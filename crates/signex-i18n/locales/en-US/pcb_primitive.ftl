@@ -180,6 +180,19 @@ pcb-prim-min-thickness = Minimum Width
 pcb-prim-keepout-kinds = Keeps Out
 pcb-prim-keepout-all-copper = All copper
 pcb-prim-keepout-kinds-unsupported = A board keepout keeps out all copper; other kinds are not stored yet.
+# A pour's fill rules (#2216): a higher priority fills first and the others
+# keep clear of it; islands below the area (mm²) are dropped, and with Remove
+# Dead Copper those touching no copper of the pour's net.
+pcb-prim-priority = Priority
+pcb-prim-min-island-area = Remove Islands Below (mm²)
+pcb-prim-remove-dead-islands = Remove Dead Copper
+# What the pour's fill came to: its copper area and pieces.
+pcb-prim-pour-copper = Copper
+pcb-prim-pour-copper-value = { $area } mm² in { $pieces ->
+    [one] 1 piece
+   *[other] { $pieces } pieces
+}
+pcb-prim-pour-copper-tip = Computed from the board; Repour fills it again.
 
 ## Free arcs, strings and dimensions (#2373). A free pad uses the pad rows.
 pcb-prim-arc-title = Arc

@@ -96,21 +96,28 @@ impl Signex {
         }
     }
 
-    /// A right-click while a Solid Region or Keepout has three corners:
-    /// close it. Whether it did.
+    /// A right-click while a Solid Region, Polygon Pour, Keepout or Pour
+    /// Cutout has three corners: close it. Whether it did.
     pub(crate) fn close_board_region(&mut self) -> bool {
         let Some(session) = self.own_board_tool() else {
             return false;
         };
         let polygon = matches!(
             session.tool,
-            BoardPlaceTool::SolidRegion | BoardPlaceTool::PolygonPour | BoardPlaceTool::Keepout
+            BoardPlaceTool::SolidRegion
+                | BoardPlaceTool::PolygonPour
+                | BoardPlaceTool::Keepout
+                | BoardPlaceTool::PourCutout
         );
         if !polygon || session.points.len() < 3 {
             return false;
         }
         let (tool, outline) = (session.tool, session.points.clone());
-        self.add_area(tool, outline);
+        if tool == BoardPlaceTool::PourCutout {
+            self.cut_pours_with(outline);
+        } else {
+            self.add_area(tool, outline);
+        }
         true
     }
 

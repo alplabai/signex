@@ -356,6 +356,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "fabrication_outputs"
         | "open_drc_panel"
         | "open_net_classes_panel" => Needs::Pcb,
+        // #2216: the pours of the board in view.
+        "repour_selected" | "repour_all" => Needs::Pcb,
         // #2404, #2402: the board reports and Board Print / PDF.
         "board_report_bom"
         | "board_report_netlist"
@@ -371,6 +373,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_fill"
         | "place_board_region"
         | "place_board_polygon_pour"
+        | "place_board_pour_cutout"
+        | "place_board_slice_pour"
         | "place_board_keepout"
         // #2389: Interactive Routing.
         | "place_board_route"

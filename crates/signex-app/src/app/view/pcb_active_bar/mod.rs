@@ -300,6 +300,8 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::Fill => svg(ic::icon_shape_rect(tid)),
         T::SolidRegion => svg(ic::icon_shape_polygon(tid)),
         T::PolygonPour => svg(ic::icon_dd_polygon(tid)),
+        T::PourCutout => svg(ic::icon_dd_cut(tid)),
+        T::SlicePour => svg(ic::icon_dd_line(tid)),
         T::TextString => svg(ic::icon_text(tid)),
         T::Dimension => ActiveBarIcon::Glyph("\u{2194}"),
         T::Keepout => ActiveBarIcon::Glyph("\u{2298}"),

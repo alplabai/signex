@@ -299,6 +299,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_fill", "PlaceBoardFill"),
     ("place_board_region", "PlaceBoardRegion"),
     ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
+    ("place_board_pour_cutout", "PlaceBoardPourCutout"),
+    ("place_board_slice_pour", "PlaceBoardSlicePour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
     ("place_board_route", "PlaceBoardRoute"),
     // #2410: File ▸ Import, fixture names only.
@@ -372,6 +374,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("run_drc", "RunDrc"),
     ("open_drc_panel", "OpenDrcPanel"),
     ("open_net_classes_panel", "OpenNetClassesPanel"),
+    ("repour_selected", "RepourSelected"),
+    ("repour_all", "RepourAll"),
     ("reannotate_board", "ReannotateBoard"),
     // #2404: the board reports.
     ("board_report_bom", "BoardReportBom"),

@@ -86,6 +86,10 @@ pub enum PrimitiveField {
     LineWidth,
     /// The decimals a dimension's value shows.
     Precision,
+    /// A polygon pour's priority, a whole number (#2216).
+    Priority,
+    /// The smallest island a polygon pour keeps, in mm² (#2216).
+    MinIslandArea,
 }
 
 /// An on / off setting of a track or via (#2378).
@@ -352,6 +356,15 @@ pub struct ZoneFacts {
     /// A pour's clearance as set; 0 follows the board's.
     pub clearance: Option<f64>,
     pub min_thickness: Option<f64>,
+    /// A pour's priority (#2216): a higher one fills first.
+    pub priority: Option<u32>,
+    /// The smallest island a pour keeps, in mm²; 0 keeps every island.
+    pub min_island_area: Option<f64>,
+    /// Whether the pours drop islands touching no copper of their net.
+    pub remove_dead_islands: Option<bool>,
+    /// The copper the selected pours' fills hold: area in mm² and pieces;
+    /// `None` while the fills of the board are not computed.
+    pub copper: Option<(f64, usize)>,
 }
 
 /// Free arcs (#2373). Positions and angles are read from the board origin

@@ -66,6 +66,10 @@ pub struct BoardToolDefaults {
     pub dimension_line_width_mm: Option<f64>,
     pub dimension_text_height_mm: Option<f64>,
     pub dimension_precision: Option<u8>,
+    /// A pour's priority and island rules (#2216).
+    pub pour_priority: Option<f64>,
+    pub pour_min_island_mm2: Option<f64>,
+    pub pour_remove_dead_islands: Option<bool>,
 }
 
 impl BoardToolDefaults {
@@ -76,6 +80,10 @@ impl BoardToolDefaults {
             self.area_net.map(ZoneEdit::Net),
             self.pour_clearance_mm.map(ZoneEdit::Clearance),
             self.pour_min_thickness_mm.map(ZoneEdit::MinThickness),
+            self.pour_priority.map(ZoneEdit::Priority),
+            self.pour_min_island_mm2.map(ZoneEdit::MinIslandArea),
+            self.pour_remove_dead_islands
+                .map(ZoneEdit::RemoveDeadIslands),
         ];
         for edit in edits.into_iter().flatten() {
             // Each value was checked by `apply_zone_edit` when it was set,
@@ -364,6 +372,13 @@ impl Signex {
             ZoneEdit::Clearance(v) if zone.is_pour() => defaults.pour_clearance_mm = Some(v),
             ZoneEdit::MinThickness(v) if zone.is_pour() => {
                 defaults.pour_min_thickness_mm = Some(v);
+            }
+            ZoneEdit::Priority(v) if zone.is_pour() => defaults.pour_priority = Some(v),
+            ZoneEdit::MinIslandArea(v) if zone.is_pour() => {
+                defaults.pour_min_island_mm2 = Some(v);
+            }
+            ZoneEdit::RemoveDeadIslands(on) if zone.is_pour() => {
+                defaults.pour_remove_dead_islands = Some(on);
             }
             _ => return,
         }

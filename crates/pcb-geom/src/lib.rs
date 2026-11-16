@@ -29,6 +29,7 @@ mod net_length;
 mod net_report;
 mod obstacle;
 mod pick_filter;
+mod pour_edit;
 mod ratsnest;
 mod rect;
 mod region;
@@ -79,6 +80,7 @@ pub use net_length::{
 };
 pub use net_report::{NetReport, net_named, net_reports};
 pub use pick_filter::{PickFilter, PickKind};
+pub use pour_edit::{AreaShape, cut_area, slice_area};
 pub use ratsnest::{RatLine, ratsnest, ratsnest_with_fills};
 pub use rect::RectNm;
 pub use region::{

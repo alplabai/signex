@@ -460,6 +460,8 @@ fn zone(net: u32, layer: &str, rect: (f64, f64, f64, f64)) -> signex_types::pcb:
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }

@@ -25,6 +25,7 @@ mod area;
 mod form;
 mod free;
 mod free_form;
+mod pour_cut;
 mod route;
 mod router;
 mod string;
@@ -43,6 +44,10 @@ mod area_tests;
 mod form_tests;
 #[cfg(test)]
 mod free_tests;
+#[cfg(test)]
+mod pour_cut_tests;
+#[cfg(test)]
+mod pour_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -272,6 +277,8 @@ impl Signex {
             BoardPlaceTool::Pad => self.pad_clicked(at),
             BoardPlaceTool::Arc => self.arc_clicked(at),
             BoardPlaceTool::Dimension => self.dimension_clicked(at),
+            BoardPlaceTool::PourCutout => self.pour_cutout_clicked(at),
+            BoardPlaceTool::SlicePour => self.slice_pour_clicked(at),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour
@@ -314,6 +321,9 @@ impl Signex {
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
             BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension => {
                 self.free_preview(session, board, cursor, &mut preview);
+            }
+            BoardPlaceTool::PourCutout | BoardPlaceTool::SlicePour => {
+                self.pour_cut_preview(session, cursor, &mut preview);
             }
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion

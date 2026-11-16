@@ -269,6 +269,10 @@ place_board_fill	place	Place a rectangle of solid copper on the active copper la
 place_board_region	place	Place a polygon of solid copper on the active copper layer	Solid Region	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_polygon_pour	place	Place a polygon pour on the active copper layer, filled clear of other nets	Polygon Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_pour_cutout	place	Cut an area out of the polygon pours on the active copper layer	Pour Cutout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_slice_pour	place	Slice the polygon pours on the active copper layer along a line	Slice Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+repour_selected	pcb	Fill the selected polygon pours again and report their copper	Repour Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	-	document:document
 place_board_route	place	Route on the active copper layer around other nets, keeping the rule clearance	Interactive Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_pad	place	Place a free pad on the board	Pad	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-

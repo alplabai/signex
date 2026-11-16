@@ -73,3 +73,40 @@ fn a_pour_takes_a_clearance_and_minimum_width_never_below_zero() {
         Err(PrimitiveEditRefusal::NonFinite)
     );
 }
+
+/// #2216: a pour takes a whole-number priority and its island rules; other
+/// areas have none and are left as they are.
+#[test]
+fn a_pour_takes_a_priority_and_island_rules() {
+    let mut b = with_fill(POUR_FILL);
+    assert_eq!(edit(&mut b, ZoneEdit::Priority(3.0)), Ok(true));
+    assert_eq!(edit(&mut b, ZoneEdit::MinIslandArea(2.5)), Ok(true));
+    assert_eq!(edit(&mut b, ZoneEdit::RemoveDeadIslands(true)), Ok(true));
+    let zone = &b.zones[0];
+    assert_eq!(
+        (
+            zone.priority,
+            zone.min_island_area,
+            zone.remove_dead_islands
+        ),
+        (3, 2.5, true)
+    );
+    assert_eq!(
+        edit(&mut b, ZoneEdit::Priority(1.5)),
+        Err(PrimitiveEditRefusal::NotWhole)
+    );
+    assert_eq!(
+        edit(&mut b, ZoneEdit::Priority(-1.0)),
+        Err(PrimitiveEditRefusal::Negative)
+    );
+    assert_eq!(
+        edit(&mut b, ZoneEdit::MinIslandArea(-0.5)),
+        Err(PrimitiveEditRefusal::Negative)
+    );
+    let mut solid = with_fill("solid");
+    assert_eq!(edit(&mut solid, ZoneEdit::Priority(2.0)), Ok(false));
+    assert_eq!(
+        edit(&mut solid, ZoneEdit::RemoveDeadIslands(true)),
+        Ok(false)
+    );
+}

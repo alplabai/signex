@@ -344,6 +344,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
         "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
         "place_board_polygon_pour" => board_tool(BoardPlaceTool::PolygonPour),
+        "place_board_pour_cutout" => board_tool(BoardPlaceTool::PourCutout),
+        "place_board_slice_pour" => board_tool(BoardPlaceTool::SlicePour),
+        // #2216: fill the pours of the board in view again and say what
+        // their copper came to.
+        "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
+        "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),

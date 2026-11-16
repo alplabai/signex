@@ -80,6 +80,7 @@ pub(crate) mod pcb_placement;
 mod pcb_placement_tests;
 #[cfg(test)]
 mod pcb_placement_window_tests;
+pub(crate) mod pcb_pour;
 pub(crate) mod pcb_primitive;
 pub(crate) mod pcb_query;
 pub mod pcb_select;

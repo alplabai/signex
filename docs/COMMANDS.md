@@ -355,8 +355,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |
 | `place_board_pad` | Place a free pad on the board | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
+| `place_board_pour_cutout` | Cut an area out of the polygon pours on the active copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
+| `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
 | `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
@@ -365,6 +367,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
 | `rename_net_class` | Rename a net class | design | — | — |
+| `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
+| `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |

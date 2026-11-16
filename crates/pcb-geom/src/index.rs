@@ -32,7 +32,7 @@ pub enum ItemRef {
     /// ([`footprint_body`](crate::footprint_body)). Only the selection index
     /// ([`BoardIndex::build_selectable`]) holds it.
     Footprint(Uuid),
-    /// A keepout, solid region or fill drawn on the board (#2383), as
+    /// A keepout, solid region, fill (#2383) or polygon pour (#2216), as
     /// [`PickKind::of_zone`] names it. Only the selection index holds it:
     /// one zero-width capsule per outline edge, plus its area for a click
     /// or a box inside it.

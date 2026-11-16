@@ -464,6 +464,14 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_POLYGON_POUR = "cmd-menu-place-board-polygon-pour";
         CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
+        CMD_PLACE_BOARD_POUR_CUTOUT = "cmd-place-board-pour-cutout";
+        CMD_MENU_PLACE_BOARD_POUR_CUTOUT = "cmd-menu-place-board-pour-cutout";
+        CMD_PLACE_BOARD_SLICE_POUR = "cmd-place-board-slice-pour";
+        CMD_MENU_PLACE_BOARD_SLICE_POUR = "cmd-menu-place-board-slice-pour";
+        CMD_REPOUR_SELECTED = "cmd-repour-selected";
+        CMD_MENU_REPOUR_SELECTED = "cmd-menu-repour-selected";
+        CMD_REPOUR_ALL = "cmd-repour-all";
+        CMD_MENU_REPOUR_ALL = "cmd-menu-repour-all";
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";

@@ -121,6 +121,8 @@ mod tests {
                 "read_document",
                 "remove_teardrops",
                 "rename_net_class",
+                // #2216: each pour's fill of the named board, as JSON.
+                "repour_all",
                 "resolve",
                 "revert",
                 "rules_add",

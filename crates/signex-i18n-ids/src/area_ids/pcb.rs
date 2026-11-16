@@ -51,6 +51,16 @@ define_ids! {
     PCB_ARC_MODE_CENTRE_NAME = "pcb-arc-mode-centre-name";
     PCB_ARC_MODE_EDGE_NAME = "pcb-arc-mode-edge-name";
     PCB_ARC_MODE_ANY_NAME = "pcb-arc-mode-any-name";
+    PCB_TOOL_POUR_CUTOUT = "pcb-tool-pour-cutout";
+    PCB_TOOL_SLICE_POUR = "pcb-tool-slice-pour";
+    PCB_BAR_POUR_CUTOUT_TOOLTIP = "pcb-bar-pour-cutout-tooltip";
+    PCB_TOOL_HINT_POUR_CUTOUT = "pcb-tool-hint-pour-cutout";
+    PCB_BAR_SLICE_POUR_TOOLTIP = "pcb-bar-slice-pour-tooltip";
+    PCB_TOOL_HINT_SLICE_POUR = "pcb-tool-hint-slice-pour";
+    PCB_TOOL_POUR_MISSED = "pcb-tool-pour-missed";
+    PCB_POUR_REPOURED = "pcb-pour-repoured";
+    PCB_POUR_NONE = "pcb-pour-none";
+    PCB_POUR_NONE_SELECTED = "pcb-pour-none-selected";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
     PCB_3D_TITLE = "pcb-3d-title";

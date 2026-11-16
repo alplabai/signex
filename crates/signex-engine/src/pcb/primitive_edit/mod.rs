@@ -48,6 +48,8 @@ pub enum PrimitiveEditRefusal {
     OutOfRange,
     #[error("the value must not be below zero")]
     Negative,
+    #[error("the value must be a whole number")]
+    NotWhole,
     #[error("the area cannot be on that layer")]
     LayerNotAllowed,
     /// A selected track or via is locked and the edit is not its unlock.

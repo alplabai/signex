@@ -77,6 +77,10 @@ pub enum PcbMsg {
     /// `cycle_arc_mode` ran (#2373): the Arc tool draws its next arc by
     /// centre, by edge or at any angle.
     ArcModeStepped,
+    /// `repour_selected` or `repour_all` ran (#2216): the pour fills of the
+    /// board in view are computed again and Messages says what the selected
+    /// pours (`selected`) or all of them came to.
+    RepourRequested { selected: bool },
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).

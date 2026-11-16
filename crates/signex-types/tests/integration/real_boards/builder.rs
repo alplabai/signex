@@ -369,6 +369,8 @@ impl Builder {
             thermal_width: 0.3,
             clearance: 0.3,
             min_thickness: 0.254,
+            min_island_area: 0.0,
+            remove_dead_islands: false,
             unknown: Default::default(),
         });
     }

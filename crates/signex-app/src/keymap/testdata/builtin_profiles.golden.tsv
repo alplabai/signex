@@ -380,6 +380,10 @@ altium	hint	-	P F	place_board_fill
 altium	hint	-	P R	place_board_region
 altium	hint	-	P G	place_board_polygon_pour
 altium	hint	-	P K	place_board_keepout
+altium	hint	-	-	place_board_pour_cutout
+altium	hint	-	-	place_board_slice_pour
+altium	hint	-	-	repour_selected
+altium	hint	-	-	repour_all
 altium	hint	-	-	place_board_route
 altium	hint	-	-	cycle_route_mode
 altium	hint	-	-	board_report_bom
@@ -812,6 +816,10 @@ classic	hint	-	-	place_board_fill
 classic	hint	-	-	place_board_region
 classic	hint	-	-	place_board_polygon_pour
 classic	hint	-	K	place_board_keepout
+classic	hint	-	-	place_board_pour_cutout
+classic	hint	-	-	place_board_slice_pour
+classic	hint	-	-	repour_selected
+classic	hint	-	-	repour_all
 classic	hint	-	-	place_board_route
 classic	hint	-	-	cycle_route_mode
 classic	hint	-	-	board_report_bom

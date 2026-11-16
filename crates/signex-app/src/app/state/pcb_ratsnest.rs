@@ -48,6 +48,18 @@ impl PcbRatsnest {
         &self.fills
     }
 
+    /// The pour fills held, if they are those of `key` (that board at that
+    /// revision); `None` before they are computed for it.
+    pub(crate) fn fills_for(&self, key: &RatsnestKey) -> Option<&ZoneFills> {
+        (self.key.as_ref() == Some(key)).then_some(&self.fills)
+    }
+
+    /// Forget which board revision the lines and fills are of, so the next
+    /// refresh computes them again (Repour, #2216).
+    pub(crate) fn invalidate(&mut self) {
+        self.key = None;
+    }
+
     /// How many nets still have a ratsnest line, if the lines held are the
     /// ones of `key` (#2353); `None` before they are computed for it.
     pub(crate) fn unrouted_nets(&self, key: &RatsnestKey) -> Option<usize> {

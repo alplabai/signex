@@ -9,6 +9,8 @@ Place/Arc	item	Arc	-	-	PlaceBoardArc	1
 Place/Fill	item	Fill	-	-	PlaceBoardFill	1
 Place/Solid Region	item	Solid Region	-	-	PlaceBoardRegion	1
 Place/Polygon Pour	item	Polygon Pour	-	-	PlaceBoardPolygonPour	1
+Place/Pour Cutout	item	Pour Cutout	-	-	PlaceBoardPourCutout	1
+Place/Slice Pour	item	Slice Pour	-	-	PlaceBoardSlicePour	1
 Place/String	item	String	-	-	PlaceBoardString	1
 Place/Dimension	item	Dimension	-	-	PlaceBoardDimension	1
 Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1

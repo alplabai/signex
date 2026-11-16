@@ -264,6 +264,8 @@ fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
     let mut f = open(with_zone);

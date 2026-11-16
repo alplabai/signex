@@ -426,6 +426,53 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2216: cut an area out of the pours on the active copper layer, or
+    // slice them along a line; each edit is one undo step. No default key.
+    CommandMetadata {
+        id: "place_board_pour_cutout",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_POUR_CUTOUT,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_POUR_CUTOUT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_slice_pour",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_SLICE_POUR,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_SLICE_POUR),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2216: fill the pours again and report their copper. Read-only (fills
+    // are computed, not stored). Repour Selected reads the selection, so it
+    // is window only; Repour All named a board (`document`) answers with
+    // each pour's fill as JSON. No default key.
+    CommandMetadata {
+        id: "repour_selected",
+        category: "pcb",
+        label: command_ids::CMD_REPOUR_SELECTED,
+        menu_label: Some(command_ids::CMD_MENU_REPOUR_SELECTED),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "repour_all",
+        category: "pcb",
+        label: command_ids::CMD_REPOUR_ALL,
+        menu_label: Some(command_ids::CMD_MENU_REPOUR_ALL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     // #2389: Interactive Routing. Each route is one undo step when it ends.
     // No default key.
     CommandMetadata {
