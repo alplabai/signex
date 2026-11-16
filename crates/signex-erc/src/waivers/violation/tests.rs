@@ -152,11 +152,11 @@ fn key_of(v: &Violation, sheet: &SchematicSheet) -> WaiverKey {
 
 #[test]
 fn a_waiver_survives_a_save_and_reload_of_the_sheet() {
-    // 1.27 * 7.0 is 8.889999999999999 mm; it reads back from its stored
-    // 8_890_000 nm as 8.89.
+    // 0.1 + 0.2 is 0.30000000000000004 mm; it reads back from its stored
+    // 300_000 nm as 0.3.
     let id = Uuid::now_v7();
     let mut symbol = part(id);
-    symbol.position = Point::new(1.27 * 7.0, 3.81);
+    symbol.position = Point::new(0.1 + 0.2, 3.81);
     symbol.rotation = 90.0;
     let sheet = sheet_with(symbol);
     let text = signex_types::format::SnxSchematic::new(sheet.clone())

@@ -401,8 +401,9 @@ fn a_mixed_selection_leaves_differing_values_blank() {
     assert_eq!(track.width, Some(0.25), "a shared value shows");
     assert_eq!(track.start, (None, None), "differing values are blank");
     assert_eq!(track.common.net_info.net, None);
-    // Y counts up from the board origin (#2384).
-    assert_eq!(track.location, Some((10.0, -10.0)));
+    // The lowest X and Y of the selection, Y counting up from the board
+    // origin (#2384).
+    assert_eq!(track.location, Some((10.0, -30.0)));
 }
 
 #[test]
