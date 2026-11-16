@@ -148,6 +148,8 @@ pub fn bus_tracks(
         };
         tracks.extend(points.windows(2).map(|leg| Segment {
             uuid: ids(),
+            locked: false,
+            attributes: Default::default(),
             start: point(leg[0]),
             end: point(leg[1]),
             width: style.width_mm,
