@@ -76,9 +76,11 @@ is not applied.
 | `class == "Power"` | the nets of a net class |
 | `net matches "USB_*"` | nets whose name matches (`*` any run, `?` one character) |
 | `layer == outer`, `layer == inner`, `layer == TopCopper` | copper layers |
+| `class == "HV" and other_class == "LV"` | a clearance between a net of each class, in either order (a class matrix cell) |
 
 A rule takes at most one of the first three and one layer condition. With no
-condition the rule is board-wide.
+condition the rule is board-wide. `other_class` needs a `class` condition and
+a clearance rule.
 
 ### Object pairs
 
@@ -103,7 +105,10 @@ more specific: `class == "HV" and layer == inner` wins over `class == "HV"`
 on inner layers. A layer condition and an object pair count the same: a
 rule with only a layer condition and one with only an object pair are
 equally specific, and the stricter one wins. Between two rules of the same
-specificity, the stricter one wins.
+specificity, the stricter one wins. A `class` and `other_class` rule is a
+net-class rule with one more condition: for a clearance between a net of each
+class it wins over a rule for either class alone, on both sides, and a rule
+for one net still wins over it.
 
 A clearance is between two nets, and each net keeps its own rule: **a pair
 needs the stricter of its two sides; a rule for one net can loosen that
@@ -229,7 +234,7 @@ step each and answer with data; refusals say why.
 
 | Command | Answer |
 |---|---|
-| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
 | `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
 | `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
 | `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |
@@ -238,11 +243,71 @@ step each and answer with data; refusals say why.
 | `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`) |
 | `rules_explain violation` | for finding `violation` of the last run: `required_mm`, `rule` and one `sides` entry per net, as `rules_effective` answers |
 | `rules_conflicts` | `flags`: `shadowed` (`by`), `conflict` (`with`), `lowers_class` (`class`, `from_mm`, `to_mm`), `no_nets` |
+| `rules_matrix_get` | `classes`, `cells` (each `class_a`, `class_b`, `object_pair`, `layer`, `value`, `rule`, `enabled`), `defaults` (each `class_a`, `class_b`, `object_pair`, `value_mm`) and `defaults_from_board` |
+| `rules_matrix_set class_a class_b [object_pair] [layer] [value]` | `change` (`added`, `changed`, `removed`, `unchanged`), `rule` and `cell`; no `value` clears the cell |
+| `rules_set_create name values [severity]` | `set`: `name`, `limits`, `severity`, `uses` (each `scope` and `rules`) |
+| `rules_set_edit set values [severity]` | `set`; every rule the set wrote follows; no `severity` keeps the set's |
+| `rules_set_apply set scope` | `set` and the `rules` written for `scope` |
+| `rules_preset_diff preset` | `preset`, `label`, `mode` (`merge` or `replace`), the counts `added`, `changed`, `removed`, `changes` (each `rule`, `change`, `from`, `to`) and `other` (severity and rule-set lines) |
+| `rules_preset_apply preset` | as `rules_preset_diff`, applied |
+
+### Class matrix
+
+The Clearance sub-tab's Matrix button shows one row and one column per net
+class of the project, one clearance per cell. A cell is a rule of the text,
+`rule cc_<A>_<B> on clearance when class == "A" and other_class == "B"
+require clearance >= <length> then error`, so the list shows the same rule.
+It applies to a clearance between a net of class A and a net of class B, in
+either order, on both sides ([Which rule applies](#which-rule-applies)); the
+diagonal cell (A and A) is between two nets of one class.
+
+An empty cell shows, greyed, what the pair needs without class-pair rules:
+the board's resolution of the two classes' first nets (the written rules,
+else the setup and class clearances), or with no board open the larger of
+the two class clearances, or "board setup". A cell below what a class asks
+is applied and flagged as lowering that class, as any rule is.
+
+Clicking a cell types in it (Enter stores it; an empty value removes the
+rule, so the cell falls back) and opens its object sub-grid: the whole cell,
+then one cell per object pair (track-track, track-pad, track-via, pad-pad,
+pad-via, via-via), each the same rule narrowed with `between`, each with
+Clear. Every cell edit is one undo step.
+
+Differential-pair classes are not in the matrix yet: there is no
+differential-pair class to name.
+
+### Rule sets
+
+A named rule set holds limits written once (`min_clearance=0.8mm,
+min_width=0.3mm`) and a severity. It is stored beside the rule text in
+`rules.drc.sets` and is not a rule itself. Apply writes, for one scope (a
+class, a net, a pattern or a class pair), one ordinary rule per kind the set
+limits, named `<set>_<scope>_<kind>`; applying it again to the same scope
+writes those rules anew. Giving the set new limits rewrites every rule it
+wrote, everywhere it is applied: a kind it no longer limits loses its rule,
+a kind it now limits gains one; each rule keeps its name, on/off, layer and
+objects. Each create, apply and change is one undo step that holds the set
+and its rules together. A rule a set wrote can still be edited in the
+table; the set's next change writes over it.
+
+### Presets
+
+The Presets panel lists the generic manufacturing tiers (Standard, Advanced
+and HDI, the minimums the new-project setup offers; no fabricator is named)
+and, once read, the rule profiles of this machine that hold DRC rules. A
+tier merges three board-wide rules, `fab_clearance`, `fab_track` and
+`fab_via`, into the text by name: a rule of that name is replaced, the rest
+stay. A profile replaces the project's DRC rules (text, severity entries and
+rule sets) as "Update from profile" does. Picking one lists the rules it
+adds, changes and removes (spacing alone is not a change) and the other
+lines; Apply stores it as one undo step, and is refused when the rules
+changed since the list was made.
 
 ## Not in this version
 
 Region-scoped rules, clearance to holes and the board edge, annular ring,
-differential pairs, arithmetic in lengths, and checking the board setup's
+differential pairs and their classes, arithmetic in lengths, the what-if
+preview of a rule edit, and checking the board setup's
 minimum track width and via sizes without a written rule. The DRC panel's
 summary counts clearance, shorts, unconnected links and keepouts only; width
 and via findings are listed as rows.

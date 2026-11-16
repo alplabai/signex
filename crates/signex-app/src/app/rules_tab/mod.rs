@@ -9,20 +9,32 @@
 mod analysis;
 mod commands;
 mod json;
+mod matrix;
 mod open;
+mod presets;
+mod sets;
 mod source;
 mod update;
+mod update_matrix;
 mod view;
 
+#[cfg(test)]
+mod matrix_tests;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use analysis::RulesAnalysis;
 pub(crate) use commands::{rules_add, rules_enable, rules_remove, rules_set};
+pub(crate) use matrix::rules_matrix_set;
+pub(crate) use presets::rules_preset_apply;
+pub(crate) use sets::{rules_set_apply, rules_set_create, rules_set_edit};
 pub(crate) use source::{RulesOrigin, TEXT_UNAPPLIED};
 
 use iced::widget::text_editor;
+use signex_drc_dsl::table::matrix::CellKey;
+use signex_drc_dsl::table::presets::RowChange;
 use signex_drc_dsl::table::{RuleField, RuleKind, RuleTable};
+use signex_types::project::DrcRuleSet;
 
 use crate::app::state::ProjectId;
 
@@ -81,6 +93,68 @@ impl RulesFilter {
         RulesFilter::Flagged,
         RulesFilter::Disabled,
     ];
+}
+
+/// How the Clearance sub-tab shows its rules (#2398).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ClearanceView {
+    #[default]
+    List,
+    /// The class-to-class matrix.
+    Matrix,
+}
+
+/// A panel the tab shows beside its rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RulesPanel {
+    /// Named rule sets.
+    Sets,
+    /// Generic tiers and rule profiles, applied after a diff.
+    Presets,
+}
+
+/// A matrix cell being typed in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatrixEdit {
+    pub key: CellKey,
+    pub text: String,
+}
+
+/// A field of the rule-set form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetFormField {
+    Name,
+    Values,
+    Severity,
+    Scope,
+}
+
+/// What is typed in the rule-set form.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SetForm {
+    pub name: String,
+    /// `min_clearance=0.8mm, min_width=0.3mm`.
+    pub values: String,
+    pub severity: String,
+    /// The scope Apply writes the set's rules for.
+    pub scope: String,
+}
+
+/// A preset picked: what applying it changes, and the DRC rules it leaves,
+/// from the rules it was computed against.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PresetPreview {
+    /// `tier:standard` or `profile:<name>`.
+    pub preset: String,
+    /// The tier or profile name, as shown.
+    pub label: String,
+    pub changes: Vec<RowChange>,
+    /// Severity, rule-set and other changes, one line each.
+    pub other: Vec<String>,
+    /// The project's DRC rules the preview was computed from.
+    pub base: DrcRuleSet,
+    /// The DRC rules after Apply.
+    pub result: DrcRuleSet,
 }
 
 /// A cell being typed in.
@@ -159,6 +233,13 @@ pub struct RulesTabState {
     /// Flags and scope counts, refreshed in `update` when the rules, the
     /// board or the net classes change.
     pub analysis: Option<RulesAnalysis>,
+    pub clearance_view: ClearanceView,
+    pub panel: Option<RulesPanel>,
+    pub matrix_edit: Option<MatrixEdit>,
+    /// The class pair whose object sub-grid is shown.
+    pub matrix_open: Option<(String, String)>,
+    pub set_form: SetForm,
+    pub preview: Option<PresetPreview>,
 }
 
 /// Messages of a Rules tab, under `ProjectMsg::Rules`. Each names its
@@ -236,6 +317,75 @@ pub enum RulesTabMsg {
     },
     /// Run DRC on the project's board, from the tab.
     DrcRequested {
+        project_id: ProjectId,
+    },
+    /// The Clearance sub-tab switched between its list and the matrix.
+    ClearanceViewPicked {
+        project_id: ProjectId,
+        view: ClearanceView,
+    },
+    /// A matrix cell was clicked: type in it and show its object sub-grid.
+    MatrixCellOpened {
+        project_id: ProjectId,
+        key: CellKey,
+    },
+    MatrixCellEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    MatrixCellCommitted {
+        project_id: ProjectId,
+    },
+    MatrixCellCancelled {
+        project_id: ProjectId,
+    },
+    /// Clear a cell back to what its two classes ask without it.
+    MatrixCellCleared {
+        project_id: ProjectId,
+        key: CellKey,
+    },
+    /// The object sub-grid was closed.
+    MatrixCollapsed {
+        project_id: ProjectId,
+    },
+    /// A side panel was opened, or closed with `None`.
+    PanelPicked {
+        project_id: ProjectId,
+        panel: Option<RulesPanel>,
+    },
+    SetFormEdited {
+        project_id: ProjectId,
+        field: SetFormField,
+        text: String,
+    },
+    /// Create the set the form names, with its limits.
+    SetCreated {
+        project_id: ProjectId,
+    },
+    /// Give set `set` the form's limits and severity.
+    SetRedefined {
+        project_id: ProjectId,
+        set: String,
+    },
+    /// Apply set `set` to the form's scope.
+    SetApplied {
+        project_id: ProjectId,
+        set: String,
+    },
+    /// Read the rule profile library, for its profiles as presets.
+    PresetsListRequested {
+        project_id: ProjectId,
+    },
+    /// A preset was picked: show what applying it changes.
+    PresetPicked {
+        project_id: ProjectId,
+        preset: String,
+    },
+    /// Apply the previewed preset as one undo step.
+    PresetApplied {
+        project_id: ProjectId,
+    },
+    PresetDismissed {
         project_id: ProjectId,
     },
 }

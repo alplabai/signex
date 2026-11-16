@@ -38,6 +38,20 @@ pub(crate) fn empty_scopes(
             NetScope::Pattern(glob) => infos.push(format!(
                 "DRC rule '{name}': no net of this board matches '{glob}'; {nothing}"
             )),
+            NetScope::ClassPair(a, b) => {
+                let missing = [a, b]
+                    .into_iter()
+                    .find(|class| !classes.iter().any(|c| &c.name == *class));
+                match missing {
+                    Some(class) => warnings.push(format!(
+                        "DRC rule '{name}': there is no net class '{class}'; {nothing}"
+                    )),
+                    None => infos.push(format!(
+                        "DRC rule '{name}': net class '{a}' or '{b}' has no net on this \
+                         board; {nothing}"
+                    )),
+                }
+            }
             NetScope::Board => {}
         }
     }
@@ -100,6 +114,12 @@ pub(crate) fn lowered(rules: &DrcRules, board: &PcbBoard, classes: &[NetClass]) 
     pairs.sort_unstable();
     pairs.dedup();
     let bits = layer_kinds(&rules.user, rules.copper);
+    // A class-pair rule (#2398) applies only with a net across: try one
+    // net of each kind the rules tell apart.
+    let mut partners: Vec<Option<u32>> = vec![None];
+    if rules.user.iter().any(ScopedRule::is_pair_scope) {
+        partners.extend(rules.net_representatives(board).into_iter().map(Some));
+    }
     let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     let mut found = Vec::new();
     for net in &board.nets {
@@ -110,12 +130,16 @@ pub(crate) fn lowered(rules: &DrcRules, board: &PcbBoard, classes: &[NetClass]) 
             continue;
         };
         let without = rules.required(net.number, net.number);
-        for &bit in &bits {
+        let tries = bits
+            .iter()
+            .flat_map(|&bit| partners.iter().map(move |&other| (bit, other)));
+        for (bit, other) in tries {
             for &objects in &pairs {
-                let picked = user_rules::pick(
+                let picked = user_rules::pick_between(
                     &rules.user,
                     LimitKind::MinClearance,
                     net.number,
+                    other,
                     1 << bit,
                     objects,
                 );

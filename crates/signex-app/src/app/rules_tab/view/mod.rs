@@ -4,6 +4,9 @@
 //! `RulesTabMsg`s. Every text is a catalog message or the user's own text.
 
 mod detail;
+mod matrix;
+mod presets;
+mod sets;
 mod table;
 mod text_view;
 
@@ -21,7 +24,9 @@ use signex_types::violation::Severity;
 use signex_widgets::{button, text, text_input};
 
 pub(super) use super::analysis::Checked;
-use super::{RulesDomain, RulesFilter, RulesOrigin, RulesTabMsg, RulesTabState};
+use super::{
+    ClearanceView, RulesDomain, RulesFilter, RulesOrigin, RulesPanel, RulesTabMsg, RulesTabState,
+};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::{Spacing, TypeScale, tokens};
@@ -115,12 +120,36 @@ impl Signex {
             .boxed();
         };
         let frame = self.rules_frame(id, i18n, tokens, state, src, origin);
-        let body: Element<'_, Message> = match state.text.as_ref() {
+        let matrix_shown =
+            state.domain == RulesDomain::Clearance && state.clearance_view == ClearanceView::Matrix;
+        let rules: Element<'_, Message> = match state.text.as_ref() {
             Some(rules_text) => text_view::view(&frame, rules_text),
+            None if matrix_shown => matrix::view(&frame),
             None => column![table::view(&frame), detail::view(&frame)]
                 .spacing(SP.l)
                 .height(Length::Fill)
                 .boxed(),
+        };
+        let panel: Option<Element<'_, Message>> = match state.panel {
+            Some(RulesPanel::Sets) => {
+                let sets = self
+                    .rules_drc_of(id)
+                    .map(|drc| drc.sets)
+                    .unwrap_or_default();
+                Some(sets::view(&frame, &sets))
+            }
+            Some(RulesPanel::Presets) => Some(presets::view(&frame, self.preset_profiles())),
+            None => None,
+        };
+        let body: Element<'_, Message> = match panel {
+            Some(panel) => row![
+                container(rules).width(Length::FillPortion(3)),
+                container(panel).width(Length::FillPortion(2)),
+            ]
+            .spacing(SP.l)
+            .height(Length::Fill)
+            .boxed(),
+            None => rules,
         };
         container(
             column![toolbar(&frame), notes(&frame), body]
@@ -277,7 +306,31 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             bar = bar.push(pick(t!(i18n, label), filter == state.filter, msg, tokens));
         }
     }
+    if in_table && state.domain == RulesDomain::Clearance {
+        let matrix = state.clearance_view == ClearanceView::Matrix;
+        let (label, view) = if matrix {
+            (ids::RULES_VIEW_LIST, ClearanceView::List)
+        } else {
+            (ids::RULES_VIEW_MATRIX, ClearanceView::Matrix)
+        };
+        let msg = up(RulesTabMsg::ClearanceViewPicked {
+            project_id: id,
+            view,
+        });
+        bar = bar.push(pick(t!(i18n, label), false, msg, tokens));
+    }
     bar = bar.push(Space::new().width(Length::Fill));
+    for (panel, label) in [
+        (RulesPanel::Sets, ids::RULES_PANEL_SETS),
+        (RulesPanel::Presets, ids::RULES_PANEL_PRESETS),
+    ] {
+        let open = state.panel == Some(panel);
+        let msg = up(RulesTabMsg::PanelPicked {
+            project_id: id,
+            panel: (!open).then_some(panel),
+        });
+        bar = bar.push(pick(t!(i18n, label), open, msg, tokens));
+    }
     if in_table && !frame.table.is_unparsed() {
         for &kind in state.domain.kinds() {
             let label = match kind {

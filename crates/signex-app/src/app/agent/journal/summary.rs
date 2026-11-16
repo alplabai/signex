@@ -24,12 +24,17 @@ const TEXT_CHARS: usize = 120;
 const HEADER: &str = "Agent edits since the previous commit:";
 
 /// Commands whose change lands in the project file, whatever sheet they name.
-const PROJECT_WIDE: [&str; 5] = [
+const PROJECT_WIDE: [&str; 10] = [
     "assign_net_class",
     "rules_add",
     "rules_set",
     "rules_remove",
     "rules_enable",
+    "rules_matrix_set",
+    "rules_set_create",
+    "rules_set_edit",
+    "rules_set_apply",
+    "rules_preset_apply",
 ];
 
 /// How long a commit worker waits for the journal lines still queued.

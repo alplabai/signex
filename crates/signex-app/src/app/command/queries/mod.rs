@@ -2,7 +2,9 @@
 //! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
 //! `check_erc` and `check_drc` (#2199, answered once their run lands), and
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
-//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`). Each
+//! `rules_explain`, `rules_conflicts`, `rules_matrix_get` and
+//! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
+//! rule profile library, read off the update loop first). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -48,6 +50,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_effective",
     "rules_explain",
     "rules_conflicts",
+    "rules_matrix_get",
+    "rules_preset_diff",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -119,6 +123,15 @@ impl Signex {
                 };
                 return Some((outcome, Task::none()));
             }
+            "rules_matrix_get" => {
+                let outcome = match self.rules_matrix_get(args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // A profile preset may need the profile library read first.
+            "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
             _ => {}
         }
         let answer = match id {

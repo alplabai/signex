@@ -101,15 +101,16 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#2199), each answered once its run lands, like an edit waiting for its
   reads
   ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
-  `rules_list`, `rules_get`, `rules_effective`, `rules_explain` and
-  `rules_conflicts` (#2398);
+  `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
+  `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
   `clear_all_net_colors`, `assign_net_class`, `save_document`,
   `close_active_document`, and the Rules manager edits `rules_add`, `rules_set`,
-  `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it). A test pins this set, so a catalog row that joins or
+  `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
+  `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
+  `document` is the project or any document of it). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision.
 
 The last three are open to agents by the maintainer's decision (#1924):

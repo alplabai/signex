@@ -115,4 +115,82 @@ pub(super) const RULES: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // Steps 5 and 6: the class matrix, named rule sets and presets.
+    CommandMetadata {
+        id: "rules_matrix_get",
+        category: "validation",
+        label: command_ids::CMD_RULES_MATRIX_GET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_matrix_set",
+        category: "design",
+        label: command_ids::CMD_RULES_MATRIX_SET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::RULES_MATRIX_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_set_create",
+        category: "design",
+        label: command_ids::CMD_RULES_SET_CREATE,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::RULES_SET_CREATE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_set_edit",
+        category: "design",
+        label: command_ids::CMD_RULES_SET_EDIT,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::RULES_SET_EDIT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_set_apply",
+        category: "design",
+        label: command_ids::CMD_RULES_SET_APPLY,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::RULES_SET_APPLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_preset_diff",
+        category: "validation",
+        label: command_ids::CMD_RULES_PRESET_DIFF,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::RULES_PRESET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rules_preset_apply",
+        category: "design",
+        label: command_ids::CMD_RULES_PRESET_APPLY,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::RULES_PRESET,
+        ..CommandMetadata::DEFAULT
+    },
 ];

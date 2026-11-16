@@ -250,6 +250,26 @@ pub fn set_field(
     Ok(text)
 }
 
+/// `src` with rule `name` written anew from `draft`: only that rule's span
+/// is rewritten, whatever it held (a matrix cell or a rule set's rule
+/// following its set, #2398).
+pub fn replace_rule(src: &str, name: &str, draft: &RuleDraft) -> Result<String, EditError> {
+    let rows = parsed(src)?;
+    let row = find(&rows, name)?;
+    if draft.name != row.name && rows.rows.iter().any(|r| r.name == draft.name) {
+        return Err(EditError::NameTaken(draft.name.clone()));
+    }
+    if draft.limits.is_empty() {
+        return Err(EditError::BadValue {
+            field: "values",
+            reason: "a rule needs at least one limit".into(),
+        });
+    }
+    let text = splice(src, &row.span, &render(draft));
+    no_new_errors(&text, &draft.name, row.error_count())?;
+    Ok(text)
+}
+
 /// `src` with rule `name` written `disabled` (`on` false) or not.
 pub fn enable_rule(src: &str, name: &str, on: bool) -> Result<String, EditError> {
     let rows = parsed(src)?;
@@ -340,7 +360,7 @@ fn toggle(src: &str, row: &RuleRow, on: bool) -> String {
     }
 }
 
-fn splice(src: &str, span: &Span, with: &str) -> String {
+pub(crate) fn splice(src: &str, span: &Span, with: &str) -> String {
     format!("{}{with}{}", &src[..span.start], &src[span.end..])
 }
 
@@ -376,7 +396,7 @@ pub(crate) fn is_name(text: &str) -> bool {
 }
 
 /// Text a quoted string can hold: no double quote, no line break.
-fn is_plain(text: &str) -> bool {
+pub(crate) fn is_plain(text: &str) -> bool {
     !text.is_empty() && !text.contains(['"', '\n', '\r'])
 }
 
@@ -400,7 +420,7 @@ pub(crate) fn parse_severity(text: &str) -> Option<Severity> {
 
 /// A number and a unit word, at most one space between: `0.2mm`, `8 mil`.
 /// The compiler names a unit it does not know.
-fn is_length(text: &str) -> bool {
+pub(crate) fn is_length(text: &str) -> bool {
     let unit_at = text
         .find(|c: char| !(c.is_ascii_digit() || c == '.'))
         .unwrap_or(text.len());
@@ -418,14 +438,36 @@ pub fn parse_scope(text: &str) -> Result<NetScope, String> {
     if text.is_empty() || matches!(text, "all" | "board" | "*") {
         return Ok(NetScope::Board);
     }
-    let shape =
-        || "write net == \"NAME\", class == \"NAME\" or net matches \"PATTERN\"".to_string();
+    let shape = || {
+        "write net == \"NAME\", class == \"NAME\", net matches \"PATTERN\" or \
+         class == \"NAME\" and other_class == \"NAME\""
+            .to_string()
+    };
+    // `class == "A" and other_class == "B"`: between two classes (#2398).
+    if let Some((first, second)) = text.split_once(" and ") {
+        return match (one_condition(first)?, one_condition(second)?) {
+            (("class", true, a), ("other_class", true, b)) => Ok(NetScope::ClassPair(a, b)),
+            _ => Err(shape()),
+        };
+    }
+    match one_condition(text)? {
+        ("net", true, value) => Ok(NetScope::Net(value)),
+        ("net", false, value) => Ok(NetScope::Pattern(value)),
+        ("class", true, value) => Ok(NetScope::Class(value)),
+        _ => Err(shape()),
+    }
+}
+
+/// One `<subject> == "<value>"` or `<subject> matches "<value>"`: the
+/// subject (a known word, else `""`), whether it is `==`, the value.
+fn one_condition(text: &str) -> Result<(&'static str, bool, String), String> {
+    let text = text.trim();
     let (subject, is, value) = if let Some((subject, value)) = text.split_once("==") {
         (subject, true, value)
     } else if let Some((subject, value)) = text.split_once(" matches ") {
         (subject, false, value)
     } else {
-        return Err(shape());
+        ("", true, text)
     };
     let value = value.trim();
     let value = value
@@ -435,12 +477,13 @@ pub fn parse_scope(text: &str) -> Result<NetScope, String> {
     if !is_plain(value) {
         return Err("the name needs a character and no double quote".to_string());
     }
-    match (subject.trim(), is) {
-        ("net", true) => Ok(NetScope::Net(value.to_string())),
-        ("net", false) => Ok(NetScope::Pattern(value.to_string())),
-        ("class", true) => Ok(NetScope::Class(value.to_string())),
-        _ => Err(shape()),
-    }
+    let subject = match subject.trim() {
+        "net" => "net",
+        "class" => "class",
+        "other_class" => "other_class",
+        _ => "",
+    };
+    Ok((subject, is, value.to_string()))
 }
 
 /// The scope as a cell shows it (the inverse of [`parse_scope`]); empty for
@@ -451,10 +494,11 @@ pub fn scope_text(scope: &NetScope) -> String {
         NetScope::Net(net) => format!("net == \"{net}\""),
         NetScope::Class(class) => format!("class == \"{class}\""),
         NetScope::Pattern(glob) => format!("net matches \"{glob}\""),
+        NetScope::ClassPair(a, b) => format!("class == \"{a}\" and other_class == \"{b}\""),
     }
 }
 
-fn parse_pair(text: &str) -> Result<Option<[String; 2]>, String> {
+pub(crate) fn parse_pair(text: &str) -> Result<Option<[String; 2]>, String> {
     if text.is_empty() || matches!(text, "any" | "all") {
         return Ok(None);
     }

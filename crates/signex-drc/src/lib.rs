@@ -130,6 +130,8 @@ impl DrcReport {
 }
 
 #[cfg(test)]
+mod class_pair_tests;
+#[cfg(test)]
 mod explain_tests;
 #[cfg(test)]
 mod findings_tests;

@@ -55,6 +55,10 @@ pub fn render(draft: &RuleDraft) -> String {
         NetScope::Net(net) => conds.push(format!("net == \"{net}\"")),
         NetScope::Class(class) => conds.push(format!("class == \"{class}\"")),
         NetScope::Pattern(glob) => conds.push(format!("net matches \"{glob}\"")),
+        NetScope::ClassPair(a, b) => {
+            conds.push(format!("class == \"{a}\""));
+            conds.push(format!("other_class == \"{b}\""));
+        }
     }
     if let Some(layer) = &draft.layer {
         if super::edit::is_name(layer) {

@@ -143,18 +143,45 @@ impl DrcRules {
         let mut most: (i64, Option<&ScopedRule>) = (i64::MIN, None);
         let layers = self.on_board(layers);
         for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
-            for net in [first.net, second.net] {
-                let side =
-                    user_rules::pick(&self.user, LimitKind::MinClearance, net, 1 << bit, objects)
-                        .map_or((self.required(net, net), None), |(nm, rule)| {
-                            (nm, Some(rule))
-                        });
+            for (net, other) in [(first.net, second.net), (second.net, first.net)] {
+                let side = user_rules::pick_between(
+                    &self.user,
+                    LimitKind::MinClearance,
+                    net,
+                    Some(other),
+                    1 << bit,
+                    objects,
+                )
+                .map_or((self.required(net, net), None), |(nm, rule)| {
+                    (nm, Some(rule))
+                });
                 if side.0 > most.0 || (side.0 == most.0 && self.wins_tie(side.1, most.1)) {
                     most = side;
                 }
             }
         }
         (most.0, most.1.map(|s| s.rule.id()))
+    }
+
+    /// What a clearance between nets `a` and `b` needs with no class-pair
+    /// rule (#2398, a matrix cell's default): each side by the most
+    /// specific other rule, else its implicit value; the stricter side on
+    /// the strictest copper layer of the board.
+    pub fn pair_default(&self, a: u32, b: u32, objects: [Option<CopperObject>; 2]) -> i64 {
+        let mut most = i64::MIN;
+        for bit in (0..32).filter(|bit| self.copper & (1 << bit) != 0) {
+            for net in [a, b] {
+                let side =
+                    user_rules::pick(&self.user, LimitKind::MinClearance, net, 1 << bit, objects)
+                        .map_or_else(|| self.required(net, net), |(nm, _)| nm);
+                most = most.max(side);
+            }
+        }
+        if most == i64::MIN {
+            self.required(a, b)
+        } else {
+            most
+        }
     }
 
     /// Between two sides asking the same clearance: the more severe one

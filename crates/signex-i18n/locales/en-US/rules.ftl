@@ -116,3 +116,47 @@ rules-verdict-other-objects = other objects
 # The text view.
 rules-text-problem = Line { $line }, column { $column }: { $message }
 rules-text-clean = No problems in the text.
+
+# The class-to-class clearance matrix (Clearance sub-tab).
+rules-view-matrix = Matrix
+rules-view-list = List
+rules-matrix-hint = One clearance per pair of net classes. A grey value is what the pair needs without a cell of its own; click a cell to set it, or to open its object pairs.
+rules-matrix-no-classes = This project has no net classes yet, so the matrix is empty.
+rules-matrix-default = ({ $value } mm)
+rules-matrix-no-default = (board setup)
+rules-matrix-objects-title = Objects between { $a } and { $b }
+rules-matrix-all-objects = All objects
+rules-matrix-clear = Clear
+rules-matrix-collapse = Close
+
+# Named rule sets.
+rules-panel-sets = Rule sets
+rules-sets-title = Rule sets
+rules-sets-hint = A rule set is limits written once and applied to classes or nets. Changing a set rewrites every rule it wrote.
+rules-sets-name = Set name, such as HV_08
+rules-sets-values = Limits, such as min_clearance=0.8mm, min_width=0.3mm
+rules-sets-severity = Severity: error, warning or info
+rules-sets-scope = Scope to apply to, such as class == "HV"
+rules-sets-create = Create set
+rules-sets-apply = Apply to scope
+rules-sets-redefine = Use these limits
+rules-sets-empty = No rule sets yet.
+rules-sets-uses = Applied to: { $scopes }
+rules-sets-unused = Not applied yet.
+
+# Presets: generic tiers and rule profiles.
+rules-panel-presets = Presets
+rules-presets-title = Presets
+rules-presets-hint = A generic tier merges its minimums into the rules; a rule profile replaces them. Each shows what it changes before it is applied.
+rules-preset-standard = Standard tier
+rules-preset-advanced = Advanced tier
+rules-preset-hdi = HDI tier
+rules-presets-load = Show rule profiles
+rules-presets-no-profiles = No rule profile holds DRC rules.
+rules-preset-preview = Applying { $preset } changes:
+rules-preset-no-change = Nothing changes.
+rules-preset-added = Added { $rule }
+rules-preset-changed = Changed { $rule }
+rules-preset-removed = Removed { $rule }
+rules-preset-apply = Apply
+rules-preset-cancel = Cancel

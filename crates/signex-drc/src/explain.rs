@@ -96,11 +96,26 @@ impl DrcRules {
         layers: u32,
         objects: [Option<CopperObject>; 2],
     ) -> Effective {
+        self.effective_between(kind, net, None, layers, objects)
+    }
+
+    /// [`Self::effective`] for one side of a clearance whose other side is
+    /// net `other`: a class-pair rule (#2398) takes part when the two nets
+    /// sit in its two classes.
+    pub fn effective_between(
+        &self,
+        kind: LimitKind,
+        net: u32,
+        other: Option<u32>,
+        layers: u32,
+        objects: [Option<CopperObject>; 2],
+    ) -> Effective {
         let layers = self.on_board(layers);
         let implicit = (kind == LimitKind::MinClearance).then(|| self.required(net, net));
         let mut held: Option<(u32, i64, Option<&ScopedRule>)> = None;
         for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
-            let side = match user_rules::pick(&self.user, kind, net, 1 << bit, objects) {
+            let picked = user_rules::pick_between(&self.user, kind, net, other, 1 << bit, objects);
+            let side = match picked {
                 Some((nm, scoped)) => Some((nm, Some(scoped))),
                 None => implicit.map(|nm| (nm, None)),
             };
@@ -118,7 +133,7 @@ impl DrcRules {
             .map(|(bit, _, _)| bit)
             .or_else(|| (0..32).find(|bit| layers & (1 << bit) != 0));
         let chain = layer
-            .map(|bit| self.candidates(kind, net, 1 << bit, objects))
+            .map(|bit| self.candidates(kind, net, other, 1 << bit, objects))
             .unwrap_or_default();
         let source = match held {
             Some((_, _, Some(scoped))) => Source::Rule(scoped.rule.name.clone()),
@@ -145,16 +160,18 @@ impl DrcRules {
         &self,
         kind: LimitKind,
         net: u32,
+        other: Option<u32>,
         layer_mask: u32,
         objects: [Option<CopperObject>; 2],
     ) -> Vec<Candidate> {
-        let winner = user_rules::pick(&self.user, kind, net, layer_mask, objects).map(|(_, s)| s);
+        let winner = user_rules::pick_between(&self.user, kind, net, other, layer_mask, objects)
+            .map(|(_, s)| s);
         let mut out = Vec::new();
         for scoped in &self.user {
             let Some(value_nm) = scoped.rule.limit(kind) else {
                 continue;
             };
-            let verdict = if !scoped.covers_net(net) {
+            let verdict = if !scoped.covers_net(net) || !scoped.covers_partner(net, other) {
                 Verdict::OtherNets
             } else if !scoped.covers(net, layer_mask) {
                 Verdict::OtherLayers
@@ -197,9 +214,10 @@ impl DrcRules {
                 violation.items.get(1).and_then(CopperObject::of),
             ];
             let (a, b) = violation.nets;
-            let mut sides = vec![self.effective(kind, a, violation.layers, objects)];
+            let layers = violation.layers;
+            let mut sides = vec![self.effective_between(kind, a, Some(b), layers, objects)];
             if b != a {
-                sides.push(self.effective(kind, b, violation.layers, objects));
+                sides.push(self.effective_between(kind, b, Some(a), layers, objects));
             }
             sides
         } else {
