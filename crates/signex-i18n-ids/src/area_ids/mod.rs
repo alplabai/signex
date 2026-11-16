@@ -3,6 +3,7 @@
 //! re-exports them, so callers write `ids::NAME` either way.
 
 mod bom;
+mod chrome;
 mod dialog;
 mod dialog_text;
 mod editors;
@@ -17,10 +18,12 @@ mod pcb_board;
 mod pcb_component;
 mod pcb_primitive;
 mod pdf_preview;
+mod placeholder;
 mod preferences;
 mod update_pcb;
 
 pub use bom::*;
+pub use chrome::*;
 pub use dialog::*;
 pub use dialog_text::*;
 pub use editors::*;
@@ -35,6 +38,7 @@ pub use pcb_board::*;
 pub use pcb_component::*;
 pub use pcb_primitive::*;
 pub use pdf_preview::*;
+pub use placeholder::*;
 pub use preferences::*;
 pub use update_pcb::*;
 
@@ -43,6 +47,7 @@ pub use update_pcb::*;
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         bom::BOM,
+        chrome::CHROME,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
         editors::EDITORS,
@@ -57,6 +62,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pcb_component::PCB_COMPONENT,
         pcb_primitive::PCB_PRIMITIVE,
         pdf_preview::PDF_PREVIEW,
+        placeholder::PLACEHOLDER,
         preferences::PREFERENCES,
         update_pcb::UPDATE_PCB,
     ]

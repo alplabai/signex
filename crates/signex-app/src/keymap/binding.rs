@@ -4,24 +4,8 @@ use crate::keymap::{
 };
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
+pub use signex_commands::{Modifiers, ShortcutContext};
 use std::{error::Error, fmt, str::FromStr};
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ShortcutContext {
-    #[default]
-    Global,
-    Schematic,
-    Footprint,
-    Pcb,
-    Library,
-    Modal,
-    TextInput,
-    CommandPalette,
-    Placement,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,23 +27,6 @@ pub enum KeyToken {
     ArrowLeft,
     ArrowRight,
     Function(u8),
-}
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
-)]
-pub struct Modifiers {
-    pub ctrl: bool,
-    pub alt: bool,
-    pub shift: bool,
-    pub command: bool,
-    /// The `Mod` token of a profile: the platform's standard modifier,
-    /// Cmd on macOS and Ctrl elsewhere (#1645). Only parsed or recorded
-    /// strokes carry it; a live keystroke never does. Spelling is kept so a
-    /// saved profile reads `Mod+…` on every OS. Compare strokes through
-    /// [`KeyStroke::resolved_for`], never raw.
-    #[serde(default)]
-    pub primary: bool,
 }
 
 /// The macOS modifier symbols in Apple's order: ⌃ ⌥ ⇧ ⌘.
@@ -87,24 +54,9 @@ pub fn mac_stroke_caps(label: &str) -> Option<Vec<String>> {
     Some(caps)
 }
 
-impl Modifiers {
-    /// `primary` replaced by the concrete key it means on `platform`: Cmd
-    /// on macOS, Ctrl elsewhere, never Super. Idempotent.
-    pub fn resolved_for(self, platform: Platform) -> Self {
-        if !self.primary {
-            return self;
-        }
-        let mut resolved = Self {
-            primary: false,
-            ..self
-        };
-        match platform {
-            Platform::MacOs => resolved.command = true,
-            Platform::Windows | Platform::Linux => resolved.ctrl = true,
-        }
-        resolved
-    }
-
+/// The app-side half of [`Modifiers`]: the conversion from iced and the
+/// labels, which need the toolkit and the catalog (ADR-0006).
+pub trait ModifiersExt {
     /// Canonical form shared by live keystrokes and parsed bindings (#1378).
     ///
     /// `ctrl` is the physical Control key and `command` is the logo key
@@ -113,7 +65,19 @@ impl Modifiers {
     /// flags for a plain Ctrl press while a parsed `Ctrl+W` sets only
     /// `ctrl`, so the two never compared equal. On macOS Cmd and Ctrl
     /// stay distinct.
-    pub fn from_iced(modifiers: keyboard::Modifiers) -> Self {
+    fn from_iced(modifiers: keyboard::Modifiers) -> Self;
+
+    /// The held modifiers as `platform` writes them, without a key: Apple
+    /// symbols in Apple order on macOS (`⇧⌘`), `Ctrl+Shift` elsewhere.
+    /// In en-US; the UI uses [`Self::display_in`].
+    fn display_for(self, platform: Platform) -> String;
+
+    /// [`Self::display_for`] with the words in the language of `i18n`.
+    fn display_in(self, platform: Platform, i18n: &signex_i18n::I18n) -> String;
+}
+
+impl ModifiersExt for Modifiers {
+    fn from_iced(modifiers: keyboard::Modifiers) -> Self {
         Self {
             ctrl: modifiers.control(),
             alt: modifiers.alt(),
@@ -123,38 +87,12 @@ impl Modifiers {
         }
     }
 
-    /// The held modifiers as `platform` writes them, without a key: Apple
-    /// symbols in Apple order on macOS (`⇧⌘`), `Ctrl+Shift` elsewhere.
-    /// In en-US; the UI uses [`Self::display_in`].
-    pub fn display_for(self, platform: Platform) -> String {
+    fn display_for(self, platform: Platform) -> String {
         self.display_in(platform, &signex_i18n::I18n::en_us())
     }
 
-    /// The form the Preferences recorder stores: on macOS a Cmd press is
-    /// `Mod`, so a profile made on a Mac also works elsewhere. Other OSes
-    /// record exactly what was pressed.
-    pub fn recorded_for(self, platform: Platform) -> Self {
-        if platform == Platform::MacOs && self.command {
-            return Self {
-                command: false,
-                primary: true,
-                ..self
-            };
-        }
-        self
-    }
-
-    /// The logo key's spelling in profile files, on every OS.
-    pub const CONFIG_COMMAND_NAME: &'static str = "Cmd";
-
-    /// What this OS calls the logo key: Cmd on macOS, Win on Windows,
-    /// Super elsewhere. The parser accepts all three spellings on every OS.
-    pub fn command_key_name() -> &'static str {
-        Platform::current().logo_key_name()
-    }
-
-    pub fn is_empty(self) -> bool {
-        !self.ctrl && !self.alt && !self.shift && !self.command && !self.primary
+    fn display_in(self, platform: Platform, i18n: &signex_i18n::I18n) -> String {
+        super::display::modifiers_in(self, platform, i18n)
     }
 }
 

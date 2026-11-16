@@ -118,7 +118,10 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
                         row![
                             property_label(label, muted),
                             signex_widgets::text_input(
-                                signex_widgets::raw(project_value.clone().unwrap_or_default()),
+                                // The project's own value for the field, shown verbatim.
+                                signex_i18n::UserText::new(
+                                    project_value.clone().unwrap_or_default()
+                                ),
                                 value.clone()
                             )
                             .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))

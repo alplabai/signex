@@ -83,7 +83,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let (ts, sp) = (TypeScale::default(), Spacing::default());
     let project_id = project.id;
     let description = text_input(
-        raw("Description"),
+        signex_i18n::t!(i18n, signex_i18n::ids::PLACEHOLDER_PROJECT_DESCRIPTION),
         project.data.description.as_deref().unwrap_or(""),
     )
     .on_input(move |text| tab_message(ProjectTabMsg::DescriptionEdited { project_id, text }))

@@ -28,6 +28,7 @@ fn drawn_items(tool: Tool, tokens: &ThemeTokens, tid: ThemeId) -> Vec<ActiveBarI
         tid,
         false,
         false,
+        &signex_i18n::I18n::en_us(),
     )
 }
 

@@ -453,6 +453,42 @@ panels-status-bar-snap-on = Snap on
 panels-status-bar-snap-off = Snap off
 panels-status-bar-tool = Tool: { $tool }
 panels-status-bar-importing = Importing { $name }… ✕
+# The cursor position. $value is the coordinate as a number; $unit is the
+# unit symbol (mm, mil, in, µm).
+panels-status-bar-x = X { $value } { $unit }
+panels-status-bar-y = Y { $value } { $unit }
+# The zoom level; $percent is a whole number, already written out.
+panels-status-bar-zoom = { $percent }%
+# Shown while saved documents are being committed to the project history;
+# $count is how many commits are still running.
+panels-status-bar-saving = { $count ->
+        [one] Saving…
+       *[other] Saving { $count }…
+    }
+# The canvas selection when it holds one kind of object; $kind is one of the
+# panels-status-bar-selected-* texts below.
+panels-status-bar-selection-one-kind = Sel: { $kind }
+# The canvas selection when it holds several kinds; $count is the total and
+# $kinds the panels-status-bar-selected-* texts, separated by commas.
+panels-status-bar-selection-kinds = Sel: { $count } ({ $kinds })
+panels-status-bar-selected-components = { $count ->
+        [one] { $count } component
+       *[other] { $count } components
+    }
+panels-status-bar-selected-wires = { $count ->
+        [one] { $count } wire
+       *[other] { $count } wires
+    }
+panels-status-bar-selected-labels = { $count ->
+        [one] { $count } label
+       *[other] { $count } labels
+    }
+panels-status-bar-selected-shapes = { $count ->
+        [one] { $count } shape
+       *[other] { $count } shapes
+    }
+# Selected objects that are none of the kinds above.
+panels-status-bar-selected-other = { $count } other
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…

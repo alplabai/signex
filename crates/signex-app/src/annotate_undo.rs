@@ -31,13 +31,13 @@ impl AnnotateUndo {
             AnnotateUndo::Project
         }
     }
-}
 
-impl std::fmt::Display for AnnotateUndo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// The name a pick list shows, rendered at view time.
+    pub fn label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            AnnotateUndo::Project => write!(f, "One step for the whole project"),
-            AnnotateUndo::PerSheet => write!(f, "Per sheet"),
+            AnnotateUndo::Project => ids::PREFERENCES_ANNOTATE_UNDO_PROJECT,
+            AnnotateUndo::PerSheet => ids::PREFERENCES_ANNOTATE_UNDO_PER_SHEET,
         }
     }
 }

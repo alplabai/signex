@@ -107,8 +107,8 @@ pub(super) fn waive_editor<'a>(
         return None;
     }
     let wrap = PanelMsg::ErcWaiver;
-    let input = |hint: &'a str, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
-        signex_widgets::text_input(signex_widgets::raw(hint), value)
+    let input = |hint: signex_i18n::MessageId, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
+        signex_widgets::text_input(signex_i18n::t!(ctx.i18n, hint), value)
             .on_input(move |s| wrap(on(s)))
             .on_submit(wrap(ErcWaiverMsg::Confirmed))
             .size(TS.body)
@@ -131,7 +131,7 @@ pub(super) fn waive_editor<'a>(
         .width(Length::Fill);
     col = col.push(
         input(
-            "Reason (required)",
+            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_REASON,
             &draft.reason,
             ErcWaiverMsg::ReasonChanged,
         )
@@ -139,7 +139,7 @@ pub(super) fn waive_editor<'a>(
     );
     col = col.push(
         input(
-            "Author (required)",
+            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_AUTHOR,
             &draft.author,
             ErcWaiverMsg::AuthorChanged,
         )

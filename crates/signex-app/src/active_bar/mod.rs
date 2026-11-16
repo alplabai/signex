@@ -5,8 +5,9 @@
 
 use iced::widget::{Widget, svg};
 use iced::{Background, Border, Color, Element, Theme};
+use signex_i18n::{I18n, MessageId, ids};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use crate::styles::{self, TypeScale};
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -26,7 +27,7 @@ pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
     bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
 };
-pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
+pub use planned::{PLANNED_TOOLS, is_planned, planned_name, refusal_line};
 
 /// Whether `action` needs at least one selected item to make sense.
 /// Transform / align / distribute family — Altium greys these out when
@@ -418,12 +419,14 @@ pub enum ActiveBarAction {
 /// Hover text for a bar button: its name, plus the shared "planned" note
 /// when the button's left-click action is a placeholder tool (#1249), so a
 /// greyed Harness button explains itself like the rows in its dropdown.
-fn button_tooltip(left: &ActiveBarMsg, name: &str) -> String {
+fn button_tooltip(left: &ActiveBarMsg, name: MessageId, i18n: &I18n) -> String {
+    let name = i18n.message_plain(name, &[]);
     match left {
-        ActiveBarMsg::Action(action) if is_planned(action) => {
-            format!("{name} — {PLANNED_TOOLTIP}")
-        }
-        _ => name.to_string(),
+        ActiveBarMsg::Action(action) if is_planned(action) => i18n.message_plain(
+            ids::CHROME_ACTIVE_BAR_PLANNED_TOOLTIP,
+            &[("name", name.into())],
+        ),
+        _ => name,
     }
 }
 
@@ -437,6 +440,10 @@ fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
 }
 
 /// Render the Active Bar (the floating toolbar strip).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "8 arguments: the bar reads independent slices of app state and owns none of them"
+)]
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
     corner_mode: signex_types::corner::CornerMode,
@@ -445,6 +452,7 @@ pub fn view_bar<'a>(
     tid: ThemeId,
     has_selection: bool,
     has_net_colors: bool,
+    i18n: &I18n,
 ) -> Element<'a, ActiveBarMsg> {
     let items = bar_items(
         current_tool,
@@ -454,12 +462,17 @@ pub fn view_bar<'a>(
         tid,
         has_selection,
         has_net_colors,
+        i18n,
     );
     signex_widgets::active_bar::view(items, tokens)
 }
 
 /// The bar's slots in draw order. The leading slots must match
 /// `layout::SCHEMATIC_BAR_SLOTS` (pinned by `bar_items_follow_the_slot_table`).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "8 arguments: the bar reads independent slices of app state and owns none of them"
+)]
 fn bar_items(
     current_tool: crate::app::Tool,
     corner_mode: signex_types::corner::CornerMode,
@@ -468,6 +481,7 @@ fn bar_items(
     tid: ThemeId,
     has_selection: bool,
     has_net_colors: bool,
+    i18n: &I18n,
 ) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
     use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
@@ -499,7 +513,7 @@ fn bar_items(
                selected: bool,
                left: ActiveBarMsg,
                right: Option<ActiveBarMsg>,
-               tooltip: &str|
+               tooltip: MessageId|
      -> ActiveBarItem<ActiveBarMsg> {
         let enabled = match &left {
             ActiveBarMsg::Action(a) => action_enabled(a, has_selection, has_net_colors),
@@ -512,7 +526,7 @@ fn bar_items(
         };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
-            tooltip: button_tooltip(&left, tooltip),
+            tooltip: button_tooltip(&left, tooltip, i18n),
             enabled,
             selected,
             on_press: Some(left),
@@ -528,14 +542,14 @@ fn bar_items(
         false,
         ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)),
-        "Selection Filter",
+        ids::CHROME_ACTIVE_BAR_SELECTION_FILTER,
     ));
     items.push(btn(
         ic::icon_move(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::Move),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
-        "Move / Transform",
+        ids::CHROME_ACTIVE_BAR_MOVE,
     ));
     items.push(ActiveBarItem::Separator);
 
@@ -544,14 +558,14 @@ fn bar_items(
         current_tool == crate::app::Tool::Select,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode)),
-        "Select",
+        ids::CHROME_ACTIVE_BAR_SELECT,
     ));
     items.push(btn(
         ic::icon_align(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::AlignToGrid),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
-        "Align",
+        ids::CHROME_ACTIVE_BAR_ALIGN,
     ));
     items.push(ActiveBarItem::Separator);
 
@@ -560,7 +574,7 @@ fn bar_items(
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
         last("wiring", ActiveBarAction::DrawWire),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
-        "Wiring",
+        ids::CHROME_ACTIVE_BAR_WIRING,
     ));
     let power_icon =
         glyphs::PowerGlyph::of(last_tool.get("power").filter(|a| !is_planned(a))).handle(tid);
@@ -569,7 +583,7 @@ fn bar_items(
         false,
         last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
-        "Power Port",
+        ids::CHROME_ACTIVE_BAR_POWER_PORT,
     ));
     items.push(ActiveBarItem::Separator);
 
@@ -578,28 +592,28 @@ fn bar_items(
         false,
         last("harness", ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
-        "Harness",
+        ids::CHROME_ACTIVE_BAR_HARNESS,
     ));
     items.push(btn(
         ic::icon_sheetsym(tid),
         false,
         last("sheet", ActiveBarAction::PlaceSheetSymbol),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
-        "Sheet Symbol",
+        ids::CHROME_ACTIVE_BAR_SHEET_SYMBOL,
     ));
     items.push(btn(
         ic::icon_port(tid),
         false,
         last("port", ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
-        "Port / Connector",
+        ids::CHROME_ACTIVE_BAR_PORT,
     ));
     items.push(btn(
         ic::icon_directives(tid),
         false,
         last("directives", DIRECTIVES_DEFAULT_ACTION),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
-        "Directives",
+        ids::CHROME_ACTIVE_BAR_DIRECTIVES,
     ));
     items.push(ActiveBarItem::Separator);
 
@@ -608,7 +622,7 @@ fn bar_items(
         current_tool == crate::app::Tool::Text,
         last("text", ActiveBarAction::PlaceTextString),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
-        "Text",
+        ids::CHROME_ACTIVE_BAR_TEXT,
     ));
     items.push(btn(
         ic::icon_shapes(tid),
@@ -618,14 +632,14 @@ fn bar_items(
         ),
         last("shapes", ActiveBarAction::DrawLine),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)),
-        "Drawing Tools",
+        ids::CHROME_ACTIVE_BAR_DRAWING_TOOLS,
     ));
     items.push(btn(
         ic::icon_netcolor(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)),
-        "Net Color",
+        ids::CHROME_ACTIVE_BAR_NET_COLOR,
     ));
 
     // Draw-mode indicator (only visible while wire/bus is the active
@@ -635,15 +649,15 @@ fn bar_items(
         items.push(ActiveBarItem::Separator);
         // The pill names the angle; the status bar says which leg leads.
         let mode_label = match corner_mode {
-            signex_types::corner::CornerMode::Ortho90 => "90\u{00B0}",
+            signex_types::corner::CornerMode::Ortho90 => ids::CHROME_ACTIVE_BAR_CORNER_90,
             signex_types::corner::CornerMode::Angle45Start
-            | signex_types::corner::CornerMode::Angle45End => "45\u{00B0}",
-            signex_types::corner::CornerMode::FreeAngle => "Any",
+            | signex_types::corner::CornerMode::Angle45End => ids::CHROME_ACTIVE_BAR_CORNER_45,
+            signex_types::corner::CornerMode::FreeAngle => ids::CHROME_ACTIVE_BAR_CORNER_ANY,
         };
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
         let pill: Element<'static, ActiveBarMsg> = button(
-            text(raw(mode_label.to_string()))
+            text(i18n.message(mode_label, &[]))
                 .size(TS.label)
                 .color(pill_text),
         )
@@ -727,6 +741,7 @@ pub(crate) fn drawn_trigger_centres_with(
         tid,
         false,
         false,
+        &I18n::en_us(),
     );
     let (offsets, total) = slot_offsets(&items, &m);
     let bar_left = (window_width - total) / 2.0;

@@ -4,7 +4,7 @@
 
 use super::catalog_golden_tests::{Render, profiles_text_for};
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, KeymapEditorModel, Modifiers, Platform,
+    AppCommandId, CompiledKeymap, KeyStroke, KeymapEditorModel, Modifiers, ModifiersExt, Platform,
     ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, TomlShortcutProfile, export_custom_profile,
     import_custom_profile, load_profile_set_at, save_profile_set_at,

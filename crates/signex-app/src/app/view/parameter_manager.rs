@@ -75,23 +75,31 @@ impl Signex {
         keys.sort();
 
         let toolbar = row![
-            text_input(raw("Filter rows"), &table.filter)
-                .style(crate::panels::form_look::text_input_style)
-                .on_input(
-                    |text| Message::ParameterManager(ParameterManagerMsg::FilterChanged(text))
-                )
-                .padding([SP.xs, 6.0])
-                .size(TS.body)
-                .width(iced::Length::Fixed(220.0)),
-            text_input(raw("New parameter"), &table.new_key)
-                .style(crate::panels::form_look::text_input_style)
-                .on_input(
-                    |text| Message::ParameterManager(ParameterManagerMsg::NewKeyChanged(text))
-                )
-                .on_submit(Message::ParameterManager(ParameterManagerMsg::ColumnAdded))
-                .padding([SP.xs, 6.0])
-                .size(TS.body)
-                .width(iced::Length::Fixed(180.0)),
+            text_input(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::PLACEHOLDER_PARAMETER_MANAGER_FILTER
+                ),
+                &table.filter
+            )
+            .style(crate::panels::form_look::text_input_style)
+            .on_input(|text| Message::ParameterManager(ParameterManagerMsg::FilterChanged(text)))
+            .padding([SP.xs, 6.0])
+            .size(TS.body)
+            .width(iced::Length::Fixed(220.0)),
+            text_input(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::PLACEHOLDER_PARAMETER_MANAGER_NEW_KEY
+                ),
+                &table.new_key
+            )
+            .style(crate::panels::form_look::text_input_style)
+            .on_input(|text| Message::ParameterManager(ParameterManagerMsg::NewKeyChanged(text)))
+            .on_submit(Message::ParameterManager(ParameterManagerMsg::ColumnAdded))
+            .padding([SP.xs, 6.0])
+            .size(TS.body)
+            .width(iced::Length::Fixed(180.0)),
             crate::styles::dialog_button(
                 signex_i18n::t!(
                     self.ui_state.i18n,
@@ -166,7 +174,7 @@ impl Signex {
                 let sym_uuid = sym.uuid;
                 let k_str = k.clone();
                 r = r.push(
-                    text_input(raw(""), shown)
+                    text_input(signex_i18n::UserText::new(String::new()), shown)
                         .style(crate::panels::form_look::text_input_style)
                         .on_input(move |text| {
                             Message::ParameterManager(ParameterManagerMsg::Edit {
