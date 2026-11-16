@@ -12,6 +12,7 @@ mod json;
 mod matrix;
 mod open;
 mod presets;
+mod search;
 mod sets;
 mod source;
 mod update;

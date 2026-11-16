@@ -260,9 +260,14 @@ pub(super) fn canvas_menu_entries(
     };
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(40);
 
-    v.push(ruled(
+    // The sheet menu seeds from what is under the cursor, so its row is
+    // live without a selection (#2416).
+    v.push(dd_command(
+        i18n,
         Some(ic::icon_dd_find_similar(tid)),
         "find_similar_objects",
+        sc.of("find_similar_objects"),
+        None,
     ));
     v.push(ruled(Some(ic::icon_chrome_search(tid)), "find"));
     // Ends the net highlight, which dims everything off the net.

@@ -104,7 +104,7 @@ impl Col {
 /// whose kind this build does not know shows in every sub-tab.
 fn shown<'f>(frame: &'f Frame) -> Vec<&'f RuleRow> {
     let state = frame.state;
-    let needle = state.search.trim().to_lowercase();
+    let needle = super::super::search::needle(&state.search);
     frame
         .table
         .rows
@@ -119,7 +119,7 @@ fn shown<'f>(frame: &'f Frame) -> Vec<&'f RuleRow> {
                     row.message.clone().unwrap_or_default(),
                 ]
                 .iter()
-                .any(|hay| hay.to_lowercase().contains(&needle))
+                .any(|hay| super::super::search::holds(hay, &needle))
         })
         .filter(|row| match state.filter {
             RulesFilter::All => true,
@@ -475,13 +475,13 @@ fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             }
         }
     }
-    let needle = typed.trim().to_lowercase();
+    let needle = super::super::search::needle(&typed);
     let candidates = frame
         .classes
         .iter()
         .map(|c| format!("class == \"{c}\""))
         .chain(nets.iter().map(|n| format!("net == \"{n}\"")))
-        .filter(|c| needle.is_empty() || c.to_lowercase().contains(&needle))
+        .filter(|c| super::super::search::holds(c, &needle))
         .take(8);
     let mut picks: Row<Element<'a, Message>> = Row::new().spacing(SP.xs);
     for candidate in candidates {

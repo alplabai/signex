@@ -111,5 +111,4 @@ fn the_three_points_of_a_sweep_rebuild_the_same_arc() {
         close(start.x, 1.0) && close(end.y, 1.0),
         "{start:?} {end:?}"
     );
-    let _ = PI;
 }

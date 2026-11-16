@@ -324,7 +324,9 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
     assert!(runs(row_message(&place, "Keepout"), "place_board_keepout"));
     assert!(runs(row_message(&place, "Board Sketch"), "board_sketch"));
     // A tool the board editor cannot run yet is greyed, with its reason.
-    assert!(row_message(&place, "Pad").is_none());
+    // Pad is live since #2373; Component is still greyed.
+    assert!(runs(row_message(&place, "Pad"), "place_board_pad"));
+    assert!(row_message(&place, "Component").is_none());
     let read_only = board_ctx(PcbTargets {
         shown: true,
         read_only: true,

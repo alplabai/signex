@@ -255,6 +255,11 @@
     "category": "edit"
   },
   {
+    "id": "cycle_arc_mode",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "cycle_fast_grid",
     "group": "General",
     "category": "view"
@@ -875,12 +880,22 @@
     "category": "place"
   },
   {
+    "id": "place_board_arc",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_circle",
     "group": "Pcb",
     "category": "place"
   },
   {
     "id": "place_board_diff_pair",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension",
     "group": "Pcb",
     "category": "place"
   },
@@ -906,6 +921,11 @@
   },
   {
     "id": "place_board_multi_route",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_pad",
     "group": "Pcb",
     "category": "place"
   },
@@ -946,6 +966,11 @@
   },
   {
     "id": "place_board_slice_pour",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_string",
     "group": "Pcb",
     "category": "place"
   },

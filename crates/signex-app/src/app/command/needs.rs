@@ -57,7 +57,9 @@ pub(crate) enum Needs {
     MoveSelection,
     /// Move: a sheet or a board to pick from.
     MoveObject,
-    /// Find Similar Objects: a selection on a sheet to seed from (#2416). A
+    /// Find Similar Objects: a selection on a sheet to seed from (#2416), or a
+    /// board in view, which seeds from its selection or what is under the
+    /// cursor (#2403). A
     /// key or the canvas menu may seed from the object under the cursor, so
     /// they still reach the handler (`explains_when_unavailable`).
     SimilarSeed,
@@ -165,7 +167,7 @@ impl Needs {
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && editable_selection(ctx),
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
-            Self::SimilarSeed => ctx.has_schematic && ctx.has_selection,
+            Self::SimilarSeed => (ctx.has_schematic && ctx.has_selection) || ctx.pcb.shown,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
             Self::PcbSelection => ctx.pcb.shown && ctx.pcb.any,
@@ -369,6 +371,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_compile_mask"
         | "place_diff_pair"
         | "edit_blanket"
+        // #1667: the file rows place onto the sheet in view.
+        | "place_design_block"
+        | "import_graphics"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.

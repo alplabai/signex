@@ -440,6 +440,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1667: fixture names only.
     ("place_design_block", "PlaceDesignBlock"),
     ("import_graphics", "ImportGraphics"),
+    // #2420: the directive tools, fixture names only.
+    ("place_blanket", "PlaceBlanket"),
+    ("place_compile_mask", "PlaceCompileMask"),
+    ("place_diff_pair", "PlaceDiffPair"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
