@@ -808,6 +808,9 @@ mod descent;
 #[path = "edits.rs"]
 mod edits;
 
+#[path = "find.rs"]
+mod find;
+
 #[path = "scoped.rs"]
 mod scoped;
 
