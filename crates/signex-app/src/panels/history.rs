@@ -219,6 +219,10 @@ fn message_card<'a, M: 'a>(
 /// `PanelMsg::HistoryRestoreClicked { sha }` on press. The handler
 /// runs `LocalGitProjectAdapter::restore_at` against the active
 /// tab's owning project.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "8 arguments: the card reads the entry, the clock, the language and four theme colours"
+)]
 fn commit_card<'a>(
     i18n: &I18n,
     entry: &'a signex_widgets::HistoryEntry,
