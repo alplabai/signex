@@ -50,6 +50,10 @@ pub(crate) enum Needs {
     MoveSelection,
     /// Move: a sheet or a board to pick from.
     MoveObject,
+    /// Find Similar Objects: a selection on a sheet to seed from (#2416). A
+    /// key or the canvas menu may seed from the object under the cursor, so
+    /// they still reach the handler (`explains_when_unavailable`).
+    SimilarSeed,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
     /// Change Footprint: a board with unlocked footprints selected (#2366).
@@ -133,6 +137,7 @@ impl Needs {
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
+            Self::SimilarSeed => ctx.has_schematic && ctx.has_selection,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
@@ -195,6 +200,7 @@ impl Needs {
             }
             Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
             Self::MoveObject => "No schematic or PCB is open",
+            Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
             Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
@@ -258,6 +264,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "flip_selected_y" => Needs::Turn,
         "move_selection" => Needs::MoveSelection,
         "move_object" => Needs::MoveObject,
+        "find_similar_objects" => Needs::SimilarSeed,
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
         "remove_last_vertex" => Needs::VertexTarget,
@@ -277,6 +284,29 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_port"
         | "place_off_sheet_connector"
         | "place_sheet_entry"
+        // #2415: the rest of the Place menu's tools on a sheet, with the
+        // ids that run the same message (`draw_graphic_line` is `draw_line`,
+        // `draw_hierarchical_sheet` is `place_sheet_symbol`, `place_text`
+        // is `place_text_string`).
+        | "place_bus_entry"
+        | "place_sheet_symbol"
+        | "draw_hierarchical_sheet"
+        | "place_no_connect"
+        | "place_no_erc"
+        | "place_text"
+        | "place_text_string"
+        | "place_text_frame"
+        | "place_note"
+        | "draw_line"
+        | "draw_graphic_line"
+        | "draw_arc"
+        | "draw_full_circle"
+        | "draw_rectangle"
+        | "draw_polygon"
+        // #2416: the selection filter and the Net Classes row act on the
+        // sheet in view.
+        | "open_selection_filter"
+        | "open_net_classes"
         | "open_components_panel"
         | "place_symbol"
         | "measure_distance"

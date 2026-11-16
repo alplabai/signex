@@ -267,9 +267,10 @@ impl PanelKind {
         )
     }
 
-    /// Whether this panel requires a PCB document to be open.
+    /// Whether this panel requires a PCB document to be open. Net Classes is
+    /// the project's table, offered with any document (#2416).
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+        matches!(self, PanelKind::LayerStack)
     }
 
     /// The catalog message of [`Self::label`] (dock tabs and titles).
@@ -372,7 +373,9 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             crate::library::editor::footprint::layers_panel::view(ctx)
         }
         PanelKind::Layers => pcb_layers::view(ctx),
-        PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
+        // The project's net-class table, the same section Properties shows
+        // for the sheet (#2416).
+        PanelKind::NetClasses => view_net_classes_section(ctx).boxed(),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
         PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),

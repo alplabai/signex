@@ -21,6 +21,7 @@ use super::{AppCommandId, metadata_for};
 /// crate root (`CARGO_MANIFEST_DIR`).
 const MENU_SOURCES: &[&str] = &[
     "src/menu_bar/model/menus.rs",
+    "src/menu_bar/model/sheet_place.rs",
     "src/app/view/context_menu/menus.rs",
     "src/app/view/context_menu/project_tree.rs",
     "src/app/view/context_menu/submenu.rs",

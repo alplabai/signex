@@ -511,4 +511,28 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2416: View ▸ Selection Filter opens the Active Bar's filter of the
+    // sheet. No default key.
+    CommandMetadata {
+        id: "open_selection_filter",
+        category: "select",
+        label: command_ids::CMD_OPEN_SELECTION_FILTER,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_SELECTION_FILTER),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2416: Design ▸ Net Classes opens the panel of the project's net-class
+    // table. No default key.
+    CommandMetadata {
+        id: "open_net_classes",
+        category: "design",
+        label: command_ids::CMD_OPEN_NET_CLASSES,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_NET_CLASSES),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

@@ -75,7 +75,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
-| `cross_probe` | Cross probe the selection to the board or schematic | select | — | — |
+| `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
 | `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
@@ -103,7 +103,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_items` | Find documents or items | search | — | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
-| `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
+| `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | library | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
@@ -122,7 +122,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
-| `open_net_inspector` | Open Net Inspector panel | panels | — | — |
+| `open_net_inspector` | Open Net Inspector panel | panels | `V N` | `Shift+I` |
 | `open_preferences` | Open preferences | preferences | `Mod+,` | `Mod+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Mod+V` | `Mod+V` |
@@ -214,7 +214,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_elliptical_arc` | Draw elliptical arc | place | — | — |
 | `draw_full_circle` | Draw full circle | place | — | — |
 | `draw_graphic_line` | Draw graphic line | place | — | `I` |
-| `draw_hierarchical_sheet` | Draw hierarchical sheet | place | — | `S` |
+| `draw_hierarchical_sheet` | Draw hierarchical sheet | place | — | — |
 | `draw_line` | Draw line | place | — | — |
 | `draw_polygon` | Draw polygon | place | — | — |
 | `draw_rectangle` | Draw rectangle | place | — | — |
@@ -238,42 +238,44 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |
+| `open_net_classes` | Open the Net Classes panel | design | — | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
+| `open_selection_filter` | Open the selection filter of the sheet | select | — | — |
 | `place_blanket` | Place blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
-| `place_bus_entry` | Place bus entry | place | — | — |
+| `place_bus_entry` | Place bus entry | place | `P U` | `Z` |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
 | `place_component` | Place component | place | — | — |
 | `place_design_block` | Place design block | place | — | `Shift+B` |
 | `place_device_sheet_symbol` | Place device sheet symbol | place | — | — |
 | `place_diff_pair` | Place diff pair | place | — | — |
-| `place_global_label` | Place global label | place | — | `Mod+L` |
+| `place_global_label` | Place global label | place | — | — |
 | `place_graphic` | Place graphic | place | — | — |
 | `place_harness_connector` | Place harness connector | place | — | — |
 | `place_harness_entry` | Place harness entry | place | — | — |
-| `place_hierarchical_label` | Place hierarchical label | place | — | `H` |
+| `place_hierarchical_label` | Place hierarchical label | place | — | — |
 | `place_junction` | Place junction | place | — | `J` |
 | `place_local_net_label` | Place local net label | place | — | `L` |
 | `place_net_label` | Place net label | place | `P N` | — |
-| `place_no_connect` | Place no-connect flag | place | — | `Q` |
+| `place_no_connect` | Place no-connect flag | place | `P X` | `Q` |
 | `place_no_erc` | Place Generic No ERC directive | place | `P V N` | — |
 | `place_note` | Place note | place | — | — |
-| `place_off_sheet_connector` | Place off sheet connector | place | — | — |
+| `place_off_sheet_connector` | Place off sheet connector | place | `P C` | `H` |
 | `place_parameter_set` | Place parameter set | place | — | — |
-| `place_port` | Place port | place | — | — |
+| `place_port` | Place port | place | `P R` | `Mod+L` |
 | `place_power_symbol` | Place power symbol | place | — | `P` |
 | `place_reuse_block` | Place reuse block | place | — | — |
 | `place_sheet_entry` | Place sheet entry | place | — | — |
-| `place_sheet_symbol` | Place sheet symbol | place | — | — |
+| `place_sheet_symbol` | Place sheet symbol | place | `P S` | `S` |
 | `place_signal_harness` | Place signal harness | place | — | — |
 | `place_symbol` | Place symbol | place | — | `A` |
 | `place_text` | Place text | place | — | `T` |
 | `place_text_frame` | Place text frame | place | — | — |
 | `place_text_string` | Place text string | place | — | — |
 | `place_wire` | Place wire | place | `Ctrl+W`, `P W` | `W` |
-| `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | `Z` |
+| `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |

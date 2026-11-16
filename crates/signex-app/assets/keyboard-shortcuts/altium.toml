@@ -163,6 +163,25 @@ context = "global"
 "Shift+F3" = "find_previous"
 "Shift+G" = "cycle_snap_grid_backward"
 
+# #2416: Cross Probe and the Net Inspector, on a sheet or a board.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"T C" = "cross_probe"
+"V N" = "open_net_inspector"
+
+# #2416: the sheet's placement tools with no key before (sheet tabs only).
+[[keyboard_shortcuts.sections]]
+context = "schematic"
+
+[keyboard_shortcuts.sections.bindings]
+"P C" = "place_off_sheet_connector"
+"P R" = "place_port"
+"P S" = "place_sheet_symbol"
+"P U" = "place_bus_entry"
+"P X" = "place_no_connect"
+
 # The board view (PCB tabs only): `+` steps to the next layer of the board,
 # `*` to the next signal layer,
 # `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`

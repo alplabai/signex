@@ -73,7 +73,8 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
-Parameter Manager.... **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+Parameter Manager... and Net Classes (see
+[below](#find-similar-filter-net-classes)). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
@@ -313,6 +314,43 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Place on a sheet {#place-sheet}
+
+Place on a sheet lists every schematic placement tool the Active Bar has
+(#2415). The top rows are the wiring, part and text tools: Wire, Bus, Bus
+Entry, Net Label, Component, Power Port, Junction, Text, Text Frame, Note, No
+Connect and Sheet Entry. Three submenus follow, grouped like the bar's
+buttons (`menu_bar/model/sheet_place.rs`):
+
+- **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
+  Sheet Symbol, Reuse Block; Signal Harness, Harness Connector, Harness Entry.
+- **Directives**: Parameter Set, Generic No ERC, Differential Pair, Blanket,
+  Compile Mask.
+- **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
+  Round Rectangle, Polygon, Bezier; Graphic.
+
+A live row runs its catalog command, the one the Active Bar's row names, and
+is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
+the command's key in the active profile. A tool that is a planned placeholder
+(`active_bar::PLANNED_TOOLS`) is an `ItemState::Placeholder` with the planned
+tooltip, read from the same list the bar greys its rows by, so the two never
+disagree (`items::tool_item`). Global and hierarchical labels have no rows of
+their own: `place_global_label` and `place_hierarchical_label` arm the same
+Port and Off Sheet Connector tools.
+
+## Edit ▸ Find Similar Objects, View ▸ Selection Filter, Design ▸ Net Classes {#find-similar-filter-net-classes}
+
+Rows added by #2416, each a catalog command greyed without a sheet:
+
+- **Edit ▸ Find Similar Objects** runs `find_similar_objects`, the canvas
+  menu's Find Similar: the object under the cursor, else the one selected,
+  seeds the dialog.
+- **View ▸ Selection Filter** runs `open_selection_filter`, which opens the
+  Active Bar's Filter dropdown of the sheet in view.
+- **Design ▸ Net Classes** runs `open_net_classes`, which opens the Net
+  Classes panel: the project's net-class table, the same section the sheet's
+  Properties shows.
+
 ## Place on a board {#place-board}
 
 Place follows the document in view (#2360). While the window shows a board
@@ -374,11 +412,13 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
-## Tools ▸ Net Inspector {#tools-net-inspector}
+## View ▸ Net Inspector {#view-net-inspector}
 
 Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
 panel, docked on the right by default. Always available; with no schematic of
-a project in view the panel says so.
+a project in view the panel says so. The row sits under the panel rows of
+View since #2416 (it was in Tools); the key is `V N` in the default profile and
+`Shift+I` in Classic.
 
 - The list is every net of the active document's project, read from the
   cached stitched project net index (`signex_net::NetIndex`, the one net
@@ -445,7 +485,8 @@ the whole monitor. The Messages panel names how many windows were arranged.
 
 ## Rows still planned {#rows-still-planned}
 
-None: every menu row runs a command (#2247).
+Every other menu row runs a command (#2247). The only greyed tool rows are the
+planned tools of Place on a sheet and on a board, each with its reason.
 
 ## Save and Save As {#file-save}
 

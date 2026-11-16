@@ -143,6 +143,8 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         cmd_item_gated(ctx, cmd("find", "Mod+F")),
         cmd_item_gated(ctx, cmd("find_and_replace", "Ctrl+H")),
+        // #2416: seeds from the object under the cursor or the one selected.
+        cmd_item_gated(ctx, cmd("find_similar_objects", "")),
     ]
 }
 
@@ -256,6 +258,10 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
+        // #2416: the Net Inspector panel (docs/MENU_BAR.md#view-net-inspector),
+        // and the Active Bar's selection filter of the sheet in view.
+        cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        cmd_item_gated(ctx, cmd("open_selection_filter", "")),
     ]
 }
 
@@ -285,10 +291,13 @@ fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
     rows
 }
 
+/// Place on a sheet: the wiring, part and text rows, then every other
+/// placement tool of the Active Bar in its group (#2415).
 fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![
+    let mut rows = vec![
         cmd_item_gated(ctx, cmd("place_wire", "W")),
         cmd_item_gated(ctx, cmd("place_bus", "B")),
+        cmd_item_gated(ctx, cmd("place_bus_entry", "")),
         cmd_item_gated(ctx, cmd("place_net_label", "L")),
         SEP,
         cmd_item_gated(ctx, cmd("open_components_panel", "P")),
@@ -301,6 +310,8 @@ fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::PlaceText,
             ctx.commands.has_schematic,
         ),
+        cmd_item_gated(ctx, cmd("place_text_frame", "")),
+        cmd_item_gated(ctx, cmd("place_note", "")),
         item_if(
             ctx,
             menu_ids::MENU_PLACE_NO_CONNECT,
@@ -308,7 +319,10 @@ fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
             ctx.commands.has_schematic,
         ),
         cmd_item_gated(ctx, cmd("place_sheet_entry", "")),
-    ]
+        SEP,
+    ];
+    rows.extend(super::sheet_place::tool_groups(ctx));
+    rows
 }
 
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
@@ -320,6 +334,8 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_sketch", "")),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
+        // #2416: the project's net-class table, in its own panel.
+        cmd_item_gated(ctx, cmd("open_net_classes", "")),
     ]
 }
 
@@ -460,8 +476,6 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "")),
-        // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
-        cmd_item_gated(ctx, cmd("open_net_inspector", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.
