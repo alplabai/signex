@@ -536,7 +536,7 @@ no release of its own.
 
 | Plan | Scope |
 |------|-------|
-| **Application Core** | The #2325 CLI stack fix; the `signex-i18n-ids` split and the `signex-commands` crate; the core contract (`CoreEvent`, `Effect`, the test adapter); the event seam and projector; the `load_gateway` split; the state partition; persistence and git IO as effects run by a host; command handlers in the core; queries; lifting the core into `signex-workspace` so `signex-cli` drops `signex-app` (ADR-0006, "Slices") |
+| **Application Core** | The #2325 CLI stack fix; the `signex-i18n-ids` split and the `signex-commands` crate; the command catalog in `signex-commands`; the safety net (the parity table, the test adapter and the safety-net tests), with the core's event and effect types added by the slice that moves each behaviour; the event seam and projector; the `load_gateway` split; the state partition; persistence and git IO as effects run by a host; command handlers in the core; queries; lifting the core into `signex-workspace` so `signex-cli` drops `signex-app` (ADR-0006, "Slices") |
 
 **Not in this plan:** a web front end and the wasm32 gate (epic D10: not
 now), the plugin host (Plugin System).
