@@ -172,9 +172,10 @@ pub enum BoardCommand {
     /// options.
     SetBoardOptions { options: Box<BoardOptions> },
     /// Set the board's panel (#2410), `None` to make the board on its own.
-    /// Refused for a panel that breaks a rule of `BoardPanel::check`, or
-    /// that cannot be laid out on the board's outline (tabs that do not fit
-    /// an edge). The inverse is another one holding the old panel.
+    /// Refused for a panel that breaks a rule of `BoardPanel::check`.
+    /// Whether it lays out on the outline is the caller's check: the outline
+    /// may change later and an undo must restore what was there. The inverse
+    /// is another one holding the old panel.
     SetBoardPanel { panel: Option<Box<BoardPanel>> },
 }
 

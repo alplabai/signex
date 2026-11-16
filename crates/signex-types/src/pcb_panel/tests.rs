@@ -39,6 +39,12 @@ fn counts_lengths_and_bite_rules_are_checked() {
         Err(PanelError::PitchNotAboveHole)
     );
     assert_eq!(
+        with(|p| p.bites.hole_diameter = 0.01),
+        Err(PanelError::BiteHoleTooSmall {
+            min_mm: MIN_BITE_HOLE_MM
+        })
+    );
+    assert_eq!(
         with(|p| p.spacing_x = 0.0),
         Err(PanelError::BitesNeedSpacing)
     );

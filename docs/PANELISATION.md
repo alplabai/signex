@@ -33,7 +33,9 @@ panel of several different boards is not covered by this slice.
 The bite settings are kept while V-scores are chosen, so switching back loses
 nothing. Rules every panel keeps (`BoardPanel::check`): counts in range,
 lengths finite and not negative; with mouse bites, the bite settings above 0,
-the pitch above the hole diameter, and both gaps above 0. A panel that breaks
+a bite hole of at least 0.1 mm (`MIN_BITE_HOLE_MM`: no drill makes a smaller
+one, and a pitch that rounds to nothing would fill a tab with millions of
+holes), the pitch above the hole diameter, and both gaps above 0. A panel that breaks
 one is refused by the board engine and on load.
 
 ## File

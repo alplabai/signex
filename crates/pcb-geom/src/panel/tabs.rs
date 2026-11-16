@@ -143,7 +143,10 @@ fn spans(start: i64, len: i64, count: u32, width: i64) -> Result<Vec<Span>, Pane
 }
 
 /// The hole centres along a tab: as many as fit `pitch` apart, centred.
+/// `BoardPanel::check` keeps the pitch above the smallest bite hole; the
+/// floor of 1 nm only guards the division.
 fn bite_row(lo: i64, hi: i64, pitch: i64) -> Vec<i64> {
+    let pitch = pitch.max(1);
     let width = hi - lo;
     let count = width / pitch + 1;
     let first = lo + (width - (count - 1) * pitch) / 2;

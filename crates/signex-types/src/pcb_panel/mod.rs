@@ -22,6 +22,10 @@ pub const MAX_PANEL_COPIES: u32 = 50;
 /// Most tabs on one edge of a copy.
 pub const MAX_TABS_PER_EDGE: u32 = 20;
 
+/// Smallest mouse-bite hole, mm: below it no drill makes the hole, and a
+/// pitch that rounds to nothing would fill a tab with millions of holes.
+pub const MIN_BITE_HOLE_MM: f64 = 0.1;
+
 /// How the copies come apart after assembly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -167,6 +171,11 @@ impl BoardPanel {
                 return Err(PanelError::NotPositive { field });
             }
         }
+        if b.hole_diameter < MIN_BITE_HOLE_MM {
+            return Err(PanelError::BiteHoleTooSmall {
+                min_mm: MIN_BITE_HOLE_MM,
+            });
+        }
         if b.pitch <= b.hole_diameter {
             return Err(PanelError::PitchNotAboveHole);
         }
@@ -200,6 +209,8 @@ pub enum PanelError {
     Negative { field: &'static str },
     #[error("{field} must be more than 0")]
     NotPositive { field: &'static str },
+    #[error("the bite hole diameter must be at least {min_mm} mm")]
+    BiteHoleTooSmall { min_mm: f64 },
     #[error("the bite pitch must be more than the bite hole diameter, or the holes run together")]
     PitchNotAboveHole,
     #[error("mouse bites need a gap: set spacing_x and spacing_y above 0, or use V-scores")]
