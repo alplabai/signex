@@ -2,7 +2,7 @@
 //! `signex_commands::catalog`; rendering its message ids stays here.
 
 use crate::keymap::{AppCommandId, ShortcutContext};
-use signex_commands::catalog::{general, operands, pcb, schematic};
+use signex_commands::catalog::{general, operands, pcb, schematic, threed};
 use signex_i18n::{I18n, MessageId, command_ids, t};
 
 pub use categories::category_title;
@@ -20,7 +20,6 @@ mod active_bar;
 mod categories;
 #[cfg(test)]
 mod operand_convention;
-mod threed;
 
 /// The text of a catalog row in a message language. The catalog itself is
 /// UI-free (`signex-commands`); every caller that renders a row imports this.
@@ -607,7 +606,10 @@ mod tests {
                 "pcb.rs",
                 include_str!("../../../../signex-commands/src/catalog/pcb.rs"),
             ),
-            ("threed.rs", include_str!("threed.rs")),
+            (
+                "threed.rs",
+                include_str!("../../../../signex-commands/src/catalog/threed.rs"),
+            ),
         ];
 
         let mut missing: Vec<String> = Vec::new();
