@@ -119,12 +119,10 @@ impl Signex {
             PcbBoardMsg::SheetFromBoardToggled => self.toggle_pcb_sheet_from_board(),
             // #2410: the Panel section's buttons run the menu rows' commands.
             PcbBoardMsg::PanelizeClicked => {
-                let command = crate::menu_bar::MenuMessage::command("panelize_board");
-                task = Task::done(Message::Menu(command));
+                task = run_menu_command("panelize_board");
             }
             PcbBoardMsg::PanelRemoveClicked => {
-                let command = crate::menu_bar::MenuMessage::command("remove_board_panel");
-                task = Task::done(Message::Menu(command));
+                task = run_menu_command("remove_board_panel");
             }
             PcbBoardMsg::PanelSeparationPicked(separation) => {
                 let separation = *separation;
@@ -139,12 +137,7 @@ impl Signex {
                 task = Task::done(Message::Overlay(OverlayMsg::OpenPanel(PanelKind::Messages)));
             }
             // The button runs the BOM report's command, as its menu row does.
-            PcbBoardMsg::ReportsOpened => {
-                if let Ok(id) = crate::keymap::AppCommandId::new("board_report_bom") {
-                    let command = crate::menu_bar::MenuMessage::Command(id);
-                    task = Task::done(Message::Menu(command));
-                }
-            }
+            PcbBoardMsg::ReportsOpened => task = run_menu_command("board_report_bom"),
         }
         self.sync_pcb_board_summary();
         task
@@ -230,3 +223,11 @@ impl Signex {
 #[cfg(test)]
 #[path = "pcb_board_panel_tests.rs"]
 mod tests;
+
+/// The task that runs catalog command `id` as its menu row does.
+fn run_menu_command(id: &str) -> Task<Message> {
+    match crate::keymap::AppCommandId::new(id) {
+        Ok(id) => Task::done(Message::Menu(crate::menu_bar::MenuMessage::Command(id))),
+        Err(_) => Task::none(),
+    }
+}
