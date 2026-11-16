@@ -150,3 +150,21 @@ dialog-grid-title = Cartesian Grid Editor [mm]
 dialog-grid-intro = Grid step and display
 dialog-selection-filter-title = Selection Filter — Customize
 dialog-selection-filter-intro = Selectable kinds
+
+## Move Selection
+# $count is how many objects are selected, a whole number. The English keeps
+# "item(s)" for every count.
+dialog-move-selection-count = { $count } item(s) selected
+# The offset along X and Y, in millimetres.
+dialog-move-selection-dx = ΔX (mm)
+dialog-move-selection-dy = ΔY (mm)
+
+## Net colours
+dialog-net-color-pick-title = Pick Net Color
+dialog-net-color-no-nets = No net labels on the active sheet.
+dialog-net-color-custom-rgb = Custom RGB
+# One letter per colour channel: red, green, blue.
+dialog-net-color-channel-r = R
+dialog-net-color-channel-g = G
+dialog-net-color-channel-b = B
+dialog-net-color-quick-pick = Quick Pick

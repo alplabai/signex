@@ -85,7 +85,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
         use signex_i18n::{Localized, ids, t};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -161,7 +161,8 @@ impl Signex {
                     .size(TS.body)
                     .color(muted_c)
                     .width(label_w),
-                text(raw(value))
+                // The symbol's own field value (design data).
+                text(signex_i18n::UserText::new(value))
                     .font(canvas_font)
                     .size(TS.label)
                     .color(text_c)

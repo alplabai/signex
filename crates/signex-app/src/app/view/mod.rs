@@ -130,7 +130,7 @@ impl Signex {
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
         use iced::widget::{container, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let active_bg = crate::styles::ti(tokens.hover);
@@ -152,7 +152,10 @@ impl Signex {
             accent_position: AccentPosition::Bottom,
         };
         let inner = container(row![
-            text(raw(title.to_string())).size(TS.body).color(text_c)
+            // The tab's title, as the tab strip shows it.
+            text(signex_i18n::UserText::new(title))
+                .size(TS.body)
+                .color(text_c)
         ])
         .padding([SP.s, 10.0])
         .boxed();
@@ -427,8 +430,9 @@ impl Signex {
     fn locked_window_layer(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
-            signex_widgets::text(signex_widgets::raw(
-                "A dialog is open: click to show it, Esc to cancel",
+            signex_widgets::text(signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::OVERLAY_LOCKED_WINDOW_HINT
             ))
             .size(TS.label)
             .color(crate::styles::ti(tokens.text_secondary)),
@@ -488,6 +492,8 @@ impl Signex {
             } else {
                 container(
                     column![
+                        // raw: a fallback of the component editor, which
+                        // moves with the editors (#2060).
                         signex_widgets::text(signex_widgets::raw(
                             "Component Editor — state not yet loaded"
                         ))
@@ -563,6 +569,8 @@ impl Signex {
                     // out of sync with the tabs vector. Keeps the tab
                     // renderable rather than crashing.
                     return container(
+                        // raw: a fallback of the Library Browser, which moves
+                        // with the library views (#2060).
                         signex_widgets::text(signex_widgets::raw(
                             "Library Browser — state not yet loaded",
                         ))
@@ -624,7 +632,10 @@ impl Signex {
             // Always a two-layer stack, so the widget tree keeps its shape
             // when a tab switch changes the read-only state.
             let badge: Element<'_, Message> = if read_only {
-                overlays::read_only_badge::read_only_badge(&self.document_state.panel_ctx.tokens)
+                overlays::read_only_badge::read_only_badge(
+                    &self.document_state.panel_ctx.tokens,
+                    &self.ui_state.i18n,
+                )
             } else {
                 iced::widget::Space::new().boxed()
             };

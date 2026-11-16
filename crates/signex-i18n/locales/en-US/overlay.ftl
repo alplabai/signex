@@ -37,3 +37,17 @@ overlay-symbol-card-value = Value
 overlay-symbol-card-footprint = Footprint
 overlay-symbol-card-library = Library
 overlay-placement-paused-resume = Resume Placement
+
+## Hover card of a net
+# $class is the name of the net's net class.
+overlay-net-card-class = Class: { $class }
+# The card lists a few pins; $count is how many more it leaves out, a whole
+# number.
+overlay-net-card-more = +{ $count } more
+
+# Badge over the canvas of a sheet written by a newer Signex, which opens
+# read-only.
+overlay-read-only-badge = Read-only: written by a newer { -brand-name }
+
+# Over a window that a dialog in its own window has locked.
+overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel

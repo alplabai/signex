@@ -12,6 +12,7 @@ mod find;
 mod library;
 mod notice;
 mod overlay;
+mod panel_body;
 mod panels;
 mod pcb;
 mod pcb_board;
@@ -32,6 +33,7 @@ pub use find::*;
 pub use library::*;
 pub use notice::*;
 pub use overlay::*;
+pub use panel_body::*;
 pub use panels::*;
 pub use pcb::*;
 pub use pcb_board::*;
@@ -56,6 +58,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         library::LIBRARY,
         notice::NOTICE,
         overlay::OVERLAY,
+        panel_body::PANEL_BODY,
         panels::PANELS,
         pcb::PCB,
         pcb_board::PCB_BOARD,

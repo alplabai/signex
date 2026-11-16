@@ -204,25 +204,28 @@ pub(crate) fn view<'a>(
     use signex_i18n::{ids, t};
     let muted = crate::styles::tokens::resolve(tokens).ink4;
 
-    let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
-        container(text(raw(message)).size(HINT_TEXT_SIZE).color(color))
+    let empty = |message: signex_widgets::Label<'a>, color: Color| -> Element<'a, LibraryMessage> {
+        container(text(message).size(HINT_TEXT_SIZE).color(color))
             .padding([SP.s, 10.0])
             .width(Length::Fill)
             .boxed()
     };
+    let note = |id| t!(i18n, id).into();
     if panel.selected.is_none() {
-        return empty("Select a component to see its details.", muted);
+        return empty(note(ids::PANELS_COMPONENTS_DETAILS_SELECT), muted);
     }
     let Some(d) = panel.details.loaded.as_deref() else {
         return match &panel.details.error {
-            Some(why) => empty(why, theme_ext::error_color(tokens)),
-            None => empty("Loading…", muted),
+            // raw: the load error is worded by the library reader (#2061).
+            Some(why) => empty(raw(why.as_str()), theme_ext::error_color(tokens)),
+            None => empty(note(ids::PANELS_COMPONENTS_DETAILS_LOADING), muted),
         };
     };
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.s).width(Length::Fill);
     if let Some(why) = &panel.details.error {
         col = col.push(
+            // raw: the load error is worded by the library reader (#2061).
             text(raw(why.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(theme_ext::error_color(tokens))
@@ -253,7 +256,7 @@ pub(crate) fn view<'a>(
             .boxed(),
             tokens,
         ),
-        None => empty("No symbol.", muted),
+        None => empty(note(ids::PANELS_COMPONENTS_DETAILS_NO_SYMBOL), muted),
     });
 
     col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT));
@@ -294,12 +297,16 @@ pub(crate) fn view<'a>(
                 .height(PREVIEW_HEIGHT);
             preview_box(canvas.boxed(), tokens)
         }
-        None if d.has_footprint_ref => empty("Footprint could not be read.", muted),
-        None => empty("No footprint.", muted),
+        None if d.has_footprint_ref => empty(
+            note(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE),
+            muted,
+        ),
+        None => empty(note(ids::PANELS_COMPONENTS_DETAILS_NO_FOOTPRINT), muted),
     });
-    for note in &d.notes {
+    for line in &d.notes {
         col = col.push(
-            text(raw(note.as_str()))
+            // raw: the notes are worded in English by the details reader (#2061).
+            text(raw(line.as_str()))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -309,7 +316,7 @@ pub(crate) fn view<'a>(
     col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
     if d.parameters.is_empty() {
         col = col.push(
-            text(raw("No parameters."))
+            text(t!(i18n, ids::PANELS_COMPONENTS_DETAILS_NO_PARAMETERS))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .boxed(),

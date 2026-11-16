@@ -358,6 +358,8 @@ fn delete_warning_block<'a>(
     );
     for line in &warning.lines {
         block = block.push(
+            // raw: the in-use lines are worded in English by the delete check
+            // in `library::symbol_delete` (#2060).
             text(raw(line.as_str()))
                 .size(TS.caption)
                 .color(muted)
@@ -491,6 +493,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
+                // raw: the count is already formatted for the locale by `I18n::count`.
                 text(raw(ctx.i18n.count(footprint_row.pad_count as i64)))
                     .size(TS.body)
                     .color(label_color),
