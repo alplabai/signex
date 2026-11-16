@@ -96,20 +96,22 @@ pub(super) fn content_editing<'a>(
     .spacing(10)
     .align_y(iced::Alignment::Center);
 
+    use crate::choice::{Choice, chosen};
+    use crate::paste_prefs::PasteDesignators;
+    let modes = Choice::named(PasteDesignators::ALL, PasteDesignators::label, i18n);
     let paste_designators = row![
         described(
             ids::PREFERENCES_PASTE_DESIGNATORS,
             ids::PREFERENCES_PASTE_DESIGNATORS_HELP
         ),
         Space::new().width(Length::Fill),
-        // The mode names come from `PasteDesignators`'s Display (#2059).
         pick_list(
-            Some(draft_paste_designators),
-            crate::paste_prefs::PasteDesignators::ALL,
-            ToString::to_string,
+            chosen(&modes, &draft_paste_designators),
+            modes,
+            |mode: &Choice<PasteDesignators>| mode.label.clone(),
         )
         .graphite()
-        .on_select(PrefMsg::DraftPasteDesignators),
+        .on_select(|mode: Choice<PasteDesignators>| PrefMsg::DraftPasteDesignators(mode.value)),
     ]
     .align_y(iced::Alignment::Center);
 

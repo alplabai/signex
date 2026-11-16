@@ -106,6 +106,7 @@ fn shared_number(shared: &Shared<f64>, scale: f64) -> String {
 /// progress (if any).
 pub struct MultiView<'a> {
     pub draft: Option<&'a (MultiField, String)>,
+    pub i18n: &'a signex_i18n::I18n,
 }
 
 impl MultiView<'_> {
@@ -123,10 +124,15 @@ impl MultiView<'_> {
             .map(|(_, t)| t.clone());
         let shown = drafted.unwrap_or(stored);
         let (changed, submitted) = (field.clone(), field);
+        let placeholder: signex_widgets::Label<'a> = if mixed {
+            signex_i18n::t!(self.i18n, signex_i18n::ids::PLACEHOLDER_MIXED).into()
+        } else {
+            signex_i18n::UserText::new(String::new()).into()
+        };
         container(
             row![
                 property_label(label.to_string(), muted),
-                text_input(raw(if mixed { MIXED } else { "" }), shown)
+                text_input(placeholder, shown)
                     .on_input(move |s| {
                         PanelMsg::MultiEdit(MultiEditMsg::DraftChanged(changed.clone(), s))
                     })
@@ -295,6 +301,7 @@ pub fn view_multi_selection<'a>(
 ) -> Element<'a, PanelMsg> {
     let view = MultiView {
         draft: ctx.multi_draft.as_ref(),
+        i18n: &ctx.i18n,
     };
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(

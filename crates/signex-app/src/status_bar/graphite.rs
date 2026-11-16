@@ -161,6 +161,17 @@ pub fn check_ink(tokens: &ThemeTokens) -> Color {
     resolve(tokens).accent_text
 }
 
+/// The zoom readout's number: whole percent, no grouping, like the
+/// coordinates beside it.
+pub(super) fn zoom_value(zoom: f64) -> String {
+    format!("{zoom:.0}")
+}
+
+/// The zoom segment of the bar: `zoom` as a whole percent.
+fn zoom_text(i18n: &signex_i18n::I18n, zoom: f64) -> Localized {
+    t!(i18n, ids::PANELS_STATUS_BAR_ZOOM, "percent" => zoom_value(zoom))
+}
+
 /// The cursor readout: `(x, y)` as numbers in `unit`.
 pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
     match unit {
@@ -291,8 +302,16 @@ pub(super) fn view<'a>(
     let grid = grid_label(r.grid_visible, r.grid_size_mm, unit);
 
     let mut bar = row![
-        mono_text(format!("X {xs} {unit}"), muted).boxed(),
-        mono_text(format!("Y {ys} {unit}"), muted).boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => xs, "unit" => unit.to_string()),
+            muted
+        )
+        .boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => ys, "unit" => unit.to_string()),
+            muted
+        )
+        .boxed(),
         mono_button(
             mono_message(
                 if r.grid_visible {
@@ -349,12 +368,8 @@ pub(super) fn view<'a>(
         );
     }
     if r.pending_git_commits > 0 {
-        let label = if r.pending_git_commits == 1 {
-            "Saving…".to_string()
-        } else {
-            format!("Saving {}…", r.pending_git_commits)
-        };
-        bar = bar.push(mono_text(label, muted).boxed());
+        let label = t!(i18n, ids::PANELS_STATUS_BAR_SAVING, "count" => r.pending_git_commits);
+        bar = bar.push(mono_message(label, muted).boxed());
     }
     if let Some(name) = r.altium_import {
         bar = bar.push(
@@ -372,7 +387,7 @@ pub(super) fn view<'a>(
     if let Some(summary) = r.selection.clone() {
         bar = bar.push(
             mono_button(
-                mono_text(summary, ink),
+                mono_message(summary, ink),
                 StatusBarRequest::OpenPropertiesForSelection,
             )
             .boxed(),
@@ -382,7 +397,7 @@ pub(super) fn view<'a>(
         bar = bar.push(view_angle(angle, tokens));
     }
     let bar = bar
-        .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
+        .push(mono_message(zoom_text(i18n, r.zoom), muted).boxed())
         .push(
             mono_button(
                 mono_text(format!("{unit}"), muted),
@@ -437,6 +452,21 @@ mod tests {
         assert_eq!(grid_label(true, 0.254, Unit::Mil), "10.0 mil");
         assert_eq!(grid_label(true, 1.27, Unit::Mm), "1.270 mm");
         assert_eq!(grid_label(false, 1.27, Unit::Mm), "OFF");
+    }
+
+    /// The zoom reads as trunk's `format!("{:.0}%")` did, for every value.
+    #[test]
+    fn the_zoom_reads_as_a_whole_percent_without_grouping() {
+        let i18n = signex_i18n::I18n::en_us();
+        for zoom in [0.5, 2.5, 12.5, 99.5, 100.0, 1600.0, 12345.4] {
+            let shown = zoom_text(&i18n, zoom)
+                .into_string()
+                .replace(['\u{2068}', '\u{2069}'], "");
+            assert_eq!(shown, format!("{:.0}%", zoom), "zoom {zoom}");
+        }
+        assert_eq!(zoom_value(0.5), "0");
+        assert_eq!(zoom_value(2.5), "2");
+        assert_eq!(zoom_value(1600.0), "1600");
     }
 
     #[test]

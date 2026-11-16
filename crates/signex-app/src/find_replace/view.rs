@@ -65,8 +65,7 @@ fn build<'a>(
             .size(TS.body)
             .color(text_secondary)
             .width(80),
-        // raw: placeholders move with #2059.
-        text_input(raw("Search text"), &state.query)
+        text_input(t!(i18n, ids::PLACEHOLDER_FIND_QUERY), &state.query)
             .style(crate::panels::form_look::text_input_style)
             .on_input(FindReplaceMsg::QueryChanged)
             .padding([6.0, SP.m])
@@ -105,13 +104,15 @@ fn build<'a>(
                     .size(TS.body)
                     .color(text_secondary)
                     .width(80),
-                // raw: placeholders move with #2059.
-                text_input(raw("Replacement text"), &state.replacement)
-                    .style(crate::panels::form_look::text_input_style)
-                    .on_input(FindReplaceMsg::ReplacementChanged)
-                    .padding([6.0, SP.m])
-                    .size(TS.label)
-                    .width(Length::Fill),
+                text_input(
+                    t!(i18n, ids::PLACEHOLDER_FIND_REPLACEMENT),
+                    &state.replacement
+                )
+                .style(crate::panels::form_look::text_input_style)
+                .on_input(FindReplaceMsg::ReplacementChanged)
+                .padding([6.0, SP.m])
+                .size(TS.label)
+                .width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center)
             .spacing(10),

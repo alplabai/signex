@@ -64,4 +64,8 @@ define_ids! {
     PDF_COLOR_MODE_COLOR = "pdf-color-mode-color";
     PDF_COLOR_MODE_GREYSCALE = "pdf-color-mode-greyscale";
     PDF_COLOR_MODE_MONOCHROME = "pdf-color-mode-monochrome";
+    PDF_VARIANT_BASE = "pdf-variant-base";
+    PDF_QUALITY_DRAFT = "pdf-quality-draft";
+    PDF_QUALITY_MEDIUM = "pdf-quality-medium";
+    PDF_QUALITY_HIGH = "pdf-quality-high";
 }

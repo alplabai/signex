@@ -142,12 +142,14 @@ impl Signex {
                 text(t!(i18n, ids::PDF_PAGE))
                     .size(TS.body)
                     .color(text_muted),
-                // raw: an example page number as placeholder (#2059).
-                text_input(raw("1"), &preview.specific_page_input)
-                    .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
-                    .padding([SP.s, SP.m])
-                    .size(TS.label)
-                    .width(80),
+                text_input(
+                    t!(i18n, ids::PLACEHOLDER_PDF_PAGE),
+                    &preview.specific_page_input
+                )
+                .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
+                .padding([SP.s, SP.m])
+                .size(TS.label)
+                .width(80),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
