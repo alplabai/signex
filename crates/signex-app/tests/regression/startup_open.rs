@@ -8,6 +8,7 @@
 
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::startup_args::document_paths;
+use signex_i18n::RenderTranslatable;
 
 use std::ffi::OsString;
 use std::fs;

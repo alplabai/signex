@@ -1,4 +1,4 @@
-//! Message ids by catalog area, one file per `locales/en-US/` file, for ids
+//! Message ids by catalog area, one file per `signex-i18n/locales/en-US/` file, for ids
 //! added after the list in `lib.rs` reached the file-size cap. `ids`
 //! re-exports them, so callers write `ids::NAME` either way.
 
@@ -39,7 +39,7 @@ pub use preferences::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         bom::BOM,

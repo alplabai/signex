@@ -2,6 +2,7 @@
 //! re-keys everything under it, and commits the move to version control,
 //! against a real directory and a real repository.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use signex_library::adapters::local_git_project::LocalGitProjectAdapter;

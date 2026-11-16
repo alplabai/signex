@@ -5,6 +5,7 @@
     reason = "tests run git, mkfifo and other tools as fixtures"
 )]
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::restore_commit_tests::restore;

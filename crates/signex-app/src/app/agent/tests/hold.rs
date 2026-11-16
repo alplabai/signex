@@ -5,6 +5,7 @@
 //! take a project any window has open, and many windows can have one project
 //! open. Unix only: process 1 stands for a reused process id.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use super::super::client::{self, Hold, Lookup, hold};

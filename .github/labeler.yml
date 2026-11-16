@@ -110,6 +110,7 @@
           - "crates/signex-app/src/app/**"
           - "crates/signex-app/src/app.rs"
           - "crates/signex-i18n/**"
+          - "crates/signex-i18n-ids/**"
           - "crates/signex-app/src/main.rs"
           - "crates/signex-app/src/menu_bar/**"
           - "crates/signex-app/src/toolbar.rs"

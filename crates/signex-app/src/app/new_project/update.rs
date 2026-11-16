@@ -17,12 +17,12 @@ pub(crate) static NAME_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.new_project.name"));
 
 /// Name a fresh dialog offers.
-const SUGGESTED_NAME: &str = "Untitled";
+pub(super) const SUGGESTED_NAME: &str = "Untitled";
 
 impl Signex {
     /// Where a new project goes by default: beside the open project's folder,
     /// else `Signex` in the user's documents folder.
-    fn default_project_location(&self) -> String {
+    pub(super) fn default_project_location(&self) -> String {
         let beside_open = self
             .document_state
             .active_project
@@ -52,7 +52,7 @@ impl Signex {
         }
         let mut state = NewProjectState::new(self.default_project_location());
         state.name = SUGGESTED_NAME.to_string();
-        self.ui_state.new_project = Some(state);
+        self.ui_state.new_project = Some(Box::new(state));
         Task::batch([
             operation::focus(NAME_INPUT_ID.clone()),
             operation::text_input::select_all(NAME_INPUT_ID.clone()),
@@ -184,7 +184,7 @@ impl Signex {
         let start = self
             .ui_state
             .new_project
-            .as_ref()
+            .as_deref()
             .and_then(NewProjectState::location_path);
         let base = self.ui_state.io.picker.dialog().title_in(
             &self.ui_state.i18n,

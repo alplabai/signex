@@ -9,6 +9,7 @@ use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::PickerMsg;
 use signex_app::library::state::PickerState;
+use signex_i18n::RenderTranslatable;
 
 use crate::library_place_symbol::{Fixture, PLACE_AT, app_with_library, click, doc, fixture, run};
 

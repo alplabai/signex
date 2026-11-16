@@ -1,6 +1,7 @@
 //! #1205 — New Project creates its own `<stem>/` folder and never writes
 //! into a folder that is not empty or already holds a project.
 
+use signex_i18n::RenderTranslatable;
 use std::fs;
 use std::path::Path;
 

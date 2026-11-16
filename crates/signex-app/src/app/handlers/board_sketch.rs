@@ -7,6 +7,7 @@
 //! command, so undo, dirty and save are a board edit's. A refused bake
 //! leaves the board as it was and the mode on. See `docs/PCB_SKETCH.md`.
 
+use signex_i18n::RenderTranslatable;
 use std::path::Path;
 
 use iced::Task;

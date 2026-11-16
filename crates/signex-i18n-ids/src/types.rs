@@ -1,4 +1,5 @@
-//! The three kinds of text the UI deals with.
+//! A message id, user text, and the arguments a message takes. The third
+//! kind of text, `Localized`, is rendered output and lives in `signex-i18n`.
 
 use std::fmt;
 
@@ -15,28 +16,13 @@ impl MessageId {
     pub const fn as_str(self) -> &'static str {
         self.0
     }
-}
 
-/// A rendered message, for display only. It has no `Serialize`, and no
-/// equality with `&str`: state, files and undo labels keep the
-/// [`MessageId`] and its arguments, never the rendered text.
-#[derive(Debug, Clone)]
-pub struct Localized(String);
-
-impl Localized {
-    pub(crate) fn new(text: String) -> Self {
-        Self(text)
-    }
-
-    /// Hand the text to a widget.
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-impl fmt::Display for Localized {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+    /// An id outside the registry, for `signex-i18n`'s tests of a message
+    /// the catalog lacks.
+    #[cfg(feature = "test-support")]
+    #[doc(hidden)]
+    pub const fn unlisted_for_test(id: &'static str) -> Self {
+        Self(id)
     }
 }
 
@@ -74,31 +60,50 @@ pub struct LocalNumber(pub f64);
 /// impls and `From<LocalNumber>`, so a bare float cannot reach the locale
 /// number formatter.
 ///
+/// `signex-i18n`'s `t!` carries the same guarantee and its own doctests.
+///
 /// ```compile_fail,E0277
-/// use signex_i18n::{I18n, ids, t};
-/// let i18n = I18n::en_us();
-/// let _ = t!(i18n, ids::MENU_FILE, "value" => 1.27_f64);
+/// let _ = signex_i18n_ids::Arg::from(1.27_f64);
 /// ```
 ///
 /// ```compile_fail,E0599
-/// let _ = signex_i18n::Arg::Number(1.27);
+/// let _ = signex_i18n_ids::Arg::Number(1.27);
 /// ```
 ///
 /// The same setup compiles once the number is wrapped, so the two failures
-/// above are not caused by a renamed id or constructor:
+/// above are not caused by a renamed type or constructor:
 ///
 /// ```
-/// use signex_i18n::{I18n, LocalNumber, ids, t};
-/// let i18n = I18n::en_us();
-/// let _ = t!(i18n, ids::MENU_FILE, "value" => LocalNumber(1.27));
+/// use signex_i18n_ids::{Arg, LocalNumber};
+/// let _ = Arg::from(LocalNumber(1.27));
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct Arg(pub(crate) ArgKind);
+pub struct Arg(ArgKind);
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ArgKind {
+enum ArgKind {
     Text(String),
     Number(f64),
+}
+
+/// A borrowed read of an [`Arg`], for the formatter in `signex-i18n`. It
+/// converts to nothing, so it opens no way in for a bare float.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArgValue<'a> {
+    Text(&'a str),
+    Number(f64),
+}
+
+impl Arg {
+    /// What the argument holds, for the formatter.
+    #[doc(hidden)]
+    pub fn value(&self) -> ArgValue<'_> {
+        match &self.0 {
+            ArgKind::Text(text) => ArgValue::Text(text),
+            ArgKind::Number(number) => ArgValue::Number(*number),
+        }
+    }
 }
 
 impl From<&str> for Arg {

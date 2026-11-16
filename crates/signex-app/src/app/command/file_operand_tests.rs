@@ -2,6 +2,7 @@
 //! their operand handlers, and the result is what the menu entry and its dialog
 //! produce; a refusal reaches the Messages log and the error notice.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::{CommandArgs, CommandOutcome};
