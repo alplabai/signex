@@ -25,6 +25,8 @@ fn drawing(n: u128, kind: &str, a: (f64, f64), b: (f64, f64)) -> BoardGraphic {
 fn board(graphics: Vec<BoardGraphic>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
+        free: Default::default(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
