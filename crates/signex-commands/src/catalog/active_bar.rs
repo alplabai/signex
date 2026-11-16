@@ -14,9 +14,9 @@
 //! `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
-pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
+pub const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tool_select",
         category: "select",
