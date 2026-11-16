@@ -56,7 +56,7 @@ impl PcbBarRow {
 
 impl PcbBarGroup {
     /// The groups in the bar's order.
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::Components,
         Self::Route,
         Self::Tune,

@@ -40,7 +40,8 @@ impl Signex {
                 return;
             };
             let defaults = &self.interaction_state.pcb_tool_defaults;
-            let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer);
+            let classes = self.track_tool_net_classes();
+            let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
             let corner = self.interaction_state.corner_rule;
             let leg = RoutedLeg {
                 tracks: draw::track_run(anchor, at, corner, style, Uuid::now_v7),
@@ -73,7 +74,8 @@ impl Signex {
             return;
         };
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer);
+        let classes = self.track_tool_net_classes();
+        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
         let corner = self.interaction_state.corner_rule;
         preview
             .segments
