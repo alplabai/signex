@@ -1,6 +1,6 @@
 # ADR-0003 — Deferred work: explicit owed state, one flush before boundaries, consistent history
 
-- **Status:** Proposed (2026-10-25)
+- **Status:** Accepted 2026-11-17 (Hakan; proposed 2026-10-25, applied since, and binding for ADR-0006)
 - **Scope:** `signex-app` — every piece of work that finishes after `update` returns (`Task::perform`, `spawn_blocking`, a `Subscription` producer, the document save queue), and the persistence, undo/redo and document-switch paths that can observe it
 - **Extends:** ADR-0001 §A1 (`update` is the only mutation site; IO is returned as a `Task`) and D8 (a background worker's join handle and cancel token are state in the Model; D1 extends that from workers to every piece of owed work). D2 knowingly blocks `update` for bounded waits; see D2
 - **Trigger:** each move of work off the UI thread reopened the same data-loss class and each feature solved it locally: schematic saves (#997, #1008, tracked in #859), the PDF preview (#940), and the footprint sketch drag solve (#1047, branch `perf/1047-async-sketch-solve`, not merged). Review of #1047 found four holes in a row (see the appendix); each wrote wrong geometry to disk, kept an unsolved state in undo history or marked a dirty document clean. Nothing in the codebase states the rules those fixes rely on.
