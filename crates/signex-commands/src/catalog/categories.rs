@@ -2,11 +2,11 @@
 //! catalog message (`cmd-category-<id>`), so the Keyboard Shortcuts pane and
 //! the preferences keymap list can translate it.
 
-use signex_i18n::{I18n, MessageId, command_ids as ids, t};
+use signex_i18n_ids::{MessageId, command_ids as ids};
 
 /// The title message of a catalog category, or `None` for an id that is not
 /// one (the editor's `uncategorized` bucket aside, which is).
-pub(super) fn category_title_id(category: &str) -> Option<MessageId> {
+pub fn category_title_id(category: &str) -> Option<MessageId> {
     Some(match category {
         "edit" => ids::CMD_CATEGORY_EDIT,
         "modify" => ids::CMD_CATEGORY_MODIFY,
@@ -33,18 +33,9 @@ pub(super) fn category_title_id(category: &str) -> Option<MessageId> {
     })
 }
 
-/// The title of `category` in the message language; an id the catalog does
-/// not know is spelled out from its words (`idle_tools` -> `Idle Tools`).
-pub fn category_title(i18n: &I18n, category: &str) -> String {
-    match category_title_id(category) {
-        Some(id) => t!(i18n, id).to_string(),
-        None => title_words(category),
-    }
-}
-
 /// `a_b` -> `A B`: each word's first ASCII letter capitalised. The text of a
 /// command or category the catalog has no message for.
-pub(super) fn title_words(value: &str) -> String {
+pub fn title_words(value: &str) -> String {
     value
         .split(['_', '-', ' '])
         .filter(|part| !part.is_empty())

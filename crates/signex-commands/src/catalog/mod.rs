@@ -7,6 +7,7 @@ use signex_i18n_ids::{MessageId, command_ids};
 pub use operands::{Operand, OperandKind};
 
 pub mod active_bar;
+pub mod categories;
 pub mod general;
 pub mod operands;
 pub mod pcb;

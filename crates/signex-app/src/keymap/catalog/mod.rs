@@ -2,13 +2,13 @@
 //! `signex_commands::catalog`; rendering its message ids stays here.
 
 use crate::keymap::{AppCommandId, ShortcutContext};
-use signex_commands::catalog::{active_bar, general, pcb, schematic, threed};
+#[cfg(test)]
+use signex_commands::catalog::CommandFlags;
+use signex_commands::catalog::{active_bar, categories, general, pcb, schematic, threed};
 use signex_i18n::{I18n, MessageId, command_ids, t};
 
-pub use categories::category_title;
 pub use signex_commands::catalog::{
-    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, HeadlessUse, Operand,
-    OperandKind,
+    CommandGroup, CommandMetadata, DocumentKind, Enablement, HeadlessUse, Operand, OperandKind,
 };
 
 #[cfg(test)]
@@ -16,7 +16,6 @@ pub(crate) use operand_convention::{
     CONVENTION as OPERAND_CONVENTION, describe as describe_operands,
 };
 
-mod categories;
 #[cfg(test)]
 mod operand_convention;
 
@@ -66,6 +65,15 @@ pub fn command_menu_text(i18n: &I18n, command_id: &str) -> String {
         || command_id.to_string(),
         |metadata| metadata.menu_label_in(i18n),
     )
+}
+
+/// The title of `category` in the message language; an id the catalog does
+/// not know is spelled out from its words (`idle_tools` -> `Idle Tools`).
+pub fn category_title(i18n: &I18n, category: &str) -> String {
+    match categories::category_title_id(category) {
+        Some(id) => t!(i18n, id).to_string(),
+        None => categories::title_words(category),
+    }
 }
 
 /// The message of the menu text of `command_id`, for row data that renders
