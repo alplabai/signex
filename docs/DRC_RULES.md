@@ -288,7 +288,12 @@ wrote, everywhere it is applied: a kind it no longer limits loses its rule,
 a kind it now limits gains one; each rule keeps its name, on/off, layer and
 objects. Each create, apply and change is one undo step that holds the set
 and its rules together. A rule a set wrote can still be edited in the
-table; the set's next change writes over it.
+table; the set's next change writes over it. A severity entry for a rule
+whose `then` word the set changes is dropped in the same step, so the set's
+severity governs it. A rule a set wrote that was edited in the text into one
+the table cannot show ("Text only") is not written over: the set's change is
+refused and names the rule. In a scope cell, a class pair naming a class the
+project does not have is flagged like a one-class scope.
 
 ### Presets
 

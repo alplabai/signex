@@ -4,7 +4,6 @@
 //! as a diff (added, changed and removed rules) before it is applied as
 //! one undo step. Behaviour: `docs/DRC_RULES.md`, "Presets".
 
-use iced::Task;
 use serde_json::{Value, json};
 use signex_drc::{DrcRuleSection, WrittenRuleEdit, adopt_profile_drc, diff_drc_against_profile};
 use signex_drc_dsl::table::presets::{
@@ -15,9 +14,9 @@ use signex_types::project::{DrcRuleSet, FabTemplate, RuleProfile};
 
 use super::PresetPreview;
 use super::commands::{Ran, answered, refused, text};
-use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::Signex;
+use crate::app::command::CommandArgs;
 use crate::app::state::ProjectId;
-use crate::app::{Message, Signex};
 
 /// Why a profile preset cannot be read yet: the library is read off the
 /// update loop.
@@ -90,7 +89,9 @@ impl Signex {
             .rules_drc_of(id)
             .ok_or("the project is no longer open")?;
         let current = base.dsl.clone().unwrap_or_default();
-        let (key, label, mut result, other) = match self.find_preset(preset)? {
+        let found = self.find_preset(preset)?;
+        let merged = matches!(found, Preset::Tier(_));
+        let (key, label, mut result, other) = match found {
             Preset::Tier(tier) => {
                 let text = preset_result(&current, &tier_text(tier), PresetMode::Merge)
                     .map_err(|e| e.to_string())?;
@@ -110,7 +111,7 @@ impl Signex {
             }
         };
         let changes = diff_rows(&current, result.dsl.as_deref().unwrap_or_default());
-        if matches!(self.find_preset(preset)?, Preset::Tier(_)) {
+        if merged {
             // A rule a tier adds or replaces must not keep a stale entry.
             for change in &changes {
                 signex_drc::follow_written_rule_edit(
@@ -148,30 +149,21 @@ impl Signex {
 
     /// `rules_preset_diff`: what applying `preset` changes. A profile
     /// preset before the library was read is refused while it is read.
-    pub(crate) fn rules_preset_diff(
-        &mut self,
-        args: &CommandArgs,
-    ) -> (CommandOutcome, Task<Message>) {
-        let outcome = |result: Result<Value, String>| match result {
-            Ok(value) => CommandOutcome::Answered(value),
-            Err(reason) => CommandOutcome::disabled(reason),
-        };
+    pub(crate) fn rules_preset_diff(&mut self, args: &CommandArgs) -> Ran {
         let id = match self.rules_project_named(args) {
             Ok(id) => id,
-            Err(reason) => return (outcome(Err(reason)), Task::none()),
+            Err(reason) => return refused(reason),
         };
         let Some(preset) = text(args, "preset") else {
-            return (
-                outcome(Err("needs the operand `preset`".into())),
-                Task::none(),
-            );
+            return refused("needs the operand `preset`");
         };
         match self.preset_preview(id, preset) {
-            Ok(preview) => (outcome(Ok(preview_json(&preview))), Task::none()),
+            Ok(preview) => answered(preview_json(&preview)),
+            // The library is read now; the answer is to ask again.
             Err(reason) if reason == PROFILES_NOT_READ => {
-                (outcome(Err(reason)), Self::list_profiles_task())
+                (refused(reason).0, Self::list_profiles_task())
             }
-            Err(reason) => (outcome(Err(reason)), Task::none()),
+            Err(reason) => refused(reason),
         }
     }
 }
@@ -221,10 +213,7 @@ pub(crate) fn rules_preset_apply(app: &mut Signex, args: &CommandArgs) -> Ran {
     let preview = match app.preset_preview(id, preset) {
         Ok(preview) => preview,
         Err(reason) if reason == PROFILES_NOT_READ => {
-            return (
-                CommandOutcome::disabled(reason),
-                Signex::list_profiles_task(),
-            );
+            return (refused(reason).0, Signex::list_profiles_task());
         }
         Err(reason) => return refused(reason),
     };

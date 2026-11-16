@@ -176,6 +176,21 @@ fn changing_a_set_rewrites_every_rule_it_wrote() {
 }
 
 #[test]
+fn a_set_does_not_rewrite_a_rule_edited_into_text_only() {
+    let set = new_set("min_clearance=0.8mm", None).unwrap();
+    let (text, set) = apply_set(OTHER, "hv", &set, "class == \"HV\"").unwrap();
+    let typed = text.replace(
+        "when class == \"HV\"",
+        "when class == \"HV\" and layer == TopCopper and layer == BottomCopper",
+    );
+    let changed = super::sets::redefined(&set, new_set("min_clearance=1mm", None).unwrap());
+    assert_eq!(
+        sync_set(&typed, "hv", &changed),
+        Err(EditError::TextOnly("hv_HV_clearance".into()))
+    );
+}
+
+#[test]
 fn a_set_needs_known_limits_with_units() {
     assert!(new_set("", None).is_err());
     assert!(new_set("min_gap=1mm", None).is_err());

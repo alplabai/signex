@@ -164,6 +164,8 @@ pub fn sync_set(
 /// One use brought in line with `set`: each rule it wrote that still
 /// exists is rewritten (its name, on/off, layer and objects kept); a kind
 /// the set no longer limits loses its rule; a kind it now limits gains one.
+/// A rule edited by hand into one the table cannot show is refused, not
+/// rewritten over what was typed.
 fn sync_use(
     src: &str,
     name: &str,
@@ -182,6 +184,9 @@ fn sync_use(
         let Some(row) = rows.row(rule) else {
             continue;
         };
+        if row.text_only {
+            return Err(EditError::TextOnly(row.name.clone()));
+        }
         let kind = row.kind;
         match wanted.iter().position(|d| Some(d.kind) == kind) {
             Some(at) => {

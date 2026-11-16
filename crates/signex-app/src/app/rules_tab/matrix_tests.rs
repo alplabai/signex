@@ -426,6 +426,93 @@ fn the_rule_set_commands_answer_with_the_set() {
     );
 }
 
+/// A set's new severity governs its rules: a severity entry for a rule
+/// whose `then` word the set changed is dropped in the same step, and an
+/// entry for a rule the set left alone stays.
+#[test]
+fn a_set_severity_change_drops_the_stale_entry_of_its_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    let _ = answer(
+        &mut app,
+        "rules_set_create",
+        &["name=hv", "values=min_clearance=0.8mm"],
+    );
+    let _ = answer(
+        &mut app,
+        "rules_set_apply",
+        &["set=hv", "scope=net == \"LV_A\""],
+    );
+    let severity = &mut app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .expect("stored rules")
+        .drc
+        .severity;
+    severity.insert("user::hv_LV_A_clearance".into(), "info".into());
+    severity.insert("user::base".into(), "warning".into());
+
+    let steps = undo_steps(&app, id);
+    let _ = answer(
+        &mut app,
+        "rules_set_edit",
+        &["set=hv", "values=min_clearance=0.8mm", "severity=warning"],
+    );
+    assert!(dsl(&app).contains("require clearance >= 0.8mm then warning"));
+    let entries = drc(&app).severity;
+    assert!(
+        !entries.contains_key("user::hv_LV_A_clearance"),
+        "{entries:?}"
+    );
+    assert_eq!(
+        entries.get("user::base").map(String::as_str),
+        Some("warning")
+    );
+    assert_eq!(undo_steps(&app, id), steps + 1);
+}
+
+/// A rule a set wrote, edited by hand into one the table cannot show, is
+/// not rewritten over: the set edit is refused and nothing changes.
+#[test]
+fn a_set_edit_over_a_hand_edited_rule_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    let _ = answer(
+        &mut app,
+        "rules_set_create",
+        &["name=hv", "values=min_clearance=0.8mm"],
+    );
+    let _ = answer(
+        &mut app,
+        "rules_set_apply",
+        &["set=hv", "scope=net == \"LV_A\""],
+    );
+    let typed = dsl(&app).replace(
+        "when net == \"LV_A\"",
+        "when net == \"LV_A\" and layer == TopCopper and layer == BottomCopper",
+    );
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .expect("stored rules")
+        .drc
+        .dsl = Some(typed.clone());
+    let steps = undo_steps(&app, id);
+    let refused = run(
+        &mut app,
+        "rules_set_edit",
+        &["set=hv", "values=min_clearance=1mm"],
+    );
+    assert!(
+        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("hv_LV_A_clearance")),
+        "{refused:?}"
+    );
+    assert_eq!(dsl(&app), typed);
+    assert_eq!(undo_steps(&app, id), steps);
+}
+
 #[test]
 fn a_tier_preset_shows_its_diff_then_applies_as_one_undo_step() {
     let dir = tempfile::tempdir().unwrap();

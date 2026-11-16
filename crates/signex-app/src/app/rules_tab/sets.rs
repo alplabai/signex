@@ -42,7 +42,9 @@ fn written(set: &NamedRuleSet) -> BTreeSet<String> {
 
 impl Signex {
     /// Store `text` and set `name` as `set` in one undo step; the severity
-    /// entries of rules the step adds or removes are dropped.
+    /// entries of rules the step adds or removes are dropped, and so are
+    /// those of rules whose `then` word the set changed, so the set's
+    /// severity governs them.
     fn commit_set(
         &mut self,
         id: ProjectId,
@@ -54,11 +56,21 @@ impl Signex {
         let old = before.map(written).unwrap_or_default();
         let new = written(&set);
         let dropped: Vec<String> = old.symmetric_difference(&new).cloned().collect();
+        let now = signex_drc_dsl::table::table(&text);
         self.commit_drc_section(id, |drc| {
-            drc.dsl = (!text.trim().is_empty()).then_some(text);
+            let was = signex_drc_dsl::table::table(drc.dsl.as_deref().unwrap_or_default());
+            let severity = |rows: &signex_drc_dsl::table::RuleTable, rule: &str| {
+                rows.row(rule).map(|row| row.severity)
+            };
+            for rule in old.intersection(&new) {
+                if severity(&was, rule) != severity(&now, rule) {
+                    signex_drc::follow_written_rule_edit(drc, WrittenRuleEdit::SeveritySet(rule));
+                }
+            }
             for rule in &dropped {
                 signex_drc::follow_written_rule_edit(drc, WrittenRuleEdit::Dropped(rule));
             }
+            drc.dsl = (!text.trim().is_empty()).then_some(text);
             drc.sets.insert(name.to_string(), set);
         })
     }
