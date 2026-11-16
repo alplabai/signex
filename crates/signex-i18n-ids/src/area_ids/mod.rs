@@ -3,6 +3,7 @@
 //! re-exports them, so callers write `ids::NAME` either way.
 
 mod bom;
+mod chrome;
 mod dialog;
 mod dialog_text;
 mod editors;
@@ -21,6 +22,7 @@ mod preferences;
 mod update_pcb;
 
 pub use bom::*;
+pub use chrome::*;
 pub use dialog::*;
 pub use dialog_text::*;
 pub use editors::*;
@@ -43,6 +45,7 @@ pub use update_pcb::*;
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         bom::BOM,
+        chrome::CHROME,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
         editors::EDITORS,

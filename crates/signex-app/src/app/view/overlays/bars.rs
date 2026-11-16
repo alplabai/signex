@@ -278,6 +278,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             bar_has_selection,
             bar_has_net_colors,
+            &ui.i18n,
         )
         .map(Message::ActiveBar)
         .boxed();

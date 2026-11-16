@@ -32,3 +32,15 @@ fn boot_finishes_the_journalled_moves_before_any_startup_open_can_run() {
     );
     assert!(pending_move::owed(&recovery).is_empty());
 }
+
+/// The window title reads as it did before the catalog (#2059): no mark
+/// while nothing is unsaved, the dot and the count otherwise.
+#[test]
+fn the_window_title_names_the_version_and_the_unsaved_count() {
+    let i18n = signex_i18n::I18n::en_us();
+    let version = env!("CARGO_PKG_VERSION");
+    let title = |count| super::main_window_title(&i18n, count);
+    assert_eq!(title(0), format!("Signex {version}"));
+    assert_eq!(title(1), format!("• Signex {version} — 1 unsaved"));
+    assert_eq!(title(12), format!("• Signex {version} — 12 unsaved"));
+}

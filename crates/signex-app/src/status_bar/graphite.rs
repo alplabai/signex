@@ -291,8 +291,16 @@ pub(super) fn view<'a>(
     let grid = grid_label(r.grid_visible, r.grid_size_mm, unit);
 
     let mut bar = row![
-        mono_text(format!("X {xs} {unit}"), muted).boxed(),
-        mono_text(format!("Y {ys} {unit}"), muted).boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => xs, "unit" => unit.to_string()),
+            muted
+        )
+        .boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => ys, "unit" => unit.to_string()),
+            muted
+        )
+        .boxed(),
         mono_button(
             mono_message(
                 if r.grid_visible {
@@ -349,12 +357,8 @@ pub(super) fn view<'a>(
         );
     }
     if r.pending_git_commits > 0 {
-        let label = if r.pending_git_commits == 1 {
-            "Saving…".to_string()
-        } else {
-            format!("Saving {}…", r.pending_git_commits)
-        };
-        bar = bar.push(mono_text(label, muted).boxed());
+        let label = t!(i18n, ids::PANELS_STATUS_BAR_SAVING, "count" => r.pending_git_commits);
+        bar = bar.push(mono_message(label, muted).boxed());
     }
     if let Some(name) = r.altium_import {
         bar = bar.push(
@@ -372,7 +376,7 @@ pub(super) fn view<'a>(
     if let Some(summary) = r.selection.clone() {
         bar = bar.push(
             mono_button(
-                mono_text(summary, ink),
+                mono_message(summary, ink),
                 StatusBarRequest::OpenPropertiesForSelection,
             )
             .boxed(),
@@ -382,7 +386,13 @@ pub(super) fn view<'a>(
         bar = bar.push(view_angle(angle, tokens));
     }
     let bar = bar
-        .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
+        .push(
+            mono_message(
+                t!(i18n, ids::PANELS_STATUS_BAR_ZOOM, "percent" => signex_i18n::LocalNumber(r.zoom.round())),
+                muted,
+            )
+            .boxed(),
+        )
         .push(
             mono_button(
                 mono_text(format!("{unit}"), muted),

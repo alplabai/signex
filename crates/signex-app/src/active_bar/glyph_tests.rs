@@ -174,6 +174,7 @@ fn graphite_power_icon(last: Option<ActiveBarAction>) -> iced::widget::svg::Hand
         tid,
         false,
         false,
+        &signex_i18n::I18n::en_us(),
     );
     items
         .into_iter()
