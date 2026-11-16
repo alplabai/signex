@@ -81,7 +81,7 @@ impl Signex {
 
     /// The net classes the Track tool sizes a run by: the table of the
     /// project of the board in view (none for a loose board).
-    fn track_tool_net_classes(&self) -> &[NetClass] {
+    pub(super) fn track_tool_net_classes(&self) -> &[NetClass] {
         match self.active_tab_path() {
             Some(path) => self.board_net_classes(&path),
             None => &[],
