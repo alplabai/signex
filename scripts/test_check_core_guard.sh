@@ -14,20 +14,35 @@ CORE_REL="crates/signex-app/src/app/core"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# The scanner must hold under every POSIX awk at hand: rerun all controls once
+# per implementation (BSD awk, plus mawk and gawk when installed).
+if [[ -z "${CORE_GUARD_AWK:-}" ]]; then
+  status=0
+  for awk_bin in /usr/bin/awk mawk gawk; do
+    command -v "$awk_bin" >/dev/null 2>&1 || continue
+    echo "== $awk_bin"
+    CORE_GUARD_AWK="$awk_bin" bash "$0" || status=1
+  done
+  exit "$status"
+fi
+
 failures=0
 
 # run_case <name> <fail|pass> <core file body | -none- | -empty-> [message] [file]
 #
-# `file` is the path below app/core/ (default sub/x.rs, module depth 2).
+# `file` is the path below app/core/ (default sub/x.rs, module depth 2);
+# `../core.rs` is the sibling module root instead of the directory.
 # The exit code alone is not enough: a gate that crashes under `set -e` also
 # exits 1. A fail case must print `message`; a pass case the OK line.
 run_case() {
-  local name="$1" expect="$2" body="$3" want="${4:-}" file="${5:-sub/x.rs}" tree="$TMP/$1" status=0 out
+  local name="$1" expect="$2" body="$3" want="${4:-}" file="${5:-sub/x.rs}" tree="$TMP/$1" status=0 out target
   mkdir -p "$tree/crates/signex-app/src/app"
+  target="$tree/$CORE_REL/$file"
+  [[ "$file" == ../* ]] && target="$tree/crates/signex-app/src/app/${file#../}"
   case "$body" in
     -none-) ;;
     -empty-) mkdir -p "$tree/$CORE_REL" ;;
-    *) mkdir -p "$(dirname "$tree/$CORE_REL/$file")"; printf '%s\r\n' "$body" > "$tree/$CORE_REL/$file" ;;
+    *) mkdir -p "$(dirname "$target")"; printf '%s\r\n' "$body" > "$target" ;;
   esac
   out="$(CORE_GUARD_ROOT="$tree" bash "$GATE" 2>&1)" || status=$?
   [[ "$expect" == pass ]] && want="Core guard: OK"
@@ -157,6 +172,42 @@ run_case super_after_inline_mod_closes fail 'mod tests {
     use super::*;
 }
 use super::view;' "mod.rs:4 breaks 'super_escape'" mod.rs
+
+# --- the sibling module root app/core.rs ------------------------------------
+
+run_case core_rs_std_fs fail 'use std::fs;' "core.rs:1 breaks 'std_fs'" ../core.rs
+run_case core_rs_super_escape fail 'use super::view;' "core.rs:1 breaks 'super_escape'" ../core.rs
+
+# --- attributes split over lines --------------------------------------------
+
+run_case path_in_multiline_cfg_attr fail '#[cfg_attr(
+    not(test),
+    path = "../../view/mod.rs"
+)]
+mod v;' "x.rs:1 breaks 'path_attr'"
+
+# --- comments and strings do not open a `mod x {` ---------------------------
+
+run_case mod_open_in_block_comment fail '/* mod pad { */
+use super::super::view::Theme;' "x.rs:2 breaks 'super_escape'" x.rs
+run_case mod_open_in_string fail 'const S: &str = "mod pad {";
+use super::super::view::Theme;' "x.rs:2 breaks 'super_escape'" x.rs
+run_case super_word_in_string pass 'const S: &str = "a super user";' '' mod.rs
+run_case use_after_block_comment_is_joined fail '/* io */ use std::{
+    fs};' "x.rs:1 breaks 'std_fs'"
+
+# --- raw identifiers and char literals --------------------------------------
+
+run_case raw_identifier_path fail 'let _ = std::r#fs::read(p);' "breaks 'std_fs'"
+run_case char_quote_does_not_hide_code fail "let q = '\"'; let u = \"http://x\"; let _ = std::fs::read(u);" \
+  "breaks 'std_fs'"
+run_case lifetimes_are_not_char_literals pass "fn f<'a>(x: &'a str) -> &'a str { x } // std::fs"
+
+# --- the UI stack -------------------------------------------------------------
+
+run_case wgpu_use fail 'use wgpu::Device;' "breaks 'ui_stack'"
+run_case signex_widgets_path fail 'let b = signex_widgets::button(x);' "breaks 'ui_stack'"
+run_case i18n_ids_are_allowed pass 'use signex_i18n_ids::NoticeId;'
 
 # --- and the real tree passes ----------------------------------------------
 

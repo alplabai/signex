@@ -4,17 +4,21 @@
 # Reads one .rs file under app/core/. Variables: f (path to print),
 # depth (module depth below app/core/), mode ("lines" or "super").
 #
-# mode=lines prints every code line as `f:line:code`, where `code` is the line
-# with its `//` comment cut off (outside string literals). Each `use`
-# statement, also one after `#[attr]` or `{` on the same line, is joined over
-# its lines and flattened into one record per path (`use std::{fs, io};` ->
+# Every line is lexed first (strip): `//` and `/* */` comments are dropped,
+# string, raw-string and char literal contents are blanked to "" and '', and
+# the `r#` of a raw identifier is cut, across lines. So no comment or string
+# can hide code, open a `mod x {`, shift the brace count or name `super`.
+#
+# mode=lines prints every code line as `f:line:code`. An attribute whose
+# brackets stay open is joined over its lines first. Each `use` statement,
+# also one after `#[attr]` or `{` on the same line, is joined over its lines
+# and flattened into one record per path (`use std::{fs, io};` ->
 # `use std::fs;` and `use std::io;`), so a group split over lines is judged
 # like the one-line form.
 #
 # mode=super prints the records whose `super::` chain climbs above app/core/:
 # more `super`s than the file's depth plus the inline `mod x {` blocks open at
-# that line. Braces are counted without parsing strings, so a lone brace in a
-# string can shift that count.
+# that line.
 
 BEGIN {
   PUB = "(pub(\\([^)]*\\))?[[:space:]]+)?"
@@ -22,21 +26,58 @@ BEGIN {
   # A `use` that starts a statement: line start, or after `]`, `{`, `}` or `;`.
   USE_ANY = "(^|[];{}])[[:space:]]*" PUB "use[[:space:]]"
   MOD_OPEN = PUB "mod[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\\{"
+  bc = 0; sq = 0; rh = 0
 }
 
-# The line without its `//` comment. Quote-aware for "..." strings; a char
-# literal such as '"' or a raw string holding a quote can confuse it.
-function strip(s,   i, c, q, out) {
-  q = 0; out = ""
-  for (i = 1; i <= length(s); i++) {
-    c = substr(s, i, 1)
-    if (q) {
-      out = out c
-      if (c == "\\") { i++; out = out substr(s, i, 1) } else if (c == "\"") q = 0
+function ident(c) { return c ~ /^[A-Za-z0-9_]$/ }
+
+# A raw string or raw identifier may start at s[i] == "r": not glued to a
+# preceding identifier, except a `b` / `c` literal prefix.
+function raw_at(s, i,   p) {
+  p = i > 1 ? substr(s, i - 1, 1) : ""
+  if (p == "b" || p == "c") p = i > 2 ? substr(s, i - 2, 1) : ""
+  return !ident(p)
+}
+
+# The line as code, lexer state (bc: block-comment depth, sq: 1 inside a
+# string, 2 inside a raw string closed by `"` and rh `#`s) carried over lines.
+# shortcut: a non-ASCII char literal such as 'é' reads as a lifetime; lex
+# per character if one ever lands in the core.
+function strip(s,   i, j, n, c, d, out) {
+  out = ""; n = length(s)
+  for (i = 1; i <= n; i++) {
+    c = substr(s, i, 1); d = substr(s, i, 2)
+    if (bc) {
+      if (d == "/*") { bc++; i++ }
+      else if (d == "*/") { bc--; i++; if (!bc) out = out " " }
       continue
     }
-    if (c == "\"") q = 1
-    else if (c == "/" && substr(s, i + 1, 1) == "/") break
+    if (sq == 1) {
+      if (c == "\\") i++
+      else if (c == "\"") { sq = 0; out = out c }
+      continue
+    }
+    if (sq == 2) {
+      if (c == "\"" && substr(s, i + 1, rh) == substr("################", 1, rh)) {
+        sq = 0; i += rh; out = out c
+      }
+      continue
+    }
+    if (d == "//") break
+    if (d == "/*") { bc = 1; i++; continue }
+    if (c == "\"") { sq = 1; out = out c; continue }
+    if (c == "r" && raw_at(s, i)) {
+      for (j = i + 1; substr(s, j, 1) == "#"; j++) ;
+      if (substr(s, j, 1) == "\"") { sq = 2; rh = j - i - 1; i = j; out = out "\""; continue }
+      if (j == i + 2 && substr(s, j, 1) ~ /[A-Za-z_]/) { i++; continue }
+    }
+    if (c == "'") {
+      if (substr(s, i + 1, 1) == "\\") {
+        for (j = i + 3; j <= n && substr(s, j, 1) != "'"; j++) ;
+        i = j; out = out "''"; continue
+      }
+      if (substr(s, i + 2, 1) == "'") { i += 2; out = out "''"; continue }
+    }
     out = out c
   }
   return out
@@ -104,28 +145,52 @@ function count(code,   opens, closes) {
   while (nmods > 0 && braces <= stack[nmods]) nmods--
 }
 
-{ gsub(/\r/, "") }
-/^[[:space:]]*\/\// { next }
-{
-  code = strip($0)
+# `[` minus `]` on a stripped line.
+function brackets(t,   o) {
+  o = gsub(/\[/, "[", t)
+  return o - gsub(/\]/, "]", t)
+}
+
+# Judge one stripped line (or joined attribute) that starts at source line ln.
+function process(code, ln,   usepos, prefix) {
   if (acc != "") {
     acc = acc " " code
     if (code ~ /;/) flush()
     count(code)
-    next
+    return
   }
   if (match(code, USE_ANY)) {
     # Split before the `use` keyword; the prefix is ordinary code.
     usepos = RSTART + RLENGTH - 4
     prefix = substr(code, 1, usepos - 1)
-    emit(NR, prefix, depth + nmods)
-    acc = substr(code, usepos); start = NR
+    emit(ln, prefix, depth + nmods)
+    acc = substr(code, usepos); start = ln
     start_allowed = depth + nmods + (prefix ~ MOD_OPEN ? 1 : 0)
     if (acc ~ /;/) flush()
     count(code)
-    next
+    return
   }
-  emit(NR, code, depth + nmods)
+  emit(ln, code, depth + nmods)
   count(code)
 }
-END { if (acc != "") flush() }
+
+{
+  gsub(/\r/, "")
+  code = strip($0)
+  # An attribute left open (rustfmt splits `#[cfg_attr(..., path = ...)]`)
+  # is joined until its brackets close, so it is judged as one line.
+  if (attr != "") {
+    attr = attr " " code
+    if (brackets(attr) <= 0) { process(attr, attr_start); attr = "" }
+    next
+  }
+  if (acc == "" && code ~ /#!?\[/ && brackets(code) > 0) {
+    attr = code; attr_start = NR
+    next
+  }
+  process(code, NR)
+}
+END {
+  if (attr != "") process(attr, attr_start)
+  if (acc != "") flush()
+}
