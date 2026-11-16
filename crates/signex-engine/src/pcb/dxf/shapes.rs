@@ -237,10 +237,7 @@ fn append(path: &mut Vec<Point>, piece: Vec<Point>) {
 fn join_chains(mut open: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
     let mut rings = Vec::new();
     while let Some(mut chain) = open.pop() {
-        loop {
-            let (Some(&first), Some(&last)) = (chain.first(), chain.last()) else {
-                break;
-            };
+        while let (Some(&first), Some(&last)) = (chain.first(), chain.last()) {
             if chain.len() > 2 && same(first, last) {
                 rings.push(chain);
                 break;

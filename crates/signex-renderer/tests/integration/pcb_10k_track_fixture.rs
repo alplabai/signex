@@ -59,7 +59,7 @@ const UUID_ZONE_BASE: u128 = 40_000;
 /// The same nm-to-mm step the `.snxpcb` reader takes, so a reopened board
 /// compares equal to the generated one.
 fn mm(nm: i64) -> f64 {
-    nm as f64 * 1.0e-6
+    nm as f64 / 1.0e6
 }
 
 fn point(x_nm: i64, y_nm: i64) -> Point {

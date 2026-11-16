@@ -87,7 +87,7 @@ impl PageFrame {
 
     /// A board point (model mm) on the page, PDF points from the
     /// bottom-left.
-    pub(crate) fn to_pt(&self, x_mm: f64, y_mm: f64) -> (f32, f32) {
+    pub(crate) fn to_pt(self, x_mm: f64, y_mm: f64) -> (f32, f32) {
         let u = if self.mirrored {
             self.max.x - x_mm
         } else {

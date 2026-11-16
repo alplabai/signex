@@ -139,7 +139,7 @@ pub fn rotate_to_command(
             let s = sheet.symbols.iter().find(|s| s.uuid == item.uuid)?;
             let stored_delta = (degrees - s.rotation).rem_euclid(360.0);
             // Already there (within float noise): the absolute set is a no-op.
-            let at_target = stored_delta < 1e-6 || stored_delta > 360.0 - 1e-6;
+            let at_target = !(1e-6..=360.0 - 1e-6).contains(&stored_delta);
             if s.is_power || at_target {
                 return Some(Command::SetSymbolRotation {
                     symbol_id: s.uuid,

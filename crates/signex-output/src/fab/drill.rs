@@ -164,7 +164,7 @@ fn via_span(via: &Via, stack: &CopperStack) -> Option<Span> {
         .filter(|l| mask & (1 << layer_bit(**l)) != 0)
         .filter_map(|l| stack.number(*l));
     let from = numbers.next()?;
-    let to = numbers.last()?;
+    let to = numbers.next_back()?;
     Some(Span { from, to })
 }
 
