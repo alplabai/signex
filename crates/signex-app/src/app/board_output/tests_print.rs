@@ -171,6 +171,51 @@ fn the_cli_prints_a_board_at_one_to_one() {
 }
 
 #[test]
+fn the_cli_warns_when_a_one_to_one_board_runs_off_the_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &[],
+    );
+    app.ui_state.first_run_tour_open = false;
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let board = dir.path().join("board.snxpcb");
+    // 400 mm x 300 mm: larger than A4 at 1:1.
+    let mut large = super::tests::board();
+    for point in large.outline.iter_mut() {
+        point.x *= 8.0;
+        point.y *= 10.0;
+    }
+    app.open_pcb_tab(board.clone(), "board".into(), large);
+    let document = format!("document={}", board.display());
+
+    let path = format!("path={}", dir.path().join("fit.pdf").display());
+    let (outcome, _) = headless(&mut app, &[&document, &path, "layers=top"]);
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(answer["pages"][0]["overflows"], false, "fitted");
+    assert_eq!(answer["warnings"], serde_json::json!([]));
+
+    let path = format!("path={}", dir.path().join("full.pdf").display());
+    let (outcome, _) = headless(
+        &mut app,
+        &[&document, &path, "layers=top", "scale=one_to_one"],
+    );
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(answer["pages"][0]["overflows"], true);
+    let warnings = answer["warnings"].as_array().expect("warnings");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.as_str().is_some_and(|w| w.contains("runs off page(s) 1"))),
+        "{warnings:?}"
+    );
+}
+
+#[test]
 fn the_cli_refuses_an_unknown_option() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, board) = app_with_board(dir.path());

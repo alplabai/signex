@@ -112,7 +112,15 @@ fn monochrome_draws_every_layer_in_black() {
     let frame = PageFrame::new(&board, &mono, page, false);
     let mut fonts = crate::pdf::embed::FontUsage::new();
     let mut surface = PdfSurface::new(&mut fonts);
-    draw::page(&mut surface, &board, &mono, &frame, &[BoardLayerSet::Top]);
+    let fills = pcb_geom::zone_fills(&board);
+    draw::page(
+        &mut surface,
+        &board,
+        &fills,
+        &mono,
+        &frame,
+        &[BoardLayerSet::Top],
+    );
     let ops = String::from_utf8(surface.finish()).expect("ops");
     for line in ops.lines() {
         if line.ends_with(" rg") || line.ends_with(" RG") {
@@ -159,4 +167,102 @@ fn each_set_holds_its_layers() {
     for set in BoardLayerSet::ALL {
         assert_eq!(BoardLayerSet::from_id(set.id()), Some(set));
     }
+}
+
+fn zone(fill_type: &str, net: u32, from: (f64, f64), to: (f64, f64)) -> signex_types::pcb::Zone {
+    serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::now_v7(),
+        "net": net,
+        "layer": "TopCopper",
+        "fill_type": fill_type,
+        "outline": [
+            { "x": from.0, "y": from.1 },
+            { "x": to.0, "y": from.1 },
+            { "x": to.0, "y": to.1 },
+            { "x": from.0, "y": to.1 },
+        ],
+    }))
+    .expect("zone")
+}
+
+/// The operators the top set's zones of `board` draw.
+fn zone_ops(board: &PcbBoard) -> String {
+    let print = options(&[BoardLayerSet::Top], BoardPrintPages::PerSet);
+    let page = print.page_size.dimensions_mm(print.orientation);
+    let frame = PageFrame::new(board, &print, page, false);
+    let fills = pcb_geom::zone_fills(board);
+    let mut fonts = crate::pdf::embed::FontUsage::new();
+    let mut surface = PdfSurface::new(&mut fonts);
+    let black = (0.0, 0.0, 0.0);
+    draw::draw_zones(
+        &mut surface,
+        board,
+        &fills,
+        &frame,
+        BoardLayerSet::Top,
+        black,
+    );
+    String::from_utf8(surface.finish()).expect("ops")
+}
+
+#[test]
+fn a_pour_prints_its_fill_clear_of_other_nets() {
+    // VCC pour over R10, whose GND pad must stay clear of it.
+    let mut board = fixture();
+    board.zones.push(zone("pour", 1, (25.0, 5.0), (35.0, 15.0)));
+    let fills = pcb_geom::zone_fills(&board);
+    let pieces = &fills.of(0).expect("the pour fills").pieces;
+    assert!(
+        pieces.iter().any(|p| !p.holes.is_empty()),
+        "the GND pad is cut out"
+    );
+    let rings: usize = pieces.iter().map(|p| 1 + p.holes.len()).sum();
+    let ops = zone_ops(&board);
+    assert_eq!(ops.matches("f*\n").count(), pieces.len(), "{ops}");
+    assert_eq!(
+        ops.lines().filter(|l| l.ends_with(" m")).count(),
+        rings + 1,
+        "the fill's rings, then the outline stroked"
+    );
+}
+
+#[test]
+fn a_keepout_prints_its_outline_not_copper() {
+    let mut board = fixture();
+    board
+        .zones
+        .push(zone("keepout", 0, (40.0, 20.0), (45.0, 25.0)));
+    let ops = zone_ops(&board);
+    assert!(!ops.contains("f*"), "no copper: {ops}");
+    assert!(ops.contains("S\n"), "the outline is stroked: {ops}");
+}
+
+#[test]
+fn a_solid_zone_still_prints_filled() {
+    let mut board = fixture();
+    board
+        .zones
+        .push(zone("solid", 1, (40.0, 20.0), (45.0, 25.0)));
+    let ops = zone_ops(&board);
+    assert_eq!(ops.matches("f*\n").count(), 1, "{ops}");
+}
+
+#[test]
+fn a_one_to_one_board_larger_than_the_page_is_flagged() {
+    let mut board = fixture();
+    for point in board.outline.iter_mut() {
+        point.x *= 8.0;
+        point.y *= 10.0;
+    }
+    let mut print = options(&[BoardLayerSet::Top], BoardPrintPages::PerSet);
+    let fitted = board_pdf(&board, &print, &BoardPrintText::default()).expect("pdf");
+    assert!(
+        !fitted.pages[0].overflows,
+        "a fitted board stays on the page"
+    );
+    print.scale = BoardPrintScale::OneToOne;
+    let full = board_pdf(&board, &print, &BoardPrintText::default()).expect("pdf");
+    assert!(full.pages[0].overflows, "400 mm x 300 mm runs off A4");
+    let small = board_pdf(&fixture(), &print, &BoardPrintText::default()).expect("pdf");
+    assert!(!small.pages[0].overflows, "50 mm x 30 mm fits A4");
 }

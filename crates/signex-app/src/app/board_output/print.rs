@@ -144,10 +144,28 @@ impl Signex {
             output.pages.len(),
             output.bytes.len()
         );
-        let warnings =
-            crate::app::handlers::menu::export::uncovered_chars_warning(&output.uncovered_chars)
-                .into_iter()
-                .collect();
+        let warnings = pdf_warnings(&output);
         self.write_export(path, output.bytes, "PDF", log, None, warnings)
     }
+}
+
+/// What a made PDF warns of: characters no font covers, and pages the
+/// board runs off at 1:1.
+pub(super) fn pdf_warnings(output: &BoardPdfOutput) -> Vec<String> {
+    let uncovered =
+        crate::app::handlers::menu::export::uncovered_chars_warning(&output.uncovered_chars);
+    let off_page: Vec<String> = output
+        .pages
+        .iter()
+        .enumerate()
+        .filter(|(_, page)| page.overflows)
+        .map(|(index, _)| (index + 1).to_string())
+        .collect();
+    let overflow = (!off_page.is_empty()).then(|| {
+        format!(
+            "PDF export: at 1:1 the board is larger than the printable area and runs off page(s) {}; choose Fit to Page or a larger page",
+            off_page.join(", ")
+        )
+    });
+    uncovered.into_iter().chain(overflow).collect()
 }

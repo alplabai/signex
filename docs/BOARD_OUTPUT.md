@@ -60,17 +60,20 @@ On a board, File ▸ Print (Ctrl+P), File ▸ Export ▸ PDF and
   mirrored.
 - **Scale**: Fit to Page fills the space inside the 10 mm margins and above
   the title block; 1:1 prints the board at its size, centred (a board larger
-  than the page is cut at the page edge). The board's extent is its outline's,
+  than the page is cut at the page edge; the page is flagged and the export
+  warns which pages run off). The board's extent is its outline's,
   or the default board area when it has none.
 - **Ink**: each set in its colour on white paper, or everything black.
 - **Show**: the board outline on every page, drill holes (pad and via holes
   drawn open), and the title block (the board name, the page's sets, the
   scale as `1:1`, `1:2.5` or `2:1`, and `n / N`).
 
-Drawn per set: zones filled (with their usable holes), tracks with round
-ends at their width, pads and vias on the set's copper, footprint and board
-drawings and texts on the set's layers. Texts are placed and turned, not
-mirrored. Lines thinner than 0.25 pt print at 0.25 pt.
+Drawn per set: a polygon pour as its computed fill (clear of other nets'
+copper, as on the canvas) with its outline stroked, a keepout or other rule
+area as its outline only, any other zone filled (with its usable holes);
+tracks with round ends at their width, pads and vias on the set's copper,
+footprint and board drawings and texts on the set's layers. Texts are
+placed and turned, not mirrored. Lines thinner than 0.25 pt print at 0.25 pt.
 
 Defaults: Top, Bottom and Outline and Mechanical on their own pages, the
 bottom mirrored, fitted, colour, outline, drill holes and title block on, A4
@@ -82,8 +85,10 @@ optional `layers` (comma-separated set ids `top`, `bottom`, `inner`,
 `mechanical`), `pages` (`per_set`, `composite`), `scale` (`fit`,
 `one_to_one`) and the switches `monochrome`, `mirror_bottom`, `outline`,
 `drill_marks`, `title_block`; anything left out is the default above. The
-answer lists each page's sets, mirror, scale and printed size in mm. CLI only
+answer lists each page's sets, mirror, scale, printed size in mm and whether
+the board runs off the page, and the export's warnings. CLI only
 (`export` capability).
 
-Not yet: a raster preview of the pages, a system printer, and a page size
-other than A4 landscape in the dialog (the options carry one).
+Not yet: footprint designator and comment texts, a raster preview of the
+pages, a system printer, and a page size other than A4 landscape in the
+dialog (the options carry one).

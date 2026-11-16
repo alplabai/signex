@@ -206,6 +206,7 @@ pub(crate) fn export_board_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         "document": board.display().to_string(),
         "path": path.display().to_string(),
         "pages": pages,
+        "warnings": super::print::pdf_warnings(&output),
     });
     let task = app.write_pdf_file(output, path);
     (CommandOutcome::Answered(answer), task)

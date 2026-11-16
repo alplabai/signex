@@ -78,6 +78,13 @@ impl PageFrame {
         )
     }
 
+    /// Whether the board runs past the margins: at 1:1, a board larger than
+    /// the printable area. A fitted board never does.
+    pub(crate) fn overflows(&self) -> bool {
+        const SLACK_MM: f64 = 1e-6;
+        self.at_mm.0 < MARGIN_MM - SLACK_MM || self.at_mm.1 < MARGIN_MM - SLACK_MM
+    }
+
     /// A board point (model mm) on the page, PDF points from the
     /// bottom-left.
     pub(crate) fn to_pt(&self, x_mm: f64, y_mm: f64) -> (f32, f32) {

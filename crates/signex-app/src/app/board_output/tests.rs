@@ -157,6 +157,30 @@ fn each_report_command_opens_its_table_and_a_tab_switches_it() {
 }
 
 #[test]
+fn a_tab_switch_after_the_board_is_dropped_says_why() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    run(&mut app, "board_report_bom");
+    assert_eq!(shown_kind(&app), Some(BoardReportKind::Bom));
+    // A failed History restore leaves the tab without its board.
+    for tab in app.document_state.tabs.iter_mut() {
+        if tab.path == board {
+            tab.cached_document = None;
+        }
+    }
+    app.document_state.error_notice = None;
+    let _ = output(
+        &mut app,
+        BoardOutputMsg::ReportPicked(BoardReportKind::Netlist),
+    );
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the click is answered with a notice"
+    );
+    assert_eq!(shown_kind(&app), Some(BoardReportKind::Bom), "table kept");
+}
+
+#[test]
 fn the_board_panel_reports_button_opens_board_reports() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_with_board(dir.path());

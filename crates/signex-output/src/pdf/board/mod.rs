@@ -185,6 +185,9 @@ pub struct BoardPdfPage {
     pub scale: f64,
     /// The board's extent as printed, in page mm.
     pub printed_size_mm: (f64, f64),
+    /// The board runs past the printable area (at 1:1 on a page too
+    /// small): part of it is off the page.
+    pub overflows: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -221,10 +224,11 @@ pub fn board_pdf(
     let mut fonts = FontUsage::new();
     let mut contents = Vec::with_capacity(plan.len());
     let mut pages = Vec::with_capacity(plan.len());
+    let fills = pcb_geom::zone_fills(board);
     for (index, (sets, mirrored)) in plan.iter().enumerate() {
         let frame = PageFrame::new(board, options, (page_w_mm, page_h_mm), *mirrored);
         let mut surface = PdfSurface::new(&mut fonts);
-        draw::page(&mut surface, board, options, &frame, sets);
+        draw::page(&mut surface, board, &fills, options, &frame, sets);
         if options.title_block {
             let label = sets
                 .iter()
@@ -250,6 +254,7 @@ pub fn board_pdf(
             mirrored: *mirrored,
             scale: frame.scale(),
             printed_size_mm: frame.printed_size_mm(),
+            overflows: frame.overflows(),
         });
     }
     let bytes = assemble(&contents, &fonts, page_w_mm, page_h_mm)?;

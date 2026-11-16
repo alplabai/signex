@@ -2,7 +2,7 @@
 //! vias, drawings and texts, then the drill holes, the outline and the
 //! title block.
 
-use pcb_geom::{GraphicShape, PlacedGraphic, PointNm, nm_to_mm};
+use pcb_geom::{GraphicShape, PlacedGraphic, PointNm, Polygon, ZoneFills, nm_to_mm};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -20,6 +20,8 @@ const BLACK: Rgb = (0.0, 0.0, 0.0);
 const PAPER: Rgb = (1.0, 1.0, 1.0);
 /// The thinnest line a page draws, so a hairline still prints.
 const MIN_LINE_PT: f32 = 0.25;
+/// The stroke of a pour's or rule area's outline, board mm.
+const ZONE_EDGE_MM: f64 = 0.1;
 /// Points per quarter turn of a round pad or via.
 const ROUND_STEPS: usize = 8;
 /// The sets in the order they are drawn: the top side last, on top.
@@ -47,6 +49,7 @@ fn ink(set: BoardLayerSet, monochrome: bool) -> Rgb {
 pub(super) fn page(
     s: &mut PdfSurface<'_>,
     board: &PcbBoard,
+    fills: &ZoneFills,
     options: &BoardPrintOptions,
     frame: &PageFrame,
     sets: &[BoardLayerSet],
@@ -54,7 +57,7 @@ pub(super) fn page(
     // Round caps and joins, so a bent track has no notch.
     s.raw_operator("1 J 1 j\n");
     for set in DRAW_ORDER.into_iter().filter(|set| sets.contains(set)) {
-        draw_set(s, board, frame, set, ink(set, options.monochrome));
+        draw_set(s, board, fills, frame, set, ink(set, options.monochrome));
     }
     let copper = sets.iter().any(|set| copper_mask(*set) != 0);
     if options.drill_marks && copper {
@@ -85,21 +88,13 @@ fn on_set(set: BoardLayerSet, layer: &str) -> bool {
 fn draw_set(
     s: &mut PdfSurface<'_>,
     board: &PcbBoard,
+    fills: &ZoneFills,
     frame: &PageFrame,
     set: BoardLayerSet,
     rgb: Rgb,
 ) {
     let mm = |p: PointNm| frame.to_pt(nm_to_mm(p.x), nm_to_mm(p.y));
-    for zone in board.zones.iter().filter(|z| on_set(set, &z.layer)) {
-        let outline: Vec<Pt> = zone.outline.iter().map(|p| frame.to_pt(p.x, p.y)).collect();
-        let mut rings: Vec<Vec<Pt>> = vec![outline];
-        for index in zone.usable_holes() {
-            if let Some(hole) = zone.holes.get(index) {
-                rings.push(hole.iter().map(|p| frame.to_pt(p.x, p.y)).collect());
-            }
-        }
-        fill(s, &rings, rgb);
-    }
+    draw_zones(s, board, fills, frame, set, rgb);
     for track in board.segments.iter().filter(|t| on_set(set, &t.layer)) {
         let ends = [
             frame.to_pt(track.start.x, track.start.y),
@@ -159,6 +154,55 @@ fn draw_set(
             );
         }
     }
+}
+
+/// The zones of `set`, as the canvas draws them: a pour's computed copper
+/// (clear of other nets) with its outline stroked, a rule area or keepout
+/// as its outline alone, any other zone filled solid.
+pub(super) fn draw_zones(
+    s: &mut PdfSurface<'_>,
+    board: &PcbBoard,
+    fills: &ZoneFills,
+    frame: &PageFrame,
+    set: BoardLayerSet,
+    rgb: Rgb,
+) {
+    let edge = frame.length_pt(ZONE_EDGE_MM);
+    for (index, zone) in board.zones.iter().enumerate() {
+        if !on_set(set, &zone.layer) {
+            continue;
+        }
+        let outline: Vec<Pt> = zone.outline.iter().map(|p| frame.to_pt(p.x, p.y)).collect();
+        if zone.is_rule_area() {
+            stroke(s, &outline, true, edge, rgb);
+        } else if zone.is_pour() {
+            for piece in fills.of(index).map_or(&[][..], |f| f.pieces.as_slice()) {
+                fill(s, &polygon_rings(frame, piece), rgb);
+            }
+            stroke(s, &outline, true, edge, rgb);
+        } else {
+            let mut rings: Vec<Vec<Pt>> = vec![outline];
+            for hole in zone.usable_holes() {
+                if let Some(hole) = zone.holes.get(hole) {
+                    rings.push(hole.iter().map(|p| frame.to_pt(p.x, p.y)).collect());
+                }
+            }
+            fill(s, &rings, rgb);
+        }
+    }
+}
+
+/// A computed copper area's outer ring and holes on the page.
+fn polygon_rings(frame: &PageFrame, polygon: &Polygon) -> Vec<Vec<Pt>> {
+    let ring = |points: &[PointNm]| -> Vec<Pt> {
+        points
+            .iter()
+            .map(|p| frame.to_pt(nm_to_mm(p.x), nm_to_mm(p.y)))
+            .collect()
+    };
+    std::iter::once(ring(&polygon.outer))
+        .chain(polygon.holes.iter().map(|h| ring(h)))
+        .collect()
 }
 
 /// One placed drawing; `text` is a text drawing's string and size in mm.

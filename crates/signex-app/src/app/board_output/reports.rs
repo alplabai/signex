@@ -18,6 +18,7 @@ impl Signex {
             return;
         };
         let Some(report) = self.board_report_of(&board, kind) else {
+            self.refuse_board_gone(&board);
             return;
         };
         self.ui_state.board_output.dialog = Some(BoardOutputDialog::Reports(BoardReportsState {
@@ -35,6 +36,7 @@ impl Signex {
         };
         let board = state.board.clone();
         let Some(report) = self.board_report_of(&board, kind) else {
+            self.refuse_board_gone(&board);
             return;
         };
         if let Some(BoardOutputDialog::Reports(state)) = self.ui_state.board_output.dialog.as_mut()
