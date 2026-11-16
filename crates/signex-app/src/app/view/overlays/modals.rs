@@ -333,6 +333,14 @@ impl Signex {
             .then(|| self.view_fab_outputs_dialog())
     }
 
+    pub(in crate::app::view) fn board_output_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .board_output
+            .dialog
+            .is_some()
+            .then(|| self.view_board_output_dialog())
+    }
+
     pub(in crate::app::view) fn back_annotate_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .back_annotate

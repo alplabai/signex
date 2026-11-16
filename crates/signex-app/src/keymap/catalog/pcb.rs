@@ -438,4 +438,77 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2404: the board reports. In a window each opens Board Reports on its
+    // table; named a board (`document`), each answers with the table.
+    // Read-only, no default key.
+    CommandMetadata {
+        id: "board_report_bom",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_BOM,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_BOM),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_netlist",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_NETLIST,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_NETLIST),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_net_length",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_NET_LENGTH,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_NET_LENGTH),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_components",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_COMPONENTS,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_COMPONENTS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2404: the report in view (the BOM with none) as a CSV file; headless
+    // it writes `kind` of `document` to `path`.
+    CommandMetadata {
+        id: "export_board_report",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_REPORT,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_REPORT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_REPORT_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2402: the Board Print / PDF dialog (File > Print and Export > PDF on
+    // a board open it too); headless it writes `document` to `path`.
+    CommandMetadata {
+        id: "export_board_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_PDF,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_PDF),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_PDF,
+        ..CommandMetadata::DEFAULT
+    },
 ];

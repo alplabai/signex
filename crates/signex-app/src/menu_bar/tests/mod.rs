@@ -287,6 +287,8 @@ pub(super) struct Probe {
     pub fab_outputs: bool,
     /// Back Annotate opens its dialog (#1312).
     pub back_annotate: bool,
+    /// Board Reports or Board Print / PDF is open (#2404, #2402).
+    pub board_output: bool,
     /// Place on a board arms a board placement tool (#2373).
     pub pcb_tool: bool,
     /// File ▸ New ▸ PCB / Schematic opens its setup dialog (#2232).
@@ -368,6 +370,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         board_reannotate: app.ui_state.board_reannotate.is_some(),
         fab_outputs: app.ui_state.fab_outputs.is_some(),
         back_annotate: app.ui_state.back_annotate.is_some(),
+        board_output: app.ui_state.board_output.dialog.is_some(),
         pcb_tool: app.interaction_state.pcb_tool.is_some(),
         document_setup: app.ui_state.document_setup.is_some(),
     }

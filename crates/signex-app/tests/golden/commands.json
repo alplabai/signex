@@ -70,6 +70,26 @@
     "category": "pcb_sync"
   },
   {
+    "id": "board_report_bom",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "board_report_components",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "board_report_net_length",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "board_report_netlist",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "board_sketch",
     "group": "Pcb",
     "category": "design"
@@ -378,6 +398,16 @@
     "id": "edit_value",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "export_board_pdf",
+    "group": "Pcb",
+    "category": "reports"
+  },
+  {
+    "id": "export_board_report",
+    "group": "Pcb",
+    "category": "reports"
   },
   {
     "id": "fabrication_outputs",

@@ -140,6 +140,8 @@ pub enum PcbBoardMsg {
     ComponentsSelected(ComponentSide),
     /// The DRC violations count was clicked.
     DrcResultsOpened,
+    /// The Reports button: Board Reports opens on the BOM (#2404).
+    ReportsOpened,
     GridStepTyped(String),
     /// Enter in the grid step field: apply the typed step.
     GridStepSubmitted,

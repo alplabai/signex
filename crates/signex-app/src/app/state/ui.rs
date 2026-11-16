@@ -484,6 +484,9 @@ pub struct UiState {
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
+    /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
+    /// and the print options it was last used with.
+    pub board_output: crate::app::BoardOutputState,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk.
     pub back_annotate: Option<crate::app::BackAnnotateState>,

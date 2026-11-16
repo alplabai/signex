@@ -68,6 +68,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
+    let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -283,6 +284,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
+        // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.
+        "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),
+        "board_report_netlist" => board_report(signex_output::BoardReportKind::Netlist),
+        "board_report_net_length" => board_report(signex_output::BoardReportKind::NetLength),
+        "board_report_components" => board_report(signex_output::BoardReportKind::Components),
+        "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
+        "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),

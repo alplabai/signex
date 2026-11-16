@@ -351,6 +351,12 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
     ("reannotate_board", "ReannotateBoard"),
+    // #2404: the board reports.
+    ("board_report_bom", "BoardReportBom"),
+    ("board_report_netlist", "BoardReportNetlist"),
+    ("board_report_net_length", "BoardReportNetLength"),
+    ("board_report_components", "BoardReportComponents"),
+    ("export_board_report", "ExportBoardReport"),
     ("back_annotate_schematics", "BackAnnotate"),
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),

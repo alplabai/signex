@@ -172,6 +172,8 @@ mod tests {
             (Capability::Save, "save_document_as"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
+            (Capability::Export, "export_board_report"),
+            (Capability::Export, "export_board_pdf"),
             (Capability::LibraryWrite, "import_graphics"),
         ]);
         assert_eq!(non_default, pinned);

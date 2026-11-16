@@ -12,6 +12,7 @@ mod annotate;
 mod assign_footprints;
 mod autosave_recovery;
 mod back_annotate;
+mod board_output;
 mod board_reannotate;
 mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};

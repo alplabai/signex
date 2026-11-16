@@ -19,6 +19,7 @@ use super::layer_strip_operands as strip;
 use super::part_operands as part;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
+use crate::app::board_output as output;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -91,6 +92,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("hide_layer_group", strip::hide_layer_group),
     ("show_layer_group", strip::show_layer_group),
     ("set_layer_tab_names", strip::set_layer_tab_names),
+    ("board_report_bom", output::board_report_bom),
+    ("board_report_netlist", output::board_report_netlist),
+    ("board_report_net_length", output::board_report_net_length),
+    ("board_report_components", output::board_report_components),
+    ("export_board_report", output::export_board_report),
+    ("export_board_pdf", output::export_board_pdf),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

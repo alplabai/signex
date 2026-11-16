@@ -18,5 +18,7 @@ pub(super) const ASSIGN_FOOTPRINTS: (f32, f32) = (900.0, 620.0);
 pub(super) const UPDATE_PCB: (f32, f32) = (760.0, 640.0);
 pub(super) const SHEET_NUMBERING: (f32, f32) = (680.0, 560.0);
 pub(super) const BOARD_REANNOTATE: (f32, f32) = (600.0, 600.0);
+pub(super) const BOARD_REPORTS: (f32, f32) = (900.0, 620.0);
+pub(super) const BOARD_PRINT: (f32, f32) = (560.0, 600.0);
 pub(super) const BACK_ANNOTATE: (f32, f32) = (720.0, 600.0);
 pub(super) const FAB_OUTPUTS: (f32, f32) = (640.0, 600.0);

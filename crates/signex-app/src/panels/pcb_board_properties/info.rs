@@ -349,13 +349,13 @@ fn drc<'a>(form: &Form<'a>) -> Shown<'a> {
     form.row(&[&label], form.field(&label, shown))
 }
 
-/// Reports, at the end of the section; no board report exists yet.
+/// Reports, at the end of the section: opens Board Reports (#2404).
 fn reports<'a>(form: &Form<'a>) -> Shown<'a> {
     let reports = form.t(ids::PCB_BOARD_REPORTS);
     let button = form.action(
         reports.clone(),
+        Some(PanelMsg::PcbBoard(PcbBoardMsg::ReportsOpened)),
         None,
-        Some(form.t(ids::PCB_BOARD_REPORTS_UNAVAILABLE)),
     );
     let button = container(button).padding([SP.s, SP.l]).boxed();
     form.row(&[&reports], button)

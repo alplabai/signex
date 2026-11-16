@@ -62,6 +62,7 @@ struct OpenOverlays {
     sheet_numbering_open: bool,
     board_reannotate_open: bool,
     fab_outputs_open: bool,
+    board_output_open: bool,
     back_annotate_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
@@ -352,6 +353,9 @@ impl OpenOverlays {
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
+            OverlayId::BoardOutput => self
+                .board_output_open
+                .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
@@ -663,6 +667,7 @@ impl Signex {
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
+            board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
@@ -1770,6 +1775,7 @@ mod tests {
             sheet_numbering_open,
             board_reannotate_open,
             fab_outputs_open,
+            board_output_open,
             back_annotate_open,
             library_picker_open,
             library_document_options_open,
@@ -1844,6 +1850,7 @@ mod tests {
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
+            ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true

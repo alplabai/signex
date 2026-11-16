@@ -48,6 +48,7 @@ impl Signex {
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
             PcbMsg::FabOutputs(msg) => self.dispatch_fab_outputs_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
+            PcbMsg::Output(msg) => self.dispatch_board_output_message(msg),
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
             PcbMsg::PlaceToolPicked(tool) => {
                 self.arm_board_tool(tool);

@@ -77,7 +77,8 @@ impl Needs {
                     || (ctx.document_has_file && ctx.project_dirty)
             }
             Self::SaveAsTarget => ctx.document_is_schematic || ctx.document_is_editor,
-            Self::PrintTarget => ctx.document_is_schematic,
+            // A board prints through Board Print / PDF (#2402).
+            Self::PrintTarget => ctx.document_is_schematic || ctx.pcb.shown,
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
@@ -165,7 +166,7 @@ impl Needs {
                 "Save needs a schematic or editor document, or a project with unsaved changes"
             }
             Self::SaveAsTarget => "Save As needs a schematic, symbol or footprint document",
-            Self::PrintTarget => "Print needs an open schematic",
+            Self::PrintTarget => "Print needs an open schematic or PCB",
             Self::Document => "No document is open",
             Self::Undo => "Nothing to undo",
             Self::Redo => "Nothing to redo",
@@ -287,6 +288,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" | "fabrication_outputs" => Needs::Pcb,
+        // #2404, #2402: the board reports and Board Print / PDF.
+        "board_report_bom"
+        | "board_report_netlist"
+        | "board_report_net_length"
+        | "board_report_components"
+        | "export_board_report"
+        | "export_board_pdf" => Needs::Pcb,
         // #2373: the board placement tools.
         "place_board_via"
         | "place_board_track"

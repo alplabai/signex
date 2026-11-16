@@ -293,10 +293,16 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
+| `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
+| `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
+| `board_report_netlist` | Show the board's netlist: each net and the pads on it | pcb | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
+| `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
+| `export_board_report` | Export a board report as a CSV file | reports | — | — |
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
