@@ -21,4 +21,7 @@ pub enum ToolMessage {
     /// Backspace/Delete: drop the pending wire vertex while drawing,
     /// otherwise delete the selection.
     RemoveLastVertex,
+    /// `undo_last_segment`: drop the pending wire vertex or the last
+    /// polyline point while drawing; outside a draw it does nothing.
+    LastSegmentUndoRequested,
 }

@@ -180,6 +180,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | ToolMessage::CornerFlipRequested
                 | ToolMessage::CancelDrawing
                 | ToolMessage::RemoveLastVertex
+                | ToolMessage::LastSegmentUndoRequested
         ),
         Message::ActiveBar(ActiveBarMsg::Action(_)) => true,
         // Placed-part actions act on the selected part of the shown sheet.

@@ -34,6 +34,8 @@ pub(crate) enum Needs {
     ParentSheet,
     DeleteTarget,
     VertexTarget,
+    /// A wire, bus or polyline draw is in progress.
+    DrawInProgress,
     Sheets,
     ActiveSheet,
     Canvas,
@@ -111,6 +113,7 @@ impl Needs {
             Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
             Self::DeleteTarget => ctx.has_selection || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
+            Self::DrawInProgress => ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
             // Annotate acts from the active document's path; with none open it
@@ -183,6 +186,7 @@ impl Needs {
                 "Nothing is selected to delete, or a selected footprint is locked"
             }
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
+            Self::DrawInProgress => "No wire, bus or polyline is being drawn",
             Self::Sheets => "No schematic or project is open",
             Self::ActiveSheet => "No sheet is open",
             Self::Canvas => "No schematic or PCB is open",
@@ -260,7 +264,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "move_object" => Needs::MoveObject,
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
-        "remove_last_vertex" | "undo_last_segment" => Needs::VertexTarget,
+        "remove_last_vertex" => Needs::VertexTarget,
+        "undo_last_segment" => Needs::DrawInProgress,
         "paste_array"
         | "repeat_last_item"
         | "rubber_stamp_copy"

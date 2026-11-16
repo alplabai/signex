@@ -129,8 +129,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "switch_segment_posture" => Message::Tool(ToolMessage::CornerFlipRequested),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
-        // `undo_last_segment` is the Classic profile's Backspace (#1669).
-        "remove_last_vertex" | "undo_last_segment" => Message::Tool(ToolMessage::RemoveLastVertex),
+        "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
+        // The Classic profile's Backspace: Remove Last Vertex without its
+        // delete-selection fallback, so it only acts mid-draw (#1669).
+        "undo_last_segment" => Message::Tool(ToolMessage::LastSegmentUndoRequested),
         // Aliases of `draw_line` and `place_sheet_symbol`: one route each.
         "draw_graphic_line" => active_bar(crate::active_bar::ActiveBarAction::DrawLine),
         "draw_hierarchical_sheet" => {
@@ -567,8 +569,8 @@ mod tests {
     ///   coordinate origin, and the app has none (no relative origin, no
     ///   delta readout). The document's `PageOrigin`
     ///   (`PanelMsg::SetPageOrigin`) is a different thing, a saved sheet
-    ///   setting, so this id must not be wired to it. `cycle_wiring_mode` cycles how dragged wires bend,
-    ///   but a drag stretches its wires one fixed way; the corner rule only
+    ///   setting, so this id must not be wired to it. `cycle_wiring_mode`
+    ///   cycles how dragged wires bend, but a drag stretches its wires one fixed way; the corner rule only
     ///   steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
     ///   half of `copy_attributes_or_add_vertex` does not exist (#1669).
     /// - **not addressable from a bare id** — the operation exists but
@@ -941,10 +943,78 @@ mod tests {
         assert!(app.interaction_state.wire_points.is_empty());
     }
 
-    /// #1669 - the Classic profile's Backspace, `undo_last_segment`, ends a
-    /// wire draw the same way `remove_last_vertex` does.
+    /// A schematic tab whose one wire is selected, with no draw in progress.
+    fn app_with_a_selected_wire() -> (Signex, std::path::PathBuf) {
+        use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Wire};
+        let (mut app, _task) = Signex::new();
+        let path = std::path::PathBuf::from("vertex.snxsch");
+        let wire = uuid::Uuid::from_u128(5);
+        let mut engine = signex_engine::Engine::new(SchematicSheet::default()).unwrap();
+        engine
+            .execute(signex_engine::Command::PlaceWireSegment {
+                wire: Wire {
+                    uuid: wire,
+                    start: Point::new(10.16, 10.16),
+                    end: Point::new(20.32, 10.16),
+                    ..Default::default()
+                },
+            })
+            .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "vertex".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.active_path = Some(path.clone());
+        app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(wire, SelectedKind::Wire)];
+        (app, path)
+    }
+
+    fn wire_count(app: &Signex, path: &std::path::Path) -> usize {
+        app.document_state.engines[path].document().wires.len()
+    }
+
+    /// #1669 - outside a draw `undo_last_segment` is disabled and deletes
+    /// nothing, even with a selection; the sheet stays clean.
     #[test]
-    fn undo_last_segment_ends_a_wire_draw_like_remove_last_vertex() {
+    fn undo_last_segment_outside_a_draw_is_disabled_and_deletes_nothing() {
+        let (mut app, path) = app_with_a_selected_wire();
+        let cmd = AppCommandId::new("undo_last_segment").unwrap();
+        let revision = app.document_state.engines[&path].revision();
+
+        let (outcome, _task) = app.dispatch_command_reporting(&cmd, CommandArgs::none(), None);
+
+        assert!(
+            matches!(outcome, super::super::CommandOutcome::Disabled { .. }),
+            "{outcome:?}"
+        );
+        assert_eq!(wire_count(&app, &path), 1);
+        assert_eq!(app.document_state.engines[&path].revision(), revision);
+        assert!(!app.document_state.has_dirty_documents());
+        assert_eq!(app.interaction_state.active_canvas().selected.len(), 1);
+    }
+
+    /// Trunk behaviour pinned: `remove_last_vertex` with a selection and no
+    /// draw deletes the selection.
+    #[test]
+    fn remove_last_vertex_outside_a_draw_deletes_the_selection() {
+        let (mut app, path) = app_with_a_selected_wire();
+        let cmd = AppCommandId::new("remove_last_vertex").unwrap();
+
+        let _ = app.dispatch_command(&cmd, CommandArgs::none(), None);
+
+        assert_eq!(wire_count(&app, &path), 0);
+    }
+
+    /// #1669 - the Classic profile's Backspace, `undo_last_segment`, removes
+    /// the pending vertex of a wire draw, ending it.
+    #[test]
+    fn undo_last_segment_removes_the_pending_vertex_while_drawing() {
         let (mut app, _task) = Signex::new();
         let cmd = AppCommandId::new("undo_last_segment").unwrap();
         app.interaction_state.wire_drawing = true;
