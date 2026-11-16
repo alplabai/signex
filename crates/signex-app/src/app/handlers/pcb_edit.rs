@@ -108,8 +108,8 @@ impl Signex {
         self.refresh_undocked_pcb_highlights(path);
     }
 
-    /// Give each undocked window that shows the board at `path` its new
-    /// geometry.
+    /// Give each undocked window, and the unfocused tile pane (#2249), that
+    /// shows the board at `path` its new geometry.
     pub(crate) fn repaint_undocked_boards(&mut self, path: &Path) {
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
@@ -119,20 +119,28 @@ impl Signex {
         let view = self.pcb_layer_view(path);
         let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = crate::pcb_canvas::BoardMarks::of(board);
-        for (id, canvas) in &mut self.interaction_state.pcb_canvases {
-            let shows = matches!(
-                self.ui_state.windows.get(id),
-                Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
-                    if shown == path
-            );
-            if shows {
-                canvas.set_renderer_snapshot(Some(snapshot.clone()));
-                canvas.set_board_grid(board_grid);
-                canvas.set_board_marks(marks.clone());
-                canvas.set_origin_marker_visible(origin_marker);
-                canvas.set_view_flipped(flipped);
-                canvas.clear_content_cache();
-            }
+        let windows = &self.ui_state.windows;
+        let pane = self.interaction_state.tile_panes.board.get_mut(path);
+        let canvases = self
+            .interaction_state
+            .pcb_canvases
+            .iter_mut()
+            .filter(|(id, _)| {
+                matches!(
+                    windows.get(id),
+                    Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
+                        if shown == path
+                )
+            })
+            .map(|(_, canvas)| canvas)
+            .chain(pane);
+        for canvas in canvases {
+            canvas.set_renderer_snapshot(Some(snapshot.clone()));
+            canvas.set_board_grid(board_grid);
+            canvas.set_board_marks(marks.clone());
+            canvas.set_origin_marker_visible(origin_marker);
+            canvas.set_view_flipped(flipped);
+            canvas.clear_content_cache();
         }
     }
 }

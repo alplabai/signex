@@ -13,8 +13,8 @@ use std::path::Path;
 use crate::app::{Message, Signex, TileLayout, UiMsg, WindowMsg};
 
 /// Width of the focused pane's ring; the other panes get a hairline.
-const FOCUS_RING: f32 = 2.0;
-const PANE_EDGE: f32 = 1.0;
+const FOCUS_RING: f32 = 2.0 * crate::styles::HAIRLINE;
+const PANE_EDGE: f32 = crate::styles::HAIRLINE;
 
 impl Signex {
     /// The documents of `window_id`: the active one alone, or in the tiled
@@ -99,7 +99,7 @@ impl Signex {
                 border: Border {
                     color,
                     width,
-                    radius: 0.0.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             });
@@ -151,6 +151,7 @@ impl Signex {
                     .boxed()
             })
             .map(|_| Message::Ui(UiMsg::Noop))
+            .boxed()
     }
 
     /// The sheet at `path` on its pane canvas: the CPU surface, since a
@@ -161,11 +162,25 @@ impl Signex {
         path: &Path,
         window_id: iced::window::Id,
     ) -> Element<'a, Message> {
+        // The main window's prefs are the active sheet's; the per-sheet ones
+        // are this pane's.
+        let prefs = self.canvas_view_prefs(window_id);
+        let shown = self.shown_placement(path);
+        let class_styles = &self.ui_state.net_class_styles;
         let prefs = crate::canvas::CanvasViewPrefs {
             schematic_defaults: self.document_state.schematic_defaults_for(path),
+            wire_color_overrides: self
+                .document_state
+                .engines
+                .get(path)
+                .map_or(prefs.wire_color_overrides, |engine| {
+                    &engine.document().net_colors
+                }),
+            wire_class_styles: class_styles.styles_in(shown.as_ref()),
+            wire_class_revision: class_styles.revision_in(shown.as_ref()),
             wire_tool_active: false,
             placement: None,
-            ..self.canvas_view_prefs(window_id)
+            ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))
             .boxed()

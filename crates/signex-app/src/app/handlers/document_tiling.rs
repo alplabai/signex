@@ -192,3 +192,44 @@ impl Signex {
         slot
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::app::handlers::menu::export::tests as fx;
+    use crate::app::{TabInfo, TabKind, TileLayout};
+    use crate::schematic_runtime::RenderInvalidation;
+
+    /// A change to the sheet of an unfocused pane redraws that pane, as it
+    /// redraws an undocked window on the sheet.
+    #[test]
+    fn a_change_to_an_unfocused_sheet_redraws_its_pane() {
+        let dir = "/w/tile-panes";
+        let mut app = fx::app_workspace(dir, &["left.snxsch", "right.snxsch"]);
+        let paths = ["left.snxsch", "right.snxsch"].map(|name| PathBuf::from(dir).join(name));
+        for path in &paths {
+            fx::open_with(
+                &mut app.document_state,
+                path,
+                fx::sheet_with_net("R1", "N1", &[]),
+            );
+            app.document_state.tabs.push(TabInfo {
+                title: path.display().to_string(),
+                path: path.clone(),
+                cached_document: None,
+                project_id: None,
+                kind: TabKind::Schematic,
+            });
+        }
+        app.document_state.active_tab = 1;
+        app.document_state.active_path = Some(paths[1].clone());
+        let _task = app.tile(TileLayout::SideBySide);
+        let clears = app.interaction_state.tile_panes.schematic[&paths[0]].content_cache_clears;
+
+        app.after_sheet_change(&paths[0], RenderInvalidation::NET_COLORS);
+
+        let pane = &app.interaction_state.tile_panes.schematic[&paths[0]];
+        assert!(pane.content_cache_clears > clears, "the pane redraws");
+    }
+}
