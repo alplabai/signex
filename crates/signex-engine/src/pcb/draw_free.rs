@@ -172,6 +172,7 @@ pub fn new_free_pad(board: &PcbBoard, id: Uuid, at: Point, number: String) -> Pa
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

@@ -68,6 +68,7 @@ fn pad(net: u32) -> Pad {
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
