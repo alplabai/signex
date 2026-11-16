@@ -169,7 +169,7 @@ impl Signex {
     }
 
     pub(crate) fn refuse_new_pcb(&mut self, why: Translatable) {
-        crate::diagnostics::log_warning(why.render(&self.ui_state.i18n));
+        crate::diagnostics::log_warning(why.render_en_us());
         self.document_state.error_notice = Some(ErrorNotice::new(ids::NEW_PCB_TITLE, why));
     }
 }

@@ -207,3 +207,22 @@ library-updates-apply = Update Selected Components ({ $count })
 # Change Component: confirm; "anyway" when the change loses connections or data.
 library-change-part-confirm = Change
 library-change-part-confirm-anyway = Change anyway
+
+## Preferences ▸ Library ▸ Distributor APIs
+library-digikey-connecting = Connecting…
+# $account is the signed-in DigiKey account.
+library-digikey-connected-as = Connected as { $account }
+library-digikey-not-connected = Not connected
+library-digikey-help = OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first.
+library-mouser-api-key = API Key
+library-mouser-not-tested = Not tested
+library-no-key-required = (no key required)
+library-order-of-preference = Order of Preference
+# One row of the preference list: $rank is its place (1, 2, …) and $name the
+# distributor.
+library-order-row = { $rank }.  { $name }
+# A distributor that is none of the named ones.
+library-distributor-other = Other
+library-order-help = Saved to <config_dir>/signex/distributors.toml. The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
+# $error is the system's reason, in English.
+library-order-save-failed = Could not save the order: { $error }

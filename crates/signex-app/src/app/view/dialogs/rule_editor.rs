@@ -8,6 +8,7 @@
 
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_widgets::{button, raw, text};
 
 use signex_erc::{PinAxis, RuleKind, Severity};
@@ -25,6 +26,7 @@ const ROW_HEADER_W: f32 = chrome_px(80.0);
 
 /// What the editor shows and how a click reaches the caller.
 pub(crate) struct RuleEditor<'a, M> {
+    pub i18n: &'a I18n,
     pub tokens: &'a signex_types::theme::ThemeTokens,
     /// Per-rule severity overrides; a rule not listed shows its default.
     pub severity: &'a std::collections::HashMap<RuleKind, Severity>,
@@ -40,6 +42,7 @@ pub(crate) struct RuleEditor<'a, M> {
 /// The two-column editor body.
 pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Element<'static, M> {
     let RuleEditor {
+        i18n,
         tokens,
         severity,
         pin_matrix,
@@ -54,11 +57,11 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     // Per-rule severity grid: one row per built-in rule x 4 severities.
     let mut rule_rows: Column<Element<'static, M>> = column![
         row![
-            text(raw("Rule"))
+            text(t!(i18n, ids::DIALOG_RULES_COL_RULE))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
-            text(raw("Severity"))
+            text(t!(i18n, ids::DIALOG_RULES_COL_SEVERITY))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
@@ -71,23 +74,28 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
             .get(rule)
             .copied()
             .unwrap_or_else(|| rule.default_severity());
+        // The rule names come from signex-erc (#2062).
         let label = if rule.is_on_off_only() {
-            format!("{} (on/off; severity per matrix cell)", rule.label())
+            t!(i18n, ids::DIALOG_RULES_ON_OFF, "rule" => rule.label()).into_string()
         } else {
             rule.label().to_string()
         };
         rule_rows = rule_rows.push(
             row![
+                // raw: see above; the on/off wording is rendered from the catalog.
                 text(raw(label))
                     .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(3)),
                 severity_segmented(
+                    i18n,
                     *rule,
                     current,
-                    border_c,
-                    text_muted,
-                    crate::styles::tokens::resolve(tokens).field,
+                    (
+                        border_c,
+                        text_muted,
+                        crate::styles::tokens::resolve(tokens).field,
+                    ),
                     editable,
                     on_severity,
                 ),
@@ -108,8 +116,10 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         ..container::Style::default()
     };
     let rules_pane = column![
-        text(raw("Severity per rule")).size(TS.body).color(text_c),
-        text(raw("Click a cell to change."))
+        text(t!(i18n, ids::DIALOG_RULES_SEVERITY_HEADING))
+            .size(TS.body)
+            .color(text_c),
+        text(t!(i18n, ids::DIALOG_RULES_SEVERITY_HINT))
             .size(TS.caption)
             .color(text_muted),
         Space::new().height(8),
@@ -122,17 +132,23 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     .width(Length::FillPortion(3));
 
     let matrix_pane = column![
-        text(raw("Pin Connection Matrix"))
+        text(t!(i18n, ids::DIALOG_RULES_MATRIX_HEADING))
             .size(TS.body)
             .color(text_c),
-        text(raw("Click a cell to cycle severity."))
+        text(t!(i18n, ids::DIALOG_RULES_MATRIX_HINT))
             .size(TS.caption)
             .color(text_muted),
         Space::new().height(8),
-        container(pin_matrix_view(tokens, pin_matrix, editable, on_pin_cell))
-            .padding(8.0)
-            .width(Length::Fill)
-            .style(framed),
+        container(pin_matrix_view(
+            i18n,
+            tokens,
+            pin_matrix,
+            editable,
+            on_pin_cell
+        ))
+        .padding(8.0)
+        .width(Length::Fill)
+        .style(framed),
     ]
     .spacing(2)
     .width(Length::FillPortion(2));
@@ -143,15 +159,15 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
 }
 
 fn severity_segmented<M: Clone + 'static>(
+    i18n: &I18n,
     rule: RuleKind,
     current: Severity,
-    border: Color,
-    text_muted: Color,
-    unselected: Color,
+    // The border, the unselected text and the unselected fill.
+    (border, text_muted, unselected): (Color, Color, Color),
     editable: bool,
     on_severity: fn(RuleKind, Severity) -> M,
 ) -> Element<'static, M> {
-    let seg = |label: &'static str, value: Severity, color: Color| -> Element<'static, M> {
+    let seg = |label: MessageId, value: Severity, color: Color| -> Element<'static, M> {
         let selected = if rule.is_on_off_only() && value != Severity::Off {
             current != Severity::Off
         } else {
@@ -159,29 +175,31 @@ fn severity_segmented<M: Clone + 'static>(
         };
         let bg = if selected { color } else { unselected };
         let fg = if selected { Color::WHITE } else { text_muted };
-        button(
-            container(text(raw(label.to_string())).size(TS.caption).color(fg)).padding([3.0, 8.0]),
-        )
-        .on_press_maybe(editable.then(|| on_severity(rule, value)))
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color: fg,
-            ..button::Style::default()
-        })
-        .boxed()
+        button(container(text(t!(i18n, label)).size(TS.caption).color(fg)).padding([3.0, 8.0]))
+            .on_press_maybe(editable.then(|| on_severity(rule, value)))
+            .style(move |_: &Theme, _| button::Style {
+                background: Some(Background::Color(bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                    ..Border::default()
+                },
+                text_color: fg,
+                ..button::Style::default()
+            })
+            .boxed()
     };
-    let off = seg("Off", Severity::Off, Color::from_rgb(0.35, 0.36, 0.42));
+    let off = seg(
+        ids::DIALOG_RULES_OFF,
+        Severity::Off,
+        Color::from_rgb(0.35, 0.36, 0.42),
+    );
     if rule.is_on_off_only() {
         // Severity comes from the pin matrix per cell; the row only gates it.
         return row![
             seg(
-                "On",
+                ids::DIALOG_RULES_ON,
                 rule.default_severity(),
                 Color::from_rgb(0.30, 0.60, 0.95)
             ),
@@ -191,9 +209,21 @@ fn severity_segmented<M: Clone + 'static>(
         .boxed();
     }
     row![
-        seg("E", Severity::Error, Color::from_rgb(0.85, 0.25, 0.25)),
-        seg("W", Severity::Warning, Color::from_rgb(0.95, 0.70, 0.15)),
-        seg("I", Severity::Info, Color::from_rgb(0.30, 0.60, 0.95)),
+        seg(
+            ids::DIALOG_RULES_ERROR_SHORT,
+            Severity::Error,
+            Color::from_rgb(0.85, 0.25, 0.25)
+        ),
+        seg(
+            ids::DIALOG_RULES_WARNING_SHORT,
+            Severity::Warning,
+            Color::from_rgb(0.95, 0.70, 0.15)
+        ),
+        seg(
+            ids::DIALOG_RULES_INFO_SHORT,
+            Severity::Info,
+            Color::from_rgb(0.30, 0.60, 0.95)
+        ),
         off,
     ]
     .spacing(2)
@@ -205,6 +235,7 @@ fn severity_segmented<M: Clone + 'static>(
 /// lands when the rule engine learns the remaining variants (Open Collector,
 /// Open Emitter, HiZ, ...).
 fn pin_matrix_view<M: Clone + 'static>(
+    i18n: &I18n,
     tokens: &signex_types::theme::ThemeTokens,
     overrides: &std::collections::HashMap<(u8, u8), Severity>,
     editable: bool,
@@ -217,14 +248,28 @@ fn pin_matrix_view<M: Clone + 'static>(
     // Six axes; `PinAxis::of` documents how the 14 pin electrical types fold
     // onto them. The baseline grid lives in `signex_erc::pin_matrix`.
     let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, M> {
+        // An Off cell shows a middle dot, a glyph rather than a word.
         let (bg, ch) = match sev {
-            Severity::Error => (Color::from_rgba(0.85, 0.25, 0.25, 0.55), "E"),
-            Severity::Warning => (Color::from_rgba(0.95, 0.70, 0.15, 0.55), "W"),
-            Severity::Info => (Color::from_rgba(0.30, 0.55, 0.85, 0.55), "I"),
-            Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.35), "\u{00B7}"),
+            Severity::Error => (
+                Color::from_rgba(0.85, 0.25, 0.25, 0.55),
+                t!(i18n, ids::DIALOG_RULES_ERROR_SHORT).into_string(),
+            ),
+            Severity::Warning => (
+                Color::from_rgba(0.95, 0.70, 0.15, 0.55),
+                t!(i18n, ids::DIALOG_RULES_WARNING_SHORT).into_string(),
+            ),
+            Severity::Info => (
+                Color::from_rgba(0.30, 0.55, 0.85, 0.55),
+                t!(i18n, ids::DIALOG_RULES_INFO_SHORT).into_string(),
+            ),
+            Severity::Off => (
+                Color::from_rgba(0.25, 0.70, 0.30, 0.35),
+                "\u{00B7}".to_owned(),
+            ),
         };
         button(
-            container(text(raw(ch.to_string())).size(TS.label).color(text_c))
+            // raw: the letter is rendered from the catalog above (or a glyph).
+            container(text(raw(ch)).size(TS.label).color(text_c))
                 .width(CELL_W)
                 .height(CELL_H)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -246,6 +291,7 @@ fn pin_matrix_view<M: Clone + 'static>(
         .boxed()
     };
 
+    // raw: the pin-axis names come from signex-erc (#2062).
     let header_label = |label: &str| -> Element<'static, M> {
         container(
             text(raw(label.to_string()))

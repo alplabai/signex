@@ -70,6 +70,7 @@ impl Signex {
                 "folder" => full_folder.clone()
             ),
         };
+        // raw: an example file name as placeholder (#2059).
         let field = text_input(raw("sheet.snxsch"), &confirm.path_text)
             .style(crate::panels::form_look::text_input_style)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))

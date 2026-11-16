@@ -7,7 +7,7 @@ use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
 use signex_i18n::{ids, t};
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use super::widgets::modal_title_header;
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
@@ -47,7 +47,11 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header_content = modal_title_header("Recover Unsaved Edits", later.clone(), tokens);
+        let header_content = modal_title_header(
+            t!(i18n, ids::DIALOG_TITLE_AUTOSAVE_RECOVERY).into_string(),
+            later.clone(),
+            tokens,
+        );
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {
@@ -69,34 +73,30 @@ impl Signex {
                 .unwrap_or_else(|| offer.path.display().to_string())
         });
         let mut body = column![dialog_message(
-            format!(
-                "Signex found a recovery copy of {name} written {} that differs from the \
-                 saved file.",
-                describe_age(offer.age_secs)
+            t!(
+                i18n,
+                ids::DIALOG_RECOVERY_FOUND,
+                "name" => name.as_str(),
+                "age" => describe_age(offer.age_secs)
             ),
             tokens,
         )]
         .spacing(SP.m);
         if offer.older_than_file {
             body = body.push(
-                text(raw(format!(
-                    "{name} was saved after this copy was written. Restore replaces that \
-                     newer saved work in the editor with the older copy."
-                )))
-                .size(TS.body)
-                .color(crate::styles::ti(tokens.warning))
-                .boxed(),
+                text(t!(i18n, ids::DIALOG_RECOVERY_OLDER, "name" => name.as_str()))
+                    .size(TS.body)
+                    .color(crate::styles::ti(tokens.warning))
+                    .boxed(),
             );
         }
         body = body.push(dialog_hint(
-            format!(
-                "Restore loads the copy as unsaved edits; nothing is written to the file until \
-                 you save. Restoring replaces the open document and cannot be undone with \
-                 {}. Discard deletes the copy. Decide later keeps it for the next time \
-                 this file is opened, and pauses autosave for this document for the rest of the \
-                 session.",
-                crate::keymap::shown("Mod+Z")
-            ),
+            t!(
+                i18n,
+                ids::DIALOG_RECOVERY_HINT,
+                "undo" => crate::keymap::shown("Mod+Z")
+            )
+            .into_string(),
             tokens,
         ));
 

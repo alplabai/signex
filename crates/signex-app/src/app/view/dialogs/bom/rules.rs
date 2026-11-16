@@ -6,6 +6,7 @@
 use super::super::*;
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_output::{BomIssueSeverity, BomRule};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
@@ -34,20 +35,21 @@ impl Signex {
             rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c, tokens));
         }
 
+        let i18n = self.ui_state.i18n.as_ref();
         let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
         let report = &preview.validation_report;
         if report.issues.is_empty() {
             issues = issues.push(
-                text(raw("No issues found."))
+                text(t!(i18n, ids::BOM_NO_ISSUES_FOUND))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
             );
         }
         for (severity, heading) in [
-            (BomIssueSeverity::Error, "Errors"),
-            (BomIssueSeverity::Warning, "Warnings"),
-            (BomIssueSeverity::Info, "Notes"),
+            (BomIssueSeverity::Error, ids::BOM_ISSUES_ERRORS),
+            (BomIssueSeverity::Warning, ids::BOM_ISSUES_WARNINGS),
+            (BomIssueSeverity::Info, ids::BOM_ISSUES_NOTES),
         ] {
             let of_severity: Vec<_> = report
                 .issues
@@ -58,7 +60,7 @@ impl Signex {
                 continue;
             }
             issues = issues.push(
-                text(raw(format!("{heading} ({})", of_severity.len())))
+                text(t!(i18n, heading, "count" => of_severity.len()))
                     .size(TS.body)
                     .color(severity_color(severity, text_c, tokens))
                     .boxed(),
@@ -66,6 +68,7 @@ impl Signex {
             for issue in of_severity {
                 issues = issues.push(
                     column![
+                        // raw: the validator's own message, in English (#2061).
                         text(raw(issue.message.clone())).size(TS.body).color(text_c),
                         text(signex_i18n::UserText::new(issue.references.join(", ")))
                             .size(TS.caption)
@@ -80,10 +83,10 @@ impl Signex {
         }
 
         column![
-            section_header("Validation Rules", text_muted),
+            section_header(t!(i18n, ids::BOM_SECTION_RULES), text_muted),
             container(rule_list).padding([SP.s, 0.0]),
             Space::new().height(8),
-            section_header("Issues", text_muted),
+            section_header(t!(i18n, ids::BOM_SECTION_ISSUES), text_muted),
             container(issues).padding([SP.m, SP.l]),
         ]
         .spacing(0)
@@ -123,6 +126,7 @@ fn rule_row<'a>(
     } else {
         crate::styles::tokens::resolve(tokens).field
     };
+    // raw: a tick glyph (or a blank of the same size), not language.
     let inner = if on {
         text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
     } else {
@@ -147,6 +151,7 @@ fn rule_row<'a>(
         row![
             pip,
             Space::new().width(8),
+            // raw: the rule's name comes from signex-bom (#2060).
             text(raw(rule.label())).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
         ]

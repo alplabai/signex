@@ -27,6 +27,7 @@ pub(crate) fn update_pcb_from_schematic(app: &mut Signex, args: &CommandArgs) ->
     }
     match app.open_update_pcb_from_view(true) {
         Ok(task) => (CommandOutcome::Ran, task),
-        Err(why) => refused(app.update_pcb_text(why)),
+        // Agent replies stay en-US whatever the UI language.
+        Err(why) => refused(signex_i18n::I18n::en_us().message_plain(why, &[])),
     }
 }
