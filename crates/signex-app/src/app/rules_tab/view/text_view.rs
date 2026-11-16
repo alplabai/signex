@@ -2,7 +2,7 @@
 //! as one undo step, with what the compiler says about the text as typed.
 
 use iced::widget::{Column, column, row, text_editor};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_widgets::{button, text};
 
@@ -50,7 +50,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>, rules_text: &'a RulesText) -> Element<
         .syntax
         .iter()
         .chain(table.rows.iter().flat_map(|r| r.problems.iter()));
-    let mut problems: Column<'a, Message> = Column::new().spacing(SP.xs);
+    let mut problems: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
     let mut any = false;
     for d in said {
         any = true;
@@ -64,14 +64,16 @@ pub(super) fn view<'a>(frame: &Frame<'a>, rules_text: &'a RulesText) -> Element<
                 "message" => d.message.as_str()
             ))
             .size(TS.body)
-            .color(tokens::danger(tokens)),
+            .color(tokens::danger(tokens))
+            .boxed(),
         );
     }
     if !any {
         problems = problems.push(
             text(t!(i18n, ids::RULES_TEXT_CLEAN))
                 .size(TS.body)
-                .color(tokens::muted_text(tokens)),
+                .color(tokens::muted_text(tokens))
+                .boxed(),
         );
     }
     column![
@@ -82,5 +84,5 @@ pub(super) fn view<'a>(frame: &Frame<'a>, rules_text: &'a RulesText) -> Element<
     ]
     .spacing(SP.m)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }

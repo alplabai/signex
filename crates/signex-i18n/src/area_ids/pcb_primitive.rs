@@ -46,6 +46,7 @@ define_ids! {
     PCB_PRIM_ITEM_LOCKED = "pcb-prim-item-locked";
     PCB_PRIM_LOCK_NOTHING = "pcb-prim-lock-nothing";
     PCB_PRIM_PAD_LOCK_TIP = "pcb-prim-pad-lock-tip";
+    PCB_PRIM_AREA_LOCK_UNSUPPORTED = "pcb-prim-area-lock-unsupported";
     PCB_PRIM_LAYER = "pcb-prim-layer";
     PCB_PRIM_WIDTH = "pcb-prim-width";
     PCB_PRIM_START = "pcb-prim-start";

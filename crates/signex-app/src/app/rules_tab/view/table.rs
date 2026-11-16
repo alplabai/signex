@@ -143,17 +143,18 @@ fn flags_of<'f>(frame: &'f Frame, row: &'f RuleRow) -> impl Iterator<Item = &'f 
 pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
     let cols = Col::of(frame.state.domain);
-    let mut head: Row<'a, Message> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
+    let mut head: Row<Element<'a, Message>> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
     for &col in &cols {
         head = head.push(
             text(t!(i18n, col.heading()))
                 .size(TS.caption)
                 .color(tokens::muted_text(tokens))
-                .width(col.width()),
+                .width(col.width())
+                .boxed(),
         );
     }
     let rows = shown(frame);
-    let mut body: Column<'a, Message> = Column::new().spacing(SP.xs);
+    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
     if rows.is_empty() && !frame.table.is_unparsed() {
         body = body.push(
             container(
@@ -161,7 +162,8 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                     .size(TS.body)
                     .color(tokens::muted_text(tokens)),
             )
-            .padding([SP.m, SP.m]),
+            .padding([SP.m, SP.m])
+            .boxed(),
         );
     }
     for row in rows {
@@ -183,12 +185,12 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
 
 fn row_view<'a>(frame: &Frame<'a>, row: &RuleRow, cols: &[Col]) -> Element<'a, Message> {
     let (id, tokens) = (frame.id, frame.tokens);
-    let mut line: Row<'a, Message> = Row::new()
+    let mut line: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.s)
         .padding([SP.xs, SP.m])
         .align_y(Alignment::Center);
     for &col in cols {
-        line = line.push(container(cell(frame, row, col)).width(col.width()));
+        line = line.push(container(cell(frame, row, col)).width(col.width()).boxed());
     }
     let selected = frame.state.selected.as_deref() == Some(row.name.as_str());
     let tint = tokens::selection_tint(tokens);
@@ -204,7 +206,7 @@ fn row_view<'a>(frame: &Frame<'a>, row: &RuleRow, cols: &[Col]) -> Element<'a, M
             project_id: id,
             rule: row.name.clone(),
         }))
-        .into()
+        .boxed()
 }
 
 fn plain<'a>(frame: &Frame<'a>, value: String, muted: bool) -> Element<'a, Message> {
@@ -231,7 +233,7 @@ fn cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> 
                         on,
                     })
                 })
-                .into()
+                .boxed()
         }
         Col::Kind => {
             let kind = match row.kind {
@@ -317,7 +319,7 @@ fn field_cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Mes
         return row![input, cancel]
             .spacing(SP.xs)
             .align_y(Alignment::Center)
-            .into();
+            .boxed();
     }
     let Some(value) = shown_value(frame, row, col) else {
         return plain(frame, t!(i18n, ids::RULES_CELL_EMPTY).into_string(), true);
@@ -333,7 +335,7 @@ fn field_cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Mes
             rule: row.name.clone(),
             field,
         }))
-        .into()
+        .boxed()
 }
 
 /// Actual, Margin and Violations: from the last run, or why they are
@@ -360,7 +362,7 @@ fn outcome<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Messag
         return text(user(value))
             .size(TS.body)
             .color(tokens::danger(frame.tokens))
-            .into();
+            .boxed();
     }
     plain(frame, value, result.worst.is_none())
 }
@@ -429,7 +431,7 @@ fn flags<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
     text(user(words.join("; ")))
         .size(TS.caption)
         .color(ink)
-        .into()
+        .boxed()
 }
 
 /// Under the scope cell being typed in: what it can say, picks from the
@@ -446,7 +448,8 @@ fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     help = help.push(
         text(t!(i18n, ids::RULES_SCOPE_HINT))
             .size(TS.caption)
-            .color(tokens::muted_text(tokens)),
+            .color(tokens::muted_text(tokens))
+            .boxed(),
     );
     let nets: Vec<String> = frame
         .board
@@ -457,12 +460,18 @@ fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             help = help.push(
                 text(user(reason))
                     .size(TS.caption)
-                    .color(tokens::danger(tokens)),
+                    .color(tokens::danger(tokens))
+                    .boxed(),
             );
         }
         Ok(scope) => {
             if let Some(problem) = scope_problem(frame, &scope, &nets) {
-                help = help.push(text(problem).size(TS.caption).color(tokens::danger(tokens)));
+                help = help.push(
+                    text(problem)
+                        .size(TS.caption)
+                        .color(tokens::danger(tokens))
+                        .boxed(),
+                );
             }
         }
     }
@@ -474,7 +483,7 @@ fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         .chain(nets.iter().map(|n| format!("net == \"{n}\"")))
         .filter(|c| needle.is_empty() || c.to_lowercase().contains(&needle))
         .take(8);
-    let mut picks: Row<'a, Message> = Row::new().spacing(SP.xs);
+    let mut picks: Row<Element<'a, Message>> = Row::new().spacing(SP.xs);
     for candidate in candidates {
         picks = picks.push(
             button(text(user(candidate.clone())).size(TS.caption))
@@ -483,10 +492,11 @@ fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                 .on_press(up(RulesTabMsg::CellEdited {
                     project_id: id,
                     text: candidate,
-                })),
+                }))
+                .boxed(),
         );
     }
-    help.push(picks).into()
+    help.push(picks.boxed()).boxed()
 }
 
 /// A scope that parses but takes in no net of the board, worded.

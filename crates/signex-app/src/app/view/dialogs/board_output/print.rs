@@ -37,7 +37,7 @@ fn tick<'a>(label: MessageId, on: bool, msg: BoardOutputMsg, i18n: &I18n) -> Ele
         .text_size(TS.body)
         .style(checkbox_style)
         .on_toggle(move |_| out(msg.clone()))
-        .into()
+        .boxed()
 }
 
 /// Header, the options and the footer with Export PDF and Close.
@@ -135,7 +135,7 @@ pub(super) fn parts<'a>(
         .spacing(SP.l)
         .push(captioned(
             t!(i18n, ids::BOARD_PRINT_SETS),
-            sets.into(),
+            sets.boxed(),
             tokens,
         ))
         .push(captioned(t!(i18n, ids::BOARD_PRINT_PAGES), pages, tokens))
@@ -143,10 +143,10 @@ pub(super) fn parts<'a>(
         .push(captioned(t!(i18n, ids::BOARD_PRINT_INK), ink, tokens))
         .push(captioned(
             t!(i18n, ids::BOARD_PRINT_SHOW),
-            show.into(),
+            show.boxed(),
             tokens,
         ))
-        .push(summary);
+        .push(summary.boxed());
     let body = scrollable(container(form).padding([SP.l, SP.xl]))
         .height(Length::Fill)
         .boxed();

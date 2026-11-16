@@ -172,7 +172,7 @@ fn note<'a>(ctx: &'a PanelContext, id: MessageId) -> Element<'a, PanelMsg> {
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Add Class, Undo and Redo.
@@ -207,7 +207,7 @@ fn toolbar<'a>(ctx: &'a PanelContext, view: &BoardNetClassView) -> Element<'a, P
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn heading<'a>(
@@ -222,7 +222,7 @@ fn heading<'a>(
             .color(theme_ext::text_secondary(&ctx.tokens)),
     )
     .width(Length::Fixed(width))
-    .into()
+    .boxed()
 }
 
 /// The column headings.
@@ -245,7 +245,7 @@ fn heading_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         line = line.push(heading(i18n, field.heading(), RULE_W, ctx));
     }
     line.push(heading(i18n, ids::BOARD_NET_CLASSES_COL_NETS, NETS_W, ctx))
-        .into()
+        .boxed()
 }
 
 /// One typed cell: the draft while it is being typed in, else the value.
@@ -280,7 +280,7 @@ fn cell<'a>(
         .padding(SP.xs)
         .style(super::form_look::text_input_style)
         .width(Length::Fixed(width))
-        .into()
+        .boxed()
 }
 
 /// The member nets as chips (a press takes one out), a note of the glob
@@ -308,7 +308,7 @@ fn members<'a>(
         }))
         .style(super::form_look::option_tile(true));
         chips = chips.push(super::graphite::hint_tooltip(
-            chip.into(),
+            chip.boxed(),
             t!(i18n, ids::BOARD_NET_CLASSES_REMOVE_NET, "net" => net.clone()),
             &ctx.tokens,
             iced::widget::tooltip::Position::Bottom,
@@ -328,7 +328,7 @@ fn members<'a>(
         .cloned()
         .collect();
     let mut cell = Column::new().spacing(SP.xs).width(Length::Fixed(NETS_W));
-    cell = cell.push(chips);
+    cell = cell.push(Element::from(chips));
     if !free.is_empty() {
         let name = class.name.clone();
         cell = cell.push(
@@ -345,7 +345,7 @@ fn members<'a>(
                 .boxed(),
         );
     }
-    cell.into()
+    cell.boxed()
 }
 
 /// One class: its cells, its members and Delete.
@@ -368,7 +368,7 @@ fn class_row<'a>(
         Some(msg(BoardNetClassMsg::DeleteRequested(class.name.clone()))),
         &ctx.tokens,
     ))
-    .into()
+    .boxed()
 }
 
 /// The panel for the board in view.
@@ -388,19 +388,24 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             text(raw(notice.clone()))
                 .size(TS.caption)
-                .color(theme_ext::warning_color(&ctx.tokens)),
+                .color(theme_ext::warning_color(&ctx.tokens))
+                .boxed(),
         );
     }
     if view.classes.is_empty() {
-        return col.push(note(ctx, ids::BOARD_NET_CLASSES_EMPTY)).into();
+        return col.push(note(ctx, ids::BOARD_NET_CLASSES_EMPTY)).boxed();
     }
     let mut table: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.s).push(heading_row(ctx));
     for class in &view.classes {
         table = table.push(class_row(ctx, view, class));
     }
-    col.push(scrollable(table).direction(Direction::Horizontal(Scrollbar::default())))
-        .into()
+    col.push(
+        scrollable(table)
+            .direction(Direction::Horizontal(Scrollbar::default()))
+            .boxed(),
+    )
+    .boxed()
 }
 
 #[cfg(test)]

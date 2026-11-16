@@ -63,6 +63,7 @@ pcb-prim-lock-tip = A locked track or via stays where it is: move, delete and ed
 pcb-prim-item-locked = This track or via is locked, so it cannot be changed. Clear Lock to edit it.
 pcb-prim-lock-nothing = Select a track or via to lock or unlock; a footprint is locked in its Component properties.
 pcb-prim-pad-lock-tip = A pad is locked with its footprint.
+pcb-prim-area-lock-unsupported = Fills, regions, pours and keepouts cannot be locked yet; the board does not store a lock for them.
 pcb-prim-layer = Layer
 pcb-prim-width = Width
 pcb-prim-start = Start (X/Y)

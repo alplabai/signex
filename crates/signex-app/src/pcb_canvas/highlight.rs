@@ -204,7 +204,9 @@ fn paint_ruler(
     to: signex_types::pcb::Point,
     accent: Color,
 ) {
-    let (a, b) = (camera.board_to_screen(from), camera.board_to_screen(to));
+    let at =
+        |p: signex_types::pcb::Point| camera.world_to_screen(Point::new(p.x as f32, p.y as f32));
+    let (a, b) = (at(from), at(to));
     let stroke = Stroke::default().with_width(1.5).with_color(accent);
     frame.stroke(&Path::line(a, b), stroke);
     for end in [a, b] {

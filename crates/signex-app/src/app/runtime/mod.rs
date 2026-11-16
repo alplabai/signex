@@ -14,7 +14,6 @@ mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
-mod pcb_panel_ctx;
 mod pin_focus;
 mod placed_ctx;
 mod sheet_frame;

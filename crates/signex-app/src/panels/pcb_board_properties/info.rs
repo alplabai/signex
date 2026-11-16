@@ -77,7 +77,8 @@ fn card<'a>(
         text(caption)
             .size(TS.caption)
             .color(resolve(form.tokens()).ink4)
-            .wrapping(Wrapping::None),
+            .wrapping(Wrapping::None)
+            .boxed(),
     );
     for line in lines {
         let mut tiles: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.m).width(Length::Fill);
@@ -89,12 +90,13 @@ fn card<'a>(
                     text(label)
                         .size(TS.caption)
                         .color(muted)
-                        .wrapping(Wrapping::None),
+                        .wrapping(Wrapping::None)
+                        .boxed(),
                 )
                 .push(value);
-            tiles = tiles.push(container(figure).width(Length::FillPortion(1)));
+            tiles = tiles.push(container(figure).width(Length::FillPortion(1)).boxed());
         }
-        body = body.push(tiles);
+        body = body.push(tiles.boxed());
     }
     if let Some((extra, labels)) = extra {
         body = body.push(extra);
@@ -309,10 +311,14 @@ fn primitives<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
             ]
             .spacing(SP.s)
             .align_y(Alignment::Center);
-            line = line.push(container(pair).width(Length::FillPortion(1)));
+            line = line.push(container(pair).width(Length::FillPortion(1)).boxed());
         }
         if chunk.len() == 1 {
-            line = line.push(iced::widget::Space::new().width(Length::FillPortion(1)));
+            line = line.push(
+                iced::widget::Space::new()
+                    .width(Length::FillPortion(1))
+                    .boxed(),
+            );
         }
         grid = grid.push(line);
     }

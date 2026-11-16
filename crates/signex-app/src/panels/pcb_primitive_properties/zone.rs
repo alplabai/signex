@@ -78,7 +78,7 @@ fn properties<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelM
         labelled(
             look,
             ids::PCB_PRIM_LOCK,
-            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
+            lock(look, false, ids::PCB_PRIM_AREA_LOCK_UNSUPPORTED),
         ),
     );
     s.finish()

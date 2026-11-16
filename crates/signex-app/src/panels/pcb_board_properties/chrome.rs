@@ -394,6 +394,7 @@ impl<'a> Form<'a> {
                     width: HAIRLINE,
                     color: edge,
                     radius: crate::styles::RADIUS.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             });

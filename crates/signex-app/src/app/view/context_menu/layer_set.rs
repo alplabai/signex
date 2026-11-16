@@ -103,6 +103,7 @@ fn card_button(
                 width: if primary { 0.0 } else { 1.0 },
                 color: r.line_soft,
                 radius: crate::styles::Radii::GRAPHITE.small.into(),
+                ..Border::default()
             },
             ..ButtonStyle::default()
         })

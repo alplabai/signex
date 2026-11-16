@@ -194,7 +194,7 @@ fn filters<'a>(ctx: &'a PanelContext, drc: &'a DrcPanel) -> Element<'a, PanelMsg
     ]
     .spacing(SP.xs)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// A group's heading: the rule and its count, and the Rule link, greyed
@@ -226,7 +226,7 @@ fn group_header<'a>(ctx: &'a PanelContext, first: &DrcRow, count: usize) -> Elem
     ]
     .align_y(iced::Alignment::Center)
     .padding([SP.xs, 0.0])
-    .into()
+    .boxed()
 }
 
 /// The clickable part of a row: severity, what broke and the nets; then
@@ -253,7 +253,7 @@ fn row_body<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelM
     ]
     .spacing(SP.s + SP.xs);
     if let Some(layer) = layer_label(i18n, violation.layer) {
-        second = second.push(text(layer).size(TS.caption).color(muted));
+        second = second.push(text(layer).size(TS.caption).color(muted).boxed());
     }
     let mut lines = column![first, second].spacing(SP.xs);
     if let Some(waiver) = &violation.waiver {
@@ -262,7 +262,7 @@ fn row_body<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelM
         } else {
             t!(i18n, ids::DRC_PANEL_WAIVED_NOTE, "note" => waiver.clone())
         };
-        lines = lines.push(text(said).size(TS.caption).color(muted));
+        lines = lines.push(text(said).size(TS.caption).color(muted).boxed());
     }
     signex_widgets::button(lines)
         .width(Length::Fill)
@@ -299,7 +299,7 @@ fn waive_form<'a>(ctx: &'a PanelContext, draft: &'a DrcWaiveDraft) -> Element<'a
     ]
     .spacing(SP.xs)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// One violation: its body, Waive or Unwaive, and the note field while a
@@ -329,11 +329,11 @@ fn violation<'a>(
     let line = row![row_body(ctx, item), action]
         .spacing(SP.xs)
         .align_y(iced::Alignment::Center);
-    let mut col = Column::new().push(line).spacing(SP.xs);
+    let mut col = Column::new().push(line.boxed()).spacing(SP.xs);
     if let Some(draft) = drc.waive_draft.as_ref().filter(|d| d.key == item.key) {
         col = col.push(waive_form(ctx, draft));
     }
-    col.into()
+    col.boxed()
 }
 
 /// The panel for the board in view.
@@ -344,7 +344,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return container(note(t!(i18n, ids::DRC_PANEL_NO_BOARD), muted))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
-            .into();
+            .boxed();
     };
     let col: Rows<'a> = Column::new()
         .spacing(SP.xs)
@@ -352,7 +352,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill);
     let mut col = status(ctx, drc, header(ctx, drc, col));
     if drc.running || !drc.ran {
-        return col.into();
+        return col.boxed();
     }
     col = col.push(filters(ctx, drc));
     let waived = drc.rows.iter().filter(|r| r.waiver.is_some()).count();
@@ -375,7 +375,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if drc.hidden > 0 {
         col = col.push(note(t!(i18n, ids::DRC_MORE, "count" => drc.hidden), muted));
     }
-    col.into()
+    col.boxed()
 }
 
 #[cfg(test)]

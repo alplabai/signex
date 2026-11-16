@@ -119,7 +119,7 @@ fn build<'a>(
     // A board is searched whole (#2403): no scope to pick.
     let mut form = column![query_row].spacing(10);
     if state.board.is_none() {
-        form = form.push(scope_row);
+        form = form.push(Widget::boxed(scope_row));
     }
     if state.replace_mode {
         form = form.push(Widget::boxed(

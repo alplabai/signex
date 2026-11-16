@@ -41,14 +41,15 @@ pub(super) fn push_directive_sections<'a>(
         &ctx.selection_info,
         "ERC Exclusions",
     ));
-    let title = signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_BLANKET);
+    let title = signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_BLANKET).into_string();
     col = col.push(
         ctx.collapsible("sel_blanket", &title, &ctx.collapsed_sections, move || {
             Column::new()
                 .spacing(0)
                 .width(Length::Fill)
                 .push(form_edit_row(
-                    &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_NET_CLASS),
+                    &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_NET_CLASS)
+                        .into_string(),
                     &class,
                     muted,
                     move |value| PanelMsg::EditBlanket(id, BlanketEdit::NetClass(value)),
@@ -56,7 +57,8 @@ pub(super) fn push_directive_sections<'a>(
         })
         .boxed(),
     );
-    let rules_title = signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ERC_EXCLUSIONS);
+    let rules_title =
+        signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ERC_EXCLUSIONS).into_string();
     col.push(
         ctx.collapsible(
             "sel_blanket_rules",
@@ -69,7 +71,8 @@ pub(super) fn push_directive_sections<'a>(
                     .spacing(0)
                     .width(Length::Fill)
                     .push(form_check_row(
-                        &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ALL_RULES),
+                        &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ALL_RULES)
+                            .into_string(),
                         every,
                         PanelMsg::EditBlanket(
                             id,

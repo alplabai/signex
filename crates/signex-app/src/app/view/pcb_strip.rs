@@ -216,6 +216,7 @@ fn layer_set_button<'a>(
                 width: 1.0,
                 color: r.line_soft,
                 radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
             },
             ..ButtonStyle::default()
         })

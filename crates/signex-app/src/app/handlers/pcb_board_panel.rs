@@ -125,8 +125,10 @@ impl Signex {
             }
             // The button runs the BOM report's command, as its menu row does.
             PcbBoardMsg::ReportsOpened => {
-                let command = crate::menu_bar::MenuMessage::command("board_report_bom");
-                task = Task::done(Message::Menu(command));
+                if let Ok(id) = crate::keymap::AppCommandId::new("board_report_bom") {
+                    let command = crate::menu_bar::MenuMessage::Command(id);
+                    task = Task::done(Message::Menu(command));
+                }
             }
         }
         self.sync_pcb_board_summary();

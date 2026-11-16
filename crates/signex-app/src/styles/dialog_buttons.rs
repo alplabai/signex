@@ -100,6 +100,7 @@ pub(super) fn dialog_border(color: Color) -> Border {
         width: BORDER_WIDTH,
         radius: Radii::GRAPHITE.button.into(),
         color,
+        ..Border::default()
     }
 }
 

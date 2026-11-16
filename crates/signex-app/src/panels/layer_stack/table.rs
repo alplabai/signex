@@ -31,7 +31,7 @@ const COLUMNS: [(MessageId, u16); 6] = [
 const TABLE_EMS: f32 = 44.0;
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let mut rows: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).push(header(ctx));
+    let mut rows: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(header(ctx));
     for (index, layer) in facts.stack.layers.iter().enumerate() {
         rows = rows.push(layer_row(ctx, facts, index, layer));
     }
@@ -46,7 +46,7 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Ele
     .boxed()
 }
 
-fn cell<'a>(content: impl Into<Element<'a, PanelMsg>>, portion: u16) -> Element<'a, PanelMsg> {
+fn cell<'a>(content: Element<'a, PanelMsg>, portion: u16) -> Element<'a, PanelMsg> {
     container(content)
         .width(Length::FillPortion(portion))
         .clip(true)
@@ -60,11 +60,11 @@ fn number_width() -> Length {
 
 fn header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
-    let mut line: Row<'a, PanelMsg> =
+    let mut line: Row<Element<'a, PanelMsg>> =
         row![container(iced::widget::Space::new()).width(number_width())].spacing(SP.xs);
     for (id, portion) in COLUMNS {
         line = line.push(cell(
-            text(t!(ctx.i18n, id)).size(TS.dense).color(muted),
+            text(t!(ctx.i18n, id)).size(TS.dense).color(muted).boxed(),
             portion,
         ));
     }

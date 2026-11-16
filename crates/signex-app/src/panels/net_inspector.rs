@@ -439,7 +439,7 @@ fn board_net_row<'a>(ctx: &'a PanelContext, net: &'a BoardNetRow) -> Element<'a,
     .height(ROW_H)
     .padding([0.0, SP.l])
     .align_y(Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn kind_label(i18n: &I18n, kind: NetMemberRowKind) -> signex_i18n::Localized {

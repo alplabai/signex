@@ -213,7 +213,7 @@ fn domain_findings(frame: &Frame, domain: RulesDomain) -> usize {
 
 fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens, state, id) = (frame.i18n, frame.tokens, frame.state, frame.id);
-    let mut bar: Row<'a, Message> = Row::new().spacing(SP.s).align_y(Alignment::Center);
+    let mut bar: Row<Element<'a, Message>> = Row::new().spacing(SP.s).align_y(Alignment::Center);
     let in_table = state.text.is_none();
     for domain in RulesDomain::ALL {
         let label = match domain {
@@ -240,12 +240,12 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                 domain,
             }));
         bar = if domain == state.domain && in_table {
-            bar.push(tab.style(crate::styles::accent_button(tokens)))
+            bar.push(tab.style(crate::styles::accent_button(tokens)).boxed())
         } else {
-            bar.push(tab.style(crate::styles::subtle_button(tokens)))
+            bar.push(tab.style(crate::styles::subtle_button(tokens)).boxed())
         };
     }
-    bar = bar.push(Space::new().width(SP.l));
+    bar = bar.push(Space::new().width(SP.l).boxed());
     if in_table {
         bar = bar.push(
             text_input(
@@ -261,7 +261,8 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             .size(TS.label)
             .padding(SP.s)
             .width(Length::Fixed(TS.body * 22.0))
-            .style(crate::panels::form_look::text_input_style),
+            .style(crate::panels::form_look::text_input_style)
+            .boxed(),
         );
         for filter in RulesFilter::ALL {
             let label = match filter {
@@ -277,7 +278,7 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             bar = bar.push(pick(t!(i18n, label), filter == state.filter, msg, tokens));
         }
     }
-    bar = bar.push(Space::new().width(Length::Fill));
+    bar = bar.push(Space::new().width(Length::Fill).boxed());
     if in_table && !frame.table.is_unparsed() {
         for &kind in state.domain.kinds() {
             let label = match kind {
@@ -302,7 +303,8 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         button(text(t!(i18n, drc_label)).size(TS.label))
             .padding([SP.xs, SP.m])
             .style(crate::styles::outline_button(tokens))
-            .on_press_maybe(can_run.then(|| up(RulesTabMsg::DrcRequested { project_id: id }))),
+            .on_press_maybe(can_run.then(|| up(RulesTabMsg::DrcRequested { project_id: id })))
+            .boxed(),
     );
     let (view_label, to_text) = if in_table {
         (ids::RULES_VIEW_TEXT, true)
@@ -326,7 +328,8 @@ fn notes<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         lines = lines.push(
             text(t!(i18n, ids::RULES_ORIGIN_MACHINE))
                 .size(TS.body)
-                .color(tokens::muted_text(tokens)),
+                .color(tokens::muted_text(tokens))
+                .boxed(),
         );
     }
     if let Some(first) = frame.table.syntax.first() {
@@ -334,14 +337,16 @@ fn notes<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         lines = lines.push(
             text(t!(i18n, ids::RULES_SYNTAX_ERROR, "error" => error))
                 .size(TS.body)
-                .color(tokens::danger(tokens)),
+                .color(tokens::danger(tokens))
+                .boxed(),
         );
     }
     if let Some(reason) = frame.state.refused.as_ref() {
         lines = lines.push(
             text(t!(i18n, ids::RULES_REFUSED, "reason" => reason.as_str()))
                 .size(TS.body)
-                .color(tokens::danger(tokens)),
+                .color(tokens::danger(tokens))
+                .boxed(),
         );
     }
     lines.boxed()

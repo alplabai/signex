@@ -43,7 +43,7 @@ pub(super) fn no_swatch<'a>() -> Element<'a, PanelMsg> {
     Space::new()
         .width(Length::Fixed(TS.body))
         .height(Length::Fixed(TS.body))
-        .into()
+        .boxed()
 }
 
 /// The ⋯ button that opens or closes a card's menu.

@@ -114,10 +114,11 @@ fn body<'a>(state: &'a FabOutputsState, i18n: &I18n, tokens: &ThemeTokens) -> El
                 .size(TS.title)
                 .labelled(t!(i18n, kind_label(kind)))
                 .text_size(TS.label)
-                .on_toggle(move |_| fo(FabOutputsMsg::OutputToggled(kind))),
+                .on_toggle(move |_| fo(FabOutputsMsg::OutputToggled(kind)))
+                .boxed(),
         );
     }
-    col = col.push(kinds);
+    col = col.push(kinds.boxed());
     col = col.push(fields(state, i18n, tokens));
     col = col.push(outcome(state, i18n, tokens));
     col.boxed()
@@ -176,7 +177,8 @@ fn outcome<'a>(
         col = col.push(
             text(t!(i18n, ids::FAB_OUTPUTS_WRITING))
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     match &state.outcome {
@@ -184,14 +186,16 @@ fn outcome<'a>(
             col = col.push(
                 text(crate::app::fab_outputs::written_text(written, i18n))
                     .size(TS.body)
-                    .color(ti(tokens.text)),
+                    .color(ti(tokens.text))
+                    .boxed(),
             );
         }
         Some(Err(problem)) => {
             col = col.push(
                 text(crate::app::fab_outputs::problem_text(problem, i18n))
                     .size(TS.body)
-                    .color(tokens::danger(tokens)),
+                    .color(tokens::danger(tokens))
+                    .boxed(),
             );
         }
         None => {}
@@ -200,12 +204,17 @@ fn outcome<'a>(
     // colour: the set is not complete as it stands.
     let warning = ti(tokens.warning);
     for note in state.notes() {
-        col = col.push(text(note_text(*note, i18n)).size(TS.body).color(warning));
+        col = col.push(
+            text(note_text(*note, i18n))
+                .size(TS.body)
+                .color(warning)
+                .boxed(),
+        );
     }
     if let Some(Ok(written)) = &state.outcome
         && let Some(line) = stale_text(written, i18n)
     {
-        col = col.push(text(line).size(TS.body).color(warning));
+        col = col.push(text(line).size(TS.body).color(warning).boxed());
     }
     col.boxed()
 }

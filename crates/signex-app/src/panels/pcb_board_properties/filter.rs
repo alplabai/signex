@@ -130,7 +130,9 @@ fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg
             Some(form.t(ids::PCB_BOARD_FILTER_PRESET_ADD_TIP)),
         )
     };
-    let mut column = Column::new().spacing(SP.s).push(wrap.push(add));
+    let mut column = Column::new()
+        .spacing(SP.s)
+        .push(Element::from(wrap.push(add)));
     let tab = board.preset_tab.min(board.presets.len().saturating_sub(1));
     if let Some(preset) = board.presets.get(tab) {
         let name = text_input(
@@ -157,7 +159,7 @@ fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg
         ]
         .spacing(SP.s)
         .align_y(Alignment::Center);
-        column = column.push(edit);
+        column = column.push(edit.boxed());
     }
     container(column).padding([SP.xs, SP.l]).boxed()
 }

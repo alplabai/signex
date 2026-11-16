@@ -65,7 +65,7 @@ fn pills<'a>(
                 .boxed(),
         );
     }
-    row.wrap().into()
+    row.wrap().boxed()
 }
 
 /// A muted caption over a control.

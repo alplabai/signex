@@ -3,7 +3,7 @@
 //! net it takes in, by the check's own resolution.
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_drc::{Source, Verdict};
 use signex_drc_dsl::table::RuleRow;
 use signex_i18n::{MessageId, ids, t};
@@ -23,7 +23,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         .as_deref()
         .and_then(|name| frame.table.row(name))
     else {
-        return Space::new().height(Length::Shrink).into();
+        return Space::new().height(Length::Shrink).boxed();
     };
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
     let heading = text(user(row.name.clone()))
@@ -36,11 +36,12 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             project_id: id,
             rule: row.name.clone(),
         }));
-    let mut body: Column<'a, Message> = Column::new().spacing(SP.s);
+    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.s);
     body = body.push(
         row![heading, Space::new().width(Length::Fill), remove]
             .spacing(SP.m)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
     );
     body = body.push(section(frame, ids::RULES_DETAIL_TEXT));
     body = body.push(
@@ -48,7 +49,8 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             .size(TS.body)
             .font(crate::fonts::iced_font_for_family(
                 crate::fonts::CHROME_MONO_FONT,
-            )),
+            ))
+            .boxed(),
     );
     if !row.problems.is_empty() {
         body = body.push(section(frame, ids::RULES_DETAIL_PROBLEMS));
@@ -63,7 +65,8 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                     "message" => problem.message.as_str()
                 ))
                 .size(TS.body)
-                .color(tokens::danger(tokens)),
+                .color(tokens::danger(tokens))
+                .boxed(),
             );
         }
     }
@@ -77,7 +80,12 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     if !flags.is_empty() {
         body = body.push(section(frame, ids::RULES_DETAIL_FLAGS));
         for flag in flags {
-            body = body.push(text(user(flag)).size(TS.body).color(tokens::danger(tokens)));
+            body = body.push(
+                text(user(flag))
+                    .size(TS.body)
+                    .color(tokens::danger(tokens))
+                    .boxed(),
+            );
         }
     }
     body = body.push(scope(frame, row));
@@ -87,14 +95,14 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         .width(Length::Fill)
         .height(Length::FillPortion(2))
         .style(crate::styles::card(tokens))
-        .into()
+        .boxed()
 }
 
 fn section<'a>(frame: &Frame<'a>, id: MessageId) -> Element<'a, Message> {
     text(t!(frame.i18n, id))
         .size(TS.caption)
         .color(tokens::muted_text(frame.tokens))
-        .into()
+        .boxed()
 }
 
 /// How many objects the rule applies to, and a button that shows them.
@@ -110,7 +118,7 @@ fn scope<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
         return text(t!(i18n, ids::RULES_DETAIL_SCOPE_UNKNOWN))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
-            .into();
+            .boxed();
     };
     let show = button(text(t!(i18n, ids::RULES_DETAIL_SHOW)).size(TS.label))
         .padding([SP.xs, SP.m])
@@ -127,7 +135,7 @@ fn scope<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// "Why this value?" for the first net the rule takes in, on the layers
@@ -135,16 +143,18 @@ fn scope<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
 /// every rule of that limit fared.
 fn why<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
-    let mut out: Column<'a, Message> = column![section(frame, ids::RULES_WHY_TITLE)].spacing(SP.xs);
+    let mut out: Column<Element<'a, Message>> =
+        column![section(frame, ids::RULES_WHY_TITLE)].spacing(SP.xs);
     let found = frame.why;
     let Some((effective, net_name)) = found else {
         return out
             .push(
                 text(t!(i18n, ids::RULES_WHY_NONE))
                     .size(TS.body)
-                    .color(tokens::muted_text(tokens)),
+                    .color(tokens::muted_text(tokens))
+                    .boxed(),
             )
-            .into();
+            .boxed();
     };
     let mm = |nm: i64| format!("{}", pcb_geom::nm_to_mm(nm));
     let source = match &effective.source {
@@ -171,7 +181,8 @@ fn why<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             "value" => value,
             "source" => source
         ))
-        .size(TS.body),
+        .size(TS.body)
+        .boxed(),
     );
     for candidate in &effective.chain {
         let verdict = match candidate.verdict {
@@ -196,8 +207,9 @@ fn why<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                 "verdict" => t!(i18n, verdict).into_string()
             ))
             .size(TS.body)
-            .color(ink),
+            .color(ink)
+            .boxed(),
         );
     }
-    out.into()
+    out.boxed()
 }

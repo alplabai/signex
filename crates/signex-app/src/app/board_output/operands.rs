@@ -50,7 +50,7 @@ fn file(args: &CommandArgs) -> Option<PathBuf> {
 impl Signex {
     /// The open board `document` names. Refused with the reason when it
     /// names none, names another kind, or the board is not open.
-    fn named_board(&self, args: &CommandArgs) -> Result<PathBuf, String> {
+    fn named_output_board(&self, args: &CommandArgs) -> Result<PathBuf, String> {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
             return Err("needs the operand `document`".to_string());
         };
@@ -74,7 +74,7 @@ impl Signex {
 
 /// `board_report_<kind> document=<board>`: the table as JSON.
 fn report_answer(app: &mut Signex, args: &CommandArgs, kind: BoardReportKind) -> Ran {
-    let board = match app.named_board(args) {
+    let board = match app.named_output_board(args) {
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
@@ -105,7 +105,7 @@ pub(crate) fn board_report_components(app: &mut Signex, args: &CommandArgs) -> R
 /// `export_board_report document=<board> kind=<kind> path=<file>`: the CSV,
 /// written off the UI thread; the answer says what is written where.
 pub(crate) fn export_board_report(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let board = match app.named_board(args) {
+    let board = match app.named_output_board(args) {
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
@@ -185,7 +185,7 @@ pub(super) fn print_options(args: &CommandArgs) -> Result<BoardPrintOptions, Str
 /// `export_board_pdf document=<board> path=<file> [options]`: the PDF,
 /// written off the UI thread; the answer lists the pages.
 pub(crate) fn export_board_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let board = match app.named_board(args) {
+    let board = match app.named_output_board(args) {
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
