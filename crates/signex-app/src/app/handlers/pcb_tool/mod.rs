@@ -23,6 +23,7 @@ use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod form;
+mod pour_cut;
 mod route;
 mod router;
 mod string;
@@ -37,6 +38,10 @@ mod area_form_tests;
 mod area_tests;
 #[cfg(test)]
 mod form_tests;
+#[cfg(test)]
+mod pour_cut_tests;
+#[cfg(test)]
+mod pour_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -248,6 +253,8 @@ impl Signex {
             BoardPlaceTool::Track => self.route_clicked(at),
             BoardPlaceTool::InteractiveRouting => self.router_clicked(at),
             BoardPlaceTool::TextString => self.string_clicked(at),
+            BoardPlaceTool::PourCutout => self.pour_cutout_clicked(at),
+            BoardPlaceTool::SlicePour => self.slice_pour_clicked(at),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour
@@ -288,6 +295,9 @@ impl Signex {
                 self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
+            BoardPlaceTool::PourCutout | BoardPlaceTool::SlicePour => {
+                self.pour_cut_preview(session, cursor, &mut preview);
+            }
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour

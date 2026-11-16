@@ -438,6 +438,8 @@ fn unknown_zone_keys_survive_a_round_trip() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
     let text = save_pcb(&board);

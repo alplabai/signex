@@ -20,6 +20,7 @@ mod index;
 mod mst;
 mod net_length;
 mod pick_filter;
+mod pour_edit;
 mod ratsnest;
 mod rect;
 mod region;
@@ -54,6 +55,7 @@ pub use net_length::{
     item_net, net_items, net_routed_length_mm, track_length_mm, tracks_length_mm, via_span,
 };
 pub use pick_filter::{PickFilter, PickKind};
+pub use pour_edit::{AreaShape, cut_area, slice_area};
 pub use ratsnest::{RatLine, ratsnest, ratsnest_with_fills};
 pub use rect::RectNm;
 pub use region::{

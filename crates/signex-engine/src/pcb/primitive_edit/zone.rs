@@ -1,5 +1,6 @@
 //! Area fields (#2393): the layer and net of a fill, solid region, polygon
-//! pour or keepout, and a pour's clearance and minimum width.
+//! pour or keepout, and a pour's clearance, minimum width, priority and
+//! island rules (#2216).
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Zone};
@@ -24,6 +25,15 @@ pub enum ZoneEdit {
     /// A pour's minimum copper width in mm. Other areas are left as they
     /// are.
     MinThickness(f64),
+    /// A pour's priority (#2216): a higher one fills first. A whole number
+    /// from 0. Other areas are left as they are.
+    Priority(f64),
+    /// The smallest island, in mm², a pour keeps; 0 keeps every island.
+    /// Other areas are left as they are.
+    MinIslandArea(f64),
+    /// Whether a pour drops islands touching no copper of its net. Other
+    /// areas are left as they are.
+    RemoveDeadIslands(bool),
 }
 
 /// Whether `layer` can hold `zone`: copper for a copper area, a layer that
@@ -69,10 +79,18 @@ pub fn apply_zone_edit(
     edit: ZoneEdit,
 ) -> Result<(), PrimitiveEditRefusal> {
     let is_keepout = zone.fill_type == KEEPOUT_FILL;
-    if let ZoneEdit::Clearance(v) | ZoneEdit::MinThickness(v) = edit
+    if let ZoneEdit::Clearance(v)
+    | ZoneEdit::MinThickness(v)
+    | ZoneEdit::MinIslandArea(v)
+    | ZoneEdit::Priority(v) = edit
         && finite(v)? < 0.0
     {
         return Err(PrimitiveEditRefusal::Negative);
+    }
+    if let ZoneEdit::Priority(v) = edit
+        && (v.fract() != 0.0 || v > f64::from(u32::MAX))
+    {
+        return Err(PrimitiveEditRefusal::NotWhole);
     }
     match edit {
         ZoneEdit::Layer(layer) => {
@@ -93,9 +111,18 @@ pub fn apply_zone_edit(
                 .map(|n| n.name.clone())
                 .unwrap_or_default();
         }
-        ZoneEdit::Clearance(_) | ZoneEdit::MinThickness(_) if !zone.is_pour() => {}
+        ZoneEdit::Clearance(_)
+        | ZoneEdit::MinThickness(_)
+        | ZoneEdit::Priority(_)
+        | ZoneEdit::MinIslandArea(_)
+        | ZoneEdit::RemoveDeadIslands(_)
+            if !zone.is_pour() => {}
         ZoneEdit::Clearance(v) => zone.clearance = v,
         ZoneEdit::MinThickness(v) => zone.min_thickness = v,
+        // Checked above: a whole number from 0 within `u32`.
+        ZoneEdit::Priority(v) => zone.priority = v as u32,
+        ZoneEdit::MinIslandArea(v) => zone.min_island_area = v,
+        ZoneEdit::RemoveDeadIslands(on) => zone.remove_dead_islands = on,
     }
     Ok(())
 }

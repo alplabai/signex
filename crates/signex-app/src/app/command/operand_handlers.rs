@@ -113,6 +113,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
+    ("repour_all", crate::app::handlers::pcb_pour::repour_all),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

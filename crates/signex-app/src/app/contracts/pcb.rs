@@ -74,6 +74,10 @@ pub enum PcbMsg {
     /// `cycle_route_mode` ran (#2389): Interactive Routing switches between
     /// walking around other nets and pushing their tracks aside.
     RouteModeStepped,
+    /// `repour_selected` or `repour_all` ran (#2216): the pour fills of the
+    /// board in view are computed again and Messages says what the selected
+    /// pours (`selected`) or all of them came to.
+    RepourRequested { selected: bool },
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).

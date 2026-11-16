@@ -28,6 +28,7 @@ mod items;
 mod options;
 pub mod part_place;
 pub mod placement;
+pub mod pour_edit;
 pub mod primitive_edit;
 mod replace;
 pub mod route;

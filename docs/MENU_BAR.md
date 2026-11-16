@@ -142,6 +142,15 @@ because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
 [Back Annotate](#back-annotate) to keep them. The dialog and the Properties
 section say so under their fields.
 
+## Tools ▸ Repour Selected, Repour All {#tools-repour}
+
+Right after Re-Annotate Board, Tools ▸ Repour Selected and Repour All run
+`repour_selected` and `repour_all` (#2216) on the board in view, greyed while
+no PCB is open. Both fill the board's polygon pours again and say in Messages
+how many pours, pieces of copper and removed islands they came to; Repour
+Selected reports the selected pours and says so when none is selected.
+Rules in `docs/PCB_TOOLS.md`, "Repour".
+
 ## Back Annotate {#back-annotate}
 
 Tools ▸ Annotation ▸ Back Annotate Schematics... and Design ▸ Update

@@ -370,12 +370,15 @@ fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }
 
 /// #2383: a keepout is picked on its edge and inside it, a box selects it
-/// whole only when it holds every edge, and a pour stays out of the index.
+/// whole only when it holds every edge; #2216: a pour is picked inside its
+/// outline as a polygon.
 #[test]
 fn drawn_areas_are_picked_on_their_edges_and_inside() {
     let mut b = board(Vec::new(), Vec::new(), Vec::new());
@@ -395,7 +398,15 @@ fn drawn_areas_are_picked_on_their_edges_and_inside() {
     );
     assert_eq!(index.hit_point(PointNm::new(5 * MM, 0), 0), vec![keepout]);
     assert!(index.hit_point(PointNm::new(8 * MM, 8 * MM), 0).is_empty());
-    assert!(index.hit_point(PointNm::new(25 * MM, 2 * MM), 0).is_empty());
+    let pour = ItemRef::Zone {
+        zone: id(8),
+        kind: PickKind::Polygons,
+    };
+    assert_eq!(
+        index.hit_point(PointNm::new(25 * MM, 2 * MM), 0),
+        vec![pour]
+    );
+    assert!(index.hit_point(PointNm::new(21 * MM, 8 * MM), 0).is_empty());
     let whole = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(11 * MM, 11 * MM));
     let half = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(5 * MM, 11 * MM));
     let within = RectNm::new(PointNm::new(MM, MM), PointNm::new(2 * MM, 2 * MM));

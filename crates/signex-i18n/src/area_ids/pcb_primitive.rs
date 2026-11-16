@@ -138,4 +138,10 @@ define_ids! {
     PCB_PRIM_KEEPOUT_KINDS = "pcb-prim-keepout-kinds";
     PCB_PRIM_KEEPOUT_ALL_COPPER = "pcb-prim-keepout-all-copper";
     PCB_PRIM_KEEPOUT_KINDS_UNSUPPORTED = "pcb-prim-keepout-kinds-unsupported";
+    PCB_PRIM_PRIORITY = "pcb-prim-priority";
+    PCB_PRIM_MIN_ISLAND_AREA = "pcb-prim-min-island-area";
+    PCB_PRIM_REMOVE_DEAD_ISLANDS = "pcb-prim-remove-dead-islands";
+    PCB_PRIM_POUR_COPPER = "pcb-prim-pour-copper";
+    PCB_PRIM_POUR_COPPER_VALUE = "pcb-prim-pour-copper-value";
+    PCB_PRIM_POUR_COPPER_TIP = "pcb-prim-pour-copper-tip";
 }

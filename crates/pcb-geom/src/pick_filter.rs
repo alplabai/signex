@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use signex_types::pcb::{Point, SOLID_FILL, Zone};
 use signex_types::zone_keepout::KEEPOUT_FILL;
+use signex_types::zone_pour::POUR_FILL;
 
 use crate::index::ItemRef;
 
@@ -59,14 +60,14 @@ impl PickKind {
     }
 
     /// The kind a drawn area is (#2383): a keepout, a Fill (solid copper on
-    /// an upright rectangle, as the Fill tool draws it) or a Solid Region.
-    /// `None` for any other zone, such as a polygon pour, which the board
-    /// editor does not pick yet.
+    /// an upright rectangle, as the Fill tool draws it), a Solid Region or a
+    /// polygon pour (#2216). `None` for a zone of a kind no tool draws.
     pub fn of_zone(zone: &Zone) -> Option<Self> {
         match zone.fill_type.as_str() {
             KEEPOUT_FILL => Some(PickKind::Keepouts),
             SOLID_FILL if is_upright_rectangle(&zone.outline) => Some(PickKind::Fills),
             SOLID_FILL => Some(PickKind::Regions),
+            POUR_FILL => Some(PickKind::Polygons),
             _ => None,
         }
     }
@@ -83,6 +84,7 @@ impl PickKind {
                 | PickKind::Keepouts
                 | PickKind::Regions
                 | PickKind::Fills
+                | PickKind::Polygons
         )
     }
 }
@@ -202,12 +204,14 @@ mod tests {
             thermal_width: 0.0,
             clearance: 0.0,
             min_thickness: 0.0,
+            min_island_area: 0.0,
+            remove_dead_islands: false,
             unknown: Default::default(),
         }
     }
 
-    /// #2383: a keepout, a Fill and a Solid Region are told apart; a pour is
-    /// not picked yet.
+    /// #2383: a keepout, a Fill and a Solid Region are told apart; #2216: a
+    /// pour is a polygon.
     #[test]
     fn drawn_areas_have_their_kind() {
         let rect = [(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)];
@@ -229,11 +233,21 @@ mod tests {
             PickKind::of_zone(&zone("solid", &bow)),
             Some(PickKind::Regions)
         );
-        assert_eq!(PickKind::of_zone(&zone("pour", &rect)), None);
-        for kind in [PickKind::Keepouts, PickKind::Fills, PickKind::Regions] {
+        assert_eq!(
+            PickKind::of_zone(&zone("pour", &rect)),
+            Some(PickKind::Polygons),
+            "#2216: a pour is picked as a polygon"
+        );
+        assert_eq!(PickKind::of_zone(&zone("", &rect)), None);
+        for kind in [
+            PickKind::Keepouts,
+            PickKind::Fills,
+            PickKind::Regions,
+            PickKind::Polygons,
+        ] {
             assert!(kind.is_pickable(), "{kind:?}");
         }
-        assert!(!PickKind::Polygons.is_pickable());
+        assert!(!PickKind::Rooms.is_pickable());
     }
 
     #[test]

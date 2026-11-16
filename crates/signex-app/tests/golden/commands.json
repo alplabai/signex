@@ -780,12 +780,22 @@
     "category": "place"
   },
   {
+    "id": "place_board_pour_cutout",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_region",
     "group": "Pcb",
     "category": "place"
   },
   {
     "id": "place_board_route",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_slice_pour",
     "group": "Pcb",
     "category": "place"
   },
@@ -1038,6 +1048,16 @@
     "id": "report_manager_bom",
     "group": "General",
     "category": "reports"
+  },
+  {
+    "id": "repour_all",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "repour_selected",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "reset_local_coordinates",

@@ -494,6 +494,9 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "")),
+        // #2216: docs/MENU_BAR.md#tools-repour
+        cmd_item_gated(ctx, cmd("repour_selected", "")),
+        cmd_item_gated(ctx, cmd("repour_all", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.

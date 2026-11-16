@@ -1,4 +1,6 @@
 use super::*;
+use crate::rect::RectNm;
+use crate::transform::pad_shape;
 use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment};
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
@@ -48,6 +50,8 @@ fn zone(n: u128, net: u32, fill: &str, layer: &str, rect: (f64, f64, f64, f64)) 
         thermal_width: 0.0,
         clearance: 0.5,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }
@@ -278,4 +282,137 @@ fn the_pour_clearance_falls_back_to_the_board_then_the_default() {
     });
     let w = hole_width(&b);
     assert!((8 * MM / 5..8 * MM / 5 + MM / 50).contains(&w), "{w}");
+}
+
+/// A net-2 track along y = `y` across the whole pour.
+fn track_across(n: u128, y: f64) -> Segment {
+    Segment {
+        uuid: Uuid::from_u128(n),
+        start: Point::new(-20.0, y),
+        end: Point::new(20.0, y),
+        width: 0.25,
+        layer: "TopCopper".into(),
+        net: 2,
+        unknown_columns: Default::default(),
+    }
+}
+
+/// The bounds of every piece of the pour at `index`.
+fn fill_bounds(board: &PcbBoard, index: usize) -> RectNm {
+    let fills = zone_fills(board);
+    let fill = fills.of(index).expect("filled");
+    RectNm::bounding(fill.pieces.iter().flat_map(|p| p.outer.iter().copied())).expect("copper")
+}
+
+/// #2216: a pour of another net that fills later keeps the clearance from
+/// the fill of the pour filled first; a higher priority fills first, and
+/// equal priorities fill in board order.
+#[test]
+fn a_higher_priority_pour_fills_first_and_the_other_keeps_clear_of_it() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    // Equal priority: the first pour fills first, the second clears it.
+    assert_eq!(twice_area(&pieces(&b)), FULL);
+    let second = fill_bounds(&b, 1);
+    assert!(
+        (21 * MM / 2..21 * MM / 2 + MM / 50).contains(&second.min.x),
+        "{second:?}"
+    );
+    // The second pour on a higher priority fills first.
+    b.zones[1].priority = 3;
+    let first = fill_bounds(&b, 0);
+    assert!(
+        (-MM / 2 - MM / 50..=-MM / 2).contains(&first.max.x),
+        "{first:?}"
+    );
+    assert_eq!(fill_bounds(&b, 1).min.x, 0, "the higher one is whole");
+}
+
+/// #2216: pours of one net may overlap; neither clears the other.
+#[test]
+fn pours_of_one_net_overlap() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 1, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    let fills = zone_fills(&b);
+    assert_eq!(twice_area(&fills.of(0).expect("filled").pieces), FULL);
+    assert_eq!(twice_area(&fills.of(1).expect("filled").pieces), FULL);
+}
+
+/// #2216: a pour on another layer does not clear this one.
+#[test]
+fn a_pour_on_another_layer_is_not_cleared() {
+    let mut b = board(Vec::new());
+    b.zones.push(zone(
+        2,
+        2,
+        POUR_FILL,
+        "BottomCopper",
+        (0.0, -10.0, 20.0, 10.0),
+    ));
+    b.zones[1].priority = 5;
+    assert_eq!(twice_area(&pieces(&b)), FULL);
+}
+
+/// #2216: a fill stays inside the board outline.
+#[test]
+fn a_fill_is_clipped_to_the_board_outline() {
+    let mut b = board(Vec::new());
+    b.outline = vec![
+        Point::new(-5.0, -5.0),
+        Point::new(5.0, -5.0),
+        Point::new(5.0, 5.0),
+        Point::new(-5.0, 5.0),
+    ];
+    let fill = pieces(&b);
+    assert_eq!(fill.len(), 1);
+    assert_eq!(twice_area(&fill), 2 * (10 * MM as i128) * (10 * MM as i128));
+    // No outline: nothing clips it.
+    b.outline.clear();
+    assert_eq!(twice_area(&pieces(&b)), FULL);
+}
+
+/// #2216: an island smaller than the pour's minimum area is dropped and
+/// counted; a bigger one stays.
+#[test]
+fn an_island_below_the_minimum_area_is_dropped() {
+    let mut b = board(Vec::new());
+    // The track at y = 8 leaves a strip about 20 x 1.375 mm (27.5 mm²) above.
+    b.segments.push(track_across(7, 8.0));
+    assert_eq!(pieces(&b).len(), 2);
+    b.zones[0].min_island_area = 30.0;
+    let fills = zone_fills(&b);
+    let fill = fills.of(0).expect("filled");
+    assert_eq!(fill.pieces.len(), 1);
+    assert_eq!(fill.islands_removed, 1);
+    b.zones[0].min_island_area = 20.0;
+    assert_eq!(pieces(&b).len(), 2, "27.5 mm² is kept");
+}
+
+/// #2216: with dead-copper removal, an island touching no copper of the
+/// pour's net is dropped; an island on a pad of the net stays. A pour with
+/// no net keeps every island.
+#[test]
+fn an_island_touching_no_copper_of_the_net_is_dropped() {
+    let mut b = board(vec![pad(1, 0.0, 1)]);
+    b.segments.push(track_across(7, 8.0));
+    b.zones[0].remove_dead_islands = true;
+    let fills = zone_fills(&b);
+    let fill = fills.of(0).expect("filled");
+    assert_eq!(fill.pieces.len(), 1, "the strip above the track is dead");
+    assert_eq!(fill.islands_removed, 1);
+    let kept = RectNm::bounding(fill.pieces[0].outer.iter().copied()).expect("copper");
+    assert!(kept.min.y < 0, "the piece holding the pad stays");
+
+    b.zones[0].net = 0;
+    assert_eq!(pieces(&b).len(), 2, "no net: nothing is dead");
+}
+
+/// #2216: the fill's area in mm².
+#[test]
+fn the_fill_area_is_in_square_millimetres() {
+    let fills = zone_fills(&board(Vec::new()));
+    let area = fills.of(0).expect("filled").area_mm2();
+    assert!((area - 400.0).abs() < 1e-9, "{area}");
 }

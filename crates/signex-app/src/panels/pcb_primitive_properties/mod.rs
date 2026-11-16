@@ -81,6 +81,11 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         net: u32,
     },
+    /// A pour's Remove Dead Copper box was ticked or cleared (#2216).
+    DeadIslandsToggled {
+        target: PrimitiveTarget,
+        on: bool,
+    },
     ShapePicked {
         target: PrimitiveTarget,
         shape: PadShape,

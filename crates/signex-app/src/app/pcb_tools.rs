@@ -1,4 +1,4 @@
-//! The board placement tools (#2352, #2360, #2373, #2389). One table, so the PCB
+//! The board placement tools (#2352, #2360, #2373, #2389, #2216). One table, so the PCB
 //! Active Bar and the Place menu on a board run the same command for a live
 //! tool, and grey the same set with the same reason for a tool the board
 //! editor cannot run yet.
@@ -17,6 +17,8 @@ pub enum BoardPlaceTool {
     Fill,
     SolidRegion,
     PolygonPour,
+    PourCutout,
+    SlicePour,
     TextString,
     Dimension,
     Keepout,
@@ -34,7 +36,7 @@ pub(crate) enum ToolState {
 
 impl BoardPlaceTool {
     /// Place on a board, top to bottom.
-    pub(crate) const PLACE_MENU: [Self; 12] = [
+    pub(crate) const PLACE_MENU: [Self; 14] = [
         Self::Component,
         Self::Pad,
         Self::Via,
@@ -44,6 +46,8 @@ impl BoardPlaceTool {
         Self::Fill,
         Self::SolidRegion,
         Self::PolygonPour,
+        Self::PourCutout,
+        Self::SlicePour,
         Self::TextString,
         Self::Dimension,
         Self::Keepout,
@@ -58,6 +62,8 @@ impl BoardPlaceTool {
             Self::Fill => Live("place_board_fill"),
             Self::SolidRegion => Live("place_board_region"),
             Self::PolygonPour => Live("place_board_polygon_pour"),
+            Self::PourCutout => Live("place_board_pour_cutout"),
+            Self::SlicePour => Live("place_board_slice_pour"),
             Self::Keepout => Live("place_board_keepout"),
             Self::Component => Unavailable(ids::PCB_BAR_COMPONENT_UNAVAILABLE),
             Self::Pad => Unavailable(ids::PCB_BAR_PAD_UNAVAILABLE),
@@ -88,6 +94,8 @@ impl BoardPlaceTool {
             Self::Fill => ids::PCB_TOOL_FILL,
             Self::SolidRegion => ids::PCB_TOOL_REGION,
             Self::PolygonPour => ids::PCB_TOOL_POLYGON_POUR,
+            Self::PourCutout => ids::PCB_TOOL_POUR_CUTOUT,
+            Self::SlicePour => ids::PCB_TOOL_SLICE_POUR,
             Self::TextString => ids::PCB_TOOL_STRING,
             Self::Dimension => ids::PCB_TOOL_DIMENSION,
             Self::Keepout => ids::PCB_TOOL_KEEPOUT,
@@ -104,6 +112,14 @@ impl BoardPlaceTool {
             Self::Fill => (ids::PCB_BAR_FILL_TOOLTIP, ids::PCB_TOOL_HINT_FILL),
             Self::SolidRegion => (ids::PCB_BAR_REGION_TOOLTIP, ids::PCB_TOOL_HINT_REGION),
             Self::PolygonPour => (ids::PCB_BAR_POUR_TOOLTIP, ids::PCB_TOOL_HINT_POUR),
+            Self::PourCutout => (
+                ids::PCB_BAR_POUR_CUTOUT_TOOLTIP,
+                ids::PCB_TOOL_HINT_POUR_CUTOUT,
+            ),
+            Self::SlicePour => (
+                ids::PCB_BAR_SLICE_POUR_TOOLTIP,
+                ids::PCB_TOOL_HINT_SLICE_POUR,
+            ),
             Self::Keepout => (ids::PCB_BAR_KEEPOUT_TOOLTIP, ids::PCB_TOOL_HINT_KEEPOUT),
             other => (other.name(), other.name()),
         }

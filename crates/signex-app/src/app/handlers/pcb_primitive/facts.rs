@@ -107,8 +107,9 @@ impl Signex {
                     return None;
                 }
                 let net = shared(zones.iter().map(|z| z.net));
+                let fills = self.current_pour_fills(&target.board);
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
-                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, i18n))
+                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, fills, i18n))
             }
             ItemRef::Footprint(_) => return None,
         })

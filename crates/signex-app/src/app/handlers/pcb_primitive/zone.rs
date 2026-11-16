@@ -1,8 +1,9 @@
 //! The facts of the area panel (#2393): fills, solid regions, polygon pours
 //! and keepouts, read from the zones. The kind is named the way the pick
-//! filter names it (`pcb_geom::PickKind::of_zone`).
+//! filter names it (`pcb_geom::PickKind::of_zone`). A pour also shows its
+//! priority, island rules and the copper its fill holds (#2216).
 
-use pcb_geom::{ItemRef, PickKind};
+use pcb_geom::{ItemRef, PickKind, ZoneFills};
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::primitive_edit::{PrimitiveEditRefusal, ZoneEdit, zone_edit_command};
 use signex_i18n::I18n;
@@ -49,10 +50,31 @@ fn area_layers(board: &PcbBoard, keepout: bool, i18n: &I18n) -> Vec<AreaLayerCho
         .collect()
 }
 
+/// The copper the fills of the pours in `zones` hold: area in mm² and
+/// pieces. `None` without fills, or when a zone is not a filled pour.
+fn pour_copper(
+    board: &PcbBoard,
+    zones: &[&Zone],
+    fills: Option<&ZoneFills>,
+) -> Option<(f64, usize)> {
+    let fills = fills?;
+    let mut total = (0.0, 0);
+    for zone in zones {
+        let index = board.zones.iter().position(|z| z.uuid == zone.uuid)?;
+        let fill = fills.of(index).filter(|f| f.zone == zone.uuid)?;
+        total.0 += fill.area_mm2();
+        total.1 += fill.pieces.len();
+    }
+    Some(total)
+}
+
+/// The facts of the area panel for `zones`; `fills` are the board's pour
+/// fills when they are computed.
 pub(super) fn zone_facts(
     board: &PcbBoard,
     common: PrimitiveCommon,
     zones: &[&Zone],
+    fills: Option<&ZoneFills>,
     i18n: &I18n,
 ) -> ZoneFacts {
     let kind = shared(zones.iter().map(|z| zone_kind(z))).flatten();
@@ -71,6 +93,10 @@ pub(super) fn zone_facts(
         layers: area_layers(board, all_keepouts, i18n),
         clearance: shared(zones.iter().map(|z| z.clearance)),
         min_thickness: shared(zones.iter().map(|z| z.min_thickness)),
+        priority: shared(zones.iter().map(|z| z.priority)),
+        min_island_area: shared(zones.iter().map(|z| z.min_island_area)),
+        remove_dead_islands: shared(zones.iter().map(|z| z.remove_dead_islands)),
+        copper: pour_copper(board, zones, fills),
         common,
     }
 }
@@ -84,6 +110,9 @@ pub(crate) fn zone_edit(edit: &PrimitiveEdit) -> Option<ZoneEdit> {
         PrimitiveEdit::Net(net) => ZoneEdit::Net(net),
         PrimitiveEdit::Number(F::Clearance, v) => ZoneEdit::Clearance(v),
         PrimitiveEdit::Number(F::MinThickness, v) => ZoneEdit::MinThickness(v),
+        PrimitiveEdit::Number(F::Priority, v) => ZoneEdit::Priority(v),
+        PrimitiveEdit::Number(F::MinIslandArea, v) => ZoneEdit::MinIslandArea(v),
+        PrimitiveEdit::DeadIslands(on) => ZoneEdit::RemoveDeadIslands(on),
         _ => return None,
     })
 }

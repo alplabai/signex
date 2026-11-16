@@ -38,6 +38,8 @@ pub enum PrimitiveEditRefusal {
     OutOfRange,
     #[error("the value must not be below zero")]
     Negative,
+    #[error("the value must be a whole number")]
+    NotWhole,
     #[error("the area cannot be on that layer")]
     LayerNotAllowed,
 }

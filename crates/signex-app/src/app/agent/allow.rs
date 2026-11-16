@@ -91,6 +91,8 @@ mod tests {
                 "list_documents",
                 "query_pins",
                 "read_document",
+                // #2216: each pour's fill of the named board, as JSON.
+                "repour_all",
                 "resolve",
                 "revert",
                 "rules_add",

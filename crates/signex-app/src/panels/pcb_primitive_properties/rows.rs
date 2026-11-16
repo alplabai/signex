@@ -340,6 +340,29 @@ pub(super) fn fixed_checkbox<'a>(
     with_tip(look, check.boxed(), tip)
 }
 
+/// A checkbox with its label, ticked when `checked` is `Some(true)`; it
+/// sends `on_toggle` when the selection can be edited.
+pub(super) fn live_checkbox<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    label: MessageId,
+    checked: Option<bool>,
+    on_toggle: impl Fn(bool) -> PcbPrimitiveMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    let check = checkbox::<PanelMsg, Theme, iced::Renderer>(checked == Some(true))
+        .labelled(look.t(label))
+        .size(TS.body)
+        .text_size(TS.body)
+        .style(form_look::checkbox_style);
+    if common.is_editable() {
+        check
+            .on_toggle(move |on| PanelMsg::PcbPrimitive(on_toggle(on)))
+            .boxed()
+    } else {
+        check.boxed()
+    }
+}
+
 /// A disabled field box showing `value`, with `tip`.
 pub(super) fn fixed_value<'a>(
     look: Look<'a>,

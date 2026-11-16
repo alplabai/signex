@@ -191,16 +191,63 @@ A pour's outline only bounds its copper. The copper, its fill, is computed by
   layer, grown by the clearance;
 - less every keepout zone on the layer and every board-sketch keepout that
   forbids copper or pours on it, with no clearance;
+- less the fills of the other nets' pours on the layer that filled before it,
+  grown by its clearance (pour-to-pour clearance);
+- inside the board outline less its through cutouts, when the board has an
+  outline;
 - with every part narrower than the zone's `min_thickness` removed, when it
-  is set.
+  is set;
+- with every island (separate piece) smaller than `min_island_area` (mm²)
+  removed, when it is above 0, and, with `remove_dead_islands`, every island
+  that touches no pad, track, via or solid copper zone of the pour's net (a
+  pour of no net keeps them). The fill counts the islands it removed.
+
+Pours fill in priority order (#2216): a higher `priority` first, equal
+priorities in board order. A pour of the same net may overlap an earlier one;
+one of another net keeps its clearance from it. So of two overlapping pours
+of different nets, the higher priority keeps the overlap.
 
 Copper of the pour's own net is filled over: a pad joins the pour solidly, with
 no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
-are kept but not read yet). Not modelled yet: pours of different nets that
-overlap are not cleared from each other and both fill the overlap (zone
-`priority` is not read); islands of fill that join nothing stay; the fill is
-not clipped to the board outline; copper text and footprint copper graphics
-are not cleared.
+are kept but not read yet). Not modelled yet: copper text and footprint copper
+graphics are not cleared.
+
+### Picking and editing a pour
+
+A placed pour is picked inside its outline (`PickKind::Polygons`, the
+Polygons chip of the selection filter) and opens the area panel: net, layer,
+clearance, minimum width, Priority (a whole number from 0), Remove Islands
+Below (mm²), Remove Dead Copper, and the copper its fill holds (area and
+pieces), read from the fills the app holds. Each edit is one undo step.
+`min_island_area` and `remove_dead_islands` are written to the file only when
+set.
+
+### Pour Cutout and Slice Pour
+
+Both work on the polygon pours of the active copper layer and are one undo
+step each (`signex_engine::pcb::pour_edit`, geometry in
+`pcb_geom::{cut_area, slice_area}`):
+
+- **Pour Cutout** (`place_board_pour_cutout`) is drawn like a Solid Region.
+  Closed, its area is cut out of every pour it overlaps: a hole when inside,
+  a notch at an edge, or several pieces.
+- **Slice Pour** (`place_board_slice_pour`) takes two clicks; every pour the
+  segment between them meets is cut in two along the line through them.
+
+The largest piece keeps the pour (its uuid and settings); every other piece
+becomes a new pour with the same settings, and a pour the cutout covers whole
+is removed. When nothing is cut, Messages says so and the board is unchanged.
+
+### Repour
+
+`repour_selected` and `repour_all` (Tools, the Copper Areas group of the
+Active Bar, the palette) fill the board in view again at once and say in
+Messages how many pours, pieces of copper and removed islands they came to;
+Repour Selected reports the selected pours. Fills depend on each other, so
+the whole board is filled either way. Nothing in the document changes, so
+there is no undo step. `repour_all document=<board>` answers an agent or the
+CLI with each pour's `zone`, `net`, `net_name`, `layer`, `priority`,
+`filled`, `pieces`, `area_mm2` and `islands_removed`.
 
 A round part of a grown obstacle is cut as a polygon whose chords lie on or
 outside the true arc, so the fill never comes closer than the clearance. The
@@ -303,7 +350,7 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Components | Component, Change Footprint |
 | Route | Interactive Routing |
 | Via / Pad | Via, Pad |
-| Copper areas | Polygon Pour, Solid Region, Fill, Keepout |
+| Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All |
 | Copper drawing | Track, Arc |
 | Dimensions | Dimension |
 | Text | String |

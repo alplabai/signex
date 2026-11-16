@@ -208,3 +208,42 @@ fn a_group_remembers_its_last_tool_after_a_restart() {
     let button = group_button_of(&restarted, PcbBarGroup::CopperAreas);
     assert!(runs(&button, "place_board_fill"));
 }
+
+/// #2216: Copper Areas lists Pour Cutout and Slice Pour after Polygon Pour
+/// and ends with Repour Selected and Repour All; every row is live on a
+/// board, and Pour Cutout picked from it is armed.
+#[test]
+fn the_copper_areas_group_lists_the_pour_rows() {
+    let mut app = board_app();
+    let ids: Vec<Option<&str>> = rows(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
+        .iter()
+        .map(|row| row.command_id)
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            Some("place_board_polygon_pour"),
+            Some("place_board_pour_cutout"),
+            Some("place_board_slice_pour"),
+            Some("place_board_region"),
+            Some("place_board_fill"),
+            Some("place_board_keepout"),
+            Some("repour_selected"),
+            Some("repour_all"),
+        ]
+    );
+    let labels: Vec<String> = rows(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
+        .into_iter()
+        .filter(|row| !row.disabled)
+        .map(|row| row.label)
+        .collect();
+    assert_eq!(labels.len(), 8, "every row is live: {labels:?}");
+    assert!(labels.iter().any(|l| l == "Pour Cutout"), "{labels:?}");
+    assert!(labels.iter().any(|l| l == "Repour All"), "{labels:?}");
+    let _ = pick_from_group(
+        &mut app,
+        PcbBarGroup::CopperAreas,
+        "place_board_pour_cutout",
+    );
+    assert_eq!(armed(&app), Some(BoardPlaceTool::PourCutout));
+}

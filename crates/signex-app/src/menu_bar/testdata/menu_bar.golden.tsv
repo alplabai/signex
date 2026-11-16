@@ -169,6 +169,8 @@ Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
+Tools/Repour Selected	item	Repour Selected	-	-	RepourSelected	01100000	cmd:repour_selected
+Tools/Repour All	item	Repour All	-	-	RepourAll	01100000	cmd:repour_all
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
 Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Mod+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode

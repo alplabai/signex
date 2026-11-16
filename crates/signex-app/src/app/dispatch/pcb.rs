@@ -64,6 +64,10 @@ impl Signex {
                 self.step_route_mode();
                 Task::none()
             }
+            PcbMsg::RepourRequested { selected } => {
+                self.repour_board_in_view(selected);
+                Task::none()
+            }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),

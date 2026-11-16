@@ -187,6 +187,23 @@ pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer 
 pcb-tool-string-text = String
 # A String click while the active layer is not an overlay layer.
 pcb-tool-string-needs-overlay = String: make an overlay layer active to place a string on it
+# Pour Cutout and Slice Pour (#2216): their Place rows, Active Bar tooltips,
+# Messages hints, and the line said when nothing was cut; $tool is the
+# tool's name.
+pcb-tool-pour-cutout = Pour Cutout
+pcb-tool-slice-pour = Slice Pour
+pcb-bar-pour-cutout-tooltip = Place Pour Cutout (right-click to close)
+pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner or a right-click to close it. The area is cut out of every polygon pour it overlaps on the active copper layer, as one step; Esc drops the shape, then ends the tool
+pcb-bar-slice-pour-tooltip = Slice Pour
+pcb-tool-hint-slice-pour = Slice Pour: click two points on a line across a polygon pour on the active copper layer; each pour the line meets is cut in two along it, as one step. Esc drops the first point, then ends the tool
+pcb-tool-pour-missed = { $tool }: no polygon pour on the active copper layer is cut there, so nothing changed
+# Repour Selected and Repour All (#2216): what the fill came to.
+pcb-pour-repoured = Repour: { $pours ->
+    [one] 1 polygon pour
+   *[other] { $pours } polygon pours
+} filled, { $pieces } areas of copper, { $islands } islands removed
+pcb-pour-none = Repour: the board has no polygon pour
+pcb-pour-none-selected = Repour Selected: select a polygon pour first
 # Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
 # lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
 pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)

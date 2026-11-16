@@ -1,15 +1,17 @@
 //! The area panel (#2393): fills, solid regions, polygon pours and
 //! keepouts. Net Information and the net for copper areas, the layer, a
-//! pour's clearance and minimum width, a keepout's kinds and the lock.
+//! pour's clearance, minimum width, priority, island rules and the copper
+//! its fill holds (#2216), a keepout's kinds and the lock.
 
 use iced::widget::{container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::ids;
+use signex_i18n::{ids, t};
 
 use super::rows::{
-    Look, Section, chip, dropdown, fixed_value, labelled, lock, mm_field, net_row, stack,
+    Look, Section, chip, dropdown, field, fixed_value, labelled, live_checkbox, lock, mm_field,
+    net_row, stack,
 };
-use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, ZoneFacts, net_info};
+use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, ZoneFacts, format_number, net_info};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::pcb_canvas::layer_style;
 
@@ -109,5 +111,56 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
             mm_field(common, F::MinThickness, f.min_thickness, look),
         ),
     );
+    let priority = f.priority.map(|p| p.to_string());
+    s.push(
+        common,
+        ids::PCB_PRIM_PRIORITY,
+        labelled(
+            look,
+            ids::PCB_PRIM_PRIORITY,
+            field(common, F::Priority, priority, None, look),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_MIN_ISLAND_AREA,
+        labelled(
+            look,
+            ids::PCB_PRIM_MIN_ISLAND_AREA,
+            mm_field(common, F::MinIslandArea, f.min_island_area, look),
+        ),
+    );
+    let target = common.target.clone();
+    s.push(
+        common,
+        ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+        live_checkbox(
+            look,
+            common,
+            ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+            f.remove_dead_islands,
+            move |on| PcbPrimitiveMsg::DeadIslandsToggled {
+                target: target.clone(),
+                on,
+            },
+        ),
+    );
+    if let Some((area, pieces)) = f.copper {
+        let value = t!(
+            look.ctx.i18n,
+            ids::PCB_PRIM_POUR_COPPER_VALUE,
+            "area" => format_number(area),
+            "pieces" => pieces
+        );
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            labelled(
+                look,
+                ids::PCB_PRIM_POUR_COPPER,
+                fixed_value(look, value, ids::PCB_PRIM_POUR_COPPER_TIP),
+            ),
+        );
+    }
     s.finish()
 }

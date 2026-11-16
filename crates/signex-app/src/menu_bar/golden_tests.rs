@@ -288,6 +288,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_fill", "PlaceBoardFill"),
     ("place_board_region", "PlaceBoardRegion"),
     ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
+    ("place_board_pour_cutout", "PlaceBoardPourCutout"),
+    ("place_board_slice_pour", "PlaceBoardSlicePour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
     ("place_board_route", "PlaceBoardRoute"),
     ("open_document", "OpenProject"),
@@ -350,6 +352,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
+    ("repour_selected", "RepourSelected"),
+    ("repour_all", "RepourAll"),
     ("reannotate_board", "ReannotateBoard"),
     // #2404: the board reports.
     ("board_report_bom", "BoardReportBom"),

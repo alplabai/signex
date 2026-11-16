@@ -79,6 +79,8 @@ pub(crate) enum PrimitiveEdit {
     AreaLayer(PcbLayer),
     Net(u32),
     Shape(PadShape),
+    /// A pour's Remove Dead Copper (#2216).
+    DeadIslands(bool),
 }
 
 impl Signex {
@@ -128,6 +130,13 @@ impl Signex {
             }
             M::NetPicked { target, net } => {
                 self.apply_primitive_edit(target, PrimitiveEdit::Net(*net), ids::PCB_PRIM_NET);
+            }
+            M::DeadIslandsToggled { target, on } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::DeadIslands(*on),
+                    ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+                );
             }
             M::ShapePicked { target, shape } => {
                 self.apply_primitive_edit(
@@ -249,6 +258,8 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
         F::Clearance => ids::PCB_PRIM_CLEARANCE,
         F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
+        F::Priority => ids::PCB_PRIM_PRIORITY,
+        F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
     }
 }
 

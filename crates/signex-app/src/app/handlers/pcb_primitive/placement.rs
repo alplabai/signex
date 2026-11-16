@@ -52,7 +52,7 @@ impl Signex {
                 let mut common =
                     self.primitive_common_on(board, target, Editability::Editable, net);
                 common.placement_paused = paused;
-                let mut facts = zone_facts(board, common, &[&zone], i18n);
+                let mut facts = zone_facts(board, common, &[&zone], None, i18n);
                 // The stand-in outline is a rectangle: the tool names the kind.
                 facts.kind = Some(kind);
                 PcbPrimitiveFacts::Zone(facts)

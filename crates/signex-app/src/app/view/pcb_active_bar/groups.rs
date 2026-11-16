@@ -125,13 +125,20 @@ fn row_tooltip(row: PcbBarRow, i18n: &I18n) -> String {
     }
 }
 
-/// The bar button's icon for `row`: the tool's bar icon, the component
-/// glyph for a command of the Components group.
+/// The bar button's icon for `row`: the tool's bar icon, the repour glyph
+/// for Repour (#2216), the component glyph for a command of the Components
+/// group.
 fn button_icon(row: PcbBarRow, tid: ThemeId) -> ActiveBarIcon {
     match row {
         PcbBarRow::Tool(tool) => tool_icon(tool, tid),
+        PcbBarRow::Command(id) if is_repour(id) => ActiveBarIcon::Svg(ic::icon_redo(tid)),
         PcbBarRow::Command(_) => ActiveBarIcon::Svg(ic::icon_component(tid)),
     }
+}
+
+/// Whether `command` is one of the Repour commands of the Copper Areas group.
+fn is_repour(command: &str) -> bool {
+    matches!(command, "repour_selected" | "repour_all")
 }
 
 /// The dropdown row's icon for `row`, from the dropdown set and the board
@@ -140,6 +147,7 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
     use BoardPlaceTool as T;
     let tool = match row {
         PcbBarRow::Tool(tool) => tool,
+        PcbBarRow::Command(id) if is_repour(id) => return ic::icon_redo(tid),
         PcbBarRow::Command(_) => return ic::icon_dd_part_actions(tid),
     };
     match tool {
@@ -152,6 +160,8 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
         T::Fill => ic::icon_dd_rect(tid),
         T::SolidRegion => ic::icon_shape_polygon(tid),
         T::PolygonPour => ic::icon_dd_polygon(tid),
+        T::PourCutout => ic::icon_dd_cut(tid),
+        T::SlicePour => ic::icon_dd_line(tid),
         T::TextString => ic::icon_dd_text_string(tid),
         T::Dimension => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),

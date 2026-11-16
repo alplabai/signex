@@ -18,7 +18,8 @@ pub enum PcbBarGroup {
     Route,
     /// Via and free pad.
     ViaPad,
-    /// Copper areas: polygon pour, solid region, fill, and the keepouts
+    /// Copper areas: polygon pour and its cutout, slice and repour (#2216),
+    /// solid region, fill, and the keepouts
     /// that hold copper out of an area.
     CopperAreas,
     /// Track and arc drawn on copper.
@@ -71,9 +72,13 @@ impl PcbBarGroup {
             Self::ViaPad => &[Tool(T::Via), Tool(T::Pad)],
             Self::CopperAreas => &[
                 Tool(T::PolygonPour),
+                Tool(T::PourCutout),
+                Tool(T::SlicePour),
                 Tool(T::SolidRegion),
                 Tool(T::Fill),
                 Tool(T::Keepout),
+                Command("repour_selected"),
+                Command("repour_all"),
             ],
             Self::CopperDrawing => &[Tool(T::Track), Tool(T::Arc)],
             Self::Dimensions => &[Tool(T::Dimension)],

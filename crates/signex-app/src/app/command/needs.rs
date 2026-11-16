@@ -322,6 +322,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" | "fabrication_outputs" => Needs::Pcb,
+        // #2216: the pours of the board in view.
+        "repour_selected" | "repour_all" => Needs::Pcb,
         // #2404, #2402: the board reports and Board Print / PDF.
         "board_report_bom"
         | "board_report_netlist"
@@ -335,6 +337,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_fill"
         | "place_board_region"
         | "place_board_polygon_pour"
+        | "place_board_pour_cutout"
+        | "place_board_slice_pour"
         | "place_board_keepout"
         // #2389: Interactive Routing and its mode.
         | "place_board_route"
