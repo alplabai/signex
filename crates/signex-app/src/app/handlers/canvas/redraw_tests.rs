@@ -33,6 +33,7 @@ fn app_on_a_sheet() -> Signex {
 fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
