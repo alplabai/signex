@@ -1,0 +1,20 @@
+[package]
+name = "signex-commands"
+description = "The command vocabulary every Signex front end shares: shortcut contexts and modifiers, operands, targets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free (ADR-0006): the crate is in DOMAIN, so `scripts/check_arch_guard.sh`
+# refuses a direct iced / wgpu / signex-i18n dependency (UI_STACK); Fluent and
+# ICU reach the workspace only through signex-i18n.
+[dependencies]
+serde = { workspace = true }
+signex-types = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
