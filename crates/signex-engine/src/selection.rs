@@ -746,6 +746,7 @@ mod tests {
             SelectedKind::TextNote,
             SelectedKind::ChildSheet,
             SelectedKind::Drawing,
+            SelectedKind::Directive,
             SelectedKind::SymbolRefField,
             SelectedKind::SymbolValField,
         ]
