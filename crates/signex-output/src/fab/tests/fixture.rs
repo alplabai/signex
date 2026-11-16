@@ -14,6 +14,7 @@ pub(crate) fn p(x: f64, y: f64) -> Point {
 
 pub(crate) fn empty_board() -> PcbBoard {
     PcbBoard {
+        stackup: None,
         uuid: Uuid::from_u128(1),
         version: 1,
         generator: String::new(),

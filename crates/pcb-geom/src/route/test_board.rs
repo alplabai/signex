@@ -75,6 +75,7 @@ pub(crate) fn track_at(n: u128, a: (f64, f64), b: (f64, f64), net: u32) -> Segme
 
 pub(crate) fn board(footprints: Vec<Footprint>, segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
+        stackup: None,
         sketch: None,
         options: Default::default(),
         uuid: Uuid::nil(),

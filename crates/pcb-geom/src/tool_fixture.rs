@@ -15,6 +15,7 @@ pub(crate) fn clearance(_: u32, _: u32) -> i64 {
 
 pub(crate) fn empty_board() -> PcbBoard {
     PcbBoard {
+        stackup: None,
         sketch: None,
         options: Default::default(),
         uuid: Uuid::nil(),

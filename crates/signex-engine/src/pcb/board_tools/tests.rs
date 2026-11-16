@@ -63,6 +63,11 @@ fn board() -> PcbBoard {
     .expect("a board")
 }
 
+/// The board as JSON: `PcbBoard` has no `PartialEq`.
+fn json(board: &PcbBoard) -> serde_json::Value {
+    serde_json::to_value(board).expect("a board serialises")
+}
+
 /// Run `edit` as one step, check it changed the board, then undo it and
 /// check the board is back. The board after the edit is returned.
 fn one_step(edit: ToolEdit) -> PcbBoard {
@@ -70,10 +75,14 @@ fn one_step(edit: ToolEdit) -> PcbBoard {
     let before = engine.board().clone();
     engine.execute_batch(edit.commands).expect("applies");
     let after = engine.board().clone();
-    assert_ne!(after, before);
+    assert_ne!(json(&after), json(&before));
     assert_eq!(engine.undo_len(), 1, "one undo step");
     engine.undo().expect("undoes");
-    assert_eq!(engine.board(), &before, "undo restores the board");
+    assert_eq!(
+        json(engine.board()),
+        json(&before),
+        "undo restores the board"
+    );
     after
 }
 

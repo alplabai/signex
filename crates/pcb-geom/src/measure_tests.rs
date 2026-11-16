@@ -19,6 +19,7 @@ fn board() -> PcbBoard {
         locked: false,
     };
     PcbBoard {
+        stackup: None,
         sketch: None,
         options: Default::default(),
         uuid: Uuid::nil(),
