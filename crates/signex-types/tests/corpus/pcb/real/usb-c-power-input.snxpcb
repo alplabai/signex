@@ -249,7 +249,7 @@ designator_display = "physical"
 
 [board_options.origin]
 x = 0
-y = 80000000
+y = 22000000
 
 [extras.footprints.5ca1ab1e-0002-4000-8000-000000000002]
 footprint_id = "USB-C_6P_PowerOnly"

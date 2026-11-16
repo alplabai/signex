@@ -58,7 +58,7 @@ Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_a
 Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Mod+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
-Edit/Find Similar Objects...	item	Find Similar Objects...	-	-	FindSimilarObjects	01000000	cmd:find_similar_objects
+Edit/Find Similar Objects...	item	Find Similar Objects...	-	-	FindSimilarObjects	01100000	cmd:find_similar_objects
 View	menu	View	-	-	-	-	-
 View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_at_cursor
 View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_out_at_cursor
@@ -133,9 +133,9 @@ Place/Ports & Connectors/Harness Entry	stub	Harness Entry	-	-	-	00-00000	never
 Place/Directives	submenu	Directives	-	-	-	-	-
 Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
 Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc
-Place/Directives/Differential Pair	stub	Differential Pair	-	-	-	00-00000	never
-Place/Directives/Blanket	stub	Blanket	-	-	-	00-00000	never
-Place/Directives/Compile Mask	stub	Compile Mask	-	-	-	00-00000	never
+Place/Directives/Differential Pair	item	Differential Pair	-	-	PlaceDiffPair	01-00000	cmd:place_diff_pair
+Place/Directives/Blanket	item	Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
+Place/Directives/Compile Mask	item	Compile Mask	-	-	PlaceCompileMask	01-00000	cmd:place_compile_mask
 Place/Graphics	submenu	Graphics	-	-	-	-	-
 Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
 Place/Graphics/Full Circle	item	Full Circle	-	-	DrawFullCircle	01-00000	cmd:draw_full_circle
@@ -156,7 +156,7 @@ Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01100000	cmd:board_layer_stack
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
-Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01000000	cmd:open_net_classes
+Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes
 Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-

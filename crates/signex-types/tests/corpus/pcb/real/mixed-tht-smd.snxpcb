@@ -479,7 +479,7 @@ designator_display = "physical"
 
 [board_options.origin]
 x = 0
-y = 80000000
+y = 40000000
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000002]
 footprint_id = "DC_Jack_5.5x2.1mm"
