@@ -2,7 +2,7 @@
 //! `signex_commands::catalog`; rendering its message ids stays here.
 
 use crate::keymap::{AppCommandId, ShortcutContext};
-use signex_commands::catalog::operands;
+use signex_commands::catalog::{general, operands};
 use signex_i18n::{I18n, MessageId, command_ids, t};
 
 pub use categories::category_title;
@@ -18,7 +18,6 @@ pub(crate) use operand_convention::{
 
 mod active_bar;
 mod categories;
-mod general;
 #[cfg(test)]
 mod operand_convention;
 mod pcb;
@@ -597,7 +596,10 @@ mod tests {
     #[test]
     fn every_catalog_entry_sets_enable_and_flags() {
         const TABLE_SRC: &[(&str, &str)] = &[
-            ("general.rs", include_str!("general.rs")),
+            (
+                "general.rs",
+                include_str!("../../../../signex-commands/src/catalog/general.rs"),
+            ),
             ("schematic.rs", include_str!("schematic.rs")),
             ("active_bar.rs", include_str!("active_bar.rs")),
             ("pcb.rs", include_str!("pcb.rs")),

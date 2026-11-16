@@ -6,6 +6,7 @@ use signex_i18n_ids::{MessageId, command_ids};
 
 pub use operands::{Operand, OperandKind};
 
+pub mod general;
 pub mod operands;
 
 /// Coarse editor-surface bucket used by the Keyboard Shortcuts pane to
