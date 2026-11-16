@@ -1,7 +1,9 @@
 //! A pick-list option: the value it stands for and its name, rendered from
-//! the catalog when the view is built (#2059). The list compares and returns
-//! the value, never the shown text, so a language switch cannot break a
-//! choice.
+//! the catalog when the view is built (#2059). A pick list hands back the
+//! whole choice and the caller acts on its `value`, so no code reads the
+//! shown text to decide what was picked. Equality (`PartialEq`) compares the
+//! value and the label; both come from the same render, so [`chosen`] looks
+//! the selection up by value only.
 
 use signex_i18n::{I18n, MessageId};
 

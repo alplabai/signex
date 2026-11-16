@@ -11,7 +11,9 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 type VariantChoice = Choice<Option<String>>;
 
 /// The variant options, Base first, and the one `current` names. A saved
-/// variant the project no longer lists still shows as chosen.
+/// variant the project no longer lists still shows as chosen. A variant
+/// named "Base" (any case) is Base itself, as it always was: no row of its
+/// own, and choosing it prints the base design.
 fn variant_choices(
     variants: &[String],
     current: Option<&str>,
@@ -21,13 +23,22 @@ fn variant_choices(
         value: None,
         label: i18n.message_plain(ids::PDF_VARIANT_BASE, &[]),
     };
+    let is_base = |name: &str| name.eq_ignore_ascii_case("Base");
     let named = |name: &str| Choice {
         value: Some(name.to_owned()),
         label: name.to_owned(),
     };
-    let chosen = current.map_or_else(|| base.clone(), named);
+    let chosen = match current {
+        Some(name) if !is_base(name) => named(name),
+        _ => base.clone(),
+    };
     let mut options = vec![base];
-    options.extend(variants.iter().map(|name| named(name)));
+    options.extend(
+        variants
+            .iter()
+            .filter(|name| !is_base(name))
+            .map(|name| named(name)),
+    );
     options.dedup();
     (options, chosen)
 }
@@ -527,19 +538,24 @@ impl Signex {
 mod tests {
     use super::*;
 
-    /// Base is an option of its own, not the text "Base" (#2059): a variant
-    /// the user named "Base" stays a variant.
+    /// Base is the first option and means no variant (#2059). A variant
+    /// named "Base" in any case is Base itself, as on trunk: no row of its
+    /// own, and choosing it prints the base design.
     #[test]
     fn the_variant_list_holds_base_as_no_variant() {
         let i18n = I18n::en_us();
-        let variants = ["Base".to_owned(), "Lite".to_owned()];
-        let (options, chosen) = variant_choices(&variants, None, &i18n);
-        let values: Vec<_> = options.iter().map(|c| c.value.as_deref()).collect();
-        assert_eq!(values, [None, Some("Base"), Some("Lite")]);
-        assert_eq!(options[0].label, "Base");
-        assert_eq!(chosen.value, None);
-        let (_, chosen) = variant_choices(&variants, Some("Lite"), &i18n);
-        assert_eq!(chosen.value.as_deref(), Some("Lite"));
+        for base in ["Base", "base"] {
+            let variants = [base.to_owned(), "Lite".to_owned()];
+            let (options, chosen) = variant_choices(&variants, None, &i18n);
+            let values: Vec<_> = options.iter().map(|c| c.value.as_deref()).collect();
+            assert_eq!(values, [None, Some("Lite")], "{base}");
+            assert_eq!(options[0].label, "Base");
+            assert_eq!(chosen.value, None);
+            let (_, chosen) = variant_choices(&variants, Some(base), &i18n);
+            assert_eq!(chosen.value, None, "{base}");
+            let (_, chosen) = variant_choices(&variants, Some("Lite"), &i18n);
+            assert_eq!(chosen.value.as_deref(), Some("Lite"));
+        }
     }
 
     /// The quality names read as they did when they came from `Display`.

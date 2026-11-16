@@ -35,8 +35,8 @@ chrome-active-bar-text = Text
 chrome-active-bar-drawing-tools = Drawing Tools
 chrome-active-bar-net-color = Net Color
 # A button whose tool is planned but not built yet; $name is the button's
-# hover text from above.
-chrome-active-bar-planned-tooltip = { $name } — Planned — not available yet
+# hover text from above; the note after the dash is menu-planned-tooltip.
+chrome-active-bar-planned-tooltip = { $name } — { menu-planned-tooltip }
 
 ## The corner-mode pill shown while drawing a wire or a bus
 

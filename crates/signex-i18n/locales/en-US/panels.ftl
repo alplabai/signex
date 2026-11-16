@@ -457,7 +457,7 @@ panels-status-bar-importing = Importing { $name }… ✕
 # unit symbol (mm, mil, in, µm).
 panels-status-bar-x = X { $value } { $unit }
 panels-status-bar-y = Y { $value } { $unit }
-# The zoom level; $percent is a whole number.
+# The zoom level; $percent is a whole number, already written out.
 panels-status-bar-zoom = { $percent }%
 # Shown while saved documents are being committed to the project history;
 # $count is how many commits are still running.
