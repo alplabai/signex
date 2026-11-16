@@ -559,4 +559,50 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2418: the Properties rows of a placed object. Each runs from its
+    // operands only; the Properties row sends the same edit.
+    CommandMetadata {
+        id: "set_object_position",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_POSITION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_POSITION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_object_rotation",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_ROTATION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_ROTATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_sheet_symbol_size",
+        category: "edit",
+        label: command_ids::CMD_SET_SHEET_SYMBOL_SIZE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL_SIZE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_symbol_parameter",
+        category: "edit",
+        label: command_ids::CMD_SET_SYMBOL_PARAMETER,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYMBOL_PARAMETER,
+        ..CommandMetadata::DEFAULT
+    },
 ];

@@ -27,4 +27,24 @@ define_ids! {
     PANELS_NET_CLASSES_WIRE_WIDTH = "panels-net-classes-wire-width";
     PANELS_NET_CLASSES_NO_MEMBERS = "panels-net-classes-no-members";
     PANELS_SCH_FILTER_HINT = "panels-sch-filter-hint";
+    PANELS_PLACED_LOCATION = "panels-placed-location";
+    PANELS_PLACED_PROPERTIES = "panels-placed-properties";
+    PANELS_PLACED_X = "panels-placed-x";
+    PANELS_PLACED_Y = "panels-placed-y";
+    PANELS_PLACED_START_X = "panels-placed-start-x";
+    PANELS_PLACED_START_Y = "panels-placed-start-y";
+    PANELS_PLACED_WIDTH = "panels-placed-width";
+    PANELS_PLACED_HEIGHT = "panels-placed-height";
+    PANELS_PLACED_ROTATION = "panels-placed-rotation";
+    PANELS_PLACED_DEGREES = "panels-placed-degrees";
+    PANELS_PLACED_LOCKED = "panels-placed-locked";
+    PANELS_PLACED_PARAMETERS = "panels-placed-parameters";
+    PANELS_PLACED_PARAMETERS_NONE = "panels-placed-parameters-none";
+    PANELS_PLACED_NO_PARAMETERS = "panels-placed-no-parameters";
+    PANELS_PLACED_END = "panels-placed-end";
+    PANELS_PLACED_LENGTH = "panels-placed-length";
+    PANELS_PLACED_NAME = "panels-placed-name";
+    PANELS_PLACED_DIRECTION = "panels-placed-direction";
+    PANELS_PLACED_SHEET = "panels-placed-sheet";
+    PANELS_PLACED_SHEET_FILE = "panels-placed-sheet-file";
 }

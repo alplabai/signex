@@ -2,9 +2,7 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
-use super::rows::{
-    PanelStyle, h_align_from_row, info_row, justify_h_row, pick_list_degrees, rotation_degrees,
-};
+use super::rows::{PanelStyle, h_align_from_row, info_row, justify_h_row, rotation_degrees};
 use crate::styles::Spacing;
 use iced::Widget;
 
@@ -30,7 +28,6 @@ pub(super) fn push_label_sections<'a>(
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let label_text = get("Text");
-    let position = get("Position");
     let rotation_str = get("Rotation");
     let text_size_str = get("Text Size");
     let justify_h_str = justify_h_row(&ctx.selection_info);
@@ -42,39 +39,9 @@ pub(super) fn push_label_sections<'a>(
     let justify_h = h_align_from_row(&justify_h_str);
 
     if let Some(id) = uuid {
-        // ── Location ──
-        let pos_clone = position.clone();
-        let rot_current = rotation_deg;
-        col = col.push(
-            ctx.collapsible(
-                "sel_location",
-                "Location",
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row("(X/Y)", &pos_clone, muted, input_bg));
-                    let rotation_opts: Vec<String> = vec![
-                        "0 Degrees".into(),
-                        "90 Degrees".into(),
-                        "180 Degrees".into(),
-                        "270 Degrees".into(),
-                    ];
-                    let rot_label = format!("{:.0} Degrees", rot_current);
-                    c = c.push(form_pick_row(
-                        "Rotation",
-                        rotation_opts,
-                        rot_label,
-                        move |s| {
-                            let deg = pick_list_degrees(&s);
-                            PanelMsg::EditLabelRotation(id, deg)
-                        },
-                        muted,
-                    ));
-                    c
-                },
-            )
-            .boxed(),
-        );
+        // ── Location ── (#2418): Position and Rotation through the shared rows.
+        let look = super::placed_rows::RowLook { muted, input_bg };
+        col = super::placed_rows::push_location_section(col, ctx, look);
 
         // ── Properties (Net Name, Font, Justification) ──
         let net_name = label_text.clone();

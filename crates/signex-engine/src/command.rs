@@ -102,6 +102,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetChildSheetInstances,
+    ResizeChildSheet,
     SetPaperSize,
     SetSheetFrame,
     SetSheetColor,
@@ -457,6 +458,15 @@ pub enum Command {
         sheet_id: Uuid,
         instances: Vec<signex_types::schematic::SheetInstance>,
     },
+    /// Set one placed sheet symbol's `(width, height)` in mm, by `sheet_id`
+    /// (#2418). The top-left corner stays; entries on the right and bottom
+    /// edges travel with them. Refused whole on a too-small edge, an entry
+    /// left past its edge, or a moving entry that is connected
+    /// (`exec/child_sheet_size.rs`). Undoable like any other edit.
+    ResizeChildSheet {
+        sheet_id: Uuid,
+        size: (f64, f64),
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -651,6 +661,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetChildSheetInstances { .. } => CommandKind::SetChildSheetInstances,
+            Command::ResizeChildSheet { .. } => CommandKind::ResizeChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
             Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetSheetColor { .. } => CommandKind::SetSheetColor,

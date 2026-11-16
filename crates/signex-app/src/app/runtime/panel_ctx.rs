@@ -531,6 +531,7 @@ impl Signex {
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
         let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
+        let placed = self.document_state.panel_ctx.placed.clone();
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
@@ -689,6 +690,7 @@ impl Signex {
             selected_kind,
             selection_info,
             multi_groups,
+            placed,
             multi_draft,
             symbol_choices,
             footprint_choices,

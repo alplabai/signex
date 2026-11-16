@@ -266,6 +266,10 @@ altium	hint	-	-	new_schematic_sheet
 altium	hint	-	-	back_annotate_schematics
 altium	hint	-	-	open_selection_filter
 altium	hint	-	-	open_net_classes
+altium	hint	-	-	set_object_position
+altium	hint	-	-	set_object_rotation
+altium	hint	-	-	set_sheet_symbol_size
+altium	hint	-	-	set_symbol_parameter
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -632,6 +636,10 @@ classic	hint	-	-	new_schematic_sheet
 classic	hint	-	-	back_annotate_schematics
 classic	hint	-	-	open_selection_filter
 classic	hint	-	-	open_net_classes
+classic	hint	-	-	set_object_position
+classic	hint	-	-	set_object_rotation
+classic	hint	-	-	set_sheet_symbol_size
+classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection

@@ -1,7 +1,7 @@
 //! Properties surface for a single selected schematic element.
 //!
 //! Draws the header, dispatches to the per-kind builder (`symbol`,
-//! `symbol_field`, `label`, `text_note`, `power_port`, `generic`, plus the
+//! `symbol_field`, `label`, `text_note`, `power_port`, `placed_kinds`, plus the
 //! `drawing` and `child_sheet` surfaces), then the shared wire Style and
 //! Lock sections and the status bar.
 
@@ -11,9 +11,7 @@ use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 
 #[cfg(test)]
-use super::rows::{
-    h_align_from_row, justify_h_row, justify_v_row, pick_list_degrees, rotation_degrees,
-};
+use super::rows::{h_align_from_row, justify_h_row, justify_v_row, rotation_degrees};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -94,8 +92,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
-        _ => {
-            col = super::generic::push_generic_sections(col, ctx, st);
+        Some(
+            signex_types::schematic::SelectedKind::Wire
+            | signex_types::schematic::SelectedKind::Bus
+            | signex_types::schematic::SelectedKind::BusEntry
+            | signex_types::schematic::SelectedKind::Junction
+            | signex_types::schematic::SelectedKind::NoConnect
+            | signex_types::schematic::SelectedKind::NoErcDirective
+            | signex_types::schematic::SelectedKind::SheetPin,
+        )
+        | None => {
+            col = super::placed_kinds::push_placed_kind_sections(col, ctx, st);
         }
     }
 
@@ -179,9 +186,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        h_align_from_row, justify_h_row, justify_v_row, pick_list_degrees, rotation_degrees,
-    };
+    use super::{h_align_from_row, justify_h_row, justify_v_row, rotation_degrees};
     use signex_types::schematic::HAlign;
 
     /// #828 -- a non-finite rotation text never reaches the element.
@@ -189,7 +194,6 @@ mod tests {
     fn non_finite_rotation_reads_as_zero() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "inf°"] {
             assert_eq!(rotation_degrees(bad), 0.0, "{bad:?}");
-            assert_eq!(pick_list_degrees(&format!("{bad} Degrees")), 0.0, "{bad:?}");
         }
     }
 
@@ -197,8 +201,6 @@ mod tests {
     fn ordinary_rotation_still_reads() {
         assert_eq!(rotation_degrees("90°"), 90.0);
         assert_eq!(rotation_degrees(" 270 "), 270.0);
-        assert_eq!(pick_list_degrees("180 Degrees"), 180.0);
-        assert_eq!(pick_list_degrees(""), 0.0);
     }
 
     /// #2024 - a left-justified label shows Left: its row, as the engine

@@ -626,6 +626,7 @@ impl Signex {
                     selected_kind: None,
                     selection_info: vec![],
                     multi_groups: Default::default(),
+                    placed: Default::default(),
                     multi_draft: None,
                     symbol_choices: vec![],
                     footprint_choices: vec![],

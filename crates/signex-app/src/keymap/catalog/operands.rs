@@ -110,6 +110,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("unit", OperandKind::Text),
     ("mirror", OperandKind::Text),
     ("sheet", OperandKind::Text),
+    ("size", OperandKind::Point),
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
@@ -243,6 +244,33 @@ pub const SHEET_ENTRY: &[Operand] = &[
 /// The entries of the sheet symbol named `sheet` matched to its child file.
 pub const SYNC_SHEET: &[Operand] = &[
     required("sheet", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// An absolute move of the placed object `id` (#2418): `at` is where its
+/// position goes (a part's origin, a wire's start, a sheet symbol's top-left).
+pub const OBJECT_POSITION: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("at", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
+/// An absolute turn of the part or label `id`.
+pub const OBJECT_ROTATION: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("rotation", OperandKind::Angle),
+    optional("document", OperandKind::Document),
+];
+/// The width and height of the sheet symbol `id`, written `w,h` in mm.
+pub const SHEET_SYMBOL_SIZE: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("size", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
+/// One parameter of the placed part `id`: its `name` and `value` (left out or
+/// empty: the parameter stays, with no value).
+pub const SYMBOL_PARAMETER: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("name", OperandKind::Text),
+    optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// An open dialog's answer.

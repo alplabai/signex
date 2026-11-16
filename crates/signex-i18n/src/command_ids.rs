@@ -347,6 +347,10 @@ define_ids! {
         CMD_SET_SELECTION_FILTERS = "cmd-set-selection-filters";
         CMD_APPLY_SELECTION_FILTER_PRESET = "cmd-apply-selection-filter-preset";
         CMD_PLACE_COMPONENT = "cmd-place-component";
+        CMD_SET_OBJECT_POSITION = "cmd-set-object-position";
+        CMD_SET_OBJECT_ROTATION = "cmd-set-object-rotation";
+        CMD_SET_SHEET_SYMBOL_SIZE = "cmd-set-sheet-symbol-size";
+        CMD_SET_SYMBOL_PARAMETER = "cmd-set-symbol-parameter";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";
         CMD_MENU_RUN_DRC = "cmd-menu-run-drc";

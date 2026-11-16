@@ -11,6 +11,7 @@ mod lock;
 mod multi_edit;
 mod net_class_table;
 mod paste_edit;
+mod placed_edit;
 mod placement;
 mod power_port;
 mod project_general;
@@ -107,6 +108,9 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use placed_edit::{
+    PlacedGeometry, move_to_command, placed_geometry, placed_item, rotate_to_command,
+};
 pub use placement::PlacementPayload;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
@@ -707,6 +711,7 @@ impl Engine {
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
             }
+            Command::ResizeChildSheet { .. } => self.exec_resize_child_sheet(before, cmd),
         };
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {

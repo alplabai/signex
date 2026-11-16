@@ -372,7 +372,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 59] = [
+const ALL_KINDS: [CommandKind; 60] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -420,6 +420,7 @@ const ALL_KINDS: [CommandKind; 59] = [
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
     CommandKind::SetChildSheetInstances,
+    CommandKind::ResizeChildSheet,
     CommandKind::SetPaperSize,
     CommandKind::SetSheetFrame,
     CommandKind::SetSheetColor,
@@ -486,6 +487,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
         | CommandKind::SetChildSheetInstances
+        | CommandKind::ResizeChildSheet
         | CommandKind::SetPaperSize
         | CommandKind::SetSheetFrame
         | CommandKind::SetSheetColor
@@ -1015,6 +1017,13 @@ fn samples() -> Vec<(String, Command)> {
                 path: "/".into(),
                 page: "3".into(),
             }],
+        },
+    );
+    add(
+        "ResizeChildSheet",
+        Command::ResizeChildSheet {
+            sheet_id: uid(CHILD, 1),
+            size: (20.0, 30.0),
         },
     );
     add(
