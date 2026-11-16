@@ -4,6 +4,7 @@
 
 mod board_checks;
 mod board_output;
+mod board_query;
 mod dialog;
 mod editors;
 mod fab_outputs;
@@ -23,6 +24,7 @@ mod update_pcb;
 
 pub use board_checks::*;
 pub use board_output::*;
+pub use board_query::*;
 pub use dialog::*;
 pub use editors::*;
 pub use fab_outputs::*;
@@ -46,6 +48,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
+        board_query::BOARD_QUERY,
         dialog::DIALOG,
         editors::EDITORS,
         fab_outputs::FAB_OUTPUTS,

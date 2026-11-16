@@ -709,4 +709,66 @@ pub(super) const PCB: &[CommandMetadata] = &[
         operands: super::operands::SET_LAYER_SIZES,
         ..CommandMetadata::DEFAULT
     },
+    // #2403: the board net `net` names, else that of the selection or of
+    // what is under the cursor: select its tracks, vias and pads, or draw
+    // it bright (again: no longer). `net` comes from a typed command line
+    // (the CLI), so neither is GUI-only. View and selection only; no key.
+    CommandMetadata {
+        id: "select_board_net",
+        category: "select",
+        label: command_ids::CMD_SELECT_BOARD_NET,
+        menu_label: Some(command_ids::CMD_MENU_SELECT_BOARD_NET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_NET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "highlight_board_net",
+        category: "select",
+        label: command_ids::CMD_HIGHLIGHT_BOARD_NET,
+        menu_label: Some(command_ids::CMD_MENU_HIGHLIGHT_BOARD_NET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_NET,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2403: the board queries an agent or the CLI asks; each answers with
+    // data about the named board and changes nothing. The person's surfaces
+    // are Measure Distance, the Net Inspector and Find Similar Objects.
+    CommandMetadata {
+        id: "measure_board",
+        category: "search",
+        label: command_ids::CMD_MEASURE_BOARD,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::MEASURE_BOARD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "query_board_nets",
+        category: "search",
+        label: command_ids::CMD_QUERY_BOARD_NETS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::QUERY_BOARD_NETS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "find_similar_items",
+        category: "search",
+        label: command_ids::CMD_FIND_SIMILAR_ITEMS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::FIND_SIMILAR_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
 ];

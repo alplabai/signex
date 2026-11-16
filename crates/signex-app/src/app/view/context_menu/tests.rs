@@ -95,6 +95,19 @@ fn shortcuts() -> CanvasShortcuts {
     })
 }
 
+/// The command context of a board in view whose selection `board`
+/// describes, for the board menu's builder (#2405).
+fn board_ctx(
+    board: crate::app::handlers::pcb_placement::PcbTargets,
+) -> crate::app::command::CommandContext {
+    crate::app::command::CommandContext {
+        has_pcb: true,
+        has_document: true,
+        pcb: board,
+        ..Default::default()
+    }
+}
+
 #[test]
 fn edit_rows_show_the_resolved_keymap_shortcuts() {
     let mut sc = shortcuts();
@@ -857,15 +870,25 @@ fn board_cross_probe_row_runs_the_command_with_a_selection() {
         any: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, picked, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(picked),
+        None,
+        &sc,
+    );
     assert!(runs_cross_probe(row_message(&rows, "Cross Probe")));
     let empty = PcbTargets {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(empty),
+        None,
+        &sc,
+    );
     assert!(row_message(&rows, "Cross Probe").is_none());
 }
 
@@ -879,8 +902,13 @@ fn board_sketch_row_runs_the_command() {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(empty),
+        None,
+        &sc,
+    );
     assert!(matches!(
         row_message(&rows, "Board Sketch"),
         Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))

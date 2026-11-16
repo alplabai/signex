@@ -291,6 +291,11 @@ lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresD
 unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 set_via_span	modify	Set the copper layers vias span	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,layers:text
 set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,sizes:text
+select_board_net	select	Select every track, via and pad of a board net	Select Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
+highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
+measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
+query_board_nets	search	Query board nets	-	PCB	-	-	Always	-	document:document,net:text?
+find_similar_items	search	Find similar items on a board	-	PCB	-	-	Always	-	document:document,id:text,fields:text?
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

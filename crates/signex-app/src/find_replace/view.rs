@@ -1,6 +1,7 @@
 use super::{FindReplaceMsg, FindReplaceState, FindScope};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
 
@@ -14,8 +15,12 @@ const DIALOG_W: f32 = 440.0;
 const DIALOG_H: f32 = 400.0;
 
 /// The dialog painted as a centred card on a scrim in the main window.
-pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a, FindReplaceMsg> {
-    build(state, tokens, false)
+pub fn view<'a>(
+    state: &'a FindReplaceState,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, FindReplaceMsg> {
+    build(state, tokens, i18n, false)
 }
 
 /// The dialog as the content of its own OS window: no header (the native
@@ -23,13 +28,41 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
 pub fn window_view<'a>(
     state: &'a FindReplaceState,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, FindReplaceMsg> {
-    build(state, tokens, true)
+    build(state, tokens, i18n, true)
+}
+
+/// One result row's two lines: what kind of text it is, and the text.
+type ResultLines = (&'static str, String);
+
+/// The rows the list shows: a board's hits on a board (#2403), else the
+/// sheet results with the placement a designator was read at.
+fn result_lines(state: &FindReplaceState) -> Vec<ResultLines> {
+    if let Some(board) = &state.board {
+        return board
+            .hits
+            .iter()
+            .map(|hit| (hit.kind.label(), hit.text.clone()))
+            .collect();
+    }
+    state
+        .matches
+        .iter()
+        .map(|hit| {
+            let text = match &hit.placement_label {
+                Some(label) => format!("{} · {label}", hit.hit.text),
+                None => hit.hit.text.clone(),
+            };
+            (hit.hit.kind.label(), text)
+        })
+        .collect()
 }
 
 fn build<'a>(
     state: &'a FindReplaceState,
     tokens: &ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, FindReplaceMsg> {
     let text_primary = crate::styles::ti(tokens.text);
@@ -83,7 +116,11 @@ fn build<'a>(
     .align_y(iced::Alignment::Center)
     .spacing(10);
 
-    let mut form = column![query_row, scope_row].spacing(10);
+    // A board is searched whole (#2403): no scope to pick.
+    let mut form = column![query_row].spacing(10);
+    if state.board.is_none() {
+        form = form.push(scope_row);
+    }
     if state.replace_mode {
         form = form.push(Widget::boxed(
             row![
@@ -107,7 +144,7 @@ fn build<'a>(
     } else if state.scanning {
         "Searching...".to_string()
     } else {
-        format!("{} match(es)", state.matches.len())
+        format!("{} match(es)", state.result_count())
     };
     form = form.push(
         container(text(raw(count)).size(TS.caption).color(text_secondary))
@@ -123,7 +160,8 @@ fn build<'a>(
         );
     }
 
-    let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
+    let lines = result_lines(state);
+    let results: Vec<Element<'a, FindReplaceMsg>> = if lines.is_empty() {
         vec![
             container(text(raw("No matches")).size(TS.body).color(text_secondary))
                 .padding([10.0, SP.l])
@@ -131,7 +169,7 @@ fn build<'a>(
                 .boxed(),
         ]
     } else {
-        let result_row = |idx: usize, hit: &'a super::FindMatch| -> Element<'a, FindReplaceMsg> {
+        let result_row = |idx: usize, (kind, found): ResultLines| -> Element<'a, FindReplaceMsg> {
             let is_active = state.selected_index == Some(idx);
             let row_bg = if is_active {
                 Some(Background::Color(hover))
@@ -141,15 +179,10 @@ fn build<'a>(
             button(
                 row![
                     column![
-                        text(raw(hit.hit.kind.label()))
-                            .size(TS.body)
-                            .color(text_primary),
-                        text(raw(match &hit.placement_label {
-                            Some(label) => format!("{} · {label}", hit.hit.text),
-                            None => hit.hit.text.clone(),
-                        }))
-                        .size(TS.caption)
-                        .color(text_secondary),
+                        text(raw(kind)).size(TS.body).color(text_primary),
+                        text(UserText::new(found))
+                            .size(TS.caption)
+                            .color(text_secondary),
                     ]
                     .spacing(SP.xs)
                     .width(Length::Fill),
@@ -180,9 +213,11 @@ fn build<'a>(
         };
         let mut rows: Vec<Element<'a, FindReplaceMsg>> = Vec::new();
         let mut current_sheet: Option<&std::path::Path> = None;
-        for (idx, hit) in state.matches.iter().enumerate() {
-            if state.scope == FindScope::Project && hit.sheet.as_deref() != current_sheet {
-                current_sheet = hit.sheet.as_deref();
+        for (idx, line) in lines.into_iter().enumerate() {
+            let sheet = state.matches.get(idx).and_then(|hit| hit.sheet.as_deref());
+            if state.board.is_none() && state.scope == FindScope::Project && sheet != current_sheet
+            {
+                current_sheet = sheet;
                 let name = current_sheet
                     .and_then(|p| p.file_name())
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -196,7 +231,7 @@ fn build<'a>(
                     .boxed(),
                 );
             }
-            rows.push(result_row(idx, hit));
+            rows.push(result_row(idx, line));
         }
         rows
     };
@@ -222,7 +257,7 @@ fn build<'a>(
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
-        if state.replace_mode && !state.matches.is_empty() && !state.is_busy() {
+        if state.replace_mode && state.result_count() > 0 && !state.is_busy() {
             button(text(raw("Replace All")).size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))
@@ -233,12 +268,13 @@ fn build<'a>(
                 .boxed()
         };
 
+    let targets = if state.board.is_some() {
+        text(t!(i18n, ids::BOARD_FIND_TARGETS))
+    } else {
+        text(raw("Targets: labels, notes, designators, values"))
+    };
     let footer = row![
-        container(
-            text(raw("Targets: labels, notes, designators, values"))
-                .size(TS.caption)
-                .color(text_secondary)
-        ),
+        container(targets.size(TS.caption).color(text_secondary)),
         Space::new().width(Length::Fill),
         replace_current,
         replace_all,

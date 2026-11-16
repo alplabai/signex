@@ -2,7 +2,9 @@
 //! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
 //! `check_erc` and `check_drc` (#2199, answered once their run lands), and
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
-//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`). Each
+//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`), and the
+//! board queries `measure_board`, `query_board_nets` and
+//! `find_similar_items` (#2403). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -12,6 +14,7 @@
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
+mod board;
 mod check_drc;
 mod check_erc;
 mod check_run;
@@ -48,6 +51,9 @@ const QUERY_IDS: &[&str] = &[
     "rules_effective",
     "rules_explain",
     "rules_conflicts",
+    "measure_board",
+    "query_board_nets",
+    "find_similar_items",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -127,6 +133,9 @@ impl Signex {
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
+            "measure_board" => self.measure_board(args),
+            "query_board_nets" => self.query_board_nets(args),
+            "find_similar_items" => self.find_similar_items(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

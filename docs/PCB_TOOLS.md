@@ -406,3 +406,40 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
 View menu rows. See `docs/COMMANDS.md`.
+
+## Reading a board
+
+Measure, Find and Replace, Find Similar Objects and the nets work on a board
+as on a sheet (#2403). The numbers and matches come from the domain crates
+(`pcb_geom::edge_gap`, `pcb_geom::net_reports`,
+`signex_engine::pcb::{find, similar}`); the app keeps the view in step.
+
+- **Measure Distance** (`measure_distance`, `Ctrl+M`): the first click marks a
+  point, snapped like a placement tool's, and the object under it; the ruler
+  follows the pointer to the second click. The Messages panel reads the
+  distance with dx and dy in the display unit and, when both clicks landed on
+  an object, the gap between them edge to edge (copper, footprint body or
+  area outline). The ruler stays until the next first click; Esc drops the
+  first point, then ends Measure.
+- **Find and Replace** (`find`, `find_and_replace`): with a board in view the
+  dialog searches its designators, values, footprint names and net names,
+  without case. A result selects what it names (a footprint, or the net's
+  tracks, vias and pads) and frames it. Replace writes designators and values
+  as one undo step; net and footprint results are left as they are, and the
+  Messages panel says how many.
+- **Find Similar Objects** (`find_similar_objects`): the seed is the object
+  under the cursor, else the one selected; the dialog lists its properties
+  (kind, value, footprint, designator prefix, layer, width, size, drill, pad
+  shape, net) and OK selects every object of the board that matches the ones
+  set to Same.
+- **Select Net** and **Highlight Net** (`select_board_net`,
+  `highlight_board_net`): the net `net=<name>` names, else the net of the
+  selection or of what is under the cursor. Select puts its tracks, vias,
+  pads and areas in the selection; Highlight draws its copper bright until
+  it is run again for that net or Esc is pressed. Neither changes the
+  board. A name the board does not have is refused.
+- **Net Inspector**: lists the board's nets (see `MENU_BAR.md`, "Tools ▸ Net
+  Inspector").
+
+Agents and the CLI read the same answers with `measure_board`,
+`query_board_nets` and `find_similar_items` (`CLI.md`, "Board queries").

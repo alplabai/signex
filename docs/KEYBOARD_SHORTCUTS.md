@@ -140,6 +140,17 @@ reorder that, so the global sections of both profiles are split to keep the
 order the all-`Ctrl` spelling had (redo still shows `Ctrl+Y`, Place Wire `P W`,
 the command palette `Ctrl+Shift+P`). `mod_content_tests.rs` pins those hints.
 
+On a board (the `pcb` context, #2406) both profiles bind `1` Board Sketch,
+`L` Flip Selection (the selection, or the part on the cursor), `F` Change
+Footprint and `Q` the unit toggle; the chord profile adds `N` Toggle
+Ratsnest, `P K` Keepout and `T D` Run DRC, Classic `C` Toggle Ratsnest, `K`
+Keepout, `F7` Run DRC and `Ctrl+M` Measure Distance (the chord profile's
+global `Ctrl+M` already measures on a board). A board binding outranks a global one with the same keys, so
+Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
+`pcb` section of its own before the global sections, so `cycle_unit` keeps
+`Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both
+profiles names a command enabled on a board.
+
 ### One-time macOS prompt for a custom profile
 
 On macOS, when the active profile is a custom one that still binds standard-set

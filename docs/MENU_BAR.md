@@ -485,6 +485,10 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   each with its sheet. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
+- With a board in view (#2403) the panel lists the board's nets instead,
+  from `pcb_geom::net_reports`: routed length, vias, pads and whether the
+  net is routed (or how many connections are still open). Each row's Select
+  and Highlight run what Select Net and Highlight Net run, for that net.
 
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
@@ -597,8 +601,29 @@ Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
 to the other board side, like Flip Selection; Mirror Y flips it and turns it
 half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
 and vias that end on a moved, rotated, flipped or deleted footprint stay
-where they are. Flip Selection has no default key and
-is greyed outside a board.
+where they are. Flip Selection is `L` on a board in both built-in profiles
+(#2406), which also flips a part on the cursor, and is greyed outside a board.
+
+Edit ▸ Arrange orders schematic drawings, so it is not in the Edit menu while
+a board is in view (#2405); the golden fixture marks its rows `-` in the
+`pcb` column.
+
+## The board's right-click menu {#board-context-menu}
+
+The board canvas menu (#2240, #2405) lists, in order: Find Similar Objects
+and Find; the Place ▸ flyout (the board's tools as Place on a board lists
+them, then Board Sketch) and, with a selection, Align ▸ (the Align rows of
+the PCB Active Bar, live for unlocked footprints); Undo and Redo; Cut, Copy,
+Paste, Paste Special, Duplicate and Select All; Move Selection; Rotate,
+Rotate Clockwise, Flip Selection, Mirror X, Mirror Y and Change Footprint;
+Delete; Board Sketch; Select Net (`select_board_net`) and Highlight Net
+(`highlight_board_net`), which act on the net of the selection or of what is
+under the cursor; Cross Probe and Properties; then Toggle Ratsnest. Each row
+runs its catalog command and is live exactly when that command is enabled in
+the window's `CommandContext`, so the menu greys what the keys and the menu
+bar grey. A board written by a newer Signex is read-only
+(`PcbTargets::read_only`): every row that edits it, the Place tools and
+Board Sketch included, is greyed, and the rows that only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 

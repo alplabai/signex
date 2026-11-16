@@ -19,6 +19,14 @@ profile_name = "Classic"
 profile_kind = "built_in"
 description = "Classic single-key keyboard shortcut defaults for Signex."
 
+# On a board `Q` toggles the unit (#2406). It loads first so the global
+# `Ctrl+Q` below stays the command's menu hint.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"Q" = "cycle_unit"
+
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -162,7 +170,11 @@ context = "global"
 # `*` to the next signal layer,
 # `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
 # shows the board in 3D or flat again. A
-# shifted `+` or `*` is its own stroke on a US layout.
+# shifted `+` or `*` is its own stroke on a US layout. #2406: `1` enters or
+# leaves the board sketch, `L` flips the selection or the part on the cursor
+# to the other side, `C` shows or hides the ratsnest, `F` changes the
+# footprint, `K` draws a keepout, `F7` runs the design rule check and
+# `Ctrl+M` measures.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -172,7 +184,14 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"1" = "board_sketch"
 "3" = "view_board_3d"
+"C" = "toggle_ratsnest"
+"Ctrl+M" = "measure_distance"
+"F" = "change_footprint"
+"F7" = "run_drc"
+"K" = "place_board_keepout"
+"L" = "flip_selection"
 "Shift+S" = "toggle_single_layer_mode"
 
 [[keyboard_shortcuts.sections]]

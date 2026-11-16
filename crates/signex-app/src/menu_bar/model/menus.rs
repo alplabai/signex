@@ -125,7 +125,7 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![
+    let mut rows = vec![
         cmd_item_gated(ctx, cmd("undo", "Mod+Z")),
         cmd_item_gated(ctx, cmd("redo", "Ctrl+Y")),
         SEP,
@@ -137,7 +137,13 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Del")),
         submenu(ctx, menu_ids::MENU_EDIT_MOVE, move_menu(ctx)),
-        submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)),
+    ];
+    // Arrange orders schematic drawings only, so a board has no such row
+    // (#2405).
+    if !ctx.commands.pcb.shown {
+        rows.push(submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)));
+    }
+    rows.extend([
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
         SEP,
@@ -145,7 +151,8 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("find_and_replace", "Ctrl+H")),
         // #2416: seeds from the object under the cursor or the one selected.
         cmd_item_gated(ctx, cmd("find_similar_objects", "")),
-    ]
+    ]);
+    rows
 }
 
 /// Edit ▸ Move: move, turn and mirror the selection, on a sheet and on a

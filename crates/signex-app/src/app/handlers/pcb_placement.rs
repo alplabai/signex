@@ -86,6 +86,8 @@ impl Signex {
         let window = self.interaction_state.acting_window;
         let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
         self.release_board_tool();
+        // Measure would take the Move's clicks (#2403).
+        self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(carry);
         // While a Move waits for its clicks, a press never starts a drag.
         self.refresh_pcb_highlight();
@@ -404,6 +406,11 @@ pub(crate) struct PcbTargets {
     pub lockable: bool,
     /// The selection holds a locked track or via.
     pub unlockable: bool,
+    /// The board was written by a newer Signex and is shown for reading
+    /// only: no editing command acts on it (#2405).
+    pub read_only: bool,
+    /// How many footprints the selection names, for Align (#2405).
+    pub footprints: usize,
 }
 
 impl Signex {
@@ -446,18 +453,22 @@ impl Signex {
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
-        let pasteable = self.interaction_state.pcb_clipboard.is_some();
+        // A read-only board takes no edit: nothing on it is placeable,
+        // deletable or a paste target (#2405).
+        let read_only = board.unknown.newer_minor_source.is_some();
+        let pasteable = self.interaction_state.pcb_clipboard.is_some() && !read_only;
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
                 pasteable,
                 part_in_hand,
                 routing,
+                read_only,
                 ..PcbTargets::default()
             };
         };
         let footprints = selection.footprints();
-        let unlocked = placement::editable_footprints(board, &footprints).is_ok();
+        let unlocked = !read_only && placement::editable_footprints(board, &footprints).is_ok();
         let copyable = !deletable_items(selection).is_empty();
         let locks: Vec<bool> = super::pcb_item_edits::lockable_items(selection)
             .into_iter()
@@ -468,13 +479,15 @@ impl Signex {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked) && copyable && !any_locked,
+            deletable: !read_only && (footprints.is_empty() || unlocked) && copyable && !any_locked,
             copyable,
             pasteable,
             part_in_hand,
             routing,
-            lockable: locks.contains(&false),
-            unlockable: any_locked,
+            lockable: !read_only && locks.contains(&false),
+            unlockable: !read_only && any_locked,
+            read_only,
+            footprints: footprints.len(),
         }
     }
 }

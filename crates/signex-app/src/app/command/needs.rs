@@ -40,6 +40,11 @@ pub(crate) enum Needs {
     FitTarget,
     FootprintEditor,
     Pcb,
+    /// A board edit tool (Place, Board Sketch): a board in view that is not
+    /// read-only (#2405).
+    EditablePcb,
+    /// Measure Distance: a sheet or a board in view (#2403).
+    MeasureTarget,
     /// Reset View Rotation: a board in view that is turned (#2316).
     TurnedPcbView,
     /// Rotate and mirror: on a board, an unlocked footprint selected
@@ -128,6 +133,8 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
+            Self::MeasureTarget => ctx.has_schematic || ctx.pcb.shown,
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected; on a board too (#2364).
@@ -193,6 +200,8 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::EditablePcb => "No PCB is open, or the board is read-only",
+            Self::MeasureTarget => "No schematic or PCB is in view",
             Self::TurnedPcbView => "The board view is not rotated",
             Self::Turn => "Nothing is selected or in hand to turn, or the selection is locked",
             Self::MoveSelection => "Nothing is selected to move, or the selection is locked",
@@ -314,7 +323,6 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "open_net_classes"
         | "open_components_panel"
         | "place_symbol"
-        | "measure_distance"
         | "break_wire"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
@@ -333,16 +341,20 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "board_report_components"
         | "export_board_report"
         | "export_board_pdf" => Needs::Pcb,
-        // #2373: the board placement tools.
+        "measure_distance" => Needs::MeasureTarget,
+        // #2373: the board placement tools, and Board Sketch; greyed on a
+        // read-only board (#2405).
         "place_board_via"
         | "place_board_track"
         | "place_board_fill"
         | "place_board_region"
         | "place_board_polygon_pour"
         | "place_board_keepout"
-        // #2389: Interactive Routing and its mode.
+        // #2389: Interactive Routing.
         | "place_board_route"
-        | "cycle_route_mode" => Needs::Pcb,
+        | "board_sketch" => Needs::EditablePcb,
+        // #2389: the routing mode changes no board.
+        "cycle_route_mode" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"
@@ -359,7 +371,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
         | "toggle_origin_marker"
-        | "board_sketch"
+        | "select_board_net"
+        | "highlight_board_net"
         | "view_board_3d"
         | "next_layer"
         | "prev_layer"

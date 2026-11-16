@@ -339,6 +339,16 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
         "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
+        // #2403: the net `net` names, else that of the board selection or
+        // of what is under the cursor.
+        "select_board_net" => Message::Pcb(PcbMsg::Net(crate::app::BoardNetMsg::SelectRequested(
+            super::operand_handlers::board_net_operand(args),
+        ))),
+        "highlight_board_net" => {
+            Message::Pcb(PcbMsg::Net(crate::app::BoardNetMsg::HighlightRequested(
+                super::operand_handlers::board_net_operand(args),
+            )))
+        }
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

@@ -451,7 +451,12 @@ impl Signex {
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (ctx_menu.x, ctx_menu.y));
         if let (Some(kind), Some(offset)) = (interaction.context_submenu, card.flyout_offset) {
-            let submenu = self.view_context_submenu(kind, window_id);
+            // A board's menu opens the board's flyouts (#2405).
+            let submenu = if self.pcb_targets(Some(window_id)).shown {
+                self.view_board_context_submenu(kind, window_id)
+            } else {
+                self.view_context_submenu(kind, window_id)
+            };
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::Close), menu)

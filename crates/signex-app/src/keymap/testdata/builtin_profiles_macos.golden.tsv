@@ -1,4 +1,5 @@
 # profile	kind	context	sequence	action
+altium	bind	Pcb	Q	command:cycle_unit
 altium	bind	Global	⌥A	command:annotate_schematic_quietly
 altium	bind	Global	BACKSPACE	command:remove_last_vertex
 altium	bind	Global	⌘C	command:copy
@@ -88,15 +89,21 @@ altium	bind	Schematic	P X	command:place_no_connect
 altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
+altium	bind	Pcb	1	command:board_sketch
 altium	bind	Pcb	3	command:view_board_3d
+altium	bind	Pcb	F	command:change_footprint
+altium	bind	Pcb	L	command:flip_selection
+altium	bind	Pcb	N	command:toggle_ratsnest
 altium	bind	Pcb	P F	command:place_board_fill
 altium	bind	Pcb	P G	command:place_board_polygon_pour
+altium	bind	Pcb	P K	command:place_board_keepout
 altium	bind	Pcb	P R	command:place_board_region
 altium	bind	Pcb	P T	command:place_board_track
 altium	bind	Pcb	P V	command:place_board_via
 altium	bind	Pcb	⇧*	command:next_signal_layer
 altium	bind	Pcb	⇧+	command:next_layer
 altium	bind	Pcb	⇧S	command:toggle_single_layer_mode
+altium	bind	Pcb	T D	command:run_drc
 altium	bind	Footprint	1	command:footprint_mode_sketch
 altium	bind	Footprint	2	command:footprint_mode_pads
 altium	bind	Footprint	3	command:footprint_mode_view_3d
@@ -330,7 +337,7 @@ altium	hint	-	-	color_net
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	place_component
-altium	hint	-	-	run_drc
+altium	hint	-	T D	run_drc
 altium	hint	-	-	open_drc_panel
 altium	hint	-	-	show_drc_violation
 altium	hint	-	-	waive_drc_violation
@@ -343,9 +350,9 @@ altium	hint	-	-	delete_net_class
 altium	hint	-	-	set_net_class_rules
 altium	hint	-	-	assign_board_net_class
 altium	hint	-	-	reannotate_board
-altium	hint	-	-	flip_selection
-altium	hint	-	-	change_footprint
-altium	hint	-	-	toggle_ratsnest
+altium	hint	-	L	flip_selection
+altium	hint	-	F	change_footprint
+altium	hint	-	N	toggle_ratsnest
 altium	hint	-	-	toggle_origin_marker
 altium	hint	-	⇧+	next_layer
 altium	hint	-	"-"	prev_layer
@@ -360,14 +367,14 @@ altium	hint	-	-	view_rotate_reset
 altium	hint	-	3	view_board_3d
 altium	hint	-	-	toggle_layers_panel
 altium	hint	-	-	new_pcb_document
-altium	hint	-	-	board_sketch
+altium	hint	-	1	board_sketch
 altium	hint	-	-	fabrication_outputs
 altium	hint	-	P V	place_board_via
 altium	hint	-	P T	place_board_track
 altium	hint	-	P F	place_board_fill
 altium	hint	-	P R	place_board_region
 altium	hint	-	P G	place_board_polygon_pour
-altium	hint	-	-	place_board_keepout
+altium	hint	-	P K	place_board_keepout
 altium	hint	-	-	place_board_route
 altium	hint	-	-	cycle_route_mode
 altium	hint	-	-	board_report_bom
@@ -382,6 +389,11 @@ altium	hint	-	-	lock_board_items
 altium	hint	-	-	unlock_board_items
 altium	hint	-	-	set_via_span
 altium	hint	-	-	set_layer_sizes
+altium	hint	-	-	select_board_net
+altium	hint	-	-	highlight_board_net
+altium	hint	-	-	measure_board
+altium	hint	-	-	query_board_nets
+altium	hint	-	-	find_similar_items
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -396,6 +408,7 @@ altium	hint	-	-	rules_enable
 altium	hint	-	-	rules_effective
 altium	hint	-	-	rules_explain
 altium	hint	-	-	rules_conflicts
+classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
 classic	bind	Global	⌥1	command:fast_grid_1
@@ -491,7 +504,14 @@ classic	bind	Global	⇧I	command:open_net_inspector
 classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
+classic	bind	Pcb	1	command:board_sketch
 classic	bind	Pcb	3	command:view_board_3d
+classic	bind	Pcb	C	command:toggle_ratsnest
+classic	bind	Pcb	⌃M	command:measure_distance
+classic	bind	Pcb	F	command:change_footprint
+classic	bind	Pcb	F7	command:run_drc
+classic	bind	Pcb	K	command:place_board_keepout
+classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
 classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
@@ -546,7 +566,7 @@ classic	hint	-	⇧F	find_similar_objects
 classic	hint	-	-	find_text
 classic	hint	-	⇧⌘F	import_graphics
 classic	hint	-	-	list_documents
-classic	hint	-	-	measure_distance
+classic	hint	-	⌃M	measure_distance
 classic	hint	-	X	mirror_x
 classic	hint	-	Y	mirror_y
 classic	hint	-	-	move_object
@@ -728,7 +748,7 @@ classic	hint	-	-	color_net
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	place_component
-classic	hint	-	-	run_drc
+classic	hint	-	F7	run_drc
 classic	hint	-	-	open_drc_panel
 classic	hint	-	-	show_drc_violation
 classic	hint	-	-	waive_drc_violation
@@ -741,9 +761,9 @@ classic	hint	-	-	delete_net_class
 classic	hint	-	-	set_net_class_rules
 classic	hint	-	-	assign_board_net_class
 classic	hint	-	-	reannotate_board
-classic	hint	-	-	flip_selection
-classic	hint	-	-	change_footprint
-classic	hint	-	-	toggle_ratsnest
+classic	hint	-	L	flip_selection
+classic	hint	-	F	change_footprint
+classic	hint	-	C	toggle_ratsnest
 classic	hint	-	-	toggle_origin_marker
 classic	hint	-	⇧+	next_layer
 classic	hint	-	"-"	prev_layer
@@ -758,14 +778,14 @@ classic	hint	-	-	view_rotate_reset
 classic	hint	-	3	view_board_3d
 classic	hint	-	-	toggle_layers_panel
 classic	hint	-	-	new_pcb_document
-classic	hint	-	-	board_sketch
+classic	hint	-	1	board_sketch
 classic	hint	-	-	fabrication_outputs
 classic	hint	-	-	place_board_via
 classic	hint	-	-	place_board_track
 classic	hint	-	-	place_board_fill
 classic	hint	-	-	place_board_region
 classic	hint	-	-	place_board_polygon_pour
-classic	hint	-	-	place_board_keepout
+classic	hint	-	K	place_board_keepout
 classic	hint	-	-	place_board_route
 classic	hint	-	-	cycle_route_mode
 classic	hint	-	-	board_report_bom
@@ -780,6 +800,11 @@ classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
 classic	hint	-	-	set_via_span
 classic	hint	-	-	set_layer_sizes
+classic	hint	-	-	select_board_net
+classic	hint	-	-	highlight_board_net
+classic	hint	-	-	measure_board
+classic	hint	-	-	query_board_nets
+classic	hint	-	-	find_similar_items
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

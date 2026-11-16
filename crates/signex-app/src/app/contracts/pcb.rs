@@ -87,6 +87,21 @@ pub enum PcbMsg {
     /// Lock or unlock the tracks and vias selected on the board in view was
     /// asked for (`lock_board_items`, `unlock_board_items`, #2407).
     LockRequested { locked: bool },
+    /// A net of the board in view picked or highlighted (#2403).
+    Net(BoardNetMsg),
+}
+
+/// Net actions on the board in view (#2403, #2405): the board menu's and the
+/// palette's rows act on the net of the selection or of what is under the
+/// cursor; a Net Inspector row names its net.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BoardNetMsg {
+    /// `select_board_net` ran, or a Net Inspector row's Select was pressed:
+    /// every track, via and pad of the net is selected.
+    SelectRequested(Option<String>),
+    /// `highlight_board_net` ran, or a Net Inspector row's Highlight was
+    /// pressed: the net is drawn bright, or no longer when it already is.
+    HighlightRequested(Option<String>),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

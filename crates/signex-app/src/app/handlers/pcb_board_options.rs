@@ -162,6 +162,8 @@ impl Signex {
             return;
         };
         self.interaction_state.pcb_guide_place = Some((path, kind));
+        // Measure would take the guide's click (#2403).
+        self.interaction_state.pcb_query.measure = None;
         let hint = t!(self.ui_state.i18n, ids::PCB_BOARD_GUIDE_PLACE_HINT);
         crate::diagnostics::log_info(hint.into_string());
     }

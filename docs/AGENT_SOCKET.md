@@ -102,7 +102,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   reads
   ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain` and
-  `rules_conflicts` (#2398);
+  `rules_conflicts` (#2398), and the board queries `measure_board`,
+  `query_board_nets` and `find_similar_items` (#2403);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,

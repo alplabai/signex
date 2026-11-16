@@ -429,6 +429,42 @@ pub(crate) fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
     )
 }
 
+/// The item of `board` whose uuid is `id`: a footprint, pad, track, via or
+/// selectable drawn area. `None` when nothing has it, or for a pour.
+pub fn item_by_uuid(board: &PcbBoard, id: Uuid) -> Option<ItemRef> {
+    let footprint = board.footprints.iter().find_map(|fp| {
+        if fp.uuid == id {
+            return Some(ItemRef::Footprint(id));
+        }
+        fp.pads.iter().find(|p| p.uuid == id).map(|_| ItemRef::Pad {
+            footprint: fp.uuid,
+            pad: id,
+        })
+    });
+    footprint
+        .or_else(|| {
+            board
+                .segments
+                .iter()
+                .any(|s| s.uuid == id)
+                .then_some(ItemRef::Track(id))
+        })
+        .or_else(|| {
+            board
+                .vias
+                .iter()
+                .any(|v| v.uuid == id)
+                .then_some(ItemRef::Via(id))
+        })
+        .or_else(|| {
+            let zone = board.zones.iter().find(|z| z.uuid == id)?;
+            Some(ItemRef::Zone {
+                zone: id,
+                kind: PickKind::of_zone(zone)?,
+            })
+        })
+}
+
 /// A track's copper; a negative width counts as its magnitude.
 pub fn track_shape(segment: &Segment) -> Result<Shape, GeomError> {
     Ok(Shape::Capsule {

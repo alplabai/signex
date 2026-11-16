@@ -148,6 +148,10 @@ impl Signex {
                 } else {
                     Some(target.clone())
                 };
+                // Measure would take the pick's click (#2403).
+                if panel.net_pick.is_some() {
+                    self.interaction_state.pcb_query.measure = None;
+                }
             }
             M::NetLinkPressed { board, net } => self.select_pcb_net(board, *net),
             M::ClassLinkPressed { board, class } => self.select_pcb_net_class(board, class),
