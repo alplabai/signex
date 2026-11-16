@@ -156,7 +156,7 @@ impl Engine {
             let Some(patch_pair) = self.execute(command)?.patch_pair else {
                 continue;
             };
-            self.note_applied(added, patch_pair.document);
+            self.note_applied(added);
 
             document |= patch_pair.document;
 

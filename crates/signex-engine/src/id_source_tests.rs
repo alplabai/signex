@@ -252,3 +252,137 @@ fn a_batch_may_reuse_an_id_it_deleted() {
         .unwrap();
     assert_eq!(engine.document().no_connects[0].position.x, 5.0);
 }
+
+fn wire(n: u128, from: f64, to: f64) -> Command {
+    Command::PlaceWireSegment {
+        wire: Wire {
+            uuid: id(n),
+            start: Point::new(from, 0.0),
+            end: Point::new(to, 0.0),
+            ..Default::default()
+        },
+    }
+}
+
+fn engine_with_wire() -> Engine {
+    let mut engine = Engine::new(test_sheet()).unwrap();
+    engine.execute(wire(100, 0.0, 10.0)).unwrap();
+    engine
+}
+
+/// A placement that folds a wire away frees its id for the rest of the batch.
+#[test]
+fn a_batch_may_reuse_an_id_a_wire_merge_removed() {
+    let mut probe = engine_with_wire();
+    probe.execute(wire(101, 10.0, 20.0)).unwrap();
+    let kept: Vec<Uuid> = probe.document().wires.iter().map(|w| w.uuid).collect();
+    assert_eq!(kept.len(), 1, "the collinear wires fold into one");
+    let gone = if kept[0] == id(100) { 101 } else { 100 };
+
+    let mut engine = engine_with_wire();
+    engine
+        .execute_batch([wire(101, 10.0, 20.0), no_connect(gone, 50.0)])
+        .unwrap();
+    assert_eq!(engine.document().no_connects[0].uuid, id(gone));
+}
+
+/// Every command that places an object under a caller-minted id refuses one
+/// already in the sheet.
+#[test]
+fn every_placing_command_refuses_an_id_in_use() {
+    let mut engine = run_steps(&test_sheet(), &mut SequentialIds::default());
+    let taken = id(1);
+    let f = payload().fragment().clone();
+    let corners = (Point::new(100.0, 50.0), Point::new(130.0, 80.0));
+    let ids = &mut SequentialIds::default();
+    let sheet_taken = child_sheet_from_corners(corners.0, corners.1, "sheet2", ids).unwrap();
+    assert_eq!(sheet_taken.uuid, taken);
+    let mut pin_taken = sheet_taken.clone();
+    pin_taken.uuid = id(900);
+    let mut entry = new_sheet_entry(&pin_taken, Point::new(98.0, 60.0), "A", None, ids);
+    entry.uuid = taken;
+    pin_taken.pins.push(entry.clone());
+    let at = Point::new(100.0, 100.0);
+    let point = signex_types::schematic::NoConnect {
+        uuid: taken,
+        position: at,
+    };
+    let commands = vec![
+        Command::BreakWire {
+            wire: engine.document().wires[1].uuid,
+            at: Point::new(25.0, 10.0),
+            new_wire: taken,
+        },
+        Command::PlaceSymbol {
+            symbol: Symbol {
+                uuid: taken,
+                ..f.symbols[0].clone()
+            },
+        },
+        wire(1, 100.0, 110.0),
+        Command::PlaceWireSegmentAsIs {
+            wire: Wire {
+                uuid: taken,
+                ..f.wires[0].clone()
+            },
+        },
+        Command::PlaceBus {
+            bus: Bus {
+                uuid: taken,
+                ..f.buses[0].clone()
+            },
+        },
+        Command::PlaceBusEntry {
+            bus_entry: BusEntry {
+                uuid: taken,
+                ..f.bus_entries[0].clone()
+            },
+        },
+        Command::PlaceJunction {
+            junction: Junction {
+                uuid: taken,
+                ..f.junctions[0].clone()
+            },
+        },
+        Command::PlaceNoConnect {
+            no_connect: point.clone(),
+        },
+        Command::PlaceNoErcDirective { directive: point },
+        Command::PlaceLabel {
+            label: Label {
+                uuid: taken,
+                ..f.labels[0].clone()
+            },
+        },
+        Command::PlaceTextNote {
+            text_note: TextNote {
+                uuid: taken,
+                ..f.text_notes[0].clone()
+            },
+        },
+        Command::PlaceSchDrawing {
+            drawing: signex_types::schematic::SchDrawing::Line {
+                uuid: taken,
+                start: at,
+                end: Point::new(110.0, 100.0),
+                width: 0.2,
+                stroke_color: None,
+                locked: false,
+            },
+        },
+        Command::PlaceChildSheet {
+            child_sheet: sheet_taken,
+        },
+        Command::PlaceChildSheet {
+            child_sheet: pin_taken,
+        },
+        Command::PlaceSheetPin {
+            sheet_id: engine.document().child_sheets[0].uuid,
+            pin: entry,
+        },
+    ];
+    assert_eq!(commands.len(), 15);
+    for command in commands {
+        assert_refused(&mut engine, command, taken);
+    }
+}

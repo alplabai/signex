@@ -174,7 +174,7 @@ pub struct Engine {
     /// stays suppressed while it is open.
     transaction: Option<exec::transaction::Transaction>,
     /// Object ids of the sheet while a batch runs (`id_collision.rs`).
-    batch_ids: Option<id_collision::IdIndex>,
+    batch_ids: id_collision::BatchIds,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -388,7 +388,7 @@ impl Engine {
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
-            batch_ids: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -430,7 +430,7 @@ impl Engine {
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
-            batch_ids: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,

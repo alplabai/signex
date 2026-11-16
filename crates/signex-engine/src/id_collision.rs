@@ -3,8 +3,10 @@
 //! is touched.
 //!
 //! A single command scans the sheet. A batch (a paste of thousands of items)
-//! builds one index of the sheet's ids up front and keeps it in step as its
-//! commands apply, so each check is a hash lookup, not a scan.
+//! builds one index of the sheet's ids on its first check and keeps it in
+//! step as its commands apply, so each check is a hash lookup, not a scan.
+//! An edit that is not a plain placement only marks the index stale, so a
+//! batch of edits with no placement after them never builds it.
 
 use std::collections::HashSet;
 
@@ -12,18 +14,34 @@ use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
 use crate::command::Command;
-use crate::patch::DocumentPatch;
 use crate::{Engine, EngineError};
 
 /// Every object id of a sheet.
 pub(crate) type IdIndex = HashSet<Uuid>;
 
+/// The id index of the running batch.
+#[derive(Debug, Default)]
+pub(crate) enum BatchIds {
+    /// No batch runs: each check scans the sheet.
+    #[default]
+    Off,
+    /// Built on the next check.
+    Stale,
+    Ready(IdIndex),
+}
+
 impl Engine {
     /// The refusal for `cmd`, or `None` when its new ids are free.
-    pub(crate) fn id_in_use_refusal(&self, cmd: &Command) -> Option<EngineError> {
+    pub(crate) fn id_in_use_refusal(&mut self, cmd: &Command) -> Option<EngineError> {
+        let ids = new_object_ids(cmd);
+        if ids.is_empty() {
+            return None;
+        }
+        if matches!(self.batch_ids, BatchIds::Stale) {
+            self.batch_ids = BatchIds::Ready(id_index(&self.document));
+        }
         let mut seen = HashSet::new();
-        new_object_ids(cmd)
-            .into_iter()
+        ids.into_iter()
             .find(|id| !seen.insert(*id) || self.holds_id(*id))
             .map(EngineError::IdInUse)
     }
@@ -31,39 +49,35 @@ impl Engine {
     fn holds_id(&self, id: Uuid) -> bool {
         match &self.batch_ids {
             // The index may still hold an id a merge removed; the scan confirms a hit.
-            Some(index) => index.contains(&id) && holds_id(&self.document, id),
-            None => holds_id(&self.document, id),
+            BatchIds::Ready(index) => index.contains(&id) && holds_id(&self.document, id),
+            BatchIds::Off | BatchIds::Stale => holds_id(&self.document, id),
         }
     }
 
-    /// Run `batch` with one id index built for the whole batch.
+    /// Run `batch` with one id index for the whole batch, built when first read.
     pub(crate) fn with_id_index<T>(&mut self, batch: impl FnOnce(&mut Self) -> T) -> T {
-        let outer = self.batch_ids.replace(id_index(&self.document));
+        let outer = std::mem::replace(&mut self.batch_ids, BatchIds::Stale);
         let result = batch(self);
         self.batch_ids = outer;
         result
     }
 
-    /// Bring the batch index up to date after a command changed the sheet
-    /// with `patch`. `added` is [`index_update`] of that command.
-    pub(crate) fn note_applied(&mut self, added: Option<Vec<Uuid>>, patch: DocumentPatch) {
-        let Some(index) = self.batch_ids.as_mut() else {
-            return;
-        };
-        let Some(added) = added else {
-            *index = id_index(&self.document);
-            return;
-        };
-        index.extend(added);
-        // A placed wire can mint junction dots at its ends.
-        if patch.contains(DocumentPatch::JUNCTIONS) {
-            index.extend(self.document.junctions.iter().map(|j| j.uuid));
+    /// Bring the batch index up to date after a command changed the sheet.
+    /// `added` is [`index_update`] of that command.
+    // shortcut: junction dots the engine mints mid-batch are not indexed; their
+    // random v7 ids cannot meet a caller's fresh id. Index them once autoplace
+    // takes its ids from the caller (#2429).
+    pub(crate) fn note_applied(&mut self, added: Option<Vec<Uuid>>) {
+        match (&mut self.batch_ids, added) {
+            (BatchIds::Ready(index), Some(added)) => index.extend(added),
+            (BatchIds::Ready(_), None) => self.batch_ids = BatchIds::Stale,
+            (BatchIds::Off | BatchIds::Stale, _) => {}
         }
     }
 }
 
-/// The ids a command adds when it only adds objects (and junction dots), so
-/// the batch index can be extended; `None` when the index must be rebuilt.
+/// The ids a command adds when it only adds objects, so the batch index can
+/// be extended; `None` when it must be rebuilt.
 pub(crate) fn index_update(cmd: &Command) -> Option<Vec<Uuid>> {
     let ids = new_object_ids(cmd);
     (!ids.is_empty() || matches!(cmd, Command::RegisterLibSymbol { .. })).then_some(ids)
