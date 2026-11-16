@@ -42,6 +42,9 @@ pub struct InteractionState {
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// Arrange in Box armed on a board (#2409): the components it moves
+    /// and the first corner once clicked.
+    pub pcb_arrange_box: Option<crate::app::board_tools::ArrangeBox>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

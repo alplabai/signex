@@ -15,6 +15,7 @@ pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
 pub(crate) mod board_reannotate;
+pub(crate) mod board_tools;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -81,7 +82,7 @@ pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg,
-    BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
+    BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
     ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget, DrcRunResult, EditMsg,
     EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState, ErcMsg,
     ExcludeDirtyChoice, ExportMsg, FileMsg, FootprintSwapMsg, GitCommitFailure, GridPickerState,

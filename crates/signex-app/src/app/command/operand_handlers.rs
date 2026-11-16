@@ -18,6 +18,7 @@ use super::hierarchy_operands as hierarchy;
 use super::part_operands as part;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
+use crate::app::board_tools as board;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -82,6 +83,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    // #2408, #2409: the board Tools edits on the board `document` names.
+    ("stitch_vias", board::stitch_by_operands),
+    ("add_teardrops", board::add_teardrops_by_operands),
+    ("remove_teardrops", board::remove_teardrops_by_operands),
+    ("gloss_selected_routes", board::gloss_by_operands),
+    ("board_shape_from_selection", board::board_shape_by_operands),
+    ("keepout_from_selection", board::keepout_by_operands),
+    ("arrange_in_box", board::arrange_in_box_by_operands),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

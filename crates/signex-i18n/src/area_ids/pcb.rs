@@ -53,4 +53,8 @@ define_ids! {
     PCB_3D_RIGHT = "pcb-3d-right";
     PCB_3D_ISO = "pcb-3d-iso";
     PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
+    PCB_BOARD_TOOL_DONE = "pcb-board-tool-done";
+    PCB_BOARD_TOOL_SKIPPED = "pcb-board-tool-skipped";
+    PCB_BOARD_TOOL_REFUSED = "pcb-board-tool-refused";
+    PCB_ARRANGE_BOX_HINT = "pcb-arrange-box-hint";
 }

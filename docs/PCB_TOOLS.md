@@ -234,3 +234,98 @@ active and hides every other layer the Layers panel lists; the board outline
 and the Multi-Layer row keep their state, as in single-layer mode. The rows
 change the view of the board in the window the menu was opened in, never the
 board file.
+
+## Board Tools
+
+Seven Tools rows edit the board in view (#2408, #2409); the menu side is in
+`MENU_BAR.md`, "Tools: board edits". Each builds its edit in
+`signex_engine::pcb::board_tools` from geometry in `pcb_geom` (integer nm)
+and runs it as one board undo step. The same command with operands acts on
+the board an agent or the CLI names by `document`, on items named by uuid
+(`id`, `ids`) or by point (`start`, `end`), and answers with what it did:
+the uuids added, removed and changed, and how many places it left out.
+Copper keeps the clearance the board's setup and its project's net classes
+ask for between two nets (`DrcRules::for_board`), measured as the design
+rule check measures it, so the result adds no clearance or short finding.
+Written DRC rules are not read yet. The work runs on the update thread,
+like Align. A refusal says why in Messages and changes nothing.
+
+### Via Stitching
+
+`stitch_vias` fills an area with vias of one net on a square grid. From the
+menu the area is each selected Fill or Solid Region, else every polygon pour
+that has a net, and the net is the area's; the grid step is the smallest
+multiple of the board's snap grid that is at least 2 mm. With operands the
+area is a zone (`id`) or a rectangle (`start`, `end`), `net` names the net by
+name (needed for a rectangle or a zone with no net) and `pitch` the step in
+mm. A pour is stitched over its computed fill, any other zone over its
+outline less its holes.
+
+A via goes on a grid point (a multiple of the step, so a second run lands on
+the same points) when its whole disc lies inside the area, inside the board
+outline by the board clearance, clear of copper of every other net (no net
+counts as another) by the clearance, clear of pads and vias of its own net,
+and outside every keepout that forbids vias. Vias take the board's via size
+(`PcbSetup` diameter and drill). A step smaller than the via is refused, and
+so is an area where no via fits. Stitching an area again adds nothing.
+
+### Teardrops
+
+`add_teardrops` adds a teardrop where a track enters a pad or via of its own
+net on the track's layer: a straight-sided taper from 0.9 of the pad's (or
+via's) inscribed radius at its centre out to the track's width, one radius
+past the pad edge or at the track's far end when the track is shorter. It is
+a zone with `fill_type = "teardrop"` on the track's net and layer, solid
+copper like a Solid Region. A track as wide as the pad gets none. A teardrop
+that would come closer than the clearance to another net's copper, or meet a
+keepout that forbids routing, is left out and counted in Messages. Adding
+removes the old teardrops of the same nets first, so running it twice leaves
+the same board. `remove_teardrops` removes them. From the menu both act on
+the nets of the selection, or every net with nothing selected; with operands
+on the net `net` names, or every net.
+
+Teardrops are not tied to their track: moving or deleting the track leaves
+the teardrop where it was until Teardrops runs again.
+
+### Gloss
+
+`gloss_selected_routes` shortens the selected tracks. Where exactly two
+selected tracks of one net, layer and width meet at a corner that no other
+track end, pad or via shares, the two become one straight track between
+their far ends, when that track keeps the clearance to other nets' copper
+and stays out of keepouts that forbid routing. It repeats until no corner
+can go, trying corners in position order. The first track keeps its uuid
+and takes the new end; the second is removed. Route ends never move, so
+nothing a route connects comes loose. Nothing to cut is refused. It does not
+read the interactive router and makes no 45° bends; it only removes corners.
+
+### Board Shape from Selection
+
+`board_shape_from_selection` makes the selected lines the board outline when
+they close one loop end to end (ends join at the same nm point, in any order
+and direction). The lines stay. Open lines, a branch and several loops are
+refused, saying where the path opens. While the board sketch owns the outline
+the row is refused: the outline is changed in Board Sketch, whose backdrop
+shows the outline set here. Only tracks are lines on a board today; board
+arcs and graphics lines cannot be selected yet.
+
+### Keepout from Selection
+
+`keepout_from_selection` turns a selected Fill, Solid Region or pour into a
+keepout over its outline on its layer, keeping its uuid (its holes and net
+go). With no area selected, selected lines that close one loop on one layer
+are replaced by a keepout over that loop. The layer rule is the Keepout
+tool's: a copper layer keeps that copper clear, a keep-out layer its side's
+outer copper; other layers are refused, and so is an area that already is a
+keepout.
+
+### Arrange in Box
+
+`arrange_in_box` arms a box for the selected unlocked components; two clicks
+on the board (on the non-components grid) set its opposite corners. The
+components are packed inside it in rows from its top-left corner, tallest
+first, each origin on the components grid, 0.5 mm apart and from the box
+edge, by their bounds as placed (turned and mirrored). Components that are
+not selected are not avoided, even inside the box. A box too small is refused
+and nothing moves. Esc drops the box. With operands `ids` names the
+components and `start` and `end` the box.

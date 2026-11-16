@@ -293,9 +293,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
+| `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
+| `board_shape_from_selection` | Make the selected closed lines the board outline | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `gloss_selected_routes` | Shorten the selected routes by cutting their corners where the clearance allows | pcb | — | — |
+| `keepout_from_selection` | Turn the selected area or closed lines into a keepout on its layer | design | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
@@ -307,8 +312,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
+| `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |

@@ -24,6 +24,8 @@ pub enum OperandKind {
     Color,
     /// A document: its id (a hyphenated uuid) or an absolute path (#2172).
     Document,
+    /// A length in mm, above zero: a grid step (#2408).
+    Length,
 }
 
 impl OperandKind {
@@ -37,13 +39,14 @@ impl OperandKind {
             Self::Bool => "bool",
             Self::Color => "color",
             Self::Document => "document",
+            Self::Length => "length",
         }
     }
 
     /// The unit the value is written in; `None` for a kind without one.
     pub const fn unit(self) -> Option<&'static str> {
         match self {
-            Self::Point => Some("mm"),
+            Self::Point | Self::Length => Some("mm"),
             Self::Angle | Self::Turn => Some("deg"),
             Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
         }
@@ -114,6 +117,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
+    ("pitch", OperandKind::Length),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -363,6 +367,36 @@ pub const REVERT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("group", OperandKind::Text),
     optional("documents", OperandKind::Text),
+];
+
+/// `stitch_vias` (#2408): the area as a zone (`id`) or a rectangle (`start`,
+/// `end`), the net by name (the zone's when left out) and the grid step
+/// (`pitch`, the default step when left out).
+pub const STITCH: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("id", OperandKind::Text),
+    optional("start", OperandKind::Point),
+    optional("end", OperandKind::Point),
+    optional("net", OperandKind::Text),
+    optional("pitch", OperandKind::Length),
+];
+/// Add or remove teardrops (#2408): on the net named, or on every net.
+pub const TEARDROPS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+];
+/// Board items by uuid, comma separated (#2408, #2409): the tracks to
+/// gloss, the lines to close, the area or lines to make a keepout.
+pub const BOARD_ITEMS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+];
+/// `arrange_in_box` (#2409): the components and the box's two corners.
+pub const ARRANGE_BOX: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

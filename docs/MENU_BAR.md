@@ -385,6 +385,27 @@ a project in view the panel says so.
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
 
+## Tools: board edits {#tools-board-edits}
+
+Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
+as one undo step: Via Stitching (`stitch_vias`), Add Teardrops
+(`add_teardrops`), Remove Teardrops (`remove_teardrops`), Gloss Selected
+Routes (`gloss_selected_routes`), Board Shape from Selection
+(`board_shape_from_selection`), Keepout from Selection
+(`keepout_from_selection`) and Arrange in Box (`arrange_in_box`).
+
+- Via Stitching and the two teardrop rows are live with a board open; with
+  nothing selected they act on every pour or every net.
+- Gloss, Board Shape and Keepout need something selected on the board in
+  view; Arrange in Box needs unlocked components selected. Otherwise the
+  rows are greyed with the reason.
+- Gloss, Add Teardrops, Board Shape, Keepout and Arrange in Box are also on
+  the board's right-click menu, above Cross Probe.
+- Each command takes operands (`document` and the items by uuid) on the
+  agent channel and the CLI; no keymap preset binds them.
+
+What each one does: [PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools".
+
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
 Runs `number_schematic_sheets` (#2247; editable dialog, maintainer decision

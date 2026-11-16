@@ -248,3 +248,15 @@ pcb-3d-iso = Angled
 # Messages line when a part's model could not be read; the part is drawn as
 # a plain body. $source names the library footprint.
 pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.
+
+## The board Tools edits (#2408, #2409).
+
+# Messages line when a Tools edit ran; $tool is its menu name, the counts
+# are the items it added, removed and changed.
+pcb-board-tool-done = { $tool }: { $added } added, { $removed } removed, { $changed } changed
+# Messages line when a copper tool left places out; $count of them.
+pcb-board-tool-skipped = { $tool }: { $count } left out where the copper would break the clearance or a keepout
+# Messages line when a Tools edit did nothing; $reason says why.
+pcb-board-tool-refused = { $tool }: { $reason }; nothing changed
+# Messages line when Arrange in Box is waiting for its corners.
+pcb-arrange-box-hint = Arrange in Box: click two opposite corners of the box for the selected components; Esc ends it

@@ -51,6 +51,11 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "cross_probe",
     "board_sketch",
     "change_footprint",
+    "gloss_selected_routes",
+    "add_teardrops",
+    "board_shape_from_selection",
+    "keepout_from_selection",
+    "arrange_in_box",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -450,6 +455,13 @@ pub(super) fn pcb_canvas_menu_entries(
             dd_cmd_disabled(i18n, Some(icon), command_id, sc.of(command_id))
         }
     };
+    let tool_row = |command_id: &'static str, enabled: bool| {
+        if enabled {
+            dd_command(i18n, None, command_id, sc.of(command_id), None)
+        } else {
+            dd_cmd_disabled(i18n, None, command_id, sc.of(command_id))
+        }
+    };
     let placeable = board.placeable;
     let duplicate = if board.copyable {
         dd_command(i18n, None, "duplicate", sc.of("duplicate"), None)
@@ -492,6 +504,13 @@ pub(super) fn pcb_canvas_menu_entries(
         DropdownEntry::Separator,
         // Enter or leave the board's sketch mode (#2234).
         row(ic::icon_dd_rect(tid), "board_sketch", true),
+        DropdownEntry::Separator,
+        // The board Tools edits on the selection (#2408, #2409), as in Tools.
+        tool_row("gloss_selected_routes", board.any),
+        tool_row("add_teardrops", true),
+        tool_row("board_shape_from_selection", board.any),
+        tool_row("keepout_from_selection", board.any),
+        tool_row("arrange_in_box", placeable),
         DropdownEntry::Separator,
         row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
         // Shows the Properties panel, where one selected footprint's

@@ -104,9 +104,13 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
-  `clear_all_net_colors`, `assign_net_class`, `save_document` and
-  `close_active_document`. A test pins this set, so a catalog row that joins or
-  leaves it is a visible decision.
+  `clear_all_net_colors`, `assign_net_class`, `save_document`,
+  `close_active_document`, and the board Tools edits (#2408, #2409)
+  `stitch_vias`, `add_teardrops`, `remove_teardrops`, `gloss_selected_routes`,
+  `board_shape_from_selection`, `keepout_from_selection` and `arrange_in_box`,
+  each one board undo step answered with the uuids it added, removed and
+  changed ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"). A test pins this set,
+  so a catalog row that joins or leaves it is a visible decision.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

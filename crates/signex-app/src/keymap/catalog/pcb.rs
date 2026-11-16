@@ -291,4 +291,85 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2408, #2409: the board Tools edits. Each acts on the board in view and
+    // its selection from a menu, the board menu, the palette or a key, and on
+    // the board an agent names with operands; each is one undo step. No
+    // default keys.
+    CommandMetadata {
+        id: "stitch_vias",
+        category: "pcb",
+        label: command_ids::CMD_STITCH_VIAS,
+        menu_label: Some(command_ids::CMD_MENU_STITCH_VIAS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::STITCH,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "add_teardrops",
+        category: "pcb",
+        label: command_ids::CMD_ADD_TEARDROPS,
+        menu_label: Some(command_ids::CMD_MENU_ADD_TEARDROPS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::TEARDROPS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "remove_teardrops",
+        category: "pcb",
+        label: command_ids::CMD_REMOVE_TEARDROPS,
+        menu_label: Some(command_ids::CMD_MENU_REMOVE_TEARDROPS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::TEARDROPS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "gloss_selected_routes",
+        category: "pcb",
+        label: command_ids::CMD_GLOSS_SELECTED_ROUTES,
+        menu_label: Some(command_ids::CMD_MENU_GLOSS_SELECTED_ROUTES),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_shape_from_selection",
+        category: "design",
+        label: command_ids::CMD_BOARD_SHAPE_FROM_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_SHAPE_FROM_SELECTION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "keepout_from_selection",
+        category: "design",
+        label: command_ids::CMD_KEEPOUT_FROM_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_KEEPOUT_FROM_SELECTION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "arrange_in_box",
+        category: "modify",
+        label: command_ids::CMD_ARRANGE_IN_BOX,
+        menu_label: Some(command_ids::CMD_MENU_ARRANGE_IN_BOX),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::ARRANGE_BOX,
+        ..CommandMetadata::DEFAULT
+    },
 ];

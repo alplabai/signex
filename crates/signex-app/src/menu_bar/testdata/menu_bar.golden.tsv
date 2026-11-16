@@ -129,6 +129,14 @@ Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
+Tools/Via Stitching	item	Via Stitching	-	-	StitchVias	01100000	cmd:stitch_vias
+Tools/Add Teardrops	item	Add Teardrops	-	-	AddTeardrops	01100000	cmd:add_teardrops
+Tools/Remove Teardrops	item	Remove Teardrops	-	-	RemoveTeardrops	01100000	cmd:remove_teardrops
+Tools/Gloss Selected Routes	item	Gloss Selected Routes	-	-	GlossSelectedRoutes	00100000	cmd:gloss_selected_routes
+Tools/Board Shape from Selection	item	Board Shape from Selection	-	-	BoardShapeFromSelection	00100000	cmd:board_shape_from_selection
+Tools/Keepout from Selection	item	Keepout from Selection	-	-	KeepoutFromSelection	00100000	cmd:keepout_from_selection
+Tools/Arrange in Box	item	Arrange in Box	-	-	ArrangeInBox	00100000	cmd:arrange_in_box
+Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
 Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Mod+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode
 Tools/---	separator	-	-	-	-	-	-

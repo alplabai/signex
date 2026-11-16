@@ -1,5 +1,10 @@
 [
   {
+    "id": "add_teardrops",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "align_bottom",
     "group": "Schematic",
     "category": "modify"
@@ -50,6 +55,11 @@
     "category": "edit"
   },
   {
+    "id": "arrange_in_box",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "assign_footprints",
     "group": "Schematic",
     "category": "design"
@@ -68,6 +78,11 @@
     "id": "back_annotate_schematics",
     "group": "Schematic",
     "category": "pcb_sync"
+  },
+  {
+    "id": "board_shape_from_selection",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "board_sketch",
@@ -455,6 +470,11 @@
     "category": "design"
   },
   {
+    "id": "gloss_selected_routes",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "go_to_net_partner",
     "group": "Schematic",
     "category": "navigation"
@@ -473,6 +493,11 @@
     "id": "import_graphics",
     "group": "General",
     "category": "library"
+  },
+  {
+    "id": "keepout_from_selection",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "lasso_select",
@@ -940,6 +965,11 @@
     "category": "interactive"
   },
   {
+    "id": "remove_teardrops",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "repeat_last_item",
     "group": "General",
     "category": "edit"
@@ -1088,6 +1118,11 @@
     "id": "smart_paste",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "stitch_vias",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "switch_segment_posture",

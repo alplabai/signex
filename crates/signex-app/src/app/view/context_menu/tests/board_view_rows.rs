@@ -88,3 +88,48 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
         "the row is there, greyed"
     );
 }
+
+/// #2408, #2409: the board menu offers the selection tools, each running
+/// its command: live with a selection (Arrange in Box with unlocked
+/// components), greyed without; Add Teardrops acts on every net then.
+#[test]
+fn the_board_menu_offers_the_selection_tools() {
+    let sc = shortcuts();
+    let runs = |rows: &[DropdownEntry<Message>], label: &str, command: &str| {
+        matches!(
+            row_message(rows, label),
+            Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+                if id.as_str() == command
+        )
+    };
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        placeable: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, picked, &sc);
+    for (label, command) in [
+        ("Gloss Selected Routes", "gloss_selected_routes"),
+        ("Add Teardrops", "add_teardrops"),
+        ("Board Shape from Selection", "board_shape_from_selection"),
+        ("Keepout from Selection", "keepout_from_selection"),
+        ("Arrange in Box", "arrange_in_box"),
+    ] {
+        assert!(runs(&rows[..], label, command), "{label}");
+    }
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
+    assert!(runs(&rows[..], "Add Teardrops", "add_teardrops"));
+    for label in [
+        "Gloss Selected Routes",
+        "Board Shape from Selection",
+        "Keepout from Selection",
+        "Arrange in Box",
+    ] {
+        assert!(row_message(&rows, label).is_none(), "{label} greyed");
+    }
+}

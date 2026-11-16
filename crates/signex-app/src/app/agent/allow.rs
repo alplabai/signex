@@ -71,8 +71,11 @@ mod tests {
         assert_eq!(
             allowed(),
             [
+                "add_teardrops",
                 "apply_edits",
+                "arrange_in_box",
                 "assign_net_class",
+                "board_shape_from_selection",
                 "check_drc",
                 "check_erc",
                 "clear_all_net_colors",
@@ -80,12 +83,16 @@ mod tests {
                 "color_net",
                 "document_info",
                 "find_items",
+                "gloss_selected_routes",
+                "keepout_from_selection",
                 "list_documents",
                 "query_pins",
                 "read_document",
+                "remove_teardrops",
                 "resolve",
                 "revert",
                 "save_document",
+                "stitch_vias",
             ]
         );
     }

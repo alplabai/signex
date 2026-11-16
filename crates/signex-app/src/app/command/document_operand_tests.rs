@@ -468,6 +468,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "find_items",
                     "apply_edits",
                     "revert",
+                    // #2408, #2409: the board Tools edits name their board.
+                    "stitch_vias",
+                    "add_teardrops",
+                    "remove_teardrops",
+                    "gloss_selected_routes",
+                    "board_shape_from_selection",
+                    "keepout_from_selection",
+                    "arrange_in_box",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"
