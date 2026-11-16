@@ -62,6 +62,7 @@ mod pcb_edit;
 mod pcb_edit_tests;
 mod pcb_filter_presets;
 pub(crate) mod pcb_footprint_text;
+pub(crate) mod pcb_layer_strip;
 #[cfg(test)]
 mod pcb_origin_tests;
 mod pcb_parking;

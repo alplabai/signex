@@ -53,6 +53,7 @@ pub mod paste_prefs;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+pub mod layer_strip_prefs;
 #[cfg(test)]
 pub(crate) mod layout_probe;
 pub mod library;

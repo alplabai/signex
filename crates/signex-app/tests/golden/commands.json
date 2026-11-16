@@ -230,6 +230,11 @@
     "category": "interactive"
   },
   {
+    "id": "delete_layer_set",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "delete_selection",
     "group": "General",
     "category": "edit"
@@ -425,6 +430,11 @@
     "category": "search"
   },
   {
+    "id": "flip_board_view",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "flip_selected_x",
     "group": "Schematic",
     "category": "modify"
@@ -468,6 +478,21 @@
     "id": "go_to_net_partner",
     "group": "Schematic",
     "category": "navigation"
+  },
+  {
+    "id": "hide_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "hide_layer_group",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "highlight_layer",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "highlight_net_under_cursor",
@@ -1030,6 +1055,11 @@
     "category": "file"
   },
   {
+    "id": "save_layer_set",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "select_all",
     "group": "General",
     "category": "select"
@@ -1070,6 +1100,11 @@
     "category": "modify"
   },
   {
+    "id": "set_layer_tab_names",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "sheet_navigation_back",
     "group": "Schematic",
     "category": "navigation"
@@ -1098,6 +1133,16 @@
     "id": "show_current_command_shortcuts",
     "group": "General",
     "category": "help"
+  },
+  {
+    "id": "show_layer_group",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "show_layer_set",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "smart_paste",
@@ -1143,6 +1188,11 @@
     "id": "toggle_floating_panels",
     "group": "General",
     "category": "window"
+  },
+  {
+    "id": "toggle_layer_numbers",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "toggle_layer_visibility",

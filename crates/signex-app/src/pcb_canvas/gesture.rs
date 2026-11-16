@@ -146,11 +146,16 @@ impl Gesture {
                         to: canvas.screen_to_world(pos, bounds),
                     }
                 } else if !clicks_only && past_threshold(press, pos) {
+                    // Seen from below (#2394) the box is judged mirrored.
+                    let (from, to, deg) = canvas.camera_ref().box_frame(
+                        canvas.screen_to_world(press, bounds),
+                        canvas.screen_to_world(pos, bounds),
+                    );
                     PcbCanvasMsg::BoxSelected {
-                        from: canvas.screen_to_world(press, bounds),
-                        to: canvas.screen_to_world(pos, bounds),
+                        from,
+                        to,
                         mode: box_mode(self.modifiers),
-                        view_rotation_deg: f64::from(canvas.view_rotation_deg()),
+                        view_rotation_deg: f64::from(deg),
                     }
                 } else {
                     PcbCanvasMsg::Clicked {

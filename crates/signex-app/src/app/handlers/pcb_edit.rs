@@ -114,7 +114,8 @@ impl Signex {
         };
         let snapshot = self.undocked_pcb_snapshot(path, board);
         let board_grid = Some(signex_engine::pcb::placement::grid_step_mm(board));
-        let origin_marker = self.pcb_layer_view(path).origin_marker_visible();
+        let view = self.pcb_layer_view(path);
+        let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = crate::pcb_canvas::BoardMarks::of(board);
         for (id, canvas) in &mut self.interaction_state.pcb_canvases {
             let shows = matches!(
@@ -127,6 +128,7 @@ impl Signex {
                 canvas.set_board_grid(board_grid);
                 canvas.set_board_marks(marks.clone());
                 canvas.set_origin_marker_visible(origin_marker);
+                canvas.set_view_flipped(flipped);
                 canvas.clear_content_cache();
             }
         }

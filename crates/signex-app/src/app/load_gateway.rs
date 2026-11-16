@@ -415,7 +415,9 @@ impl Signex {
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
         canvas.set_board_grid(Some(signex_engine::pcb::placement::grid_step_mm(board)));
         canvas.set_board_marks(crate::pcb_canvas::BoardMarks::of(board));
-        canvas.set_origin_marker_visible(self.pcb_layer_view(path).origin_marker_visible());
+        let view = self.pcb_layer_view(path);
+        canvas.set_origin_marker_visible(view.origin_marker_visible());
+        canvas.set_view_flipped(view.flipped());
         let snapshot = self.undocked_pcb_snapshot(path, board);
         canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
@@ -455,7 +457,8 @@ impl Signex {
         let board_grid = self
             .active_pcb()
             .map(signex_engine::pcb::placement::grid_step_mm);
-        let origin_marker = self.pcb_layer_view(&board_path).origin_marker_visible();
+        let view = self.pcb_layer_view(&board_path);
+        let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = self
             .active_pcb()
             .map(crate::pcb_canvas::BoardMarks::of)
@@ -479,6 +482,7 @@ impl Signex {
                 canvas.set_board_grid(board_grid);
                 canvas.set_board_marks(marks.clone());
                 canvas.set_origin_marker_visible(origin_marker);
+                canvas.set_view_flipped(flipped);
                 canvas.clear_content_cache();
             }
         }
@@ -487,6 +491,7 @@ impl Signex {
         main.set_board_grid(board_grid);
         main.set_board_marks(marks);
         main.set_origin_marker_visible(origin_marker);
+        main.set_view_flipped(flipped);
         self.note_pcb_board_changed();
     }
 

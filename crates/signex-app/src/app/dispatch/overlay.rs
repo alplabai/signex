@@ -819,6 +819,7 @@ impl Signex {
         interaction.tab_context_menu = None;
         interaction.start_row_menu = None;
         interaction.pcb_layer_tab_menu = None;
+        interaction.pcb_layer_set_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.context_submenu = None;
         interaction.pending_submenu = None;

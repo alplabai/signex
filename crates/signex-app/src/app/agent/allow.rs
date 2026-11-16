@@ -80,12 +80,19 @@ mod tests {
                 "color_net",
                 "document_info",
                 "find_items",
+                // #2394: the board view's layers, on the named board.
+                "hide_layer",
+                "hide_layer_group",
+                "highlight_layer",
                 "list_documents",
                 "query_pins",
                 "read_document",
                 "resolve",
                 "revert",
                 "save_document",
+                "save_layer_set",
+                "show_layer_group",
+                "show_layer_set",
             ]
         );
     }

@@ -178,6 +178,7 @@ mod footprint_text;
 mod graphics;
 mod layer_colour;
 mod layer_rows;
+mod layer_sets;
 mod layer_view;
 mod ratsnest;
 mod zone_fill;
@@ -188,6 +189,10 @@ pub use graphics::{GraphicInput, GraphicShapeInput};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
     signal_layers,
+};
+pub use layer_sets::{
+    BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
+    listed_layers,
 };
 pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
 pub use ratsnest::ratsnest_inputs;

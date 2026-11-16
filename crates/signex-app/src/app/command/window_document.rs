@@ -272,6 +272,13 @@ impl Signex {
         {
             interaction.pcb_layer_tab_menu = None;
         }
+        if interaction
+            .pcb_layer_set_menu
+            .as_ref()
+            .is_some_and(|menu| menu.window == Some(window))
+        {
+            interaction.pcb_layer_set_menu = None;
+        }
         if interaction.active_bar_menu_window == Some(window) {
             interaction.active_bar_menu = None;
             interaction.active_bar_menu_window = None;

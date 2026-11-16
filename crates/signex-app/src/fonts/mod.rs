@@ -765,6 +765,7 @@ pub mod document_report;
 mod erc;
 mod fast_grids;
 mod language;
+mod layer_strip;
 pub mod measure;
 mod merge_queue;
 mod misc;
@@ -800,6 +801,7 @@ pub use dock_layout::*;
 pub use erc::*;
 pub use fast_grids::*;
 pub use language::*;
+pub use layer_strip::*;
 pub use misc::*;
 pub use ordered_write::{
     OrderedPrefWrite, background_pref_merge, background_pref_write, wait_for_pref_writes,

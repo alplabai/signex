@@ -288,7 +288,7 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
         .pcb_layer_tab_menu
         .expect("the menu is open");
     assert_eq!(menu.layer, BOTTOM);
-    pick_row(&mut app, main, "Hide this layer");
+    pick_row(&mut app, main, "Hide Bottom Layer");
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
     let traces = |app: &Signex| {
@@ -386,7 +386,7 @@ fn a_pick_in_an_undocked_windows_tab_menu_changes_that_windows_board() {
         .expect("the menu is open");
     assert_eq!(menu.window, Some(window));
     assert_eq!(menu.layer, BOTTOM);
-    pick_row(&mut app, window, "Hide this layer");
+    pick_row(&mut app, window, "Hide Bottom Layer");
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
     assert!(

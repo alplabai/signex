@@ -64,36 +64,10 @@ impl Signex {
                 Task::none()
             }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
-            PcbMsg::LayerTabMenu(event) => {
-                self.handle_layer_tab_menu(event);
-                Task::none()
-            }
-        }
-    }
-
-    /// The right-click menu of a layer tab (#2379): it opens at the pointer,
-    /// one menu at a time, and a picked row changes the view of the board
-    /// of the window it was opened in.
-    fn handle_layer_tab_menu(&mut self, event: LayerTabMenuMsg) {
-        match event {
-            LayerTabMenuMsg::Opened { window, layer } => {
-                self.close_all_context_menus();
-                // The menu takes the cursor: a card the canvas showed goes.
-                self.clear_canvas_hover();
-                let (x, y) = self.interaction_state.last_mouse_pos;
-                self.interaction_state.pcb_layer_tab_menu = Some(LayerTabMenu {
-                    x,
-                    y,
-                    layer,
-                    window,
-                });
-            }
-            LayerTabMenuMsg::Dismissed => self.interaction_state.pcb_layer_tab_menu = None,
-            LayerTabMenuMsg::Picked(view_event) => {
-                if let Some(menu) = self.interaction_state.pcb_layer_tab_menu.take() {
-                    self.apply_pcb_view_event(menu.window, view_event);
-                }
-            }
+            PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
+            PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),
+            PcbMsg::LayerStrip(setting) => self.apply_layer_strip_setting(setting),
+            PcbMsg::LayerSet(event) => self.handle_layer_set(event),
         }
     }
 

@@ -250,6 +250,16 @@ place_board_polygon_pour	place	Place a polygon pour on the active copper layer, 
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_route	place	Route on the active copper layer around other nets, keeping the rule clearance	Interactive Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+show_layer_set	view	Show a layer set on the board view	Show Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
+save_layer_set	view	Save the shown layers as a layer set	Save Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
+delete_layer_set	view	Delete a saved layer set	Delete Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text
+hide_layer	view	Hide one layer of the board view	Hide Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
+highlight_layer	view	Highlight one layer and dim the others	Highlight Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
+hide_layer_group	view	Hide every layer of one kind	Hide Layers	PCB	-	-	RequiresDocument(Pcb)	-	group:text,document:document
+show_layer_group	view	Show every layer of one kind	Show Layers	PCB	-	-	RequiresDocument(Pcb)	-	group:text,document:document
+set_layer_tab_names	view	Name the layer tabs short, medium or long	Layer Tab Names	PCB	-	-	RequiresDocument(Pcb)	-	style:text
+toggle_layer_numbers	view	Show or hide the numbers on the layer tabs	Show Layer Numbers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+flip_board_view	view	View the board from below, or from above again	Flip Board View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

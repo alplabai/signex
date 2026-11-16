@@ -171,6 +171,7 @@ impl Message {
 
 mod cross_probe;
 mod dialogs;
+mod layer_strip;
 mod messages;
 mod net_nav;
 mod pcb;
@@ -178,12 +179,15 @@ mod state;
 
 pub use cross_probe::CrossProbeMsg;
 pub use dialogs::*;
+pub use layer_strip::{
+    LAYER_SET_NAME_INPUT_ID, LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg,
+    LayerStripMsg, LayerTabMenu, LayerTabMenuMsg, LayerTabSubmenu,
+};
 pub use messages::*;
 pub use net_nav::NetNavMsg;
 pub use pcb::{
     Board3dGesture, Board3dModelsRead, Board3dMsg, BoardSketchMsg, DrcRunResult, FootprintSwapMsg,
-    LayerTabMenu, LayerTabMenuMsg, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg, ViewAngleEntry,
-    ViewRotationMsg,
+    PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg, ViewAngleEntry, ViewRotationMsg,
 };
 pub use state::*;
 

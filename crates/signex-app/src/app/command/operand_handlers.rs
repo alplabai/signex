@@ -15,6 +15,7 @@ use super::agent_edits as agent;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
+use super::layer_strip_operands as strip;
 use super::part_operands as part;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
@@ -82,6 +83,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    ("show_layer_set", strip::show_layer_set),
+    ("save_layer_set", strip::save_layer_set),
+    ("delete_layer_set", strip::delete_layer_set),
+    ("hide_layer", strip::hide_layer),
+    ("highlight_layer", strip::highlight_layer),
+    ("hide_layer_group", strip::hide_layer_group),
+    ("show_layer_group", strip::show_layer_group),
+    ("set_layer_tab_names", strip::set_layer_tab_names),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -132,6 +141,27 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        // #2394: a person picks these on the layer strip under the board.
+        "show_layer_set" | "save_layer_set" => Some(
+            "this command needs the operands `name` and `document` — \
+             use the layer set button under the board",
+        ),
+        "delete_layer_set" => Some(
+            "`delete_layer_set` needs the operand `name` — \
+             use Manage sets on the layer set button under the board",
+        ),
+        "hide_layer" | "highlight_layer" => Some(
+            "this command needs the operands `layer` and `document` — \
+             right-click a layer tab under the board",
+        ),
+        "hide_layer_group" | "show_layer_group" => Some(
+            "this command needs the operands `group` and `document` — \
+             right-click a layer tab under the board",
+        ),
+        "set_layer_tab_names" => Some(
+            "`set_layer_tab_names` needs the operand `style` — \
+             right-click a layer tab under the board",
         ),
         _ => None,
     }

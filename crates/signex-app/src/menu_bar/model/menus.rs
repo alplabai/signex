@@ -198,11 +198,15 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_single_layer_mode", "")),
         cmd_item_gated(ctx, cmd("toggle_layer_visibility", "")),
         cmd_item_gated(ctx, cmd("show_all_layers", "")),
+        // The layer tabs' numbers (#2394).
+        cmd_item_gated(ctx, cmd("toggle_layer_numbers", "")),
         // The board view's turn on screen (#2316); greyed without a PCB.
         cmd_item_gated(ctx, cmd("view_rotate", "")),
         cmd_item_gated(ctx, cmd("view_rotate_ccw", "")),
         cmd_item_gated(ctx, cmd("view_rotate_180", "")),
         cmd_item_gated(ctx, cmd("view_rotate_reset", "")),
+        // The board seen from below (#2394); greyed without a PCB.
+        cmd_item_gated(ctx, cmd("flip_board_view", "")),
         // The board in 3D, or flat again (#2390); greyed without a PCB.
         cmd_item_gated(ctx, cmd("view_board_3d", "")),
         SEP,

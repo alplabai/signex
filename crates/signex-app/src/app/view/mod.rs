@@ -661,6 +661,7 @@ impl Signex {
                         board,
                         view: &view,
                         window: undocked.map(|_| window_id),
+                        prefs: &self.ui_state.layer_strip,
                     },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,
