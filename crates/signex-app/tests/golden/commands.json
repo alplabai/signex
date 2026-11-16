@@ -1021,12 +1021,12 @@
   },
   {
     "id": "select_expand_connection",
-    "group": "General",
+    "group": "Schematic",
     "category": "select"
   },
   {
     "id": "select_node_or_connection_item",
-    "group": "General",
+    "group": "Schematic",
     "category": "select"
   },
   {

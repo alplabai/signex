@@ -178,6 +178,156 @@ pub(crate) mod flows {
         );
     }
 
+    fn run_command(app: &mut Signex, id: &str) {
+        let _ = app.update(Message::Menu(signex_app::menu_bar::MenuMessage::Command(
+            signex_app::keymap::AppCommandId::new(id).expect("a catalog id"),
+        )));
+    }
+
+    fn cursor_at(app: &mut Signex, x: f32, y: f32) {
+        let _ = app.update(Message::CanvasEvent(
+            signex_app::canvas::CanvasEvent::CursorAt {
+                x,
+                y,
+                zoom_pct: 100.0,
+            },
+        ));
+    }
+
+    /// #1668: `select_expand_connection` is Select > Connection under the
+    /// Classic profile's name: the selected wire grows to its net.
+    #[test]
+    fn select_expand_connection_expands_the_selected_wire_to_its_net() {
+        let tmp = TempDir::new().unwrap();
+        let (mut app, _a, _b) = open_project(tmp.path());
+        let wire = SelectedItem::new(Uuid::from_u128(11), SelectedKind::Wire);
+        app.interaction_state.active_canvas_mut().selected = vec![wire];
+
+        run_command(&mut app, "select_expand_connection");
+
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![wire, item(LABEL_A)]
+        );
+    }
+
+    const FRAMED_WIRE: u128 = 21;
+    const NOTE_AT_40: u128 = 23;
+    const NODE_MISS: &str = "Select node / connection item: no wire, bus, junction or label";
+
+    /// One sheet: a wire from (0, 0) to (20, 0) inside a rectangle drawing,
+    /// joined at (20, 0) by a second wire of the same net down to (20, 10),
+    /// and a text note at (40, 40).
+    fn open_framed_wire() -> Signex {
+        use signex_types::schematic::{SchDrawing, TextNote};
+        let mut sheet = SchematicSheet {
+            uuid: Uuid::now_v7(),
+            version: 1,
+            generator: "signex-test".into(),
+            generator_version: "0.9".into(),
+            paper_size: "A4".into(),
+            ..Default::default()
+        };
+        sheet.wires.push(Wire {
+            uuid: Uuid::from_u128(FRAMED_WIRE),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(20.0, 0.0),
+            ..Default::default()
+        });
+        // Same net, so expanding the connection would select it too.
+        sheet.wires.push(Wire {
+            uuid: Uuid::from_u128(24),
+            start: Point::new(20.0, 0.0),
+            end: Point::new(20.0, 10.0),
+            ..Default::default()
+        });
+        sheet.drawings.push(SchDrawing::Rect {
+            uuid: Uuid::from_u128(22),
+            start: Point::new(-5.0, -5.0),
+            end: Point::new(25.0, 5.0),
+            width: 0.25,
+            fill: Default::default(),
+            stroke_color: None,
+            locked: false,
+        });
+        sheet.text_notes.push(TextNote {
+            uuid: Uuid::from_u128(NOTE_AT_40),
+            text: "NOTE".into(),
+            position: Point::new(40.0, 40.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: HAlign::default(),
+            justify_v: VAlign::default(),
+            locked: false,
+        });
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.main_window_id = Some(iced::window::Id::unique());
+        let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+            path: PathBuf::from("framed.snxsch"),
+            title: "framed".into(),
+            result: Ok(Box::new(sheet)),
+            disk: None,
+        }));
+        app
+    }
+
+    fn said(fragment: &str) -> usize {
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .filter(|entry| entry.message.contains(fragment))
+            .count()
+    }
+
+    fn select_node_at(app: &mut Signex, x: f32, y: f32) -> Vec<SelectedItem> {
+        cursor_at(app, x, y);
+        run_command(app, "select_node_or_connection_item");
+        app.interaction_state.active_canvas().selected.clone()
+    }
+
+    /// #1668: `select_node_or_connection_item` selects the wire under the
+    /// cursor alone, even inside a drawing that is hit first.
+    #[test]
+    fn select_node_or_connection_item_selects_the_wire_inside_a_drawing() {
+        let mut app = open_framed_wire();
+
+        assert_eq!(
+            select_node_at(&mut app, 10.0, 0.0),
+            vec![SelectedItem::new(
+                Uuid::from_u128(FRAMED_WIRE),
+                SelectedKind::Wire
+            )]
+        );
+    }
+
+    /// #1668: over a non-connection item, or over nothing, the command
+    /// selects nothing new and says so in Messages.
+    #[test]
+    fn select_node_or_connection_item_over_no_connection_item_says_so() {
+        let _ = signex_app::diagnostics::init_logging();
+        let mut app = open_framed_wire();
+        let note = SelectedItem::new(Uuid::from_u128(NOTE_AT_40), SelectedKind::TextNote);
+        let _ = app.update(Message::CanvasEvent(
+            signex_app::canvas::CanvasEvent::Clicked {
+                world_x: 40.5,
+                world_y: 40.0,
+            },
+        ));
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![note],
+            "precondition: the text note is under (40.5, 40)"
+        );
+        let kept = SelectedItem::new(Uuid::from_u128(99), SelectedKind::Symbol);
+        app.interaction_state.active_canvas_mut().selected = vec![kept];
+
+        for (x, y, what) in [(40.5, 40.0, "a text note"), (80.0, 80.0, "nothing")] {
+            let before = said(NODE_MISS);
+            assert_eq!(select_node_at(&mut app, x, y), vec![kept], "over {what}");
+            assert!(said(NODE_MISS) > before, "over {what}: Messages says why");
+        }
+    }
+
     #[test]
     fn go_to_net_partner_jumps_to_the_other_sheet() {
         let tmp = TempDir::new().unwrap();
