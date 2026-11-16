@@ -373,6 +373,40 @@ fn a_fill_is_clipped_to_the_board_outline() {
     assert_eq!(twice_area(&pieces(&b)), FULL);
 }
 
+/// #2216: a through cutout of the board sketch is left out of the fill; a
+/// cutout that does not go through the board is not.
+#[test]
+fn a_fill_leaves_out_the_boards_through_cutouts() {
+    use signex_types::pcb_sketch::{BoardSketch, PcbCutout};
+
+    let mut b = board(Vec::new());
+    b.outline = vec![
+        Point::new(-5.0, -5.0),
+        Point::new(5.0, -5.0),
+        Point::new(5.0, 5.0),
+        Point::new(-5.0, 5.0),
+    ];
+    let opening = PcbCutout {
+        uuid: Uuid::from_u128(50),
+        boundary: vec![
+            Point::new(-1.0, -1.0),
+            Point::new(1.0, -1.0),
+            Point::new(1.0, 1.0),
+            Point::new(-1.0, 1.0),
+        ],
+        edge_radius: 0.0,
+        through: true,
+    };
+    b.sketch = Some(BoardSketch {
+        cutouts: vec![opening],
+        ..Default::default()
+    });
+    let (ten, two) = (10 * MM as i128, 2 * MM as i128);
+    assert_eq!(twice_area(&pieces(&b)), 2 * (ten * ten - two * two));
+    b.sketch.as_mut().expect("sketch").cutouts[0].through = false;
+    assert_eq!(twice_area(&pieces(&b)), 2 * ten * ten);
+}
+
 /// #2216: an island smaller than the pour's minimum area is dropped and
 /// counted; a bigger one stays.
 #[test]
