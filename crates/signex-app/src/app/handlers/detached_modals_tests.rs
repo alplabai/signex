@@ -27,7 +27,7 @@ fn open(app: &mut Signex, modal: ModalId) {
     let ui = &mut app.ui_state;
     match modal {
         ModalId::NewProject => {
-            ui.new_project = Some(crate::app::NewProjectState::new(String::new()))
+            ui.new_project = Some(Box::new(crate::app::NewProjectState::new(String::new())))
         }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {
@@ -109,14 +109,15 @@ fn open(app: &mut Signex, modal: ModalId) {
         }
         ModalId::ProjectCloseConfirm => {
             let project_id = app.document_state.mint_project_id();
-            app.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
-                project_id,
-                project_name: "p".into(),
-                dirty_paths: vec!["/p/a.snxsch".into()],
-                dirty_rows: Vec::new(),
-                kept_paths: Vec::new(),
-                sheet_refs: Default::default(),
-            })
+            app.ui_state.project_close_confirm =
+                Some(Box::new(crate::app::ProjectCloseConfirmState {
+                    project_id,
+                    project_name: "p".into(),
+                    dirty_paths: vec!["/p/a.snxsch".into()],
+                    dirty_rows: Vec::new(),
+                    kept_paths: Vec::new(),
+                    sheet_refs: Default::default(),
+                }))
         }
         ModalId::AppQuitConfirm => {
             app.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState {
