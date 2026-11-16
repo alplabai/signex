@@ -50,8 +50,7 @@ pub fn view<'a>(
     let field = |label: Localized, value: &'a str, on_input: fn(String) -> PasteArrayMsg| {
         row![
             text(label).size(TS.body).color(text_primary).width(LABEL_W),
-            // raw: no placeholder text.
-            text_input(raw(""), value)
+            text_input(signex_i18n::UserText::new(String::new()), value)
                 .on_input(on_input)
                 .on_submit_maybe(verdict.is_ok().then_some(PasteArrayMsg::ApplyPressed))
                 .size(TS.body)

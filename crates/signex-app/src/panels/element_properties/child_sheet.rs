@@ -241,7 +241,8 @@ fn child_sheet_stroke_width_row<'a>(
             .trim_end_matches('.')
             .to_string(),
     };
-    let input = signex_widgets::text_input(signex_widgets::raw("0.1524"), display)
+    let placeholder = signex_i18n::t!(i18n, signex_i18n::ids::PLACEHOLDER_CHILD_SHEET_LINE_WIDTH);
+    let input = signex_widgets::text_input(placeholder, display)
         .size(TS.body)
         .padding(SP.s)
         .width(120)
@@ -286,13 +287,14 @@ fn child_sheet_text_row<'a>(
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let input = signex_widgets::text_input(signex_widgets::raw(""), value.to_string())
-        .size(TS.body)
-        .padding(SP.s)
-        .width(Length::Fill)
-        .on_input(on_input)
-        .on_submit(on_submit)
-        .style(crate::panels::form_look::text_input_style);
+    let input =
+        signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_string())
+            .size(TS.body)
+            .padding(SP.s)
+            .width(Length::Fill)
+            .on_input(on_input)
+            .on_submit(on_submit)
+            .style(crate::panels::form_look::text_input_style);
     container(
         row![text(label).size(TS.body).color(muted).width(84), input]
             .spacing(SP.s)

@@ -18,6 +18,7 @@ mod pcb_board;
 mod pcb_component;
 mod pcb_primitive;
 mod pdf_preview;
+mod placeholder;
 mod preferences;
 mod update_pcb;
 
@@ -37,6 +38,7 @@ pub use pcb_board::*;
 pub use pcb_component::*;
 pub use pcb_primitive::*;
 pub use pdf_preview::*;
+pub use placeholder::*;
 pub use preferences::*;
 pub use update_pcb::*;
 
@@ -60,6 +62,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pcb_component::PCB_COMPONENT,
         pcb_primitive::PCB_PRIMITIVE,
         pdf_preview::PDF_PREVIEW,
+        placeholder::PLACEHOLDER,
         preferences::PREFERENCES,
         update_pcb::UPDATE_PCB,
     ]

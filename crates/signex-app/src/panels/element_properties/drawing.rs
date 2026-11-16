@@ -412,7 +412,7 @@ fn drawing_num_row<'a>(
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
-    use signex_widgets::{raw, text, text_input};
+    use signex_widgets::{text, text_input};
     let display = buf
         .get(&field)
         .cloned()
@@ -422,7 +422,7 @@ fn drawing_num_row<'a>(
             .size(TS.body)
             .color(muted)
             .width(PROPERTY_LABEL_COLUMN),
-        text_input(raw(""), display)
+        text_input(signex_i18n::UserText::new(String::new()), display)
             .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::Fill),

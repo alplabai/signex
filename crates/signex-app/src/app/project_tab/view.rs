@@ -85,7 +85,9 @@ impl Signex {
         let new_parameter_name = tab.map_or("", |tab| tab.new_parameter_name.as_str());
         let content = match selected {
             ProjectSection::General => general::view(&self.ui_state.i18n, project, tokens),
-            ProjectSection::Parameters => parameters::view(project, new_parameter_name, tokens),
+            ProjectSection::Parameters => {
+                parameters::view(&self.ui_state.i18n, project, new_parameter_name, tokens)
+            }
             ProjectSection::SchematicDefaults => {
                 schematic_defaults::view(project, tab.map(|tab| &tab.default_drafts), tokens)
             }

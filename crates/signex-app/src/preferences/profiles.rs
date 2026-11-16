@@ -368,8 +368,7 @@ fn actions_row<'a>(manager: &'a ProfileManager, i18n: &I18n) -> Element<'a, Pref
                 text(t!(i18n, ids::PREFERENCES_PROFILES_NAME))
                     .size(TS.body)
                     .style(text_muted),
-                // raw: placeholders move with #2059.
-                text_input(raw("Profile name"), &manager.name_input)
+                text_input(t!(i18n, ids::PLACEHOLDER_PROFILE_NAME), &manager.name_input)
                     .size(TS.label)
                     .on_input(|v| pane(ProfilesMsg::NameInputChanged(v))),
             ]
