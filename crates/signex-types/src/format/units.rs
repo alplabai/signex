@@ -14,7 +14,6 @@
 //! only place nanometres are used; `crate::coord` no longer defines a
 //! competing integer-nm coordinate type (#394).
 
-const MM_PER_NM: f64 = 1.0e-6;
 const NM_PER_MM: f64 = 1.0e6;
 
 /// A document value that cannot be written to the wire format: NaN,
@@ -55,5 +54,7 @@ pub(in crate::format) fn nm_survives_round_trip(nm: i64) -> bool {
 }
 
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
-    (nm as f64) * MM_PER_NM
+    // Divided, not multiplied by 1e-6: the quotient is the double nearest
+    // the decimal mm, so 100000 nm reads back as 0.1, not 0.09999999999999999.
+    (nm as f64) / NM_PER_MM
 }

@@ -416,6 +416,14 @@ y = 43.5
 x = 0.5
 y = 43.5
 
+[board_options]
+polygon_naming = "net_layer_pour"
+designator_display = "physical"
+
+[board_options.origin]
+x = 0
+y = 80000000
+
 [extras.footprints.5ca1ab1e-0003-4000-8000-000000000002]
 footprint_id = "TQFP-32"
 locked = false

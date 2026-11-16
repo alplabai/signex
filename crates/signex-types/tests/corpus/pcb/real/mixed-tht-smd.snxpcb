@@ -473,6 +473,14 @@ uuid                                  pos_x     pos_y     drill    plated  net
 5ca1ab1e-0005-4000-8000-000000000040  46000000  36000000  3200000  true    2
 """
 
+[board_options]
+polygon_naming = "net_layer_pour"
+designator_display = "physical"
+
+[board_options.origin]
+x = 0
+y = 80000000
+
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000002]
 footprint_id = "DC_Jack_5.5x2.1mm"
 locked = true

@@ -369,6 +369,14 @@ y = 17.4
 x = 0.6
 y = 17.4
 
+[board_options]
+polygon_naming = "net_layer_pour"
+designator_display = "physical"
+
+[board_options.origin]
+x = 0
+y = 80000000
+
 [extras.footprints.5ca1ab1e-0004-4000-8000-000000000002]
 footprint_id = "PinHeader_1x04_P2.54mm"
 locked = true
