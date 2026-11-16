@@ -268,3 +268,15 @@ preferences-profiles-none-selected = No profile is selected.
 preferences-profiles-reset-confirm = Put every rule of "{ $name }" back to the { -brand-name } Default values?
 preferences-profiles-reset = Reset
 preferences-profiles-reset-to-default = Reset to { -brand-name } Default
+
+## Designators on paste: the choices (also in Paste Array)
+# The pasted part keeps its designator unless the project already uses it.
+preferences-paste-designators-keep-if-free = Keep unless taken
+preferences-paste-designators-keep = Keep
+# Keep "R?, U?" as written: designators not numbered yet.
+preferences-paste-designators-reset = Reset (R?, U?, ...)
+preferences-paste-designators-next-free = Next free number
+
+## Annotate undo: the choices
+preferences-annotate-undo-project = One step for the whole project
+preferences-annotate-undo-per-sheet = Per sheet

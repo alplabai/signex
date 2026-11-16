@@ -6,7 +6,7 @@ use super::*;
 use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Element, Length};
 use signex_i18n::{I18n, ids, t};
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{button, text, text_input};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -46,21 +46,25 @@ pub(super) fn content_component_classes<'a>(
 
     let mut rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(classes.len());
     for (idx, entry) in classes.iter().enumerate() {
-        // raw: placeholders move with #2059.
-        let key_input = text_input(raw("class_key"), entry.key.as_str())
-            .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
-            .padding(5)
-            .size(TS.label)
-            .width(Length::FillPortion(2));
-        // raw: placeholders move with #2059.
-        let label_input = text_input(raw("Label"), entry.label.as_str())
-            .on_input(move |s| PrefMsg::ComponentClassEditLabel {
-                index: idx,
-                label: s,
-            })
-            .padding(5)
-            .size(TS.label)
-            .width(Length::FillPortion(3));
+        let key_input = text_input(
+            t!(i18n, ids::PLACEHOLDER_COMPONENT_CLASS_KEY),
+            entry.key.as_str(),
+        )
+        .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
+        .padding(5)
+        .size(TS.label)
+        .width(Length::FillPortion(2));
+        let label_input = text_input(
+            t!(i18n, ids::PLACEHOLDER_COMPONENT_CLASS_LABEL),
+            entry.label.as_str(),
+        )
+        .on_input(move |s| PrefMsg::ComponentClassEditLabel {
+            index: idx,
+            label: s,
+        })
+        .padding(5)
+        .size(TS.label)
+        .width(Length::FillPortion(3));
         let remove_btn = button(
             container(text(t!(i18n, ids::PREFERENCES_CLASSES_REMOVE)).size(TS.body))
                 .padding([SP.s, 10.0])

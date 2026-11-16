@@ -278,6 +278,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             bar_has_selection,
             bar_has_net_colors,
+            &ui.i18n,
         )
         .map(Message::ActiveBar)
         .boxed();
@@ -542,7 +543,11 @@ impl Signex {
         document.engine_for_window(window_id, &self.ui_state)?;
         let edit_state = interaction.editing_text.as_ref()?;
         let text = edit_state.text.clone();
-        let placeholder = crate::app::handlers::canvas::editor_placeholder(edit_state.kind);
+        let placeholder: signex_widgets::Label<'static> =
+            match crate::app::handlers::canvas::editor_placeholder(edit_state.kind) {
+                Some(id) => self.ui_state.i18n.message(id, &[]).into(),
+                None => signex_i18n::UserText::new(String::new()).into(),
+            };
         // Object world position -> window position through the live camera
         // and the canvas rectangle, so the editor opens on the label.
         let camera = interaction.canvas_for_window(window_id).live_camera();
@@ -573,7 +578,7 @@ impl Signex {
                 row![
                     iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
                     container(
-                        signex_widgets::text_input(signex_widgets::raw(placeholder), text)
+                        signex_widgets::text_input(placeholder, text)
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))

@@ -33,7 +33,7 @@ impl Signex {
             let value = value.to_owned();
             column![
                 text(raw(label)).size(TS.caption).color(text_muted),
-                text_input(raw("0.00"), value)
+                text_input(t!(self.ui_state.i18n, ids::PLACEHOLDER_MOVE_OFFSET), value)
                     .style(crate::panels::form_look::text_input_style)
                     .on_input(msg)
                     .padding([SP.s, SP.m])
@@ -439,12 +439,15 @@ impl Signex {
                         .size(TS.body)
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
-                    text_input(raw("0"), v255.to_string())
-                        .style(crate::panels::form_look::text_input_style)
-                        .size(TS.body)
-                        .padding([3.0, SP.m])
-                        .width(iced::Length::Fixed(70.0))
-                        .on_input(move |s| Message::NetColor(NetColorMsg::CustomChannel(chan, s))),
+                    text_input(
+                        t!(self.ui_state.i18n, ids::PLACEHOLDER_COLOR_CHANNEL),
+                        v255.to_string()
+                    )
+                    .style(crate::panels::form_look::text_input_style)
+                    .size(TS.body)
+                    .padding([3.0, SP.m])
+                    .width(iced::Length::Fixed(70.0))
+                    .on_input(move |s| Message::NetColor(NetColorMsg::CustomChannel(chan, s))),
                 ]
                 .align_y(iced::Alignment::Center)
                 .spacing(6)

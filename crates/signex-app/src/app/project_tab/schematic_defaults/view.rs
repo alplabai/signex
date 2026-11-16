@@ -45,7 +45,9 @@ pub(in crate::app::project_tab) fn view<'a>(
     for field in SchematicDefaultField::ALL {
         let draft = drafts.and_then(|drafts| drafts.get(&field));
         let shown = super::shown_text(draft, overrides.get(field));
-        let input = text_input(raw(format!("{}", field.resolved(&resolved))), shown)
+        // The placeholder is the built-in value, a number Signex formats.
+        let builtin = signex_i18n::UserText::new(field.resolved(&resolved).to_string());
+        let input = text_input(builtin, shown)
             .on_input(move |text| {
                 tab_message(ProjectTabMsg::SchematicDefaultEdited {
                     project_id,
@@ -66,8 +68,9 @@ pub(in crate::app::project_tab) fn view<'a>(
             );
         }
     }
+    // The placeholder is the font in effect, a font name.
     let font = text_input(
-        raw(overrides.font_family()),
+        signex_i18n::UserText::new(overrides.font_family()),
         overrides.font_family.as_deref().unwrap_or_default(),
     )
     .on_input(move |text| {

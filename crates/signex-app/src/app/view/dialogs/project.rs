@@ -80,12 +80,14 @@ impl Signex {
                 .unwrap_or("")
                 .to_string()
         };
-        // Placeholders move with #2059; these are example names anyway.
-        let placeholder = if st.is_project_rename {
-            "new-project-name"
-        } else {
-            "new-name.snxsch"
-        };
+        let placeholder = t!(
+            i18n,
+            if st.is_project_rename {
+                ids::PLACEHOLDER_RENAME_PROJECT
+            } else {
+                ids::PLACEHOLDER_RENAME_FILE
+            }
+        );
         let prompt = t!(
             i18n,
             if st.is_project_rename {
@@ -98,8 +100,7 @@ impl Signex {
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
             dialog_intro(DialogIcon::File, prompt.into_string(), None, tokens),
-            // raw: an example name as placeholder (#2059).
-            text_input(raw(placeholder), &st.buffer)
+            text_input(placeholder, &st.buffer)
                 .style(crate::panels::form_look::text_input_style)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
                 .on_submit(Message::Rename(RenameMsg::Submit))
@@ -345,13 +346,12 @@ impl Signex {
         );
 
         fn mk_input<'a>(
-            placeholder: &'static str,
+            placeholder: signex_i18n::Localized,
             value: &'a str,
             on_input: fn(String) -> Message,
         ) -> Element<'a, Message> {
-            use signex_widgets::{raw, text_input};
-            // raw: an example number as placeholder (#2059).
-            text_input(raw(placeholder), value)
+            use signex_widgets::text_input;
+            text_input(placeholder, value)
                 .style(crate::panels::form_look::text_input_style)
                 .size(TS.label)
                 .padding(6)
@@ -422,9 +422,9 @@ impl Signex {
                         .color(text_muted)
                 )
                 .width(Length::Fixed(80.0)),
-                mk_input("0.127", &st.step_mm, |v| Message::GridProperties(
-                    GridPropertiesMsg::SetStep(v)
-                )),
+                mk_input(t!(i18n, ids::PLACEHOLDER_GRID_STEP), &st.step_mm, |v| {
+                    Message::GridProperties(GridPropertiesMsg::SetStep(v))
+                }),
                 text(t!(i18n, ids::DIALOG_GRID_STEP_UNIT))
                     .size(TS.caption)
                     .color(text_muted),

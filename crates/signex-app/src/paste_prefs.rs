@@ -52,15 +52,15 @@ impl PasteDesignators {
             .find(|mode| token.eq_ignore_ascii_case(mode.token()))
             .unwrap_or_default()
     }
-}
 
-impl std::fmt::Display for PasteDesignators {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// The name a pick list shows, rendered at view time.
+    pub fn label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            PasteDesignators::KeepIfFree => write!(f, "Keep unless taken"),
-            PasteDesignators::Keep => write!(f, "Keep"),
-            PasteDesignators::Reset => write!(f, "Reset (R?, U?, ...)"),
-            PasteDesignators::NextFree => write!(f, "Next free number"),
+            PasteDesignators::KeepIfFree => ids::PREFERENCES_PASTE_DESIGNATORS_KEEP_IF_FREE,
+            PasteDesignators::Keep => ids::PREFERENCES_PASTE_DESIGNATORS_KEEP,
+            PasteDesignators::Reset => ids::PREFERENCES_PASTE_DESIGNATORS_RESET,
+            PasteDesignators::NextFree => ids::PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE,
         }
     }
 }
