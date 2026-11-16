@@ -63,6 +63,8 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 unlockable: false,
                 read_only: false,
                 footprints: 1,
+                pad_pair: false,
+                one_footprint: true,
             },
             ..base
         }),
