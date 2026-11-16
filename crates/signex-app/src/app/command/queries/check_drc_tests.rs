@@ -175,7 +175,11 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
                     pcb_geom::ItemRef::Track(id)
                     | pcb_geom::ItemRef::Via(id)
                     | pcb_geom::ItemRef::Footprint(id)
-                    | pcb_geom::ItemRef::Zone { zone: id, .. } => id.to_string(),
+                    | pcb_geom::ItemRef::Zone { zone: id, .. }
+                    | pcb_geom::ItemRef::Text(id)
+                    | pcb_geom::ItemRef::Arc(id)
+                    | pcb_geom::ItemRef::FreePad(id)
+                    | pcb_geom::ItemRef::Dimension(id) => id.to_string(),
                 })
                 .collect();
             (rule, items)

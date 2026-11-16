@@ -161,9 +161,9 @@ fn assert_one_step(f: &mut Fixture, run: impl FnOnce(&mut Fixture)) -> PcbBoard 
 #[test]
 fn the_free_section_loads_with_the_board() {
     let f = open_board();
-    let board = live(&f.app);
-    assert_eq!(board.free, board().free, "loaded as saved");
-    assert_eq!(board.texts.len(), 1);
+    let loaded = live(&f.app);
+    assert_eq!(loaded.free, board().free, "loaded as saved");
+    assert_eq!(loaded.texts.len(), 1);
 }
 
 #[test]
