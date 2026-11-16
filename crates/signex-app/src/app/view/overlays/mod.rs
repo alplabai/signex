@@ -22,6 +22,8 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 
 mod bars;
+#[cfg(test)]
+mod dismiss_tests;
 mod modals;
 mod net_hover;
 mod palette;

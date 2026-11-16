@@ -14,6 +14,9 @@ use signex_i18n::{ids, t};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Width of the custom net-colour picker card in the main window, in px.
+const NET_COLOR_CUSTOM_W: f32 = 430.0;
+
 impl Signex {
     /// Altium-style Move Selection dialog. Two numeric inputs plus
     /// OK / Cancel. No header on the body: the dialog opens in its own
@@ -304,11 +307,10 @@ impl Signex {
         .boxed()
     }
 
-    /// Custom net-colour picker modal. Grid of quick-pick swatches on
+    /// Custom net-colour picker card. Grid of quick-pick swatches on
     /// the left, precise R / G / B / hex on the right, live preview
-    /// and OK / Cancel at the bottom. Ships with a 24-color palette
-    /// matching the common Altium net-colour presets plus a handful of
-    /// EDA-specific diagnostic colours.
+    /// and OK / Cancel at the bottom. Unpositioned: the in-window overlay
+    /// places it at [`Self::net_color_custom_anchor`].
     pub(super) fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
         use super::contracts::Channel;
         use iced::widget::{Space, Widget, column, container, row};
@@ -512,35 +514,26 @@ impl Signex {
         ]);
 
         let windowed = self.modal_detached(crate::app::state::ModalId::NetColorCustom);
+        let tokens = &self.document_state.panel_ctx.tokens;
         let card = container(
             column![self.net_color_custom_header(), dialog_body(body), footer,]
-                .width(crate::library::card_len(windowed, 430.0)),
-        )
-        .style(crate::styles::context_menu(
-            &self.document_state.panel_ctx.tokens,
-        ));
-
+                .width(crate::library::card_len(windowed, NET_COLOR_CUSTOM_W)),
+        );
         // In its own window the card is the dialog: flat surface, no anchor.
         if windowed {
-            return card
-                .style(crate::styles::modal_card(
-                    &self.document_state.panel_ctx.tokens,
-                ))
-                .boxed();
+            card.style(crate::styles::modal_card(tokens)).boxed()
+        } else {
+            card.style(crate::styles::context_menu(tokens)).boxed()
         }
+    }
 
-        // Anchor below the Active Bar Net Color button (rightmost icon).
+    /// Where the in-window net-colour picker card sits: centred under the
+    /// Active Bar. The overlay places the unpositioned card here through the
+    /// dismiss helper, so only a press outside the card closes it (#2377).
+    pub(super) fn net_color_custom_anchor(&self) -> (f32, f32) {
         let (ww, _wh) = self.ui_state.window_size;
-        let card_w = 430.0;
-        let x = ((ww - card_w) * 0.5).max(0.0);
+        let x = ((ww - NET_COLOR_CUSTOM_W) * 0.5).max(0.0);
         let y = super::canvas_region::chrome_top(&self.document_state.panel_ctx.tokens) + 80.0;
-        // Wrap in a mouse_area with on_press(Noop) so clicks inside the
-        // card are captured and DON'T fall through to the dismiss
-        // layer sitting beneath. Without this, clicking on the card's
-        // background / between swatches closes the picker.
-        let card_capturing = iced::widget::mouse_area(card)
-            .on_press(Message::noop())
-            .boxed();
-        signex_widgets::Translate::new(card_capturing, (x, y)).into()
+        (x, y)
     }
 }

@@ -70,35 +70,32 @@ impl Signex {
     /// Export-error modal — appears when PDF / netlist / BOM export
     /// hits a user-actionable failure (write permission, invalid path,
     /// empty schematic). Dismiss via OK button or clicking outside.
-    /// Pushes the dismiss backdrop then the error card.
+    /// The card goes to the dismiss helper unpositioned, so a press on its
+    /// padding keeps it open (#2377).
     pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.error_notice.is_none()
-            || self.modal_detached(crate::app::state::ModalId::ErrorNotice)
-        {
+        if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
             return Vec::new();
         }
-        Self::dismiss_over(
-            Message::Overlay(OverlayMsg::DismissErrorNotice),
-            self.view_error_notice(),
-        )
+        let Some(card) = self.error_notice_card() else {
+            return Vec::new();
+        };
+        Self::dismiss_and_centre(Message::Overlay(OverlayMsg::DismissErrorNotice), card)
     }
 
     /// #431 — netlist-incomplete "Export anyway?" prompt. Same modal idiom as
     /// [`Self::error_notice_overlay`], but the card offers TWO actions —
     /// "Export anyway (incomplete)" and "Cancel". Clicking outside cancels
-    /// (writes nothing). Pushes the dismiss backdrop then the prompt card.
+    /// (writes nothing); a press on the card or its padding does not (#2377).
     pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
         &self,
     ) -> Vec<Element<'_, Message>> {
-        if self.document_state.netlist_incomplete_prompt.is_none()
-            || self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt)
-        {
+        if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
             return Vec::new();
         }
-        Self::dismiss_over(
-            Message::Export(ExportMsg::NetlistCancelIncomplete),
-            self.view_netlist_incomplete_prompt(),
-        )
+        let Some(card) = self.netlist_incomplete_prompt_card() else {
+            return Vec::new();
+        };
+        Self::dismiss_and_centre(Message::Export(ExportMsg::NetlistCancelIncomplete), card)
     }
 
     /// Print preview overlay — Altium parity: opens as a separate OS
@@ -126,17 +123,18 @@ impl Signex {
 
     /// Custom net-colour picker. Bespoke modal (not the iced_aw
     /// ColorPicker) because the user needs a quick-pick palette +
-    /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
-    /// then the picker card.
+    /// precise RGB inputs side-by-side. The card is placed by the dismiss
+    /// helper, so a press on its padding keeps it open (#2377).
     pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
         if !self.ui_state.net_color_custom.show
             || self.modal_detached(crate::app::state::ModalId::NetColorCustom)
         {
             return Vec::new();
         }
-        Self::dismiss_over(
+        Self::dismiss_and_place(
             Message::NetColor(NetColorMsg::CustomShow(false)),
             self.view_net_color_custom_picker(),
+            self.net_color_custom_anchor(),
         )
     }
 
