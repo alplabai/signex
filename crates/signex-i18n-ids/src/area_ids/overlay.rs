@@ -7,4 +7,7 @@ define_ids! {
     OVERLAY_SYMBOL_CARD_FOOTPRINT = "overlay-symbol-card-footprint";
     OVERLAY_SYMBOL_CARD_LIBRARY = "overlay-symbol-card-library";
     OVERLAY_PLACEMENT_PAUSED_RESUME = "overlay-placement-paused-resume";
+    OVERLAY_NET_CARD_CLASS = "overlay-net-card-class";
+    OVERLAY_NET_CARD_MORE = "overlay-net-card-more";
+    OVERLAY_READ_ONLY_BADGE = "overlay-read-only-badge";
 }

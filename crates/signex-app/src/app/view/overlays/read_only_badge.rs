@@ -4,22 +4,24 @@
 use iced::widget::container;
 use iced::{Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use crate::app::Message;
 use crate::styles;
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
 
-/// Text of the badge; the tab says the same word.
-const BADGE_TEXT: &str = "Read-only: written by a newer Signex";
-
 /// Top-right badge. A plain container with no `mouse_area`, so every pointer
-/// event falls through to the canvas below it.
-pub(in crate::app::view) fn read_only_badge<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+/// event falls through to the canvas below it. Its text is
+/// `overlay-read-only-badge`; the tab says the same word.
+pub(in crate::app::view) fn read_only_badge<'a>(
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, Message> {
     let panel_bg = styles::ti(tokens.panel_bg);
     let border = styles::ti(tokens.border);
     let muted = styles::ti(tokens.text_secondary);
-    let chip = container(text(raw(BADGE_TEXT)).size(TS.body).color(muted))
+    let badge = signex_i18n::t!(i18n, signex_i18n::ids::OVERLAY_READ_ONLY_BADGE);
+    let chip = container(text(badge).size(TS.body).color(muted))
         .padding([3, 8])
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(panel_bg)),

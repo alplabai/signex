@@ -106,7 +106,7 @@ pub fn view<'a>(
                 .size(ts.body)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
-            // raw: placeholders move with #2059.
+            // raw: placeholders move with #2060.
             text_input(raw("Paste API key…"), &settings.mouser_api_key_buf)
                 .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))

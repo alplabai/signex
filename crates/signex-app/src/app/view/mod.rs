@@ -130,7 +130,7 @@ impl Signex {
     fn view_tab_drag_ghost(&self, title: &str) -> Element<'_, Message> {
         use iced::widget::{container, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let active_bg = crate::styles::ti(tokens.hover);
@@ -152,7 +152,10 @@ impl Signex {
             accent_position: AccentPosition::Bottom,
         };
         let inner = container(row![
-            text(raw(title.to_string())).size(TS.body).color(text_c)
+            // The tab's title, as the tab strip shows it.
+            text(signex_i18n::UserText::new(title))
+                .size(TS.body)
+                .color(text_c)
         ])
         .padding([SP.s, 10.0])
         .boxed();
@@ -624,7 +627,10 @@ impl Signex {
             // Always a two-layer stack, so the widget tree keeps its shape
             // when a tab switch changes the read-only state.
             let badge: Element<'_, Message> = if read_only {
-                overlays::read_only_badge::read_only_badge(&self.document_state.panel_ctx.tokens)
+                overlays::read_only_badge::read_only_badge(
+                    &self.document_state.panel_ctx.tokens,
+                    &self.ui_state.i18n,
+                )
             } else {
                 iced::widget::Space::new().boxed()
             };
