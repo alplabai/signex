@@ -170,7 +170,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #1312: shows the selection's counterpart on the other side (sheet or
-    // board), opening it when needed. No default key in any preset.
+    // board), opening it when needed. Default keys since #2416.
     CommandMetadata {
         id: "cross_probe",
         category: "select",

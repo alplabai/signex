@@ -46,6 +46,11 @@ menu-edit-arrange = Arrange
 # Rows of the Place menu that are not commands.
 menu-place-text = Text
 menu-place-no-connect = No Connect
+# Submenu titles of the Place menu on a sheet (#2415), grouped like the
+# Active Bar: ports, sheet symbols and harnesses; directives; drawing tools.
+menu-place-ports = Ports & Connectors
+menu-place-directives = Directives
+menu-place-graphics = Graphics
 
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.

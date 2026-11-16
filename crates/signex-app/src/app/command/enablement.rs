@@ -144,7 +144,9 @@ pub(crate) fn remove_part_menu_enabled(ctx: &CommandContext) -> bool {
 /// menu greys them by [`is_enabled`], but a keystroke still reaches the
 /// handler so the explanation is not lost (Save As in a PCB tab, #671;
 /// Print with no schematic; Up Hierarchy on a top-level sheet, whose handler
-/// also assembles the sheets itself when the Navigator cache is cold).
+/// also assembles the sheets itself when the Navigator cache is cold). Find
+/// Similar with nothing selected still seeds from the object under the
+/// cursor, or says what to hover (#2416).
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -154,6 +156,7 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
             | "navigate_up_hierarchy"
             | "annotate_schematic_quietly"
             | "force_annotate_all_schematics"
+            | "find_similar_objects"
     ) || is_planned_command(command)
 }
 
@@ -717,10 +720,46 @@ mod tests {
             "place_junction",
             "place_port",
             "place_off_sheet_connector",
+            // #2415: the rest of the sheet's Place tools.
+            "place_bus_entry",
+            "place_sheet_symbol",
+            "place_no_connect",
+            "place_no_erc",
+            "place_text_string",
+            "place_text_frame",
+            "place_note",
+            "draw_line",
+            "draw_arc",
+            "draw_full_circle",
+            "draw_rectangle",
+            "draw_polygon",
+            // #2416: the sheet's selection filter and the Net Classes panel.
+            "open_selection_filter",
+            "open_net_classes",
         ] {
             assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
             assert!(is_enabled(&id(name), &on), "{name} with a schematic");
         }
+    }
+
+    /// #2416: Edit ▸ Find Similar Objects is live with a selection on a sheet;
+    /// without one the key still reaches the handler, which seeds from the
+    /// object under the cursor or says what to hover.
+    #[test]
+    fn find_similar_needs_a_selection_on_a_sheet_but_its_key_still_explains() {
+        let command = id("find_similar_objects");
+        let sheet = CommandContext {
+            has_schematic: true,
+            ..CommandContext::default()
+        };
+        let selected = CommandContext {
+            has_selection: true,
+            ..sheet
+        };
+        assert!(!is_enabled(&command, &CommandContext::default()));
+        assert!(!is_enabled(&command, &sheet));
+        assert!(is_enabled(&command, &selected));
+        assert!(explains_when_unavailable(&command));
     }
 
     #[test]

@@ -368,6 +368,25 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("force_annotate_all_schematics", "AnnotateForceAll"),
     ("open_preferences", "OpenPreferences"),
     ("show_current_command_hotkeys", "OpenKeyboardShortcuts"),
+    // #2415: the sheet's Place tools, fixture names only.
+    ("place_bus_entry", "PlaceBusEntry"),
+    ("place_text_frame", "PlaceTextFrame"),
+    ("place_note", "PlaceNote"),
+    ("place_port", "PlacePort"),
+    ("place_off_sheet_connector", "PlaceOffSheetConnector"),
+    ("place_sheet_symbol", "PlaceSheetSymbol"),
+    ("place_no_erc", "PlaceNoErc"),
+    ("draw_arc", "DrawArc"),
+    ("draw_full_circle", "DrawFullCircle"),
+    ("draw_line", "DrawLine"),
+    ("draw_rectangle", "DrawRectangle"),
+    ("draw_polygon", "DrawPolygon"),
+    // #2416: No Connect runs its command now, under the name it had.
+    ("place_no_connect", "PlaceNoConnect"),
+    // #2416: fixture names only.
+    ("find_similar_objects", "FindSimilarObjects"),
+    ("open_selection_filter", "OpenSelectionFilter"),
+    ("open_net_classes", "OpenNetClasses"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
@@ -563,7 +582,10 @@ fn model_shortcuts_follow_the_active_keymap() {
     // View ▸ Next Layer and Previous Layer add two more (#2223).
     // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
     // View ▸ Next Signal Layer and Single Layer Mode add two more (#2357).
-    assert_eq!(checked, 40, "the Altium profile labels 40 menu rows");
+    // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
+    // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
+    // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
+    assert_eq!(checked, 49, "the default profile labels 49 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

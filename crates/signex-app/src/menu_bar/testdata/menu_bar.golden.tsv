@@ -56,6 +56,7 @@ Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_a
 Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Mod+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
+Edit/Find Similar Objects...	item	Find Similar Objects...	-	-	FindSimilarObjects	01000000	cmd:find_similar_objects
 View	menu	View	-	-	-	-	-
 View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_at_cursor
 View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_out_at_cursor
@@ -89,6 +90,8 @@ View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
 View/Signex AI	item	Signex AI	-	-	OpenSignexAiPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
+View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
+View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-
@@ -98,6 +101,7 @@ Project/Close Project	item	Close Project	-	-	CloseProject	01001001	project
 Place	menu	Place	-	-	-	-	-
 Place/Wire	item	Wire	place_wire	W	PlaceWire	01-00000	cmd:place_wire
 Place/Bus	item	Bus	place_bus	B	PlaceBus	01-00000	cmd:place_bus
+Place/Bus Entry	item	Bus Entry	-	-	PlaceBusEntry	01-00000	cmd:place_bus_entry
 Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01-00000	cmd:place_net_label
 Place/---	separator	-	-	-	-	-	-
 Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01-00000	cmd:open_components_panel
@@ -105,14 +109,48 @@ Place/Power Port	item	Power Port	place_power_symbol	P	PlacePowerPort	01-00000	cm
 Place/Junction	item	Junction	place_junction	J	PlaceJunction	01-00000	cmd:place_junction
 Place/---	separator	-	-	-	-	-	-
 Place/Text	item	Text	-	-	PlaceText	01-00000	sch
-Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	sch
+Place/Text Frame	item	Text Frame	-	-	PlaceTextFrame	01-00000	cmd:place_text_frame
+Place/Note	item	Note	-	-	PlaceNote	01-00000	cmd:place_note
+Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	cmd:place_no_connect
 Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01-00000	cmd:place_sheet_entry
+Place/---	separator	-	-	-	-	-	-
+Place/Ports & Connectors	submenu	Ports & Connectors	-	-	-	-	-
+Place/Ports & Connectors/Port	item	Port	-	-	PlacePort	01-00000	cmd:place_port
+Place/Ports & Connectors/Off Sheet Connector	item	Off Sheet Connector	-	-	PlaceOffSheetConnector	01-00000	cmd:place_off_sheet_connector
+Place/Ports & Connectors/---	separator	-	-	-	-	-	-
+Place/Ports & Connectors/Sheet Symbol	item	Sheet Symbol	-	-	PlaceSheetSymbol	01-00000	cmd:place_sheet_symbol
+Place/Ports & Connectors/Device Sheet Symbol	stub	Device Sheet Symbol	-	-	-	00-00000	never
+Place/Ports & Connectors/Reuse Block...	stub	Reuse Block...	-	-	-	00-00000	never
+Place/Ports & Connectors/---	separator	-	-	-	-	-	-
+Place/Ports & Connectors/Signal Harness	stub	Signal Harness	-	-	-	00-00000	never
+Place/Ports & Connectors/Harness Connector	stub	Harness Connector	-	-	-	00-00000	never
+Place/Ports & Connectors/Harness Entry	stub	Harness Entry	-	-	-	00-00000	never
+Place/Directives	submenu	Directives	-	-	-	-	-
+Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
+Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc
+Place/Directives/Differential Pair	stub	Differential Pair	-	-	-	00-00000	never
+Place/Directives/Blanket	stub	Blanket	-	-	-	00-00000	never
+Place/Directives/Compile Mask	stub	Compile Mask	-	-	-	00-00000	never
+Place/Graphics	submenu	Graphics	-	-	-	-	-
+Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
+Place/Graphics/Full Circle	item	Full Circle	-	-	DrawFullCircle	01-00000	cmd:draw_full_circle
+Place/Graphics/Elliptical Arc	stub	Elliptical Arc	-	-	-	00-00000	never
+Place/Graphics/Ellipse	stub	Ellipse	-	-	-	00-00000	never
+Place/Graphics/---	separator	-	-	-	-	-	-
+Place/Graphics/Line	item	Line	-	-	DrawLine	01-00000	cmd:draw_line
+Place/Graphics/Rectangle	item	Rectangle	-	-	DrawRectangle	01-00000	cmd:draw_rectangle
+Place/Graphics/Round Rectangle	stub	Round Rectangle	-	-	-	00-00000	never
+Place/Graphics/Polygon	item	Polygon	-	-	DrawPolygon	01-00000	cmd:draw_polygon
+Place/Graphics/Bezier	stub	Bezier	-	-	-	00-00000	never
+Place/Graphics/---	separator	-	-	-	-	-	-
+Place/Graphics/Graphic...	stub	Graphic...	-	-	-	00-00000	never
 Design	menu	Design	-	-	-	-	-
 Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
+Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01000000	cmd:open_net_classes
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-
 Tools/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch
@@ -130,7 +168,6 @@ Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
-Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
 Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Mod+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode

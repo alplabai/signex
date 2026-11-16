@@ -14,7 +14,9 @@
 //! `bridge::resolve(id)`, or `ContextAction::Command` for that id. A live
 //! row must also be one `is_enabled` allows in the context the app really
 //! has in that selection state (`Signex::command_context`), or the click
-//! would be dropped silently. Any other row fails here, naming the row.
+//! would be dropped silently; a command whose handler explains why it did
+//! nothing (`explains_when_unavailable`) is never dropped. Any other row
+//! fails here, naming the row.
 //!
 //! This does not run a row's handler: what each row does is pinned by
 //! `tests/row_effects.rs`.
@@ -255,7 +257,11 @@ fn check_live_row(
     walk: &mut Walk,
 ) {
     let command = AppCommandId::new(id).expect("catalog id is well formed");
-    if !is_enabled(&command, ctx) {
+    // Find Similar (#2416) seeds from the object under the cursor with
+    // nothing selected; its handler runs and says so when there is none.
+    if !is_enabled(&command, ctx)
+        && !crate::app::command::enablement::explains_when_unavailable(&command)
+    {
         walk.dropped.insert(format!("{origin}: {id}"));
     }
     let dispatches_the_id = match pressed {

@@ -695,6 +695,11 @@
     "category": "library"
   },
   {
+    "id": "open_net_classes",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "open_net_color_palette",
     "group": "Schematic",
     "category": "view"
@@ -723,6 +728,11 @@
     "id": "open_schematic_preferences",
     "group": "General",
     "category": "preferences"
+  },
+  {
+    "id": "open_selection_filter",
+    "group": "Schematic",
+    "category": "select"
   },
   {
     "id": "paste",

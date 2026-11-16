@@ -230,6 +230,10 @@ define_ids! {
         CMD_UPDATE_PCB_FROM_SCHEMATIC = "cmd-update-pcb-from-schematic";
         CMD_BACK_ANNOTATE_SCHEMATICS = "cmd-back-annotate-schematics";
         CMD_MENU_BACK_ANNOTATE_SCHEMATICS = "cmd-menu-back-annotate-schematics";
+        CMD_OPEN_SELECTION_FILTER = "cmd-open-selection-filter";
+        CMD_MENU_OPEN_SELECTION_FILTER = "cmd-menu-open-selection-filter";
+        CMD_OPEN_NET_CLASSES = "cmd-open-net-classes";
+        CMD_MENU_OPEN_NET_CLASSES = "cmd-menu-open-net-classes";
         CMD_TOOL_SELECT = "cmd-tool-select";
         CMD_LASSO_SELECT = "cmd-lasso-select";
         CMD_MENU_LASSO_SELECT = "cmd-menu-lasso-select";

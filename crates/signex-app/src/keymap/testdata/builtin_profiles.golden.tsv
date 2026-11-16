@@ -78,6 +78,13 @@ altium	bind	Global	Shift+F	command:find_similar_objects
 altium	bind	Global	Shift+F12	command:toggle_schematic_list_panel
 altium	bind	Global	Shift+F3	command:find_previous
 altium	bind	Global	Shift+G	command:cycle_snap_grid_backward
+altium	bind	Global	T C	command:cross_probe
+altium	bind	Global	V N	command:open_net_inspector
+altium	bind	Schematic	P C	command:place_off_sheet_connector
+altium	bind	Schematic	P R	command:place_port
+altium	bind	Schematic	P S	command:place_sheet_symbol
+altium	bind	Schematic	P U	command:place_bus_entry
+altium	bind	Schematic	P X	command:place_no_connect
 altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
@@ -109,7 +116,7 @@ altium	hint	-	Ctrl+F4	close_active_document
 altium	hint	-	-	close_all_documents
 altium	hint	-	Ctrl+C	copy
 altium	hint	-	INS	copy_attributes_or_add_vertex
-altium	hint	-	-	cross_probe
+altium	hint	-	T C	cross_probe
 altium	hint	-	Ctrl+X	cut
 altium	hint	-	-	cycle_fast_grid
 altium	hint	-	Ctrl+Q	cycle_unit
@@ -156,7 +163,7 @@ altium	hint	-	Ctrl+O	open_document
 altium	hint	-	-	open_grid_picker
 altium	hint	-	-	open_grid_properties
 altium	hint	-	-	open_library_browser
-altium	hint	-	-	open_net_inspector
+altium	hint	-	V N	open_net_inspector
 altium	hint	-	Ctrl+,	open_preferences
 altium	hint	-	T P	open_schematic_preferences
 altium	hint	-	Ctrl+V	paste
@@ -236,7 +243,7 @@ altium	hint	-	-	place_hierarchical_label
 altium	hint	-	-	place_junction
 altium	hint	-	-	place_local_net_label
 altium	hint	-	P N	place_net_label
-altium	hint	-	-	place_no_connect
+altium	hint	-	P X	place_no_connect
 altium	hint	-	P V N	place_no_erc
 altium	hint	-	-	place_power_symbol
 altium	hint	-	-	place_symbol
@@ -258,6 +265,8 @@ altium	hint	-	-	open_project_options
 altium	hint	-	-	update_pcb_from_schematic
 altium	hint	-	-	new_schematic_sheet
 altium	hint	-	-	back_annotate_schematics
+altium	hint	-	-	open_selection_filter
+altium	hint	-	-	open_net_classes
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -273,7 +282,7 @@ altium	hint	-	-	bring_to_front
 altium	hint	-	-	send_to_back
 altium	hint	-	-	bring_to_front_of
 altium	hint	-	-	send_to_back_of
-altium	hint	-	-	place_sheet_symbol
+altium	hint	-	P S	place_sheet_symbol
 altium	hint	-	-	place_sheet_entry
 altium	hint	-	-	place_device_sheet_symbol
 altium	hint	-	-	place_reuse_block
@@ -288,12 +297,12 @@ altium	hint	-	-	distribute_vertically
 altium	hint	-	-	align_to_grid
 altium	hint	-	-	draw_wire
 altium	hint	-	-	draw_bus
-altium	hint	-	-	place_bus_entry
+altium	hint	-	P U	place_bus_entry
 altium	hint	-	-	place_signal_harness
 altium	hint	-	-	place_harness_connector
 altium	hint	-	-	place_harness_entry
-altium	hint	-	-	place_port
-altium	hint	-	-	place_off_sheet_connector
+altium	hint	-	P R	place_port
+altium	hint	-	P C	place_off_sheet_connector
 altium	hint	-	-	place_parameter_set
 altium	hint	-	-	place_diff_pair
 altium	hint	-	-	place_blanket
@@ -378,7 +387,7 @@ classic	bind	Global	Ctrl+F5	command:zoom_to_selection_area
 classic	bind	Global	Ctrl+G	command:toggle_search_panel
 classic	bind	Global	Ctrl+HOME	command:zoom_to_all_objects
 classic	bind	Global	Ctrl+K	command:open_command_palette
-classic	bind	Global	Mod+L	command:place_global_label
+classic	bind	Global	Mod+L	command:place_port
 classic	bind	Global	Mod+N	command:new_document
 classic	bind	Global	Mod+O	command:open_document
 classic	bind	Global	Mod+P	command:print
@@ -410,7 +419,7 @@ classic	bind	Global	F5	command:refresh_view
 classic	bind	Global	F8	command:run_erc
 classic	bind	Global	F9	command:toggle_auto_focus
 classic	bind	Global	G	command:drag_keep_connections
-classic	bind	Global	H	command:place_hierarchical_label
+classic	bind	Global	H	command:place_off_sheet_connector
 classic	bind	Global	HOME	command:zoom_to_fit
 classic	bind	Global	I	command:draw_graphic_line
 classic	bind	Global	INS	command:repeat_last_item
@@ -424,7 +433,7 @@ classic	bind	Global	PGDN	command:next_sheet
 classic	bind	Global	PGUP	command:previous_sheet
 classic	bind	Global	Q	command:place_no_connect
 classic	bind	Global	R	command:rotate_counterclockwise
-classic	bind	Global	S	command:draw_hierarchical_sheet
+classic	bind	Global	S	command:place_sheet_symbol
 classic	bind	Global	Alt+Shift+A	command:force_annotate_all_schematics
 classic	bind	Global	Shift+B	command:place_design_block
 classic	bind	Global	Shift+F3	command:find_previous
@@ -440,9 +449,12 @@ classic	bind	Global	V	command:edit_value
 classic	bind	Global	W	command:place_wire
 classic	bind	Global	X	command:mirror_x
 classic	bind	Global	Y	command:mirror_y
-classic	bind	Global	Z	command:place_wire_to_bus_entry
+classic	bind	Global	Z	command:place_bus_entry
 classic	bind	Global	`	command:highlight_net_under_cursor
 classic	bind	Global	~	command:clear_net_highlighting
+classic	bind	Global	Shift+C	command:cross_probe
+classic	bind	Global	Shift+F	command:find_similar_objects
+classic	bind	Global	Shift+I	command:open_net_inspector
 classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
@@ -469,7 +481,7 @@ classic	hint	-	-	close_active_document
 classic	hint	-	-	close_all_documents
 classic	hint	-	Ctrl+C	copy
 classic	hint	-	-	copy_attributes_or_add_vertex
-classic	hint	-	-	cross_probe
+classic	hint	-	Shift+C	cross_probe
 classic	hint	-	Ctrl+X	cut
 classic	hint	-	Alt+4	cycle_fast_grid
 classic	hint	-	Ctrl+Q	cycle_unit
@@ -497,7 +509,7 @@ classic	hint	-	-	find_items
 classic	hint	-	-	find_and_replace
 classic	hint	-	F3	find_next
 classic	hint	-	Shift+F3	find_previous
-classic	hint	-	-	find_similar_objects
+classic	hint	-	Shift+F	find_similar_objects
 classic	hint	-	-	find_text
 classic	hint	-	Ctrl+Shift+F	import_graphics
 classic	hint	-	-	list_documents
@@ -516,7 +528,7 @@ classic	hint	-	Ctrl+O	open_document
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
 classic	hint	-	-	open_library_browser
-classic	hint	-	-	open_net_inspector
+classic	hint	-	Shift+I	open_net_inspector
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences
 classic	hint	-	Ctrl+V	paste
@@ -575,7 +587,7 @@ classic	hint	-	Alt+A	annotate_schematic_quietly
 classic	hint	-	-	assign_footprints
 classic	hint	-	~	clear_net_highlighting
 classic	hint	-	I	draw_graphic_line
-classic	hint	-	S	draw_hierarchical_sheet
+classic	hint	-	-	draw_hierarchical_sheet
 classic	hint	-	Alt+Shift+A	force_annotate_all_schematics
 classic	hint	-	-	go_to_net_partner
 classic	hint	-	`	highlight_net_under_cursor
@@ -591,8 +603,8 @@ classic	hint	-	-	open_net_color_palette
 classic	hint	-	B	place_bus
 classic	hint	-	-	place_compile_mask
 classic	hint	-	Shift+B	place_design_block
-classic	hint	-	Ctrl+L	place_global_label
-classic	hint	-	H	place_hierarchical_label
+classic	hint	-	-	place_global_label
+classic	hint	-	-	place_hierarchical_label
 classic	hint	-	J	place_junction
 classic	hint	-	L	place_local_net_label
 classic	hint	-	-	place_net_label
@@ -602,7 +614,7 @@ classic	hint	-	P	place_power_symbol
 classic	hint	-	A	place_symbol
 classic	hint	-	T	place_text
 classic	hint	-	W	place_wire
-classic	hint	-	Z	place_wire_to_bus_entry
+classic	hint	-	-	place_wire_to_bus_entry
 classic	hint	-	Shift+TAB	previous_highlighted_net_item
 classic	hint	-	PGUP	previous_sheet
 classic	hint	-	F8	run_erc
@@ -618,6 +630,8 @@ classic	hint	-	-	open_project_options
 classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	new_schematic_sheet
 classic	hint	-	-	back_annotate_schematics
+classic	hint	-	-	open_selection_filter
+classic	hint	-	-	open_net_classes
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection
@@ -633,7 +647,7 @@ classic	hint	-	-	bring_to_front
 classic	hint	-	-	send_to_back
 classic	hint	-	-	bring_to_front_of
 classic	hint	-	-	send_to_back_of
-classic	hint	-	-	place_sheet_symbol
+classic	hint	-	S	place_sheet_symbol
 classic	hint	-	-	place_sheet_entry
 classic	hint	-	-	place_device_sheet_symbol
 classic	hint	-	-	place_reuse_block
@@ -648,12 +662,12 @@ classic	hint	-	-	distribute_vertically
 classic	hint	-	-	align_to_grid
 classic	hint	-	-	draw_wire
 classic	hint	-	-	draw_bus
-classic	hint	-	-	place_bus_entry
+classic	hint	-	Z	place_bus_entry
 classic	hint	-	-	place_signal_harness
 classic	hint	-	-	place_harness_connector
 classic	hint	-	-	place_harness_entry
-classic	hint	-	-	place_port
-classic	hint	-	-	place_off_sheet_connector
+classic	hint	-	Ctrl+L	place_port
+classic	hint	-	H	place_off_sheet_connector
 classic	hint	-	-	place_parameter_set
 classic	hint	-	-	place_diff_pair
 classic	hint	-	-	place_blanket

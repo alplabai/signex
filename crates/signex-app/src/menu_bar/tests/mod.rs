@@ -18,6 +18,7 @@ mod key_names;
 mod language_switch;
 mod library_window_rows;
 mod place_design_rows;
+mod sheet_place_rows;
 mod view_rows;
 mod walk;
 mod window_native_rows;
@@ -293,6 +294,10 @@ pub(super) struct Probe {
     pub pcb_tool: bool,
     /// File ▸ New ▸ PCB / Schematic opens its setup dialog (#2232).
     pub document_setup: bool,
+    /// Edit ▸ Find Similar Objects opens its dialog (#2416).
+    pub find_similar: bool,
+    /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
+    pub active_bar_menu: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -373,6 +378,8 @@ pub(super) fn probe(app: &Signex) -> Probe {
         board_output: app.ui_state.board_output.dialog.is_some(),
         pcb_tool: app.interaction_state.pcb_tool.is_some(),
         document_setup: app.ui_state.document_setup.is_some(),
+        find_similar: app.ui_state.find_similar.is_some(),
+        active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
     }
 }
 
