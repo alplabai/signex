@@ -4,7 +4,7 @@
 //! There was no command reference at all before this.
 //! `docs/KEYBOARD_SHORTCUTS.md` documents the TOML profile *format* and
 //! contains no command table, so a user could not discover what they were
-//! allowed to bind a key to except by reading `keymap/catalog/*.rs`
+//! allowed to bind a key to except by reading `signex-commands/src/catalog/*.rs`
 //! (signex#517 §8).
 //!
 //! Generated rather than hand-written for the reason the epic exists: the
@@ -96,7 +96,7 @@ fn render() -> String {
          for the file format.\n\
          \n\
          **Generated — do not edit by hand.** Produced from\n\
-         `crates/signex-app/src/keymap/catalog/` and\n\
+         `crates/signex-commands/src/catalog/` and\n\
          `crates/signex-app/assets/keyboard-shortcuts/` by\n\
          `crates/signex-app/tests/integration/command_reference.rs`, which fails if this\n\
          file drifts. Regenerate with:\n\

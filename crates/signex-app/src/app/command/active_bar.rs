@@ -284,7 +284,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "Active Bar command ids with no CommandMetadata entry — add them \
-             to keymap/catalog/active_bar.rs: {orphans:?}"
+             to signex-commands/src/catalog/active_bar.rs: {orphans:?}"
         );
     }
 
@@ -413,7 +413,7 @@ mod tests {
             "Active Bar label drift — the catalog and the view disagree on \
              what the user sees. Changing this text is menu content and needs \
              sign-off; if the change is intended, update `menu_label` in \
-             keymap/catalog/: {drift:#?}"
+             signex-commands/src/catalog/: {drift:#?}"
         );
     }
 

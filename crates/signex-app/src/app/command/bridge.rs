@@ -543,7 +543,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "core_to_message maps command ids with no CommandMetadata \
-             entry (add them to keymap/catalog): {orphans:?}"
+             entry (add them to signex-commands/src/catalog): {orphans:?}"
         );
     }
 

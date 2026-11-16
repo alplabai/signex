@@ -6,7 +6,7 @@ keys to these ids — see [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md)
 for the file format.
 
 **Generated — do not edit by hand.** Produced from
-`crates/signex-app/src/keymap/catalog/` and
+`crates/signex-commands/src/catalog/` and
 `crates/signex-app/assets/keyboard-shortcuts/` by
 `crates/signex-app/tests/integration/command_reference.rs`, which fails if this
 file drifts. Regenerate with:
