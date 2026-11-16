@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable as _;
 use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReportKind,
 };
