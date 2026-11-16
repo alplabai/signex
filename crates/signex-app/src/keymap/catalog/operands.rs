@@ -397,6 +397,21 @@ pub const IMPORT_DXF_OUTLINE: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("document", OperandKind::Document),
 ];
+/// Length tuning on the named board (#2389): `net` names the net to tune
+/// (else the nets of the selected tracks), `value` the target length in mm
+/// (else the longest of those nets).
+pub const TUNE_LENGTH: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+    optional("value", OperandKind::Text),
+];
+
+/// Match a differential pair's lengths on the named board (#2389): `net`
+/// names either net of the pair (else the selected track's).
+pub const TUNE_PAIR: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

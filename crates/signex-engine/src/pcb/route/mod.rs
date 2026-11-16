@@ -5,7 +5,10 @@
 //! as ONE undo step when the route ends ([`RouteDraft::commands`]), after
 //! [`draft_fits`] checked it against the board as it is then. The
 //! geometry is `pcb_geom::route`; this module turns it into board items.
+//! Differential pairs and buses route side by side (`bus`, `pair`).
 
+mod bus;
+mod pair;
 mod tune;
 
 use pcb_geom::route::{
@@ -22,7 +25,9 @@ use super::command::BoardCommand;
 use super::draw::TrackStyle;
 use super::items::BoardItem;
 
-pub use tune::{Meander, TuneRefusal, tune_length};
+pub use bus::{BusMember, BusStyle, bus_start, bus_tracks, nearest_net_point, route_bus_leg};
+pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
+pub use tune::{Meander, TuneRefusal, tune_length, tune_net, tune_nets};
 
 /// Lattice points one clicked leg's search may expand.
 pub const SEARCH_BUDGET: usize = 12_000;
@@ -85,6 +90,8 @@ pub enum RouteRefusal {
     Unrepresentable,
     #[error("a track the route pushed was changed or removed since")]
     BoardChanged,
+    #[error("a corner turns too sharply for the tracks to follow it side by side")]
+    TooSharp,
 }
 
 /// One routed leg: its tracks, the via that took it to another layer, and
@@ -376,7 +383,11 @@ fn lattice_step(grid_mm: f64, a: PointNm, b: PointNm) -> i64 {
 }
 
 #[cfg(test)]
+mod bus_tests;
+#[cfg(test)]
 mod fit_tests;
+#[cfg(test)]
+mod pair_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

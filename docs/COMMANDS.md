@@ -352,14 +352,17 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_rules` | Open the design rules of the project | design | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
 | `place_board_circle` | Draw a full circle by its centre and a point on it on the active non-copper layer | place | — | — |
+| `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
 | `place_board_dimension` | Place a linear dimension on the board | place | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active non-copper layer | place | — | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |
 | `place_board_line` | Draw lines on the active non-copper layer | place | — | — |
+| `place_board_multi_route` | Route the selected nets side by side as a bus, around other nets | place | — | — |
 | `place_board_pad` | Place a free pad on the board | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
 | `place_board_pour_cutout` | Cut an area out of the polygon pours on the active copper layer | place | — | — |
+| `place_board_quick_route` | Route straight to the clicked point at the rule width, without avoiding other nets | place | — | — |
 | `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
@@ -411,6 +414,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | `N` | `C` |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `tune_diff_pair` | Lengthen the shorter net of a differential pair with meanders to match the longer one | pcb | — | — |
+| `tune_net_length` | Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them | pcb | — | — |
 | `unlock_board_items` | Unlock the selected tracks and vias | modify | — | — |
 | `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |

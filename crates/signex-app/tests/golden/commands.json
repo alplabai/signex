@@ -870,6 +870,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_diff_pair",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_fill",
     "group": "Pcb",
     "category": "place"
@@ -890,12 +895,22 @@
     "category": "place"
   },
   {
+    "id": "place_board_multi_route",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_polygon_pour",
     "group": "Pcb",
     "category": "place"
   },
   {
     "id": "place_board_pour_cutout",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_quick_route",
     "group": "Pcb",
     "category": "place"
   },
@@ -1608,6 +1623,16 @@
     "id": "tool_select",
     "group": "Schematic",
     "category": "select"
+  },
+  {
+    "id": "tune_diff_pair",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "tune_net_length",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "undo",

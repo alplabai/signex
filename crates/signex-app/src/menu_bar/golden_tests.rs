@@ -316,6 +316,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_circle", "PlaceBoardCircle"),
     ("place_board_rectangle", "PlaceBoardRectangle"),
     ("place_board_text_frame", "PlaceBoardTextFrame"),
+    // #2389: the other routing tools.
+    ("place_board_diff_pair", "PlaceBoardDiffPair"),
+    ("place_board_quick_route", "PlaceBoardQuickRoute"),
+    ("place_board_multi_route", "PlaceBoardMultiRoute"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),

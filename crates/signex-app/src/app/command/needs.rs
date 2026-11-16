@@ -376,7 +376,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_pour_cutout"
         | "place_board_slice_pour"
         | "place_board_keepout"
-        // #2389: Interactive Routing.
+        // #2389: Interactive Routing and the other routing tools.
+        | "place_board_diff_pair"
+        | "place_board_quick_route"
+        | "place_board_multi_route"
         | "place_board_route"
         // #2373: free pads, arcs, strings and dimensions.
         | "place_board_pad"
@@ -394,6 +397,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
+        // #2389: length tuning of the selected tracks' nets.
+        "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"

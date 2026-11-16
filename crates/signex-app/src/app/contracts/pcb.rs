@@ -100,6 +100,8 @@ pub enum PcbMsg {
     Tools(BoardToolsMsg),
     /// DXF import onto the board in view (#2410).
     DxfImport(DxfImportMsg),
+    /// Length tuning on the board in view (#2389).
+    Tune(TuneMsg),
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the
@@ -136,6 +138,19 @@ pub enum BoardToolsMsg {
     /// `arrange_in_box`: the box tool is armed for the selected components;
     /// its two corner clicks arrive as board canvas clicks.
     ArrangeRequested,
+}
+
+/// Length tuning asked for on the board in view (#2389), from the PCB
+/// Active Bar's Tune group or the palette. Each acts on the selected tracks'
+/// nets and lands as one undo step, or says in Messages why not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuneMsg {
+    /// `tune_net_length` ran: the selected tracks' nets are lengthened to
+    /// the longest of them.
+    NetLengthRequested,
+    /// `tune_diff_pair` ran: the shorter net of the selected track's pair is
+    /// lengthened to the other's length.
+    DiffPairRequested,
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

@@ -126,13 +126,25 @@ fn row_tooltip(row: PcbBarRow, i18n: &I18n) -> String {
 }
 
 /// The bar button's icon for `row`: the tool's bar icon, the repour glyph
-/// for Repour (#2216), the component glyph for a command of the Components
+/// for Repour (#2216), a tuning command's glyph (#2389), the component glyph
+/// for a command of the Components
 /// group.
 fn button_icon(row: PcbBarRow, tid: ThemeId) -> ActiveBarIcon {
     match row {
         PcbBarRow::Tool(tool) => tool_icon(tool, tid),
-        PcbBarRow::Command(id) if is_repour(id) => ActiveBarIcon::Svg(ic::icon_redo(tid)),
-        PcbBarRow::Command(_) => ActiveBarIcon::Svg(ic::icon_component(tid)),
+        PcbBarRow::Command(id) => {
+            ActiveBarIcon::Svg(command_icon(id, tid).unwrap_or_else(|| ic::icon_component(tid)))
+        }
+    }
+}
+
+/// The glyph of a Repour (#2216) or tuning (#2389) command row; `None` for
+/// another command.
+fn command_icon(id: &str, tid: ThemeId) -> Option<svg::Handle> {
+    match id {
+        id if is_repour(id) => Some(ic::icon_redo(tid)),
+        "tune_net_length" => Some(ic::icon_pcb_length_tune(tid)),
+        _ => None,
     }
 }
 
@@ -147,14 +159,18 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
     use BoardPlaceTool as T;
     let tool = match row {
         PcbBarRow::Tool(tool) => tool,
-        PcbBarRow::Command(id) if is_repour(id) => return ic::icon_redo(tid),
-        PcbBarRow::Command(_) => return ic::icon_dd_part_actions(tid),
+        PcbBarRow::Command(id) => {
+            return command_icon(id, tid).unwrap_or_else(|| ic::icon_dd_part_actions(tid));
+        }
     };
     match tool {
         T::Component => ic::icon_component(tid),
         T::Pad => ic::icon_pcb_pad(tid),
         T::Via => ic::icon_pcb_via(tid),
         T::InteractiveRouting => ic::icon_dd_wire(tid),
+        T::DiffPairRouting => ic::icon_pcb_diff_pair_route(tid),
+        T::QuickRoute => ic::icon_pcb_quick_route(tid),
+        T::MultiRoute => ic::icon_pcb_multi_route(tid),
         T::Track => ic::icon_dd_line(tid),
         T::Arc => ic::icon_dd_arc(tid),
         T::Fill => ic::icon_dd_rect(tid),

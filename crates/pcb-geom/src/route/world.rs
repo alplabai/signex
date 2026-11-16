@@ -140,6 +140,9 @@ pub struct RouteWorld<'a> {
     /// How far the broad phase looks: the widest clearance the rules can
     /// ask of any pair.
     reach: i64,
+    /// Nets routed together (a differential pair, a bus): none is an
+    /// obstacle to another ([`Self::with_kin`]).
+    kin: Vec<u32>,
 }
 
 impl<'a> RouteWorld<'a> {
@@ -178,7 +181,24 @@ impl<'a> RouteWorld<'a> {
             keepouts,
             rule,
             reach: reach.max(0),
+            kin: Vec::new(),
         }
+    }
+
+    /// This world with `nets` routed together: copper of one of them is no
+    /// obstacle to new copper of another, so the centre line of a pair or
+    /// a bus walks past its own members' pads. Their gaps to each other are
+    /// checked on the member tracks, in a world without kin.
+    #[must_use]
+    pub fn with_kin(mut self, nets: &[u32]) -> Self {
+        self.kin = nets.to_vec();
+        self
+    }
+
+    /// Whether copper of nets `a` and `b` never needs a clearance: one net,
+    /// or two nets routed together.
+    fn is_kin(&self, a: u32, b: u32) -> bool {
+        a == b || (self.kin.contains(&a) && self.kin.contains(&b))
     }
 
     /// Whether `new` keeps the clearance from every other net's copper and
@@ -200,10 +220,10 @@ impl<'a> RouteWorld<'a> {
     }
 
     /// Whether `a` and the copper `b_shape` of item `b` come closer than
-    /// the rule asks (touching included); false for one net or no shared
-    /// layer.
+    /// the rule asks (touching included); false for one net, kin nets or no
+    /// shared layer.
     pub(super) fn too_close(&self, a: &CopperItem, b: &CopperItem, b_shape: &Shape) -> bool {
-        if a.net == b.net || a.layers & b.layers == 0 {
+        if self.is_kin(a.net, b.net) || a.layers & b.layers == 0 {
             return false;
         }
         let required = self.clearance(a, b);
@@ -356,6 +376,27 @@ mod tests {
             ..near(0.0, 1)
         };
         assert!(world.is_clear(&bottom), "another layer is no obstacle");
+    }
+
+    /// #2389: the nets of a pair or a bus are no obstacle to each other's
+    /// new copper; every other net still is.
+    #[test]
+    fn kin_nets_are_no_obstacle_to_each_other() {
+        let board = board(
+            vec![pad_at(1, 5.0, 0.0, 1.0, 2), pad_at(2, 5.0, 3.0, 1.0, 4)],
+            vec![],
+        );
+        let through = |y: f64| NewCopper::track(at(0.0, y), at(10.0, y), nm(0.15), 3, 1);
+        let plain = RouteWorld::new(&board, &rule);
+        assert!(!plain.is_clear(&through(0.0)), "net 2's pad is in the way");
+        let pair = RouteWorld::new(&board, &rule).with_kin(&[2, 3]);
+        assert!(pair.is_clear(&through(0.0)), "net 2 is routed with net 3");
+        assert!(!pair.is_clear(&through(3.0)), "net 4 is not kin");
+        let unrelated = NewCopper::track(at(0.0, 0.0), at(10.0, 0.0), nm(0.15), 5, 1);
+        assert!(
+            !pair.is_clear(&unrelated),
+            "kin covers the routed nets only"
+        );
     }
 
     #[test]

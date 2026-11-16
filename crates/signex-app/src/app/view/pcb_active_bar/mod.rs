@@ -272,11 +272,11 @@ pub(in crate::app::view) fn pcb_bar_items(
 }
 
 /// The tool groups between the Align button and Board Sketch, a separator
-/// between each run: what goes on the board, routing, the copper itself,
-/// then what annotates it.
+/// between each run: what goes on the board, routing and tuning, the
+/// copper itself, then what annotates it.
 const BAR_GROUPS: [&[PcbBarGroup]; 4] = [
     &[PcbBarGroup::Components],
-    &[PcbBarGroup::Route],
+    &[PcbBarGroup::Route, PcbBarGroup::Tune],
     &[
         PcbBarGroup::ViaPad,
         PcbBarGroup::CopperAreas,
@@ -299,6 +299,9 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::Pad => ActiveBarIcon::Glyph("\u{25CF}"),
         T::Via => ActiveBarIcon::Glyph("\u{25CE}"),
         T::InteractiveRouting => svg(ic::icon_wire(tid)),
+        T::DiffPairRouting => svg(ic::icon_pcb_diff_pair_route(tid)),
+        T::QuickRoute => svg(ic::icon_pcb_quick_route(tid)),
+        T::MultiRoute => svg(ic::icon_pcb_multi_route(tid)),
         T::Track => svg(ic::icon_shape_line(tid)),
         T::Arc => svg(ic::icon_shape_arc(tid)),
         T::Fill => svg(ic::icon_shape_rect(tid)),

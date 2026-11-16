@@ -159,6 +159,9 @@ mod tests {
                 // everything is AI-controllable.
                 "tile_windows_horizontally",
                 "tile_windows_vertically",
+                // #2389: length tuning on the named board.
+                "tune_diff_pair",
+                "tune_net_length",
                 "unlock_board_items",
                 "untile_documents",
                 "unwaive_drc_violation",

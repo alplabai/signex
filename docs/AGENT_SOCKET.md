@@ -135,8 +135,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
-  each, answered with the drawing as JSON). A test pins this set, so a
-  catalog row that joins or leaves it is a visible decision.
+  each, answered with the drawing as JSON), and the length tuning commands
+  `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
+  board, answered with the tuned nets and their lengths as JSON). A test
+  pins this set, so a catalog row that joins or leaves it is a visible
+  decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is

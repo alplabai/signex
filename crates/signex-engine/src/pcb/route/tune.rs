@@ -23,6 +23,30 @@ pub struct Meander<'a> {
     pub amplitude_mm: f64,
 }
 
+/// How tall a bump may grow, in accordion pitches.
+const AMPLITUDE_PITCHES: f64 = 4.0;
+
+impl<'a> Meander<'a> {
+    /// The accordion every tuning surface uses (#2389) on tracks
+    /// `width_mm` wide: legs a track width and the rules' plain clearance
+    /// (`clearance_mm`) apart on either side, bumps up to four pitches
+    /// tall.
+    pub fn for_tracks(
+        clearance: &'a ClearanceRule<'a>,
+        reach: i64,
+        width_mm: f64,
+        clearance_mm: f64,
+    ) -> Self {
+        let pitch_mm = 2.0 * (width_mm.abs() + clearance_mm);
+        Self {
+            clearance,
+            reach,
+            pitch_mm,
+            amplitude_mm: AMPLITUDE_PITCHES * pitch_mm,
+        }
+    }
+}
+
 /// Why a track was not tuned.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum TuneRefusal {
@@ -40,6 +64,79 @@ pub enum TuneRefusal {
     Blocked,
     #[error("a length here is not one the board geometry can hold")]
     Unrepresentable,
+    #[error("the net has no straight track to tune")]
+    NoTrack,
+}
+
+/// Lengthen `net` to `target_mm` on its longest straight track that takes
+/// the accordion ([`tune_length`]); a track too short for it, or with no
+/// clear side, hands over to the next longest.
+pub fn tune_net(
+    board: &PcbBoard,
+    net: u32,
+    target_mm: f64,
+    meander: &Meander,
+    mut ids: impl FnMut() -> Uuid,
+) -> Result<Vec<BoardCommand>, TuneRefusal> {
+    if net == 0 {
+        return Err(TuneRefusal::NoNet);
+    }
+    let mut tracks: Vec<(f64, Uuid)> = board
+        .segments
+        .iter()
+        .filter(|s| s.net == net)
+        .filter_map(|s| pcb_geom::track_length_mm(s).map(|length| (length, s.uuid)))
+        .collect();
+    tracks.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut refusal = TuneRefusal::NoTrack;
+    for (_, track) in tracks {
+        match tune_length(board, track, target_mm, meander, &mut ids) {
+            Ok(commands) => return Ok(commands),
+            Err(why @ (TuneRefusal::TooShort | TuneRefusal::Blocked)) => {
+                if refusal == TuneRefusal::NoTrack {
+                    refusal = why;
+                }
+            }
+            Err(why) => return Err(why),
+        }
+    }
+    Err(refusal)
+}
+
+/// Bring each of `nets` to `target_mm` ([`tune_net`]), each tuned on the
+/// board as the ones before it left it, so their accordions keep clear of
+/// each other too: one set of commands, one undo step. A net at the target
+/// already, or short by less than one bump adds, is left as it is; when
+/// that leaves nothing to tune, the first such net says why.
+pub fn tune_nets(
+    board: &PcbBoard,
+    nets: &[u32],
+    target_mm: f64,
+    meander: &Meander,
+    mut ids: impl FnMut() -> Uuid,
+) -> Result<Vec<BoardCommand>, TuneRefusal> {
+    let mut working = board.clone();
+    let mut commands = Vec::new();
+    let mut skipped = None;
+    for &net in nets {
+        let step = match tune_net(&working, net, target_mm, meander, &mut ids) {
+            Ok(step) => step,
+            Err(why @ (TuneRefusal::LongEnough { .. } | TuneRefusal::TooLittle { .. })) => {
+                skipped.get_or_insert(why);
+                continue;
+            }
+            Err(why) => return Err(why),
+        };
+        for command in step.iter().cloned() {
+            command.apply(&mut working).map_err(|_| TuneRefusal::Gone)?;
+        }
+        commands.extend(step);
+    }
+    match (commands.is_empty(), skipped) {
+        (true, Some(why)) => Err(why),
+        (true, None) => Err(TuneRefusal::NoTrack),
+        (false, _) => Ok(commands),
+    }
 }
 
 /// Lengthen `track`'s net to `target_mm`: the track replaced by an

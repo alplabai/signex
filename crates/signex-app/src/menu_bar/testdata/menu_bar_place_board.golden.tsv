@@ -4,6 +4,9 @@ Place/Component	stub	Component	-	-	-	0
 Place/Pad	item	Pad	-	-	PlaceBoardPad	1
 Place/Via	item	Via	-	-	PlaceBoardVia	1
 Place/Interactive Routing	item	Interactive Routing	-	-	PlaceBoardRoute	1
+Place/Differential Pair Routing	item	Differential Pair Routing	-	-	PlaceBoardDiffPair	1
+Place/Quick Route	item	Quick Route	-	-	PlaceBoardQuickRoute	1
+Place/Multi-Route	item	Multi-Route	-	-	PlaceBoardMultiRoute	1
 Place/Track	item	Track	-	-	PlaceBoardTrack	1
 Place/Arc	item	Arc	-	-	PlaceBoardArc	1
 Place/Fill	item	Fill	-	-	PlaceBoardFill	1

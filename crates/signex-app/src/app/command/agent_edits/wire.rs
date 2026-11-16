@@ -240,6 +240,15 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_graphic",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2389: length tuning lands on the named board's own undo stack.
+    (
+        "tune_net_length",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "tune_diff_pair",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 const BOARD_EDIT: &str =
@@ -436,6 +445,8 @@ mod tests {
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
             ("update_pcb_from_schematic", "edits the project's board"),
+            ("tune_net_length", "edits a board"),
+            ("tune_diff_pair", "edits a board"),
             ("toggle_properties_panel", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));

@@ -28,8 +28,10 @@ mod free;
 mod free_form;
 mod graphic;
 mod pour_cut;
+mod quick;
 mod route;
 mod router;
+mod side_by_side;
 mod string;
 
 pub(crate) use form::has_form;
@@ -57,6 +59,8 @@ mod route_tests;
 #[cfg(test)]
 mod router_tests;
 #[cfg(test)]
+mod side_by_side_tests;
+#[cfg(test)]
 mod string_tests;
 #[cfg(test)]
 mod tests;
@@ -77,7 +81,7 @@ pub struct BoardToolSession {
     pub cursor: Option<Point>,
     /// The layer, width and net of the track run being drawn.
     pub route: Option<draw::TrackStyle>,
-    /// Interactive Routing's route not yet on the board, and its rules.
+    /// The route of a routing tool not yet on the board, and its rules.
     pub router: Option<RouterState>,
     /// Tab paused placing for the values to be edited in Properties (#2393);
     /// what Esc puts back.
@@ -95,7 +99,11 @@ impl BoardToolSession {
     pub fn is_routing(&self) -> bool {
         matches!(
             self.tool,
-            BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting
+            BoardPlaceTool::Track
+                | BoardPlaceTool::InteractiveRouting
+                | BoardPlaceTool::DiffPairRouting
+                | BoardPlaceTool::QuickRoute
+                | BoardPlaceTool::MultiRoute
         ) && !self.points.is_empty()
     }
 }
@@ -277,6 +285,10 @@ impl Signex {
             }
             BoardPlaceTool::Track => self.route_clicked(at),
             BoardPlaceTool::InteractiveRouting => self.router_clicked(at),
+            BoardPlaceTool::QuickRoute => self.quick_route_clicked(at),
+            BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute => {
+                self.bus_route_clicked(tool, at);
+            }
             BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Pad => self.pad_clicked(at),
             BoardPlaceTool::Arc => self.arc_clicked(at),
@@ -324,7 +336,10 @@ impl Signex {
                 preview.vias.push(defaults.via(board, Uuid::nil(), cursor));
             }
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
-            BoardPlaceTool::InteractiveRouting => {
+            BoardPlaceTool::InteractiveRouting
+            | BoardPlaceTool::QuickRoute
+            | BoardPlaceTool::DiffPairRouting
+            | BoardPlaceTool::MultiRoute => {
                 self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),

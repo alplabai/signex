@@ -480,6 +480,10 @@ fn place_on_a_board_lists_the_boards_tools() {
             "Pad",
             "Via",
             "Interactive Routing",
+            // #2389: the routing tools that follow it.
+            "Differential Pair Routing",
+            "Quick Route",
+            "Multi-Route",
             "Track",
             "Arc",
             "Fill",

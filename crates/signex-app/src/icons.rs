@@ -328,6 +328,12 @@ canonical_icon!(icon_pcb_dimension, "pcb/dimension.svg");
 canonical_icon!(icon_pcb_keepout, "pcb/keepout.svg");
 canonical_icon!(icon_pcb_pad, "pcb/pad.svg");
 canonical_icon!(icon_pcb_via, "pcb/via.svg");
+// #2389: the routing and tuning rows of the PCB Active Bar.
+canonical_icon!(icon_pcb_diff_pair_route, "pcb/diff_pair_route.svg");
+canonical_icon!(icon_pcb_quick_route, "pcb/quick_route.svg");
+canonical_icon!(icon_pcb_multi_route, "pcb/multi_route.svg");
+canonical_icon!(icon_pcb_length_tune, "pcb/length_tune.svg");
+canonical_icon!(icon_pcb_diff_pair_tune, "pcb/diff_pair_tune.svg");
 
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
@@ -419,14 +425,19 @@ mod tests {
 
     /// #2392: the board tool glyphs follow the dropdown set's rules (24×24,
     /// 2.5 stroke, copper in the accent sentinel, so they tint per theme)
-    /// and are distinct drawings.
+    /// and are distinct drawings; #2389's routing and tuning glyphs too.
     #[test]
     fn board_tool_glyphs_follow_the_dropdown_rules() {
-        let glyphs: [&str; 4] = [
+        let glyphs: [&str; 9] = [
             include_str!("../assets/icons/pcb/dimension.svg"),
             include_str!("../assets/icons/pcb/keepout.svg"),
             include_str!("../assets/icons/pcb/pad.svg"),
             include_str!("../assets/icons/pcb/via.svg"),
+            include_str!("../assets/icons/pcb/diff_pair_route.svg"),
+            include_str!("../assets/icons/pcb/quick_route.svg"),
+            include_str!("../assets/icons/pcb/multi_route.svg"),
+            include_str!("../assets/icons/pcb/length_tune.svg"),
+            include_str!("../assets/icons/pcb/diff_pair_tune.svg"),
         ];
         for svg in glyphs {
             assert!(svg.starts_with("<svg "), "{svg}");

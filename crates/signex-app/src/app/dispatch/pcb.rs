@@ -90,6 +90,10 @@ impl Signex {
                 self.handle_board_tools(event);
                 Task::none()
             }
+            PcbMsg::Tune(event) => {
+                self.handle_tune(event);
+                Task::none()
+            }
         }
     }
 

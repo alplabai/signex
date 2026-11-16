@@ -133,19 +133,22 @@ pub struct PlacementPause {
 }
 
 /// Whether Properties shows a form for `tool` while it is armed: every tool
-/// that can be armed on a board.
+/// that can be armed on a board but Differential Pair Routing and
+/// Multi-Route, whose width and gap come from the rules (#2389).
 pub(crate) fn has_form(tool: BoardPlaceTool) -> bool {
+    matches!(tool, BoardPlaceTool::Via)
+        || is_one_track(tool)
+        || is_area(tool)
+        || is_free(tool)
+        || tool.graphic_kind().is_some()
+}
+
+/// Whether `tool` draws one track run whose width and net the form sets.
+fn is_one_track(tool: BoardPlaceTool) -> bool {
     matches!(
         tool,
-        BoardPlaceTool::Via
-            | BoardPlaceTool::Track
-            | BoardPlaceTool::InteractiveRouting
-            | BoardPlaceTool::Pad
-            | BoardPlaceTool::Arc
-            | BoardPlaceTool::TextString
-            | BoardPlaceTool::Dimension
-    ) || is_area(tool)
-        || tool.graphic_kind().is_some()
+        BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting | BoardPlaceTool::QuickRoute
+    )
 }
 
 /// Whether `tool` places a free pad, arc, string or dimension (#2373),
@@ -316,11 +319,8 @@ impl Signex {
             return;
         }
         let size = match (tool, edit) {
-            (BoardPlaceTool::Via, PrimitiveEdit::Number(F::Diameter | F::HoleSize, v))
-            | (
-                BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting,
-                PrimitiveEdit::Number(F::Width, v),
-            ) => Some(*v),
+            (BoardPlaceTool::Via, PrimitiveEdit::Number(F::Diameter | F::HoleSize, v)) => Some(*v),
+            (tool, PrimitiveEdit::Number(F::Width, v)) if is_one_track(tool) => Some(*v),
             _ => None,
         };
         if size.is_some_and(|v| v <= 0.0) {
@@ -337,16 +337,12 @@ impl Signex {
                 defaults.via_hole_mm = Some(*v);
             }
             (BoardPlaceTool::Via, PrimitiveEdit::Net(net)) => defaults.via_net = Some(*net),
-            (
-                BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting,
-                PrimitiveEdit::Number(F::Width, v),
-            ) => {
+            (tool, PrimitiveEdit::Number(F::Width, v)) if is_one_track(tool) => {
                 defaults.track_width_mm = Some(*v);
             }
-            (
-                BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting,
-                PrimitiveEdit::Net(net),
-            ) => defaults.track_net = Some(*net),
+            (tool, PrimitiveEdit::Net(net)) if is_one_track(tool) => {
+                defaults.track_net = Some(*net);
+            }
             // The location of what is not placed yet is the pointer's.
             _ => return,
         }

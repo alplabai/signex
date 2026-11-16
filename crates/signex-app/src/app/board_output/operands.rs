@@ -50,7 +50,8 @@ fn file(args: &CommandArgs) -> Option<PathBuf> {
 
 impl Signex {
     /// The open board `document` names. Refused with the reason when it
-    /// names none, names another kind, or the board is not open.
+    /// names none, names another kind, or the board is not open. Length
+    /// tuning (#2389) reads its board the same way.
     pub(crate) fn named_output_board(&self, args: &CommandArgs) -> Result<PathBuf, String> {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
             return Err("needs the operand `document`".to_string());

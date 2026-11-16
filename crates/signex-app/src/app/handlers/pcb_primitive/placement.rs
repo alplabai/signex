@@ -40,7 +40,9 @@ impl Signex {
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Via(via_facts(board, common, &[&via], i18n))
             }
-            BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting => {
+            BoardPlaceTool::Track
+            | BoardPlaceTool::InteractiveRouting
+            | BoardPlaceTool::QuickRoute => {
                 let track = self.next_board_track(board);
                 let mut common =
                     self.primitive_common_on(board, target, Editability::Editable, Some(track.net));
