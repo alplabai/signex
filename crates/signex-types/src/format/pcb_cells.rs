@@ -9,8 +9,8 @@ use super::pcb_rows::row_field_error;
 use super::tsv::format_f64;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::{FormatError, UnknownColumns};
-use crate::format::parse_pcb_layer;
 use crate::pcb::{LayerSize, LayerSizes, Point};
+use crate::pcb_stack::size_storable;
 
 /// Header of the optional `rotation` pad column: the pad's own turn in
 /// degrees. Rides the foreign-column path like `net_locked`; written only
@@ -132,13 +132,13 @@ pub(in crate::format) trait SizeCell: Copy + Sized {
     fn read(text: &str) -> Option<Self>;
 }
 
+/// The engine refuses an edit to a size [`size_storable`] refuses, so this
+/// refusal only meets a board built outside it.
 fn positive_nm(mm: f64) -> Result<i64, NonFiniteField> {
-    let nm = mm_to_nm(mm, LAYER_SIZES_COLUMN)?;
-    if nm > 0 {
-        Ok(nm)
-    } else {
-        Err(NonFiniteField(LAYER_SIZES_COLUMN))
+    if !size_storable(mm) {
+        return Err(NonFiniteField(LAYER_SIZES_COLUMN));
     }
+    mm_to_nm(mm, LAYER_SIZES_COLUMN)
 }
 
 fn read_nm(text: &str) -> Option<f64> {
@@ -168,6 +168,10 @@ impl SizeCell for Point {
 }
 
 fn layer_sizes_cell<T: SizeCell>(sizes: &LayerSizes<T>) -> Result<String, NonFiniteField> {
+    // The list rule the engine checks (`LayerSizes::list_fault`).
+    if sizes.list_fault().is_some() {
+        return Err(NonFiniteField(LAYER_SIZES_COLUMN));
+    }
     let entries: Vec<(String, T)> = match sizes {
         LayerSizes::TopMiddleBottom {
             top,
@@ -178,24 +182,13 @@ fn layer_sizes_cell<T: SizeCell>(sizes: &LayerSizes<T>) -> Result<String, NonFin
             .map(|k| k.to_string())
             .zip([*top, *middle, *bottom])
             .collect(),
-        LayerSizes::Full { layers } => {
-            if layers.is_empty() {
-                return Err(NonFiniteField(LAYER_SIZES_COLUMN));
-            }
-            layers.iter().map(|l| (l.layer.clone(), l.size)).collect()
-        }
+        LayerSizes::Full { layers } => layers.iter().map(|l| (l.layer.clone(), l.size)).collect(),
     };
     let mut parts = Vec::with_capacity(entries.len());
     for (key, size) in entries {
         parts.push(format!("{key}={}", size.write()?));
     }
-    let cell = parts.join(";");
-    // The reader refuses a cell that does not read back to the same sizes
-    // (an unknown layer, a layer twice), so the save is refused instead.
-    match read_layer_sizes::<T>(&cell) {
-        Some(_) => Ok(cell),
-        None => Err(NonFiniteField(LAYER_SIZES_COLUMN)),
-    }
+    Ok(parts.join(";"))
 }
 
 /// The sizes a cell holds; `None` for a cell that is not one.
@@ -213,18 +206,15 @@ fn read_layer_sizes<T: SizeCell>(cell: &str) -> Option<LayerSizes<T>> {
             bottom: entries[2].1,
         });
     }
-    let mut layers: Vec<LayerSize<T>> = Vec::with_capacity(entries.len());
-    for (key, size) in entries {
-        parse_pcb_layer(key)?.copper()?;
-        if layers.iter().any(|l| l.layer == key) {
-            return None;
-        }
-        layers.push(LayerSize {
+    let layers = entries
+        .into_iter()
+        .map(|(key, size)| LayerSize {
             layer: key.to_string(),
             size,
-        });
-    }
-    (!layers.is_empty()).then_some(LayerSizes::Full { layers })
+        })
+        .collect();
+    let sizes = LayerSizes::Full { layers };
+    sizes.list_fault().is_none().then_some(sizes)
 }
 
 pub(in crate::format) fn with_layer_sizes_cell<T: SizeCell>(

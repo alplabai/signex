@@ -265,6 +265,26 @@ fn an_inner_layer_via_rule_does_not_lift_a_board_wide_minimum_off_the_outer_laye
 }
 
 #[test]
+fn a_top_middle_bottom_via_is_checked_with_its_part_sizes_not_its_own_diameter() {
+    // Diameter 0.45 left over from Simple mode; every part is 0.6 (#2401).
+    let mut v = via(1, (0.0, 0.0), 1);
+    v.diameter = 0.45;
+    v.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.6,
+        middle: 0.6,
+        bottom: 0.6,
+    });
+    let four = four_layers(named(board(vec![], vec![], vec![v])));
+    let all = rule(
+        "vias",
+        NetScope::Board,
+        vec![Limit::MinViaDiameter(500_000)],
+    );
+    let found = via_findings(&four, vec![all]);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
 fn an_inner_layer_clearance_rule_finds_nothing_on_a_two_layer_board() {
     let mut inner = clearance("inner", NetScope::Board, 500_000);
     inner.layers = Some(INNER);

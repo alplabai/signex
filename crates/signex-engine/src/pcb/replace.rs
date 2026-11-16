@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashSet};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{LayerSizes, Pad, PcbBoard, Segment, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
-use signex_types::pcb_stack::board_copper_layers;
+use signex_types::pcb_stack::{LayerSizesFault, board_copper_layers, size_storable};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -138,15 +138,15 @@ fn check_span(board: &PcbBoard, via: &Via) -> Result<(), BoardCommandError> {
     Ok(())
 }
 
-/// Per-layer diameters (#2401) are positive, larger than the hole, and on
-/// copper layers of the board.
+/// Per-layer diameters (#2401) are at least 1 nm, larger than the hole, and
+/// on copper layers of the board.
 fn check_via_sizes(board: &PcbBoard, via: &Via) -> Result<(), BoardCommandError> {
     let Some(sizes) = via.layer_sizes.as_ref() else {
         return Ok(());
     };
     check_size_layers(board, sizes)?;
     for diameter in sizes.sizes() {
-        check_positive(diameter, "via diameter")?;
+        check_layer_size(diameter, "via diameter")?;
         if via.drill >= diameter {
             return Err(BoardCommandError::HoleTooLarge {
                 hole: via.drill,
@@ -157,8 +157,19 @@ fn check_via_sizes(board: &PcbBoard, via: &Via) -> Result<(), BoardCommandError>
     Ok(())
 }
 
-/// A per-layer size names a copper layer of the board.
+/// Per-layer sizes the file can hold (the writer's own list rule), each on
+/// a copper layer of the board.
 fn check_size_layers<T>(board: &PcbBoard, sizes: &LayerSizes<T>) -> Result<(), BoardCommandError> {
+    match sizes.list_fault() {
+        None => {}
+        Some(LayerSizesFault::NoLayers) => return Err(BoardCommandError::NoSizeLayers),
+        Some(LayerSizesFault::NotCopper(layer)) => {
+            return Err(BoardCommandError::NotCopperLayer(layer));
+        }
+        Some(LayerSizesFault::NamedTwice(layer)) => {
+            return Err(BoardCommandError::DuplicateSizeLayer(layer));
+        }
+    }
     let LayerSizes::Full { layers } = sizes else {
         return Ok(());
     };
@@ -177,6 +188,15 @@ fn check_positive(value: f64, field: &'static str) -> Result<(), BoardCommandErr
     }
     if value <= 0.0 {
         return Err(BoardCommandError::NotPositive { field });
+    }
+    Ok(())
+}
+
+/// A per-layer size is positive and saves as at least 1 nm.
+fn check_layer_size(value: f64, field: &'static str) -> Result<(), BoardCommandError> {
+    check_positive(value, field)?;
+    if !size_storable(value) {
+        return Err(BoardCommandError::SizeTooSmall { field });
     }
     Ok(())
 }
@@ -261,8 +281,8 @@ fn check_pad(board: &PcbBoard, old: &Pad, new: &Pad) -> Result<(), BoardCommandE
     {
         check_size_layers(board, sizes)?;
         for size in sizes.sizes() {
-            check_positive(size.x, "pad x size")?;
-            check_positive(size.y, "pad y size")?;
+            check_layer_size(size.x, "pad x size")?;
+            check_layer_size(size.y, "pad y size")?;
             if let Some(drill) = new.drill.as_ref()
                 && drill.diameter > size.x.min(size.y)
             {

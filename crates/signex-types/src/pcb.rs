@@ -396,13 +396,26 @@ impl Via {
             .unwrap_or(self.diameter)
     }
 
-    /// The smallest copper diameter on any layer.
-    pub fn min_diameter(&self) -> f64 {
-        self.layer_sizes
-            .as_ref()
-            .map_or(Vec::new(), LayerSizes::sizes)
-            .into_iter()
-            .fold(self.diameter, f64::min)
+    /// The smallest copper diameter on the layers the via passes through:
+    /// those of `copper` (the board's copper, top to bottom) between its two
+    /// span ends, every one of them when a span end is not copper.
+    /// [`Self::diameter`] counts only on a layer its sizes do not cover, as
+    /// top/middle/bottom sizes cover every layer.
+    pub fn min_diameter(&self, copper: &[CopperLayer]) -> f64 {
+        let ends: Option<Vec<CopperLayer>> = self
+            .layers
+            .iter()
+            .map(|name| parse_pcb_layer(name).and_then(PcbLayer::copper))
+            .collect();
+        let span = ends
+            .filter(|ends| !ends.is_empty())
+            .and_then(|ends| Some((*ends.iter().min()?, *ends.iter().max()?)));
+        copper
+            .iter()
+            .filter(|&&layer| span.is_none_or(|(from, to)| (from..=to).contains(&layer)))
+            .map(|&layer| self.diameter_on(layer))
+            .reduce(f64::min)
+            .unwrap_or(self.diameter)
     }
 }
 

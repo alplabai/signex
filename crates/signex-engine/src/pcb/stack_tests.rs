@@ -176,3 +176,86 @@ fn bad_stacks_are_refused() {
         Err(BoardCommandError::OuterCopperMoved(_))
     ));
 }
+
+/// A through via with a size on each of `layers`, inner ones smaller.
+fn full_via(layers: &[&str]) -> signex_types::pcb::Via {
+    let sizes: Vec<serde_json::Value> = layers
+        .iter()
+        .enumerate()
+        .map(|(i, l)| serde_json::json!({"layer": l, "size": 0.6 - 0.05 * i as f64}))
+        .collect();
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(9), "position": {"x": 0.0, "y": 0.0},
+        "diameter": 0.6, "drill": 0.2, "layers": ["TopCopper", "BottomCopper"],
+        "layer_sizes": {"mode": "full", "layers": sizes}
+    }))
+    .unwrap()
+}
+
+#[test]
+fn removing_an_inner_layer_drops_its_full_sizes_and_undo_puts_them_back() {
+    let mut b = board(4, "TopCopper");
+    b.vias.push(full_via(&[
+        "TopCopper",
+        "Inner1Copper",
+        "Inner2Copper",
+        "BottomCopper",
+    ]));
+    let inner2 = b.vias[0].layer_sizes.as_ref().unwrap().sizes()[2];
+    let before = snapshot(&b);
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    stack.layers.remove(copper_row(&stack, 1));
+    let applied = set(&mut b, stack).unwrap();
+
+    let sizes = b.vias[0].layer_sizes.clone().unwrap();
+    let signex_types::pcb::LayerSizes::Full { layers } = &sizes else {
+        panic!("still a full list: {sizes:?}");
+    };
+    let names: Vec<&str> = layers.iter().map(|l| l.layer.as_str()).collect();
+    assert_eq!(
+        names,
+        ["TopCopper", "Inner1Copper", "BottomCopper"],
+        "Inner 1's entry is gone and Inner 2's moved up, each named once"
+    );
+    assert_eq!(sizes.on_token("Inner1Copper"), Some(inner2));
+    signex_types::format::SnxPcb::new(b.clone())
+        .write_string()
+        .expect("the board saves");
+
+    let after = snapshot(&b);
+    let redo = applied.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), before, "undo is exact");
+    redo.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), after, "redo is exact");
+}
+
+#[test]
+fn a_full_list_left_with_no_entry_becomes_one_size() {
+    let mut b = board(3, "TopCopper");
+    b.vias.push(full_via(&["Inner1Copper"]));
+    let before = snapshot(&b);
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    stack.layers.remove(copper_row(&stack, 1));
+    let applied = set(&mut b, stack).unwrap();
+    assert_eq!(b.vias[0].layer_sizes, None);
+    applied.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), before);
+}
+
+#[test]
+fn a_stack_edit_that_keeps_the_copper_leaves_the_layer_list_alone() {
+    let mut b = board(4, "TopCopper");
+    // The silkscreen between two copper entries, as a user may order tabs.
+    let silk = b.layers.remove(0);
+    b.layers.insert(2, silk);
+    let layers = b.layers.clone();
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    let dielectric = stack
+        .layers
+        .iter()
+        .position(|l| l.kind == StackLayerKind::Dielectric)
+        .unwrap();
+    stack.layers[dielectric].thickness_mm += 0.1;
+    set(&mut b, stack).unwrap();
+    assert_eq!(b.layers, layers, "the tab order is kept");
+}

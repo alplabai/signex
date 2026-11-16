@@ -122,6 +122,12 @@ pub enum BoardCommandError {
     ItemLocked(BoardItemId),
     #[error("a via spans two different copper layers of the board, not {0}")]
     BadViaSpan(String),
+    #[error("per-layer sizes need at least one copper layer")]
+    NoSizeLayers,
+    #[error("{0} is named by two per-layer sizes")]
+    DuplicateSizeLayer(String),
+    #[error("{field} must be at least 1 nm")]
+    SizeTooSmall { field: &'static str },
     #[error("a failed command could not be rolled back: {0}")]
     RollbackFailed(String),
 }

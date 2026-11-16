@@ -267,3 +267,76 @@ fn a_smaller_inner_via_size_through_the_panel_and_an_agent() {
         "one step"
     );
 }
+
+/// Type `text` into `field` of `target`'s panel and press Enter.
+fn submit(app: &mut Signex, target: &PrimitiveTarget, field: PrimitiveField, text: &str) {
+    panel(
+        app,
+        PcbPrimitiveMsg::FieldTyped {
+            target: target.clone(),
+            field,
+            text: text.into(),
+        },
+    );
+    panel(
+        app,
+        PcbPrimitiveMsg::FieldSubmitted {
+            target: target.clone(),
+            field,
+        },
+    );
+}
+
+#[test]
+fn a_top_middle_bottom_via_is_as_small_as_its_parts_not_its_left_over_diameter() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let via = target(&path, ItemRef::Via(VIA));
+    panel(
+        &mut app,
+        PcbPrimitiveMsg::StackModePicked {
+            target: via.clone(),
+            mode: StackMode::TopMiddleBottom,
+        },
+    );
+    let inner1 = CopperLayer::Inner(InnerCopper::new(1).unwrap());
+    for layer in [CopperLayer::Top, inner1, CopperLayer::Bottom] {
+        submit(&mut app, &via, PrimitiveField::LayerSize(layer), "0.7");
+    }
+    let b = board_of(&app, &path);
+    assert_eq!(
+        b.vias[0].layer_sizes,
+        Some(LayerSizes::TopMiddleBottom {
+            top: 0.7,
+            middle: 0.7,
+            bottom: 0.7
+        })
+    );
+    assert_eq!(b.vias[0].diameter, 0.6, "the Simple diameter is left over");
+    let copper = signex_types::pcb_stack::board_copper_layers(&b.layers);
+    assert_eq!(
+        b.vias[0].min_diameter(&copper),
+        0.7,
+        "the hidden diameter is no layer's size"
+    );
+}
+
+#[test]
+fn an_empty_size_list_from_an_agent_is_refused_and_the_board_still_saves() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let command = AppCommandId::new("set_layer_sizes").unwrap();
+    let document = format!("document={}", path.display());
+    let ids = format!("ids={VIA}");
+    let args = CommandArgs::parse_operands(&command, &[document.as_str(), ids.as_str(), "sizes=;"])
+        .expect("operands");
+    let (outcome, _) = app.run_operands(&command, &args);
+    assert!(
+        matches!(outcome, CommandOutcome::Disabled { .. }),
+        "a list naming no layer is refused: {outcome:?}"
+    );
+    assert_eq!(board_of(&app, &path).vias[0].layer_sizes, None);
+    SnxPcb::new(board_of(&app, &path).clone())
+        .write_string()
+        .expect("the board saves");
+}

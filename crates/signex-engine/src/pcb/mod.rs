@@ -60,4 +60,4 @@ pub use footprint::FootprintFace;
 pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
 pub use replace::FootprintPad;
-pub use stack::StackSnapshot;
+pub use stack::{ItemLayerSizes, StackSnapshot};

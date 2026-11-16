@@ -18,14 +18,17 @@ copper row names the board layer it was (`layer`), or none for a new one.
 `BoardCommand::SetLayerStack` (`signex_engine::pcb::stack`) gives each row
 its token by place and renames the copper of every item (tracks, vias, their
 per-layer sizes, zones, texts, graphics, footprints and pads) whose layer
-moved place, as one undo step. It also writes the copper entries of the
-layer list (the layer tabs read it) and sets the board thickness to the
-stack's total. It is refused for a number that is negative or not finite,
+moved place, as one undo step. A per-layer size on a removed copper layer is
+dropped (a list left with no entry becomes the item's one size). It also
+writes the copper entries of the layer list (the layer tabs read it), each
+in the place of a copper entry in turn, so other entries keep their place and
+an edit that keeps the copper leaves the list as it was; it sets the board
+thickness to the stack's total. It is refused for a number that is negative or not finite,
 fewer than 2 or more than 32 copper rows, a copper row naming a layer the
 board does not have or one named twice, an outer copper row moved inward,
 and a copper layer left out while items or a board-sketch keepout are on
 it. Its inverse, `RestoreLayerStack`, puts back the stack, layer list,
-thickness and copper names exactly.
+thickness, copper names and dropped sizes exactly.
 
 The manager (Design ▸ Layer Stack Manager..., `board_layer_stack`) is a
 table, one row per layer: Name, Type (a copper row switches between Signal
@@ -45,12 +48,16 @@ size) may size its copper by layer: top/middle/bottom (middle is every inner
 layer) or a size per copper layer, where a layer not listed keeps the item's
 own size. Saved in the optional `layer_sizes` via and pad column, in nm:
 `top=<v>;middle=<v>;bottom=<v>` or `<layer>=<v>;...`, a pad size `<x>x<y>`.
-A malformed cell is a load error. The Via and Pad panels' Simple /
+A malformed cell is a load error. One rule (`LayerSizes::list_fault`,
+`size_storable`) holds for the engine and the writer: a per-layer list names
+at least one copper layer, each once, and every size is at least 1 nm, so an
+edit the engine takes always saves. The Via and Pad panels' Simple /
 Top-Middle-Bottom / Full Stack tiles pick the form (each layer keeps its
 size) and show a size row per layer. The renderer draws a via or pad with its
 size on the active copper layer; DRC checks a via with its copper on each
 layer (`pcb_geom::via_pieces`) and its smallest ring against a minimum
-diameter rule. Fabrication outputs do not read the sizes yet.
+diameter rule (`Via::min_diameter`: the layers its span passes, the via's
+own diameter only where its sizes do not cover a layer). Fabrication outputs do not read the sizes yet.
 
 ## Locks and the via span {#locks}
 

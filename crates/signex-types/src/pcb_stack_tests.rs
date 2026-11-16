@@ -99,7 +99,65 @@ fn a_via_with_a_smaller_inner_size_keeps_its_own_size_elsewhere() {
     let inner = CopperLayer::Inner(InnerCopper::new(1).unwrap());
     assert_eq!(via.diameter_on(inner), 0.45);
     assert_eq!(via.diameter_on(CopperLayer::Top), 0.6);
-    assert_eq!(via.min_diameter(), 0.45);
+    assert_eq!(
+        via.min_diameter(&[CopperLayer::Top, inner, CopperLayer::Bottom]),
+        0.45
+    );
+}
+
+#[test]
+fn a_top_middle_bottom_via_ignores_its_own_diameter() {
+    let mut via: crate::pcb::Via = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "position": {"x": 0.0, "y": 0.0},
+        "diameter": 0.45,
+        "drill": 0.3,
+        "layers": ["TopCopper", "BottomCopper"],
+        "layer_sizes": {"mode": "top_middle_bottom", "top": 0.6, "middle": 0.6, "bottom": 0.6}
+    }))
+    .unwrap();
+    let inner = CopperLayer::Inner(InnerCopper::new(1).unwrap());
+    let copper = [CopperLayer::Top, inner, CopperLayer::Bottom];
+    assert_eq!(via.min_diameter(&copper), 0.6);
+    // A full list that leaves Inner 1 out keeps the via's own size there.
+    via.layer_sizes = Some(LayerSizes::Full {
+        layers: vec![
+            LayerSize::new(CopperLayer::Top, 0.6),
+            LayerSize::new(CopperLayer::Bottom, 0.6),
+        ],
+    });
+    assert_eq!(via.min_diameter(&copper), 0.45);
+    // A blind via from Top to Inner 1 never reaches the bottom's size.
+    via.layers = vec!["TopCopper".into(), "Inner1Copper".into()];
+    via.layer_sizes = Some(LayerSizes::Full {
+        layers: vec![
+            LayerSize::new(CopperLayer::Top, 0.6),
+            LayerSize::new(inner, 0.6),
+            LayerSize::new(CopperLayer::Bottom, 0.3),
+        ],
+    });
+    assert_eq!(via.min_diameter(&copper), 0.6);
+}
+
+#[test]
+fn a_size_list_the_file_cannot_hold_has_a_fault() {
+    let empty: LayerSizes<f64> = LayerSizes::Full { layers: Vec::new() };
+    assert_eq!(empty.list_fault(), Some(LayerSizesFault::NoLayers));
+    let twice = LayerSizes::Full {
+        layers: vec![
+            LayerSize::new(CopperLayer::Top, 0.6),
+            LayerSize::new(CopperLayer::Top, 0.5),
+        ],
+    };
+    assert_eq!(
+        twice.list_fault(),
+        Some(LayerSizesFault::NamedTwice("TopCopper".into()))
+    );
+    assert!(size_storable(0.000_001));
+    assert!(!size_storable(0.000_000_4));
+    assert!(!size_storable(f64::NAN));
+    let number = |t: &str| t.parse::<f64>().ok();
+    assert!(parse_layer_sizes(";", number).is_err());
 }
 
 #[test]

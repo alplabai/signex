@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::format::{parse_pcb_layer, pcb_layer_token};
+use crate::format::{mm_as_stored_nm, parse_pcb_layer, pcb_layer_token};
 use crate::pcb::{LayerDef, PCB_DEFAULT_THICKNESS_MM};
 use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer};
 
@@ -323,6 +323,49 @@ impl<T: Copy> LayerSizes<T> {
     }
 }
 
+/// Why per-layer sizes cannot be saved: the list rule the board engine and
+/// the `.snxpcb` writer share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LayerSizesFault {
+    /// A full list that names no layer.
+    NoLayers,
+    /// An entry whose name is not a copper layer.
+    NotCopper(String),
+    /// A copper layer named by two entries.
+    NamedTwice(String),
+}
+
+impl<T> LayerSizes<T> {
+    /// What keeps the list from being saved; `None` for one that saves.
+    /// The sizes themselves are checked with [`size_storable`].
+    pub fn list_fault(&self) -> Option<LayerSizesFault> {
+        let Self::Full { layers } = self else {
+            return None;
+        };
+        if layers.is_empty() {
+            return Some(LayerSizesFault::NoLayers);
+        }
+        for (i, entry) in layers.iter().enumerate() {
+            if parse_pcb_layer(&entry.layer)
+                .and_then(PcbLayer::copper)
+                .is_none()
+            {
+                return Some(LayerSizesFault::NotCopper(entry.layer.clone()));
+            }
+            if layers[..i].iter().any(|l| l.layer == entry.layer) {
+                return Some(LayerSizesFault::NamedTwice(entry.layer.clone()));
+            }
+        }
+        None
+    }
+}
+
+/// Whether `mm` is a per-layer copper size the file can hold: finite and at
+/// least 1 nm once rounded to the whole nm it is saved as.
+pub fn size_storable(mm: f64) -> bool {
+    mm_as_stored_nm(mm).is_some_and(|nm| nm > 0)
+}
+
 /// How a via or pad sizes its copper by layer: the three choices of its
 /// Properties stack row (#2401).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -424,17 +467,17 @@ pub fn parse_layer_sizes<T>(
             bottom,
         }));
     }
-    let mut layers: Vec<LayerSize<T>> = Vec::with_capacity(entries.len());
-    for (key, size) in entries {
-        if parse_pcb_layer(&key).and_then(PcbLayer::copper).is_none() {
-            return Err(format!("{key} is not a copper layer"));
-        }
-        if layers.iter().any(|l| l.layer == key) {
-            return Err(format!("{key} is named twice"));
-        }
-        layers.push(LayerSize { layer: key, size });
+    let layers = entries
+        .into_iter()
+        .map(|(layer, size)| LayerSize { layer, size })
+        .collect();
+    let sizes = LayerSizes::Full { layers };
+    match sizes.list_fault() {
+        None => Ok(Some(sizes)),
+        Some(LayerSizesFault::NoLayers) => Err("no copper layer is named".to_string()),
+        Some(LayerSizesFault::NotCopper(key)) => Err(format!("{key} is not a copper layer")),
+        Some(LayerSizesFault::NamedTwice(key)) => Err(format!("{key} is named twice")),
     }
-    Ok(Some(LayerSizes::Full { layers }))
 }
 
 #[cfg(test)]

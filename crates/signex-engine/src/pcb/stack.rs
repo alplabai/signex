@@ -4,17 +4,20 @@
 //!
 //! Copper is named by place, top to bottom (`copper_at`): a new inner layer
 //! between Inner 1 and Inner 2 is Inner 2, and what was on Inner 2 moves to
-//! Inner 3 with it. The rename is a bijection on the copper that stays, so
-//! the inverse ([`StackSnapshot`]) restores the board bit for bit.
+//! Inner 3 with it. The rename is a bijection on the copper that stays; a
+//! per-layer size entry on a removed layer is dropped (a full list left
+//! empty becomes one size). The inverse ([`StackSnapshot`]) restores the
+//! board bit for bit.
 
 use std::collections::{HashMap, HashSet};
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
-use signex_types::pcb::{LayerDef, PcbBoard};
+use signex_types::pcb::{LayerDef, PcbBoard, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::{
     LayerSizes, LayerStack, MAX_COPPER_LAYERS, board_copper_layers, copper_at,
 };
+use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
@@ -28,6 +31,22 @@ pub struct StackSnapshot {
     pub thickness: f64,
     /// Copper layer tokens to rename, `(now, then)`.
     pub renames: Vec<(String, String)>,
+    /// Per-layer sizes to put back after the rename.
+    pub sizes: Vec<ItemLayerSizes>,
+}
+
+/// The per-layer sizes one via or pad held.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ItemLayerSizes {
+    Via {
+        via: Uuid,
+        sizes: Option<LayerSizes<f64>>,
+    },
+    Pad {
+        footprint: Uuid,
+        pad: Uuid,
+        sizes: Option<LayerSizes<Point>>,
+    },
 }
 
 /// Replace the stack with `stack`. Refused, before any write, for a row
@@ -39,17 +58,22 @@ pub(super) fn set(
     board: &mut PcbBoard,
     mut stack: LayerStack,
 ) -> Result<Applied, BoardCommandError> {
-    let Plan { renames, origins } = plan(board, &mut stack)?;
+    let Plan {
+        renames,
+        origins,
+        removed,
+    } = plan(board, &mut stack)?;
+    let layers = copper_defs(&board.layers, &stack, &origins)?;
     let snapshot = StackSnapshot {
         stackup: board.stackup.clone(),
-        layers: board.layers.clone(),
+        layers: std::mem::replace(&mut board.layers, layers),
         thickness: board.thickness,
         renames: renames
             .iter()
             .map(|(a, b)| (b.clone(), a.clone()))
             .collect(),
+        sizes: drop_removed_sizes(board, &removed),
     };
-    board.layers = copper_defs(&board.layers, &stack, &origins)?;
     rename_layers(board, &renames);
     let total = stack.total_thickness_mm();
     if total.is_finite() && total > 0.0 {
@@ -74,8 +98,16 @@ pub(super) fn restore(
             .iter()
             .map(|(a, b)| (b.clone(), a.clone()))
             .collect(),
+        sizes: snapshot
+            .sizes
+            .iter()
+            .map(|held| current_sizes(board, held))
+            .collect(),
     };
     rename_layers(board, &renames);
+    for held in snapshot.sizes {
+        put_sizes(board, held);
+    }
     board.stackup = snapshot.stackup;
     Ok(applied(inverse))
 }
@@ -97,6 +129,8 @@ struct Plan {
     /// Per copper row, top to bottom: the board layer it was; `None` for a
     /// new layer.
     origins: Vec<Option<String>>,
+    /// Tokens of the copper layers the stack leaves out.
+    removed: Vec<String>,
 }
 
 /// Check `stack` and give its copper rows their tokens by place.
@@ -143,8 +177,13 @@ fn plan(board: &PcbBoard, stack: &mut LayerStack) -> Result<Plan, BoardCommandEr
         }
         row.layer = token(new);
     }
-    for gone in current.iter().filter(|layer| !kept.contains(layer)) {
-        check_empty(board, &token(*gone))?;
+    let removed: Vec<String> = current
+        .iter()
+        .filter(|layer| !kept.contains(layer))
+        .map(|layer| token(*layer))
+        .collect();
+    for gone in &removed {
+        check_empty(board, gone)?;
     }
     let moved: Vec<&String> = renames.iter().map(|(old, _)| old).collect();
     for old in moved {
@@ -152,7 +191,11 @@ fn plan(board: &PcbBoard, stack: &mut LayerStack) -> Result<Plan, BoardCommandEr
             return Err(BoardCommandError::KeepoutOnLayer(old.clone()));
         }
     }
-    Ok(Plan { renames, origins })
+    Ok(Plan {
+        renames,
+        origins,
+        removed,
+    })
 }
 
 fn token(layer: CopperLayer) -> String {
@@ -199,9 +242,11 @@ fn keepout_names(board: &PcbBoard, layer: &str) -> bool {
         .is_some_and(|s| s.keepouts.iter().any(|k| k.layers.contains(&copper)))
 }
 
-/// The layer list with its copper entries following `stack`: the other
-/// entries keep their place, the copper goes where the first copper entry
-/// was (first when there was none), top to bottom. A layer that stays keeps
+/// The layer list with its copper entries following `stack`, top to
+/// bottom, each in the place of a copper entry in turn: the other entries
+/// keep their place, so a list whose copper did not change stays as it
+/// was. Copper past the last entry follows it (first when there was none);
+/// entries past the stack's copper are dropped. A layer that stays keeps
 /// its entry (id, display name) under its new token; a new one takes the
 /// first free id.
 fn copper_defs(
@@ -210,8 +255,7 @@ fn copper_defs(
     origins: &[Option<String>],
 ) -> Result<Vec<LayerDef>, BoardCommandError> {
     let is_copper = |def: &LayerDef| parse_pcb_layer(&def.name).is_some_and(|l| l.is_copper());
-    let at = layers.iter().position(is_copper).unwrap_or(0);
-    let mut out: Vec<LayerDef> = layers.iter().filter(|&d| !is_copper(d)).cloned().collect();
+    let others: Vec<&LayerDef> = layers.iter().filter(|&d| !is_copper(d)).collect();
     let previous: Vec<Option<&LayerDef>> = origins
         .iter()
         .map(|was| {
@@ -219,7 +263,7 @@ fn copper_defs(
             layers.iter().find(|d| d.name == was)
         })
         .collect();
-    let mut used: HashSet<u8> = out.iter().map(|d| d.id).collect();
+    let mut used: HashSet<u8> = others.iter().map(|d| d.id).collect();
     used.extend(previous.iter().flatten().map(|d| d.id));
     let mut copper = Vec::with_capacity(stack.copper_count());
     for (row, previous) in stack.copper().zip(previous) {
@@ -247,9 +291,121 @@ fn copper_defs(
         }
         copper.push(def);
     }
-    let at = at.min(out.len());
-    out.splice(at..at, copper);
+    let last = layers.iter().rposition(is_copper);
+    let mut copper = copper.into_iter();
+    let mut out = Vec::with_capacity(others.len() + copper.len());
+    if last.is_none() {
+        out.extend(copper.by_ref());
+    }
+    for (i, def) in layers.iter().enumerate() {
+        if !is_copper(def) {
+            out.push(def.clone());
+            continue;
+        }
+        out.extend(copper.next());
+        if Some(i) == last {
+            out.extend(copper.by_ref());
+        }
+    }
     Ok(out)
+}
+
+/// Drop the per-layer size entries on `removed` copper layers from every
+/// via and pad; what each changed item held, to put back.
+fn drop_removed_sizes(board: &mut PcbBoard, removed: &[String]) -> Vec<ItemLayerSizes> {
+    let mut held = Vec::new();
+    if removed.is_empty() {
+        return held;
+    }
+    for via in &mut board.vias {
+        if let Some(sizes) = without_removed(via.layer_sizes.as_ref(), removed) {
+            held.push(ItemLayerSizes::Via {
+                via: via.uuid,
+                sizes: std::mem::replace(&mut via.layer_sizes, sizes),
+            });
+        }
+    }
+    for fp in &mut board.footprints {
+        for pad in &mut fp.pads {
+            if let Some(sizes) = without_removed(pad.layer_sizes.as_ref(), removed) {
+                held.push(ItemLayerSizes::Pad {
+                    footprint: fp.uuid,
+                    pad: pad.uuid,
+                    sizes: std::mem::replace(&mut pad.layer_sizes, sizes),
+                });
+            }
+        }
+    }
+    held
+}
+
+/// `sizes` without its entries on `removed`, `None` inside when no entry
+/// is left; `None` when nothing is dropped.
+fn without_removed<T: Clone>(
+    sizes: Option<&LayerSizes<T>>,
+    removed: &[String],
+) -> Option<Option<LayerSizes<T>>> {
+    let Some(LayerSizes::Full { layers }) = sizes else {
+        return None;
+    };
+    if !layers.iter().any(|l| removed.contains(&l.layer)) {
+        return None;
+    }
+    let kept: Vec<_> = layers
+        .iter()
+        .filter(|l| !removed.contains(&l.layer))
+        .cloned()
+        .collect();
+    Some((!kept.is_empty()).then_some(LayerSizes::Full { layers: kept }))
+}
+
+/// What the item `held` names holds now.
+fn current_sizes(board: &PcbBoard, held: &ItemLayerSizes) -> ItemLayerSizes {
+    match held {
+        ItemLayerSizes::Via { via, .. } => ItemLayerSizes::Via {
+            via: *via,
+            sizes: board
+                .vias
+                .iter()
+                .find(|v| v.uuid == *via)
+                .and_then(|v| v.layer_sizes.clone()),
+        },
+        ItemLayerSizes::Pad { footprint, pad, .. } => ItemLayerSizes::Pad {
+            footprint: *footprint,
+            pad: *pad,
+            sizes: board
+                .footprints
+                .iter()
+                .find(|fp| fp.uuid == *footprint)
+                .and_then(|fp| fp.pads.iter().find(|p| p.uuid == *pad))
+                .and_then(|p| p.layer_sizes.clone()),
+        },
+    }
+}
+
+/// Give the item `held` names the sizes it holds.
+fn put_sizes(board: &mut PcbBoard, held: ItemLayerSizes) {
+    match held {
+        ItemLayerSizes::Via { via, sizes } => {
+            if let Some(v) = board.vias.iter_mut().find(|v| v.uuid == via) {
+                v.layer_sizes = sizes;
+            }
+        }
+        ItemLayerSizes::Pad {
+            footprint,
+            pad,
+            sizes,
+        } => {
+            let pad = board
+                .footprints
+                .iter_mut()
+                .find(|fp| fp.uuid == footprint)
+                .and_then(|fp| fp.pads.iter_mut().find(|p| p.uuid == pad));
+            if let Some(p) = pad {
+                p.layer_sizes = sizes;
+            }
+        }
+    }
 }
 
 /// Rename copper layer tokens `(from, to)` on every item at once.

@@ -263,3 +263,109 @@ fn set_layer_stack_stores_the_stack_an_agent_sends_as_one_step() {
         "a stack without copper is refused: {outcome:?}"
     );
 }
+
+/// Four copper layers and a through via with a size on each of them.
+fn board_with_full_via() -> PcbBoard {
+    let layer =
+        |id: u8, name: &str| serde_json::json!({"id": id, "name": name, "layer_type": "signal"});
+    let sizes: Vec<serde_json::Value> =
+        ["TopCopper", "Inner1Copper", "Inner2Copper", "BottomCopper"]
+            .iter()
+            .zip([0.6, 0.55, 0.5, 0.45])
+            .map(|(l, size)| serde_json::json!({"layer": l, "size": size}))
+            .collect();
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(1),
+        "thickness": 1.6,
+        "layers": [layer(0, "TopCopper"), layer(1, "Inner1Copper"),
+                   layer(2, "Inner2Copper"), layer(31, "BottomCopper")],
+        "vias": [{"uuid": Uuid::from_u128(9), "position": {"x": 0.0, "y": 0.0},
+                  "diameter": 0.6, "drill": 0.2, "layers": ["TopCopper", "BottomCopper"],
+                  "layer_sizes": {"mode": "full", "layers": sizes}}]
+    }))
+    .unwrap()
+}
+
+#[test]
+fn removing_an_inner_layer_drops_its_via_sizes_saves_and_undoes_exactly() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board_with_full_via());
+    let before = serde_json::to_string(board_of(&app, &path)).unwrap();
+    let inner1 = row_of(&facts(&app), StackLayerKind::Signal, 1);
+    send(
+        &mut app,
+        LayerStackMsg::RowSelected {
+            board: path.clone(),
+            row: inner1,
+        },
+    );
+    send(
+        &mut app,
+        LayerStackMsg::RowRemoved {
+            board: path.clone(),
+        },
+    );
+
+    let b = board_of(&app, &path);
+    assert_eq!(
+        copper_tabs(&app, &path),
+        ["TopCopper", "Inner1Copper", "BottomCopper"]
+    );
+    let Some(signex_types::pcb::LayerSizes::Full { layers }) = &b.vias[0].layer_sizes else {
+        panic!("still a full list: {:?}", b.vias[0].layer_sizes);
+    };
+    let held: Vec<(&str, f64)> = layers.iter().map(|l| (l.layer.as_str(), l.size)).collect();
+    assert_eq!(
+        held,
+        [
+            ("TopCopper", 0.6),
+            ("Inner1Copper", 0.5),
+            ("BottomCopper", 0.45)
+        ],
+        "Inner 1's size is gone and Inner 2's moved up with its layer"
+    );
+    signex_types::format::SnxPcb::new(b.clone())
+        .write_string()
+        .expect("the board saves");
+
+    undo(&mut app);
+    assert_eq!(
+        serde_json::to_string(board_of(&app, &path)).unwrap(),
+        before,
+        "one undo puts every size back"
+    );
+}
+
+#[test]
+fn a_thickness_edit_keeps_the_layer_tab_order() {
+    let dir = tempfile::tempdir().unwrap();
+    // The overlay is listed between Inner 1 and Bottom.
+    let (mut app, path) = app_with(dir.path(), true);
+    let layers = board_of(&app, &path).layers.clone();
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    send(
+        &mut app,
+        LayerStackMsg::FieldTyped {
+            board: path.clone(),
+            row,
+            field: StackField::Thickness,
+            text: "0.5 mm".into(),
+        },
+    );
+    send(
+        &mut app,
+        LayerStackMsg::FieldSubmitted {
+            board: path.clone(),
+            row,
+            field: StackField::Thickness,
+        },
+    );
+    assert!(board_of(&app, &path).stackup.is_some(), "the edit applied");
+    assert_eq!(
+        board_of(&app, &path).layers,
+        layers,
+        "the tabs keep their order"
+    );
+}

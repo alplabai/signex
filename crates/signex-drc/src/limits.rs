@@ -4,6 +4,7 @@
 //! nothing here.
 
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_stack::board_copper_layers;
 
 use pcb_geom::{ItemRef, PointNm, layer_mask, mm_to_nm, via_layers};
 
@@ -45,6 +46,7 @@ fn track_widths(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) 
 }
 
 fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
+    let copper = board_copper_layers(&board.layers);
     for via in &board.vias {
         let Ok(at) = PointNm::from_mm(via.position, "via position") else {
             continue;
@@ -56,10 +58,10 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
             at,
         };
         let sizes = [
-            // Its smallest copper ring, on whichever layer it is (#2401).
+            // Its smallest copper ring on a layer it passes (#2401).
             (
                 LimitKind::MinViaDiameter,
-                via.min_diameter(),
+                via.min_diameter(&copper),
                 "via diameter",
             ),
             (LimitKind::MinViaDrill, via.drill, "via drill"),
