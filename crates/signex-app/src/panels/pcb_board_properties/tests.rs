@@ -19,6 +19,7 @@ fn board() -> PcbBoard {
     let p = |x: f64, y: f64| Point { x, y };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

@@ -17,6 +17,7 @@ pub(super) fn id(n: u128) -> Uuid {
 
 pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
+        locked: false,
         uuid: id(2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -35,6 +36,8 @@ pub(super) fn via(n: u128, at: (f64, f64), net: u32) -> Via {
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -56,6 +59,7 @@ pub(super) fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -90,6 +94,7 @@ pub(super) fn board(
 ) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -347,6 +352,8 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
 fn blind_via(n: u128, at: (f64, f64), net: u32, bottom: &str, via_type: ViaType) -> Via {
     Via {
         layers: vec!["TopCopper".into(), bottom.into()],
+        locked: false,
+        layer_sizes: None,
         via_type,
         ..via(n, at, net)
     }
@@ -373,6 +380,31 @@ fn a_blind_or_micro_via_reaches_only_the_layers_it_spans() {
         let at_end = board(vec![], vec![track_on("Inner2Copper")], vec![via]);
         assert_eq!(kinds(&run(&at_end, &rules)), [ViolationKind::Clearance]);
     }
+}
+
+#[test]
+fn a_via_is_checked_with_its_size_on_each_layer() {
+    // 0.6 mm outside, 0.2 mm on the inner layers (#2401). A track at 0.5 mm
+    // has copper from 0.375 mm: 0.075 mm from the outer ring, 0.275 mm
+    // from the inner one.
+    let rules = DrcRules::new(RULE);
+    let mut small_inside = via(1, (5.0, 0.0), 1);
+    small_inside.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.6,
+        middle: 0.2,
+        bottom: 0.6,
+    });
+    let track_on = |layer: &str| track(1, (0.0, 0.5), (10.0, 0.5), 2, layer);
+    let inner = board(
+        vec![],
+        vec![track_on("Inner1Copper")],
+        vec![small_inside.clone()],
+    );
+    assert!(run(&inner, &rules).is_clean(), "the inner ring is clear");
+    let top = board(vec![], vec![track_on("TopCopper")], vec![small_inside]);
+    let report = run(&top, &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    assert_eq!(report.violations[0].layers, 1, "on the top layer only");
 }
 
 fn pad_sized(size: (f64, f64), shape: PadShape) -> Footprint {

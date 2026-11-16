@@ -141,6 +141,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("via_drill", OperandKind::Text),
     ("diff_pair_gap", OperandKind::Text),
     ("diff_pair_width", OperandKind::Text),
+    ("stack", OperandKind::Text),
+    ("sizes", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -603,3 +605,32 @@ pub fn describe(operands: &[Operand]) -> String {
         .collect();
     parts.join(",")
 }
+
+/// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
+/// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
+/// board layer it was, or none for a new layer.
+pub const SET_LAYER_STACK: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("stack", OperandKind::Text),
+];
+/// `lock_board_items` and `unlock_board_items` (#2407): tracks and vias of
+/// the named board by uuid, comma separated.
+pub const BOARD_ITEMS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+];
+/// `set_via_span` (#2407): vias by uuid and the two copper layers they join,
+/// `TopCopper,Inner2Copper`.
+pub const SET_VIA_SPAN: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+    required("layers", OperandKind::Text),
+];
+/// `set_layer_sizes` (#2401): vias or pads by uuid and their per-layer sizes
+/// in mm: `simple`, `top=..;middle=..;bottom=..` or `<copper layer>=..;..`,
+/// a via size one number, a pad size `<x>x<y>`.
+pub const SET_LAYER_SIZES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+    required("sizes", OperandKind::Text),
+];

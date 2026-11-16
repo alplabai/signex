@@ -223,6 +223,7 @@ fn reopening_an_already_open_schematic_tab_activates_it_instead_of_duplicating()
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

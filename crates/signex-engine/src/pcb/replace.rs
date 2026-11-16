@@ -4,7 +4,9 @@
 use std::collections::{BTreeSet, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Pad, PcbBoard, Segment, Via};
+use signex_types::pcb::{LayerSizes, Pad, PcbBoard, Segment, Via, ViaType};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_stack::{LayerSizesFault, board_copper_layers, size_storable};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -72,6 +74,11 @@ pub(super) fn replace(
 /// and a changed net is in the net table (or 0, no net). Unchanged values
 /// pass, so a board read with an odd value can still be edited elsewhere.
 fn check_segment(board: &PcbBoard, old: &Segment, new: &Segment) -> Result<(), BoardCommandError> {
+    if old.locked && new != old {
+        return Err(BoardCommandError::ItemLocked(BoardItemId::Segment(
+            old.uuid,
+        )));
+    }
     if new.width != old.width {
         check_positive(new.width, "track width")?;
     }
@@ -85,6 +92,15 @@ fn check_segment(board: &PcbBoard, old: &Segment, new: &Segment) -> Result<(), B
 /// A via's diameter and hole are positive numbers and the hole fits inside
 /// the via, once either changed; a changed net is in the net table.
 fn check_via(board: &PcbBoard, old: &Via, new: &Via) -> Result<(), BoardCommandError> {
+    if old.locked && new != old {
+        return Err(BoardCommandError::ItemLocked(BoardItemId::Via(old.uuid)));
+    }
+    if new.layers != old.layers || new.via_type != old.via_type {
+        check_span(board, new)?;
+    }
+    if new.layer_sizes != old.layer_sizes || new.drill != old.drill {
+        check_via_sizes(board, new)?;
+    }
     if new.diameter != old.diameter || new.drill != old.drill {
         check_positive(new.diameter, "via diameter")?;
         check_positive(new.drill, "via hole size")?;
@@ -98,12 +114,89 @@ fn check_via(board: &PcbBoard, old: &Via, new: &Via) -> Result<(), BoardCommandE
     check_net(board, old.net, new.net)
 }
 
+/// A via spans two different copper layers of the board (#2407); a through
+/// via spans the outer two, a blind or micro via does not.
+fn check_span(board: &PcbBoard, via: &Via) -> Result<(), BoardCommandError> {
+    let copper = board_copper_layers(&board.layers);
+    let bad = || BoardCommandError::BadViaSpan(via.layers.join(", "));
+    let ends: Vec<CopperLayer> = via
+        .layers
+        .iter()
+        .map(|name| parse_pcb_layer(name).and_then(PcbLayer::copper))
+        .collect::<Option<_>>()
+        .ok_or_else(bad)?;
+    let [a, b] = ends[..] else {
+        return Err(bad());
+    };
+    if a == b || !copper.contains(&a) || !copper.contains(&b) {
+        return Err(bad());
+    }
+    let outer = [a, b].contains(&CopperLayer::Top) && [a, b].contains(&CopperLayer::Bottom);
+    if outer != (via.via_type == ViaType::Through) {
+        return Err(bad());
+    }
+    Ok(())
+}
+
+/// Per-layer diameters (#2401) are at least 1 nm, larger than the hole, and
+/// on copper layers of the board.
+fn check_via_sizes(board: &PcbBoard, via: &Via) -> Result<(), BoardCommandError> {
+    let Some(sizes) = via.layer_sizes.as_ref() else {
+        return Ok(());
+    };
+    check_size_layers(board, sizes)?;
+    for diameter in sizes.sizes() {
+        check_layer_size(diameter, "via diameter")?;
+        if via.drill >= diameter {
+            return Err(BoardCommandError::HoleTooLarge {
+                hole: via.drill,
+                diameter,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Per-layer sizes the file can hold (the writer's own list rule), each on
+/// a copper layer of the board.
+fn check_size_layers<T>(board: &PcbBoard, sizes: &LayerSizes<T>) -> Result<(), BoardCommandError> {
+    match sizes.list_fault() {
+        None => {}
+        Some(LayerSizesFault::NoLayers) => return Err(BoardCommandError::NoSizeLayers),
+        Some(LayerSizesFault::NotCopper(layer)) => {
+            return Err(BoardCommandError::NotCopperLayer(layer));
+        }
+        Some(LayerSizesFault::NamedTwice(layer)) => {
+            return Err(BoardCommandError::DuplicateSizeLayer(layer));
+        }
+    }
+    let LayerSizes::Full { layers } = sizes else {
+        return Ok(());
+    };
+    let copper = board_copper_layers(&board.layers);
+    for size in layers {
+        if !size.copper().is_some_and(|layer| copper.contains(&layer)) {
+            return Err(BoardCommandError::NotCopperLayer(size.layer.clone()));
+        }
+    }
+    Ok(())
+}
+
 fn check_positive(value: f64, field: &'static str) -> Result<(), BoardCommandError> {
     if !value.is_finite() {
         return Err(BoardCommandError::NonFinite { field });
     }
     if value <= 0.0 {
         return Err(BoardCommandError::NotPositive { field });
+    }
+    Ok(())
+}
+
+/// A per-layer size is positive and saves as at least 1 nm.
+fn check_layer_size(value: f64, field: &'static str) -> Result<(), BoardCommandError> {
+    check_positive(value, field)?;
+    if !size_storable(value) {
+        return Err(BoardCommandError::SizeTooSmall { field });
     }
     Ok(())
 }
@@ -183,6 +276,23 @@ pub(super) fn replace_pads(
 /// A changed size is positive on both axes; a changed hole is positive and
 /// fits inside the pad; a changed net is in the table under its own name.
 fn check_pad(board: &PcbBoard, old: &Pad, new: &Pad) -> Result<(), BoardCommandError> {
+    if new.layer_sizes != old.layer_sizes
+        && let Some(sizes) = new.layer_sizes.as_ref()
+    {
+        check_size_layers(board, sizes)?;
+        for size in sizes.sizes() {
+            check_layer_size(size.x, "pad x size")?;
+            check_layer_size(size.y, "pad y size")?;
+            if let Some(drill) = new.drill.as_ref()
+                && drill.diameter > size.x.min(size.y)
+            {
+                return Err(BoardCommandError::HoleTooLarge {
+                    hole: drill.diameter,
+                    diameter: size.x.min(size.y),
+                });
+            }
+        }
+    }
     if new.size != old.size {
         check_positive(new.size.x, "pad x size")?;
         check_positive(new.size.y, "pad y size")?;

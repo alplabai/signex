@@ -17,6 +17,7 @@ mod facts;
 mod net_info;
 mod pad;
 mod rows;
+mod stack_rows;
 mod track;
 mod via;
 mod zone;
@@ -28,12 +29,13 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_types::pcb::PadShape;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_stack::StackMode;
 use signex_widgets::{text, text_input};
 
 pub use facts::{
-    AreaLayerChoice, Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
-    PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, ZoneFacts,
-    ZoneKind, shared,
+    AreaLayerChoice, Editability, LayerChoice, LayerSizeRow, NetChoice, NetInfo, PadFacts,
+    PcbPrimitiveFacts, PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts,
+    ViaFacts, ZoneFacts, ZoneKind, shared,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -101,6 +103,22 @@ pub enum PcbPrimitiveMsg {
     },
     ShowMoreToggled,
     SearchTyped(String),
+    /// The Lock box of tracks or vias (#2407).
+    LockToggled {
+        target: PrimitiveTarget,
+        locked: bool,
+    },
+    /// A via's From or To layer was picked (#2407): the span it then has.
+    SpanPicked {
+        target: PrimitiveTarget,
+        top: CopperLayer,
+        bottom: CopperLayer,
+    },
+    /// A Simple, Top-Middle-Bottom or Full Stack tile (#2401).
+    StackModePicked {
+        target: PrimitiveTarget,
+        mode: StackMode,
+    },
 }
 
 /// The panel for `facts`: header, then the kind's sections.
@@ -117,7 +135,13 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
     let note = |id| text(t!(ctx.i18n, id)).size(TS.dense).color(muted);
     match common.editability {
         Editability::ReadOnly => notes = notes.push(note(ids::PCB_PRIM_READ_ONLY)),
-        Editability::Locked => notes = notes.push(note(ids::PCB_PRIM_PAD_LOCKED)),
+        Editability::Locked => {
+            let id = match facts {
+                PcbPrimitiveFacts::Pad(_) => ids::PCB_PRIM_PAD_LOCKED,
+                _ => ids::PCB_PRIM_ITEM_LOCKED,
+            };
+            notes = notes.push(note(id));
+        }
         Editability::Editable => {}
     }
     if common.picking_net {

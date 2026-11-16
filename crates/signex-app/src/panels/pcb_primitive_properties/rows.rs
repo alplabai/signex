@@ -67,6 +67,11 @@ impl<'a> Section<'a> {
         }
     }
 
+    /// Add `row`, whose label the caller already matched to the search.
+    pub fn push_row(&mut self, row: Element<'a, PanelMsg>) {
+        self.rows.push(row);
+    }
+
     /// The section, or nothing when the search left no row.
     pub fn finish(self) -> Option<Element<'a, PanelMsg>> {
         if self.rows.is_empty() {
@@ -98,9 +103,9 @@ pub(super) fn stack<'a>(sections: Vec<Option<Element<'a, PanelMsg>>>) -> Element
     col.width(Length::Fill).boxed()
 }
 
-fn label_cell<'a>(look: Look<'a>, id: MessageId) -> Element<'a, PanelMsg> {
+fn label_cell<'a>(look: Look<'a>, label: impl Into<Label<'a>>) -> Element<'a, PanelMsg> {
     container(
-        text(look.t(id))
+        text(label)
             .size(TS.body)
             .color(look.muted)
             .wrapping(iced::widget::text::Wrapping::Word),
@@ -116,9 +121,18 @@ pub(super) fn labelled<'a>(
     id: MessageId,
     value: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
+    labelled_text(look, look.t(id), value)
+}
+
+/// A label given as text (a layer's name) and its value.
+pub(super) fn labelled_text<'a>(
+    look: Look<'a>,
+    label: impl Into<Label<'a>>,
+    value: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
     container(
         row![
-            label_cell(look, id),
+            label_cell(look, label),
             container(value).width(Length::FillPortion(VALUE_PORTION)),
         ]
         .spacing(SP.m)

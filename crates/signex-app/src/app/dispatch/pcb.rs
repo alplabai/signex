@@ -69,6 +69,10 @@ impl Signex {
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),
             PcbMsg::LayerStrip(setting) => self.apply_layer_strip_setting(setting),
             PcbMsg::LayerSet(event) => self.handle_layer_set(event),
+            PcbMsg::LockRequested { locked } => {
+                self.lock_pcb_selection(locked);
+                Task::none()
+            }
         }
     }
 

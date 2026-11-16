@@ -9,6 +9,7 @@
 mod facts;
 mod links;
 mod placement;
+mod stack_facts;
 mod tune;
 mod zone;
 
@@ -29,6 +30,7 @@ use signex_engine::pcb::primitive_edit::{
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_stack::StackMode;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -79,6 +81,10 @@ pub(crate) enum PrimitiveEdit {
     AreaLayer(PcbLayer),
     Net(u32),
     Shape(PadShape),
+    /// A via's two end layers (#2407).
+    Span(CopperLayer, CopperLayer),
+    /// How vias or pads size their copper by layer (#2401).
+    Mode(StackMode),
 }
 
 impl Signex {
@@ -147,6 +153,30 @@ impl Signex {
             M::ClassLinkPressed { board, class } => self.select_pcb_net_class(board, class),
             M::ShowMoreToggled => panel.show_more = !panel.show_more,
             M::SearchTyped(text) => panel.search = text.clone(),
+            M::LockToggled { target, locked } => {
+                let items = super::pcb_item_edits::lock_targets(&target.items);
+                if let Err(why) = self.set_items_locked(&target.board, &items, *locked) {
+                    self.refuse_primitive_edit(ids::PCB_PRIM_LOCK, why);
+                }
+            }
+            M::SpanPicked {
+                target,
+                top,
+                bottom,
+            } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Span(*top, *bottom),
+                    ids::PCB_PRIM_VIA_NAME,
+                );
+            }
+            M::StackModePicked { target, mode } => {
+                let what = match target.items.first() {
+                    Some(ItemRef::Pad { .. }) => ids::PCB_PRIM_PAD_STACK,
+                    _ => ids::PCB_PRIM_VIA_STACK,
+                };
+                self.apply_primitive_edit(target, PrimitiveEdit::Mode(*mode), what);
+            }
         }
         self.sync_pcb_board_summary();
     }
@@ -249,6 +279,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
         F::Clearance => ids::PCB_PRIM_CLEARANCE,
         F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
+        F::LayerSize(_) | F::LayerSizeY(_) => ids::PCB_PRIM_COPPER,
     }
 }
 
@@ -344,7 +375,10 @@ fn via_edit(edit: &PrimitiveEdit) -> Option<ViaEdit> {
         PrimitiveEdit::Number(F::Y, v) => ViaEdit::Y(v),
         PrimitiveEdit::Number(F::Diameter, v) => ViaEdit::Diameter(v),
         PrimitiveEdit::Number(F::HoleSize, v) => ViaEdit::HoleSize(v),
+        PrimitiveEdit::Number(F::LayerSize(layer), v) => ViaEdit::LayerDiameter(layer, v),
         PrimitiveEdit::Net(net) => ViaEdit::Net(net),
+        PrimitiveEdit::Span(top, bottom) => ViaEdit::Span(top, bottom),
+        PrimitiveEdit::Mode(mode) => ViaEdit::Mode(mode),
         _ => return None,
     })
 }
@@ -361,6 +395,9 @@ fn pad_edit(edit: &PrimitiveEdit) -> Option<PadEdit> {
         PrimitiveEdit::Designator(text) => PadEdit::Designator(text.clone()),
         PrimitiveEdit::Shape(shape) => PadEdit::Shape(*shape),
         PrimitiveEdit::Net(net) => PadEdit::Net(*net),
+        PrimitiveEdit::Number(F::LayerSize(layer), v) => PadEdit::LayerSizeX(*layer, *v),
+        PrimitiveEdit::Number(F::LayerSizeY(layer), v) => PadEdit::LayerSizeY(*layer, *v),
+        PrimitiveEdit::Mode(mode) => PadEdit::Mode(*mode),
         _ => return None,
     })
 }

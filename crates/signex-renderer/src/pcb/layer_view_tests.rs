@@ -517,3 +517,20 @@ fn a_layer_set_shows_its_layers_and_lists_them() {
     view.show_all();
     assert!(view.layer_set().is_none() && view.lists_in_strip(mechanical));
 }
+
+#[test]
+fn a_via_with_a_smaller_inner_size_draws_it_on_an_inner_layer() {
+    let mut board = board();
+    board.vias[0].layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.8,
+        middle: 0.5,
+        bottom: 0.8,
+    });
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Inner(InnerCopper::new(1).unwrap()));
+    let inner = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(inner.vias[0].diameter_mm, 0.5, "#2401: the inner ring");
+    view.set_active(TOP);
+    let top = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(top.vias[0].diameter_mm, 0.8, "the top ring");
+}

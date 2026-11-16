@@ -18,6 +18,7 @@ fn pt(x: f64) -> PcbPoint {
 
 fn track(n: u128, end_x: f64) -> Segment {
     Segment {
+        locked: false,
         uuid: id(n),
         start: pt(0.0),
         end: pt(end_x),
@@ -36,6 +37,8 @@ fn via(n: u128, x: f64) -> Via {
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 0,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -86,6 +89,7 @@ fn pad(n: u128, number: &str) -> Pad {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     }
 }

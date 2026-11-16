@@ -10,6 +10,10 @@
 //! the container `SnxPcb` can reach them.
 
 use super::extras::{FootprintExtras, PadExtras};
+use super::pcb_cells::{
+    take_layer_sizes_cell, take_locked_cell, take_net_locked_cell, take_rotation_cell,
+    with_layer_sizes_cell, with_locked_cell, with_net_locked_cell, with_rotation_cell,
+};
 use super::tsv::{format_f64, parse_f64, parse_nm, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
@@ -324,48 +328,18 @@ fn parse_pad_shape(text: &str, block: &str, row: usize) -> Result<PadShape, Form
     })
 }
 
-fn row_field_error(block: &str, row: usize, field: &str, value: &str, why: &str) -> FormatError {
+pub(in crate::format) fn row_field_error(
+    block: &str,
+    row: usize,
+    field: &str,
+    value: &str,
+    why: &str,
+) -> FormatError {
     FormatError::TsvFieldParse {
         block: block.to_string(),
         row,
         field: field.to_string(),
         message: format!("value {value:?}: {why}"),
-    }
-}
-
-/// Header of the optional `rotation` pad column: the pad's own turn in
-/// degrees. Rides the foreign-column path like `net_locked`; written only
-/// when some pad is turned, so an unturned board re-saves unchanged.
-pub(in crate::format) const PAD_ROTATION_COLUMN: &str = "rotation";
-
-fn with_rotation_cell(
-    mut columns: UnknownColumns,
-    rotation: f64,
-) -> Result<UnknownColumns, NonFiniteField> {
-    if rotation != 0.0 {
-        columns.set(PAD_ROTATION_COLUMN, format_f64(rotation, "rotation")?);
-    }
-    Ok(columns)
-}
-
-fn take_rotation_cell(
-    columns: &mut UnknownColumns,
-    block: &str,
-    row: usize,
-) -> Result<f64, FormatError> {
-    match columns.take(PAD_ROTATION_COLUMN) {
-        None => Ok(0.0),
-        Some(cell) if cell.is_empty() => Ok(0.0),
-        Some(cell) => match cell.trim().parse::<f64>() {
-            Ok(degrees) if degrees.is_finite() => Ok(degrees),
-            _ => Err(row_field_error(
-                block,
-                row,
-                PAD_ROTATION_COLUMN,
-                &cell,
-                "a pad rotation must be a finite number of degrees",
-            )),
-        },
     }
 }
 
@@ -654,42 +628,6 @@ fn take_lib_ref_cell(
     }
 }
 
-/// Header of the optional `net_locked` pad column. Like the schematic's
-/// `locked` column it is not a known column: it rides the foreign-column
-/// path. A board with no locked pad has no such header and re-saves
-/// byte-identical, and a build that predates the lock keeps it. When any pad
-/// is locked the header is written after the known columns, in first-seen
-/// order among the block's foreign columns (its position among the known
-/// ones is not kept), and every unlocked pad writes an empty cell. See
-/// `unknown_columns` for the contract.
-pub(in crate::format) const NET_LOCKED_COLUMN: &str = "net_locked";
-
-/// The cell a locked pad writes; every other pad of the block writes empty.
-const NET_LOCKED_CELL: &str = "true";
-
-fn with_net_locked_cell(mut columns: UnknownColumns, locked: bool) -> UnknownColumns {
-    if locked {
-        columns.set(NET_LOCKED_COLUMN, NET_LOCKED_CELL.to_string());
-    }
-    columns
-}
-
-/// `true` locks and an empty cell is an unlocked pad; any other value is not
-/// ours to read, so it stays a foreign cell and round-trips untouched.
-fn take_net_locked_cell(columns: &mut UnknownColumns) -> bool {
-    match columns.get(NET_LOCKED_COLUMN) {
-        Some(NET_LOCKED_CELL) => {
-            columns.take(NET_LOCKED_COLUMN);
-            true
-        }
-        Some("") => {
-            columns.take(NET_LOCKED_COLUMN);
-            false
-        }
-        _ => false,
-    }
-}
-
 /// A round-rect corner ratio must be within 0..=0.5; other shapes ignore it.
 /// The reader and the writer share this rule.
 fn roundrect_ratio_fits(shape: PadShape, ratio: f64) -> bool {
@@ -731,9 +669,12 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: with_rotation_cell(
-            with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
-            pad.rotation,
+        unknown_columns: with_layer_sizes_cell(
+            with_rotation_cell(
+                with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
+                pad.rotation,
+            )?,
+            pad.layer_sizes.as_ref(),
         )?,
     })
 }
@@ -757,6 +698,7 @@ pub(in crate::format) fn row_to_pad(
     }
     let rotation = take_rotation_cell(&mut row.unknown_columns, block, index)?;
     let net_locked = take_net_locked_cell(&mut row.unknown_columns);
+    let layer_sizes = take_layer_sizes_cell(&mut row.unknown_columns, block, index)?;
     let drill = if row.drill > 0 {
         Some(DrillDef {
             diameter: nm_to_mm(row.drill),
@@ -792,6 +734,7 @@ pub(in crate::format) fn row_to_pad(
         roundrect_ratio: row.roundrect_ratio,
         rotation,
         net_locked,
+        layer_sizes,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     })
@@ -807,11 +750,12 @@ pub(in crate::format) fn track_to_row(s: &Segment) -> Result<PcbTrackRow, NonFin
         start_y: mm_to_nm(s.start.y, "start_y")?,
         end_x: mm_to_nm(s.end.x, "end_x")?,
         end_y: mm_to_nm(s.end.y, "end_y")?,
-        unknown_columns: s.unknown_columns.clone(),
+        unknown_columns: with_locked_cell(s.unknown_columns.clone(), s.locked),
     })
 }
 
-pub(in crate::format) fn row_to_track(row: PcbTrackRow) -> Segment {
+pub(in crate::format) fn row_to_track(mut row: PcbTrackRow) -> Segment {
+    let locked = take_locked_cell(&mut row.unknown_columns);
     Segment {
         uuid: row.uuid,
         start: PcbPoint {
@@ -825,6 +769,7 @@ pub(in crate::format) fn row_to_track(row: PcbTrackRow) -> Segment {
         width: nm_to_mm(row.width),
         layer: row.layer,
         net: row.net,
+        locked,
         unknown_columns: row.unknown_columns,
     }
 }
@@ -839,12 +784,21 @@ pub(in crate::format) fn via_to_row(v: &Via) -> Result<PcbViaRow, NonFiniteField
         diameter: mm_to_nm(v.diameter, "diameter")?,
         layers: join_layers(&v.layers),
         via_type: via_type_str(v.via_type).to_string(),
-        unknown_columns: v.unknown_columns.clone(),
+        unknown_columns: with_layer_sizes_cell(
+            with_locked_cell(v.unknown_columns.clone(), v.locked),
+            v.layer_sizes.as_ref(),
+        )?,
     })
 }
 
-pub(in crate::format) fn row_to_via(row: PcbViaRow) -> Via {
-    Via {
+pub(in crate::format) fn row_to_via(
+    mut row: PcbViaRow,
+    block: &str,
+    index: usize,
+) -> Result<Via, FormatError> {
+    let locked = take_locked_cell(&mut row.unknown_columns);
+    let layer_sizes = take_layer_sizes_cell(&mut row.unknown_columns, block, index)?;
+    Ok(Via {
         uuid: row.uuid,
         position: PcbPoint {
             x: nm_to_mm(row.pos_x),
@@ -855,6 +809,8 @@ pub(in crate::format) fn row_to_via(row: PcbViaRow) -> Via {
         layers: split_layers(&row.layers),
         net: row.net,
         via_type: parse_via_type(&row.via_type),
+        locked,
+        layer_sizes,
         unknown_columns: row.unknown_columns,
-    }
+    })
 }

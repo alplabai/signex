@@ -343,6 +343,7 @@ pub fn carried_board(
         graphics: Vec::new(),
         texts: Vec::new(),
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
     }

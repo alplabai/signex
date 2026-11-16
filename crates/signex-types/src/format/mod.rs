@@ -39,6 +39,7 @@ mod finite_toml;
 mod header_id;
 mod load_repair;
 mod page_extras;
+mod pcb_cells;
 mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;
@@ -90,6 +91,8 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_stack_tests;
 #[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
@@ -794,6 +797,7 @@ impl SnxPcb {
         // known members empty, so those keys are not lost.
         let keep_stackup = !self.board.layers.is_empty()
             || self.board.setup.is_some()
+            || self.board.stackup.is_some()
             || !self.board.unknown.stackup.is_empty()
             || !self.board.unknown.stackup_display_names.is_empty();
         let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
@@ -945,17 +949,23 @@ impl SnxPcb {
         )?;
 
         let segments = track_rows.into_iter().map(row_to_track).collect();
-        let vias = via_rows.into_iter().map(row_to_via).collect();
+        let vias = via_rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| row_to_via(row, "vias", index))
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Reconstitute zones from `[[zones]]` array.
         let zones = raw.zones.unwrap_or_default();
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
         let mut stackup_display_names = UnknownFields::default();
+        let mut stack = None;
         let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
                 let read = stackup::read(s)?;
                 stackup_display_names = read.display_names;
+                stack = read.stackup;
                 (read.layers, read.setup, read.unknown)
             }
             None => (Vec::new(), None, UnknownFields::default()),
@@ -984,6 +994,7 @@ impl SnxPcb {
             graphics: board_extras.graphics,
             texts: board_extras.texts,
             sketch,
+            stackup: stack,
             options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,

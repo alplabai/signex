@@ -115,11 +115,14 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   of the named board, no undo step; `save_layer_set` also keeps the set in the
   person's preferences), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it), and the board's DRC results and net classes
+  document of it), the board's DRC results and net classes
   (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
   `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
-  `assign_board_net_class`, each answering with what it did. A test pins
+  `assign_board_net_class`, each answering with what it did, and the board
+  edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
+  `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
+  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)). A test pins
   this set, so a catalog row that joins or leaves it is a visible decision.
   The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
   `path`, so they are CLI only.

@@ -7,7 +7,7 @@ use signex_i18n::ids;
 use signex_types::pcb_layer::PcbLayer;
 
 use super::rows::{
-    Look, Section, chip, dropdown, labelled, lock, mask_section, mm_field, mm_or_na, net_row, pair,
+    Look, Section, chip, dropdown, labelled, mask_section, mm_field, mm_or_na, net_row, pair,
     stack, value_box,
 };
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TrackFacts, net_info};
@@ -46,7 +46,7 @@ fn location<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_LOCK,
-            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
+            super::stack_rows::item_lock(look, common, f.locked),
         ),
     );
     s.finish()

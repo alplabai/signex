@@ -669,6 +669,8 @@ pub enum PanelMsg {
     PcbComponent(super::PcbComponentMsg),
     /// The selected tracks', vias' or pads' panel (#2355).
     PcbPrimitive(super::PcbPrimitiveMsg),
+    /// The Layer Stack manager (#2401).
+    LayerStack(super::LayerStackMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to

@@ -20,6 +20,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -49,6 +50,7 @@ fn footprint(uuid: Uuid, x: f64, y: f64, rotation: f64, layer: &str, pads: Vec<P
 
 fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
     Segment {
+        locked: false,
         uuid,
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -67,6 +69,8 @@ fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
         drill: diameter / 2.0,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -75,6 +79,7 @@ fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

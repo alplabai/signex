@@ -27,6 +27,7 @@ const PAD: Uuid = Uuid::from_u128(0x302);
 
 fn track(uuid: Uuid, (ax, ay): (f64, f64), (bx, by): (f64, f64), net: u32) -> Segment {
     Segment {
+        locked: false,
         uuid,
         start: Point::new(ax, ay),
         end: Point::new(bx, by),
@@ -56,6 +57,7 @@ fn board() -> PcbBoard {
         net: None,
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -80,6 +82,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(1),
         version: 1,
@@ -111,6 +114,8 @@ fn board() -> PcbBoard {
             drill: 0.3,
             layers: vec!["TopCopper".into(), "BottomCopper".into()],
             net: 1,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         }],

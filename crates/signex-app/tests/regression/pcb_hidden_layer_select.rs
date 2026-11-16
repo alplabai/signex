@@ -45,6 +45,7 @@ fn layer(id: u8, name: &str) -> LayerDef {
 
 fn track(n: u128, y: f64, layer: &str, net: u32) -> Segment {
     Segment {
+        locked: false,
         uuid: Uuid::from_u128(n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),
@@ -58,6 +59,7 @@ fn track(n: u128, y: f64, layer: &str, net: u32) -> Segment {
 fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -277,6 +279,7 @@ fn linked() -> Linked {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),

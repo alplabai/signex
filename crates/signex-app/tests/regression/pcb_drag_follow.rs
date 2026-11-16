@@ -45,6 +45,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64) -> Footprint {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -75,6 +76,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -89,6 +91,7 @@ fn board() -> PcbBoard {
         }],
         footprints: vec![footprint(U1, "U1", 12.7), footprint(U2, "U2", 25.4)],
         segments: vec![Segment {
+            locked: false,
             uuid: TRACK,
             start: pt(11.9, 12.7),
             end: pt(5.08, 12.7),

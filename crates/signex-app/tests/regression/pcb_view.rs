@@ -51,6 +51,7 @@ fn pad(n: u128, x: f64) -> Pad {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -59,6 +60,7 @@ fn pad(n: u128, x: f64) -> Pad {
 
 fn segment(n: u128, y: f64, layer: &str) -> Segment {
     Segment {
+        locked: false,
         uuid: Uuid::from_u128(n),
         start: pt(0.0, y),
         end: pt(10.0, y),
@@ -92,6 +94,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -400,6 +403,8 @@ fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
         drill: 0.4,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 2,
+        locked: false,
+        layer_sizes: None,
         via_type: signex_types::pcb::ViaType::Through,
         unknown_columns: Default::default(),
     });

@@ -184,8 +184,8 @@ pub fn transform_commands(
     Ok(commands)
 }
 
-/// Delete `items`, refusing the whole edit if a footprint among them is
-/// locked.
+/// Delete `items`, refusing the whole edit if a footprint, track or via among
+/// them is locked.
 pub fn delete_commands(
     board: &PcbBoard,
     items: Vec<BoardItemId>,
@@ -202,6 +202,18 @@ pub fn delete_commands(
         .collect();
     if !footprints.is_empty() {
         editable_footprints(board, &footprints)?;
+    }
+    let locked: Vec<String> = items
+        .iter()
+        .filter(|id| super::lock::is_locked(board, **id))
+        .map(|id| match *id {
+            BoardItemId::Segment(uuid) => format!("track {uuid}"),
+            BoardItemId::Via(uuid) => format!("via {uuid}"),
+            other => format!("{other:?}"),
+        })
+        .collect();
+    if !locked.is_empty() {
+        return Err(PlacementRefusal::Locked(locked));
     }
     Ok(vec![BoardCommand::DeleteItems { items }])
 }

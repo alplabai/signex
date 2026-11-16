@@ -8,7 +8,7 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use crate::index::{ItemRef, track_shape, via_shape};
 use crate::shape::Shape;
 use crate::transform::{Side, pad_shape, pad_world_center};
-use crate::units::PointNm;
+use crate::units::{GeomError, PointNm, mm_to_nm};
 
 /// A copper item of a numbered net, with where it touches other copper.
 pub struct CopperItem {
@@ -88,6 +88,30 @@ pub fn via_layers(via: &Via) -> u32 {
     }
 }
 
+/// A via's copper per group of the layers it reaches that share one
+/// diameter (#2401): one piece, its [`via_shape`], for a via without
+/// per-layer sizes. The layers are a [`layer_bit`] mask.
+pub fn via_pieces(via: &Via) -> Result<Vec<(u32, Shape)>, GeomError> {
+    let layers = via_layers(via);
+    if via.layer_sizes.is_none() {
+        return Ok(vec![(layers, via_shape(via)?)]);
+    }
+    let center = PointNm::from_mm(via.position, "via.position")?;
+    let mut pieces: Vec<(u32, Shape)> = Vec::new();
+    for layer in copper_layers(layers) {
+        let radius = (mm_to_nm(via.diameter_on(layer), "via.diameter")? / 2).abs();
+        let bit = 1 << layer_bit(layer);
+        match pieces
+            .iter_mut()
+            .find(|(_, shape)| matches!(shape, Shape::Disc { radius: r, .. } if *r == radius))
+        {
+            Some((mask, _)) => *mask |= bit,
+            None => pieces.push((bit, Shape::Disc { center, radius })),
+        }
+    }
+    Ok(pieces)
+}
+
 /// A through-hole pad reaches every copper layer; a surface pad the copper
 /// layers it lists, or its footprint's side when it lists none.
 pub fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
@@ -161,6 +185,7 @@ mod tests {
 
     fn board() -> PcbBoard {
         let track = Segment {
+            locked: false,
             uuid: Uuid::from_u128(2),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
@@ -185,6 +210,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            stackup: None,
             options: Default::default(),
             unknown: Default::default(),
         }
@@ -202,5 +228,45 @@ mod tests {
         assert_eq!(net_at(&board, at(5.0, 0.2), top), Some(3));
         assert_eq!(net_at(&board, at(5.0, 0.2), bottom), None, "other layer");
         assert_eq!(net_at(&board, at(5.0, 1.0), top), None, "bare board");
+    }
+
+    #[test]
+    fn a_via_with_a_smaller_inner_size_has_one_piece_per_size() {
+        let mut via = signex_types::pcb::Via {
+            uuid: Uuid::from_u128(4),
+            position: Point::new(0.0, 0.0),
+            diameter: 0.6,
+            drill: 0.3,
+            layers: vec!["TopCopper".into(), "BottomCopper".into()],
+            net: 1,
+            via_type: ViaType::Through,
+            locked: false,
+            layer_sizes: None,
+            unknown_columns: Default::default(),
+        };
+        assert_eq!(via_pieces(&via).unwrap().len(), 1);
+        via.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+            top: 0.6,
+            middle: 0.4,
+            bottom: 0.6,
+        });
+        let pieces = via_pieces(&via).unwrap();
+        let outer = (1 << layer_bit(CopperLayer::Top)) | (1 << layer_bit(CopperLayer::Bottom));
+        let radius = |mask: u32| {
+            pieces
+                .iter()
+                .find(|(m, _)| *m == mask)
+                .map(|(_, s)| match s {
+                    Shape::Disc { radius, .. } => *radius,
+                    _ => 0,
+                })
+        };
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(radius(outer), Some(300_000));
+        assert_eq!(
+            radius(u32::MAX & !outer),
+            Some(200_000),
+            "every inner layer"
+        );
     }
 }

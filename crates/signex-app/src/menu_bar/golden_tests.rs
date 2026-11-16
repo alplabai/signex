@@ -59,6 +59,8 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 pasteable: true,
                 part_in_hand: false,
                 routing: false,
+                lockable: false,
+                unlockable: false,
             },
             ..base
         }),
@@ -282,6 +284,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("board_sketch", "BoardSketch"),
     // #2388: File ▸ Fabrication Outputs.
     ("fabrication_outputs", "FabricationOutputs"),
+    // #2401: Design ▸ Layer Stack Manager.
+    ("board_layer_stack", "BoardLayerStack"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),

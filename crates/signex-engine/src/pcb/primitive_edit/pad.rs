@@ -4,7 +4,9 @@
 //! placement (`pcb_geom::Placement`).
 
 use pcb_geom::{Placement, PointNm, Side, pad_world_center};
-use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PcbBoard};
+use signex_types::pcb::{Footprint, LayerSizes, Pad, PadNet, PadShape, PcbBoard, Point};
+use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_stack::{StackMode, board_copper_layers, sizes_in_mode};
 use uuid::Uuid;
 
 use super::{PrimitiveEditRefusal, finite};
@@ -26,6 +28,14 @@ pub enum PadEdit {
     /// 0 is no net. A net set here is kept when the schematic is synced
     /// (`Pad::net_locked`).
     Net(u32),
+    /// Per-layer copper sizes (#2401); `None` is one size on every layer.
+    Sizes(Option<LayerSizes<Point>>),
+    /// How the size is set by layer; each layer keeps its size.
+    Mode(StackMode),
+    /// The x or y size on one layer: its part of the per-layer sizes, or the
+    /// one size of a pad without them.
+    LayerSizeX(CopperLayer, f64),
+    LayerSizeY(CopperLayer, f64),
 }
 
 /// The command setting `edit` on every pad in `pads` (footprint, pad). A
@@ -90,6 +100,13 @@ fn apply(
         PadEdit::SizeX(x) => pad.size.x = finite(*x)?,
         PadEdit::SizeY(y) => pad.size.y = finite(*y)?,
         PadEdit::Shape(shape) => pad.shape = *shape,
+        PadEdit::Sizes(sizes) => pad.layer_sizes = sizes.clone(),
+        PadEdit::Mode(mode) => {
+            let copper = board_copper_layers(&board.layers);
+            pad.layer_sizes = sizes_in_mode(pad.layer_sizes.as_ref(), pad.size, *mode, &copper);
+        }
+        PadEdit::LayerSizeX(layer, x) => set_layer_size(pad, *layer, Some(finite(*x)?), None),
+        PadEdit::LayerSizeY(layer, y) => set_layer_size(pad, *layer, None, Some(finite(*y)?)),
         PadEdit::HoleSize(h) => {
             let hole = finite(*h)?;
             let drill = pad
@@ -119,6 +136,16 @@ fn apply(
         }
     }
     Ok(())
+}
+
+/// Set the pad's x and/or y size on `layer`, the other axis kept.
+fn set_layer_size(pad: &mut Pad, layer: CopperLayer, x: Option<f64>, y: Option<f64>) {
+    let old = pad.size_on(layer);
+    let new = Point::new(x.unwrap_or(old.x), y.unwrap_or(old.y));
+    match pad.layer_sizes.as_mut() {
+        Some(sizes) => sizes.set(layer, new),
+        None => pad.size = new,
+    }
 }
 
 /// Put the pad's centre at board `x` and/or `y`, the other axis kept.

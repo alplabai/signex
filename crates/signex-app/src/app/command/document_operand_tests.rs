@@ -95,6 +95,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let mut app = app_with(&[("a.snxsch", A)]);
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -308,6 +309,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     // A board is not a sheet.
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -481,6 +483,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_effective",
                     "rules_explain",
                     "rules_conflicts",
+                    // #2401, #2407: board edits an agent names its board for.
+                    "set_layer_stack",
+                    "lock_board_items",
+                    "unlock_board_items",
+                    "set_via_span",
+                    "set_layer_sizes",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

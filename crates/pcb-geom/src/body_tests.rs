@@ -17,6 +17,7 @@ fn pad(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> Pad {
         net: None,
         roundrect_ratio: 0.0,
         rotation,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -144,6 +145,7 @@ fn a_non_finite_rotation_is_refused() {
 fn board(fp: Footprint) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

@@ -339,6 +339,8 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2234: enter or leave the sketch of the board in view; greyed
         // with no PCB.
         cmd_item_gated(ctx, cmd("board_sketch", "")),
+        // #2401: the layer stack manager of the board in view.
+        cmd_item_gated(ctx, cmd("board_layer_stack", "")),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.

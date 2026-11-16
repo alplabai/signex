@@ -475,6 +475,17 @@ cmd-menu-place-board-keepout = Keepout
 cmd-place-board-route = Route on the active copper layer around other nets, keeping the rule clearance
 cmd-menu-place-board-route = Interactive Routing
 cmd-cycle-route-mode = Switch Interactive Routing between walking around and pushing other nets' tracks
+# #2401: the layer stack manager, and its edit for an agent or the CLI.
+cmd-board-layer-stack = Open the layer stack manager of the board
+cmd-menu-board-layer-stack = Layer Stack Manager...
+cmd-set-layer-stack = Replace the layer stack of a board
+# #2407: track and via locks, the via span and per-layer copper sizes.
+cmd-lock-board-items = Lock the selected tracks and vias
+cmd-menu-lock-board-items = Lock
+cmd-unlock-board-items = Unlock the selected tracks and vias
+cmd-menu-unlock-board-items = Unlock
+cmd-set-via-span = Set the copper layers vias span
+cmd-set-layer-sizes = Set the per-layer copper sizes of vias or pads
 cmd-change-footprint = Change the footprint of the selected components
 cmd-menu-change-footprint = Change Footprint...
 cmd-board-report-bom = Show the board's bill of materials: its components grouped by value and footprint

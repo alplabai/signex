@@ -59,6 +59,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "cross_probe",
     "board_sketch",
     "change_footprint",
+    "lock_board_items",
+    "unlock_board_items",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -458,6 +460,14 @@ pub(super) fn pcb_canvas_menu_entries(
     } else {
         dd_cmd_disabled(i18n, None, "change_footprint", sc.of("change_footprint"))
     };
+    // Lock or unlock the selected tracks and vias (#2407).
+    let lock_row = |command_id: &'static str, live: bool| {
+        if live {
+            dd_command(i18n, None, command_id, sc.of(command_id), None)
+        } else {
+            dd_cmd_disabled(i18n, None, command_id, sc.of(command_id))
+        }
+    };
     vec![
         // The clipboard group (#2361), as on a sheet.
         row(ic::icon_dd_cut(tid), "cut", board.deletable),
@@ -477,6 +487,8 @@ pub(super) fn pcb_canvas_menu_entries(
         row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
         row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
         change_footprint,
+        lock_row("lock_board_items", board.lockable),
+        lock_row("unlock_board_items", board.unlockable),
         DropdownEntry::Separator,
         row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
         DropdownEntry::Separator,

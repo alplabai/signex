@@ -78,7 +78,8 @@ opens the same dialog. Rules: `BOARD_OUTPUT.md`.
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
-[Design ▸ Board Sketch](#design-board-sketch)), a separator, then
+[Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
+[Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
 greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
@@ -279,6 +280,15 @@ commits the changes as one undo step. It is greyed while no PCB is open.
 The same command is the PCB Active Bar's Board Sketch button, a row of the
 board canvas menu and a palette row; no keymap preset binds it. The mode:
 [PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
+
+## Design ▸ Layer Stack Manager {#design-layer-stack}
+
+Design ▸ Layer Stack Manager... runs `board_layer_stack` (#2401): it opens the
+Layer Stack panel for the board in view, a table of its physical stack where
+each edit is one undo step. It is greyed while no PCB is open. The same
+command is a palette row and the layer tab menu's "Layer stack..." row; no
+keymap preset binds it. The table and its rules:
+[PCB_LAYER_STACK.md](PCB_LAYER_STACK.md#stack).
 
 ## File ▸ Library {#file-library}
 

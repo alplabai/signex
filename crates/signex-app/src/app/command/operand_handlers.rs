@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_edit_operands as board_edit;
 use super::board_operands as board;
 use super::document_operands as doc;
 use super::file_operands as file;
@@ -123,6 +124,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("delete_net_class", board::delete_net_class),
     ("set_net_class_rules", board::set_net_class_rules),
     ("assign_board_net_class", board::assign_board_net_class),
+    ("set_layer_stack", board_edit::set_layer_stack),
+    ("lock_board_items", board_edit::lock_board_items),
+    ("unlock_board_items", board_edit::unlock_board_items),
+    ("set_via_span", board_edit::set_via_span),
+    ("set_layer_sizes", board_edit::set_layer_sizes),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -238,6 +244,18 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "assign_board_net_class" => Some(
             "this command needs its operands, `document` first — \
              use the board's Net Classes panel",
+        ),
+        "set_layer_stack" => Some(
+            "`set_layer_stack` needs the operands `document` and `stack` — \
+             use the Layer Stack manager",
+        ),
+        "set_via_span" => Some(
+            "`set_via_span` needs the operands `document`, `ids` and `layers` — \
+             use the From and To rows of the Via panel in Properties",
+        ),
+        "set_layer_sizes" => Some(
+            "`set_layer_sizes` needs the operands `document`, `ids` and `sizes` — \
+             use the stack rows of the Via or Pad panel in Properties",
         ),
         _ => None,
     }

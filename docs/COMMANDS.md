@@ -303,6 +303,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | --- | --- | --- | --- | --- |
 | `add_net_class` | Add a net class | design | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
+| `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
@@ -321,6 +322,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `hide_layer` | Hide one layer of the board view | view | — | — |
 | `hide_layer_group` | Hide every layer of one kind | view | — | — |
 | `highlight_layer` | Highlight one layer and dim the others | view | — | — |
+| `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
@@ -348,8 +350,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_set` | Change a field of a design rule | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
+| `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
+| `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
@@ -360,6 +365,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `unlock_board_items` | Unlock the selected tracks and vias | modify | — | — |
 | `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |

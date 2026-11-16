@@ -25,6 +25,7 @@ mod footprint;
 mod footprint_content;
 pub mod footprint_swap;
 mod items;
+pub mod lock;
 mod options;
 pub mod part_place;
 pub mod placement;
@@ -33,6 +34,8 @@ mod replace;
 pub mod route;
 pub mod snap;
 mod snap_points;
+mod stack;
+pub mod stack_edit;
 
 #[cfg(test)]
 mod board_sketch_tests;
@@ -58,3 +61,4 @@ pub use footprint::FootprintFace;
 pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
 pub use replace::FootprintPad;
+pub use stack::{ItemLayerSizes, StackSnapshot};

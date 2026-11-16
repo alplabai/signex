@@ -50,6 +50,8 @@ pub fn new_via(board: &PcbBoard, id: Uuid, at: Point) -> Via {
         drill,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: net_under(board, at, u32::MAX),
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -120,6 +122,7 @@ pub fn track_run(
     rule.legs(from, to)
         .into_iter()
         .map(|(start, end)| Segment {
+            locked: false,
             uuid: ids(),
             start,
             end,

@@ -104,6 +104,30 @@ pub enum BoardCommandError {
         "the board changed since revision {expected} (it is at {current}); read it again and retry"
     )]
     StaleRevision { expected: u64, current: u64 },
+    #[error("row {} of the layer stack has a number that is negative or not finite", .row + 1)]
+    StackRowInvalid { row: usize },
+    #[error("a layer stack needs 2 to 32 copper layers, not {0}")]
+    CopperLayerCount(usize),
+    #[error("{0} is named by two rows of the layer stack")]
+    DuplicateStackLayer(String),
+    #[error("{0} is an outer copper layer; it stays on the outside of the stack")]
+    OuterCopperMoved(String),
+    #[error("{items} items are still on {layer}; move or delete them before removing it")]
+    LayerInUse { layer: String, items: usize },
+    #[error("a keepout of the board sketch covers {0}; edit the sketch first")]
+    KeepoutOnLayer(String),
+    #[error("{0:?} has no lock of its own; footprints are locked as a whole")]
+    NotLockable(BoardItemId),
+    #[error("{0:?} is locked; unlock it first")]
+    ItemLocked(BoardItemId),
+    #[error("a via spans two different copper layers of the board, not {0}")]
+    BadViaSpan(String),
+    #[error("per-layer sizes need at least one copper layer")]
+    NoSizeLayers,
+    #[error("{0} is named by two per-layer sizes")]
+    DuplicateSizeLayer(String),
+    #[error("{field} must be at least 1 nm")]
+    SizeTooSmall { field: &'static str },
     #[error("a failed command could not be rolled back: {0}")]
     RollbackFailed(String),
 }

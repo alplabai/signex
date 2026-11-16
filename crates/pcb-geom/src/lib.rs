@@ -41,7 +41,7 @@ mod zone_fill;
 pub use body::footprint_body;
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
-    via_layers,
+    via_layers, via_pieces,
 };
 pub use flip::flip_footprint;
 pub use graphic::{

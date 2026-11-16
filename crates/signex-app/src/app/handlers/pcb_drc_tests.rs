@@ -123,6 +123,7 @@ fn a_run_says_the_text_messages_then_the_classes_a_rule_lowers() {
     use signex_types::pcb::{NetDef, PcbBoard};
     let board = PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

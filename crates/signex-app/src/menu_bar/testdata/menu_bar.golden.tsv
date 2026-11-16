@@ -148,6 +148,7 @@ Design	menu	Design	-	-	-	-	-
 Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
+Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01100000	cmd:board_layer_stack
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01000000	cmd:open_net_classes

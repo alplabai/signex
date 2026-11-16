@@ -84,6 +84,9 @@ pub enum PcbMsg {
     LayerStrip(super::LayerStripMsg),
     /// A saved layer set was saved, shown or deleted (#2394).
     LayerSet(super::LayerSetMsg),
+    /// Lock or unlock the tracks and vias selected on the board in view was
+    /// asked for (`lock_board_items`, `unlock_board_items`, #2407).
+    LockRequested { locked: bool },
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

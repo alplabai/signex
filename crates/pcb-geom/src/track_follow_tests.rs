@@ -21,6 +21,7 @@ fn pad(n: u128, x: f64, net: u32) -> Pad {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -52,6 +53,7 @@ fn footprint() -> Footprint {
 
 fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
+        locked: false,
         uuid: id(200 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -65,6 +67,7 @@ fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segmen
 fn board(segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

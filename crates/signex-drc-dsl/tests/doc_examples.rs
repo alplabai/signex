@@ -31,6 +31,7 @@ const NETS: [(u32, &str); 8] = [
 
 fn track(n: u128, x: f64, y: f64, net: u32, width: f64) -> Segment {
     Segment {
+        locked: false,
         uuid: Uuid::from_u128(n),
         start: Point::new(x - 5.0, y),
         end: Point::new(x + 5.0, y),
@@ -58,6 +59,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -92,6 +94,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -123,6 +126,8 @@ fn board() -> PcbBoard {
             drill: 0.2,
             layers: vec!["TopCopper".into(), "BottomCopper".into()],
             net: 7,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         }],

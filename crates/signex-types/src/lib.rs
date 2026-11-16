@@ -24,6 +24,7 @@ pub mod pcb_layer;
 pub mod pcb_options;
 pub mod pcb_origin;
 pub mod pcb_sketch;
+pub mod pcb_stack;
 pub mod project;
 pub mod project_vcs_files;
 pub mod property;

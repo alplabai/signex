@@ -457,6 +457,15 @@ define_ids! {
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
+        CMD_BOARD_LAYER_STACK = "cmd-board-layer-stack";
+        CMD_MENU_BOARD_LAYER_STACK = "cmd-menu-board-layer-stack";
+        CMD_SET_LAYER_STACK = "cmd-set-layer-stack";
+        CMD_LOCK_BOARD_ITEMS = "cmd-lock-board-items";
+        CMD_MENU_LOCK_BOARD_ITEMS = "cmd-menu-lock-board-items";
+        CMD_UNLOCK_BOARD_ITEMS = "cmd-unlock-board-items";
+        CMD_MENU_UNLOCK_BOARD_ITEMS = "cmd-menu-unlock-board-items";
+        CMD_SET_VIA_SPAN = "cmd-set-via-span";
+        CMD_SET_LAYER_SIZES = "cmd-set-layer-sizes";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";
