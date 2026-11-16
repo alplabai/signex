@@ -486,7 +486,9 @@ impl Engine {
                     SemanticPatch::SelectionMirrored,
                 )
             }
-            Command::BreakWire { wire, at } => self.break_wire(before, wire, at),
+            Command::BreakWire { wire, at, new_wire } => {
+                self.break_wire(before, wire, at, new_wire)
+            }
             Command::PlaceBus { bus } => {
                 self.document.buses.push(bus);
 

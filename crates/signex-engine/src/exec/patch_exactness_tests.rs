@@ -819,6 +819,7 @@ fn samples() -> Vec<(String, Command)> {
         Command::BreakWire {
             wire: uid(WIRE, 1),
             at: pt(2.5, 20.0),
+            new_wire: uuid::Uuid::now_v7(),
         },
     );
     add(

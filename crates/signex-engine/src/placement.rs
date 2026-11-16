@@ -6,10 +6,12 @@
 //! point the cursor holds. Turning it runs the engine's own selection
 //! commands on a scratch engine, so the rotate and mirror rules (pin
 //! geometry, field autoplacement, mirror pairing) are the ones a placed
-//! selection obeys, not a copy of them. Committing it mints fresh uuids and
+//! selection obeys, not a copy of them. Committing it takes fresh uuids from
+//! the caller's `IdSource` and
 //! returns ordinary `Place*` commands for the caller to apply as ONE batch,
 //! so a click is one undo step.
 
+use signex_types::object_id::IdSource;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
@@ -162,9 +164,13 @@ impl PlacementPayload {
 
     /// The commands that place the payload with its origin at `at`:
     /// `RegisterLibSymbol` for each body, then one `Place*` per item, every
-    /// item under a fresh uuid. Apply them as one batch.
-    pub fn place_commands(&self, at: Point) -> Result<Vec<Command>, EngineError> {
-        Ok(self.translated(at.x, at.y).fresh_place_commands())
+    /// item under a fresh uuid from `ids`. Apply them as one batch.
+    pub fn place_commands(
+        &self,
+        at: Point,
+        ids: &mut dyn IdSource,
+    ) -> Result<Vec<Command>, EngineError> {
+        Ok(self.translated(at.x, at.y).fresh_place_commands(ids))
     }
 
     /// Every coordinate of every item, for the finiteness check.
@@ -278,7 +284,7 @@ impl PlacementPayload {
         Ok(Self::new(turned))
     }
 
-    fn fresh_place_commands(&self) -> Vec<Command> {
+    fn fresh_place_commands(&self, ids: &mut dyn IdSource) -> Vec<Command> {
         let f = &self.fragment;
         let mut commands: Vec<Command> = f
             .lib_symbols
@@ -287,38 +293,38 @@ impl PlacementPayload {
             .map(|lib_symbol| Command::RegisterLibSymbol { lib_symbol })
             .collect();
         commands.extend(f.symbols.iter().cloned().map(|mut symbol| {
-            symbol.uuid = Uuid::now_v7();
+            symbol.uuid = ids.next_id();
             // A placed copy is a new part: its designators come from its own
             // `reference`, never the original's per-placement entries (#1138).
             symbol.instances.clear();
             Command::PlaceSymbol { symbol }
         }));
         commands.extend(f.wires.iter().cloned().map(|mut wire| {
-            wire.uuid = Uuid::now_v7();
+            wire.uuid = ids.next_id();
             Command::PlaceWireSegmentAsIs { wire }
         }));
         commands.extend(f.buses.iter().cloned().map(|mut bus| {
-            bus.uuid = Uuid::now_v7();
+            bus.uuid = ids.next_id();
             Command::PlaceBus { bus }
         }));
         commands.extend(f.bus_entries.iter().cloned().map(|mut bus_entry| {
-            bus_entry.uuid = Uuid::now_v7();
+            bus_entry.uuid = ids.next_id();
             Command::PlaceBusEntry { bus_entry }
         }));
         commands.extend(f.junctions.iter().cloned().map(|mut junction| {
-            junction.uuid = Uuid::now_v7();
+            junction.uuid = ids.next_id();
             Command::PlaceJunction { junction }
         }));
         commands.extend(f.no_connects.iter().cloned().map(|mut no_connect| {
-            no_connect.uuid = Uuid::now_v7();
+            no_connect.uuid = ids.next_id();
             Command::PlaceNoConnect { no_connect }
         }));
         commands.extend(f.labels.iter().cloned().map(|mut label| {
-            label.uuid = Uuid::now_v7();
+            label.uuid = ids.next_id();
             Command::PlaceLabel { label }
         }));
         commands.extend(f.text_notes.iter().cloned().map(|mut text_note| {
-            text_note.uuid = Uuid::now_v7();
+            text_note.uuid = ids.next_id();
             Command::PlaceTextNote { text_note }
         }));
         commands
@@ -378,6 +384,7 @@ fn restore_locks(sheet: &mut SchematicSheet, locked: &std::collections::HashSet<
 mod tests {
     use super::*;
     use crate::test_support::test_sheet;
+    use signex_types::object_id::SequentialIds;
     use signex_types::schematic::{LibSymbol, Symbol};
 
     fn part_payload() -> PlacementPayload {
@@ -398,7 +405,9 @@ mod tests {
     #[test]
     fn place_commands_register_the_body_then_place_at_the_cursor() {
         let payload = part_payload();
-        let commands = payload.place_commands(Point::new(10.16, 5.08)).unwrap();
+        let commands = payload
+            .place_commands(Point::new(10.16, 5.08), &mut SequentialIds::default())
+            .unwrap();
         assert!(matches!(commands[0], Command::RegisterLibSymbol { .. }));
         let Command::PlaceSymbol { symbol } = &commands[1] else {
             panic!("expected PlaceSymbol, got {:?}", commands[1]);
@@ -414,8 +423,13 @@ mod tests {
             Command::PlaceSymbol { symbol } => symbol.uuid,
             other => panic!("expected PlaceSymbol, got {other:?}"),
         };
-        let a = id(payload.place_commands(Point::new(0.0, 0.0)).unwrap());
-        let b = id(payload.place_commands(Point::new(0.0, 0.0)).unwrap());
+        let mut ids = SequentialIds::default();
+        let a = id(payload
+            .place_commands(Point::new(0.0, 0.0), &mut ids)
+            .unwrap());
+        let b = id(payload
+            .place_commands(Point::new(0.0, 0.0), &mut ids)
+            .unwrap());
         assert_ne!(a, b);
     }
 
@@ -556,7 +570,11 @@ mod tests {
         let payload = PlacementPayload::new(sheet);
         let mut engine = Engine::new(SchematicSheet::default()).unwrap();
         engine
-            .execute_batch(payload.place_commands(Point::new(20.0, 20.0)).unwrap())
+            .execute_batch(
+                payload
+                    .place_commands(Point::new(20.0, 20.0), &mut SequentialIds::default())
+                    .unwrap(),
+            )
             .unwrap();
         assert_eq!(engine.document().wires.len(), 2);
     }

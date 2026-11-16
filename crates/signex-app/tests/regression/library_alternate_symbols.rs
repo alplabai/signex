@@ -179,6 +179,7 @@ fn wire_pin(app: &mut Signex, number: &str) {
         .unwrap()
         .execute(signex_engine::Command::PlaceWireSegment {
             wire: Wire {
+                uuid: uuid::Uuid::now_v7(),
                 start: tip,
                 end: Point::new(tip.x - 10.0, tip.y),
                 ..Default::default()
@@ -561,6 +562,7 @@ fn a_switch_that_lands_a_pin_on_a_foreign_wire_end_is_refused() {
         .unwrap()
         .execute(signex_engine::Command::PlaceWireSegment {
             wire: Wire {
+                uuid: uuid::Uuid::now_v7(),
                 start: landing,
                 end: Point::new(landing.x + 10.0, landing.y),
                 ..Default::default()

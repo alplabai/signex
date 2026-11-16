@@ -8,10 +8,12 @@ use crate::{Command, DocumentPatch, Engine, EngineError, child_sheet_from_corner
 fn engine_with_two_sheets() -> (Engine, uuid::Uuid) {
     let mut engine = Engine::new(test_sheet()).unwrap();
     let mut first_id = uuid::Uuid::nil();
+    let ids = &mut signex_types::object_id::SequentialIds::default();
     for (i, stem) in ["sheet1", "sheet2"].iter().enumerate() {
         let x = 10.0 + 50.0 * i as f64;
-        let child = child_sheet_from_corners(Point::new(x, 10.0), Point::new(x + 30.0, 40.0), stem)
-            .expect("big enough");
+        let child =
+            child_sheet_from_corners(Point::new(x, 10.0), Point::new(x + 30.0, 40.0), stem, ids)
+                .expect("big enough");
         if i == 0 {
             first_id = child.uuid;
         }

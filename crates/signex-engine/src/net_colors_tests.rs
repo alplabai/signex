@@ -154,6 +154,7 @@ fn breaking_a_coloured_wire_paints_the_new_half_in_the_same_step() {
         .execute(Command::BreakWire {
             wire,
             at: Point::new(8.0, 0.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
 
