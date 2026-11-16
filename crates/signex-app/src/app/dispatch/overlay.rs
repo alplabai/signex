@@ -27,6 +27,10 @@ impl Signex {
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
+            OverlayMsg::FindToggled if self.ui_state.find_replace.open => {
+                self.handle_find_replace_message(crate::find_replace::FindReplaceMsg::Close)
+            }
+            OverlayMsg::FindToggled => self.handle_find_replace_open_requested(false),
             OverlayMsg::CloseKeyboardShortcuts => {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
