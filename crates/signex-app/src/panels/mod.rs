@@ -42,6 +42,7 @@ mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
+mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
 mod palette;
@@ -53,6 +54,8 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
+mod sch_filter;
+pub use sch_filter::SchFilterMsg;
 pub mod signal;
 mod status;
 mod symbol_context;
@@ -267,8 +270,9 @@ impl PanelKind {
         )
     }
 
-    /// Whether this panel requires a PCB document to be open. Net Classes is
-    /// the project's table, offered with any document (#2416).
+    /// Whether this panel requires a PCB document to be open. Net Classes
+    /// edits the project's table, so it needs a project, not a board (#2416,
+    /// #2417).
     pub fn needs_pcb(self) -> bool {
         matches!(self, PanelKind::LayerStack)
     }
@@ -373,12 +377,12 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             crate::library::editor::footprint::layers_panel::view(ctx)
         }
         PanelKind::Layers => pcb_layers::view(ctx),
-        // The project's net-class table, the same section Properties shows
-        // for the sheet (#2416).
-        PanelKind::NetClasses => view_net_classes_section(ctx).boxed(),
+        // The project's net-class table, the editor Properties shows for the
+        // sheet without its section frame (#2416, #2417).
+        PanelKind::NetClasses => net_class_panel::view_panel(ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
-        PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
+        PanelKind::SchFilter => sch_filter::view(ctx),
         PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
         PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
         PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),

@@ -18,6 +18,7 @@ use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
 use super::part_operands as part;
 use super::placement_operands as place;
+use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::{Message, Signex};
@@ -98,6 +99,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_report_components", output::board_report_components),
     ("export_board_report", output::export_board_report),
     ("export_board_pdf", output::export_board_pdf),
+    ("set_selection_filters", filter::set_selection_filters),
+    (
+        "apply_selection_filter_preset",
+        filter::apply_selection_filter_preset,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -169,6 +175,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        "set_selection_filters" => Some(
+            "`set_selection_filters` needs the operand `kinds` — \
+             use the SCH Filter panel or the Active Bar's filter",
+        ),
+        "apply_selection_filter_preset" => Some(
+            "`apply_selection_filter_preset` needs the operand `name` — \
+             click the preset in the SCH Filter panel",
         ),
         _ => None,
     }

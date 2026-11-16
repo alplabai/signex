@@ -159,6 +159,14 @@ pub(crate) fn preset_label<K>(idx: usize, preset: &CustomFilterPreset<K>) -> Str
     }
 }
 
+/// How a Selection Filter grid lays out its chips: six per line in a
+/// dropdown, wrapped to the available width in a panel (#2417).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChipLayout {
+    SixPerLine,
+    Wrapped,
+}
+
 /// Selection Filter menu: an irregular chip-wrap layout (All / None and the
 /// presets on top, then the categories as toggle chips, six per row) that
 /// can't be expressed as a vertical `Item` list, so it rides the widget's
@@ -168,33 +176,98 @@ pub(crate) fn filter_menu_entry<M: Clone + 'static>(
     tokens: &ThemeTokens,
     menu: FilterMenu<M>,
 ) -> DropdownEntry<M> {
+    DropdownEntry::Custom(filter_menu_view(tokens, menu, ChipLayout::SixPerLine))
+}
+
+/// The Selection Filter chip grid itself, as the dropdowns and the SCH
+/// Filter panel (#2417) show it.
+pub(crate) fn filter_menu_view<M: Clone + 'static>(
+    tokens: &ThemeTokens,
+    menu: FilterMenu<M>,
+    layout: ChipLayout,
+) -> Element<'static, M> {
     let scope = graphite::FilterScope::of(menu.on, menu.chips.len());
-    let mut top_row = iced::widget::Row::<Element<'static, M>>::new()
+    let mut top: Vec<Element<'static, M>> =
+        vec![graphite::all_none(tokens, scope, menu.all, menu.none)];
+    for (label, msg) in menu.presets {
+        top.push(graphite::chip(tokens, label, false, Some(msg), None));
+    }
+    let kinds: Vec<Element<'static, M>> = menu
+        .chips
+        .into_iter()
+        .map(|chip| graphite::chip(tokens, chip.label, chip.on, chip.msg, chip.why))
+        .collect();
+    let (top, kinds) = match layout {
+        ChipLayout::SixPerLine => (one_line(top), lines_of(kinds, 6)),
+        ChipLayout::Wrapped => (wrapped(top), wrapped(kinds)),
+    };
+    column![
+        container(top).padding([SP.s, SP.m]),
+        container(kinds).padding([SP.s, SP.m]),
+    ]
+    .spacing(SP.xs)
+    .boxed()
+}
+
+fn one_line<M: 'static>(cells: Vec<Element<'static, M>>) -> Element<'static, M> {
+    iced::widget::Row::with_children(cells)
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .push(graphite::all_none(tokens, scope, menu.all, menu.none));
-    for (label, msg) in menu.presets {
-        top_row = top_row.push(graphite::chip(tokens, label, false, Some(msg), None));
-    }
-    let mut chips = iced::widget::Column::<Element<'static, M>>::new().spacing(SP.s);
-    let mut kinds = menu.chips.into_iter().peekable();
-    while kinds.peek().is_some() {
+        .boxed()
+}
+
+fn lines_of<M: 'static>(cells: Vec<Element<'static, M>>, per_line: usize) -> Element<'static, M> {
+    let mut lines = iced::widget::Column::<Element<'static, M>>::new().spacing(SP.s);
+    let mut cells = cells.into_iter().peekable();
+    while cells.peek().is_some() {
         let mut line = iced::widget::Row::<Element<'static, M>>::new().spacing(SP.s);
-        for chip in kinds.by_ref().take(6) {
-            line = line.push(graphite::chip(
-                tokens, chip.label, chip.on, chip.msg, chip.why,
-            ));
+        for cell in cells.by_ref().take(per_line) {
+            line = line.push(cell);
         }
-        chips = chips.push(line.boxed());
+        lines = lines.push(line.boxed());
     }
-    DropdownEntry::Custom(
-        column![
-            container(top_row).padding([SP.s, SP.m]),
-            container(chips).padding([SP.s, SP.m]),
-        ]
-        .spacing(SP.xs)
-        .boxed(),
-    )
+    lines.boxed()
+}
+
+fn wrapped<M: 'static>(cells: Vec<Element<'static, M>>) -> Element<'static, M> {
+    let mut wrap = iced_aw::Wrap::new().spacing(SP.s).line_spacing(SP.s);
+    for cell in cells {
+        wrap = wrap.push(cell);
+    }
+    container(wrap).width(iced::Length::Fill).boxed()
+}
+
+/// The schematic's Selection Filter menu, for any surface that sends `M`:
+/// the Active Bar dropdown and the SCH Filter panel (#2417).
+pub(crate) fn schematic_filter_menu<M>(
+    filters: &std::collections::HashSet<SelectionFilter>,
+    custom_presets: &[CustomFilterPreset],
+    toggled: impl Fn(SelectionFilter) -> M,
+    applied: impl Fn(usize) -> M,
+    all: M,
+    none: M,
+) -> FilterMenu<M> {
+    let chips = SelectionFilter::ALL
+        .iter()
+        .map(|&filter| FilterChip {
+            label: filter.label().to_string(),
+            on: filters.contains(&filter),
+            msg: Some(toggled(filter)),
+            why: None,
+        })
+        .collect();
+    let presets = custom_presets
+        .iter()
+        .enumerate()
+        .map(|(idx, preset)| (preset_label(idx, preset), applied(idx)))
+        .collect();
+    FilterMenu {
+        chips,
+        presets,
+        on: filters.len(),
+        all,
+        none,
+    }
 }
 
 /// The schematic's Selection Filter menu.
@@ -203,33 +276,13 @@ pub(super) fn filter_entry(
     filters: &std::collections::HashSet<SelectionFilter>,
     custom_presets: &[CustomFilterPreset],
 ) -> DropdownEntry<ActiveBarMsg> {
-    let chips = SelectionFilter::ALL
-        .iter()
-        .map(|&filter| FilterChip {
-            label: filter.label().to_string(),
-            on: filters.contains(&filter),
-            msg: Some(ActiveBarMsg::ToggleFilter(filter)),
-            why: None,
-        })
-        .collect();
-    let presets = custom_presets
-        .iter()
-        .enumerate()
-        .map(|(idx, preset)| {
-            (
-                preset_label(idx, preset),
-                ActiveBarMsg::ApplyCustomFilter(idx),
-            )
-        })
-        .collect();
-    filter_menu_entry(
-        tokens,
-        FilterMenu {
-            chips,
-            presets,
-            on: filters.len(),
-            all: ActiveBarMsg::AllFiltersPicked,
-            none: ActiveBarMsg::NoFiltersPicked,
-        },
-    )
+    let menu = schematic_filter_menu(
+        filters,
+        custom_presets,
+        ActiveBarMsg::ToggleFilter,
+        ActiveBarMsg::ApplyCustomFilter,
+        ActiveBarMsg::AllFiltersPicked,
+        ActiveBarMsg::NoFiltersPicked,
+    );
+    filter_menu_entry(tokens, menu)
 }

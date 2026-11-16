@@ -18,4 +18,13 @@ define_ids! {
     PANELS_DRAWING_START_ANGLE = "panels-drawing-start-angle";
     PANELS_DRAWING_END_ANGLE = "panels-drawing-end-angle";
     PANELS_DRAWING_COLOR_AUTO = "panels-drawing-color-auto";
+    PANELS_NET_CLASSES_COLUMN_NAME = "panels-net-classes-column-name";
+    PANELS_NET_CLASSES_COLUMN_COLOR = "panels-net-classes-column-color";
+    PANELS_NET_CLASSES_COLUMN_WIDTH = "panels-net-classes-column-width";
+    PANELS_NET_CLASSES_COLUMN_MEMBERS = "panels-net-classes-column-members";
+    PANELS_NET_CLASSES_THEME_COLOR = "panels-net-classes-theme-color";
+    PANELS_NET_CLASSES_WIDTH_CELL = "panels-net-classes-width-cell";
+    PANELS_NET_CLASSES_WIRE_WIDTH = "panels-net-classes-wire-width";
+    PANELS_NET_CLASSES_NO_MEMBERS = "panels-net-classes-no-members";
+    PANELS_SCH_FILTER_HINT = "panels-sch-filter-hint";
 }

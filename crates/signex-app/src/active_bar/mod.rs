@@ -22,7 +22,10 @@ pub mod presets;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
-pub(crate) use dropdown::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
+pub(crate) use dropdown::{
+    ChipLayout, FilterChip, FilterMenu, filter_menu_entry, filter_menu_view, preset_label,
+    schematic_filter_menu,
+};
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
@@ -267,6 +270,29 @@ impl SelectionFilter {
             Self::DrawingObjects => "Drawing Objects",
             Self::Other => "Other",
         }
+    }
+
+    /// The category as a command operand spells it (`sheet_symbols`).
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Components => "components",
+            Self::Wires => "wires",
+            Self::Buses => "buses",
+            Self::SheetSymbols => "sheet_symbols",
+            Self::SheetEntries => "sheet_entries",
+            Self::NetLabels => "net_labels",
+            Self::Parameters => "parameters",
+            Self::Ports => "ports",
+            Self::PowerPorts => "power_ports",
+            Self::Texts => "texts",
+            Self::DrawingObjects => "drawing_objects",
+            Self::Other => "other",
+        }
+    }
+
+    /// The category an operand names, by [`Self::token`].
+    pub fn from_token(token: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|f| f.token() == token)
     }
 }
 

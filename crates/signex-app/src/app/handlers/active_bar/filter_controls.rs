@@ -3,6 +3,7 @@ use iced::Task;
 use super::super::super::*;
 use crate::active_bar::SelectionFilter;
 use crate::active_bar::presets;
+use crate::panels::SchFilterMsg;
 
 impl Signex {
     pub(crate) fn handle_active_bar_filter_toggle(
@@ -27,14 +28,33 @@ impl Signex {
     /// Turn every selection-filter category on (`all`) or off.
     pub(crate) fn set_all_selection_filters(&mut self, all: bool) -> Task<Message> {
         if all {
-            self.interaction_state.selection_filters =
-                SelectionFilter::ALL.iter().copied().collect();
+            self.set_selection_filters(SelectionFilter::ALL.iter().copied().collect())
         } else {
-            self.interaction_state.selection_filters.clear();
+            self.set_selection_filters(std::collections::HashSet::new())
         }
+    }
+
+    /// Make `filters` the active selection filter set: the
+    /// `set_selection_filters` command (#2417).
+    pub(crate) fn set_selection_filters(
+        &mut self,
+        filters: std::collections::HashSet<SelectionFilter>,
+    ) -> Task<Message> {
+        self.interaction_state.selection_filters = filters;
         self.document_state.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();
         Task::none()
+    }
+
+    /// A message of the SCH Filter panel (#2417): the Active Bar dropdown's
+    /// handlers, so the panel and the dropdown edit one filter.
+    pub(crate) fn handle_sch_filter(&mut self, msg: SchFilterMsg) -> Task<Message> {
+        match msg {
+            SchFilterMsg::KindToggled(filter) => self.handle_active_bar_filter_toggle(filter),
+            SchFilterMsg::AllPicked => self.set_all_selection_filters(true),
+            SchFilterMsg::NonePicked => self.set_all_selection_filters(false),
+            SchFilterMsg::PresetApplied(idx) => self.handle_apply_custom_filter_preset(idx),
+        }
     }
 
     /// Apply a saved preset — replaces the active filter set.

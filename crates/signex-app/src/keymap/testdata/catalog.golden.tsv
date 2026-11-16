@@ -119,6 +119,8 @@ zoom_to_selection_area	view	Zoom to selection area	-	General	-	-	RequiresSelecti
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+set_selection_filters	select	Set the schematic selection filter	-	Schematic	-	-	Always	-	kinds:text
+apply_selection_filter_preset	select	Apply a selection filter preset	-	Schematic	-	-	Always	-	name:text
 clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-

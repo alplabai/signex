@@ -15,7 +15,10 @@ use super::{
     ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
     action_enabled,
 };
-pub(crate) use custom::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
+pub(crate) use custom::{
+    ChipLayout, FilterChip, FilterMenu, filter_menu_entry, filter_menu_view, preset_label,
+    schematic_filter_menu,
+};
 use custom::{filter_entry, net_color_entries};
 use tables::{
     ALIGN, DIRECTIVES, HARNESS, PORT, POWER, SELECT, SELECT_MODE, SHAPES, SHEET_SYMBOL, TEXT_TOOLS,

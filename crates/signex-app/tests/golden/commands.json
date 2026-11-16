@@ -50,6 +50,11 @@
     "category": "edit"
   },
   {
+    "id": "apply_selection_filter_preset",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
     "id": "assign_footprints",
     "group": "Schematic",
     "category": "design"
@@ -1143,6 +1148,11 @@
     "id": "set_layer_tab_names",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "set_selection_filters",
+    "group": "Schematic",
+    "category": "select"
   },
   {
     "id": "sheet_navigation_back",

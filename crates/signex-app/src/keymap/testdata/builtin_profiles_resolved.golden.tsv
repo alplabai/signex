@@ -217,6 +217,8 @@ altium	hint	-	-	zoom_to_selection_area
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
 altium	hint	-	-	assign_footprints
+altium	hint	-	-	set_selection_filters
+altium	hint	-	-	apply_selection_filter_preset
 altium	hint	-	-	clear_net_highlighting
 altium	hint	-	-	draw_graphic_line
 altium	hint	-	-	draw_hierarchical_sheet
@@ -581,6 +583,8 @@ classic	hint	-	Ctrl+F5	zoom_to_selection_area
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
 classic	hint	-	-	assign_footprints
+classic	hint	-	-	set_selection_filters
+classic	hint	-	-	apply_selection_filter_preset
 classic	hint	-	~	clear_net_highlighting
 classic	hint	-	I	draw_graphic_line
 classic	hint	-	-	draw_hierarchical_sheet

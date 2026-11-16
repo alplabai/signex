@@ -35,6 +35,30 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2417: the schematic Selection Filter (SCH Filter panel, Active Bar
+    // dropdown) from its operands; window state, so no document.
+    CommandMetadata {
+        id: "set_selection_filters",
+        category: "select",
+        label: command_ids::CMD_SET_SELECTION_FILTERS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::SELECTION_FILTER_KINDS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_selection_filter_preset",
+        category: "select",
+        label: command_ids::CMD_APPLY_SELECTION_FILTER_PRESET,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::SELECTION_FILTER_PRESET,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "clear_net_highlighting",
         category: "select",
