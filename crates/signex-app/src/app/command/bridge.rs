@@ -993,6 +993,8 @@ mod tests {
             matches!(outcome, super::super::CommandOutcome::Disabled { .. }),
             "{outcome:?}"
         );
+        // Invoked anyway (a message that skips the gate), it still does nothing.
+        let _ = app.update(Message::Tool(ToolMessage::LastSegmentUndoRequested));
         assert_eq!(wire_count(&app, &path), 1);
         assert_eq!(app.document_state.engines[&path].revision(), revision);
         assert!(!app.document_state.has_dirty_documents());
