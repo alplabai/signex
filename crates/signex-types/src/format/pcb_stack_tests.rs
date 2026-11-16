@@ -56,7 +56,7 @@ fn round_trip(board: &PcbBoard) -> (String, PcbBoard) {
 fn the_stack_rows_round_trip() {
     let board = board();
     let (text, back) = round_trip(&board);
-    assert!(text.contains("[[stackup.rows]]"), "{text}");
+    assert!(text.contains("dielectric"), "the rows are written: {text}");
     assert_eq!(back.stackup, board.stackup);
 }
 
@@ -92,7 +92,7 @@ fn a_board_without_locks_sizes_or_stack_writes_none_of_them() {
     let (text, _) = round_trip(&board);
     assert!(!text.contains("locked"), "{text}");
     assert!(!text.contains("layer_sizes"), "{text}");
-    assert!(!text.contains("stackup.rows"), "{text}");
+    assert!(!text.contains("dielectric"), "{text}");
 }
 
 #[test]

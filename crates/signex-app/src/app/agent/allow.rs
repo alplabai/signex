@@ -81,11 +81,16 @@ mod tests {
                 "document_info",
                 "find_items",
                 "list_documents",
+                "lock_board_items",
                 "query_pins",
                 "read_document",
                 "resolve",
                 "revert",
                 "save_document",
+                "set_layer_sizes",
+                "set_layer_stack",
+                "set_via_span",
+                "unlock_board_items",
             ]
         );
     }

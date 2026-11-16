@@ -70,6 +70,11 @@
     "category": "pcb_sync"
   },
   {
+    "id": "board_layer_stack",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "board_sketch",
     "group": "Pcb",
     "category": "design"
@@ -488,6 +493,11 @@
     "id": "list_documents",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "lock_board_items",
+    "group": "Pcb",
+    "category": "modify"
   },
   {
     "id": "measure_distance",
@@ -1055,6 +1065,21 @@
     "category": "modify"
   },
   {
+    "id": "set_layer_sizes",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "set_layer_stack",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "set_via_span",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "sheet_navigation_back",
     "group": "Schematic",
     "category": "navigation"
@@ -1198,6 +1223,11 @@
     "id": "undo_last_segment",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "unlock_board_items",
+    "group": "Pcb",
+    "category": "modify"
   },
   {
     "id": "unselect_all",

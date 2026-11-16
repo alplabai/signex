@@ -303,6 +303,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),
+        // #2401 / #2407: the layer stack manager and the selection's lock.
+        "board_layer_stack" => {
+            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::LayerStack))
+        }
+        "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
+        "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

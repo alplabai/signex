@@ -4,9 +4,7 @@ use signex_types::pcb::ViaType;
 use signex_types::pcb_layer::{CopperLayer, InnerCopper};
 
 use crate::pcb::placement::{self, PlacementRefusal};
-use crate::pcb::primitive_edit::{
-    TrackEdit, ViaEdit, track_edit_command, via_edit_command, via_span,
-};
+use crate::pcb::primitive_edit::{TrackEdit, ViaEdit, track_edit_command, via_edit_command};
 use crate::pcb::tests::{SEG_1, VIA_1, board, id, snapshot};
 use crate::pcb::{BoardCommand, BoardCommandError, BoardItemId, BoardPatchKind};
 
@@ -83,7 +81,6 @@ fn a_via_span_change_makes_it_blind_and_back_through() {
     span.apply(&mut b).unwrap();
     assert_eq!(b.vias[0].via_type, ViaType::Blind);
     assert_eq!(b.vias[0].layers, ["TopCopper", "Inner2Copper"]);
-    assert_eq!(via_span(&b.vias[0]), Some((CopperLayer::Top, inner2)));
 
     let through = via_edit_command(
         &b,

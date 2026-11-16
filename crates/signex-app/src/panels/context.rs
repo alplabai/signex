@@ -111,6 +111,8 @@ pub struct PanelContext {
     pub net_inspector: super::NetInspectorView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
+    /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
+    pub layer_stack: Option<super::LayerStackFacts>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,

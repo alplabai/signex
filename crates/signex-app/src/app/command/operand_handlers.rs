@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_operands as board;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
@@ -82,6 +83,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    ("set_layer_stack", board::set_layer_stack),
+    ("lock_board_items", board::lock_board_items),
+    ("unlock_board_items", board::unlock_board_items),
+    ("set_via_span", board::set_via_span),
+    ("set_layer_sizes", board::set_layer_sizes),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -132,6 +138,18 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        "set_layer_stack" => Some(
+            "`set_layer_stack` needs the operands `document` and `stack` — \
+             use the Layer Stack manager",
+        ),
+        "set_via_span" => Some(
+            "`set_via_span` needs the operands `document`, `ids` and `layers` — \
+             use the From and To rows of the Via panel in Properties",
+        ),
+        "set_layer_sizes" => Some(
+            "`set_layer_sizes` needs the operands `document`, `ids` and `sizes` — \
+             use the stack rows of the Via or Pad panel in Properties",
         ),
         _ => None,
     }

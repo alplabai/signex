@@ -291,4 +291,79 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2401: open the board's layer stack manager (the Layers tab menu's
+    // "Layer stack..." row runs it too). No default key.
+    CommandMetadata {
+        id: "board_layer_stack",
+        category: "design",
+        label: command_ids::CMD_BOARD_LAYER_STACK,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_LAYER_STACK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2401: the manager's edit for an agent or the CLI: the whole stack
+    // as JSON rows, one undo step, answered with the stack it stored.
+    CommandMetadata {
+        id: "set_layer_stack",
+        category: "design",
+        label: command_ids::CMD_SET_LAYER_STACK,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_LAYER_STACK,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2407: lock or unlock the selected tracks and vias (the board menu's
+    // rows), or the ones `ids` names on `document`. One undo step.
+    CommandMetadata {
+        id: "lock_board_items",
+        category: "modify",
+        label: command_ids::CMD_LOCK_BOARD_ITEMS,
+        menu_label: Some(command_ids::CMD_MENU_LOCK_BOARD_ITEMS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "unlock_board_items",
+        category: "modify",
+        label: command_ids::CMD_UNLOCK_BOARD_ITEMS,
+        menu_label: Some(command_ids::CMD_MENU_UNLOCK_BOARD_ITEMS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2407: the span of vias; the Via panel's From and To rows are its
+    // surface. One undo step.
+    CommandMetadata {
+        id: "set_via_span",
+        category: "modify",
+        label: command_ids::CMD_SET_VIA_SPAN,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_VIA_SPAN,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2401: per-layer copper sizes of vias or pads; the Via and Pad
+    // Stack rows are its surface. One undo step.
+    CommandMetadata {
+        id: "set_layer_sizes",
+        category: "modify",
+        label: command_ids::CMD_SET_LAYER_SIZES,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_LAYER_SIZES,
+        ..CommandMetadata::DEFAULT
+    },
 ];

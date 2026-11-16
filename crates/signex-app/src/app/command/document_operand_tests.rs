@@ -470,6 +470,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "find_items",
                     "apply_edits",
                     "revert",
+                    // #2401, #2407: board edits an agent names its board for.
+                    "set_layer_stack",
+                    "lock_board_items",
+                    "unlock_board_items",
+                    "set_via_span",
+                    "set_layer_sizes",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

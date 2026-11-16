@@ -294,6 +294,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_region"
         | "place_board_polygon_pour"
         | "place_board_keepout" => Needs::Pcb,
+        // #2401, #2407: the layer stack and the track and via edits.
+        "board_layer_stack"
+        | "set_layer_stack"
+        | "lock_board_items"
+        | "unlock_board_items"
+        | "set_via_span"
+        | "set_layer_sizes" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,

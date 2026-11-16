@@ -338,6 +338,12 @@ altium	hint	-	P F	place_board_fill
 altium	hint	-	P R	place_board_region
 altium	hint	-	P G	place_board_polygon_pour
 altium	hint	-	-	place_board_keepout
+altium	hint	-	-	board_layer_stack
+altium	hint	-	-	set_layer_stack
+altium	hint	-	-	lock_board_items
+altium	hint	-	-	unlock_board_items
+altium	hint	-	-	set_via_span
+altium	hint	-	-	set_layer_sizes
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -688,6 +694,12 @@ classic	hint	-	-	place_board_fill
 classic	hint	-	-	place_board_region
 classic	hint	-	-	place_board_polygon_pour
 classic	hint	-	-	place_board_keepout
+classic	hint	-	-	board_layer_stack
+classic	hint	-	-	set_layer_stack
+classic	hint	-	-	lock_board_items
+classic	hint	-	-	unlock_board_items
+classic	hint	-	-	set_via_span
+classic	hint	-	-	set_layer_sizes
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

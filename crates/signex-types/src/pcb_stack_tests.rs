@@ -120,3 +120,41 @@ fn a_row_with_a_negative_or_non_finite_number_is_not_valid() {
     row.thickness_mm = f64::NAN;
     assert!(!row.numbers_valid());
 }
+
+#[test]
+fn a_mode_change_keeps_each_layers_size() {
+    let inner = CopperLayer::Inner(InnerCopper::new(1).unwrap());
+    let copper = [CopperLayer::Top, inner, CopperLayer::Bottom];
+    let tmb = sizes_in_mode(None, 0.6, StackMode::TopMiddleBottom, &copper).unwrap();
+    assert_eq!(tmb.sizes(), [0.6, 0.6, 0.6]);
+    let mut tmb = tmb;
+    tmb.set(inner, 0.45);
+    let full = sizes_in_mode(Some(&tmb), 0.6, StackMode::Full, &copper).unwrap();
+    assert_eq!(full.mode(), StackMode::Full);
+    assert_eq!(full.on(inner), Some(0.45));
+    assert_eq!(full.on(CopperLayer::Top), Some(0.6));
+    assert_eq!(
+        sizes_in_mode(Some(&full), 0.6, StackMode::Simple, &copper),
+        None
+    );
+}
+
+#[test]
+fn sizes_parse_from_text() {
+    let number = |t: &str| t.parse::<f64>().ok();
+    assert_eq!(parse_layer_sizes("", number), Ok(None));
+    assert_eq!(
+        parse_layer_sizes("top=0.6;middle=0.45;bottom=0.6", number),
+        Ok(Some(LayerSizes::TopMiddleBottom {
+            top: 0.6,
+            middle: 0.45,
+            bottom: 0.6
+        }))
+    );
+    let full = parse_layer_sizes("TopCopper=0.6; Inner1Copper=0.4", number)
+        .unwrap()
+        .unwrap();
+    assert_eq!(full.on_token("Inner1Copper"), Some(0.4));
+    assert!(parse_layer_sizes("TopSilkscreen=0.6", number).is_err());
+    assert!(parse_layer_sizes("top=x", number).is_err());
+}

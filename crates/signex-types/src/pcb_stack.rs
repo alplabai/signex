@@ -323,6 +323,120 @@ impl<T: Copy> LayerSizes<T> {
     }
 }
 
+/// How a via or pad sizes its copper by layer: the three choices of its
+/// Properties stack row (#2401).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StackMode {
+    /// One size on every layer.
+    Simple,
+    TopMiddleBottom,
+    /// A size per copper layer.
+    Full,
+}
+
+impl<T: Copy> LayerSizes<T> {
+    pub fn mode(&self) -> StackMode {
+        match self {
+            Self::TopMiddleBottom { .. } => StackMode::TopMiddleBottom,
+            Self::Full { .. } => StackMode::Full,
+        }
+    }
+
+    /// Set the size on `layer`: in top/middle/bottom form, the size of the
+    /// part `layer` is in; in full form, `layer`'s own entry.
+    pub fn set(&mut self, layer: CopperLayer, size: T) {
+        match self {
+            Self::TopMiddleBottom {
+                top,
+                middle,
+                bottom,
+            } => match layer {
+                CopperLayer::Top => *top = size,
+                CopperLayer::Inner(_) => *middle = size,
+                CopperLayer::Bottom => *bottom = size,
+            },
+            Self::Full { layers } => match layers.iter_mut().find(|l| l.copper() == Some(layer)) {
+                Some(entry) => entry.size = size,
+                None => layers.push(LayerSize::new(layer, size)),
+            },
+        }
+    }
+}
+
+/// `sizes` in `mode`: each layer keeps the size it had, `own` where it had
+/// none. `copper` is the board's copper, top to bottom, the layers a full
+/// stack lists. `None` is [`StackMode::Simple`].
+pub fn sizes_in_mode<T: Copy>(
+    sizes: Option<&LayerSizes<T>>,
+    own: T,
+    mode: StackMode,
+    copper: &[CopperLayer],
+) -> Option<LayerSizes<T>> {
+    let on = |layer: CopperLayer| sizes.and_then(|s| s.on(layer)).unwrap_or(own);
+    let middle = copper
+        .iter()
+        .copied()
+        .find(|l| matches!(l, CopperLayer::Inner(_)))
+        .map_or(own, on);
+    match mode {
+        StackMode::Simple => None,
+        StackMode::TopMiddleBottom => Some(LayerSizes::TopMiddleBottom {
+            top: on(CopperLayer::Top),
+            middle,
+            bottom: on(CopperLayer::Bottom),
+        }),
+        StackMode::Full => Some(LayerSizes::Full {
+            layers: copper.iter().map(|&l| LayerSize::new(l, on(l))).collect(),
+        }),
+    }
+}
+
+/// Per-layer sizes written as text (an agent's operand): empty or `simple`
+/// for one size, `top=..;middle=..;bottom=..`, or `<copper layer>=..;..`
+/// with each size read by `value`.
+pub fn parse_layer_sizes<T>(
+    text: &str,
+    value: impl Fn(&str) -> Option<T>,
+) -> Result<Option<LayerSizes<T>>, String> {
+    let text = text.trim();
+    if text.is_empty() || text.eq_ignore_ascii_case("simple") {
+        return Ok(None);
+    }
+    let mut entries = Vec::new();
+    for part in text.split(';').map(str::trim).filter(|p| !p.is_empty()) {
+        let (key, raw) = part
+            .split_once('=')
+            .ok_or_else(|| format!("`{part}` is not <layer>=<size>"))?;
+        let size = value(raw.trim()).ok_or_else(|| format!("`{raw}` is not a size"))?;
+        entries.push((key.trim().to_string(), size));
+    }
+    let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
+    if keys == ["top", "middle", "bottom"] {
+        let mut sizes = entries.into_iter().map(|(_, s)| s);
+        let (Some(top), Some(middle), Some(bottom)) = (sizes.next(), sizes.next(), sizes.next())
+        else {
+            return Err("top, middle and bottom each need a size".to_string());
+        };
+        return Ok(Some(LayerSizes::TopMiddleBottom {
+            top,
+            middle,
+            bottom,
+        }));
+    }
+    let mut layers: Vec<LayerSize<T>> = Vec::with_capacity(entries.len());
+    for (key, size) in entries {
+        if parse_pcb_layer(&key).and_then(PcbLayer::copper).is_none() {
+            return Err(format!("{key} is not a copper layer"));
+        }
+        if layers.iter().any(|l| l.layer == key) {
+            return Err(format!("{key} is named twice"));
+        }
+        layers.push(LayerSize { layer: key, size });
+    }
+    Ok(Some(LayerSizes::Full { layers }))
+}
+
 #[cfg(test)]
 #[path = "pcb_stack_tests.rs"]
 mod tests;

@@ -389,7 +389,8 @@ pub(crate) struct PcbTargets {
     pub any: bool,
     /// The selection names footprints and none is locked.
     pub placeable: bool,
-    /// The selection names something to delete and no locked footprint.
+    /// The selection names something to delete and no locked footprint,
+    /// track or via.
     pub deletable: bool,
     /// The selection names something Copy carries (#2361).
     pub copyable: bool,
@@ -399,6 +400,10 @@ pub(crate) struct PcbTargets {
     pub part_in_hand: bool,
     /// A track run is being drawn, for Space and Shift+Space (#2373).
     pub routing: bool,
+    /// The selection holds an unlocked track or via (#2407).
+    pub lockable: bool,
+    /// The selection holds a locked track or via.
+    pub unlockable: bool,
 }
 
 impl Signex {
@@ -454,15 +459,22 @@ impl Signex {
         let footprints = selection.footprints();
         let unlocked = placement::editable_footprints(board, &footprints).is_ok();
         let copyable = !deletable_items(selection).is_empty();
+        let locks: Vec<bool> = super::pcb_item_edits::lockable_items(selection)
+            .into_iter()
+            .map(|id| signex_engine::pcb::lock::is_locked(board, id))
+            .collect();
+        let any_locked = locks.contains(&true);
         PcbTargets {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked) && copyable,
+            deletable: (footprints.is_empty() || unlocked) && copyable && !any_locked,
             copyable,
             pasteable,
             part_in_hand,
             routing,
+            lockable: locks.contains(&false),
+            unlockable: any_locked,
         }
     }
 }

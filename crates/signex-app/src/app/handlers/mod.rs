@@ -61,6 +61,8 @@ mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
 mod pcb_filter_presets;
+pub(crate) mod pcb_item_edits;
+pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_footprint_text;
 #[cfg(test)]
 mod pcb_origin_tests;

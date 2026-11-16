@@ -62,6 +62,8 @@ pub struct InteractionState {
     /// The track, via and pad panel's drafts, search, Show More and net
     /// pick (#2355).
     pub pcb_primitive: crate::app::handlers::pcb_primitive::PcbPrimitivePanel,
+    /// The Layer Stack manager's selected row and unapplied cells (#2401).
+    pub pcb_layer_stack: crate::app::handlers::pcb_layer_stack::LayerStackPanel,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

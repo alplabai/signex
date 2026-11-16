@@ -42,7 +42,9 @@ define_ids! {
     PCB_PRIM_X = "pcb-prim-x";
     PCB_PRIM_Y = "pcb-prim-y";
     PCB_PRIM_LOCK = "pcb-prim-lock";
-    PCB_PRIM_LOCK_UNSUPPORTED = "pcb-prim-lock-unsupported";
+    PCB_PRIM_LOCK_TIP = "pcb-prim-lock-tip";
+    PCB_PRIM_ITEM_LOCKED = "pcb-prim-item-locked";
+    PCB_PRIM_LOCK_NOTHING = "pcb-prim-lock-nothing";
     PCB_PRIM_PAD_LOCK_TIP = "pcb-prim-pad-lock-tip";
     PCB_PRIM_LAYER = "pcb-prim-layer";
     PCB_PRIM_WIDTH = "pcb-prim-width";
@@ -64,7 +66,8 @@ define_ids! {
     PCB_PRIM_STACK_SIMPLE = "pcb-prim-stack-simple";
     PCB_PRIM_STACK_TOP_MIDDLE_BOTTOM = "pcb-prim-stack-top-middle-bottom";
     PCB_PRIM_STACK_FULL = "pcb-prim-stack-full";
-    PCB_PRIM_STACK_UNSUPPORTED = "pcb-prim-stack-unsupported";
+    PCB_PRIM_STACK_TIP = "pcb-prim-stack-tip";
+    PCB_PRIM_MIDDLE = "pcb-prim-middle";
     PCB_PRIM_TEMPLATE = "pcb-prim-template";
     PCB_PRIM_LIBRARY = "pcb-prim-library";
     PCB_PRIM_LIBRARY_LOCAL = "pcb-prim-library-local";
@@ -76,7 +79,8 @@ define_ids! {
     PCB_PRIM_VIA_SPAN_THROUGH = "pcb-prim-via-span-through";
     PCB_PRIM_VIA_SPAN_BLIND = "pcb-prim-via-span-blind";
     PCB_PRIM_VIA_SPAN_MICRO = "pcb-prim-via-span-micro";
-    PCB_PRIM_VIA_SPAN_UNSUPPORTED = "pcb-prim-via-span-unsupported";
+    PCB_PRIM_SPAN_FROM = "pcb-prim-span-from";
+    PCB_PRIM_SPAN_TO = "pcb-prim-span-to";
     PCB_PRIM_DIAMETER = "pcb-prim-diameter";
     PCB_PRIM_THERMAL_RELIEF = "pcb-prim-thermal-relief";
     PCB_PRIM_DIRECT = "pcb-prim-direct";

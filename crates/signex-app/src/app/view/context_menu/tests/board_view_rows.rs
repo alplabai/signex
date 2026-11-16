@@ -88,3 +88,36 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
         "the row is there, greyed"
     );
 }
+
+/// #2407: Lock runs `lock_board_items` with an unlocked track or via
+/// selected, Unlock `unlock_board_items` with a locked one; each is greyed
+/// otherwise.
+#[test]
+fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
+    let sc = shortcuts();
+    let runs = |message: Option<Message>, command: &str| {
+        matches!(
+            message,
+            Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+                if id.as_str() == command
+        )
+    };
+    let unlocked = PcbTargets {
+        shown: true,
+        any: true,
+        lockable: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, unlocked, &sc);
+    assert!(runs(row_message(&rows, "Lock"), "lock_board_items"));
+    assert!(row_message(&rows, "Unlock").is_none());
+    let locked = PcbTargets {
+        shown: true,
+        any: true,
+        unlockable: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, locked, &sc);
+    assert!(runs(row_message(&rows, "Unlock"), "unlock_board_items"));
+    assert!(row_message(&rows, "Lock").is_none());
+}

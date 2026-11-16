@@ -4,6 +4,7 @@
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{LayerSizes, PcbBoard, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_stack::{StackMode, board_copper_layers, sizes_in_mode};
 use uuid::Uuid;
 
 use super::{PrimitiveEditRefusal, finite};
@@ -25,6 +26,11 @@ pub enum ViaEdit {
     Span(CopperLayer, CopperLayer),
     /// Per-layer diameters; `None` is one diameter on every layer.
     Sizes(Option<LayerSizes<f64>>),
+    /// How the diameter is set by layer (#2401); each layer keeps its size.
+    Mode(StackMode),
+    /// The diameter on one layer: its part of the per-layer sizes, or the
+    /// one diameter of a via without them.
+    LayerDiameter(CopperLayer, f64),
 }
 
 /// The command setting `edit` on every via in `vias`.
@@ -36,6 +42,7 @@ pub fn via_edit_command(
     if vias.is_empty() {
         return Err(PrimitiveEditRefusal::Empty);
     }
+    let copper = board_copper_layers(&board.layers);
     let mut changed = Vec::new();
     for id in vias {
         let old = board
@@ -44,7 +51,7 @@ pub fn via_edit_command(
             .find(|v| v.uuid == *id)
             .ok_or(PrimitiveEditRefusal::Gone)?;
         let mut new = old.clone();
-        apply(&mut new, &edit)?;
+        apply(&mut new, &edit, &copper)?;
         if new != *old {
             changed.push(BoardItem::Via(new));
         }
@@ -52,7 +59,7 @@ pub fn via_edit_command(
     Ok((!changed.is_empty()).then_some(BoardCommand::ReplaceItems { items: changed }))
 }
 
-fn apply(v: &mut Via, edit: &ViaEdit) -> Result<(), PrimitiveEditRefusal> {
+fn apply(v: &mut Via, edit: &ViaEdit, copper: &[CopperLayer]) -> Result<(), PrimitiveEditRefusal> {
     match edit {
         ViaEdit::X(x) => v.position.x = finite(*x)?,
         ViaEdit::Y(y) => v.position.y = finite(*y)?,
@@ -61,6 +68,16 @@ fn apply(v: &mut Via, edit: &ViaEdit) -> Result<(), PrimitiveEditRefusal> {
         ViaEdit::Net(net) => v.net = *net,
         ViaEdit::Span(a, b) => set_span(v, *a, *b),
         ViaEdit::Sizes(sizes) => v.layer_sizes = sizes.clone(),
+        ViaEdit::Mode(mode) => {
+            v.layer_sizes = sizes_in_mode(v.layer_sizes.as_ref(), v.diameter, *mode, copper);
+        }
+        ViaEdit::LayerDiameter(layer, d) => {
+            let d = finite(*d)?;
+            match v.layer_sizes.as_mut() {
+                Some(sizes) => sizes.set(*layer, d),
+                None => v.diameter = d,
+            }
+        }
     }
     Ok(())
 }
@@ -77,19 +94,4 @@ fn set_span(v: &mut Via, a: CopperLayer, b: CopperLayer) {
         (false, ViaType::Micro) => ViaType::Micro,
         (false, _) => ViaType::Blind,
     };
-}
-
-/// The span a via shows: its two layers, top first, or the board's outer
-/// two for a through via.
-pub fn via_span(via: &Via) -> Option<(CopperLayer, CopperLayer)> {
-    if via.via_type == ViaType::Through {
-        return Some((CopperLayer::Top, CopperLayer::Bottom));
-    }
-    let mut ends: Vec<CopperLayer> = via
-        .layers
-        .iter()
-        .filter_map(|name| signex_types::format::parse_pcb_layer(name)?.copper())
-        .collect();
-    ends.sort();
-    Some((*ends.first()?, *ends.last()?))
 }

@@ -15,6 +15,7 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+pub mod layer_stack;
 mod pcb_layers;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
@@ -108,6 +109,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{
     view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
@@ -365,7 +367,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             return signal::view(ctx);
         }
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
-        PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
+        PanelKind::LayerStack => layer_stack::view(ctx),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {

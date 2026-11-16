@@ -4,11 +4,13 @@
 use iced::Element;
 use signex_i18n::{UserText, ids};
 
+use signex_types::pcb_stack::StackMode;
+
 use super::rows::{
-    Look, Section, fixed_checkbox, fixed_tiles, fixed_value, labelled, lock, mask_section,
-    mm_field, net_row, stack, template_rows, testpoint_section, value_box, with_tip,
+    Look, Section, fixed_checkbox, fixed_value, labelled, mask_section, mm_field, net_row, stack,
+    template_rows, testpoint_section, value_box,
 };
-use super::{PrimitiveField as F, ViaFacts, net_info};
+use super::{PrimitiveField as F, ViaFacts, net_info, stack_rows};
 use crate::panels::{PanelContext, PanelMsg};
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
@@ -32,16 +34,9 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
     s.push(
         common,
         ids::PCB_PRIM_VIA_NAME,
-        labelled(
-            look,
-            ids::PCB_PRIM_VIA_NAME,
-            with_tip(
-                look,
-                value_box(look, span),
-                ids::PCB_PRIM_VIA_SPAN_UNSUPPORTED,
-            ),
-        ),
+        labelled(look, ids::PCB_PRIM_VIA_NAME, value_box(look, span)),
     );
+    stack_rows::span_rows(look, common, &f.layers, &f.span_ends, &mut s);
     s.push(
         common,
         ids::PCB_PRIM_PROPAGATION_DELAY,
@@ -72,7 +67,7 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_LOCK,
-            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
+            stack_rows::item_lock(look, common, f.locked),
         ),
     );
     s.finish()
@@ -93,26 +88,21 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
     s.push(
         common,
         ids::PCB_PRIM_STACK_SIMPLE,
-        fixed_tiles(
-            look,
-            &[
-                ids::PCB_PRIM_STACK_SIMPLE,
-                ids::PCB_PRIM_STACK_TOP_MIDDLE_BOTTOM,
-                ids::PCB_PRIM_STACK_FULL,
-            ],
-            0,
-            ids::PCB_PRIM_STACK_UNSUPPORTED,
-        ),
+        stack_rows::mode_tiles(look, common, f.mode),
     );
-    s.push(
-        common,
-        ids::PCB_PRIM_DIAMETER,
-        labelled(
-            look,
+    if f.mode == Some(StackMode::Simple) || f.layer_sizes.is_empty() {
+        s.push(
+            common,
             ids::PCB_PRIM_DIAMETER,
-            mm_field(common, F::Diameter, f.diameter, look),
-        ),
-    );
+            labelled(
+                look,
+                ids::PCB_PRIM_DIAMETER,
+                mm_field(common, F::Diameter, f.diameter, look),
+            ),
+        );
+    } else {
+        stack_rows::size_rows(look, common, &f.layer_sizes, false, &mut s);
+    }
     s.push(
         common,
         ids::PCB_PRIM_THERMAL_RELIEF,

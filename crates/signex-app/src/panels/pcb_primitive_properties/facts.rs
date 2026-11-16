@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use pcb_geom::ItemRef;
 use signex_types::pcb::PadShape;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_stack::StackMode;
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
@@ -35,6 +36,10 @@ pub enum PrimitiveField {
     Rotation,
     SizeX,
     SizeY,
+    /// A via's diameter or a pad's x size on one copper layer (#2401).
+    LayerSize(CopperLayer),
+    /// A pad's y size on one copper layer.
+    LayerSizeY(CopperLayer),
 }
 
 impl PrimitiveField {
@@ -83,11 +88,23 @@ impl fmt::Display for ShapeChoice {
     }
 }
 
+/// One row of a via's or pad's per-layer sizes (#2401): the layer it sets
+/// (any inner layer stands for Middle), its label, and the shared sizes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayerSizeRow {
+    pub layer: CopperLayer,
+    pub label: String,
+    /// A via's diameter or a pad's x size.
+    pub x: Option<f64>,
+    /// A pad's y size; `None` for a via.
+    pub y: Option<f64>,
+}
+
 /// Whether the selection can be edited, and if not why.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Editability {
     Editable,
-    /// A pad's footprint is locked.
+    /// A pad's footprint is locked, or a track or via is (#2407).
     Locked,
     /// The board opened read-only (a newer format).
     ReadOnly,
@@ -156,6 +173,8 @@ pub struct TrackFacts {
     pub start: (Option<f64>, Option<f64>),
     pub end: (Option<f64>, Option<f64>),
     pub length_mm: Option<f64>,
+    /// The tracks share a lock state (#2407).
+    pub locked: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -167,6 +186,14 @@ pub struct ViaFacts {
     pub hole: Option<f64>,
     /// Its span name, "Thru 1:4"; `None` when the vias differ.
     pub span: Option<String>,
+    /// The top and bottom layer the vias share (#2407).
+    pub span_ends: (Option<LayerChoice>, Option<LayerChoice>),
+    /// The board's copper layers, top to bottom.
+    pub layers: Vec<LayerChoice>,
+    pub locked: Option<bool>,
+    /// How the vias size their copper by layer (#2401).
+    pub mode: Option<StackMode>,
+    pub layer_sizes: Vec<LayerSizeRow>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -185,6 +212,9 @@ pub struct PadFacts {
     pub has_hole: bool,
     pub shape: Option<ShapeChoice>,
     pub shapes: Vec<ShapeChoice>,
+    /// How the pads size their copper by layer (#2401).
+    pub mode: Option<StackMode>,
+    pub layer_sizes: Vec<LayerSizeRow>,
 }
 
 /// The selection the Properties panel shows as a primitive.

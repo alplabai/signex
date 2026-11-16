@@ -57,6 +57,10 @@ impl Signex {
                 self.handle_layer_tab_menu(event);
                 Task::none()
             }
+            PcbMsg::LockRequested { locked } => {
+                self.lock_pcb_selection(locked);
+                Task::none()
+            }
         }
     }
 

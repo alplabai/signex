@@ -152,7 +152,16 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2401, #2407: board edits, each its own step on the board it names.
+    ("set_layer_stack", BOARD_EDIT),
+    ("lock_board_items", BOARD_EDIT),
+    ("unlock_board_items", BOARD_EDIT),
+    ("set_via_span", BOARD_EDIT),
+    ("set_layer_sizes", BOARD_EDIT),
 ];
+
+const BOARD_EDIT: &str =
+    "it edits a board, which no sheet's undo step covers; run it as its own command";
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand

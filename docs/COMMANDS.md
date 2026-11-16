@@ -293,9 +293,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
@@ -308,12 +310,16 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
+| `set_layer_stack` | Replace the layer stack of a board | design | — | — |
+| `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `unlock_board_items` | Unlock the selected tracks and vias | modify | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
