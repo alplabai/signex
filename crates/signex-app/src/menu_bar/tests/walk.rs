@@ -170,10 +170,11 @@ const KNOWN_INERT: &[(&str, &[&str])] = &[];
 /// What a row can move besides [`probe`]: the selection and zoom of each
 /// window canvas, the symbols of every sheet, the revisions of every sheet
 /// and board, which a rotate or a mirror moves while it keeps the counts
-/// (#2240), and the board selection, which Select All moves (#2361).
+/// (#2240), the board selection, which Select All moves (#2361), and the
+/// board's 3D view, which View ▸ 3D View opens (#2390).
 /// Compared before and after within one app only: revisions are
 /// process-wide counters.
-fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize) {
+fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize, bool) {
     let canvases = app
         .interaction_state
         .canvases
@@ -194,10 +195,13 @@ fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize) {
         .chain(app.document_state.pcb_revisions.values().copied())
         .sum();
     let board_selected = app.interaction_state.pcb_selection.selection().len();
-    (canvases, symbols, revisions, board_selected)
+    let board_3d = app.interaction_state.board_3d.is_some();
+    (canvases, symbols, revisions, board_selected, board_3d)
 }
 
-/// Live rows of `build`'s app whose click moved nothing, as `(row, state)`.
+/// Live rows of `build`'s app whose click moved nothing and said nothing in
+/// Messages, as `(row, state)`. A board tool with nothing to act on says so
+/// (Repour on a board with no pour, #2216) and is not dead.
 fn inert_rows(
     state: &'static str,
     build: fn() -> Signex,
@@ -219,11 +223,13 @@ fn inert_rows(
             super::window_native_rows::select_window_symbols(&mut app, window);
         }
         let before = (probe(&app), window_state(&app));
+        let said = crate::diagnostics::said_on_this_thread();
         let task = match window {
             Some(window) => super::window_native_rows::click_in_window(&mut app, window, &path),
             None => click(&mut app, &path),
         };
-        if (probe(&app), window_state(&app)) == before && !has_work(&task) {
+        let silent = crate::diagnostics::said_on_this_thread() == said;
+        if (probe(&app), window_state(&app)) == before && !has_work(&task) && silent {
             inert.push((path, state));
         }
     }

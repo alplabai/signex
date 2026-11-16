@@ -19,14 +19,18 @@ use crate::pcb_canvas::PcbCanvasMsg;
 const U1: Uuid = Uuid::from_u128(0x10);
 
 /// A new board's blank, with U1 placed 20 mm right of and 20 mm above its
-/// origin.
+/// origin. Its two pads leave its centre bare, so a click there takes the
+/// body: a pad is picked over the body under it.
 fn new_board() -> PcbBoard {
     let mut board = SetupProfile::Standard.pcb(2).new_board();
     let fp: Footprint = serde_json::from_value(serde_json::json!({
         "uuid": U1, "reference": "U1", "position": {"x": 20.0, "y": 60.0},
         "layer": "TopCopper",
         "pads": [{"uuid": Uuid::from_u128(0x11), "number": "1", "pad_type": "smd",
-                  "shape": "rect", "position": {"x": 0.0, "y": 0.0},
+                  "shape": "rect", "position": {"x": -2.0, "y": 0.0},
+                  "size": {"x": 1.0, "y": 1.0}, "layers": ["TopCopper"]},
+                 {"uuid": Uuid::from_u128(0x12), "number": "2", "pad_type": "smd",
+                  "shape": "rect", "position": {"x": 2.0, "y": 0.0},
                   "size": {"x": 1.0, "y": 1.0}, "layers": ["TopCopper"]}]
     }))
     .unwrap();
