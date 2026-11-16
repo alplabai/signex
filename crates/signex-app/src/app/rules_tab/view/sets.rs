@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{Column, Row, column, row};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget as _};
 use signex_drc_dsl::table::sets::values_text;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::project::NamedRuleSet;
@@ -35,7 +35,7 @@ fn input<'a>(
         .padding(SP.xs)
         .width(Length::Fill)
         .style(crate::panels::form_look::text_input_style)
-        .into()
+        .boxed()
 }
 
 pub(super) fn view<'a>(
@@ -44,12 +44,13 @@ pub(super) fn view<'a>(
 ) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
     let form = &frame.state.set_form;
-    let mut body: Column<'a, Message> = Column::new().spacing(SP.s);
-    body = body.push(text(t!(i18n, ids::RULES_SETS_TITLE)).size(TS.label));
+    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.s);
+    body = body.push(text(t!(i18n, ids::RULES_SETS_TITLE)).size(TS.label).boxed());
     body = body.push(
         text(t!(i18n, ids::RULES_SETS_HINT))
             .size(TS.caption)
-            .color(tokens::muted_text(tokens)),
+            .color(tokens::muted_text(tokens))
+            .boxed(),
     );
     body = body.push(input(
         frame,
@@ -73,7 +74,8 @@ pub(super) fn view<'a>(
         button(text(t!(i18n, ids::RULES_SETS_CREATE)).size(TS.label))
             .padding([SP.xs, SP.m])
             .style(crate::styles::accent_button(tokens))
-            .on_press(up(RulesTabMsg::SetCreated { project_id: id })),
+            .on_press(up(RulesTabMsg::SetCreated { project_id: id }))
+            .boxed(),
     );
     body = body.push(input(
         frame,
@@ -85,13 +87,14 @@ pub(super) fn view<'a>(
         body = body.push(
             text(t!(i18n, ids::RULES_SETS_EMPTY))
                 .size(TS.body)
-                .color(tokens::muted_text(tokens)),
+                .color(tokens::muted_text(tokens))
+                .boxed(),
         );
     }
     for (name, set) in sets {
         body = body.push(set_line(frame, name, set));
     }
-    column![body].width(Length::FillPortion(2)).into()
+    body.width(Length::FillPortion(2)).boxed()
 }
 
 fn set_line<'a>(frame: &Frame<'a>, name: &str, set: &NamedRuleSet) -> Element<'a, Message> {
@@ -118,7 +121,7 @@ fn set_line<'a>(frame: &Frame<'a>, name: &str, set: &NamedRuleSet) -> Element<'a
             project_id: id,
             set: name.to_string(),
         }));
-    let actions: Row<'a, Message> = row![apply, redefine].spacing(SP.xs);
+    let actions: Row<Element<'a, Message>> = row![apply, redefine].spacing(SP.xs);
     column![
         text(user(head)).size(TS.body),
         text(uses)
@@ -127,5 +130,5 @@ fn set_line<'a>(frame: &Frame<'a>, name: &str, set: &NamedRuleSet) -> Element<'a
         actions,
     ]
     .spacing(SP.xs)
-    .into()
+    .boxed()
 }

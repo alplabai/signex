@@ -3,8 +3,8 @@
 //! value; an empty one shows, greyed, what the pair needs without it. A
 //! click types in the cell and opens its object sub-grid below.
 
-use iced::widget::{Column, Row, column, row, scrollable};
-use iced::{Alignment, Element, Length};
+use iced::widget::{Column, Row, row, scrollable};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_drc_dsl::table::matrix::{self, CellKey, OBJECT_PAIRS};
 use signex_i18n::{ids, t};
 use signex_widgets::{button, text, text_input};
@@ -22,47 +22,53 @@ fn cell_width() -> Length {
 
 pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
-    let mut body: Column<'a, Message> = Column::new().spacing(SP.xs);
+    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
     body = body.push(
         text(t!(i18n, ids::RULES_MATRIX_HINT))
             .size(TS.caption)
-            .color(tokens::muted_text(tokens)),
+            .color(tokens::muted_text(tokens))
+            .boxed(),
     );
     if frame.classes.is_empty() {
         body = body.push(
             text(t!(i18n, ids::RULES_MATRIX_NO_CLASSES))
                 .size(TS.body)
-                .color(tokens::muted_text(tokens)),
+                .color(tokens::muted_text(tokens))
+                .boxed(),
         );
-        return body.height(Length::FillPortion(3)).into();
+        return body.height(Length::FillPortion(3)).boxed();
     }
-    let mut head: Row<'a, Message> = Row::new()
+    let mut head: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.s)
-        .push(text(user(String::new())).width(cell_width()));
+        .push(text(user(String::new())).width(cell_width()).boxed());
     for class in &frame.classes {
         head = head.push(
             text(user(class.clone()))
                 .size(TS.caption)
                 .color(tokens::muted_text(tokens))
-                .width(cell_width()),
+                .width(cell_width())
+                .boxed(),
         );
     }
-    let mut grid: Column<'a, Message> = Column::new().spacing(SP.xs).push(head);
+    let mut grid: Column<Element<'a, Message>> = Column::new().spacing(SP.xs).push(head.boxed());
     for a in &frame.classes {
-        let mut line: Row<'a, Message> = Row::new()
-            .spacing(SP.s)
-            .align_y(Alignment::Center)
-            .push(text(user(a.clone())).size(TS.body).width(cell_width()));
+        let mut line: Row<Element<'a, Message>> =
+            Row::new().spacing(SP.s).align_y(Alignment::Center).push(
+                text(user(a.clone()))
+                    .size(TS.body)
+                    .width(cell_width())
+                    .boxed(),
+            );
         for b in &frame.classes {
             line = line.push(cell(frame, CellKey::new(a.clone(), b.clone())));
         }
-        grid = grid.push(line);
+        grid = grid.push(line.boxed());
     }
-    body = body.push(scrollable(grid).height(Length::FillPortion(2)));
+    body = body.push(scrollable(grid).height(Length::FillPortion(2)).boxed());
     if let Some((a, b)) = frame.state.matrix_open.clone() {
         body = body.push(sub_grid(frame, a, b));
     }
-    body.height(Length::FillPortion(3)).into()
+    body.height(Length::FillPortion(3)).boxed()
 }
 
 /// One cell: typed in, written, or its fallback greyed.
@@ -94,17 +100,17 @@ fn cell<'a>(frame: &Frame<'a>, key: CellKey) -> Element<'a, Message> {
             .spacing(SP.xs)
             .align_y(Alignment::Center)
             .width(cell_width())
-            .into();
+            .boxed();
     }
     let written = matrix::cell(&frame.table, &key)
         .and_then(|row| row.limit(signex_drc_dsl::table::LimitField::MinClearance))
         .map(|limit| limit.value.clone());
     let face: Element<'a, Message> = match written {
-        Some(value) => text(user(value)).size(TS.body).into(),
+        Some(value) => text(user(value)).size(TS.body).boxed(),
         None => text(fallback(frame, &key))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
-            .into(),
+            .boxed(),
     };
     button(face)
         .padding([0.0, SP.xs])
@@ -114,7 +120,7 @@ fn cell<'a>(frame: &Frame<'a>, key: CellKey) -> Element<'a, Message> {
             project_id: id,
             key,
         }))
-        .into()
+        .boxed()
 }
 
 /// What an empty cell falls back to, worded.
@@ -148,10 +154,11 @@ fn sub_grid<'a>(frame: &Frame<'a>, a: String, b: String) -> Element<'a, Message>
         .padding([0.0, SP.xs])
         .style(ghost_button)
         .on_press(up(RulesTabMsg::MatrixCollapsed { project_id: id }));
-    let mut lines: Column<'a, Message> = Column::new().spacing(SP.xs).push(
+    let mut lines: Column<Element<'a, Message>> = Column::new().spacing(SP.xs).push(
         row![text(title).size(TS.label), close]
             .spacing(SP.m)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
     );
     let whole = CellKey::new(a.clone(), b.clone());
     let mut keys = vec![(t!(i18n, ids::RULES_MATRIX_ALL_OBJECTS).into_string(), whole)];
@@ -162,14 +169,15 @@ fn sub_grid<'a>(frame: &Frame<'a>, a: String, b: String) -> Element<'a, Message>
     }
     for (label, key) in keys {
         let written = matrix::cell(&frame.table, &key).is_some();
-        let mut line: Row<'a, Message> = Row::new()
+        let mut line: Row<Element<'a, Message>> = Row::new()
             .spacing(SP.s)
             .align_y(Alignment::Center)
             .push(
                 text(user(label))
                     .size(TS.body)
                     .color(tokens::muted_text(tokens))
-                    .width(cell_width()),
+                    .width(cell_width())
+                    .boxed(),
             )
             .push(cell(frame, key.clone()));
         if written {
@@ -180,10 +188,11 @@ fn sub_grid<'a>(frame: &Frame<'a>, a: String, b: String) -> Element<'a, Message>
                     .on_press(up(RulesTabMsg::MatrixCellCleared {
                         project_id: id,
                         key,
-                    })),
+                    }))
+                    .boxed(),
             );
         }
-        lines = lines.push(line);
+        lines = lines.push(line.boxed());
     }
-    column![lines].padding([SP.s, SP.m]).into()
+    lines.padding([SP.s, SP.m]).boxed()
 }

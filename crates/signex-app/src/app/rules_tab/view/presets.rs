@@ -3,7 +3,7 @@
 //! and removes, and Apply stores them as one undo step.
 
 use iced::widget::{Column, Row, column, row, scrollable};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget as _};
 use signex_drc_dsl::table::presets::RowChangeKind;
 use signex_i18n::{ids, t};
 use signex_types::project::{FabTemplate, RuleProfile};
@@ -28,14 +28,19 @@ pub(super) fn view<'a>(
     profiles: Option<Vec<&'a RuleProfile>>,
 ) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
-    let mut body: Column<'a, Message> = Column::new().spacing(SP.s);
-    body = body.push(text(t!(i18n, ids::RULES_PRESETS_TITLE)).size(TS.label));
+    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.s);
+    body = body.push(
+        text(t!(i18n, ids::RULES_PRESETS_TITLE))
+            .size(TS.label)
+            .boxed(),
+    );
     body = body.push(
         text(t!(i18n, ids::RULES_PRESETS_HINT))
             .size(TS.caption)
-            .color(tokens::muted_text(tokens)),
+            .color(tokens::muted_text(tokens))
+            .boxed(),
     );
-    let mut tiers: Row<'a, Message> = Row::new().spacing(SP.xs);
+    let mut tiers: Row<Element<'a, Message>> = Row::new().spacing(SP.xs);
     for tier in FabTemplate::ALL {
         tiers = tiers.push(
             button(text(t!(i18n, tier_label(tier))).size(TS.caption))
@@ -44,28 +49,31 @@ pub(super) fn view<'a>(
                 .on_press(up(RulesTabMsg::PresetPicked {
                     project_id: id,
                     preset: tier_preset(tier),
-                })),
+                }))
+                .boxed(),
         );
     }
-    body = body.push(tiers);
+    body = body.push(tiers.boxed());
     match profiles {
         None => {
             body = body.push(
                 button(text(t!(i18n, ids::RULES_PRESETS_LOAD)).size(TS.caption))
                     .padding([SP.xs, SP.s])
                     .style(crate::styles::subtle_button(tokens))
-                    .on_press(up(RulesTabMsg::PresetsListRequested { project_id: id })),
+                    .on_press(up(RulesTabMsg::PresetsListRequested { project_id: id }))
+                    .boxed(),
             );
         }
         Some(profiles) if profiles.is_empty() => {
             body = body.push(
                 text(t!(i18n, ids::RULES_PRESETS_NO_PROFILES))
                     .size(TS.caption)
-                    .color(tokens::muted_text(tokens)),
+                    .color(tokens::muted_text(tokens))
+                    .boxed(),
             );
         }
         Some(profiles) => {
-            let mut list: Column<'a, Message> = Column::new().spacing(SP.xs);
+            let mut list: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
             for profile in profiles {
                 list = list.push(
                     button(text(user(profile.name.clone())).size(TS.caption))
@@ -74,16 +82,17 @@ pub(super) fn view<'a>(
                         .on_press(up(RulesTabMsg::PresetPicked {
                             project_id: id,
                             preset: profile_preset(&profile.name),
-                        })),
+                        }))
+                        .boxed(),
                 );
             }
-            body = body.push(list);
+            body = body.push(list.boxed());
         }
     }
     if let Some(preview) = frame.state.preview.as_ref() {
         body = body.push(preview_view(frame, preview));
     }
-    column![body].width(Length::FillPortion(2)).into()
+    body.width(Length::FillPortion(2)).boxed()
 }
 
 fn preview_view<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, Message> {
@@ -96,13 +105,18 @@ fn preview_view<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
         Some(tier) => t!(i18n, tier_label(tier)).into_string(),
         None => preview.label.clone(),
     };
-    let mut lines: Column<'a, Message> = Column::new().spacing(SP.xs);
-    lines = lines.push(text(t!(i18n, ids::RULES_PRESET_PREVIEW, "preset" => label)).size(TS.body));
+    let mut lines: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
+    lines = lines.push(
+        text(t!(i18n, ids::RULES_PRESET_PREVIEW, "preset" => label))
+            .size(TS.body)
+            .boxed(),
+    );
     if preview.changes.is_empty() && preview.other.is_empty() {
         lines = lines.push(
             text(t!(i18n, ids::RULES_PRESET_NO_CHANGE))
                 .size(TS.caption)
-                .color(tokens::muted_text(tokens)),
+                .color(tokens::muted_text(tokens))
+                .boxed(),
         );
     }
     for change in &preview.changes {
@@ -114,15 +128,16 @@ fn preview_view<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
         lines = lines.push(
             text(t!(i18n, word, "rule" => change.name.as_str()))
                 .size(TS.caption)
-                .color(ink),
+                .color(ink)
+                .boxed(),
         );
         let shown = change.to.clone().or_else(|| change.from.clone());
         if let Some(rule) = shown {
-            lines = lines.push(text(user(rule)).size(TS.caption));
+            lines = lines.push(text(user(rule)).size(TS.caption).boxed());
         }
     }
     for other in &preview.other {
-        lines = lines.push(text(user(other.clone())).size(TS.caption));
+        lines = lines.push(text(user(other.clone())).size(TS.caption).boxed());
     }
     let apply = button(text(t!(i18n, ids::RULES_PRESET_APPLY)).size(TS.label))
         .padding([SP.xs, SP.m])
@@ -137,5 +152,5 @@ fn preview_view<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
         row![apply, cancel].spacing(SP.s),
     ]
     .spacing(SP.s)
-    .into()
+    .boxed()
 }
