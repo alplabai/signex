@@ -12,7 +12,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{radio, text_input};
 
 use super::general::tab_message;
-use super::table::{SP, TS, action, cell, heading_row, problem, section, table_row, word_cell};
+use super::table::{SP, TS, action, heading_row, problem, section, table_row, word_cell};
 use super::{ProjectTabMsg, ProjectTabState, VariantRenameDraft};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{Message, Signex};
@@ -87,7 +87,10 @@ pub(super) fn view<'a>(
             word_cell(t!(i18n, ids::PROJECT_VARIANTS_BASE), tokens),
             Length::Fill,
         ),
-        (row![].boxed(), actions),
+        (
+            iced::widget::Row::<Element<'_, Message>>::new().boxed(),
+            actions,
+        ),
     ]));
     let draft = tab.and_then(|tab| tab.variant_rename.as_ref());
     for (index, name) in data.variant_definitions.iter().enumerate() {

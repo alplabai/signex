@@ -28,7 +28,7 @@ pub(super) fn section<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let mut col: Column<'a, Message> = column![
+    let mut col: Column<Element<'a, Message>> = column![
         text(t!(i18n, title))
             .size(TS.heading)
             .color(crate::styles::ti(tokens.text)),
@@ -74,29 +74,30 @@ pub(super) fn heading_row<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let mut head: Row<'a, Message> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
+    let mut head: Row<Element<'a, Message>> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
     for (caption, width) in columns {
         head = head.push(
             text(t!(i18n, *caption))
                 .size(TS.caption)
                 .color(ink::muted_text(tokens))
-                .width(*width),
+                .width(*width)
+                .boxed(),
         );
     }
     if let Some(width) = actions {
-        head = head.push(Space::new().width(width));
+        head = head.push(Space::new().width(width).boxed());
     }
     head.boxed()
 }
 
 /// One table row: each cell in its column's width.
 pub(super) fn table_row<'a>(cells: Vec<(Element<'a, Message>, Length)>) -> Element<'a, Message> {
-    let mut line: Row<'a, Message> = Row::new()
+    let mut line: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.s)
         .padding([SP.xs, SP.m])
         .align_y(Alignment::Center);
     for (cell, width) in cells {
-        line = line.push(container(cell).width(width));
+        line = line.push(container(cell).width(width).boxed());
     }
     line.boxed()
 }

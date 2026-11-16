@@ -174,7 +174,8 @@ fn annotate_choice<'a>(
                 pick,
             )
             .size(TS.body)
-            .text_size(TS.body),
+            .text_size(TS.body)
+            .boxed(),
         );
     }
     labelled(
