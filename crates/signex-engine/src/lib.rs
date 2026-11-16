@@ -7,6 +7,7 @@ mod annotation_placements;
 mod clipboard_text;
 mod history;
 mod history_snapshot;
+mod id_collision;
 mod lock;
 mod multi_edit;
 mod net_class_table;
@@ -70,6 +71,8 @@ mod save_point_tests;
 #[cfg(test)]
 mod symbol_drag_local_tests;
 
+#[cfg(test)]
+mod id_source_tests;
 #[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
@@ -170,6 +173,8 @@ pub struct Engine {
     /// The open transaction, if any (`exec/transaction.rs`, #2178): history
     /// stays suppressed while it is open.
     transaction: Option<exec::transaction::Transaction>,
+    /// Object ids of the sheet while a batch runs (`id_collision.rs`).
+    batch_ids: id_collision::BatchIds,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -383,6 +388,7 @@ impl Engine {
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -424,6 +430,7 @@ impl Engine {
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -637,7 +644,8 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_item_refusal(&cmd) {
+        let refusal = self.locked_item_refusal(&cmd);
+        if let Some(refusal) = refusal.or_else(|| self.id_in_use_refusal(&cmd)) {
             return Err(refusal);
         }
         let mark = self.revision_mark();

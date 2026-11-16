@@ -106,7 +106,13 @@ fn checked_entry(
             "sheet `{sheet_name}` already has an entry `{wanted}`"
         ));
     }
-    let pin = signex_engine::new_sheet_entry(symbol, at, name, direction);
+    let pin = signex_engine::new_sheet_entry(
+        symbol,
+        at,
+        name,
+        direction,
+        &mut signex_types::object_id::UuidV7Ids,
+    );
     if signex_net::pt_key(&pin.position) != signex_net::pt_key(&at) {
         return Err(format!(
             "{},{} is not on the border of sheet `{sheet_name}` (away from its corners); the nearest border point is {},{}",
@@ -275,7 +281,12 @@ impl Signex {
                 other.name
             ));
         }
-        let Some(child_sheet) = signex_engine::child_sheet_from_corners(start, end, &name) else {
+        let Some(child_sheet) = signex_engine::child_sheet_from_corners(
+            start,
+            end,
+            &name,
+            &mut signex_types::object_id::UuidV7Ids,
+        ) else {
             return Err(format!(
                 "each edge must be at least {} mm",
                 signex_engine::MIN_CHILD_SHEET_EDGE_MM

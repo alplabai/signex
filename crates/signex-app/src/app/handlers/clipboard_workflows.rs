@@ -188,7 +188,7 @@ impl Signex {
         };
         let payload = self.paste_numbering(&target).apply(&payload);
         let at = signex_types::schematic::Point::new(origin.x + offset_x, origin.y + offset_y);
-        match payload.place_commands(at) {
+        match payload.place_commands(at, &mut signex_types::object_id::UuidV7Ids) {
             Ok(commands) if !commands.is_empty() => {
                 self.apply_engine_commands(commands, true, true);
             }

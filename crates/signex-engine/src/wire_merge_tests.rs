@@ -67,6 +67,7 @@ fn break_wire_splits_one_wire_in_two_at_the_point() {
         .execute(Command::BreakWire {
             wire,
             at: pt(8.0, 10.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     assert!(result.changed);
@@ -92,6 +93,7 @@ fn break_wire_cuts_at_the_nearest_point_of_an_axis_aligned_wire() {
         .execute(Command::BreakWire {
             wire,
             at: pt(8.0, 10.1),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     assert_eq!(
@@ -108,6 +110,7 @@ fn break_wire_keeps_the_halves_apart_and_is_one_undo_step() {
         .execute(Command::BreakWire {
             wire,
             at: pt(8.0, 10.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     assert_eq!(
@@ -130,6 +133,7 @@ fn break_wire_does_not_change_the_nets() {
         .execute(Command::BreakWire {
             wire,
             at: pt(45.0, 50.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     assert_eq!(engine.document().wires.len(), 2);
@@ -145,6 +149,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
             Command::BreakWire {
                 wire,
                 at: pt(8.0, 12.0),
+                new_wire: uuid::Uuid::now_v7(),
             },
         ),
         (
@@ -152,6 +157,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
             Command::BreakWire {
                 wire,
                 at: pt(25.0, 10.0),
+                new_wire: uuid::Uuid::now_v7(),
             },
         ),
         (
@@ -159,6 +165,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
             Command::BreakWire {
                 wire,
                 at: pt(0.0, 10.0),
+                new_wire: uuid::Uuid::now_v7(),
             },
         ),
         (
@@ -166,6 +173,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
             Command::BreakWire {
                 wire,
                 at: pt(20.0, 10.0),
+                new_wire: uuid::Uuid::now_v7(),
             },
         ),
         (
@@ -173,6 +181,7 @@ fn break_wire_off_the_wire_at_an_end_or_on_a_missing_wire_does_nothing() {
             Command::BreakWire {
                 wire: Uuid::now_v7(),
                 at: pt(8.0, 10.0),
+                new_wire: uuid::Uuid::now_v7(),
             },
         ),
     ] {
@@ -193,6 +202,7 @@ fn break_wire_splits_a_diagonal_wire_and_keeps_its_width() {
         .execute(Command::BreakWire {
             wire,
             at: pt(4.0, 4.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     assert_eq!(
@@ -220,6 +230,7 @@ fn break_wire_on_a_locked_wire_is_refused() {
     let refused = engine.execute(Command::BreakWire {
         wire,
         at: pt(8.0, 10.0),
+        new_wire: uuid::Uuid::now_v7(),
     });
     assert!(matches!(refused, Err(EngineError::ItemLocked { .. })));
     assert_eq!(engine.document().wires.len(), 1);
@@ -452,6 +463,7 @@ fn moving_both_halves_of_a_broken_wire_does_not_fold_them_again() {
         .execute(Command::BreakWire {
             wire,
             at: pt(8.0, 10.0),
+            new_wire: uuid::Uuid::now_v7(),
         })
         .unwrap();
     let halves: Vec<SelectedItem> = engine
@@ -615,6 +627,7 @@ fn break_wire_is_refused_where_a_pin_tip_rests_on_the_wire() {
     let refused = engine.execute(Command::BreakWire {
         wire,
         at: pt(8.0, 10.0),
+        new_wire: uuid::Uuid::now_v7(),
     });
 
     assert!(matches!(refused, Err(EngineError::BreakWireBlocked)));
@@ -633,6 +646,7 @@ fn break_wire_is_refused_where_another_wire_ends_on_the_side() {
     let refused = engine.execute(Command::BreakWire {
         wire,
         at: pt(8.0, 10.0),
+        new_wire: uuid::Uuid::now_v7(),
     });
 
     assert!(matches!(refused, Err(EngineError::BreakWireBlocked)));
@@ -651,6 +665,7 @@ fn break_wire_is_refused_where_another_wire_crosses_without_a_dot() {
     let refused = engine.execute(Command::BreakWire {
         wire,
         at: pt(8.0, 10.0),
+        new_wire: uuid::Uuid::now_v7(),
     });
 
     assert!(matches!(refused, Err(EngineError::BreakWireBlocked)));

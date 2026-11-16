@@ -465,6 +465,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_io_ports.sh
 
+      # The engine takes new object ids from the caller (#2429, ADR-0006);
+      # Uuid::now_v7 / new_v4 in signex-engine production code only at the
+      # sites in scripts/engine-ids-allowlist.txt, which may only shrink. Hard gate.
+      - name: Engine id gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_engine_ids.sh
+
+      - name: Engine id gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_engine_ids.sh
+
       # Structural lint rules (sgconfig.yml, ast-grep/rules): shapes a text
       # grep cannot see, e.g. a discarded Task wrapped over several lines.
       # Hard gate. Run it locally with

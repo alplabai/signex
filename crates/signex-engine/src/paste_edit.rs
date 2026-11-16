@@ -140,7 +140,12 @@ mod tests {
         assert_eq!(p.register_commands().len(), 2);
         let bare = p.without_bodies();
         assert!(bare.fragment().lib_symbols.is_empty());
-        let placed = bare.place_commands(Point::new(1.0, 1.0)).unwrap();
+        let placed = bare
+            .place_commands(
+                Point::new(1.0, 1.0),
+                &mut signex_types::object_id::SequentialIds::default(),
+            )
+            .unwrap();
         assert!(
             !placed
                 .iter()

@@ -316,7 +316,9 @@ impl Signex {
         if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
             payload = payload.with_rotation(*degrees).map_err(|e| e.to_string())?;
         }
-        let commands = payload.place_commands(at).map_err(|e| e.to_string())?;
+        let commands = payload
+            .place_commands(at, &mut signex_types::object_id::UuidV7Ids)
+            .map_err(|e| e.to_string())?;
         self.refuse_contacts(&commands, "part")?;
         let placed: HashSet<Uuid> = self.place_part_at(&payload, at)?;
         let sheet = self

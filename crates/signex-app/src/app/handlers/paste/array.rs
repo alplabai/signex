@@ -174,7 +174,7 @@ impl Signex {
                 origin.x + f64::from(k) * input.dx_mm,
                 origin.y + f64::from(k) * input.dy_mm,
             );
-            commands.extend(copy.place_commands(at)?);
+            commands.extend(copy.place_commands(at, &mut signex_types::object_id::UuidV7Ids)?);
         }
         Ok(commands)
     }
