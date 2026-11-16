@@ -528,6 +528,15 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "swap_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
+                    "project_settings",
+                    "project_move_sheet",
+                    "project_add_variant",
+                    "project_rename_variant",
+                    "project_remove_variant",
+                    "project_set_active_variant",
+                    "project_move_library",
+                    "project_set_annotate_undo",
+                    "project_set_version_control",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

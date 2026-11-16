@@ -27,6 +27,7 @@ mod pcb_stack;
 mod pdf_preview;
 mod placeholder;
 mod preferences;
+mod project;
 mod rules;
 mod update_pcb;
 
@@ -55,6 +56,7 @@ pub use pcb_stack::*;
 pub use pdf_preview::*;
 pub use placeholder::*;
 pub use preferences::*;
+pub use project::*;
 pub use rules::*;
 pub use update_pcb::*;
 
@@ -87,6 +89,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pdf_preview::PDF_PREVIEW,
         placeholder::PLACEHOLDER,
         preferences::PREFERENCES,
+        project::PROJECT,
         rules::RULES,
         update_pcb::UPDATE_PCB,
     ]

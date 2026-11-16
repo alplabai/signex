@@ -802,6 +802,50 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("value", OperandKind::Text),
 ];
 
+// The `project_*` commands (#1689-#1693): `document` is the project or any
+// of its documents.
+
+/// `project_move_sheet`: a sheet file of the project, `up` or `down`.
+pub const PROJECT_MOVE_SHEET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("sheet", OperandKind::Text),
+    required("direction", OperandKind::Text),
+];
+/// `project_add_variant`, `project_remove_variant`: a variant name.
+pub const PROJECT_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+];
+/// `project_rename_variant`: the variant `name`, renamed to `value`.
+pub const PROJECT_RENAME_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
+/// `project_set_active_variant`: a variant name; none, or `Base`, is Base.
+pub const PROJECT_ACTIVE_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+/// `project_move_library`: a library as the project stores its path, `up`
+/// or `down`.
+pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("library", OperandKind::Text),
+    required("direction", OperandKind::Text),
+];
+/// `project_set_annotate_undo`: `project` or `per_sheet`; none follows
+/// Preferences.
+pub const PROJECT_ANNOTATE_UNDO: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("value", OperandKind::Text),
+];
+/// `project_set_version_control`: commit every save, or not.
+pub const PROJECT_VERSION_CONTROL: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("on", OperandKind::Bool),
+];
+
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.
 #[cfg(test)]

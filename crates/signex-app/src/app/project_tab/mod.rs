@@ -8,20 +8,30 @@
 //! sections own. The project name is the file stem and is not a document
 //! edit: Rename… runs the project-tree Rename flow. The tab is docked only
 //! (an undocked window would take the main window's shortcuts). One module
-//! per section (`general`); the shell (`view`) lays out the section list
-//! beside the selected section.
+//! per section (`general`, `sheets`, `variants`, ...); the shell (`view`)
+//! lays out the section list beside the selected section, and `commands`
+//! is the catalog surface of the sections (#1689-#1693).
 
 mod agent_journals;
+mod commands;
+mod erc_annotation;
 mod general;
+mod libraries;
 mod open;
 mod parameters;
 mod schematic_defaults;
 mod setup;
+mod sheets;
+mod table;
 mod update;
+mod variants;
+mod version_control;
 mod view;
 
 #[cfg(test)]
 mod agent_journals_tests;
+#[cfg(test)]
+mod commands_tests;
 #[cfg(test)]
 mod open_command_tests;
 #[cfg(test)]
@@ -29,23 +39,39 @@ mod save_point_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
 #[cfg(test)]
+mod sections_tests;
+#[cfg(test)]
 mod setup_tests;
 #[cfg(test)]
 mod undo_routing_tests;
 
+pub(crate) use commands::{
+    project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
+    project_rename_variant, project_set_active_variant, project_set_annotate_undo,
+    project_set_version_control,
+};
 pub use general::ProjectGeneralFacts;
 pub(crate) use open::project_tab_title;
 
 use crate::app::state::ProjectId;
 
-/// A section of the Project tab. Later slices add Parameters, Sheets,
-/// Variants, Libraries, ERC and annotation, Version control (#1084).
+/// A section of the Project tab, in list order (#1084).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectSection {
     #[default]
     General,
     /// Project parameters the sheets inherit (#1080).
     Parameters,
+    /// Page order and what a new sheet starts from (#1689).
+    Sheets,
+    /// Variant definitions and the active variant (#1690).
+    Variants,
+    /// Mounted libraries, their state and order (#1691).
+    Libraries,
+    /// The project's ERC rules and annotate undo choice (#1692).
+    ErcAnnotation,
+    /// The project's repository and commit on save (#1693).
+    VersionControl,
     /// Widths and sizes of unset schematic items (#2026).
     SchematicDefaults,
     /// What new PCBs and sheets start from (#2232).
@@ -54,21 +80,41 @@ pub enum ProjectSection {
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 4] = [
+    pub const ALL: [ProjectSection; 9] = [
         ProjectSection::General,
         ProjectSection::Parameters,
+        ProjectSection::Sheets,
+        ProjectSection::Variants,
+        ProjectSection::Libraries,
+        ProjectSection::ErcAnnotation,
+        ProjectSection::VersionControl,
         ProjectSection::SchematicDefaults,
         ProjectSection::Setup,
     ];
 
-    pub fn label(self) -> &'static str {
+    /// The section's name in the list.
+    pub fn title(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            ProjectSection::General => "General",
-            ProjectSection::Parameters => "Parameters",
-            ProjectSection::SchematicDefaults => "Schematic defaults",
-            ProjectSection::Setup => "Project setup",
+            ProjectSection::General => ids::PROJECT_SECTION_GENERAL,
+            ProjectSection::Parameters => ids::PROJECT_SECTION_PARAMETERS,
+            ProjectSection::Sheets => ids::PROJECT_SECTION_SHEETS,
+            ProjectSection::Variants => ids::PROJECT_SECTION_VARIANTS,
+            ProjectSection::Libraries => ids::PROJECT_SECTION_LIBRARIES,
+            ProjectSection::ErcAnnotation => ids::PROJECT_SECTION_ERC_ANNOTATION,
+            ProjectSection::VersionControl => ids::PROJECT_SECTION_VERSION_CONTROL,
+            ProjectSection::SchematicDefaults => ids::PROJECT_SECTION_SCHEMATIC_DEFAULTS,
+            ProjectSection::Setup => ids::PROJECT_SECTION_SETUP,
         }
     }
+}
+
+/// A variant name being typed over in the Variants section (#1690): the
+/// variant it renames and the text so far, committed on Enter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantRenameDraft {
+    pub from: String,
+    pub text: String,
 }
 
 /// Per-project Project tab state. Lives as long as the project is loaded,
@@ -97,6 +143,12 @@ pub struct ProjectTabState {
     /// The newest edit of the project went to its rule history, not to
     /// `general_history`: what `undo document=<.snxprj>` steps first.
     pub rules_step_newest: bool,
+    /// The name typed for a new variant, not yet added (#1690).
+    pub new_variant_name: String,
+    /// The variant name being typed over, until Enter renames it.
+    pub variant_rename: Option<VariantRenameDraft>,
+    /// Why the last variant edit was refused; cleared by the next edit.
+    pub variant_problem: Option<signex_types::project::VariantProblem>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -176,6 +228,65 @@ pub enum ProjectTabMsg {
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {
+        project_id: ProjectId,
+    },
+    /// A Move up / Move down button of the Sheets table (#1689).
+    SheetMoved {
+        project_id: ProjectId,
+        filename: String,
+        step: signex_types::project::ListMove,
+    },
+    /// The new variant name as typed (#1690).
+    NewVariantNameEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// Add the typed variant.
+    VariantAdded {
+        project_id: ProjectId,
+    },
+    /// A variant's name as typed over in its row.
+    VariantRenameEdited {
+        project_id: ProjectId,
+        from: String,
+        text: String,
+    },
+    /// Enter in a variant's name box: rename it to what was typed.
+    VariantRenameSubmitted {
+        project_id: ProjectId,
+    },
+    VariantRemoved {
+        project_id: ProjectId,
+        name: String,
+    },
+    /// The Active check of a row; `None` is Base.
+    ActiveVariantPicked {
+        project_id: ProjectId,
+        name: Option<String>,
+    },
+    /// A Move up / Move down button of the Libraries table (#1691), with the
+    /// library's path as the project stores it.
+    LibraryMoved {
+        project_id: ProjectId,
+        path: std::path::PathBuf,
+        step: signex_types::project::ListMove,
+    },
+    /// The annotate undo choice (#1692); `None` follows Preferences.
+    AnnotateUndoPicked {
+        project_id: ProjectId,
+        choice: Option<signex_types::project::AnnotateUndo>,
+    },
+    /// "Store ERC rules in this project": a copy of this machine's rules.
+    ErcRulesStoreRequested {
+        project_id: ProjectId,
+    },
+    /// The Commit every save check (#1693).
+    VersionControlToggled {
+        project_id: ProjectId,
+        on: bool,
+    },
+    /// Enable Version Control…: the project tree's dialog.
+    EnableVersionControlRequested {
         project_id: ProjectId,
     },
 }

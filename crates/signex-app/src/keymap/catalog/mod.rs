@@ -13,6 +13,7 @@ mod general;
 mod operands;
 mod panel;
 mod pcb;
+mod project;
 mod rules;
 mod schematic;
 mod threed;
@@ -324,6 +325,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     threed::THREE_D,
     rules::RULES,
     panel::PANEL,
+    project::PROJECT,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups.
@@ -842,6 +844,7 @@ mod tests {
             ("rules.rs", include_str!("rules.rs")),
             ("window.rs", include_str!("window.rs")),
             ("panel.rs", include_str!("panel.rs")),
+            ("project.rs", include_str!("project.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

@@ -273,6 +273,38 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "place_board_reuse_block",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "project_move_sheet",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_add_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_rename_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_active_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_move_library",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_annotate_undo",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_version_control",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =

@@ -185,6 +185,39 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("swap_gates", swap::swap_gates),
     ("save_board_reuse_block", reuse::save_board_reuse_block),
     ("place_board_reuse_block", reuse::place_board_reuse_block),
+    // #1689-#1693: the Project tab's section edits.
+    (
+        "project_move_sheet",
+        crate::app::project_tab::project_move_sheet,
+    ),
+    (
+        "project_add_variant",
+        crate::app::project_tab::project_add_variant,
+    ),
+    (
+        "project_rename_variant",
+        crate::app::project_tab::project_rename_variant,
+    ),
+    (
+        "project_remove_variant",
+        crate::app::project_tab::project_remove_variant,
+    ),
+    (
+        "project_set_active_variant",
+        crate::app::project_tab::project_set_active_variant,
+    ),
+    (
+        "project_move_library",
+        crate::app::project_tab::project_move_library,
+    ),
+    (
+        "project_set_annotate_undo",
+        crate::app::project_tab::project_set_annotate_undo,
+    ),
+    (
+        "project_set_version_control",
+        crate::app::project_tab::project_set_version_control,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -375,10 +408,22 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \
              select the Blanket to read them in Properties",
+        ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(
             "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
              right-click a component on the board and pick the block",
+        ),
+        "project_move_sheet"
+        | "project_add_variant"
+        | "project_rename_variant"
+        | "project_remove_variant"
+        | "project_set_active_variant"
+        | "project_move_library"
+        | "project_set_annotate_undo"
+        | "project_set_version_control" => Some(
+            "the `project_*` edits need their operands — \
+             use the Project tab (Project ▸ Project Options...)",
         ),
         _ => None,
     }

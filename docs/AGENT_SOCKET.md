@@ -105,7 +105,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
-  `board_panel` (#2410);
+  `board_panel` (#2410), and the Project tab's `project_settings`
+  (#1689-#1693);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -146,7 +147,12 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
   one undo step across the board and its sheet, a save writes the block's
   file in the project's `reuse-blocks` folder, and a place may wait for the
-  project's blocks to be read like an edit waiting for its reads). A test
+  project's blocks to be read like an edit waiting for its reads), and the
+  Project tab edits `project_move_sheet`, `project_add_variant`,
+  `project_rename_variant`, `project_remove_variant`,
+  `project_set_active_variant`, `project_move_library`,
+  `project_set_annotate_undo` and `project_set_version_control`
+  (#1689-#1693; `document` is the project or any document of it). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

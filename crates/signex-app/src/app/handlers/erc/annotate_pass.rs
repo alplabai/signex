@@ -102,10 +102,12 @@ impl Signex {
             std::collections::HashMap::new();
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
-        // One project-wide undo step per run, unless the preference asks for
-        // one per sheet. Which sheets it touched is filled in below.
+        // One project-wide undo step per run, unless the project (or, when
+        // it has no choice of its own, the preference) asks for one per
+        // sheet (#1692). Which sheets it touched is filled in below.
         let undo_group = (reprefix.is_some()
-            || self.ui_state.annotate_undo == crate::annotate_undo::AnnotateUndo::Project)
+            || self.annotate_undo_of(project_set.root.as_deref())
+                == crate::annotate_undo::AnnotateUndo::Project)
             .then(|| self.mint_undo_group());
         let mut touched_sheets = crate::app::UndoGroupSheets {
             kind: if reprefix.is_some() {
