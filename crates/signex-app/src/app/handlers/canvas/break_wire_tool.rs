@@ -1,5 +1,6 @@
 //! Break Wire tool (#1254): one click on a wire splits it in two there.
 
+use signex_types::object_id::{IdSource, UuidV7Ids};
 use signex_types::schematic::Point;
 
 use super::super::super::*;
@@ -26,7 +27,7 @@ impl Signex {
             signex_engine::Command::BreakWire {
                 wire,
                 at,
-                new_wire: uuid::Uuid::now_v7(),
+                new_wire: UuidV7Ids.next_id(),
             },
             true,
             true,
