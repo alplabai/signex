@@ -642,7 +642,11 @@ fn model_shortcuts_follow_the_active_keymap() {
     // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
     // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
     // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
-    assert_eq!(checked, 49, "the default profile labels 49 menu rows");
+    // Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
+    // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
+    // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
+    // Mask (#2420) add nine.
+    assert_eq!(checked, 58, "the default profile labels 58 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
