@@ -27,10 +27,10 @@ use super::placement_operands as place;
 use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
-use crate::app::board_tools as tools;
-use crate::app::handlers::pcb_tune as tune;
 use crate::app::board_reuse as reuse;
+use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
+use crate::app::handlers::pcb_tune as tune;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 

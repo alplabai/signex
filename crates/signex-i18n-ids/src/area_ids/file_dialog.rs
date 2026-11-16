@@ -54,5 +54,4 @@ define_ids! {
     FILE_FILTER_JSON_EXT = "file-filter-json-ext";
     FILE_FILTER_CSV_EXT = "file-filter-csv-ext";
     FILE_FILTER_TEXT_EXT = "file-filter-text-ext";
-    FILE_FILTER_DXF = "file-filter-dxf";
 }

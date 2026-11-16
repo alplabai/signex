@@ -7,12 +7,12 @@
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 use super::{TID, board_ctx, disabled_of, row_message, shortcuts};
+use crate::app::ReuseBlockMsg;
 use crate::app::handlers::pcb_placement::PcbTargets;
 use crate::app::view::context_menu::menus::pcb_canvas_menu_entries;
+use crate::app::view::context_menu::menus::pcb_canvas_menu_with_blocks;
 use crate::app::view::context_menu::submenu::board_place_entries;
 use crate::app::{ContextAction, ContextMenuMsg, ContextSubmenu, Message};
-use crate::app::view::context_menu::menus::pcb_canvas_menu_with_blocks;
-use crate::app::ReuseBlockMsg;
 
 /// #2410: Swap Pins and Swap Gates run their commands with two pads of one
 /// unlocked component selected, Save as Reuse Block with board objects

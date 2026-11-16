@@ -17,8 +17,8 @@ pub(crate) mod back_annotate;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
-pub(crate) mod board_tools;
 pub(crate) mod board_reuse;
+pub(crate) mod board_tools;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -102,9 +102,9 @@ pub use contracts::{
     GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
     LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu,
     LayerTabMenuMsg, LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
-    NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg,
-    PcbMsg, PcbViewMsg, PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
-    ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu,
+    PcbBarMsg, PcbMsg, PcbViewMsg, PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
     RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
     TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, TuneMsg, UiMsg,

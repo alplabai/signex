@@ -62,4 +62,3 @@ file-filter-pdf-ext = PDF (.pdf)
 file-filter-json-ext = JSON (.json)
 file-filter-csv-ext = CSV (.csv)
 file-filter-text-ext = Text (.txt)
-file-filter-dxf = DXF Drawing
