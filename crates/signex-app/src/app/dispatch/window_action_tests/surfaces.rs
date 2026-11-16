@@ -78,6 +78,43 @@ fn the_find_dialog_paints_in_the_window_it_was_opened_in_only() {
 }
 
 #[test]
+fn the_search_panel_toggle_closes_find_only_in_the_window_that_shows_it() {
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "toggle_search_panel", f.window);
+    settle_task(&mut f.app, task);
+    assert!(has(&f.app, f.window, FIND_FOOTER));
+
+    // Pressed in the main window, Find moves there instead of closing.
+    let (_outcome, task) = command(&mut f.app, "toggle_search_panel", f.main);
+    settle_task(&mut f.app, task);
+    assert!(f.app.ui_state.find_replace.open);
+    assert!(has(&f.app, f.main, FIND_FOOTER));
+    assert!(!has(&f.app, f.window, FIND_FOOTER));
+
+    // Pressed again where it is shown, it closes.
+    let (_outcome, task) = command(&mut f.app, "toggle_search_panel", f.main);
+    settle_task(&mut f.app, task);
+    assert!(!f.app.ui_state.find_replace.open);
+}
+
+#[test]
+fn the_search_panel_toggle_closes_a_replace_find_and_reopens_plain_find() {
+    let mut f = fixture();
+    let (_outcome, task) = command(&mut f.app, "find_and_replace", f.window);
+    settle_task(&mut f.app, task);
+    assert!(f.app.ui_state.find_replace.replace_mode);
+
+    let (_outcome, task) = command(&mut f.app, "toggle_floating_panels", f.window);
+    settle_task(&mut f.app, task);
+    assert!(!f.app.ui_state.find_replace.open);
+
+    let (_outcome, task) = command(&mut f.app, "toggle_floating_panels", f.window);
+    settle_task(&mut f.app, task);
+    assert!(f.app.ui_state.find_replace.open);
+    assert!(!f.app.ui_state.find_replace.replace_mode);
+}
+
+#[test]
 fn closing_the_window_closes_the_find_dialog_it_opened() {
     let mut f = fixture();
     let (_outcome, task) = command(&mut f.app, "find", f.window);

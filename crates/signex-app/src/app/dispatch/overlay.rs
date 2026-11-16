@@ -27,7 +27,13 @@ impl Signex {
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
-            OverlayMsg::FindToggled if self.ui_state.find_replace.open => {
+            // Close only the Find shown in the pressing window; pressed in
+            // another window, the open path moves Find there instead.
+            OverlayMsg::FindToggled
+                if self.ui_state.find_replace.open
+                    && self.ui_state.find_replace.window
+                        == self.interaction_state.acting_window =>
+            {
                 self.handle_find_replace_message(crate::find_replace::FindReplaceMsg::Close)
             }
             OverlayMsg::FindToggled => self.handle_find_replace_open_requested(false),
