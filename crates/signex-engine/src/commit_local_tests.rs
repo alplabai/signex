@@ -241,6 +241,7 @@ fn every_command(rng: &mut Lcg, sheet: &SchematicSheet, unit: f64, floors: &mut 
         let command = Command::BreakWire {
             wire: wire.uuid,
             at,
+            new_wire: uuid::Uuid::now_v7(),
         };
         both_ways(sheet, "break wire", command, floors);
     }

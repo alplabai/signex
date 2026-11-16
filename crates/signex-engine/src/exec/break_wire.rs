@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 impl Engine {
     /// Cut `wire` at `at`. The first half keeps the wire's id and place in
-    /// the sheet, the second is a new wire right after it with the same
+    /// the sheet, the second is a new wire `new_wire` right after it with the same
     /// width and lock. A point that is not strictly inside the wire changes
     /// nothing and records no history; a spot holding a pin, bus end or
     /// another wire (its end or a crossing) is refused with `BreakWireBlocked`. No merge pass runs, so the halves stay
@@ -17,6 +17,7 @@ impl Engine {
         before: SchematicSheet,
         wire: Uuid,
         at: Point,
+        new_wire: Uuid,
     ) -> Result<CommandResult, EngineError> {
         let Some(index) = self.document.wires.iter().position(|w| w.uuid == wire) else {
             return Ok(CommandResult::unchanged());
@@ -41,7 +42,7 @@ impl Engine {
 
         let first = &mut self.document.wires[index];
         let mut second = first.clone();
-        second.uuid = Uuid::now_v7();
+        second.uuid = new_wire;
         second.start = cut;
         first.end = cut;
         let items = [

@@ -22,7 +22,15 @@ impl Signex {
         };
         // A locked wire is refused with its own notice by the gateway. The
         // engine paints the new half like the wire it was cut from.
-        self.apply_engine_command(signex_engine::Command::BreakWire { wire, at }, true, true);
+        self.apply_engine_command(
+            signex_engine::Command::BreakWire {
+                wire,
+                at,
+                new_wire: uuid::Uuid::now_v7(),
+            },
+            true,
+            true,
+        );
     }
 }
 
