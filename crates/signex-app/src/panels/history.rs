@@ -14,8 +14,9 @@
 use chrono::Utc;
 use iced::widget::{Column, column, container};
 use iced::{Border, Color, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_widgets::theme_ext;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -112,24 +113,29 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let panel_bg = theme_ext::panel_bg(&ctx.tokens).background;
 
     let state = &ctx.history;
+    let i18n = &ctx.i18n;
 
     let inner: Element<'a, PanelMsg> = match &state.mode {
         HistoryRenderMode::NoActiveFile => message_card(
-            "Open a schematic, PCB, library, or primitive to see its history.",
+            t!(i18n, ids::PANELS_HISTORY_NO_ACTIVE_FILE),
             muted,
             border,
             panel_bg,
         ),
         HistoryRenderMode::NoRepo => message_card(
-            "This file isn't under version control. \
-             Enable from the project's right-click menu.",
+            t!(i18n, ids::PANELS_HISTORY_NO_REPO),
             muted,
             border,
             panel_bg,
         ),
-        HistoryRenderMode::Loading => message_card("Loading history…", muted, border, panel_bg),
+        HistoryRenderMode::Loading => message_card(
+            t!(i18n, ids::PANELS_HISTORY_LOADING),
+            muted,
+            border,
+            panel_bg,
+        ),
         HistoryRenderMode::Error(error) => message_card(
-            format!("History could not be read: {error}"),
+            t!(i18n, ids::PANELS_HISTORY_READ_FAILED, "reason" => error.to_string()),
             muted,
             border,
             panel_bg,
@@ -138,7 +144,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             let mut col: Column<Element<'a, PanelMsg>> = column![].spacing(6);
 
             if state.dirty {
-                col = col.push(working_tree_card(primary, muted, border, panel_bg));
+                col = col.push(working_tree_card(i18n, primary, muted, border, panel_bg));
             }
 
             // Render rows inline so each card can
@@ -157,6 +163,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 let now = Utc::now();
                 for entry in &state.entries {
                     col = col.push(commit_card(
+                        i18n,
                         entry,
                         now,
                         state.pending_restore.as_deref() == Some(entry.sha.as_str()),
@@ -181,15 +188,14 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 /// Single muted card used by the empty/no-repo/loading/error states.
 ///
-/// Takes an owned message rather than `&'a str` so the error state can
-/// pass a formatted string; the static callers are unchanged.
+/// Takes the rendered catalog message.
 fn message_card<'a, M: 'a>(
-    msg: impl Into<String>,
+    msg: Localized,
     muted: iced::Color,
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
-    container(text(raw(msg.into())).size(TS.label).color(muted))
+    container(text(msg).size(TS.label).color(muted))
         .padding([6.0, SP.m])
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
@@ -214,6 +220,7 @@ fn message_card<'a, M: 'a>(
 /// runs `LocalGitProjectAdapter::restore_at` against the active
 /// tab's owning project.
 fn commit_card<'a>(
+    i18n: &I18n,
     entry: &'a signex_widgets::HistoryEntry,
     now: chrono::DateTime<Utc>,
     confirming: bool,
@@ -227,18 +234,18 @@ fn commit_card<'a>(
             .size(TS.label)
             .color(primary),
         iced::widget::Space::new().width(Length::Fill),
-        text(raw(format_relative_simple(entry.time, now)))
+        text(format_relative_simple(i18n, entry.time, now))
             .size(TS.body)
             .color(muted),
     ]
     .spacing(SP.m);
 
     let restore_label = if confirming {
-        "Discard unsaved edits and restore"
+        ids::PANELS_HISTORY_DISCARD_AND_RESTORE
     } else {
-        "Restore this version"
+        ids::PANELS_HISTORY_RESTORE
     };
-    let restore_btn = button(text(raw(restore_label)).size(TS.caption).color(muted))
+    let restore_btn = button(text(t!(i18n, restore_label)).size(TS.caption).color(muted))
         .padding([SP.xs, 6.0])
         .on_press(PanelMsg::HistoryRestoreClicked {
             sha: entry.sha.clone(),
@@ -265,21 +272,25 @@ fn commit_card<'a>(
     .spacing(SP.m);
     if confirming {
         footer = footer.push(
-            button(text(raw("Cancel")).size(TS.caption).color(muted))
-                .padding([SP.xs, 6.0])
-                .on_press(PanelMsg::HistoryRestoreCancelled)
-                .style(move |_t: &Theme, _| iced::widget::button::Style {
-                    background: None,
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Border::default()
-                    },
-                    text_color: muted,
-                    ..iced::widget::button::Style::default()
-                })
-                .boxed(),
+            button(
+                text(t!(i18n, ids::PANELS_HISTORY_CANCEL))
+                    .size(TS.caption)
+                    .color(muted),
+            )
+            .padding([SP.xs, 6.0])
+            .on_press(PanelMsg::HistoryRestoreCancelled)
+            .style(move |_t: &Theme, _| iced::widget::button::Style {
+                background: None,
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: border_c,
+                    ..Border::default()
+                },
+                text_color: muted,
+                ..iced::widget::button::Style::default()
+            })
+            .boxed(),
         );
     }
     let footer = footer.push(restore_btn.boxed());
@@ -318,29 +329,35 @@ fn short_sha(full: &str) -> String {
 /// `signex_widgets::history_pane::format_relative` does but is
 /// inlined here so the panel doesn't need to expose the widget's
 /// internal helper.
-fn format_relative_simple(time: chrono::DateTime<Utc>, now: chrono::DateTime<Utc>) -> String {
+fn format_relative_simple(
+    i18n: &I18n,
+    time: chrono::DateTime<Utc>,
+    now: chrono::DateTime<Utc>,
+) -> Localized {
+    // The number goes in as `format!` wrote it, so it reads as before.
+    let ago = |id, n: i64| t!(i18n, id, "count" => n.to_string());
     let delta = now.signed_duration_since(time);
     let secs = delta.num_seconds().max(0);
     if secs < 60 {
-        return format!("{secs}s ago");
+        return ago(ids::PANELS_HISTORY_AGO_SECONDS, secs);
     }
     let mins = secs / 60;
     if mins < 60 {
-        return format!("{mins}m ago");
+        return ago(ids::PANELS_HISTORY_AGO_MINUTES, mins);
     }
     let hours = mins / 60;
     if hours < 24 {
-        return format!("{hours}h ago");
+        return ago(ids::PANELS_HISTORY_AGO_HOURS, hours);
     }
     let days = hours / 24;
     if days < 30 {
-        return format!("{days}d ago");
+        return ago(ids::PANELS_HISTORY_AGO_DAYS, days);
     }
     let months = days / 30;
     if months < 12 {
-        return format!("{months}mo ago");
+        return ago(ids::PANELS_HISTORY_AGO_MONTHS, months);
     }
-    format!("{}y ago", months / 12)
+    ago(ids::PANELS_HISTORY_AGO_YEARS, months / 12)
 }
 
 /// "Working tree (uncommitted changes)" pseudo-card pinned above the
@@ -348,14 +365,19 @@ fn format_relative_simple(time: chrono::DateTime<Utc>, now: chrono::DateTime<Utc
 /// shape as a `signex_widgets::history_pane` card so it reads as a
 /// peer of the actual commits.
 fn working_tree_card<'a, M: 'a>(
+    i18n: &I18n,
     primary: iced::Color,
     muted: iced::Color,
     border_c: iced::Color,
     bg: Option<iced::Background>,
 ) -> Element<'a, M> {
     let inner = column![
-        text(raw("Working tree")).size(TS.label).color(primary),
-        text(raw("Uncommitted changes")).size(TS.body).color(muted),
+        text(t!(i18n, ids::PANELS_HISTORY_WORKING_TREE))
+            .size(TS.label)
+            .color(primary),
+        text(t!(i18n, ids::PANELS_HISTORY_UNCOMMITTED))
+            .size(TS.body)
+            .color(muted),
     ]
     .spacing(SP.xs);
     container(inner)
@@ -373,4 +395,28 @@ fn working_tree_card<'a, M: 'a>(
             ..container::Style::default()
         })
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The relative time reads as the `format!` it replaced (#2059),
+    /// numbers without grouping included.
+    #[test]
+    fn the_relative_time_reads_as_before() {
+        let i18n = I18n::en_us();
+        let now = Utc::now();
+        let shown = |secs: i64| {
+            format_relative_simple(&i18n, now - chrono::Duration::seconds(secs), now)
+                .into_string()
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert_eq!(shown(5), "5s ago");
+        assert_eq!(shown(120), "2m ago");
+        assert_eq!(shown(3 * 3600), "3h ago");
+        assert_eq!(shown(2 * 86_400), "2d ago");
+        assert_eq!(shown(65 * 86_400), "2mo ago");
+        assert_eq!(shown(1500 * 360 * 86_400), "1500y ago");
+    }
 }
