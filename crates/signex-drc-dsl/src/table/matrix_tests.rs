@@ -33,6 +33,34 @@ fn a_class_pair_compiles_and_is_one_scope_cell() {
 }
 
 #[test]
+fn a_class_name_holding_and_still_reads() {
+    assert_eq!(
+        parse_scope("class == \"Power and Ground\""),
+        Ok(NetScope::Class("Power and Ground".into()))
+    );
+    assert_eq!(
+        parse_scope("class == \"A and B\" and other_class == \"LV\""),
+        Ok(NetScope::ClassPair("A and B".into(), "LV".into()))
+    );
+    assert!(parse_scope("class == \"HV\" and other_class").is_err());
+}
+
+#[test]
+fn a_set_applied_to_a_class_pair_writes_only_the_clearance() {
+    let set = new_set("min_clearance=0.8mm, min_width=0.3mm", None).unwrap();
+    let (text, set) = apply_set(
+        OTHER,
+        "hv",
+        &set,
+        "class == \"HV\" and other_class == \"LV\"",
+    )
+    .unwrap();
+    assert!(!text.contains("on track"), "{text}");
+    assert_eq!(set.uses[0].rules, ["hv_HV_LV_clearance"]);
+    assert!(compile(&text).diagnostics.is_empty(), "{text}");
+}
+
+#[test]
 fn other_class_needs_a_class_and_a_clearance() {
     let alone = compile(
         "rule m on clearance when other_class == \"LV\" require clearance >= 1mm then error",

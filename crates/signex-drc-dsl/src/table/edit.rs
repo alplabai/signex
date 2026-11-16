@@ -432,30 +432,34 @@ pub(crate) fn is_length(text: &str) -> bool {
 }
 
 /// A scope cell: empty or `all` for every net, else `net == "GND"`,
-/// `class == "HV"` or `net matches "DDR_*"` (quotes optional).
+/// `class == "HV"`, `net matches "DDR_*"` or `class == "HV" and
+/// other_class == "LV"` (quotes optional).
 pub fn parse_scope(text: &str) -> Result<NetScope, String> {
     let text = text.trim();
     if text.is_empty() || matches!(text, "all" | "board" | "*") {
         return Ok(NetScope::Board);
     }
-    let shape = || {
-        "write net == \"NAME\", class == \"NAME\", net matches \"PATTERN\" or \
-         class == \"NAME\" and other_class == \"NAME\""
-            .to_string()
-    };
     // `class == "A" and other_class == "B"`: between two classes (#2398).
-    if let Some((first, second)) = text.split_once(" and ") {
+    // Split on the `other_class` word so a name holding " and " still reads.
+    if let Some(at) = text.find(" and other_class") {
+        let (first, second) = (&text[..at], &text[at + " and ".len()..]);
         return match (one_condition(first)?, one_condition(second)?) {
             (("class", true, a), ("other_class", true, b)) => Ok(NetScope::ClassPair(a, b)),
-            _ => Err(shape()),
+            _ => Err(scope_shape()),
         };
     }
     match one_condition(text)? {
         ("net", true, value) => Ok(NetScope::Net(value)),
         ("net", false, value) => Ok(NetScope::Pattern(value)),
         ("class", true, value) => Ok(NetScope::Class(value)),
-        _ => Err(shape()),
+        _ => Err(scope_shape()),
     }
+}
+
+fn scope_shape() -> String {
+    "write net == \"NAME\", class == \"NAME\", net matches \"PATTERN\" or \
+     class == \"NAME\" and other_class == \"NAME\""
+        .to_string()
 }
 
 /// One `<subject> == "<value>"` or `<subject> matches "<value>"`: the
@@ -467,7 +471,7 @@ fn one_condition(text: &str) -> Result<(&'static str, bool, String), String> {
     } else if let Some((subject, value)) = text.split_once(" matches ") {
         (subject, false, value)
     } else {
-        ("", true, text)
+        return Err(scope_shape());
     };
     let value = value.trim();
     let value = value

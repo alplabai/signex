@@ -76,15 +76,18 @@ pub fn redefined(set: &NamedRuleSet, with: NamedRuleSet) -> NamedRuleSet {
     }
 }
 
-/// One draft per rule kind `set` limits, for `scope`; unnamed.
+/// One draft per rule kind `set` limits, for `scope`; unnamed. A class
+/// pair takes only the clearance (`other_class` is for a clearance rule).
 fn drafts(set: &NamedRuleSet, scope: &NetScope) -> Vec<RuleDraft> {
     let severity = set
         .severity
         .as_deref()
         .and_then(parse_severity)
         .unwrap_or(signex_types::violation::Severity::Error);
+    let pair = matches!(scope, NetScope::ClassPair(..));
     RuleKind::ALL
         .into_iter()
+        .filter(|kind| !pair || *kind == RuleKind::Clearance)
         .filter_map(|kind| {
             let limits: Vec<RowLimit> = kind
                 .fields()
