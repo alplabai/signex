@@ -622,8 +622,9 @@ reviewable change to the mechanical design, never applied silently.
 | **Sheet Metal & Plastic Parts** | Flanges, hems, bends, flat pattern with DXF export; bosses, ribs, lip/groove and snap fits for moulded enclosures |
 
 **MCAD is P3 and is not a gate.** It is published because it is planned and
-scoped. Its hard dependencies are the 3D Viewer band and the STEP 3D export in
-Assembly & 3D Export. Enclosure Fit Check needs no modelling and comes first;
+scoped. Work on it starts only once the schematic and PCB editors are complete;
+the goal is one tool for every electronic and mechanical design. Its hard
+dependencies are the 3D Viewer band and the STEP 3D export in Assembly & 3D Export. Enclosure Fit Check needs no modelling and comes first;
 the other plans follow in table order.
 
 ### Pro Release
