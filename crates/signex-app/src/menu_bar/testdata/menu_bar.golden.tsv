@@ -198,6 +198,7 @@ Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardRepo
 Window	menu	Window	-	-	-	-	-
 Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
 Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
+Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
 Window/---	separator	-	-	-	-	-	-
 Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Help	menu	Help	-	-	-	-	-

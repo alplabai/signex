@@ -68,6 +68,8 @@ pub(crate) enum Needs {
     Library,
     ProjectSheet,
     TileableWindows,
+    /// Untile: the main window shows its documents in tile panes (#2249).
+    Tiled,
 }
 
 impl Needs {
@@ -156,10 +158,12 @@ impl Needs {
             Self::Library => ctx.has_open_library,
             // Sheet numbers are the project's; a loose sheet has none.
             Self::ProjectSheet => ctx.has_project_sheet,
-            // Tile arranges the main window with the undocked document
+            // Tile shows the main window's documents in panes (#2249) and
+            // arranges the main window with the undocked document
             // windows; alone, or before the main window's screen is known,
             // it has nothing to do.
             Self::TileableWindows => ctx.can_tile_windows,
+            Self::Tiled => ctx.is_tiled,
         }
     }
 
@@ -205,7 +209,10 @@ impl Needs {
             Self::OpenProject => "No project is open",
             Self::Library => "No library is open",
             Self::ProjectSheet => "No sheet of a project is open",
-            Self::TileableWindows => "No document is in its own window",
+            Self::TileableWindows => {
+                "Tile needs two documents in the main window, or a document in its own window"
+            }
+            Self::Tiled => "The documents are not tiled",
         }
     }
 }
@@ -379,6 +386,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
+        "untile_documents" => Needs::Tiled,
         _ => return None,
     })
 }

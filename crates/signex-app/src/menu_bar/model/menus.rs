@@ -550,10 +550,11 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        // Main window plus undocked document windows; greyed with none
-        // undocked: docs/MENU_BAR.md#window-tile
+        // Document panes of the main window (#2249) and the undocked document
+        // windows; Untile is live while tiled: docs/MENU_BAR.md#window-tile
         cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
+        cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]

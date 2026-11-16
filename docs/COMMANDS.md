@@ -158,8 +158,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Mod+Shift+V` | — |
 | `switch_segment_posture` | Flip the wire/bus corner: horizontal or vertical first | interactive | — | `/` |
-| `tile_windows_horizontally` | Tile windows one above the other | window | — | — |
-| `tile_windows_vertically` | Tile windows side by side | window | — | — |
+| `tile_windows_horizontally` | Tile windows one above the other | window | `W H` | `Shift+Alt+H` |
+| `tile_windows_vertically` | Tile windows side by side | window | `W V` | `Shift+Alt+V` |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
 | `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Mod+Shift+X` | — |
 | `toggle_electrical_grid` | Toggle electrical grid | view | `Shift+E` | — |
@@ -173,6 +173,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `undo` | Undo | edit | `Mod+Z` | `Mod+Z` |
 | `undo_last_segment` | Undo last segment while drawing | interactive | — | `Backspace` |
 | `unselect_all` | Unselect all | select | — | `Mod+Shift+A` |
+| `untile_documents` | Untile documents | window | `W U` | `Shift+Alt+U` |
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |

@@ -171,6 +171,15 @@ context = "global"
 "T C" = "cross_probe"
 "V N" = "open_net_inspector"
 
+# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"W H" = "tile_windows_horizontally"
+"W U" = "untile_documents"
+"W V" = "tile_windows_vertically"
+
 # #2416: the sheet's placement tools with no key before (sheet tabs only).
 [[keyboard_shortcuts.sections]]
 context = "schematic"

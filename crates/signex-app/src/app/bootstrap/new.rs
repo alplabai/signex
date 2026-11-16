@@ -494,6 +494,7 @@ impl Signex {
                         restored_geometry.clone(),
                     ),
                 windows: std::collections::HashMap::new(),
+                document_tiling: None,
                 passive_calculator: signex_widgets::passive_calculator::CalculatorControl::default(
                 ),
                 passive_calculator_open: false,
@@ -714,6 +715,7 @@ impl Signex {
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
                 pcb_canvases: std::collections::HashMap::new(),
+                tile_panes: Default::default(),
                 pcb_selection: Default::default(),
                 pcb_selections: std::collections::HashMap::new(),
                 pcb_carry: None,

@@ -113,6 +113,25 @@ pub(in crate::app) fn canvas_bounds(
     }
 }
 
+/// Pane `index` of `count` tile panes laid out in `layout` over `area`
+/// (#2249): the split Tile uses for windows, so the last pane takes the
+/// rounding remainder. `area` itself for an index past the panes.
+pub(in crate::app) fn pane_bounds(
+    area: Rectangle,
+    count: usize,
+    index: usize,
+    layout: crate::app::TileLayout,
+) -> Rectangle {
+    crate::app::tiles(count, (area.width, area.height), layout)
+        .get(index)
+        .map_or(area, |tile| Rectangle {
+            x: area.x + tile.position.0,
+            y: area.y + tile.position.1,
+            width: tile.size.0,
+            height: tile.size.1,
+        })
+}
+
 /// Where hover cards may go: the canvas in the main window (its docks are
 /// the ones laid out), the whole window anywhere else.
 pub(in crate::app) fn card_bounds(
@@ -375,5 +394,29 @@ mod tests {
             + crate::tab_bar::tab_strip_height(&graphite());
         let at = world_to_window((10.0, 20.0), (5.0, 7.0, 3.0), bounds());
         assert_eq!(at, (245.0 + 35.0, top + 67.0));
+    }
+
+    /// #2249: a tile pane is its share of the document area, offset by the
+    /// area's origin; the last pane takes the remainder.
+    #[test]
+    fn a_pane_is_its_share_of_the_document_area() {
+        use crate::app::TileLayout;
+        let area = Rectangle {
+            x: 245.0,
+            y: 70.0,
+            width: 901.0,
+            height: 600.0,
+        };
+        let right = pane_bounds(area, 2, 1, TileLayout::SideBySide);
+        let want = Rectangle {
+            x: 695.0,
+            y: 70.0,
+            width: 451.0,
+            height: 600.0,
+        };
+        assert_eq!(right, want);
+        let top = pane_bounds(area, 3, 0, TileLayout::Stacked);
+        assert_eq!((top.y, top.height, top.width), (70.0, 200.0, 901.0));
+        assert_eq!(pane_bounds(area, 2, 5, TileLayout::Stacked), area);
     }
 }

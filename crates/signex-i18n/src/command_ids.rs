@@ -135,6 +135,8 @@ define_ids! {
         CMD_MENU_TILE_WINDOWS_HORIZONTALLY = "cmd-menu-tile-windows-horizontally";
         CMD_TILE_WINDOWS_VERTICALLY = "cmd-tile-windows-vertically";
         CMD_MENU_TILE_WINDOWS_VERTICALLY = "cmd-menu-tile-windows-vertically";
+        CMD_UNTILE_DOCUMENTS = "cmd-untile-documents";
+        CMD_MENU_UNTILE_DOCUMENTS = "cmd-menu-untile-documents";
         CMD_TOGGLE_CROSS_SELECT_MODE = "cmd-toggle-cross-select-mode";
         CMD_MENU_TOGGLE_CROSS_SELECT_MODE = "cmd-menu-toggle-cross-select-mode";
         CMD_TOGGLE_ELECTRICAL_GRID = "cmd-toggle-electrical-grid";

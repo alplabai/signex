@@ -28,6 +28,8 @@ pub struct InteractionState {
     /// its own camera, viewport and caches (#494). Populated and drained
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
     pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
+    /// Canvases of the main window's unfocused tile panes (#2249).
+    pub tile_panes: TilePaneCanvases,
     /// Hover, selection and the cached spatial index of the board in view
     /// (#2191). Like `pcb_canvas`, an undocked window's own state is
     /// swapped in from `pcb_selections` while it handles an event.
@@ -255,13 +257,17 @@ impl InteractionState {
     /// The main schematic canvas plus every undocked window's own slot, so
     /// an app-wide appearance change cannot leave a detached window stale.
     pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
-        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
+        std::iter::once(&mut self.canvas)
+            .chain(self.canvases.values_mut())
+            .chain(self.tile_panes.schematic.values_mut())
     }
 
     /// Every PCB canvas, main window first. App-wide settings (theme, grid,
     /// the GPU-render flag) go to all of them.
     pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
-        std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
+        std::iter::once(&mut self.pcb_canvas)
+            .chain(self.pcb_canvases.values_mut())
+            .chain(self.tile_panes.board.values_mut())
     }
 
     pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut CanvasSlot {
@@ -284,4 +290,13 @@ pub struct ClickedPin {
     pub placement: Option<signex_types::schematic::InstancePath>,
     pub symbol: uuid::Uuid,
     pub pin: String,
+}
+
+/// Canvases of the documents in the main window's unfocused tile panes
+/// (#2249), by tab path. The focused pane is the active tab and draws on the
+/// main canvases; see `handlers::document_tiling`.
+#[derive(Default)]
+pub struct TilePaneCanvases {
+    pub schematic: std::collections::HashMap<std::path::PathBuf, CanvasSlot>,
+    pub board: std::collections::HashMap<std::path::PathBuf, PcbCanvas>,
 }

@@ -41,8 +41,26 @@ impl Signex {
     }
 
     /// [`Self::canvas_bounds`] in the undocked window `window`, laid out at
-    /// that window's own size (`None`: the main window).
+    /// that window's own size (`None`: the main window). In a tiled main
+    /// window it is the focused pane (#2249).
     pub(in crate::app) fn canvas_bounds_in(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> iced::Rectangle {
+        let area = self.document_area_in(window);
+        match (window, self.tiled_panes()) {
+            (None, Some((layout, panes))) => {
+                let active = self.document_state.active_tab;
+                let index = panes.iter().position(|tab| *tab == active).unwrap_or(0);
+                canvas_region::pane_bounds(area, panes.len(), index, layout)
+            }
+            _ => area,
+        }
+    }
+
+    /// The region between the docks, chrome and status bar where the
+    /// documents show, in `window` (`None`: the main window).
+    pub(in crate::app) fn document_area_in(
         &self,
         window: Option<iced::window::Id>,
     ) -> iced::Rectangle {

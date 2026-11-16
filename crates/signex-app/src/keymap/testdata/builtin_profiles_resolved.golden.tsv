@@ -77,6 +77,9 @@ altium	bind	Global	Shift+F3	command:find_previous
 altium	bind	Global	Shift+G	command:cycle_snap_grid_backward
 altium	bind	Global	T C	command:cross_probe
 altium	bind	Global	V N	command:open_net_inspector
+altium	bind	Global	W H	command:tile_windows_horizontally
+altium	bind	Global	W U	command:untile_documents
+altium	bind	Global	W V	command:tile_windows_vertically
 altium	bind	Schematic	P C	command:place_off_sheet_connector
 altium	bind	Schematic	P R	command:place_port
 altium	bind	Schematic	P S	command:place_sheet_symbol
@@ -194,8 +197,6 @@ altium	hint	-	F1	show_current_command_hotkeys
 altium	hint	-	Shift+F1	show_current_command_shortcuts
 altium	hint	-	Ctrl+Shift+V	smart_paste
 altium	hint	-	-	switch_segment_posture
-altium	hint	-	-	tile_windows_horizontally
-altium	hint	-	-	tile_windows_vertically
 altium	hint	-	Ctrl+Shift+X	toggle_cross_select_mode
 altium	hint	-	Shift+E	toggle_electrical_grid
 altium	hint	-	F4	toggle_floating_panels
@@ -214,6 +215,9 @@ altium	hint	-	PGDN	zoom_out_at_cursor
 altium	hint	-	-	zoom_to_all_objects
 altium	hint	-	Ctrl+PGDN	zoom_to_fit
 altium	hint	-	-	zoom_to_selection_area
+altium	hint	-	W H	tile_windows_horizontally
+altium	hint	-	W V	tile_windows_vertically
+altium	hint	-	W U	untile_documents
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
 altium	hint	-	-	assign_footprints
@@ -478,6 +482,9 @@ classic	bind	Global	~	command:clear_net_highlighting
 classic	bind	Global	Shift+C	command:cross_probe
 classic	bind	Global	Shift+F	command:find_similar_objects
 classic	bind	Global	Shift+I	command:open_net_inspector
+classic	bind	Global	Alt+Shift+H	command:tile_windows_horizontally
+classic	bind	Global	Alt+Shift+U	command:untile_documents
+classic	bind	Global	Alt+Shift+V	command:tile_windows_vertically
 classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
@@ -585,8 +592,6 @@ classic	hint	-	-	show_current_command_hotkeys
 classic	hint	-	-	show_current_command_shortcuts
 classic	hint	-	-	smart_paste
 classic	hint	-	/	switch_segment_posture
-classic	hint	-	-	tile_windows_horizontally
-classic	hint	-	-	tile_windows_vertically
 classic	hint	-	-	toggle_cross_select_mode
 classic	hint	-	-	toggle_electrical_grid
 classic	hint	-	-	toggle_floating_panels
@@ -605,6 +610,9 @@ classic	hint	-	F2	zoom_out_at_cursor
 classic	hint	-	Ctrl+HOME	zoom_to_all_objects
 classic	hint	-	HOME	zoom_to_fit
 classic	hint	-	Ctrl+F5	zoom_to_selection_area
+classic	hint	-	Alt+Shift+H	tile_windows_horizontally
+classic	hint	-	Alt+Shift+V	tile_windows_vertically
+classic	hint	-	Alt+Shift+U	untile_documents
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
 classic	hint	-	-	assign_footprints
