@@ -222,14 +222,14 @@ fn the_header_counts_the_kinds_that_are_on() {
     let total = PickKind::ALL.len();
     let texts_all = texts(&ctx);
     let all = format!("{total}/{total}");
-    assert!(texts_all.iter().any(|t| *t == all), "{texts_all:?}");
+    assert!(texts_all.contains(&all), "{texts_all:?}");
     let chips = texts_all.iter().filter(|t| *t == "3D Bodies").count();
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.filter.toggle(PickKind::Components);
     }
     let texts = texts(&ctx);
     let fewer = format!("{}/{total}", total - 1);
-    assert!(texts.iter().any(|t| *t == fewer), "{texts:?}");
+    assert!(texts.contains(&fewer), "{texts:?}");
     let width = DEFAULT_DOCK;
     let button = laid_out(&ctx, width)
         .into_iter()

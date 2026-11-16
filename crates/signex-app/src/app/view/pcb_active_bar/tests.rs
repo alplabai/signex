@@ -402,7 +402,7 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
 
     // The schematic's dropdown, built by the same function, opens with the
     // same All / None control.
-    let tokens = app.document_state.panel_ctx.tokens.clone();
+    let tokens = app.document_state.panel_ctx.tokens;
     let schematic = crate::active_bar::filter_menu_entry(
         &tokens,
         crate::active_bar::FilterMenu {

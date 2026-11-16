@@ -142,7 +142,7 @@ mod tests {
             "mark {MARK_SIZE} px, title line {} px",
             title.height
         );
-        assert!(MARK_SIZE < DIALOG_TITLE_BAR_H, "the mark fits the bar");
+        const { assert!(MARK_SIZE < DIALOG_TITLE_BAR_H, "the mark fits the bar") };
     }
 
     #[test]

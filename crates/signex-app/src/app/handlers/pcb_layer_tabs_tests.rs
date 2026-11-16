@@ -258,7 +258,7 @@ fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
         .map(|at| {
             (
                 at,
-                messages_for_events(app.view(window), WINDOW, at, &[press.clone()]),
+                messages_for_events(app.view(window), WINDOW, at, std::slice::from_ref(&press)),
             )
         })
         .find(|(_, sent)| sent.iter().any(opens))
