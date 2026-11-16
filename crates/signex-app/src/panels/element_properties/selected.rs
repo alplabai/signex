@@ -94,6 +94,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
+        Some(signex_types::schematic::SelectedKind::Directive) => {
+            col = super::directive::push_directive_sections(col, ctx, uuid, st);
+        }
         _ => {
             col = super::generic::push_generic_sections(col, ctx, st);
         }

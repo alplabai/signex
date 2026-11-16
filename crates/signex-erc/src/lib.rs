@@ -23,6 +23,8 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind}
 pub mod check;
 pub mod context;
 pub mod diagnostic;
+#[cfg(test)]
+mod directive_tests;
 pub mod engine;
 #[cfg(test)]
 #[cfg(test)]

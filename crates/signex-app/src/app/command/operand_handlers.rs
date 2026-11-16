@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
@@ -77,6 +78,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_line", place::line),
     ("draw_graphic_line", place::line),
     ("draw_rectangle", place::rectangle),
+    ("place_blanket", directive::blanket),
+    ("edit_blanket", directive::edit_blanket),
+    ("place_compile_mask", directive::compile_mask),
+    ("place_diff_pair", directive::diff_pair),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
@@ -132,6 +137,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        "edit_blanket" => Some(
+            "`edit_blanket` needs the operand `id` and the values to set — \
+             select the Blanket to read them in Properties",
         ),
         _ => None,
     }

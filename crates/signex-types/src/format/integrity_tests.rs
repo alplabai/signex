@@ -81,6 +81,7 @@ fn all_ids(sheet: &SchematicSheet) -> Vec<Uuid> {
     ids.extend(sheet.bus_entries.iter().map(|b| b.uuid));
     ids.extend(sheet.drawings.iter().map(|d| d.uuid()));
     ids.extend(sheet.no_erc_directives.iter().map(|n| n.uuid));
+    ids.extend(sheet.directives.iter().map(|d| d.uuid()));
     ids
 }
 

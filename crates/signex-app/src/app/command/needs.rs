@@ -281,6 +281,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_symbol"
         | "measure_distance"
         | "break_wire"
+        // #2420: the directive tools and the Blanket edit.
+        | "place_blanket"
+        | "place_compile_mask"
+        | "place_diff_pair"
+        | "edit_blanket"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.

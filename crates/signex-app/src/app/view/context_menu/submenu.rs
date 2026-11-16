@@ -117,6 +117,7 @@ pub(super) fn place_entries(
         ab(ic::icon_dd_no_erc(tid), None, A::PlaceNoERC),
         ab(ic::icon_dd_diff_pair(tid), None, A::PlaceDiffPair),
         ab(ic::icon_dd_blanket(tid), None, A::PlaceBlanket),
+        ab(ic::icon_dd_blanket(tid), None, A::PlaceCompileMask),
         DropdownEntry::Separator,
         // Harness
         ab(ic::icon_dd_harness(tid), None, A::PlaceSignalHarness),

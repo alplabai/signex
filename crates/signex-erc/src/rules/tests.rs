@@ -137,6 +137,7 @@ fn ctx(
         junctions,
         no_connects: Vec::new(),
         no_erc_directives: Vec::new(),
+        directives: Vec::new(),
         bus_entries: Vec::new(),
         child_sheets: Vec::new(),
         nets: Vec::new(),

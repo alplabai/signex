@@ -53,6 +53,11 @@ impl Signex {
             Tool::Sheet => {
                 return self.place_sheet_click(world_x, world_y);
             }
+            tool @ (Tool::Blanket | Tool::CompileMask) => {
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
+                self.directive_region_point(tool, p, ClickKind::DoubleClick);
+                return Task::none();
+            }
             tool => {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 if self.shape_tool_point(tool, p, ClickKind::DoubleClick) {

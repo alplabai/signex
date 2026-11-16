@@ -55,6 +55,11 @@ impl Engine {
                 .iter()
                 .any(|text_note| text_note.uuid == item.uuid),
             SelectedKind::Drawing => self.document.drawings.iter().any(|d| d.uuid() == item.uuid),
+            SelectedKind::Directive => self
+                .document
+                .directives
+                .iter()
+                .any(|d| d.uuid() == item.uuid),
             _ => false,
         }
     }
@@ -99,6 +104,11 @@ impl Engine {
                 let before_len = self.document.drawings.len();
                 self.document.drawings.retain(|d| d.uuid() != item.uuid);
                 self.document.drawings.len() != before_len
+            }
+            SelectedKind::Directive => {
+                let before_len = self.document.directives.len();
+                self.document.directives.retain(|d| d.uuid() != item.uuid);
+                self.document.directives.len() != before_len
             }
             // A child sheet owns its pins (`ChildSheet::pins`); removing the
             // sheet entry removes them with it in one shot — no separate
@@ -451,6 +461,15 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::Directive => self
+                .document
+                .directives
+                .iter_mut()
+                .find(|d| d.uuid() == item.uuid)
+                .map(|d| {
+                    d.map_points(|p| signex_types::schematic::Point::new(p.x + dx, p.y + dy));
+                })
+                .is_some(),
             SelectedKind::Drawing => self
                 .document
                 .drawings

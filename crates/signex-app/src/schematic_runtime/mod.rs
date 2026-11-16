@@ -21,6 +21,7 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod directives;
 mod drawings;
 pub mod hit_index;
 pub mod hit_test;
@@ -72,6 +73,7 @@ impl RenderInvalidation {
     pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
     /// The sheet's net colours: a repaint with no geometry or ERC change.
     pub const NET_COLORS: Self = Self(1 << 13);
+    pub const DIRECTIVES: Self = Self(1 << 14);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -250,6 +252,9 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
         dst.no_erc_directives.clone_from(&src.no_erc_directives);
+    }
+    if invalidation.intersects(R::DIRECTIVES) {
+        dst.directives.clone_from(&src.directives);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(&src.child_sheets);
@@ -818,7 +823,7 @@ fn collect_item_bounds_with(
             ),
         });
     }
-
+    directives::push_item_bounds(snapshot, &mut out);
     out
 }
 
@@ -1178,6 +1183,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 
 #[cfg(test)]
 mod defaults_tests;
+#[cfg(test)]
+mod directives_tests;
 #[cfg(test)]
 mod drawings_tests;
 #[cfg(test)]

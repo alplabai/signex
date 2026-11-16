@@ -80,6 +80,7 @@ pub fn kind_label(kind: SelectedKind) -> &'static str {
         SelectedKind::TextNote => "Text note",
         SelectedKind::ChildSheet => "Sheet symbol",
         SelectedKind::Drawing => "Drawing",
+        SelectedKind::Directive => "Directive",
     }
 }
 

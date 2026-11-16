@@ -733,6 +733,8 @@ pub enum PanelMsg {
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
     EditTextNoteText(uuid::Uuid, String),
+    /// Edit a Blanket's net class or ERC exclusions (#2420).
+    EditBlanket(uuid::Uuid, super::BlanketEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of the selected text item.
     EditTextFontFamily(signex_engine::TextTarget, Option<String>),

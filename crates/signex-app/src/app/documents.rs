@@ -1014,6 +1014,12 @@ pub enum Tool {
     Measure,
     /// One click on a wire splits it in two at that point (#1254).
     BreakWire,
+    /// Two clicks draw a Blanket region (#2420).
+    Blanket,
+    /// Two clicks draw a Compile Mask region (#2420).
+    CompileMask,
+    /// One click on a `_P` or `_N` net marks the differential pair (#2420).
+    DiffPair,
 }
 
 impl std::fmt::Display for Tool {
@@ -1038,6 +1044,9 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
+            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::CompileMask => write!(f, "Place Compile Mask"),
+            Tool::DiffPair => write!(f, "Place Differential Pair"),
         }
     }
 }

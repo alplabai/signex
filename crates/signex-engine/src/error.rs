@@ -82,6 +82,10 @@ pub enum EngineError {
     TransactionFailed,
     #[error("the clipboard fragment could not be converted: {0}")]
     ClipboardFragment(String),
+    #[error("no {kind} directive {id} is on this sheet")]
+    DirectiveNotFound { kind: &'static str, id: uuid::Uuid },
+    #[error("a directive region needs two different corners with finite coordinates")]
+    InvalidDirectiveRegion,
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

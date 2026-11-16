@@ -707,6 +707,9 @@ impl Engine {
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
             }
+            Command::PlaceDirective { .. } | Command::UpdateDirective { .. } => {
+                self.exec_directives(before, cmd)
+            }
         };
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {

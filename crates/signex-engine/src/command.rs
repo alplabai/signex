@@ -113,6 +113,8 @@ pub enum CommandKind {
     SetNetColors,
     ArrangeDrawings,
     SetDrawingPlacement,
+    PlaceDirective,
+    UpdateDirective,
 }
 
 #[derive(Debug, Clone)]
@@ -528,6 +530,17 @@ pub enum Command {
         ids: Vec<Uuid>,
         placement: signex_types::schematic::DrawingPlacement,
     },
+    /// Place a Blanket, Compile Mask or Differential Pair directive (#2420).
+    PlaceDirective {
+        directive: signex_types::schematic::SchDirective,
+    },
+    /// Replace the directive with `directive`'s uuid by `directive`: its
+    /// region and parameters. Refused when no directive of that uuid and kind
+    /// exists; unchanged when equal. Consecutive edits of one directive share
+    /// one undo step, like typing a field (`Engine::end_field_edit_run`).
+    UpdateDirective {
+        directive: signex_types::schematic::SchDirective,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -662,6 +675,8 @@ impl Command {
             Command::SetNetColors { .. } => CommandKind::SetNetColors,
             Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
+            Command::PlaceDirective { .. } => CommandKind::PlaceDirective,
+            Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
         }
     }
 }

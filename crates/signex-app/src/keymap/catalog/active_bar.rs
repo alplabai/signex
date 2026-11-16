@@ -398,7 +398,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_DIFF_PAIR),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::AT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -408,7 +409,19 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BLANKET),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BLANKET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "edit_blanket",
+        category: "place",
+        label: command_ids::CMD_EDIT_BLANKET,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::EDIT_BLANKET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
