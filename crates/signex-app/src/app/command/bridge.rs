@@ -267,6 +267,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "tile_windows_vertically" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
         }
+        // Window ▸ Untile (#2249).
+        "untile_documents" => Message::Window(WindowMsg::UntileRequested),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),

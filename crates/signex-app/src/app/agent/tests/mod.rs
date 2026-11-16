@@ -18,6 +18,7 @@ mod origin;
 mod presence;
 mod refusals;
 mod round_trip;
+mod window_layout;
 
 use serde_json::{Value, json};
 use signex_types::document_id::DocumentId;

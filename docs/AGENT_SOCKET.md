@@ -129,9 +129,18 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `keepout_from_selection` and `arrange_in_box`, each one board undo step
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"). A test pins this set, so a
-  catalog row that joins or leaves it is a visible decision. The CSV and PDF
-  writers `export_board_report` and `export_board_pdf` take a `path`, so they
-  are CLI only.
+  catalog row that joins or leaves it is a visible decision.
+  The window-layout commands `tile_windows_horizontally`,
+  `tile_windows_vertically` and `untile_documents` (#2249) name no document:
+  they are open to agents by the maintainer's rule that everything is
+  AI-controllable, run the Window menu row's handler (refused with its reason
+  when the row is greyed) and answer with the layout they left:
+  `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
+  pane `{"focused", "document", "name"}` in pane order (`document` and
+  `name` are null for a pane outside an open project). They never change the
+  active tab.
+  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
+  `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

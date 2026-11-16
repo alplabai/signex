@@ -82,6 +82,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(CommandContext {
             undocked_has_canvas: true,
             can_tile_windows: true,
+            is_tiled: true,
             ..base
         }),
         with(CommandContext {
@@ -360,6 +361,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("number_schematic_sheets", "NumberSchematicSheets"),
     ("tile_windows_horizontally", "TileHorizontally"),
     ("tile_windows_vertically", "TileVertically"),
+    // #2249: fixture name only.
+    ("untile_documents", "UntileDocuments"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),

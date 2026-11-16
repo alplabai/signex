@@ -1540,6 +1540,11 @@
     "category": "select"
   },
   {
+    "id": "untile_documents",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "unwaive_drc_violation",
     "group": "Pcb",
     "category": "pcb"

@@ -676,6 +676,9 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+    /// Window ▸ Tile: the main window shows its documents in panes in this
+    /// layout (#2249); `None` shows the active document alone.
+    pub document_tiling: Option<crate::app::TileLayout>,
     /// Calculator state, owned here so the modal view stays a pure
     /// function of the model (ADR-0001 A1).
     pub passive_calculator: signex_widgets::passive_calculator::CalculatorControl,

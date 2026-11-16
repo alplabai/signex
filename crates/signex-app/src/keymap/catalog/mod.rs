@@ -15,6 +15,7 @@ mod pcb;
 mod rules;
 mod schematic;
 mod threed;
+mod window;
 
 /// Coarse editor-surface bucket used by the Keyboard Shortcuts pane to
 /// group commands for display. Distinct from [`CommandMetadata::category`],
@@ -315,6 +316,7 @@ pub fn command_menu_message(command_id: &str) -> MessageId {
 /// ids are unique across groups).
 const TABLES: &[&[CommandMetadata]] = &[
     general::GENERAL,
+    window::WINDOW,
     schematic::SCHEMATIC,
     active_bar::ACTIVE_BAR,
     pcb::PCB,
@@ -394,6 +396,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "close_all_documents",
     "tile_windows_horizontally",
     "tile_windows_vertically",
+    "untile_documents",
     "next_document_tab",
     "previous_document_tab",
     "undo",
@@ -835,6 +838,7 @@ mod tests {
             ("pcb.rs", include_str!("pcb.rs")),
             ("threed.rs", include_str!("threed.rs")),
             ("rules.rs", include_str!("rules.rs")),
+            ("window.rs", include_str!("window.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

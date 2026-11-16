@@ -166,6 +166,15 @@ context = "global"
 "Shift+F" = "find_similar_objects"
 "Shift+I" = "open_net_inspector"
 
+# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Shift+Alt+H" = "tile_windows_horizontally"
+"Shift+Alt+U" = "untile_documents"
+"Shift+Alt+V" = "tile_windows_vertically"
+
 # The board view (PCB tabs only): `+` steps to the next layer of the board,
 # `*` to the next signal layer,
 # `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`

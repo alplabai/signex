@@ -96,8 +96,6 @@ show_current_command_hotkeys	help	Show graphical editing hotkey list for current
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
 switch_segment_posture	interactive	Flip the wire/bus corner: horizontal or vertical first	-	General	-	-	Always	gui_only	-
-tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
-tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
@@ -116,6 +114,9 @@ zoom_out_at_cursor	view	Zoom out at cursor	Zoom Out	General	-	-	Always	gui_only	
 zoom_to_all_objects	view	Zoom to all objects	-	General	-	-	Always	gui_only	-
 zoom_to_fit	view	Zoom to fit	Fit All	General	-	-	Always	gui_only	-
 zoom_to_selection_area	view	Zoom to selection area	-	General	-	-	RequiresSelection	gui_only	-
+tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
+tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
+untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-

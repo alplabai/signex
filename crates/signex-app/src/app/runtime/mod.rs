@@ -226,6 +226,8 @@ impl Signex {
         // sync_visible_document_from_active_tab took the empty-doc
         // branch (which suppresses the implicit refresh).
         self.refresh_panel_ctx();
+        // The pane left behind draws on its own canvas now (#2249).
+        self.settle_document_tiling();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas. While an

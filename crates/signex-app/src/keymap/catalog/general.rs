@@ -997,26 +997,6 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
-        id: "tile_windows_horizontally",
-        category: "window",
-        label: command_ids::CMD_TILE_WINDOWS_HORIZONTALLY,
-        menu_label: Some(command_ids::CMD_MENU_TILE_WINDOWS_HORIZONTALLY),
-        group: CommandGroup::General,
-        enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "tile_windows_vertically",
-        category: "window",
-        label: command_ids::CMD_TILE_WINDOWS_VERTICALLY,
-        menu_label: Some(command_ids::CMD_MENU_TILE_WINDOWS_VERTICALLY),
-        group: CommandGroup::General,
-        enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
         id: "toggle_cross_select_mode",
         category: "select",
         label: command_ids::CMD_TOGGLE_CROSS_SELECT_MODE,

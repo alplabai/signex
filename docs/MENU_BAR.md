@@ -551,18 +551,31 @@ with its file and its number.
   sheet changes; if a sheet still fails part-way, every sheet already changed
   is put back and the sheets it loaded are dropped.
 
-## Window ▸ Tile Horizontally / Tile Vertically {#window-tile}
+## Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
 
-Run `tile_windows_horizontally` and `tile_windows_vertically` (#2247). They
-arrange the main window and every undocked document window (main window
-first, then the undocked ones by file path) on the main window's monitor: Tile
-Horizontally stacks them in equal rows, one above the other, and Tile
-Vertically puts them side by side in equal columns (the Windows MDI
-convention, Caner 2026-11-10). Each window is un-maximized, resized and moved with `iced::window`
-tasks. Greyed while no document is undocked, and until the main window's
-monitor has been read (the settled geometry reading, shortly after start-up).
-iced reports the monitor's full size, not its work area, so the tiles cover
-the whole monitor. The Messages panel names how many windows were arranged.
+Run `tile_windows_horizontally`, `tile_windows_vertically` (#2247, #2249) and
+`untile_documents` (#2249). Tile Horizontally stacks in equal rows, one above
+the other, and Tile Vertically puts side by side in equal columns (Caner
+2026-11-10).
+
+In the main window, with two documents or more docked, Tile shows every docked
+document (the tabs not in a window of their own, in tab-strip order) in a pane
+of its own. The focused pane is the active tab, a full editor with the accent
+ring; every other pane draws its document (sheet, board, symbol, footprint,
+library browser, Project or Rules tab) with a hairline edge, and a press on it
+makes that document the active one, as a tab click does. Untile shows the
+active document alone again; closing or undocking down to one docked document
+does the same, and a document opened later is not tiled again. Untile is
+greyed unless the documents are tiled.
+
+With undocked document windows, Tile also arranges the main window and every
+undocked window (main window first, then the undocked ones by file path) on
+the main window's monitor. Each window is un-maximized, resized and moved with
+`iced::window` tasks; this part waits until the main window's monitor has been
+read (the settled geometry reading, shortly after start-up). iced reports the
+monitor's full size, not its work area, so the tiles cover the whole monitor.
+Tile is greyed when it has neither to do. The Messages panel names how many
+documents or windows were arranged.
 
 ## Sheet right-click menu {#sheet-context-menu}
 

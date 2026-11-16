@@ -289,6 +289,8 @@ impl Signex {
         let (base, revision) = (engine.base_revision(), engine.revision());
         let windows = &self.ui_state.windows;
         let main = include_main.then_some(&mut self.interaction_state.canvas);
+        // An unfocused tile pane on that sheet draws it too (#2249).
+        let pane = self.interaction_state.tile_panes.schematic.get_mut(path);
         let slots = self
             .interaction_state
             .canvases
@@ -301,7 +303,8 @@ impl Signex {
                 )
             })
             .map(|(_, slot)| slot)
-            .chain(main);
+            .chain(main)
+            .chain(pane);
         for slot in slots {
             if let Some(cache) = slot.render_cache.as_mut() {
                 cache.update_from_sheet(sheet, invalidation, base, revision);
