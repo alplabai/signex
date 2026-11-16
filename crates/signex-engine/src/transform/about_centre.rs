@@ -131,19 +131,6 @@ fn directive_points(d: &signex_types::schematic::SchDirective) -> Vec<Point> {
     }
 }
 
-fn drawing_points(d: &SchDrawing) -> Vec<Point> {
-    match d {
-        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
-            vec![*start, *end]
-        }
-        SchDrawing::Circle { center, .. } => vec![*center],
-        SchDrawing::Arc {
-            start, mid, end, ..
-        } => vec![*start, *mid, *end],
-        SchDrawing::Polyline { points, .. } => points.clone(),
-    }
-}
-
 impl Engine {
     /// Centre of the bounding box of the anchor points of the transformable
     /// items in `items` (symbol origins, wire / bus ends, label, junction,
