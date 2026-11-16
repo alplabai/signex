@@ -87,7 +87,7 @@ One iced-free application core, `AppCore`, is the application layer over the eng
 
 ```mermaid
 flowchart TB
-  subgraph domain["UI-free domain crates: no iced; native IO moves out (S-IO, not scheduled)"]
+  subgraph domain["UI-free domain crates: no iced; native IO moves out (S-IO · DOMAIN-crate part scheduled by issue 2431, see ADR-0007)"]
     types["signex-types"] --- engine["signex-engine"]
     engine --- erc["signex-erc / signex-erc-dsl"]
     engine --- drc["signex-drc / signex-drc-dsl"]
@@ -291,8 +291,10 @@ The application core and the crates it uses get the treatment ADR-0001 D5 gives 
 - **While the core grows inside `signex-app`.** A guard fails when `app/core/` imports any `crate::` path outside `app/core/`, or names `iced`, `tokio`, `spawn_blocking` / `run_blocking`, `std::fs`, `std::thread` or `std::process`. It lands with slice 1.
 - **After the lift.** Clippy `disallowed-methods` / `disallowed-types` keep the same calls out of the core. They are modelled on the `io_ports` precedent in `clippy.toml`.
   - The lint reaches the domain crates only after slice S-IO, because `signex-types` and `signex-engine` still call `std::fs` today.
+    - *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): #2431 schedules the DOMAIN-crate part of S-IO now.*
   - Clippy reads the nearest `clippy.toml` and does not merge it with the workspace file, so a per-crate file must repeat the workspace bans.
 - **No `wasm32-unknown-unknown` gate now** (epic D10: native first).
+  - *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): a `wasm32` check gate on the DOMAIN crates the read-only viewer links (#2431).*
   - If a web front end is ever scheduled, a wasm32 build of the core and the crates below it would keep OS-bound dependencies (git2, tokio's IO and multi-thread runtime) out.
   - That build alone would not catch `std::fs` or `std::thread`: they compile there and fail only at run time. The lint above is what keeps them out either way.
 - **Stack frames (recommendation, open).** Run Clippy `large_stack_frames` on the core, against the stack overflow of #2325. This comes from the research note (§7.6), not from an epic decision.
@@ -345,7 +347,7 @@ flowchart LR
   SA["S-A · agent protocol<br/>into signex-commands"]
   SL["S-L · library · editors · 3D"]
   S9["9 · lift the crate<br/>CLI drops signex-app"]
-  SIO["S-IO · domain IO out<br/>not scheduled"]
+  SIO["S-IO · domain IO out<br/>DOMAIN part: issue 2431, see ADR-0007"]
   SP["S-P · plugin host<br/>not scheduled"]
   S0 --> S1 --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
   S1 --> SA --> S9
@@ -366,6 +368,8 @@ The event-granularity benchmark of the research note (§10, item 4) also lands b
 ## A web front end (epic D10)
 
 [Maintainer decision 2026-11-15](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348): not now; native first; a browser host only if a web front end is scheduled. Keeping the core free of iced and of native IO keeps a web front end possible later. That is an option, not a commitment: there is no `wasm32` build gate now, and S-IO is not scheduled.
+
+*Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): D10 is reopened narrowly for a read-only browser viewer only. No editing web front end and no `AppCore` browser host are scheduled.*
 
 ## Superseded decisions
 
