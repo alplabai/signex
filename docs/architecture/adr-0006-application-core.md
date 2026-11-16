@@ -252,7 +252,7 @@ Caner's decision of 2026-11-15 (`docs/DECISIONS.md`):
 - **`signex-i18n` does not move.** It keeps the Fluent bundles, ICU formatting and locale negotiation, and stays in `UI_STACK`. It re-exports the ids at their old paths, so existing call sites keep working. The one change for callers: `render_en_us()` and `localized()` become methods of the `signex_i18n::RenderTranslatable` trait, so a file calling them imports the trait. The 2026-11-07 row that no domain crate may depend on `signex-i18n` stays true.
 - **Who renders.** The core and `signex-commands` carry `Translatable` values (notices, refusal reasons, typed errors such as `QueryError`) and never render them. Front ends render them in `view()`, which keeps the `(MessageId, args)` label rule.
 
-Splitting this crate is the first step of slice 1, because the catalog that slice 1 moves imports `signex_i18n::{I18n, MessageId, command_ids, t}` today.
+Splitting this crate is the first step of slice 1, because the catalog that slice 1b moves imports `signex_i18n::{I18n, MessageId, command_ids, t}` today.
 
 ### How DDD (ADR-0001 A2) maps onto it
 
@@ -307,20 +307,23 @@ This record is (b) and (c) together, plus moving the handlers into the core; eac
 
 ## Slices
 
-Numbering follows epic #2326; one PR at a time, in the order 0, 1, C, 2, 3, 4, 5, 7, 6, 8, 9 (S-A after 1, S-L after 5, both before 9). Each is reverted by reverting its PR, so the revert column names only what a revert must also undo.
+Numbering follows epic #2326; one PR at a time, in the order 0, 1, 1b, C, 2, 3, 4, 5, 7, 6, 8, 9 (S-A after 1, S-L after 5, both before 9). Each is reverted by reverting its PR, so the revert column names only what a revert must also undo.
 
 Every slice has the same stop rule: stop and come back to the maintainers if its exit check fails, or if it needs a facade on `Signex` that outlives the slice. The stop-if column adds what is specific to the slice.
+
+**The contract grows with the slices** (Hakan, 2026-11-17). `CoreEvent`, `Effect`, `EffectResult` and `CoreContext` are not designed ahead of the code they describe: each variant is added by the slice that moves that behaviour, derived from the trunk type it replaces (for example `DocumentChanged` from `signex_engine::DocumentPatch`, the write effect from `DocumentSaveJob`), and the PR names that trunk type. Three drafts that froze the whole vocabulary in slice C each lost a trunk guarantee (the disk-changed check, case-folded write order, the restore claim). What keeps a move pure is the safety net: the same test-adapter tests pass before and after it.
 
 | # | What ships | Exit check | Stop if | Revert path |
 |---|---|---|---|---|
 | 0 | #2325: box `Signex` / run the CLI session on a thread with an explicit stack (the first part of alternative (a)) | The debug `signex-cli run` passes on Windows CI. | — | revert the PR |
 | 1 | First, split `signex-i18n-ids` out of `signex-i18n`. Then extract `signex-commands`: `Modifiers` / `ShortcutContext` out of `binding.rs` (`from_iced` stays in the app), `DocumentTarget` and `PcbTargets`. The `app/core/` guard script lands. Low risk. | Both crates are in `DOMAIN` and `check_arch_guard.sh` passes. `cargo tree -p signex-commands` shows no `iced*`, `wgpu*`, `fluent*` or `icu*`. Catalog JSON and `catalog.golden.tsv` are byte-equal. | a golden file changes | revert; the golden files are byte-equal, so nothing else moves |
-| C | `CoreEvent` / `Effect` / `EffectResult`, `CoreContext`, the (id, form) parity skeleton and the test adapter | The parity skeleton lists every (id, form) pair on trunk, and the test adapter runs one command. | the contract cannot express an existing (id, form) | revert; no behaviour moved |
-| 2 | Event seam: edit tails split into a core half that returns events, plus a projector | Every removed inline call has a projector arm and a test. The safety-net tests below pass through the test adapter. | the event-granularity bench shows a drag-time regression beyond its noise band, or a safety-net test cannot be expressed through the test adapter | revert restores the inline tails; the removed-call list in the PR says what comes back |
+| 1b | The command catalog into `signex-commands`: `AppCommandId`, the catalog tables and their metadata; labels name `signex-i18n-ids` ids. `CommandOutcome` waits for slice 7 (see there). | Catalog JSON and `catalog.golden.tsv` are byte-equal; `check_arch_guard.sh` passes. | the catalog needs a UI-stack crate | revert; the golden files are byte-equal |
+| C | The safety net, not the vocabulary: the (id, form) parity table, the test adapter, the three safety-net tests below and the drag benchmark baseline, all run against trunk behaviour. A form is each distinct route by which a command id reaches its handler or its implicit target (window-routed commands, the undo routers, the operand refusal, a bridge arm, the Active Bar table, an operand handler, a query, the headless path); each row records its owner and its implicit inputs. The parity golden has a one-command regenerate step, documented in CONTRIBUTING. The adapter's test-facing API is the frozen part. | The parity table lists every (id, form) pair on trunk; the three safety-net tests and the baseline pass on trunk through the adapter. | an (id, form) has implicit inputs (document, targets, window, a person's in-progress work) that cannot be named as operands | revert; no behaviour moved |
+| 2 | Event seam: the schematic edit tails split into a core half that returns events, plus a projector. PCB edit tails follow the schematic slices with the same pattern, the schematic as the reference. | Every removed inline call has a projector arm and a test. The safety-net tests below pass through the test adapter. | the event-granularity bench shows a drag-time regression beyond its noise band, or a safety-net test cannot be expressed through the test adapter | revert restores the inline tails; the removed-call list in the PR says what comes back |
 | 3 | `load_gateway` split | Load and restore tests pass through the test adapter, and a test proves that a panicking install leaves no engine missing from the map. | any restore is dropped in a test | revert both PRs together |
 | 4 | State partition (4a documents, 4b ERC/DRC/profiles, 4c settings) | The moved field groups are private to the core; `rg 'ui_state\.(io\|erc_\|profile_)'` has 0 hits for the moved groups. | a group cannot move without a facade | the ast-grep renames are reversible by the inverse rule |
 | 5 | Effects as data and the native host: 5a save/journal, 5b load, 5c git, 5d export, 5e the rest | For each group, `app/core/` has 0 `spawn_blocking` / `run_blocking` / `std::fs` hits, and the save-order and quit-barrier tests pass. | the save-order or quit-barrier test fails | revert brings back the `Task` path for that group |
-| 7 | `Needs` split into Core and Ui | Enablement of every core command is computed without `UiState`. | — | revert |
+| 7 | `Needs` split into Core and Ui. `CommandOutcome` moves into `signex-commands` here, as `Disabled { reason }` becomes a `Translatable`, so the versioned crate never ships the `String` form (Hakan, 2026-11-17). | Enablement of every core command is computed without `UiState`. | — | revert |
 | 6 | Handler table into the core per area, the `Targets` operand, `gui_only` deleted. Updates the CONTRIBUTING "Commands" bullet and `docs/COMMANDS.md`, and records the supersession under "Superseded decisions". | Per area, the area's ids are no longer flagged `gui_only` and have no bridge arm. At the end, `git grep -c gui_only -- crates` gives 0. | an area needs a dual path past its slice | revert per area |
 | 8 | Queries on `core.query` | Every query answers through `core.query` in a test-adapter test. | — | revert |
 | S-A | Agent wire protocol and `OperandKind` in `signex-commands` | `signex-cli` has no `signex_app::headless::agent_client` import. | — | revert |
@@ -332,7 +335,8 @@ Every slice has the same stop rule: stop and come back to the maintainers if its
 flowchart LR
   S0["0 · CLI stack fix, issue 2325"]
   S1["1 · i18n-ids split, signex-commands extraction<br/>+ guard script"]
-  SC["C · contract slice<br/>CoreEvent · Effect · CoreContext"]
+  S1b["1b · command catalog<br/>into signex-commands"]
+  SC["C · safety net<br/>parity · adapter · tests · baseline"]
   S2["2 · event seam<br/>high risk"]
   S3["3 · load_gateway split<br/>high risk"]
   S4["4 · state partition<br/>4a · 4b · 4c"]
@@ -345,7 +349,7 @@ flowchart LR
   S9["9 · lift the crate<br/>CLI drops signex-app"]
   SIO["S-IO · domain IO out<br/>not scheduled"]
   SP["S-P · plugin host<br/>not scheduled"]
-  S0 --> S1 --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
+  S0 --> S1 --> S1b --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
   S1 --> SA --> S9
   S5 --> SL --> S9
   SC -.-> SIO
@@ -357,7 +361,7 @@ flowchart LR
 The epic rates slices 2, 3 and 5 (and S-L) high or medium-high. The research note (§10, item 1) names the reason: the persistence invariants become state machines across `complete`. Before slice 2 starts, these tests run against the test adapter, not only against the ledger:
 - **Per-path write order (#997):** an older write never lands after a newer one to the same path. Today it is pinned at the ledger level (`persist/document_save.rs`, `an_older_snapshot_scheduled_last_never_overwrites_a_newer_one`).
 - **The `SaveBarrier` wait:** a synchronous write or file move waits for every write in flight (`the_barrier_waits_for_an_unfinished_job`, same file).
-- **The `complete` generation check (ADR-0003 D4):** a result for a closed, reopened or re-keyed document is dropped. This one does not exist yet, because `complete` does not; it lands with slice C.
+- **The `complete` generation check (ADR-0003 D4):** a result for a closed, reopened or re-keyed document is dropped. Slice C pins it as a behaviour test on today's completions (the save revision check and `finish_claim` in `document_read.rs`); the slice that adds `complete` keeps that test green.
 
 The event-granularity benchmark of the research note (§10, item 4) also lands before slice 2: a drag must not over-invalidate the projector.
 
