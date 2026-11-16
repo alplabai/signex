@@ -56,7 +56,12 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
             at,
         };
         let sizes = [
-            (LimitKind::MinViaDiameter, via.diameter, "via diameter"),
+            // Its smallest copper ring, on whichever layer it is (#2401).
+            (
+                LimitKind::MinViaDiameter,
+                via.min_diameter(),
+                "via diameter",
+            ),
             (LimitKind::MinViaDrill, via.drill, "via drill"),
         ];
         for (kind, mm, field) in sizes {

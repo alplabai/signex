@@ -300,6 +300,7 @@ impl Builder {
         for leg in points.windows(2) {
             let uuid = self.uuid();
             self.board.segments.push(Segment {
+                locked: false,
                 uuid,
                 start: leg[0],
                 end: leg[1],
@@ -334,6 +335,8 @@ impl Builder {
             drill,
             layers,
             net,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         });

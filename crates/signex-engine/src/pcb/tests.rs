@@ -192,6 +192,18 @@ pub(super) fn commands() -> Vec<(&'static str, BoardCommand)> {
                 items: vec![Footprint(id(FP_B)), Footprint(id(FP_A))],
             },
         ),
+        (
+            "layer stack",
+            BoardCommand::SetLayerStack {
+                stack: Box::new(signex_types::pcb_stack::LayerStack::derived(&[], 1.0 / 3.0)),
+            },
+        ),
+        (
+            "lock a track and a via",
+            BoardCommand::SetItemsLocked {
+                items: vec![(Segment(id(SEG_1)), true), (Via(id(VIA_1)), true)],
+            },
+        ),
     ]
 }
 

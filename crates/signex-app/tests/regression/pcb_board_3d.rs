@@ -46,6 +46,7 @@ fn footprint(uuid: Uuid, at: (f64, f64)) -> Footprint {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -82,6 +83,7 @@ fn board() -> PcbBoard {
     });
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

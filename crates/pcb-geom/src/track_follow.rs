@@ -51,7 +51,8 @@ struct MovedPad {
 }
 
 /// The tracks of `board` with an end on a pad of one of `footprints`, in
-/// board order. Geometry that does not convert is left out.
+/// board order. Geometry that does not convert is left out, and so is a
+/// locked track (#2407), which stays where it is.
 pub fn tracks_on_pads(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> Vec<TrackEnds> {
     let pads = moved_pads(board, footprints);
     if pads.is_empty() {
@@ -63,7 +64,7 @@ pub fn tracks_on_pads(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> Vec<Trac
         .enumerate()
         .filter_map(|(index, segment)| {
             let layers = layer_mask(std::iter::once(segment.layer.as_str()));
-            if layers == 0 {
+            if layers == 0 || segment.locked {
                 return None;
             }
             let on_pad = |p: Point| {

@@ -30,6 +30,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
 pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
@@ -443,6 +444,7 @@ fn snxpcb_round_trip_with_data() {
         }),
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     };
     let pad2 = Pad {
@@ -462,6 +464,7 @@ fn snxpcb_round_trip_with_data() {
         }),
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     };
 
@@ -510,6 +513,7 @@ fn snxpcb_round_trip_with_data() {
     ] {
         board.segments.push(Segment {
             unknown_columns: Default::default(),
+            locked: false,
             uuid: Uuid::parse_str(uuid).unwrap(),
             start: PcbPoint { x: sx, y: sy },
             end: PcbPoint { x: ex, y: ey },
@@ -527,6 +531,8 @@ fn snxpcb_round_trip_with_data() {
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
     });
 

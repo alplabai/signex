@@ -13,7 +13,7 @@ mod tests;
 
 pub use pad::{PadEdit, pad_edit_command};
 pub use track::{TrackEdit, track_edit_command, track_location};
-pub use via::{ViaEdit, via_edit_command};
+pub use via::{ViaEdit, via_edit_command, via_span};
 
 /// Why a field edit was not turned into a command. The board is unchanged.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]

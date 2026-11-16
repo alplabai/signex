@@ -96,6 +96,7 @@ pub fn board_10k_tracks() -> PcbBoard {
             let (x0, y0) = joint_nm(row, seg);
             let (x1, y1) = joint_nm(row, seg + 1);
             segments.push(Segment {
+                locked: false,
                 uuid: Uuid::from_u128(UUID_SEGMENT_BASE + segments.len() as u128),
                 start: point(x0, y0),
                 end: point(x1, y1),
@@ -115,6 +116,8 @@ pub fn board_10k_tracks() -> PcbBoard {
                 drill: mm(300_000),
                 layers: vec![COPPER_LAYERS[0].to_string(), COPPER_LAYERS[3].to_string()],
                 net,
+                locked: false,
+                layer_sizes: None,
                 via_type: ViaType::Through,
                 unknown_columns: Default::default(),
             });
@@ -141,6 +144,7 @@ pub fn board_10k_tracks() -> PcbBoard {
 
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,
@@ -228,6 +232,7 @@ fn two_pad_part(
             }),
             roundrect_ratio: 0.0,
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),

@@ -21,6 +21,7 @@ fn pad(n: u128, x: f64, net: u32) -> Pad {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -75,6 +76,7 @@ fn board(pads: Vec<Pad>) -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -159,6 +161,7 @@ fn a_pad_of_no_net_is_cleared_like_any_other_net() {
 fn copper_on_another_layer_is_not_cut() {
     let mut b = board(Vec::new());
     b.segments.push(Segment {
+        locked: false,
         uuid: Uuid::from_u128(7),
         start: Point::new(-20.0, 0.0),
         end: Point::new(20.0, 0.0),
@@ -224,6 +227,7 @@ fn the_minimum_thickness_drops_a_neck_too_thin_to_make() {
     // Two tracks of net 2 leave a 0.2 mm neck at x = 0 across the pour.
     for (n, y0, y1) in [(7, -20.0, -0.75), (8, 0.75, 20.0)] {
         b.segments.push(Segment {
+            locked: false,
             uuid: Uuid::from_u128(n),
             start: Point::new(0.0, y0),
             end: Point::new(0.0, y1),

@@ -43,6 +43,7 @@ fn pad(n: u128, x: f64) -> Pad {
         net: None,
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -87,6 +88,7 @@ fn footprint(uuid: Uuid, reference: &str, (x, y): (f64, f64), locked: bool) -> F
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

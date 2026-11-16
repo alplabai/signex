@@ -4,7 +4,7 @@
 //! placement (`pcb_geom::Placement`).
 
 use pcb_geom::{Placement, PointNm, Side, pad_world_center};
-use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PcbBoard};
+use signex_types::pcb::{Footprint, LayerSizes, Pad, PadNet, PadShape, PcbBoard, Point};
 use uuid::Uuid;
 
 use super::{PrimitiveEditRefusal, finite};
@@ -26,6 +26,8 @@ pub enum PadEdit {
     /// 0 is no net. A net set here is kept when the schematic is synced
     /// (`Pad::net_locked`).
     Net(u32),
+    /// Per-layer copper sizes (#2401); `None` is one size on every layer.
+    Sizes(Option<LayerSizes<Point>>),
 }
 
 /// The command setting `edit` on every pad in `pads` (footprint, pad). A
@@ -90,6 +92,7 @@ fn apply(
         PadEdit::SizeX(x) => pad.size.x = finite(*x)?,
         PadEdit::SizeY(y) => pad.size.y = finite(*y)?,
         PadEdit::Shape(shape) => pad.shape = *shape,
+        PadEdit::Sizes(sizes) => pad.layer_sizes = sizes.clone(),
         PadEdit::HoleSize(h) => {
             let hole = finite(*h)?;
             let drill = pad

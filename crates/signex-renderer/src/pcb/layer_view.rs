@@ -361,7 +361,7 @@ impl PcbSnapshot {
         for via in &board.vias {
             if view.is_none_or(|v| v.shows_via(&via.layers)) {
                 let (how, ink) = classify(view, &via.layers, true);
-                let mut input = via_from_board_via(via);
+                let mut input = via_from_board_via(via, view.and_then(PcbLayerView::active_copper));
                 input.dimmed = how == Emphasis::Dimmed;
                 input.ink = ink;
                 vias.push((how, input));
@@ -456,7 +456,9 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
             continue;
         }
         let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-        if let Some(mut input) = pad_from_footprint(footprint, pad) {
+        if let Some(mut input) =
+            pad_from_footprint(footprint, pad, view.and_then(PcbLayerView::active_copper))
+        {
             input.dimmed = how == Emphasis::Dimmed;
             input.ink = ink;
             pads.push((how, input));

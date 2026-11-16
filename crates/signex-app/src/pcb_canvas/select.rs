@@ -523,11 +523,14 @@ mod tests {
             drill: 0.3,
             layers: Vec::new(),
             net: 1,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         };
         PcbBoard {
             sketch: None,
+            stackup: None,
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
@@ -590,6 +593,7 @@ mod tests {
 
     fn two_layer_board() -> PcbBoard {
         let segment = |n: u128, y: f64, layer: &str| signex_types::pcb::Segment {
+            locked: false,
             uuid: Uuid::from_u128(n),
             start: Point::new(0.0, y),
             end: Point::new(5.0, y),

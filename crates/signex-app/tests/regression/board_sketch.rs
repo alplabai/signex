@@ -36,6 +36,7 @@ fn layer(id: u8, name: &str) -> LayerDef {
 pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(0xB0A2D),
         version: 1,
@@ -50,6 +51,7 @@ pub(crate) fn board() -> PcbBoard {
         }],
         footprints: Vec::new(),
         segments: vec![Segment {
+            locked: false,
             uuid: Uuid::from_u128(10),
             start: Point::new(5.0, 15.0),
             end: Point::new(25.0, 15.0),

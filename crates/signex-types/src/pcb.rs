@@ -3,7 +3,8 @@ use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
 use crate::part::FootprintSourceRef;
-use crate::pcb_layer::PcbLayer;
+use crate::pcb_layer::{CopperLayer, PcbLayer};
+pub use crate::pcb_stack::{LayerSize, LayerSizes, LayerStack};
 use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
 
@@ -99,7 +100,7 @@ pub enum ViaType {
 // Layer definition
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayerDef {
     pub id: u8,
     pub name: String,
@@ -206,6 +207,10 @@ pub struct Pad {
     /// Saved in the optional `net_locked` pad column.
     #[serde(default)]
     pub net_locked: bool,
+    /// Copper sizes that differ by layer (#2401); `None` is [`Self::size`]
+    /// on every layer. Saved in the optional `layer_sizes` pad column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_sizes: Option<LayerSizes<Point>>,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -339,6 +344,10 @@ pub struct Segment {
     pub layer: String,
     #[serde(default)]
     pub net: u32,
+    /// Move, delete and edits other than the lock itself are refused
+    /// (#2407). Saved in the optional `locked` track column.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -359,6 +368,14 @@ pub struct Via {
     pub net: u32,
     #[serde(default = "default_via_type")]
     pub via_type: ViaType,
+    /// Move, delete and edits other than the lock itself are refused
+    /// (#2407). Saved in the optional `locked` via column.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Diameters that differ by layer (#2401); `None` is [`Self::diameter`]
+    /// on every layer. Saved in the optional `layer_sizes` via column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_sizes: Option<LayerSizes<f64>>,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -367,6 +384,37 @@ pub struct Via {
 
 fn default_via_type() -> ViaType {
     ViaType::Through
+}
+
+impl Via {
+    /// The copper diameter on `layer`: its per-layer size there, else
+    /// [`Self::diameter`].
+    pub fn diameter_on(&self, layer: CopperLayer) -> f64 {
+        self.layer_sizes
+            .as_ref()
+            .and_then(|sizes| sizes.on(layer))
+            .unwrap_or(self.diameter)
+    }
+
+    /// The smallest copper diameter on any layer.
+    pub fn min_diameter(&self) -> f64 {
+        self.layer_sizes
+            .as_ref()
+            .map_or(Vec::new(), LayerSizes::sizes)
+            .into_iter()
+            .fold(self.diameter, f64::min)
+    }
+}
+
+impl Pad {
+    /// The copper size on `layer`: its per-layer size there, else
+    /// [`Self::size`].
+    pub fn size_on(&self, layer: CopperLayer) -> Point {
+        self.layer_sizes
+            .as_ref()
+            .and_then(|sizes| sizes.on(layer))
+            .unwrap_or(self.size)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -511,6 +559,11 @@ pub struct PcbBoard {
         skip_serializing_if = "crate::pcb_options::BoardOptions::is_default"
     )]
     pub options: crate::pcb_options::BoardOptions,
+    /// The physical layer stack (#2401); `None` for a board whose stack was
+    /// never edited, which shows [`LayerStack::derived`]. Written only
+    /// through the board engine's `SetLayerStack` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stackup: Option<LayerStack>,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for
