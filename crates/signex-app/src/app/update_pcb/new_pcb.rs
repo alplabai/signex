@@ -2,6 +2,7 @@
 //! after the project, starting from the project defaults (#2232). It opens
 //! as an unsaved tab; nothing is written until the user saves.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use iced::Task;

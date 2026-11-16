@@ -6,6 +6,7 @@
 //! Every test shares that one prefs file, so they serialise on a lock and
 //! each starts from a cleared list.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 

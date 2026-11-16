@@ -17,6 +17,7 @@ use crate::app::handlers::document_files::FoldAnswer;
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::path_key_with;
 use crate::app::state::volume_case::probe_directory_case;
+use signex_i18n::RenderTranslatable;
 use std::collections::HashMap;
 
 /// The reason Save All records for a spelling it kept unsaved.

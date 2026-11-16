@@ -1,6 +1,7 @@
 //! #1275 — creating the child sheet of a sheet symbol, and the dialog a
 //! double-click on a symbol without a file opens.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{Point, SchematicSheet};

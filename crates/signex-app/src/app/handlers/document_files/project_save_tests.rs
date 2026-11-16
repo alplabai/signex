@@ -2,6 +2,7 @@
 //! until the returned task runs, and its completion applies the result only
 //! to the project that asked.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::app_workspace;

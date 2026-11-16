@@ -2,6 +2,7 @@
 //! arguments or refuses naming the missing one; no window opens and nothing
 //! waits. Launches are refused and reported.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
