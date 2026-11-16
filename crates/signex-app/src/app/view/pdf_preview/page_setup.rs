@@ -23,8 +23,7 @@ impl Signex {
         value: &str,
         on_input: impl Fn(String) -> PrintPreviewMsg + 'static,
     ) -> Element<'static, Message> {
-        // raw: no placeholder text.
-        signex_widgets::text_input(signex_widgets::raw(""), value.to_owned())
+        signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_owned())
             .on_input(move |v| Message::PrintPreview(on_input(v)))
             .padding([SP.s, SP.m])
             .size(FIELD_TEXT + 1.0)

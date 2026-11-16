@@ -62,4 +62,10 @@ define_ids! {
     PREFERENCES_PROFILES_RESET_CONFIRM = "preferences-profiles-reset-confirm";
     PREFERENCES_PROFILES_RESET = "preferences-profiles-reset";
     PREFERENCES_PROFILES_RESET_TO_DEFAULT = "preferences-profiles-reset-to-default";
+    PREFERENCES_PASTE_DESIGNATORS_KEEP_IF_FREE = "preferences-paste-designators-keep-if-free";
+    PREFERENCES_PASTE_DESIGNATORS_KEEP = "preferences-paste-designators-keep";
+    PREFERENCES_PASTE_DESIGNATORS_RESET = "preferences-paste-designators-reset";
+    PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE = "preferences-paste-designators-next-free";
+    PREFERENCES_ANNOTATE_UNDO_PROJECT = "preferences-annotate-undo-project";
+    PREFERENCES_ANNOTATE_UNDO_PER_SHEET = "preferences-annotate-undo-per-sheet";
 }

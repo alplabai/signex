@@ -20,7 +20,7 @@ fn value_input<'a>(project: &'a LoadedProject, name: &str) -> iced::widget::Text
     let project_id = project.id;
     let key = name.to_string();
     text_input(
-        raw(""),
+        signex_i18n::UserText::new(String::new()),
         project.data.parameters.get(name).map_or("", String::as_str),
     )
     .on_input(move |value| {
@@ -36,6 +36,7 @@ fn value_input<'a>(project: &'a LoadedProject, name: &str) -> iced::widget::Text
 }
 
 pub(in crate::app::project_tab) fn view<'a>(
+    i18n: &signex_i18n::I18n,
     project: &'a LoadedProject,
     new_name: &'a str,
     tokens: &ThemeTokens,
@@ -94,14 +95,15 @@ pub(in crate::app::project_tab) fn view<'a>(
         .padding([sp.xs, sp.m])
         .style(crate::styles::outline_button(tokens))
         .on_press(tab_message(ProjectTabMsg::ParameterAdded { project_id }));
-    let new_input = text_input(raw("Name"), new_name)
-        .on_input(move |text| {
-            tab_message(ProjectTabMsg::NewParameterNameEdited { project_id, text })
-        })
-        .on_submit(tab_message(ProjectTabMsg::ParameterAdded { project_id }))
-        .size(ts.label)
-        .padding(sp.s)
-        .width(Length::Fill);
+    let new_input = text_input(
+        signex_i18n::t!(i18n, signex_i18n::ids::PLACEHOLDER_PROJECT_PARAMETER_NAME),
+        new_name,
+    )
+    .on_input(move |text| tab_message(ProjectTabMsg::NewParameterNameEdited { project_id, text }))
+    .on_submit(tab_message(ProjectTabMsg::ParameterAdded { project_id }))
+    .size(ts.label)
+    .padding(sp.s)
+    .width(Length::Fill);
     body = body.push(row![new_input.boxed(), add.boxed()].spacing(sp.m).boxed());
     container(body).padding([sp.xl, sp.xl]).boxed()
 }

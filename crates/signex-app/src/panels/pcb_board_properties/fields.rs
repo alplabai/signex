@@ -79,12 +79,7 @@ pub(super) fn swatch<'a>(
     form.tip(press.boxed(), tip)
 }
 
-/// One dropdown choice: the value and how it reads.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct Choice<T> {
-    pub value: T,
-    pub label: String,
-}
+pub(super) use crate::choice::Choice;
 
 /// A Graphite dropdown of `choices`; `current: None` shows `placeholder`.
 pub(super) fn dropdown<'a, T: Clone + PartialEq + 'a>(
@@ -93,7 +88,7 @@ pub(super) fn dropdown<'a, T: Clone + PartialEq + 'a>(
     placeholder: Localized,
     picked: impl Fn(T) -> PcbBoardMsg + 'a,
 ) -> Element<'a, PanelMsg> {
-    let selected = current.and_then(|v| choices.iter().find(|c| c.value == v).cloned());
+    let selected = current.and_then(|v| crate::choice::chosen(&choices, &v));
     pick_list(selected, choices, |c: &Choice<T>| c.label.clone())
         .graphite()
         .placeholder_label(placeholder)

@@ -31,6 +31,7 @@ pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
 pub mod canvas;
+pub(crate) mod choice;
 pub mod chrome;
 pub mod config_root;
 pub mod diagnostics;

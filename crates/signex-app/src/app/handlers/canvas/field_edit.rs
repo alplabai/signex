@@ -9,13 +9,15 @@ use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use super::super::super::*;
 
-/// The editor's placeholder, which names the field being edited.
-pub(crate) fn editor_placeholder(kind: SelectedKind) -> &'static str {
+/// The editor's placeholder, which names the field being edited; none for
+/// a label or a text note.
+pub(crate) fn editor_placeholder(kind: SelectedKind) -> Option<signex_i18n::MessageId> {
+    use signex_i18n::ids;
     match kind {
-        SelectedKind::SymbolRefField => "Designator",
-        SelectedKind::SymbolValField => "Value",
-        SelectedKind::Symbol => "Footprint",
-        _ => "",
+        SelectedKind::SymbolRefField => Some(ids::PLACEHOLDER_TEXT_EDIT_DESIGNATOR),
+        SelectedKind::SymbolValField => Some(ids::PLACEHOLDER_TEXT_EDIT_VALUE),
+        SelectedKind::Symbol => Some(ids::PLACEHOLDER_TEXT_EDIT_FOOTPRINT),
+        _ => None,
     }
 }
 
