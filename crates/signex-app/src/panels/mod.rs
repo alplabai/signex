@@ -25,13 +25,19 @@ mod symbol_editor_properties;
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod board_sketch_attr;
 pub use board_sketch_attr::BoardSketchAttrMsg;
+mod board_net_classes;
 mod color_field;
 mod context;
 mod drafts;
 mod drc;
+mod drc_results;
 pub use drafts::PanelDrafts;
 mod empty_state;
+pub use board_net_classes::{
+    BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
+};
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
 pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
@@ -264,7 +270,6 @@ impl PanelKind {
                 | PanelKind::SchFilter
                 | PanelKind::SchList
                 | PanelKind::SignexAi
-                | PanelKind::Drc
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -276,7 +281,7 @@ impl PanelKind {
     /// edits the project's table, so it needs a project, not a board (#2416,
     /// #2417).
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::LayerStack)
+        matches!(self, PanelKind::Drc | PanelKind::LayerStack)
     }
 
     /// The catalog message of [`Self::label`] (dock tabs and titles).
@@ -371,7 +376,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::SignexAi => {
             return signal::view(ctx);
         }
-        PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
+        PanelKind::Drc => drc_results::view(ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
@@ -379,8 +384,10 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             crate::library::editor::footprint::layers_panel::view(ctx)
         }
         PanelKind::Layers => pcb_layers::view(ctx),
-        // The project's net-class table, the editor Properties shows for the
-        // sheet without its section frame (#2416, #2417).
+        // On a board, its per-class rules (#2400); elsewhere the project's
+        // net-class table, the editor Properties shows for the sheet without
+        // its section frame (#2416, #2417).
+        PanelKind::NetClasses if ctx.net_classes.board.is_some() => board_net_classes::view(ctx),
         PanelKind::NetClasses => net_class_panel::view_panel(ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
         PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),

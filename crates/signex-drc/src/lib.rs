@@ -16,6 +16,7 @@ mod rule_notes;
 mod rules;
 mod severity;
 mod user_rules;
+mod waiver;
 
 use uuid::Uuid;
 
@@ -34,6 +35,7 @@ pub use severity::{
 };
 use user_rules::USER_RULE_ID_PREFIX;
 pub use user_rules::{CopperObject, Limit, LimitKind, NetScope, UserRule};
+pub use waiver::{rule_id, waiver_key, waiver_of};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
 /// kind, so a capped list of rows keeps the shorts. A new kind goes after

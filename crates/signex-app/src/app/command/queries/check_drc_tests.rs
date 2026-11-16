@@ -135,10 +135,10 @@ fn warnings(report: &Value) -> Vec<String> {
 }
 
 /// Run DRC on the open board at `path`, to its end: what it reported.
-/// Held by every Run DRC here (the lib binary's only one) and across each
-/// read of the shared diagnostics ring, so a parallel run never logs its
-/// Messages lines between another test's mark and its read.
-fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+/// Held by every Run DRC of the lib binary (here and in the DRC results
+/// tests) and across each read of the shared diagnostics ring, so a parallel
+/// run never logs its Messages lines between another test's mark and its read.
+pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }

@@ -264,7 +264,7 @@ impl Signex {
             "measured_mm": result.worst.map(|(m, _)| super::json::mm(m)),
             "required_mm": result.worst.map(|(_, r)| super::json::mm(r)),
             "margin_mm": result.margin_nm().map(super::json::mm),
-            "stale": done.revision != revision,
+            "stale": done.is_stale(revision, self.board_net_classes(board)),
         })
     }
 

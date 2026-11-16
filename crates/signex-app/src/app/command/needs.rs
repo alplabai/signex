@@ -321,7 +321,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
-        "run_drc" | "reannotate_board" | "fabrication_outputs" => Needs::Pcb,
+        "run_drc"
+        | "reannotate_board"
+        | "fabrication_outputs"
+        | "open_drc_panel"
+        | "open_net_classes_panel" => Needs::Pcb,
         // #2404, #2402: the board reports and Board Print / PDF.
         "board_report_bom"
         | "board_report_netlist"

@@ -15,6 +15,7 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+mod board_operands;
 pub(crate) mod bridge;
 #[cfg(test)]
 mod document_operand_tests;

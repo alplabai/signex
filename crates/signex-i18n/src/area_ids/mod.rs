@@ -2,6 +2,7 @@
 //! added after the list in `lib.rs` reached the file-size cap. `ids`
 //! re-exports them, so callers write `ids::NAME` either way.
 
+mod board_checks;
 mod board_output;
 mod dialog;
 mod editors;
@@ -19,6 +20,7 @@ mod preferences;
 mod rules;
 mod update_pcb;
 
+pub use board_checks::*;
 pub use board_output::*;
 pub use dialog::*;
 pub use editors::*;
@@ -40,6 +42,7 @@ pub use update_pcb::*;
 #[cfg(test)]
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
+        board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         dialog::DIALOG,
         editors::EDITORS,

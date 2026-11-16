@@ -133,6 +133,14 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("severity", OperandKind::Text),
     ("enabled", OperandKind::Bool),
     ("violation", OperandKind::Text),
+    ("rule", OperandKind::Text),
+    ("waived", OperandKind::Bool),
+    ("width", OperandKind::Text),
+    ("clearance", OperandKind::Text),
+    ("via_diameter", OperandKind::Text),
+    ("via_drill", OperandKind::Text),
+    ("diff_pair_gap", OperandKind::Text),
+    ("diff_pair_width", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -446,6 +454,66 @@ pub const ASSIGN_NET_CLASS: &[Operand] = &[
 pub const SELECTION_FILTER_KINDS: &[Operand] = &[required("kinds", OperandKind::Text)];
 /// `apply_selection_filter_preset` (#2417): a saved preset, by its name.
 pub const SELECTION_FILTER_PRESET: &[Operand] = &[required("name", OperandKind::Text)];
+
+/// One finding of the named board's last DRC run, by its waiver key `id`
+/// (#2399).
+pub const DRC_VIOLATION: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+];
+/// Waive a finding of the named board's last run; `text` is the note.
+pub const WAIVE_DRC_VIOLATION: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+    optional("text", OperandKind::Text),
+];
+/// What the DRC results show: one rule id, one copper layer token, one
+/// severity (`error`, `warning`, `info`), and whether waived findings show.
+/// A filter left out is cleared; `all` clears one too.
+pub const DRC_FILTER: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("rule", OperandKind::Text),
+    optional("layer", OperandKind::Text),
+    optional("severity", OperandKind::Text),
+    optional("waived", OperandKind::Bool),
+];
+/// A new net class in the named board's project, `name` or the next free
+/// `Class <n>` (#2400).
+pub const ADD_NET_CLASS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+/// Rename `class` of the named board's project to `name`.
+pub const RENAME_NET_CLASS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("class", OperandKind::Text),
+    required("name", OperandKind::Text),
+];
+/// One class of the named board's project.
+pub const NET_CLASS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("class", OperandKind::Text),
+];
+/// The colour and board rules of `class`: lengths in mm, an empty one is
+/// unset; one left out keeps its value.
+pub const NET_CLASS_RULES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("class", OperandKind::Text),
+    optional("color", OperandKind::Color),
+    optional("width", OperandKind::Text),
+    optional("clearance", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_drill", OperandKind::Text),
+    optional("diff_pair_gap", OperandKind::Text),
+    optional("diff_pair_width", OperandKind::Text),
+];
+/// Put a board net, by name, in `class` of the named board's project (out of
+/// every other class's list); no `class` takes it out of its listed class.
+pub const ASSIGN_BOARD_NET_CLASS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("net_name", OperandKind::Text),
+    optional("class", OperandKind::Text),
+];
 
 /// `apply_edits` (#2178): a JSON list of catalog edit commands, applied to the
 /// named document as one undo step if its revision is still `expect_revision`.

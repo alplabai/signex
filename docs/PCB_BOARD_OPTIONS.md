@@ -99,5 +99,11 @@ non_components = false
 
 The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
 
+Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
+table per waiver with `key` (`signex_drc::waiver_key`), `rule` and `note`,
+written only when the board waives one. The DRC results panel and the
+`waive_drc_violation` and `unwaive_drc_violation` commands set them, each
+as one `SetBoardOptions` undo step.
+
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

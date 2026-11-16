@@ -187,7 +187,7 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         Checked::Ran {
-            stale: done.revision != revision,
+            stale: done.is_stale(revision, self.board_net_classes(&path)),
             results: done.report.rule_results(),
             used: done
                 .report

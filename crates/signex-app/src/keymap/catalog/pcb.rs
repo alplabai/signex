@@ -1,7 +1,7 @@
 //! PCB-surface command metadata: placement, the design rule check, the
 //! board view (ratsnest, layers) and board sketch mode.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n::command_ids;
 
 pub(super) const PCB: &[CommandMetadata] = &[
@@ -14,6 +14,129 @@ pub(super) const PCB: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::RUNS_HEADLESS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2399: the DRC results panel and what it does. A violation is named by
+    // its waiver key (`id`), the same in every run. No default keys.
+    CommandMetadata {
+        id: "open_drc_panel",
+        category: "pcb",
+        label: command_ids::CMD_OPEN_DRC_PANEL,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DRC_PANEL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "show_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_SHOW_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: operands::DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "waive_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_WAIVE_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::WAIVE_DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "unwaive_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_UNWAIVE_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "filter_drc_results",
+        category: "pcb",
+        label: command_ids::CMD_FILTER_DRC_RESULTS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: operands::DRC_FILTER,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2400: the board Net Classes panel and the edits of its table, each
+    // one step of the project's net-class history. No default keys.
+    CommandMetadata {
+        id: "open_net_classes_panel",
+        category: "design",
+        label: command_ids::CMD_OPEN_NET_CLASSES_PANEL,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_NET_CLASSES_PANEL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "add_net_class",
+        category: "design",
+        label: command_ids::CMD_ADD_NET_CLASS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ADD_NET_CLASS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "rename_net_class",
+        category: "design",
+        label: command_ids::CMD_RENAME_NET_CLASS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::RENAME_NET_CLASS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "delete_net_class",
+        category: "design",
+        label: command_ids::CMD_DELETE_NET_CLASS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::NET_CLASS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_net_class_rules",
+        category: "design",
+        label: command_ids::CMD_SET_NET_CLASS_RULES,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::NET_CLASS_RULES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "assign_board_net_class",
+        category: "design",
+        label: command_ids::CMD_ASSIGN_BOARD_NET_CLASS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ASSIGN_BOARD_NET_CLASS,
         ..CommandMetadata::DEFAULT
     },
     // #1312: Positional Re-Annotate. Opens the dialog; its Execute is one

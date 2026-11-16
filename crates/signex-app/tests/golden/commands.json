@@ -1,5 +1,10 @@
 [
   {
+    "id": "add_net_class",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "align_bottom",
     "group": "Schematic",
     "category": "modify"
@@ -53,6 +58,11 @@
     "id": "apply_selection_filter_preset",
     "group": "Schematic",
     "category": "select"
+  },
+  {
+    "id": "assign_board_net_class",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "assign_footprints",
@@ -260,6 +270,11 @@
     "category": "view"
   },
   {
+    "id": "delete_net_class",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "delete_selection",
     "group": "General",
     "category": "edit"
@@ -428,6 +443,11 @@
     "id": "fast_grid_2",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "filter_drc_results",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "find",
@@ -680,6 +700,11 @@
     "category": "file"
   },
   {
+    "id": "open_drc_panel",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "open_erc_dialog",
     "group": "Schematic",
     "category": "validation"
@@ -702,6 +727,11 @@
   {
     "id": "open_net_classes",
     "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "open_net_classes_panel",
+    "group": "Pcb",
     "category": "design"
   },
   {
@@ -1030,6 +1060,11 @@
     "category": "interactive"
   },
   {
+    "id": "rename_net_class",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "repeat_last_item",
     "group": "General",
     "category": "edit"
@@ -1200,6 +1235,11 @@
     "category": "view"
   },
   {
+    "id": "set_net_class_rules",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "set_object_position",
     "group": "Schematic",
     "category": "edit"
@@ -1253,6 +1293,11 @@
     "id": "show_current_command_shortcuts",
     "group": "General",
     "category": "help"
+  },
+  {
+    "id": "show_drc_violation",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "show_layer_group",
@@ -1390,6 +1435,11 @@
     "category": "select"
   },
   {
+    "id": "unwaive_drc_violation",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "update_pcb_from_schematic",
     "group": "Schematic",
     "category": "pcb_sync"
@@ -1418,6 +1468,11 @@
     "id": "view_rotate_reset",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "waive_drc_violation",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "zoom_in_at_cursor",

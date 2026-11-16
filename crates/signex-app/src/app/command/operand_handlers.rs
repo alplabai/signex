@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_operands as board;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
@@ -113,6 +114,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
+    ("show_drc_violation", board::show_drc_violation),
+    ("waive_drc_violation", board::waive_drc_violation),
+    ("unwaive_drc_violation", board::unwaive_drc_violation),
+    ("filter_drc_results", board::filter_drc_results),
+    ("add_net_class", board::add_net_class),
+    ("rename_net_class", board::rename_net_class),
+    ("delete_net_class", board::delete_net_class),
+    ("set_net_class_rules", board::set_net_class_rules),
+    ("assign_board_net_class", board::assign_board_net_class),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -212,6 +222,22 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
             "the `rules_*` edits need their operands — \
              use the Rules tab (Design ▸ Rules)",
+        ),
+        "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
+            "this command needs the operands `document` and `id` — \
+             use the rows of the DRC Results panel",
+        ),
+        "filter_drc_results" => Some(
+            "`filter_drc_results` needs the operand `document` — \
+             use the filters of the DRC Results panel",
+        ),
+        "add_net_class"
+        | "rename_net_class"
+        | "delete_net_class"
+        | "set_net_class_rules"
+        | "assign_board_net_class" => Some(
+            "this command needs its operands, `document` first — \
+             use the board's Net Classes panel",
         ),
         _ => None,
     }

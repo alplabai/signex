@@ -296,6 +296,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
+        // #2399, #2400: the board's DRC results and Net Classes panels.
+        "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
+        "open_net_classes_panel" => {
+            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
+        }
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
         // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.

@@ -6,6 +6,7 @@ pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
 mod board_3d;
+pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
@@ -46,6 +47,9 @@ pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
 mod pcb_drc_check;
+mod pcb_drc_results;
+#[cfg(test)]
+mod pcb_drc_results_tests;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 mod pcb_align;

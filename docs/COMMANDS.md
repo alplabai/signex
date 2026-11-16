@@ -301,6 +301,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_net_class` | Add a net class | design | — | — |
+| `assign_board_net_class` | Put a board net in a net class | design | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
@@ -309,9 +311,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
+| `delete_net_class` | Delete a net class | design | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
+| `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
 | `hide_layer` | Hide one layer of the board view | view | — | — |
@@ -320,6 +324,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
+| `open_drc_panel` | Open the DRC results panel | pcb | — | — |
+| `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
 | `open_rules` | Open the design rules of the project | design | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
@@ -330,6 +336,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `rename_net_class` | Rename a net class | design | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -342,7 +349,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
+| `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
+| `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
 | `toggle_layer_numbers` | Show or hide the numbers on the layer tabs | view | — | — |
@@ -351,11 +360,13 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
 | `view_rotate_ccw` | Rotate the board view 90° counter-clockwise | view | — | — |
 | `view_rotate_reset` | Reset the board view rotation to 0° | view | — | — |
+| `waive_drc_violation` | Waive a DRC violation with a note | pcb | — | — |
 
 ## 3D
 

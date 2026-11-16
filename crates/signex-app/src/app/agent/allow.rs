@@ -71,7 +71,9 @@ mod tests {
         assert_eq!(
             allowed(),
             [
+                "add_net_class",
                 "apply_edits",
+                "assign_board_net_class",
                 "assign_net_class",
                 "board_report_bom",
                 "board_report_components",
@@ -82,7 +84,9 @@ mod tests {
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                "delete_net_class",
                 "document_info",
+                "filter_drc_results",
                 "find_items",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
@@ -91,6 +95,7 @@ mod tests {
                 "list_documents",
                 "query_pins",
                 "read_document",
+                "rename_net_class",
                 "resolve",
                 "revert",
                 "rules_add",
@@ -104,8 +109,12 @@ mod tests {
                 "rules_set",
                 "save_document",
                 "save_layer_set",
+                "set_net_class_rules",
+                "show_drc_violation",
                 "show_layer_group",
                 "show_layer_set",
+                "unwaive_drc_violation",
+                "waive_drc_violation",
             ]
         );
     }

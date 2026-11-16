@@ -45,7 +45,9 @@ draws nothing.
   the corner rule wires use (#2372): Space flips the bend, Shift+Space steps
   the corner mode (90°, 45° start, 45° end, any angle). The rule is shared
   with wires and buses, and kept across runs.
-- Width: `PcbSetup::trace_width`, else 0.25 mm. Net-class and rule widths
+- Width: the track width of the net's class (the first class of the
+  project's table that holds the net, #2400) when it sets one, else
+  `PcbSetup::trace_width`, else 0.25 mm. Written rule widths
   are not read yet.
 - Making another copper layer active mid-run (a layer tab, `+`, `-`, `*`)
   puts a via at the run's end in the same undo step as the next legs, and

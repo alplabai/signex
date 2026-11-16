@@ -603,7 +603,7 @@ impl Signex {
         let erc_waivers = self.erc_waiver_entries();
         let erc_violation_waivers = self.erc_violation_waiver_entries();
 
-        let net_classes = self.net_class_panel_state();
+        let net_classes = self.with_board_net_classes(self.net_class_panel_state());
         let pcb_layers = self.pcb_layers_panel_state();
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();

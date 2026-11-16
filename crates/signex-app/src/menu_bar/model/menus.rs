@@ -491,6 +491,10 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "")),
+        // The DRC results and board Net Classes panels (#2399, #2400):
+        // docs/MENU_BAR.md#tools-drc-results
+        cmd_item_gated(ctx, cmd("open_drc_panel", "")),
+        cmd_item_gated(ctx, cmd("open_net_classes_panel", "")),
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "")),

@@ -115,7 +115,8 @@ impl Signex {
             return;
         };
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer);
+        let classes = self.board_net_classes(&session.path);
+        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
         let leg = LegRequest {
             from: anchor,
             to: at,
@@ -370,8 +371,10 @@ impl Signex {
         let router = session.router.as_ref()?;
         let board = self.document_state.pcb_board(&session.path)?;
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) =
-            next_leg_style(board, session, defaults, key.anchor, key.cursor, key.layer);
+        let classes = self.board_net_classes(&session.path);
+        let (style, via) = next_leg_style(
+            board, session, defaults, key.anchor, key.cursor, key.layer, classes,
+        );
         let leg = LegRequest {
             from: key.anchor,
             to: key.cursor,

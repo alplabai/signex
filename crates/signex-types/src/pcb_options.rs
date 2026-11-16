@@ -1,8 +1,9 @@
 //! Board options (#2374): snap guides, the extra snap grids, the sheet, the
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
-//! board engine's `SetBoardOptions` command. The board's origin (#2384) is
-//! kept here too. See `docs/PCB_BOARD_OPTIONS.md`.
+//! board engine's `SetBoardOptions` command. The board's origin (#2384) and
+//! its waived design-rule findings (#2399) are kept here too. See
+//! `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -52,11 +53,32 @@ pub struct BoardOptions {
     /// counts from the model's zero.
     #[serde(default)]
     pub origin: BoardOrigin,
+    /// Design-rule findings the designer accepted, each with a note (#2399).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drc_waivers: Vec<DrcWaiver>,
+}
+
+/// One accepted design-rule finding. `key` names the finding the same way
+/// in every run (`signex_drc::waiver_key`): its rule and the objects, not
+/// where they are, so moving an object keeps the waiver.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DrcWaiver {
+    pub key: String,
+    /// The rule id it was waived under (`builtin::clearance`, `user::<name>`).
+    pub rule: String,
+    /// Why the finding is accepted; may be empty.
+    #[serde(default)]
+    pub note: String,
 }
 
 impl BoardOptions {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// The waiver of the finding `key`, if it is waived.
+    pub fn drc_waiver(&self, key: &str) -> Option<&DrcWaiver> {
+        self.drc_waivers.iter().find(|w| w.key == key)
     }
 
     /// The grid a carry or placement of `what` snaps to: the first extra
