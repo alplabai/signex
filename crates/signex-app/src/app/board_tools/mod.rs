@@ -97,7 +97,7 @@ impl Picked {
                 ItemRef::Arc(_) | ItemRef::FreePad(_) => {
                     picked.nets.extend(pcb_geom::item_net(board, *item));
                 }
-                ItemRef::Text(_) | ItemRef::Dimension(_) => {}
+                ItemRef::Text(_) | ItemRef::Dimension(_) | ItemRef::Graphic { .. } => {}
             }
         }
         picked.nets.remove(&0);

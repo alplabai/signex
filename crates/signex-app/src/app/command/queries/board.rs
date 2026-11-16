@@ -34,7 +34,8 @@ fn item_id(item: ItemRef) -> String {
         | ItemRef::Text(id)
         | ItemRef::Arc(id)
         | ItemRef::FreePad(id)
-        | ItemRef::Dimension(id) => id.to_string(),
+        | ItemRef::Dimension(id)
+        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
     }
 }
 
