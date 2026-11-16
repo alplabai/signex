@@ -518,6 +518,9 @@ mod library_symbol_missing;
 mod library_symbol_versions;
 #[path = "regression/pin_text_on_sheet.rs"]
 mod pin_text_on_sheet;
+// #1667 — Autoplace Fields, Copy Attributes, Place Design Block, Import Graphics.
+#[path = "regression/placement_extras.rs"]
+mod placement_extras;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

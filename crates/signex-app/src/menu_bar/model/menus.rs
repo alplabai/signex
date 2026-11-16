@@ -344,6 +344,10 @@ fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         cmd_item_gated(ctx, cmd("place_sheet_entry", "")),
         SEP,
+        // #1667: another sheet's content, or a DXF drawing, on the cursor.
+        cmd_item_gated(ctx, cmd("place_design_block", "")),
+        cmd_item_gated(ctx, cmd("import_graphics", "")),
+        SEP,
     ];
     rows.extend(super::sheet_place::tool_groups(ctx));
     rows

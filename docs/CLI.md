@@ -546,6 +546,41 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
 
+## Placement extras
+
+The operand forms of three placement extras (#1667). Each is one undo step
+and ends in the commit its key and its click end in.
+
+```text
+autoplace_fields id=<part uuid> document=..
+place_design_block path=<sheet .snxsch> at=x,y [document=..]
+import_graphics path=<drawing .dxf> at=x,y [document=..]
+```
+
+- `autoplace_fields` puts the reference and value of the part `id` where the
+  autoplacer puts them, also when the user had moved them, and answers
+  `{"id", "moved"}`. It names its `document`, since an agent has no
+  selection; a locked part is refused with the lock's reason.
+- `place_design_block` places the parts, wires, buses, labels, junctions,
+  no-connects, text notes and drawings of the sheet file `path` (with the
+  bodies its parts use), and answers `{"placed", "skipped_sheet_symbols"}`.
+  Sheet symbols in that file are left out: each names a child file relative
+  to its own sheet. Designators are numbered as a paste numbers them.
+- `import_graphics` places the LINE, CIRCLE, ARC, LWPOLYLINE and POLYLINE
+  entities of the ASCII DXF file `path` as sheet drawings in the project's
+  shape line width, scaled from the file's `$INSUNITS` to mm (no units: mm),
+  Y turned down. It answers `{"placed", "skipped"}`; `skipped` counts the
+  entities it does not read (text, blocks, hatches, splines). A polyline's
+  bulges are read as straight segments. A circle, arc or polyline whose
+  plane faces down Z (extrusion `0,0,-1`) is mirrored back in X. A file over
+  64 MiB is refused before it is read.
+
+`at` is where the grid-snapped centre of the content lands, as the cursor
+holds it; a point off the grid is refused as for any placement. The file is
+read off the UI thread before the edit runs. Without operands, in a window,
+`place_design_block` and `import_graphics` open a file dialog and put the
+content on the cursor; `autoplace_fields` acts on the selected parts.
+
 ## Checks on demand
 
 ```text

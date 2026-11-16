@@ -106,6 +106,7 @@ impl Signex {
                 self.handle_drawings_arrange_requested(arrange);
                 self.finish_update()
             }
+            EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
         }
     }
 

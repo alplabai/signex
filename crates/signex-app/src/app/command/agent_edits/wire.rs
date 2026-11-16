@@ -4,7 +4,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::app::command::operand_handlers::operand_handler;
-use crate::keymap::{AppCommandId, metadata_for};
+use crate::keymap::{AppCommandId, OperandKind, metadata_for};
 
 /// The most edits one call may carry: the app runs them all before the
 /// person's next keystroke is handled.
@@ -305,6 +305,13 @@ pub fn edit_refusal(command: &AppCommandId) -> Option<String> {
     if operand_handler(command).is_none() {
         return Some(format!("`{id}` has no operand form yet"));
     }
+    // An edit list comes from an agent, which has no file read for it
+    // (`place_design_block`, `import_graphics`, #1667).
+    if meta.operands.iter().any(|op| op.kind == OperandKind::Path) {
+        return Some(format!(
+            "`{id}` takes a file path; an edit list does not read a file it names"
+        ));
+    }
     PROJECT_WIDE
         .iter()
         .find(|(held, _)| *held == id)
@@ -419,6 +426,7 @@ mod tests {
     #[test]
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
+            "autoplace_fields",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
@@ -472,6 +480,8 @@ mod tests {
             ("tune_net_length", "edits a board"),
             ("tune_diff_pair", "edits a board"),
             ("toggle_properties_panel", "not runnable headless"),
+            ("place_design_block", "takes a file path"),
+            ("import_graphics", "takes a file path"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

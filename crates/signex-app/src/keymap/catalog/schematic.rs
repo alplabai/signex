@@ -236,10 +236,11 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         id: "place_design_block",
         category: "place",
         label: command_ids::CMD_PLACE_DESIGN_BLOCK,
-        menu_label: None,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_DESIGN_BLOCK),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_FILE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

@@ -103,7 +103,7 @@ pub use contracts::{
     LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu,
     LayerTabMenuMsg, LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
     NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg,
-    PcbMsg, PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    PcbMsg, PcbViewMsg, PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
     ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
     RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,

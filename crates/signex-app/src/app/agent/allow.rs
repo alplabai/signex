@@ -95,6 +95,7 @@ mod tests {
                 "arrange_in_box",
                 "assign_board_net_class",
                 "assign_net_class",
+                "autoplace_fields",
                 "board_panel",
                 "board_report_bom",
                 "board_report_components",

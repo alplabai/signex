@@ -71,6 +71,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
+    let extras = |msg| Message::Edit(EditMsg::Extras(msg));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -474,6 +475,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "edit_reference_designator" => text_edit(TextEditTarget::Designator),
         "edit_footprint_field" => text_edit(TextEditTarget::FootprintField),
         "edit_text_in_place" => text_edit(TextEditTarget::Text),
+        // Placement extras (#1667). Copy attributes takes the object where a
+        // context menu was opened, else the one under the cursor.
+        "autoplace_fields" => extras(PlacementExtrasMsg::AutoplaceFieldsRequested),
+        "copy_attributes_or_add_vertex" => extras(PlacementExtrasMsg::CopyAttributesRequested {
+            at: args.context.origin,
+        }),
+        "place_design_block" => extras(PlacementExtrasMsg::DesignBlockRequested),
+        "import_graphics" => extras(PlacementExtrasMsg::ImportGraphicsRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -687,11 +696,7 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields",
-        "copy_attributes_or_add_vertex",
         "cycle_wiring_mode",
-        "import_graphics",
-        "place_design_block",
         "reset_local_coordinates",
         "toggle_floating_panels",
         "toggle_search_panel",

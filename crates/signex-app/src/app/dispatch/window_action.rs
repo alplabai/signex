@@ -159,6 +159,10 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | EditMsg::RubberStampCopy
                 | EditMsg::PasteArrayRequested
                 | EditMsg::ArrangeDrawings(_)
+                | EditMsg::Extras(
+                    crate::app::PlacementExtrasMsg::AutoplaceFieldsRequested
+                        | crate::app::PlacementExtrasMsg::CopyAttributesRequested { .. }
+                )
         ),
         Message::Selection(selection) => matches!(
             selection,

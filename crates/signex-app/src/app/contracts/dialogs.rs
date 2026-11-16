@@ -943,6 +943,8 @@ pub enum EditMsg {
     /// Reorder the selected drawings within the sheet's drawing list; the
     /// selection's circuit elements are ignored (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),
+    /// A placement extra on a sheet (#1667).
+    Extras(super::PlacementExtrasMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

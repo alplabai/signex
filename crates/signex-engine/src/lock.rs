@@ -151,6 +151,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         // A locked symbol's designator is part of what the lock freezes, on
         // a sheet placed once or many times alike.
         Command::SetSymbolDesignatorIn { symbol, .. } => (vec![*symbol], "edited"),
+        // Fields that move are part of a locked part's look.
+        Command::AutoplaceFields { symbol_ids } => (symbol_ids.clone(), "edited"),
         Command::SetWireWidth { wire_id, .. } | Command::SetWireColor { wire_id, .. } => {
             (vec![*wire_id], "edited")
         }

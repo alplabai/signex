@@ -112,7 +112,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
-| `import_graphics` | Import graphics | library | — | `Mod+Shift+F` |
+| `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |

@@ -58,6 +58,9 @@ mod part_operands;
 mod placed_operand_tests;
 mod placed_operands;
 #[cfg(test)]
+mod placement_extras_operand_tests;
+mod placement_extras_operands;
+#[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]

@@ -116,6 +116,7 @@ pub enum CommandKind {
     SetDrawingPlacement,
     PlaceDirective,
     UpdateDirective,
+    AutoplaceFields,
 }
 
 #[derive(Debug, Clone)]
@@ -551,6 +552,14 @@ pub enum Command {
     UpdateDirective {
         directive: signex_types::schematic::SchDirective,
     },
+    /// Put the reference and value fields of the parts `symbol_ids` where the
+    /// autoplacer puts them, as one undo step (#1667). Asked for by name, so a
+    /// field the user moved is placed too and the part's fields count as
+    /// autoplaced again. Unchanged when no field moves; an id that names no
+    /// part is ignored.
+    AutoplaceFields {
+        symbol_ids: Vec<Uuid>,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -688,6 +697,7 @@ impl Command {
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
             Command::PlaceDirective { .. } => CommandKind::PlaceDirective,
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
+            Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
         }
     }
 }

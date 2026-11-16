@@ -13,6 +13,7 @@ use signex_types::schematic::{
 use super::{Engine, autoplace_fields, normalize_degrees};
 use crate::command::{MirrorAxis, SelectionTransform};
 use crate::error::EngineError;
+use crate::placement::drawing_points;
 
 impl SelectionTransform {
     fn is_mirror(self) -> bool {
