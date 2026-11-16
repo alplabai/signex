@@ -44,7 +44,7 @@ fn header<'a>(ink: Color, i18n: &I18n) -> Element<'a, PanelMsg> {
     ];
     let mut line: iced::widget::Row<Element<'a, PanelMsg>> = row![].spacing(SP.s);
     for (title, portion) in titles.into_iter().zip(COLUMNS) {
-        line = line.push(cell(title.into(), portion).color(ink).boxed());
+        line = line.push(clipped(face(title.into()).color(ink), portion));
     }
     // The row buttons' padding, so the titles sit over their cells.
     container(line).padding([0.0, SP.m]).boxed()
@@ -62,17 +62,16 @@ fn class_row<'a>(
                 .width(SWATCH)
                 .height(SWATCH)
                 .style(swatch_style(ti(c))),
-            cell(UserText::new(format_hex_color(c)).into(), 1),
+            clipped(face(UserText::new(format_hex_color(c)).into()), 1),
         ]
         .spacing(SP.xs)
         .align_y(iced::Alignment::Center)
         .width(Length::FillPortion(COLUMNS[1]))
         .boxed(),
-        None => cell(
-            t!(i18n, ids::PANELS_NET_CLASSES_THEME_COLOR).into(),
+        None => clipped(
+            face(t!(i18n, ids::PANELS_NET_CLASSES_THEME_COLOR).into()),
             COLUMNS[1],
-        )
-        .boxed(),
+        ),
     };
     let width: Label<'static> = match class.style.wire_width_mm {
         Some(mm) => t!(i18n, ids::PANELS_NET_CLASSES_WIDTH_CELL, "width" => mm.to_string()).into(),
@@ -90,10 +89,10 @@ fn class_row<'a>(
         UserText::new(members.join(", ")).into()
     };
     let cells = row![
-        cell(UserText::new(class.name.clone()).into(), COLUMNS[0]),
+        clipped(face(UserText::new(class.name.clone()).into()), COLUMNS[0]),
         colour,
-        cell(width, COLUMNS[2]),
-        cell(members, COLUMNS[3]),
+        clipped(face(width), COLUMNS[2]),
+        clipped(face(members), COLUMNS[3]),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
@@ -105,12 +104,20 @@ fn class_row<'a>(
         .boxed()
 }
 
-/// One table cell: one line, its column's share of the width.
-fn cell<'a>(label: Label<'a>, portion: u16) -> iced::widget::Text<'a, Theme> {
+/// A cell's text: one line at body size.
+fn face<'a>(label: Label<'a>) -> iced::widget::Text<'a, Theme> {
     text(label)
         .size(TS.body)
-        .width(Length::FillPortion(portion))
         .wrapping(iced::widget::text::Wrapping::None)
+}
+
+/// One table cell: its column's share of the width, a long value cut at the
+/// cell's edge rather than drawn over the next column.
+fn clipped<'a>(face: iced::widget::Text<'a, Theme>, portion: u16) -> Element<'a, PanelMsg> {
+    container(face)
+        .width(Length::FillPortion(portion))
+        .clip(true)
+        .boxed()
 }
 
 fn swatch_style(color: Color) -> impl Fn(&Theme) -> container::Style + use<> {
