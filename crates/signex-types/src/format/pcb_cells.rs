@@ -167,7 +167,9 @@ impl SizeCell for Point {
     }
 }
 
-fn layer_sizes_cell<T: SizeCell>(sizes: &LayerSizes<T>) -> Result<String, NonFiniteField> {
+pub(in crate::format) fn layer_sizes_cell<T: SizeCell>(
+    sizes: &LayerSizes<T>,
+) -> Result<String, NonFiniteField> {
     // The list rule the engine checks (`LayerSizes::list_fault`).
     if sizes.list_fault().is_some() {
         return Err(NonFiniteField(LAYER_SIZES_COLUMN));
@@ -192,7 +194,7 @@ fn layer_sizes_cell<T: SizeCell>(sizes: &LayerSizes<T>) -> Result<String, NonFin
 }
 
 /// The sizes a cell holds; `None` for a cell that is not one.
-fn read_layer_sizes<T: SizeCell>(cell: &str) -> Option<LayerSizes<T>> {
+pub(in crate::format) fn read_layer_sizes<T: SizeCell>(cell: &str) -> Option<LayerSizes<T>> {
     let mut entries = Vec::new();
     for part in cell.split(';') {
         let (key, value) = part.split_once('=')?;

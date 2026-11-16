@@ -1001,7 +1001,7 @@ impl SnxPcb {
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
-            free: board_free::read(raw.free),
+            free: board_free::read(raw.free)?,
             sketch,
             stackup: stack,
             options: board_options::read(raw.board_options)?,

@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use super::FormatError;
 use super::finite_toml;
+use super::pcb_cells::{LAYER_SIZES_COLUMN, layer_sizes_cell, read_layer_sizes};
+use super::pcb_rows::row_field_error;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::{DrillDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point};
 use crate::pcb_arc::TrackArc;
@@ -75,6 +77,10 @@ struct PadRaw {
     rotation: f64,
     #[serde(default)]
     net_locked: bool,
+    /// Per-layer copper sizes (#2401), in the `pads` rows' `layer_sizes`
+    /// cell form; absent for one size on every layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    layer_sizes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,9 +102,9 @@ fn point(x: i64, y: i64) -> Point {
 }
 
 /// The free primitives of the file; none when it has no section.
-pub(in crate::format) fn read(raw: Option<FreeRaw>) -> FreePrimitives {
+pub(in crate::format) fn read(raw: Option<FreeRaw>) -> Result<FreePrimitives, FormatError> {
     let Some(raw) = raw else {
-        return FreePrimitives::default();
+        return Ok(FreePrimitives::default());
     };
     let arcs = raw
         .arcs
@@ -113,7 +119,12 @@ pub(in crate::format) fn read(raw: Option<FreeRaw>) -> FreePrimitives {
             net: a.net,
         })
         .collect();
-    let pads = raw.pads.into_iter().map(read_pad).collect();
+    let pads = raw
+        .pads
+        .into_iter()
+        .enumerate()
+        .map(|(row, pad)| read_pad(row, pad))
+        .collect::<Result<_, _>>()?;
     let dimensions = raw
         .dimensions
         .into_iter()
@@ -128,15 +139,30 @@ pub(in crate::format) fn read(raw: Option<FreeRaw>) -> FreePrimitives {
             precision: d.precision,
         })
         .collect();
-    FreePrimitives {
+    Ok(FreePrimitives {
         arcs,
         pads,
         dimensions,
-    }
+    })
 }
 
-fn read_pad(p: PadRaw) -> Pad {
-    Pad {
+/// A malformed `layer_sizes` is a load error, as in the `pads` rows: read as
+/// no sizes, it would draw and check copper that is not there.
+fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
+    let layer_sizes = match p.layer_sizes.as_deref() {
+        None | Some("") => None,
+        Some(cell) => Some(read_layer_sizes(cell).ok_or_else(|| {
+            row_field_error(
+                PADS,
+                row,
+                LAYER_SIZES_COLUMN,
+                cell,
+                "per-layer sizes must be top=..;middle=..;bottom=.. or <copper layer>=..;.. \
+                 with positive whole-nm sizes",
+            )
+        })?),
+    };
+    Ok(Pad {
         uuid: p.uuid,
         number: p.number,
         pad_type: p.pad_type,
@@ -155,9 +181,10 @@ fn read_pad(p: PadRaw) -> Pad {
         roundrect_ratio: p.roundrect_ratio,
         rotation: p.rotation,
         net_locked: p.net_locked,
+        layer_sizes,
         unknown: Default::default(),
         unknown_columns: Default::default(),
-    }
+    })
 }
 
 /// Append `[free]` to `out`; nothing for a board without free primitives.
@@ -249,6 +276,7 @@ fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
         roundrect_ratio: p.roundrect_ratio,
         rotation: p.rotation,
         net_locked: p.net_locked,
+        layer_sizes: p.layer_sizes.as_ref().map(layer_sizes_cell).transpose()?,
     })
 }
 

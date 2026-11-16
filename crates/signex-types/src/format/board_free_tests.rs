@@ -43,6 +43,7 @@ fn pad() -> Pad {
         roundrect_ratio: 0.25,
         rotation: 45.0,
         net_locked: true,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -136,4 +137,25 @@ fn a_free_item_repeating_an_id_is_reminted_on_load() {
     let mut back = SnxPcb::parse(&text).expect("reads back").board;
     assert_ne!(back.free.pads[0].uuid, back.free.arcs[0].uuid);
     assert_eq!(back.take_load_repairs().len(), 1);
+}
+
+/// A free pad keeps per-layer sizes (#2401) across a save, in the `pads`
+/// rows' cell form; a malformed cell is a load error.
+#[test]
+fn a_free_pad_with_per_layer_sizes_round_trips() {
+    let mut board = empty_board();
+    let mut stacked = pad();
+    stacked.layer_sizes = Some(crate::pcb::LayerSizes::TopMiddleBottom {
+        top: Point::new(1.5, 2.0),
+        middle: Point::new(1.0, 1.25),
+        bottom: Point::new(1.5, 2.0),
+    });
+    board.free.pads.push(stacked);
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("layer_sizes"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.free, board.free);
+
+    let broken = text.replacen("top=", "nowhere=", 1);
+    assert!(SnxPcb::parse(&broken).is_err(), "{broken}");
 }
