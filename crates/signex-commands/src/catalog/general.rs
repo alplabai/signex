@@ -4,7 +4,7 @@
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
-pub const GENERAL: &[CommandMetadata] = &[
+pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "apply_edits",
         category: "edit",

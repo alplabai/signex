@@ -4,7 +4,7 @@
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 use signex_i18n_ids::command_ids;
 
-pub const THREE_D: &[CommandMetadata] = &[
+pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {
         id: "footprint_mode_pads",
         category: "library",

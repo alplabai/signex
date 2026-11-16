@@ -4,7 +4,7 @@
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
-pub const SCHEMATIC: &[CommandMetadata] = &[
+pub(super) const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {
         id: "annotate_schematic",
         category: "design",

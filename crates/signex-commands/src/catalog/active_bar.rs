@@ -16,7 +16,7 @@
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
-pub const ACTIVE_BAR: &[CommandMetadata] = &[
+pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tool_select",
         category: "select",
