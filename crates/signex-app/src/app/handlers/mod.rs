@@ -80,6 +80,7 @@ pub(crate) mod pcb_tool;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;
+mod placement_extras;
 pub mod placement_session;
 pub mod preferences;
 pub mod project_case;

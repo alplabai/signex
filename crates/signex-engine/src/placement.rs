@@ -10,7 +10,7 @@
 //! returns ordinary `Place*` commands for the caller to apply as ONE batch,
 //! so a click is one undo step.
 
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
 use crate::{Command, Engine, EngineError, MirrorAxis, SelectionTransform};
@@ -123,6 +123,9 @@ impl PlacementPayload {
             .for_each(|n| shift(&mut n.position));
         f.labels.iter_mut().for_each(|l| shift(&mut l.position));
         f.text_notes.iter_mut().for_each(|t| shift(&mut t.position));
+        for d in &mut f.drawings {
+            drawing_points_mut(d).into_iter().for_each(|p| shift(p));
+        }
         Self::new(f)
     }
 
@@ -191,6 +194,15 @@ impl PlacementPayload {
         f.no_connects.iter().for_each(|n| add(&n.position));
         f.labels.iter().for_each(|l| add(&l.position));
         f.text_notes.iter().for_each(|t| add(&t.position));
+        f.drawings
+            .iter()
+            .flat_map(drawing_points)
+            .for_each(|p| add(&p));
+        let radii = f.drawings.iter().filter_map(|d| match d {
+            SchDrawing::Circle { radius, .. } => Some(*radius),
+            _ => None,
+        });
+        out.extend(radii);
         out
     }
 
@@ -227,6 +239,10 @@ impl PlacementPayload {
             uuids(
                 SelectedKind::TextNote,
                 f.text_notes.iter().map(|s| s.uuid).collect(),
+            ),
+            uuids(
+                SelectedKind::Drawing,
+                f.drawings.iter().map(SchDrawing::uuid).collect(),
             ),
         ]
         .concat()
@@ -321,7 +337,35 @@ impl PlacementPayload {
             text_note.uuid = Uuid::now_v7();
             Command::PlaceTextNote { text_note }
         }));
+        commands.extend(f.drawings.iter().cloned().map(|mut drawing| {
+            drawing.set_uuid(Uuid::now_v7());
+            Command::PlaceSchDrawing { drawing }
+        }));
         commands
+    }
+}
+
+/// Every point that places drawing `d` (a circle's centre; its radius is a
+/// length, not a point).
+pub(crate) fn drawing_points(d: &SchDrawing) -> Vec<Point> {
+    let mut copy = d.clone();
+    drawing_points_mut(&mut copy)
+        .into_iter()
+        .map(|p| *p)
+        .collect()
+}
+
+/// [`drawing_points`], to move them.
+fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
+    match d {
+        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
+            vec![start, end]
+        }
+        SchDrawing::Circle { center, .. } => vec![center],
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => vec![start, mid, end],
+        SchDrawing::Polyline { points, .. } => points.iter_mut().collect(),
     }
 }
 

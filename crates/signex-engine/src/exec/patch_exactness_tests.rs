@@ -372,7 +372,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 60] = [
+const ALL_KINDS: [CommandKind; 61] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -432,6 +432,7 @@ const ALL_KINDS: [CommandKind; 60] = [
     CommandKind::SetNetColors,
     CommandKind::ArrangeDrawings,
     CommandKind::SetDrawingPlacement,
+    CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
 ];
 
@@ -499,6 +500,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetNetColors
         | CommandKind::ArrangeDrawings
         | CommandKind::SetDrawingPlacement
+        | CommandKind::AutoplaceFields
         | CommandKind::MoveEach => {}
     }
 }
@@ -1095,6 +1097,12 @@ fn samples() -> Vec<(String, Command)> {
         "SetDocumentFontFamily",
         Command::SetDocumentFontFamily {
             font_family: Some("Fira Mono".into()),
+        },
+    );
+    add(
+        "AutoplaceFields",
+        Command::AutoplaceFields {
+            symbol_ids: vec![uid(SYMBOL, 1)],
         },
     );
     add(

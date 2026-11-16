@@ -13,6 +13,7 @@ use signex_types::schematic::{
 use super::{Engine, autoplace_fields, normalize_degrees};
 use crate::command::{MirrorAxis, SelectionTransform};
 use crate::error::EngineError;
+use crate::placement::drawing_points;
 
 impl SelectionTransform {
     fn is_mirror(self) -> bool {
@@ -118,19 +119,6 @@ fn is_flag(label: &signex_types::schematic::Label) -> bool {
 /// own matches nothing here and is skipped).
 fn supported(kind: SelectedKind) -> bool {
     !matches!(kind, SelectedKind::ChildSheet | SelectedKind::SheetPin)
-}
-
-fn drawing_points(d: &SchDrawing) -> Vec<Point> {
-    match d {
-        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
-            vec![*start, *end]
-        }
-        SchDrawing::Circle { center, .. } => vec![*center],
-        SchDrawing::Arc {
-            start, mid, end, ..
-        } => vec![*start, *mid, *end],
-        SchDrawing::Polyline { points, .. } => points.clone(),
-    }
 }
 
 impl Engine {

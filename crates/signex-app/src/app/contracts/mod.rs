@@ -175,6 +175,7 @@ mod layer_strip;
 mod messages;
 mod net_nav;
 mod pcb;
+mod placement_extras;
 mod state;
 
 pub use cross_probe::CrossProbeMsg;
@@ -189,6 +190,7 @@ pub use pcb::{
     Board3dGesture, Board3dModelsRead, Board3dMsg, BoardSketchMsg, DrcRunResult, FootprintSwapMsg,
     PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg, ViewAngleEntry, ViewRotationMsg,
 };
+pub use placement_extras::PlacementExtrasMsg;
 pub use state::*;
 
 #[cfg(test)]

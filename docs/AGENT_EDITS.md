@@ -40,6 +40,8 @@ Two commands, both with capability `edit` in `signex-cli`:
   covers (a decision for a follow-up, see Known limits).
   `update_pcb_from_schematic` is refused as well: it edits the project's
   board, which no sheet's undo step covers; it runs as its own command. A
+  command that takes a file path (`place_design_block`, `import_graphics`,
+  #1667) is refused: an edit list does not read a file it names. A
   test pins the set.
 - An edit acts on the call's `document`, or on the sheet its own `document`
   names (an id or a path). Where a command takes a `document` operand

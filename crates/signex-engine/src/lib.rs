@@ -13,6 +13,7 @@ mod net_class_table;
 mod paste_edit;
 mod placed_edit;
 mod placement;
+mod placement_sources;
 mod power_port;
 mod project_general;
 mod selection;
@@ -28,6 +29,7 @@ mod transform;
 mod exec;
 mod find;
 mod find_similar;
+mod graphics_import;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -97,6 +99,9 @@ pub use find::{
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
+pub use graphics_import::{
+    GraphicsImportError, ImportedGraphics, MAX_IMPORTED_DRAWINGS, drawings_from_dxf,
+};
 use history::HistoryStep;
 pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
@@ -112,6 +117,7 @@ pub use placed_edit::{
     PlacedGeometry, move_to_command, placed_geometry, placed_item, rotate_to_command,
 };
 pub use placement::PlacementPayload;
+pub use placement_sources::DesignBlock;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
@@ -712,6 +718,9 @@ impl Engine {
                 self.exec_drawings(before, cmd)
             }
             Command::ResizeChildSheet { .. } => self.exec_resize_child_sheet(before, cmd),
+            Command::AutoplaceFields { symbol_ids } => {
+                Ok(self.exec_autoplace_fields(before, &symbol_ids))
+            }
         };
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {

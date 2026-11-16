@@ -109,7 +109,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `clear_all_net_colors`, the read-only board reports `board_report_bom`,
   `board_report_netlist`, `board_report_net_length` and
   `board_report_components` (#2404, each answers with its table as JSON),
-  `assign_net_class`, `save_document`, `close_active_document`, the board
+  `assign_net_class`, `autoplace_fields` (#1667; one undo step on the named
+  sheet), `save_document`, `close_active_document`, the board
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the

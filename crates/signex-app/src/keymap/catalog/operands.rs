@@ -281,6 +281,19 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// The placed part `id` on the sheet `document` (#1667): named, since an
+/// agent has no selection.
+pub const PART_ON_DOCUMENT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+/// The content of the file `path` placed with its centre on `at` (#1667):
+/// the dialog's answer and the click.
+pub const PLACE_FILE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("at", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
 /// A save dialog's answer; `overwrite` lets it replace an existing file.

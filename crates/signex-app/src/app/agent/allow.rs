@@ -73,6 +73,7 @@ mod tests {
             [
                 "apply_edits",
                 "assign_net_class",
+                "autoplace_fields",
                 "board_report_bom",
                 "board_report_components",
                 "board_report_net_length",

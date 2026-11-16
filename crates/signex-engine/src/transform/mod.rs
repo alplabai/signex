@@ -592,6 +592,7 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 
 mod about_centre;
 mod autoplace;
+mod autoplace_request;
 mod bus_entry;
 mod dot_verdicts;
 mod merge;

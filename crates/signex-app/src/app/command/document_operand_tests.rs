@@ -442,6 +442,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "place_design_block",
+        "import_graphics",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
@@ -459,6 +461,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "color_net",
                     "clear_all_net_colors",
                     "assign_net_class",
+                    "autoplace_fields",
                     "undo",
                     "redo",
                     "save_document",

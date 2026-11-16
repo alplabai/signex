@@ -114,6 +114,7 @@ pub enum CommandKind {
     SetNetColors,
     ArrangeDrawings,
     SetDrawingPlacement,
+    AutoplaceFields,
 }
 
 #[derive(Debug, Clone)]
@@ -538,6 +539,14 @@ pub enum Command {
         ids: Vec<Uuid>,
         placement: signex_types::schematic::DrawingPlacement,
     },
+    /// Put the reference and value fields of the parts `symbol_ids` where the
+    /// autoplacer puts them, as one undo step (#1667). Asked for by name, so a
+    /// field the user moved is placed too and the part's fields count as
+    /// autoplaced again. Unchanged when no field moves; an id that names no
+    /// part is ignored.
+    AutoplaceFields {
+        symbol_ids: Vec<Uuid>,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -673,6 +682,7 @@ impl Command {
             Command::SetNetColors { .. } => CommandKind::SetNetColors,
             Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
+            Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
         }
     }
 }

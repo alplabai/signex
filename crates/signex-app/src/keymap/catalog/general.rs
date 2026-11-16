@@ -24,6 +24,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        operands: operands::PART_ON_DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -169,8 +170,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
-    // #1312: shows the selection's counterpart on the other side (sheet or
-    // board), opening it when needed. Default keys since #2416.
+    // #1312: the selection's counterpart on the other side; keys since #2416.
     CommandMetadata {
         id: "cross_probe",
         category: "select",
@@ -234,8 +234,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_snap_grid_forward",
         category: "view",
-        // The key opens the snap-grid picker (Altium's G popup, footprint
-        // editor only); it does not step through sizes (#525).
+        // The key opens the snap-grid picker (footprint editor); no size steps (#525).
         label: command_ids::CMD_CYCLE_SNAP_GRID_FORWARD,
         menu_label: None,
         group: CommandGroup::General,
@@ -477,12 +476,13 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     },
     CommandMetadata {
         id: "import_graphics",
-        category: "library",
+        category: "place",
         label: command_ids::CMD_IMPORT_GRAPHICS,
         menu_label: None,
         group: CommandGroup::General,
-        enable: Enablement::Always,
-        flags: CommandFlags::GUI_MUTATES,
+        enable: Enablement::RequiresDocument(super::DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_FILE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

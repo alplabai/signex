@@ -98,12 +98,12 @@ pub use contracts::{
     LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu, LayerTabMenuMsg,
     LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
     ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg,
-    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
-    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
-    ViewRotationMsg, WindowMsg,
+    PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
+    VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};

@@ -54,6 +54,8 @@ pub struct EditReads {
     pub(crate) children: HashMap<PathBuf, Result<Option<SchematicSheet>, String>>,
     /// Whether a path leaves its project folder through a link.
     pub(crate) escapes: HashMap<PathBuf, bool>,
+    /// Text files an edit imports (`import_graphics`, #1667), by path.
+    pub(crate) texts: HashMap<PathBuf, Result<String, String>>,
     /// For a loose target, the files its sheet symbols refer to and what they
     /// place, as read.
     pub(crate) subtree: Option<ProjectSheetSet>,
@@ -73,12 +75,13 @@ impl std::fmt::Debug for EditReads {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EditReads {{ project: {}, subtree: {}, parts: {}, children: {}, escapes: {} }}",
+            "EditReads {{ project: {}, subtree: {}, parts: {}, children: {}, escapes: {}, texts: {} }}",
             self.project.is_some(),
             self.subtree.is_some(),
             self.parts.len(),
             self.children.len(),
-            self.escapes.len()
+            self.escapes.len(),
+            self.texts.len()
         )
     }
 }
@@ -97,6 +100,7 @@ struct ReadPlan {
     children: Vec<PathBuf>,
     /// `(project folder, path)` to check for a link out of the folder.
     links: Vec<(PathBuf, PathBuf)>,
+    texts: Vec<PathBuf>,
 }
 
 impl ReadPlan {
@@ -106,6 +110,7 @@ impl ReadPlan {
             && self.parts.is_empty()
             && self.children.is_empty()
             && self.links.is_empty()
+            && self.texts.is_empty()
     }
 
     /// Read everything. Blocking: run it off the UI thread.
@@ -145,12 +150,22 @@ impl ReadPlan {
                 (path, escapes)
             })
             .collect();
+        let texts = self
+            .texts
+            .into_iter()
+            .map(|path| {
+                let read = std::fs::read_to_string(&path)
+                    .map_err(|error| format!("{} could not be read ({error})", path.display()));
+                (path, read)
+            })
+            .collect();
         EditReads {
             project,
             subtree,
             parts,
             children,
             escapes,
+            texts,
             failed: None,
         }
     }
@@ -283,6 +298,15 @@ impl Signex {
         }
         let reads = self.document_state.agent_edits.reads.as_ref();
         match reads.and_then(|r| r.children.get(path)) {
+            Some(read) => read.clone(),
+            None => Err(NOT_READ.to_string()),
+        }
+    }
+
+    /// The text file at `path` an edit imports, as read.
+    pub(super) fn prefetched_text(&self, path: &Path) -> Result<String, String> {
+        let reads = self.document_state.agent_edits.reads.as_ref();
+        match reads.and_then(|r| r.texts.get(path)) {
             Some(read) => read.clone(),
             None => Err(NOT_READ.to_string()),
         }
@@ -461,6 +485,19 @@ impl Signex {
                 }
             }
             "sync_sheet_pins" => self.plan_child_read(args, list, target, plan),
+            // The file a design block or a graphics import places (#1667).
+            "place_design_block" => {
+                if let Ok(path) = super::placement_extras_operands::path_operand(args)
+                    && !self.document_state.engines.contains_key(&path)
+                {
+                    plan.children.push(path);
+                }
+            }
+            "import_graphics" => {
+                if let Ok(path) = super::placement_extras_operands::path_operand(args) {
+                    plan.texts.push(path);
+                }
+            }
             _ => {}
         }
     }

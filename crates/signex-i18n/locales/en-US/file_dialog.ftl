@@ -32,6 +32,10 @@ file-dialog-locate-library = Locate Library (*.snxlib)
 file-dialog-pin-datasheet = Pin datasheet PDF
 file-dialog-add-library = Add Library (*.snxlib)
 file-dialog-new-component-library = New Component Library
+# Place Design Block (#1667): a sheet whose content lands on the cursor.
+file-dialog-place-design-block = Place Design Block
+# Import Graphics (#1667): lines, circles, arcs and polylines from a DXF file.
+file-dialog-import-graphics = Import Graphics
 
 ## File type filters
 
@@ -56,3 +60,4 @@ file-filter-pdf-ext = PDF (.pdf)
 file-filter-json-ext = JSON (.json)
 file-filter-csv-ext = CSV (.csv)
 file-filter-text-ext = Text (.txt)
+file-filter-dxf = DXF Drawing
