@@ -13,6 +13,23 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     }
 }
 
+/// A copper arc as traces along its chords, within the error the copper
+/// list reads it with (#2373).
+pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInput> {
+    let width_mm = mm_with_floor(arc.width, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_TRACK_MIN_MM);
+    arc.points(pcb_geom::ARC_CHORD_ERROR_MM)
+        .windows(2)
+        .map(|pair| TraceInput {
+            p0: point_to_xy(pair[0]),
+            p1: point_to_xy(pair[1]),
+            width_mm,
+            net: arc.net,
+            dimmed: false,
+            ink: CopperInk::Unknown,
+        })
+        .collect()
+}
+
 pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
     ViaInput {
         center: point_to_xy(via.position),

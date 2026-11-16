@@ -7,6 +7,7 @@
 //! `pcb_tool::form`).
 
 mod facts;
+mod free;
 mod links;
 mod placement;
 mod tune;
@@ -74,6 +75,8 @@ impl PcbPrimitivePanel {
 pub(crate) enum PrimitiveEdit {
     Number(PrimitiveField, f64),
     Designator(String),
+    /// A string's text (#2373).
+    Text(String),
     Layer(CopperLayer),
     /// An area's layer: copper, or a keep-out layer for a keepout.
     AreaLayer(PcbLayer),
@@ -159,7 +162,9 @@ impl Signex {
         text: &str,
     ) {
         let what = field_name(field);
-        let edit = if field.is_text() {
+        let edit = if field == PrimitiveField::Text {
+            PrimitiveEdit::Text(text.to_string())
+        } else if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())
         } else {
             match parse_number(text) {
@@ -249,6 +254,14 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
         F::Clearance => ids::PCB_PRIM_CLEARANCE,
         F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
+        F::Text => ids::PCB_PRIM_TEXT,
+        F::TextHeight => ids::PCB_PRIM_TEXT_HEIGHT,
+        F::Radius => ids::PCB_PRIM_RADIUS,
+        F::StartAngle => ids::PCB_PRIM_START_ANGLE,
+        F::EndAngle => ids::PCB_PRIM_END_ANGLE,
+        F::Offset => ids::PCB_PRIM_OFFSET,
+        F::LineWidth => ids::PCB_PRIM_LINE_WIDTH,
+        F::Precision => ids::PCB_PRIM_PRECISION,
     }
 }
 
@@ -317,6 +330,9 @@ fn primitive_command(
             }
         }
         Some(ItemRef::Zone { .. }) => zone::zone_command(board, items, edit),
+        Some(ItemRef::Arc(_) | ItemRef::Text(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_)) => {
+            free::free_command(board, items, edit)
+        }
         Some(ItemRef::Footprint(_)) | None => Ok(None),
     }
 }
@@ -349,7 +365,7 @@ fn via_edit(edit: &PrimitiveEdit) -> Option<ViaEdit> {
     })
 }
 
-fn pad_edit(edit: &PrimitiveEdit) -> Option<PadEdit> {
+pub(super) fn pad_edit(edit: &PrimitiveEdit) -> Option<PadEdit> {
     use PrimitiveField as F;
     Some(match edit {
         PrimitiveEdit::Number(F::X, v) => PadEdit::X(*v),

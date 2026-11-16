@@ -185,6 +185,7 @@ fn write_board(path: &Path, id: &str) {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     board.uuid = id.parse().expect("uuid");
     let text = signex_types::format::SnxPcb::new(board)

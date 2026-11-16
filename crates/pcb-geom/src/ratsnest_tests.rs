@@ -94,6 +94,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> 
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

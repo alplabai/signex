@@ -110,12 +110,15 @@ impl Signex {
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
                 PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, i18n))
             }
+            ItemRef::Text(_) | ItemRef::Arc(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_) => {
+                return self.free_primitive_facts(board, target);
+            }
             ItemRef::Footprint(_) => return None,
         })
     }
 
     /// The facts every kind shares. `None` when a selected item is gone.
-    fn primitive_common(
+    pub(super) fn primitive_common(
         &self,
         board: &PcbBoard,
         target: PrimitiveTarget,
@@ -240,6 +243,10 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
             .footprints
             .iter()
             .any(|f| f.uuid == footprint && f.pads.iter().any(|p| p.uuid == pad)),
+        ItemRef::Text(id) => board.texts.iter().any(|t| t.uuid == id),
+        ItemRef::Arc(id) => board.free.arcs.iter().any(|a| a.uuid == id),
+        ItemRef::FreePad(id) => board.free.pads.iter().any(|p| p.uuid == id),
+        ItemRef::Dimension(id) => board.free.dimensions.iter().any(|d| d.uuid == id),
         ItemRef::Footprint(_) | ItemRef::Zone { .. } => false,
     }
 }
@@ -318,7 +325,7 @@ pub(super) fn via_facts(
     }
 }
 
-fn pad_facts(
+pub(super) fn pad_facts(
     origin: signex_types::pcb_options::BoardOrigin,
     common: PrimitiveCommon,
     pads: &[(&signex_types::pcb::Footprint, &Pad)],

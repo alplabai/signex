@@ -307,6 +307,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `board_report_netlist` | Show the board's netlist: each net and the pads on it | pcb | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
+| `cycle_arc_mode` | Switch the Arc tool between by centre, by edge and any angle | pcb | — | — |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
@@ -321,11 +322,15 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `open_rules` | Open the design rules of the project | design | — | — |
+| `place_board_arc` | Draw an arc on the active layer | place | — | — |
+| `place_board_dimension` | Place a linear dimension on the board | place | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
+| `place_board_pad` | Place a free pad on the board | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
+| `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |

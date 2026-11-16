@@ -173,3 +173,35 @@ pcb-prim-min-thickness = Minimum Width
 pcb-prim-keepout-kinds = Keeps Out
 pcb-prim-keepout-all-copper = All copper
 pcb-prim-keepout-kinds-unsupported = A board keepout keeps out all copper; other kinds are not stored yet.
+
+## Free arcs, strings and dimensions (#2373). A free pad uses the pad rows.
+pcb-prim-arc-title = Arc
+pcb-prim-arc-count = { $count ->
+    [one] 1 Arc
+   *[other] { $count } Arcs
+}
+pcb-prim-text-title = String
+pcb-prim-text-count = { $count ->
+    [one] 1 String
+   *[other] { $count } Strings
+}
+pcb-prim-dimension-title = Dimension
+pcb-prim-dimension-count = { $count ->
+    [one] 1 Dimension
+   *[other] { $count } Dimensions
+}
+pcb-prim-center = Centre (X/Y)
+pcb-prim-radius = Radius
+# Angles are read from the board origin with Y up; the arc runs
+# counter-clockwise from the start angle to the end angle.
+pcb-prim-start-angle = Start Angle
+pcb-prim-end-angle = End Angle
+pcb-prim-arc-mode = Placement
+pcb-prim-arc-mode-tip = Cycle Arc Mode (the command palette) switches how the next arc is drawn.
+pcb-prim-text = Text
+pcb-prim-text-height = Text Height
+pcb-prim-line-width = Line Width
+pcb-prim-offset = Offset
+pcb-prim-precision = Precision
+pcb-prim-value = Value
+pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6

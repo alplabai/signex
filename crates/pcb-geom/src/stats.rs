@@ -74,6 +74,14 @@ impl BoardStats {
                 stats.components_area_mm2 += shape_area_mm2(&body);
             }
         }
+        // Free pads count with the footprints' (#2373).
+        stats.pads += board.free.pads.len();
+        stats.pad_holes += board
+            .free
+            .pads
+            .iter()
+            .filter(|pad| pad.drill.as_ref().is_some_and(|d| d.diameter > 0.0))
+            .count();
         stats
     }
 
@@ -220,6 +228,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }

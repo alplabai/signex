@@ -23,12 +23,16 @@ use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod form;
+mod free;
+mod free_form;
 mod route;
 mod router;
 mod string;
 
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
+pub(crate) use free::arc_mode_name;
+pub(crate) use free_form::precision_of;
 pub use router::RouterState;
 
 #[cfg(test)]
@@ -37,6 +41,8 @@ mod area_form_tests;
 mod area_tests;
 #[cfg(test)]
 mod form_tests;
+#[cfg(test)]
+mod free_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -114,8 +120,20 @@ impl Signex {
             router: None,
             paused: None,
         });
-        crate::diagnostics::log_info(t!(self.ui_state.i18n, tool.texts().1).into_string());
+        crate::diagnostics::log_info(self.board_tool_hint(tool));
         self.refresh_pcb_highlight();
+    }
+
+    /// What the Messages panel says when `tool` is armed; the Arc hint
+    /// names how its clicks make an arc.
+    fn board_tool_hint(&self, tool: BoardPlaceTool) -> String {
+        let i18n = &self.ui_state.i18n;
+        if tool == BoardPlaceTool::Arc {
+            let mode = self.interaction_state.pcb_tool_defaults.arc_mode;
+            let how = t!(i18n, free::arc_mode_hint(mode)).into_string();
+            return t!(i18n, tool.texts().1, "mode" => how).into_string();
+        }
+        t!(i18n, tool.texts().1).into_string()
     }
 
     /// The tool armed on the board this window shows.
@@ -248,6 +266,9 @@ impl Signex {
             BoardPlaceTool::Track => self.route_clicked(at),
             BoardPlaceTool::InteractiveRouting => self.router_clicked(at),
             BoardPlaceTool::TextString => self.string_clicked(at),
+            BoardPlaceTool::Pad => self.pad_clicked(at),
+            BoardPlaceTool::Arc => self.arc_clicked(at),
+            BoardPlaceTool::Dimension => self.dimension_clicked(at),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour
@@ -288,6 +309,9 @@ impl Signex {
                 self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
+            BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension => {
+                self.free_preview(session, board, cursor, &mut preview);
+            }
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour

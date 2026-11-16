@@ -96,6 +96,7 @@ fn board(pads: Vec<Pad>) -> PcbBoard {
         )],
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

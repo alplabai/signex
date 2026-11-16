@@ -93,3 +93,24 @@ fn a_dimension_round_trips_through_json() {
     let back: LinearDimension = serde_json::from_str(&json).unwrap();
     assert_eq!(back, d);
 }
+
+#[test]
+fn the_value_reads_to_the_dimension_precision() {
+    let mut d = dimension(p(0.0, 0.0), p(3.0, 4.0), 1.0);
+    assert_eq!(d.value_text(), "5.00mm");
+    d.precision = 0;
+    assert_eq!(d.value_text(), "5mm");
+}
+
+#[test]
+fn text_and_dimensions_go_on_overlay_mechanical_and_documentation_layers() {
+    use crate::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
+    let takes = |l: PcbLayer| l.takes_text();
+    assert!(takes(PcbLayer::Technical(TechnicalLayer::SilkscreenTop)));
+    assert!(takes(PcbLayer::Technical(TechnicalLayer::Dimensions)));
+    assert!(takes(PcbLayer::Mechanical(
+        MechanicalLayer::new(1).unwrap()
+    )));
+    assert!(!takes(PcbLayer::Copper(CopperLayer::Top)));
+    assert!(!takes(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)));
+}

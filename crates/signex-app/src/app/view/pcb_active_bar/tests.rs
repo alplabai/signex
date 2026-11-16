@@ -127,9 +127,11 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert_eq!(separators, 6);
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 11,
-        "filter, move, align, components, route, via/pad, areas, drawing, sketch, fabrication outputs, view"
+        live, 13,
+        "#2373: every button, Dimensions and Text included, is live"
     );
+    assert!(runs(all[8], "place_board_dimension"), "#2373");
+    assert!(runs(all[9], "place_board_string"), "#2373");
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(
         runs(all[3], "change_footprint"),

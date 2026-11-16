@@ -3,8 +3,10 @@
 
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, Via, ViaType};
+use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
+use crate::free::arc_shapes;
 use crate::index::{ItemRef, track_shape, via_shape};
 use crate::shape::Shape;
 use crate::transform::{Side, pad_shape, pad_world_center};
@@ -61,6 +63,7 @@ pub fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
             });
         }
     }
+    free_copper(board, &mut nodes);
     for via in &board.vias {
         if via.net == 0 {
             continue;
@@ -77,6 +80,44 @@ pub fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
         }
     }
     nodes
+}
+
+/// The netted free pads and copper arcs (#2373). A free pad is a pad in the
+/// board's frame, ending ratsnest lines like a footprint pad; an arc is one
+/// item per chord, all with its identity.
+fn free_copper(board: &PcbBoard, nodes: &mut Vec<CopperItem>) {
+    let frame = free_pad_frame();
+    for pad in &board.free.pads {
+        let Some(net) = pad.net.as_ref().map(|n| n.number).filter(|&n| n != 0) else {
+            continue;
+        };
+        let (Ok(center), Ok(shape)) = (pad_world_center(&frame, pad), pad_shape(&frame, pad))
+        else {
+            continue;
+        };
+        nodes.push(CopperItem {
+            item: ItemRef::FreePad(pad.uuid),
+            net,
+            layers: pad_layers(&frame, pad),
+            shape,
+            pad_center: Some(center),
+        });
+    }
+    for arc in &board.free.arcs {
+        let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+        if arc.net == 0 || layers == 0 {
+            continue;
+        }
+        for shape in arc_shapes(arc).unwrap_or_default() {
+            nodes.push(CopperItem {
+                item: ItemRef::Arc(arc.uuid),
+                net: arc.net,
+                layers,
+                shape,
+                pad_center: None,
+            });
+        }
+    }
 }
 
 /// A through via reaches every copper layer; a blind or micro via the span
@@ -185,6 +226,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             options: Default::default(),
             unknown: Default::default(),
         }

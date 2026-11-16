@@ -111,6 +111,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     app.open_pcb_tab(path("board.snxpcb"), "board".into(), board);
     assert!(
@@ -324,6 +325,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     app.open_pcb_tab(path("board.snxpcb"), "board".into(), board);
     let pcb = refusal(

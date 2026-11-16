@@ -189,17 +189,24 @@ fn item_id(item: &ItemRef) -> String {
         ItemRef::Track(id)
         | ItemRef::Via(id)
         | ItemRef::Footprint(id)
-        | ItemRef::Zone { zone: id, .. } => id.to_string(),
+        | ItemRef::Zone { zone: id, .. }
+        | ItemRef::Text(id)
+        | ItemRef::Arc(id)
+        | ItemRef::FreePad(id)
+        | ItemRef::Dimension(id) => id.to_string(),
     }
 }
 
 fn item_label(item: &ItemRef) -> String {
     let kind = match item {
-        ItemRef::Pad { .. } => "pad",
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => "pad",
         ItemRef::Track(_) => "track",
         ItemRef::Via(_) => "via",
         ItemRef::Footprint(_) => "footprint",
         ItemRef::Zone { .. } => "area",
+        ItemRef::Text(_) => "string",
+        ItemRef::Arc(_) => "arc",
+        ItemRef::Dimension(_) => "dimension",
     };
     format!("{kind} {}", item_id(item))
 }

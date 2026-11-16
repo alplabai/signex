@@ -43,12 +43,17 @@ pub(crate) fn write_ipc356(
     skipped: &mut usize,
 ) -> String {
     let mut records = Vec::new();
-    for footprint in &board.footprints {
-        for pad in &footprint.pads {
-            match pad_record(board, footprint, pad) {
-                Some(record) => records.push(record),
-                None => *skipped += 1,
-            }
+    // Free pads (#2373) are tested in the board's own frame.
+    let frame = signex_types::pcb_free::free_pad_frame();
+    let free = board.free.pads.iter().map(|pad| (&frame, pad));
+    let owned = board
+        .footprints
+        .iter()
+        .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)));
+    for (footprint, pad) in owned.chain(free) {
+        match pad_record(board, footprint, pad) {
+            Some(record) => records.push(record),
+            None => *skipped += 1,
         }
     }
     for via in &board.vias {

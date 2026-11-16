@@ -40,6 +40,7 @@ fn board(thickness: f64) -> PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 

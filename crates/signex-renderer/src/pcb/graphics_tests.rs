@@ -287,6 +287,7 @@ fn the_carried_footprint_takes_its_drawings_and_the_library_preview_does_not() {
     let footprint_only = PcbBoard {
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         ..board.clone()
     };
     let carried = snapshot(&footprint_only, &PcbLayerView::default());

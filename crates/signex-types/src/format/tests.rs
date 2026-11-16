@@ -46,6 +46,7 @@ pub(super) fn empty_board() -> PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 

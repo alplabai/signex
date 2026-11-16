@@ -92,3 +92,24 @@ fn an_arc_round_trips_through_json() {
     let back: TrackArc = serde_json::from_str(&json).unwrap();
     assert_eq!(back, quarter);
 }
+
+#[test]
+fn the_three_points_of_a_sweep_rebuild_the_same_arc() {
+    let h = SQRT_2 / 2.0;
+    let quarter = arc((1.0, 0.0), (h, h), (0.0, 1.0));
+    let sweep = quarter.sweep().unwrap();
+    let (start, mid, end) = sweep.three_points();
+    let again = TrackArc {
+        start,
+        mid,
+        end,
+        ..quarter.clone()
+    };
+    let back = again.sweep().unwrap();
+    assert!(close(back.radius, sweep.radius) && close(back.sweep, sweep.sweep));
+    assert!(
+        close(start.x, 1.0) && close(end.y, 1.0),
+        "{start:?} {end:?}"
+    );
+    let _ = PI;
+}

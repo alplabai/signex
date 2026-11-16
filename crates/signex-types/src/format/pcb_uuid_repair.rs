@@ -50,5 +50,18 @@ pub(super) fn repair_duplicate_uuids(board: &mut PcbBoard) -> Vec<SheetLoadRepai
         None,
         by_field!(|t| t.text.clone()),
     );
+    ids.check(&mut board.free.arcs, kind::ARC, None, by_field!(no_name));
+    ids.check(
+        &mut board.free.pads,
+        kind::FREE_PAD,
+        None,
+        by_field!(|p| p.number.clone()),
+    );
+    ids.check(
+        &mut board.free.dimensions,
+        kind::DIMENSION,
+        None,
+        by_field!(no_name),
+    );
     ids.into_repairs()
 }

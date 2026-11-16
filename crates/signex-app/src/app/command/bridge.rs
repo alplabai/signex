@@ -325,6 +325,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
+        "place_board_pad" => board_tool(BoardPlaceTool::Pad),
+        "place_board_arc" => board_tool(BoardPlaceTool::Arc),
+        "place_board_string" => board_tool(BoardPlaceTool::TextString),
+        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension),
+        "cycle_arc_mode" => Message::Pcb(PcbMsg::ArcModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),

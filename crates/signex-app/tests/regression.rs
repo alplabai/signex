@@ -198,6 +198,9 @@ mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;
+// #2373, #2393: free arcs, pads, strings and dimensions on a board.
+#[path = "regression/board_free_primitives.rs"]
+mod board_free_primitives;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;

@@ -141,6 +141,7 @@ fn a_run_says_the_text_messages_then_the_classes_a_rule_lowers() {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     };
     let mut hv = NetClass::named("HV");

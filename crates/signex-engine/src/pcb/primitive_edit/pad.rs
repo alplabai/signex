@@ -69,7 +69,9 @@ pub fn pad_edit_command(
     Ok((!changed.is_empty()).then_some(BoardCommand::ReplacePads { pads: changed }))
 }
 
-fn apply(
+/// `edit` applied to `pad` of `fp`; a free pad's frame is
+/// `pcb_free::free_pad_frame` (#2373).
+pub(super) fn apply(
     board: &PcbBoard,
     fp: &Footprint,
     pad: &mut Pad,

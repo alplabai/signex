@@ -468,7 +468,8 @@ impl Signex {
 }
 
 /// What Delete removes for `selection`: its footprints (a selected pad's
-/// included), tracks, vias and drawn areas.
+/// included), tracks, vias, drawn areas, strings, free arcs, free pads and
+/// dimensions.
 pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemId> {
     let mut items: Vec<BoardItemId> = selection
         .footprints()
@@ -479,6 +480,10 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
         ItemRef::Track(id) => Some(BoardItemId::Segment(id)),
         ItemRef::Via(id) => Some(BoardItemId::Via(id)),
         ItemRef::Zone { zone, .. } => Some(BoardItemId::Zone(zone)),
+        ItemRef::Text(id) => Some(BoardItemId::Text(id)),
+        ItemRef::Arc(id) => Some(BoardItemId::Arc(id)),
+        ItemRef::FreePad(id) => Some(BoardItemId::FreePad(id)),
+        ItemRef::Dimension(id) => Some(BoardItemId::Dimension(id)),
         ItemRef::Pad { .. } | ItemRef::Footprint(_) => None,
     }));
     items

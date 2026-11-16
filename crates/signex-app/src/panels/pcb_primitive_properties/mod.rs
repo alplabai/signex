@@ -13,10 +13,13 @@
 //! places next (#2393): its target has no items, and its edits set the
 //! tool's values instead of the board.
 
+mod arc;
+mod dimension;
 mod facts;
 mod net_info;
 mod pad;
 mod rows;
+mod text;
 mod track;
 mod via;
 mod zone;
@@ -31,9 +34,9 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::{text, text_input};
 
 pub use facts::{
-    AreaLayerChoice, Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
-    PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, ZoneFacts,
-    ZoneKind, shared,
+    ArcFacts, AreaLayerChoice, DimensionFacts, Editability, LayerChoice, NetChoice, NetInfo,
+    PadFacts, PcbPrimitiveFacts, PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice,
+    TextFacts, TrackFacts, ViaFacts, ZoneFacts, ZoneKind, shared,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -43,15 +46,21 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// Widget id of the field Tab focuses while placing (#2393): a via's
-/// Diameter, a track's Width, a pour's Clearance.
+/// Diameter, a track's or arc's Width, a pour's Clearance, a pad's X-Size,
+/// a string's Text, a dimension's Line Width.
 pub static PLACEMENT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.pcb_placement_field"));
 
-/// Whether `field` is the one Tab focuses while placing.
+/// Whether `field` is the one Tab focuses while placing. Each form has one.
 pub fn is_placement_focus(field: PrimitiveField) -> bool {
     matches!(
         field,
-        PrimitiveField::Diameter | PrimitiveField::Width | PrimitiveField::Clearance
+        PrimitiveField::Diameter
+            | PrimitiveField::Width
+            | PrimitiveField::Clearance
+            | PrimitiveField::SizeX
+            | PrimitiveField::Text
+            | PrimitiveField::LineWidth
     )
 }
 
@@ -110,6 +119,9 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
         PcbPrimitiveFacts::Via(f) => via::view(ctx, f),
         PcbPrimitiveFacts::Pad(f) => pad::view(ctx, f),
         PcbPrimitiveFacts::Zone(f) => zone::view(ctx, f),
+        PcbPrimitiveFacts::Arc(f) => arc::view(ctx, f),
+        PcbPrimitiveFacts::Text(f) => text::view(ctx, f),
+        PcbPrimitiveFacts::Dimension(f) => dimension::view(ctx, f),
     };
     let common = facts.common();
     let mut notes = column![].spacing(SP.xs);
@@ -168,6 +180,18 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
                 None => ids::PCB_PRIM_AREA_TITLE,
             },
             t!(i18n, ids::PCB_PRIM_AREA_COUNT, "count" => count),
+        ),
+        PcbPrimitiveFacts::Arc(_) => (
+            ids::PCB_PRIM_ARC_TITLE,
+            t!(i18n, ids::PCB_PRIM_ARC_COUNT, "count" => count),
+        ),
+        PcbPrimitiveFacts::Text(_) => (
+            ids::PCB_PRIM_TEXT_TITLE,
+            t!(i18n, ids::PCB_PRIM_TEXT_COUNT, "count" => count),
+        ),
+        PcbPrimitiveFacts::Dimension(_) => (
+            ids::PCB_PRIM_DIMENSION_TITLE,
+            t!(i18n, ids::PCB_PRIM_DIMENSION_COUNT, "count" => count),
         ),
     };
     if facts.common().target.is_placement() {

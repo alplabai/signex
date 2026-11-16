@@ -94,7 +94,13 @@ impl Selection {
             .iter()
             .filter_map(|item| match *item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => Some(id),
-                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => None,
+                ItemRef::Track(_)
+                | ItemRef::Via(_)
+                | ItemRef::Zone { .. }
+                | ItemRef::Text(_)
+                | ItemRef::Arc(_)
+                | ItemRef::FreePad(_)
+                | ItemRef::Dimension(_) => None,
             })
             .collect()
     }
@@ -125,12 +131,14 @@ pub fn pick_filtered<'a>(
 fn rank(item: ItemRef) -> u8 {
     match item {
         ItemRef::Via(_) => 0,
-        ItemRef::Pad { .. } => 1,
-        ItemRef::Track(_) => 2,
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => 1,
+        ItemRef::Track(_) | ItemRef::Arc(_) => 2,
+        // Board drawings sit over the copper they label (#2373).
+        ItemRef::Text(_) | ItemRef::Dimension(_) => 3,
         // The body is under its own pads: a click on copper takes the copper.
-        ItemRef::Footprint(_) => 3,
+        ItemRef::Footprint(_) => 4,
         // A drawn area is under everything on it (#2383).
-        ItemRef::Zone { .. } => 4,
+        ItemRef::Zone { .. } => 5,
     }
 }
 

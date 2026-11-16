@@ -88,6 +88,7 @@ pub(crate) fn board(footprints: Vec<Footprint>, segments: Vec<Segment>) -> PcbBo
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

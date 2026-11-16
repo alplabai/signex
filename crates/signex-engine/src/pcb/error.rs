@@ -84,6 +84,12 @@ pub enum BoardCommandError {
     NotPositive { field: &'static str },
     #[error("{0} is not a copper layer")]
     NotCopperLayer(String),
+    /// A string or dimension moved to a layer that takes no text (#2373).
+    #[error("{0} takes no board text")]
+    NotTextLayer(String),
+    /// An arc moved to a layer this build does not know (#2373).
+    #[error("{0} is not a board layer")]
+    UnknownLayer(String),
     #[error("net {0} is not in the board's net table")]
     UnknownNet(u32),
     #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]

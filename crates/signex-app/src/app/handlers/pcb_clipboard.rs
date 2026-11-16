@@ -292,6 +292,10 @@ fn item_ref(id: BoardItemId) -> Option<ItemRef> {
         BoardItemId::Footprint(id) => Some(ItemRef::Footprint(id)),
         BoardItemId::Segment(id) => Some(ItemRef::Track(id)),
         BoardItemId::Via(id) => Some(ItemRef::Via(id)),
-        BoardItemId::Zone(_) | BoardItemId::Text(_) => None,
+        BoardItemId::Text(id) => Some(ItemRef::Text(id)),
+        BoardItemId::Arc(id) => Some(ItemRef::Arc(id)),
+        BoardItemId::FreePad(id) => Some(ItemRef::FreePad(id)),
+        BoardItemId::Dimension(id) => Some(ItemRef::Dimension(id)),
+        BoardItemId::Zone(_) => None,
     }
 }

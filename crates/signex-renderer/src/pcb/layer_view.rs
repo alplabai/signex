@@ -13,8 +13,8 @@ use signex_types::pcb::{Footprint, LayerDef, Pad, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::emit::{
-    is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
-    via_from_board_via, zone_from_board_zone,
+    arc_traces, is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack,
+    trace_from_segment, via_from_board_via, zone_from_board_zone,
 };
 use super::footprint_text::footprint_texts;
 use super::graphics::{Drawings, board_drawings, footprint_drawings};
@@ -475,6 +475,23 @@ impl PcbSnapshot {
                 traces.push((how, trace));
             }
         }
+        // A copper arc is drawn as copper along its chords (#2373).
+        for arc in board
+            .free
+            .arcs
+            .iter()
+            .filter(|a| pcb_geom::arc_is_copper(a))
+        {
+            let names = std::slice::from_ref(&arc.layer);
+            if shown(names) {
+                let (how, ink) = classify(view, names, false);
+                for mut trace in arc_traces(arc) {
+                    trace.dimmed = how == Emphasis::Dimmed;
+                    trace.ink = ink;
+                    traces.push((how, trace));
+                }
+            }
+        }
         let mut vias = Vec::new();
         for via in &board.vias {
             if view.is_none_or(|v| v.shows_via(&via.layers)) {
@@ -485,11 +502,19 @@ impl PcbSnapshot {
                 vias.push((how, input));
             }
         }
-        let pads: Vec<_> = board
+        let mut pads: Vec<_> = board
             .footprints
             .iter()
             .flat_map(|footprint| footprint_pads(footprint, view))
             .collect();
+        // Free pads are drawn as pads of the board's own frame (#2373).
+        if !board.free.pads.is_empty() {
+            let frame = Footprint {
+                pads: board.free.pads.clone(),
+                ..signex_types::pcb_free::free_pad_frame()
+            };
+            pads.extend(footprint_pads(&frame, view));
+        }
         let mut drawings = Drawings {
             texts: board
                 .footprints

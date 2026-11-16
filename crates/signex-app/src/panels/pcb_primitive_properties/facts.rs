@@ -59,12 +59,27 @@ pub enum PrimitiveField {
     Clearance,
     /// A polygon pour's minimum copper width.
     MinThickness,
+    /// A string's text (#2373).
+    Text,
+    /// A string's or dimension's text height.
+    TextHeight,
+    /// An arc's radius and the angles it runs between, read from the board
+    /// origin with Y up.
+    Radius,
+    StartAngle,
+    EndAngle,
+    /// How far a dimension's line stands off what it measures.
+    Offset,
+    /// A dimension's line width.
+    LineWidth,
+    /// The decimals a dimension's value shows.
+    Precision,
 }
 
 impl PrimitiveField {
     /// A field typed as text, not as a number.
     pub fn is_text(self) -> bool {
-        self == Self::Designator
+        matches!(self, Self::Designator | Self::Text)
     }
 }
 
@@ -261,13 +276,67 @@ pub struct ZoneFacts {
     pub min_thickness: Option<f64>,
 }
 
-/// The selection the Properties panel shows as a primitive.
+/// Free arcs (#2373). Positions and angles are read from the board origin
+/// with Y up; the arc runs counter-clockwise from start to end angle.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArcFacts {
+    pub common: PrimitiveCommon,
+    /// Every selected arc is on copper (has a net).
+    pub is_copper: bool,
+    pub layer: Option<AreaLayerChoice>,
+    pub layers: Vec<AreaLayerChoice>,
+    pub center: (Option<f64>, Option<f64>),
+    pub radius: Option<f64>,
+    pub start_angle: Option<f64>,
+    pub end_angle: Option<f64>,
+    pub width: Option<f64>,
+    pub length_mm: Option<f64>,
+    /// How the Arc tool draws its next arc; `None` for placed arcs.
+    pub mode: Option<String>,
+}
+
+/// Board strings (#2373).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextFacts {
+    pub common: PrimitiveCommon,
+    pub text: Option<String>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub height: Option<f64>,
+    pub rotation: Option<f64>,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers that take text.
+    pub layers: Vec<AreaLayerChoice>,
+}
+
+/// Linear dimensions (#2373).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DimensionFacts {
+    pub common: PrimitiveCommon,
+    pub start: (Option<f64>, Option<f64>),
+    pub end: (Option<f64>, Option<f64>),
+    pub offset: Option<f64>,
+    pub line_width: Option<f64>,
+    pub text_height: Option<f64>,
+    pub precision: Option<u8>,
+    /// The value as drawn.
+    pub value: Option<String>,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers that take text.
+    pub layers: Vec<AreaLayerChoice>,
+}
+
+/// The selection the Properties panel shows as a primitive. A free pad
+/// shows the pad panel.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PcbPrimitiveFacts {
     Track(TrackFacts),
     Via(ViaFacts),
     Pad(PadFacts),
     Zone(ZoneFacts),
+    Arc(ArcFacts),
+    Text(TextFacts),
+    Dimension(DimensionFacts),
 }
 
 impl PcbPrimitiveFacts {
@@ -277,6 +346,9 @@ impl PcbPrimitiveFacts {
             Self::Via(f) => &f.common,
             Self::Pad(f) => &f.common,
             Self::Zone(f) => &f.common,
+            Self::Arc(f) => &f.common,
+            Self::Text(f) => &f.common,
+            Self::Dimension(f) => &f.common,
         }
     }
 }

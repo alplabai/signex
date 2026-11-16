@@ -1,8 +1,7 @@
 //! A linear board dimension (#2373): the distance between two points, drawn
 //! as a dimension line standing off them, two extension lines, an arrow at
-//! each end and the measured value. The model and its drawing geometry; the
-//! board list, the `.snxpcb` rows and the renderer are still to come (see
-//! docs/PCB_TOOLS.md, "Dimension").
+//! each end and the measured value. The board keeps them in
+//! `PcbBoard::free` (see docs/PCB_TOOLS.md, "Dimension").
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -85,6 +84,11 @@ impl LinearDimension {
     /// The measured distance in mm.
     pub fn value_mm(&self) -> f64 {
         (self.end.x - self.start.x).hypot(self.end.y - self.start.y)
+    }
+
+    /// The value as drawn: the distance to `precision` decimals, in mm.
+    pub fn value_text(&self) -> String {
+        format!("{:.*}mm", usize::from(self.precision), self.value_mm())
     }
 
     /// What the dimension draws; `None` when its points are the same, a

@@ -4,16 +4,24 @@
 //! one undo step. Each builder returns `None` when every item already reads
 //! so. Targets are absolute per item, as for every board command.
 
+mod free;
 mod pad;
 mod track;
 mod via;
 mod zone;
 
 #[cfg(test)]
+mod free_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod zone_tests;
 
+pub use free::{
+    ArcEdit, ArcSpan, DIMENSION_MAX_PRECISION, DimensionEdit, TextEdit, apply_arc, apply_dimension,
+    apply_free_pad, apply_text, arc_edit_command, dimension_edit_command, free_pad_edit_command,
+    text_edit_command,
+};
 pub use pad::{PadEdit, pad_edit_command};
 pub use track::{TrackEdit, track_edit_command, track_location};
 pub use via::{ViaEdit, via_edit_command};
@@ -40,6 +48,12 @@ pub enum PrimitiveEditRefusal {
     Negative,
     #[error("the area cannot be on that layer")]
     LayerNotAllowed,
+    /// An arc edit that leaves no arc: a zero radius or turn (#2373).
+    #[error("the arc would have no radius or turn")]
+    NoArc,
+    /// A dimension edit that puts both its ends on one point (#2373).
+    #[error("the dimension would measure nothing")]
+    NoLength,
 }
 
 fn finite(value: f64) -> Result<f64, PrimitiveEditRefusal> {

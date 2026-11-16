@@ -199,6 +199,35 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                     points.extend(z.outline.iter().copied());
                 }
             }
+            ItemRef::Text(id) => {
+                points.extend(
+                    board
+                        .texts
+                        .iter()
+                        .filter(|t| t.uuid == id)
+                        .map(|t| t.position),
+                );
+            }
+            ItemRef::Arc(id) => {
+                for a in board.free.arcs.iter().filter(|a| a.uuid == id) {
+                    points.extend([a.start, a.mid, a.end]);
+                }
+            }
+            ItemRef::FreePad(id) => {
+                points.extend(
+                    board
+                        .free
+                        .pads
+                        .iter()
+                        .filter(|p| p.uuid == id)
+                        .map(|p| p.position),
+                );
+            }
+            ItemRef::Dimension(id) => {
+                for d in board.free.dimensions.iter().filter(|d| d.uuid == id) {
+                    points.extend([d.start, d.end]);
+                }
+            }
         }
     }
     let first = points.first()?;

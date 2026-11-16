@@ -127,6 +127,62 @@ pub(super) fn board_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out:
             out.texts.push(input);
         }
     }
+    free_drawings(board, view, out);
+}
+
+/// The free arcs off copper and the dimensions (#2373); a copper arc is
+/// drawn as copper with the tracks.
+fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawings) {
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| !pcb_geom::arc_is_copper(a))
+    {
+        let (Some((layer, dimmed)), Some(sweep)) = (shown_layer(&arc.layer, view), arc.sweep())
+        else {
+            continue;
+        };
+        out.graphics.push(GraphicInput {
+            shape: GraphicShapeInput::Arc {
+                center: point_to_xy(sweep.center),
+                radius_mm: sweep.radius as f32,
+                start_deg: sweep.start_angle.to_degrees() as f32,
+                sweep_deg: sweep.sweep.to_degrees() as f32,
+            },
+            layer,
+            width_mm: mm_with_floor(arc.width, PCB_DEFAULT_GRAPHIC_WIDTH_MM, 0.0),
+            filled: false,
+            dimmed,
+        });
+    }
+    for dimension in &board.free.dimensions {
+        let (Some((layer, dimmed)), Some(drawing)) =
+            (shown_layer(&dimension.layer, view), dimension.drawing())
+        else {
+            continue;
+        };
+        let width_mm = mm_with_floor(dimension.line_width, PCB_DEFAULT_GRAPHIC_WIDTH_MM, 0.0);
+        out.graphics
+            .extend(drawing.strokes.iter().map(|(a, b)| GraphicInput {
+                shape: GraphicShapeInput::Line {
+                    p0: point_to_xy(*a),
+                    p1: point_to_xy(*b),
+                },
+                layer,
+                width_mm,
+                filled: false,
+                dimmed,
+            }));
+        out.texts.push(FootprintTextInput {
+            content: dimension.value_text(),
+            position: point_to_xy(drawing.label_at),
+            rotation_deg: drawing.label_rotation_deg as f32,
+            size_mm: text_size_mm(dimension.text_height),
+            mirrored: false,
+            layer,
+        });
+    }
 }
 
 fn xy(p: PointNm) -> [f32; 2] {

@@ -338,7 +338,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_keepout"
         // #2389: Interactive Routing and its mode.
         | "place_board_route"
-        | "cycle_route_mode" => Needs::Pcb,
+        | "cycle_route_mode"
+        // #2373: free pads, arcs, strings, dimensions and the arc mode.
+        | "place_board_pad"
+        | "place_board_arc"
+        | "place_board_string"
+        | "place_board_dimension"
+        | "cycle_arc_mode" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,

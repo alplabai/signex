@@ -1,7 +1,7 @@
-//! A copper arc track (#2373): a track bent along the circle through its
-//! start, a point on it and its end. The model and its geometry only; the
-//! board list, the `.snxpcb` rows, drawing, hit-testing, the design rule
-//! check and the ratsnest are still to come (see docs/PCB_TOOLS.md, "Arc").
+//! A board arc (#2373): a track or drawing bent along the circle through
+//! its start, a point on it and its end. On a copper layer it is copper of
+//! its net; on any other layer a drawing. The board keeps them in
+//! `PcbBoard::free` (see docs/PCB_TOOLS.md, "Arc").
 
 use std::f64::consts::TAU;
 
@@ -43,6 +43,25 @@ pub struct ArcSweep {
     /// The turn from `start` through `mid` to `end`, in radians:
     /// counter-clockwise positive, in `-TAU..TAU`.
     pub sweep: f64,
+}
+
+impl ArcSweep {
+    /// The point at `angle` radians on the circle.
+    pub fn at(&self, angle: f64) -> Point {
+        Point::new(
+            self.center.x + self.radius * angle.cos(),
+            self.center.y + self.radius * angle.sin(),
+        )
+    }
+
+    /// The arc's start, middle and end points, as a [`TrackArc`] holds them.
+    pub fn three_points(&self) -> (Point, Point, Point) {
+        (
+            self.at(self.start_angle),
+            self.at(self.start_angle + self.sweep / 2.0),
+            self.at(self.start_angle + self.sweep),
+        )
+    }
 }
 
 impl TrackArc {

@@ -55,6 +55,11 @@ impl PickKind {
             ItemRef::Track(_) => PickKind::Tracks,
             ItemRef::Via(_) => PickKind::Vias,
             ItemRef::Zone { kind, .. } => kind,
+            ItemRef::Text(_) => PickKind::Texts,
+            ItemRef::Arc(_) => PickKind::Arcs,
+            ItemRef::FreePad(_) => PickKind::Pads,
+            // A dimension has no kind of its own in the filter (#2373).
+            ItemRef::Dimension(_) => PickKind::Other,
         }
     }
 
@@ -83,6 +88,9 @@ impl PickKind {
                 | PickKind::Keepouts
                 | PickKind::Regions
                 | PickKind::Fills
+                | PickKind::Arcs
+                | PickKind::Texts
+                | PickKind::Other
         )
     }
 }

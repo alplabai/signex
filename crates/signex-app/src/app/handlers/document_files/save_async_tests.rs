@@ -561,5 +561,6 @@ pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }

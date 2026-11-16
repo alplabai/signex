@@ -498,6 +498,12 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// Free arcs, pads and dimensions (#2373).
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pcb_free::FreePrimitives::is_empty"
+    )]
+    pub free: crate::pcb_free::FreePrimitives,
     /// The board sketch (#2234) and the keepouts, cutouts, holes and
     /// V-scores it baked to; `None` for a board drawn without one. Written
     /// only through the board engine's `SetBoardSketch` command, which also
