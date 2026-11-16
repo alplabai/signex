@@ -178,3 +178,23 @@ fn strings_and_dimensions_are_picked_on_what_they_draw() {
     );
     assert!(BoardIndex::build(&b).is_empty(), "drawings are not copper");
 }
+
+/// Two free pads of net 4 at the ends of a copper arc of net 4: the arc's
+/// chords are one copper, so the pads need no ratsnest line between them.
+#[test]
+fn an_arc_joins_the_pads_at_its_ends_as_one_copper() {
+    let mut b = board();
+    let end_pad = |n: u128, x: f64| Pad {
+        uuid: Uuid::from_u128(n),
+        position: Point::new(x, 0.0),
+        drill: None,
+        pad_type: PadType::Smd,
+        layers: vec!["TopCopper".into()],
+        ..pad(4)
+    };
+    b.free.pads.push(end_pad(10, 0.0));
+    b.free.pads.push(end_pad(11, 10.0));
+    assert_eq!(crate::ratsnest(&b).len(), 1, "unrouted: one line");
+    b.free.arcs.push(arc("TopCopper", 4));
+    assert!(crate::ratsnest(&b).is_empty(), "the arc routes the pair");
+}

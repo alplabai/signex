@@ -615,3 +615,32 @@ fn the_widest_clearance_covers_classes_and_pair_scoped_rules() {
     assert_eq!(rules.widest_clearance(), 2_000_000);
     assert_eq!(rules.reach_of(1), 2_000_000);
 }
+
+/// #2373: a copper arc is held to the track width limits, at its middle.
+#[test]
+fn a_track_width_rule_reports_a_copper_arc_outside_its_limits() {
+    let user = vec![rule(
+        "w",
+        NetScope::Net("SIG".into()),
+        vec![Limit::MinTrackWidth(200_000)],
+    )];
+    let mut b = named(board(vec![], vec![], vec![]));
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: id(4100),
+        start: signex_types::pcb::Point::new(0.0, 0.0),
+        mid: signex_types::pcb::Point::new(5.0, 5.0),
+        end: signex_types::pcb::Point::new(10.0, 0.0),
+        width: 0.1,
+        layer: "TopCopper".into(),
+        net: 3,
+    });
+    let report = run(&b, &rules_for(&b, user));
+    assert_eq!(report.count(ViolationKind::TrackWidth), 1, "{report:?}");
+    let v = report
+        .violations
+        .iter()
+        .find(|v| v.kind == ViolationKind::TrackWidth)
+        .expect("the width finding");
+    assert_eq!(v.items, [pcb_geom::ItemRef::Arc(id(4100))]);
+    assert_eq!(v.at, pcb_geom::PointNm::new(5_000_000, 5_000_000));
+}

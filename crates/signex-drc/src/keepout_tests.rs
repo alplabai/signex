@@ -310,3 +310,36 @@ fn a_keepout_drawn_on_the_board_is_checked_on_its_sides_copper() {
     assert_eq!(hits[0].items, vec![ItemRef::Track(id(2001))]);
     assert_eq!(hits[0].keepout, Some(id(KEEPOUT)));
 }
+
+/// #2373: a copper arc through a routing keepout is one finding, however
+/// many of its chords cross; a free pad inside a copper keepout is one too.
+#[test]
+fn a_copper_arc_and_a_free_pad_are_kept_out_like_a_track_and_a_pad() {
+    let mut b = board(vec![], vec![], vec![]);
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: id(4200),
+        start: Point::new(15.0, 25.0),
+        mid: Point::new(25.0, 27.0),
+        end: Point::new(35.0, 25.0),
+        width: 0.25,
+        layer: "TopCopper".into(),
+        net: 0,
+    });
+    let routed = keep_out(b.clone(), routing(), &[CopperLayer::Top]);
+    let hits = keepout_hits(&routed);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].items, vec![ItemRef::Arc(id(4200))]);
+
+    let mut free_pad = pad(4300, (25.0, 25.0), 0, PadType::Smd, "TopCopper");
+    free_pad.net = None;
+    b.free.arcs.clear();
+    b.free.pads.push(free_pad);
+    let copper = KeepoutKinds {
+        no_copper: true,
+        ..KeepoutKinds::default()
+    };
+    let kept = keep_out(b, copper, &[CopperLayer::Top]);
+    let hits = keepout_hits(&kept);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].items, vec![ItemRef::FreePad(id(4300))]);
+}

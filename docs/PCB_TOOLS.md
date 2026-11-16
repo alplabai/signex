@@ -248,8 +248,10 @@ nothing and say so. The model is `signex_types::pcb_arc::TrackArc` (start,
 a point on the arc, end, width, layer, net), kept in `PcbBoard::free.arcs`.
 On a copper layer an arc is copper of the net under its start (or the net
 set in the form): the copper list, the ratsnest, the design rule check (as a
-track) and fabrication outputs read it along its chords
-(`pcb_geom::ARC_CHORD_ERROR_MM`, 5 µm). On any other layer it is a drawing
+track: clearance, width rules and keepouts) and fabrication outputs read it
+along its chords (`pcb_geom::ARC_CHORD_ERROR_MM`, 5 µm). Its chords are one
+copper: the ratsnest joins them, and DRC reports one finding per pair of
+items, the worst of their chords'. On any other layer it is a drawing
 with no net. Width follows `PcbSetup::trace_width` unless the form sets it.
 
 The Arc panel shows Net Information and Net (copper only), Layer (any board
@@ -321,7 +323,8 @@ toggles its kind and the dropdown stays open; a click outside closes it. It
 edits the same filter as the board Properties panel's chips (#2353),
 through the same `PcbBoardMsg` messages, so the two always show the same
 state. Kinds the board editor cannot pick yet are greyed with why, as their
-chips are.
+chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
+as well as footprint pads, and Other dimensions (`PickKind::of`).
 
 ## Align
 
