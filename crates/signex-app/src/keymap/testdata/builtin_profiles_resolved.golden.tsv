@@ -442,6 +442,10 @@ altium	hint	-	-	rules_set_edit
 altium	hint	-	-	rules_set_apply
 altium	hint	-	-	rules_preset_diff
 altium	hint	-	-	rules_preset_apply
+altium	hint	-	-	panelize_board
+altium	hint	-	-	remove_board_panel
+altium	hint	-	-	set_board_panel
+altium	hint	-	-	board_panel
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -889,3 +893,7 @@ classic	hint	-	-	rules_set_edit
 classic	hint	-	-	rules_set_apply
 classic	hint	-	-	rules_preset_diff
 classic	hint	-	-	rules_preset_apply
+classic	hint	-	-	panelize_board
+classic	hint	-	-	remove_board_panel
+classic	hint	-	-	set_board_panel
+classic	hint	-	-	board_panel

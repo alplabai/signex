@@ -25,6 +25,7 @@ pub mod pcb_graphic;
 pub mod pcb_layer;
 pub mod pcb_options;
 pub mod pcb_origin;
+pub mod pcb_panel;
 pub mod pcb_route_attrs;
 pub mod pcb_sketch;
 pub mod pcb_stack;

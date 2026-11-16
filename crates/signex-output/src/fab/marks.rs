@@ -53,6 +53,8 @@ pub(crate) enum Function {
     Conductor,
     NonConductor,
     Profile,
+    /// A V-score line on the V-cut image (#2410).
+    VScore,
     /// A pad's opening on a solder mask or paste image. The X2 pad
     /// functions are for copper images only.
     PadOpening,
@@ -71,6 +73,7 @@ impl Function {
             Function::Conductor => "Conductor",
             Function::NonConductor => "NonConductor",
             Function::Profile => "Profile",
+            Function::VScore => "Other,VScore",
             Function::PadOpening => "Other,PadOpening",
             Function::Graphic => "Other,Graphic",
         }

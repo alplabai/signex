@@ -1,6 +1,7 @@
 //! The optional `[board_options]` section of a `.snxpcb` (#2374): guides,
 //! extra snap grids, the sheet, the polygon naming scheme, the
-//! designator display and the board origin (#2384).
+//! designator display, the board origin (#2384) and the panel (#2410,
+//! `board_panel`).
 //!
 //! Written only when the options differ from the default, so a board
 //! without any re-saves byte-identical and a file from before the section
@@ -42,6 +43,9 @@ pub(in crate::format) struct BoardOptionsRaw {
     /// Waived design-rule findings (#2399): no geometry, stored as held.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     drc_waivers: Vec<DrcWaiver>,
+    /// The panel (#2410), `format::board_panel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    panel: Option<super::board_panel::PanelRaw>,
 }
 
 /// The board origin (#2384), nm.
@@ -138,6 +142,7 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
             .map(|o| BoardOrigin::new(point(o.x, o.y)))
             .unwrap_or_default(),
         drc_waivers: raw.drc_waivers,
+        panel: raw.panel.map(super::board_panel::read).transpose()?,
     })
 }
 
@@ -217,6 +222,11 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
         })
         .transpose()
         .map_err(|e| refuse(ORIGIN, 0, e))?;
+    let panel = options
+        .panel
+        .as_ref()
+        .map(super::board_panel::write)
+        .transpose()?;
     #[derive(Serialize)]
     struct Wrapper {
         board_options: BoardOptionsRaw,
@@ -230,6 +240,7 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
             grids,
             origin,
             drc_waivers: options.drc_waivers.clone(),
+            panel,
         },
     };
     out.push('\n');

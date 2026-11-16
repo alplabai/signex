@@ -35,6 +35,7 @@ mod graphics;
 mod items;
 pub mod lock;
 mod options;
+mod panel;
 pub mod part_place;
 pub mod placement;
 pub mod pour_edit;

@@ -105,6 +105,11 @@
     "category": "design"
   },
   {
+    "id": "board_panel",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "board_report_bom",
     "group": "Pcb",
     "category": "pcb"
@@ -845,6 +850,11 @@
     "category": "select"
   },
   {
+    "id": "panelize_board",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "paste",
     "group": "General",
     "category": "edit"
@@ -1180,6 +1190,11 @@
     "category": "view"
   },
   {
+    "id": "remove_board_panel",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "remove_last_vertex",
     "group": "General",
     "category": "interactive"
@@ -1413,6 +1428,11 @@
     "id": "set_board_graphic",
     "group": "Pcb",
     "category": "edit"
+  },
+  {
+    "id": "set_board_panel",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "set_layer_sizes",

@@ -316,6 +316,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
+| `board_panel` | Describe the board's panel | pcb | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
@@ -350,6 +351,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_drc_panel` | Open the DRC results panel | pcb | — | — |
 | `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
 | `open_rules` | Open the design rules of the project | design | — | — |
+| `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
 | `place_board_circle` | Draw a full circle by its centre and a point on it on the active non-copper layer | place | — | — |
 | `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
@@ -374,6 +376,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `remove_board_panel` | Remove the board's panel | pcb | — | — |
 | `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
 | `rename_net_class` | Rename a net class | design | — | — |
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
@@ -398,6 +401,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
+| `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |

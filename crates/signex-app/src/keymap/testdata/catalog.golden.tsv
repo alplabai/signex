@@ -349,3 +349,7 @@ rules_set_edit	design	Change the limits of a named rule set	-	PCB	-	-	Always	mut
 rules_set_apply	design	Apply a named rule set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
+panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+remove_board_panel	pcb	Remove the board's panel	Remove Panel	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+set_board_panel	pcb	Change a setting of the board's panel	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,field:text,value:text
+board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document

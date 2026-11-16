@@ -12,6 +12,9 @@ impl Signex {
         match msg {
             M::Requested => self.open_fab_outputs(),
             M::OutputToggled(kind) => self.with_fab_outputs(|s| kind.toggle(&mut s.options)),
+            M::WholePanelToggled => self.with_fab_outputs(|s| {
+                s.whole_panel = s.panel.is_some() && !s.whole_panel;
+            }),
             M::NameEdited(name) => self.with_fab_outputs(|s| s.options.name = name),
             M::FolderEdited(folder) => self.with_fab_outputs(|s| s.folder = folder),
             M::FolderPicked(Some(folder)) => {
@@ -53,8 +56,17 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|tab| tab.title.clone())
             .unwrap_or_default();
+        // A board with a panel writes the whole panel unless unticked (#2410).
+        let panel = self
+            .document_state
+            .pcb_board(&path)
+            .and_then(|board| board.options.panel)
+            .map(|p| (p.columns, p.rows));
+        let mut state = FabOutputsState::new(path, board_name);
+        state.panel = panel;
+        state.whole_panel = panel.is_some();
         self.interaction_state.context_menu = None;
-        self.ui_state.fab_outputs = Some(FabOutputsState::new(path, board_name));
+        self.ui_state.fab_outputs = Some(state);
     }
 
     fn browse_fab_outputs_folder(&mut self) -> Task<Message> {
@@ -87,6 +99,7 @@ impl Signex {
             return Task::none();
         }
         let (board_path, options) = (state.board.clone(), state.options.clone());
+        let whole_panel = state.whole_panel;
         let folder = PathBuf::from(state.folder.trim());
         let board = self
             .document_state
@@ -105,6 +118,7 @@ impl Signex {
         state.outcome = None;
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || {
+                let board = super::write::fab_board(board, whole_panel)?;
                 write_fab_outputs(&board, &options, &folder)
             }),
             move |result| {

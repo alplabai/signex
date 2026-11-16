@@ -366,6 +366,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "export_board_report"
         | "export_board_pdf" => Needs::Pcb,
         "measure_distance" => Needs::MeasureTarget,
+        // #2410: panelisation acts on the board in view.
+        "panelize_board" | "remove_board_panel" | "set_board_panel" => Needs::Pcb,
         // #2373: the board placement tools, and Board Sketch; greyed on a
         // read-only board (#2405).
         "place_board_via"

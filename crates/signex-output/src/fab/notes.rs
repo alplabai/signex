@@ -15,8 +15,6 @@ pub enum FabNote {
     /// Placed parts the BOM lists that have no designator, so the
     /// pick-and-place file has no row for them.
     PartsWithoutDesignator { count: usize },
-    /// V-score lines, which no file written here carries.
-    VScoresNotWritten { count: usize },
     /// Items with a coordinate or size the geometry cannot hold (not
     /// finite, or beyond 1 km), or a graphic missing its points.
     ItemsSkipped { count: usize },
@@ -32,7 +30,7 @@ pub(crate) struct Tally {
 
 impl Tally {
     /// The notes, in a fixed order, leaving out every zero count.
-    pub(crate) fn notes(&self, zones_not_filled: usize, v_scores: usize) -> Vec<FabNote> {
+    pub(crate) fn notes(&self, zones_not_filled: usize) -> Vec<FabNote> {
         [
             FabNote::ZonesNotFilled {
                 count: zones_not_filled,
@@ -41,7 +39,6 @@ impl Tally {
             FabNote::PartsWithoutDesignator {
                 count: self.unnamed_parts,
             },
-            FabNote::VScoresNotWritten { count: v_scores },
             FabNote::ItemsSkipped {
                 count: self.skipped,
             },
@@ -58,7 +55,6 @@ impl FabNote {
             FabNote::ZonesNotFilled { count }
             | FabNote::TextsNotDrawn { count }
             | FabNote::PartsWithoutDesignator { count }
-            | FabNote::VScoresNotWritten { count }
             | FabNote::ItemsSkipped { count } => count,
         }
     }

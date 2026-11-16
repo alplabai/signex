@@ -1,6 +1,7 @@
 //! What the board backdrop draws from the board options (#2374): the
 //! sheet behind the board area, the extra snap grids over it and the
-//! enabled guides across the view, and where the origin marker sits (#2384).
+//! enabled guides across the view, where the origin marker sits (#2384), and
+//! the panel preview (#2410, `panel_preview`).
 //! Pure draw helpers; the canvas holds a [`BoardMarks`] copied from the board
 //! when it changes.
 
@@ -43,6 +44,8 @@ pub struct BoardMarks {
     pub sheet: Option<([f32; 2], [f32; 2])>,
     /// The board origin (#2384), board mm.
     pub origin: [f32; 2],
+    /// The panel round the board (#2410); `None` without one.
+    pub panel: Option<super::panel_preview::PanelPreview>,
 }
 
 impl BoardMarks {
@@ -83,6 +86,7 @@ impl BoardMarks {
             grids,
             sheet,
             origin: [origin.x as f32, origin.y as f32],
+            panel: super::panel_preview::PanelPreview::of(board),
         }
     }
 }

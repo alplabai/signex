@@ -105,5 +105,7 @@ written only when the board waives one. The DRC results panel and the
 `waive_drc_violation` and `unwaive_drc_violation` commands set them, each
 as one `SetBoardOptions` undo step.
 
+The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
+
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

@@ -70,6 +70,9 @@ pub enum FabOutputsMsg {
     /// `fabrication_outputs` ran on the board in view.
     Requested,
     OutputToggled(FabOutput),
+    /// The whole-panel box (#2410): write the board's panel instead of
+    /// the board alone.
+    WholePanelToggled,
     NameEdited(String),
     FolderEdited(String),
     BrowseRequested,
@@ -94,6 +97,8 @@ pub enum FabProblem {
     /// The folder or a file could not be written; the reason as the OS gave
     /// it.
     WriteFailed(String),
+    /// The board's panel does not lay out (#2410); the reason.
+    PanelRefused(String),
 }
 
 /// The open dialog: the board, the files to write, where, and the last
@@ -108,6 +113,11 @@ pub struct FabOutputsState {
     /// The generation of the write in flight; `None` when idle.
     pub writing: Option<u64>,
     pub outcome: Option<Result<FabWritten, FabProblem>>,
+    /// The board's panel as columns and rows when it has one (#2410).
+    pub panel: Option<(u32, u32)>,
+    /// Write the whole panel rather than the board alone; on by default for
+    /// a board with a panel.
+    pub whole_panel: bool,
 }
 
 impl FabOutputsState {
@@ -129,6 +139,8 @@ impl FabOutputsState {
             folder,
             writing: None,
             outcome: None,
+            panel: None,
+            whole_panel: false,
         }
     }
 
@@ -173,6 +185,9 @@ pub(crate) fn problem_text(problem: &FabProblem, i18n: &I18n) -> Localized {
         FabProblem::WriteFailed(why) => {
             t!(i18n, ids::FAB_OUTPUTS_WRITE_FAILED, "why" => why.as_str())
         }
+        FabProblem::PanelRefused(why) => {
+            t!(i18n, ids::FAB_OUTPUTS_PANEL_REFUSED, "why" => why.as_str())
+        }
     }
 }
 
@@ -182,9 +197,6 @@ pub(crate) fn note_text(note: FabNote, i18n: &I18n) -> Localized {
     match note {
         FabNote::ZonesNotFilled { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_ZONES, "count" => count),
         FabNote::TextsNotDrawn { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_TEXTS, "count" => count),
-        FabNote::VScoresNotWritten { .. } => {
-            t!(i18n, ids::FAB_OUTPUTS_NOTE_V_SCORES, "count" => count)
-        }
         FabNote::PartsWithoutDesignator { .. } => {
             t!(i18n, ids::FAB_OUTPUTS_NOTE_UNNAMED_PARTS, "count" => count)
         }

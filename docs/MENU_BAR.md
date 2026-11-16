@@ -184,6 +184,18 @@ how many pours, pieces of copper and removed islands they came to; Repour
 Selected reports the selected pours and says so when none is selected.
 Rules in `docs/PCB_TOOLS.md`, "Repour".
 
+## Tools ▸ Panelize Board and Remove Panel {#tools-panelize-board}
+
+Tools ▸ Panelize Board runs `panelize_board` (#2410) and Tools ▸ Remove
+Panel runs `remove_board_panel`, after Arrange in Box; both are greyed
+while no PCB is open. Panelize Board gives the board in view the default
+panel (two by two, rails top and bottom, mouse bites) as one undo step; on a
+board that already has a panel it changes nothing and says so in Messages.
+Remove Panel makes the board single again as one undo step, and says in
+Messages when there is no panel to remove. The panel's settings are edited in
+the Panel section of the board's Properties. Rules:
+[PANELISATION.md](PANELISATION.md).
+
 ## Back Annotate {#back-annotate}
 
 Tools ▸ Annotation ▸ Back Annotate Schematics... and Design ▸ Update

@@ -184,6 +184,8 @@ Tools/Gloss Selected Routes	item	Gloss Selected Routes	-	-	GlossSelectedRoutes	0
 Tools/Board Shape from Selection	item	Board Shape from Selection	-	-	BoardShapeFromSelection	00100000	cmd:board_shape_from_selection
 Tools/Keepout from Selection	item	Keepout from Selection	-	-	KeepoutFromSelection	00100000	cmd:keepout_from_selection
 Tools/Arrange in Box	item	Arrange in Box	-	-	ArrangeInBox	00100000	cmd:arrange_in_box
+Tools/Panelize Board	item	Panelize Board	-	-	PanelizeBoard	01100000	cmd:panelize_board
+Tools/Remove Panel	item	Remove Panel	-	-	RemoveBoardPanel	01100000	cmd:remove_board_panel
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
 Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Mod+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode

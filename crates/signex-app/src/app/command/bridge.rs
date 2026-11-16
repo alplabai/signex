@@ -320,6 +320,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_report_components" => board_report(signex_output::BoardReportKind::Components),
         "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
         "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
+        "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
+        "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),

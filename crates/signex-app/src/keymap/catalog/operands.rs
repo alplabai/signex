@@ -749,6 +749,14 @@ pub const RULES_PRESET: &[Operand] = &[
     required("document", OperandKind::Document),
     required("preset", OperandKind::Text),
 ];
+/// `set_board_panel` (#2410): one setting of the named board's panel, by its
+/// name (`columns`, `spacing_x`, `separation`, ...) and its value: a whole
+/// number, a length in mm, or `mouse_bites` / `v_score`.
+pub const SET_BOARD_PANEL: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.

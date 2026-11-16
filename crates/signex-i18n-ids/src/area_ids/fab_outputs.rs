@@ -27,9 +27,10 @@ define_ids! {
     FAB_OUTPUTS_BAD_NAME = "fab-outputs-bad-name";
     FAB_OUTPUTS_NO_OUTLINE = "fab-outputs-no-outline";
     FAB_OUTPUTS_WRITE_FAILED = "fab-outputs-write-failed";
+    FAB_OUTPUTS_PANEL = "fab-outputs-panel";
+    FAB_OUTPUTS_PANEL_REFUSED = "fab-outputs-panel-refused";
     FAB_OUTPUTS_NOTE_ZONES = "fab-outputs-note-zones";
     FAB_OUTPUTS_NOTE_TEXTS = "fab-outputs-note-texts";
-    FAB_OUTPUTS_NOTE_V_SCORES = "fab-outputs-note-v-scores";
     FAB_OUTPUTS_NOTE_SKIPPED = "fab-outputs-note-skipped";
     FAB_OUTPUTS_NOTE_UNNAMED_PARTS = "fab-outputs-note-unnamed-parts";
     FAB_OUTPUTS_STALE = "fab-outputs-stale";

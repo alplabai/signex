@@ -118,6 +118,23 @@ fn body<'a>(state: &'a FabOutputsState, i18n: &I18n, tokens: &ThemeTokens) -> El
                 .boxed(),
         );
     }
+    // #2410: a board with a panel writes the whole panel unless unticked.
+    if let Some((columns, rows)) = state.panel {
+        kinds = kinds.push(
+            checkbox(state.whole_panel)
+                .style(crate::panels::form_look::checkbox_style)
+                .size(TS.title)
+                .labelled(t!(
+                    i18n,
+                    ids::FAB_OUTPUTS_PANEL,
+                    "columns" => columns,
+                    "rows" => rows
+                ))
+                .text_size(TS.label)
+                .on_toggle(|_| fo(FabOutputsMsg::WholePanelToggled))
+                .boxed(),
+        );
+    }
     col = col.push(kinds.boxed());
     col = col.push(fields(state, i18n, tokens));
     col = col.push(outcome(state, i18n, tokens));

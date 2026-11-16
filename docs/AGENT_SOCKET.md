@@ -104,7 +104,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
-  `query_board_nets` and `find_similar_items` (#2403);
+  `query_board_nets` and `find_similar_items` (#2403), and the board's panel
+  `board_panel` (#2410);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -137,9 +138,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
   each, answered with the drawing as JSON), and the length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
-  board, answered with the tuned nets and their lengths as JSON). A test
-  pins this set, so a catalog row that joins or leaves it is a visible
-  decision.
+  board, answered with the tuned nets and their lengths as JSON), and the
+  panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
+  (#2410; one undo step on the named board each, answered with the panel as
+  JSON). A test pins this set, so a catalog row that joins or leaves it is a
+  visible decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is

@@ -117,6 +117,21 @@ impl Signex {
                 });
             }
             PcbBoardMsg::SheetFromBoardToggled => self.toggle_pcb_sheet_from_board(),
+            // #2410: the Panel section's buttons run the menu rows' commands.
+            PcbBoardMsg::PanelizeClicked => {
+                let command = crate::menu_bar::MenuMessage::command("panelize_board");
+                task = Task::done(Message::Menu(command));
+            }
+            PcbBoardMsg::PanelRemoveClicked => {
+                let command = crate::menu_bar::MenuMessage::command("remove_board_panel");
+                task = Task::done(Message::Menu(command));
+            }
+            PcbBoardMsg::PanelSeparationPicked(separation) => {
+                let separation = *separation;
+                self.edit_active_board_panel(|panel| {
+                    Ok(std::mem::replace(&mut panel.separation, separation) != separation)
+                });
+            }
             PcbBoardMsg::FastGridApplied(index) => self.apply_pcb_fast_grid(*index),
             PcbBoardMsg::ComponentsSelected(side) => self.select_pcb_components(*side),
             PcbBoardMsg::DrcResultsOpened => {

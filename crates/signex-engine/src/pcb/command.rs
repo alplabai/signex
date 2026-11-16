@@ -3,6 +3,7 @@ use signex_types::pcb::{
     BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
 };
 use signex_types::pcb_options::BoardOptions;
+use signex_types::pcb_panel::BoardPanel;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::pcb_stack::LayerStack;
 use signex_types::property::PcbProperty;
@@ -17,6 +18,7 @@ use super::graphics;
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
 use super::lock;
 use super::options;
+use super::panel;
 use super::replace::{self, FootprintPad, Values};
 use super::stack::{self, StackSnapshot};
 
@@ -198,6 +200,12 @@ pub enum BoardCommand {
     /// inverse of [`BoardCommand::AddGraphics`]. Refused unless the list
     /// still ends with exactly them.
     RemoveGraphics { graphics: Vec<BoardGraphic> },
+    /// Set the board's panel (#2410), `None` to make the board on its own.
+    /// Refused for a panel that breaks a rule of `BoardPanel::check`.
+    /// Whether it lays out on the outline is the caller's check: the outline
+    /// may change later and an undo must restore what was there. The inverse
+    /// is another one holding the old panel.
+    SetBoardPanel { panel: Option<Box<BoardPanel>> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -247,6 +255,8 @@ pub enum BoardPatchKind {
     ItemsLockSet,
     /// Board drawings added or removed. Names no items.
     GraphicsChanged,
+    /// The panel (#2410). Names no items.
+    PanelChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -332,6 +342,7 @@ impl BoardCommand {
             Self::SetItemsLocked { items: locks } => lock::set_locked(board, locks),
             Self::AddGraphics { graphics } => graphics::add(board, graphics),
             Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
+            Self::SetBoardPanel { panel: new } => panel::set(board, new.map(|p| *p)),
         }
     }
 }

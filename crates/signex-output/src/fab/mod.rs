@@ -231,10 +231,9 @@ pub fn generate(
     } else {
         0
     };
-    let v_scores = board.sketch.as_ref().map_or(0, |s| s.v_scores.len());
     Ok(FabSet {
         files,
-        notes: tally.notes(zones_not_filled, v_scores),
+        notes: tally.notes(zones_not_filled),
     })
 }
 

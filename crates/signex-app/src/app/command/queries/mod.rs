@@ -6,7 +6,7 @@
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403). Each
+//! (#2403), and `board_panel` (#2410, `app::board_panel`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -58,6 +58,7 @@ const QUERY_IDS: &[&str] = &[
     "find_similar_items",
     "rules_matrix_get",
     "rules_preset_diff",
+    "board_panel",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -149,6 +150,7 @@ impl Signex {
             "measure_board" => self.measure_board(args),
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),
+            "board_panel" => self.board_panel_query(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

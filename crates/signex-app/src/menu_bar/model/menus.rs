@@ -530,6 +530,10 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_shape_from_selection", "")),
         cmd_item_gated(ctx, cmd("keepout_from_selection", "")),
         cmd_item_gated(ctx, cmd("arrange_in_box", "")),
+        // #2410: array the board in view into a panel, or make it single
+        // again; one undo step each. docs/PANELISATION.md
+        cmd_item_gated(ctx, cmd("panelize_board", "")),
+        cmd_item_gated(ctx, cmd("remove_board_panel", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.

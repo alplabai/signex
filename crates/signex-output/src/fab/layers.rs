@@ -6,7 +6,8 @@ use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer, TechnicalLayer};
 
 /// One Gerber image: a copper layer, a side's legend, mask or paste, or
-/// the board profile. Ordered the way the files are written.
+/// the board profile, or the V-score lines. Ordered the way the files are
+/// written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum FabLayer {
     Copper(CopperLayer),
@@ -14,6 +15,8 @@ pub(crate) enum FabLayer {
     Mask(Face),
     Paste(Face),
     Profile,
+    /// The V-score lines (#2410): the board sketch's and a panel's.
+    VScore,
 }
 
 /// A board face, ordered top first.
@@ -130,6 +133,7 @@ pub(crate) fn file_function(layer: FabLayer, stack: &CopperStack) -> String {
         FabLayer::Mask(face) => format!("Soldermask,{}", face.word()),
         FabLayer::Paste(face) => format!("Paste,{}", face.word()),
         FabLayer::Profile => "Profile,NP".to_string(),
+        FabLayer::VScore => "Vcut".to_string(),
     }
 }
 
@@ -157,6 +161,7 @@ pub(crate) fn file_suffix(layer: FabLayer, stack: &CopperStack) -> String {
         FabLayer::Mask(face) => format!("soldermask-{}", face.file_word()),
         FabLayer::Paste(face) => format!("paste-{}", face.file_word()),
         FabLayer::Profile => "profile".to_string(),
+        FabLayer::VScore => "vscore".to_string(),
     }
 }
 

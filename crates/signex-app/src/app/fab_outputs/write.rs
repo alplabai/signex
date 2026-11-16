@@ -58,6 +58,16 @@ pub(crate) fn write_fab_outputs(
     })
 }
 
+/// The board the files are made from: its whole panel (#2410) when asked
+/// and the board has one, else the board itself.
+pub(crate) fn fab_board(board: PcbBoard, whole_panel: bool) -> Result<PcbBoard, FabProblem> {
+    match board.options.panel {
+        Some(panel) if whole_panel => pcb_geom::panel::panel_board(&board, &panel)
+            .map_err(|e| FabProblem::PanelRefused(e.to_string())),
+        _ => Ok(board),
+    }
+}
+
 /// The `<stem>-*` fabrication files in `folder` that are not in `written`.
 fn stale_files(folder: &Path, stem: &str, written: &[String]) -> std::io::Result<Vec<String>> {
     let prefix = format!("{stem}-");

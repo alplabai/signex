@@ -169,6 +169,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #2389: length tuning on a named board.
     ("tune_net_length", tune::tune_net_length),
     ("tune_diff_pair", tune::tune_diff_pair),
+    ("panelize_board", crate::app::board_panel::panelize_board),
+    (
+        "remove_board_panel",
+        crate::app::board_panel::remove_board_panel,
+    ),
+    ("set_board_panel", crate::app::board_panel::set_board_panel),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -283,6 +289,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // #2410: a person edits the panel in the board's Properties.
+        "set_board_panel" => Some(
+            "`set_board_panel` needs the operands `document`, `field` and `value` — \
+             use the Panel section of the board's Properties",
         ),
         "set_selection_filters" => Some(
             "`set_selection_filters` needs the operand `kinds` — \

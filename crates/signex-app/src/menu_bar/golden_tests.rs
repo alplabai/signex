@@ -387,6 +387,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("repour_selected", "RepourSelected"),
     ("repour_all", "RepourAll"),
     ("reannotate_board", "ReannotateBoard"),
+    // #2410: fixture names only.
+    ("panelize_board", "PanelizeBoard"),
+    ("remove_board_panel", "RemoveBoardPanel"),
     // #2404: the board reports.
     ("board_report_bom", "BoardReportBom"),
     ("board_report_netlist", "BoardReportNetlist"),

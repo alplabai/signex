@@ -1,6 +1,7 @@
 //! The board as Gerber images: every item on the image of its layer, in a
 //! fixed order (zone fills, footprints, tracks, vias, board graphics,
-//! extra strokes, then the profile), so one board gives the same bytes.
+//! extra strokes, the profile, then the V-score lines), so one board gives
+//! the same bytes.
 
 use std::collections::BTreeMap;
 
@@ -50,6 +51,7 @@ pub(crate) fn collect(
     board_graphics(&mut images, board, tally);
     extra_strokes(&mut images, extras, tally);
     profile(&mut images, board, tally);
+    v_scores(&mut images, board, tally);
     images
 }
 
@@ -542,6 +544,27 @@ fn profile(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
             Some(mark) => push(images, FabLayer::Profile, mark),
             None if ring.is_empty() => {}
             None => tally.skipped += 1,
+        }
+    }
+}
+
+/// The board sketch's V-score lines (#2410), each a straight stroke with the
+/// profile's pen on the V-cut image.
+fn v_scores(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+    for score in board.sketch.iter().flat_map(|s| s.v_scores.iter()) {
+        match (board_to_fab(score.from), board_to_fab(score.to)) {
+            (Ok(start), Ok(end)) => push(
+                images,
+                FabLayer::VScore,
+                Mark::Stroke {
+                    width: PROFILE_WIDTH_NM,
+                    function: Function::VScore,
+                    start,
+                    steps: vec![Step::Line(end)],
+                    attributes: Attributes::default(),
+                },
+            ),
+            _ => tally.skipped += 1,
         }
     }
 }

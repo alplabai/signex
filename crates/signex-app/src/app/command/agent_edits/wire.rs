@@ -249,6 +249,18 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "tune_diff_pair",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "panelize_board",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "remove_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 const BOARD_EDIT: &str =

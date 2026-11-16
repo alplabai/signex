@@ -32,6 +32,7 @@ The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 | `<name>-soldermask-<top\|bottom>.gbr` | mask openings (negative polarity) |
 | `<name>-paste-<top\|bottom>.gbr` | paste apertures |
 | `<name>-profile.gbr` | board outline and through cutouts |
+| `<name>-vscore.gbr` | V-score lines, when there are any (#2410) |
 | `<name>-pth.drl`, `<name>-npth.drl` | plated and non-plated holes and slots through the whole stack |
 | `<name>-blind-l<i>-l<j>.drl`, `<name>-buried-l<i>-l<j>.drl` | plated holes of a blind or buried via span, one file per span |
 | `<name>-drill-table.csv` | per file and tool: diameter, hole and slot counts |
@@ -95,7 +96,18 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
 - **Text (#2387).** Board and footprint text needs the stroke font board text
   drawing brings; stroked glyphs enter through `FabExtras::strokes`. Until
   then the dialog notes how many texts were not drawn.
-- V-score lines are not written; the dialog notes them.
+
+## V-score lines and panels (#2410)
+
+The board sketch's V-score lines are written on their own image,
+`<name>-vscore.gbr` (`.FileFunction` `Vcut`), one stroke per line with the
+profile's pen and `.AperFunction` `Other,VScore`. A board without one writes
+no such file. When the board has a panel (`docs/PANELISATION.md`) the dialog
+shows a "Whole panel" box, ticked by default: Generate then writes the panel
+as one board (every copy, the frame as the profile, the routed edges, the
+fiducials, the tooling and bite holes in the non-plated drill file, and the
+panel's V-scores). Unticked, the board alone is written. A panel that does
+not lay out on the board's outline is refused with the reason.
 
 ## Drill
 

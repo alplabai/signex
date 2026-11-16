@@ -29,6 +29,7 @@ mod mst;
 mod net_length;
 mod net_report;
 mod obstacle;
+pub mod panel;
 mod pick_filter;
 mod pour_edit;
 mod ratsnest;

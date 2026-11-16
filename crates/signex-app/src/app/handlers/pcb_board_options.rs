@@ -75,6 +75,10 @@ impl Signex {
         let Some(text) = self.ui_state.pcb_board_panel.drafts.remove(&field) else {
             return;
         };
+        if let BoardField::Panel(setting) = field {
+            self.submit_board_panel_setting(setting, &text);
+            return;
+        }
         if let BoardField::GridName(id) = field {
             let name = text.trim().to_string();
             if !name.is_empty() {
@@ -137,7 +141,7 @@ impl Signex {
             BoardField::SheetHeight => {
                 self.edit_pcb_board_options(|o| set(&mut o.sheet.height, mm));
             }
-            BoardField::GridName(_) => {}
+            BoardField::GridName(_) | BoardField::Panel(_) => {}
         }
     }
 
