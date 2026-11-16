@@ -2,9 +2,9 @@
 //! board view (ratsnest, layers) and board sketch mode.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
-pub(super) const PCB: &[CommandMetadata] = &[
+pub const PCB: &[CommandMetadata] = &[
     // Read-only: the report goes to the Messages panel, the board is not touched.
     CommandMetadata {
         id: "run_drc",
