@@ -5,8 +5,12 @@
 //! text note arms the text tool with its text and style. The add-vertex half
 //! of the same key, while a wire or a shape is being drawn, is not here.
 
+use std::path::Path;
+
 use iced::Task;
-use signex_types::schematic::{LabelType, SCHEMATIC_PT_TO_MM, SelectedItem, SelectedKind};
+use signex_types::schematic::{
+    Label, LabelType, Point, SCHEMATIC_PT_TO_MM, SelectedItem, SelectedKind, TextNote,
+};
 
 use crate::app::state::PlacementKind;
 use crate::app::{Message, Signex, Tool};
@@ -20,6 +24,14 @@ struct CopiedLook {
     kind: PrePlacementKind,
     text: String,
     style: PrePlacementStyle,
+    /// The copy the cursor shows until the click.
+    ghost: CopiedGhost,
+}
+
+/// The ghost of a copied label or text note, at the cursor origin.
+enum CopiedGhost {
+    Label(Label),
+    Text(TextNote),
 }
 
 /// The form's text size in points for a text height in mm (10 pt when the
@@ -32,8 +44,9 @@ fn size_pt(font_size_mm: f64) -> u32 {
     }
 }
 
-fn font_name(family: Option<&String>) -> String {
-    family.cloned().unwrap_or_else(|| "Iosevka".to_string())
+/// The form's font: the object's own, else the sheet's default font.
+fn font_name(family: Option<&String>, sheet_default: &str) -> String {
+    family.cloned().unwrap_or_else(|| sheet_default.to_string())
 }
 
 impl Signex {
@@ -62,7 +75,7 @@ impl Signex {
             self.arm_part_copy(&target, item.uuid);
             return Task::none();
         }
-        match self.copied_look(item) {
+        match self.copied_look(item, &target) {
             Some(look) => self.arm_copied_look(look),
             None => {
                 crate::diagnostics::log_info(
@@ -111,8 +124,9 @@ impl Signex {
 
     /// The tool, text and style that place another of the label or text
     /// note `item`; `None` for any other object.
-    fn copied_look(&self, item: SelectedItem) -> Option<CopiedLook> {
-        let doc = self.document_state.active_engine()?.document();
+    fn copied_look(&self, item: SelectedItem, target: &Path) -> Option<CopiedLook> {
+        let doc = self.document_state.engines.get(target)?.document();
+        let default_font = self.document_state.schematic_default_font_for(target);
         match item.kind {
             SelectedKind::Label => {
                 let label = doc.labels.iter().find(|l| l.uuid == item.uuid)?;
@@ -135,11 +149,17 @@ impl Signex {
                     text: label.text.clone(),
                     style: PrePlacementStyle {
                         rotation: label.rotation,
-                        font: font_name(label.font_family.as_ref()),
+                        font: font_name(label.font_family.as_ref(), &default_font),
                         font_size_pt: size_pt(label.font_size),
                         justify_h: label.justify,
                         justify_v: label.justify_v,
                     },
+                    ghost: CopiedGhost::Label(Label {
+                        uuid: uuid::Uuid::now_v7(),
+                        position: Point::new(0.0, 0.0),
+                        locked: false,
+                        ..label.clone()
+                    }),
                 })
             }
             SelectedKind::TextNote => {
@@ -151,11 +171,17 @@ impl Signex {
                     text: note.text.clone(),
                     style: PrePlacementStyle {
                         rotation: note.rotation,
-                        font: font_name(note.font_family.as_ref()),
+                        font: font_name(note.font_family.as_ref(), &default_font),
                         font_size_pt: size_pt(note.font_size),
                         justify_h: note.justify_h,
                         justify_v: note.justify_v,
                     },
+                    ghost: CopiedGhost::Text(TextNote {
+                        uuid: uuid::Uuid::now_v7(),
+                        position: Point::new(0.0, 0.0),
+                        locked: false,
+                        ..note.clone()
+                    }),
                 })
             }
             _ => None,
@@ -183,6 +209,11 @@ impl Signex {
         pre.label_text = look.text;
         pre.set_style(look.style);
         self.document_state.panel_ctx.pre_placement = Some(pre);
+        let canvas = self.interaction_state.active_canvas_mut();
+        match look.ghost {
+            CopiedGhost::Label(label) => canvas.ghost_label = Some(label),
+            CopiedGhost::Text(note) => canvas.ghost_text = Some(note),
+        }
         armed
     }
 }

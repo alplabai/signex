@@ -154,8 +154,7 @@ impl ReadPlan {
             .texts
             .into_iter()
             .map(|path| {
-                let read = std::fs::read_to_string(&path)
-                    .map_err(|error| format!("{} could not be read ({error})", path.display()));
+                let read = crate::app::handlers::placement_extras::read_import_text(&path);
                 (path, read)
             })
             .collect();

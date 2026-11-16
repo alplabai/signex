@@ -221,20 +221,15 @@ pub(super) fn arrange_entries(
     .collect()
 }
 
-/// Part Actions submenu (#2419) — the placed part's library actions, live
-/// when one placed part is selected and the command's own rule allows it.
+/// Part Actions submenu (#2419) — the placed part's library actions, then
+/// Autoplace Fields and Copy Attributes (#1667), live when one placed part is
+/// selected and the command's own rule allows it.
 pub(super) fn part_actions_entries(
     i18n: &I18n,
     selection: CanvasSelection,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
-    [
-        "open_datasheet",
-        "edit_selected_symbol_in_symbol_editor",
-        "change_component",
-    ]
-    .into_iter()
-    .map(|id| {
+    let row = |id: &'static str| {
         dd_ruled(
             i18n,
             None,
@@ -243,8 +238,15 @@ pub(super) fn part_actions_entries(
             &selection.commands,
             selection.placed_part_selected,
         )
-    })
-    .collect()
+    };
+    vec![
+        row("open_datasheet"),
+        row("edit_selected_symbol_in_symbol_editor"),
+        row("change_component"),
+        DropdownEntry::Separator,
+        row("autoplace_fields"),
+        row("copy_attributes_or_add_vertex"),
+    ]
 }
 
 /// Sheet Actions submenu (#2419) — the selected sheet symbol's child-sheet

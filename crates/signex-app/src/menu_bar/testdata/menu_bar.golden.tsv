@@ -114,6 +114,9 @@ Place/Note	item	Note	-	-	PlaceNote	01-00000	cmd:place_note
 Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	cmd:place_no_connect
 Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01-00000	cmd:place_sheet_entry
 Place/---	separator	-	-	-	-	-	-
+Place/Design Block...	item	Design Block...	-	-	PlaceDesignBlock	01-00000	cmd:place_design_block
+Place/Import Graphics...	item	Import Graphics...	-	-	ImportGraphics	01-00000	cmd:import_graphics
+Place/---	separator	-	-	-	-	-	-
 Place/Ports & Connectors	submenu	Ports & Connectors	-	-	-	-	-
 Place/Ports & Connectors/Port	item	Port	-	-	PlacePort	01-00000	cmd:place_port
 Place/Ports & Connectors/Off Sheet Connector	item	Off Sheet Connector	-	-	PlaceOffSheetConnector	01-00000	cmd:place_off_sheet_connector

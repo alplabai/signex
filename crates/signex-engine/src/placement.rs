@@ -124,7 +124,9 @@ impl PlacementPayload {
         f.labels.iter_mut().for_each(|l| shift(&mut l.position));
         f.text_notes.iter_mut().for_each(|t| shift(&mut t.position));
         for d in &mut f.drawings {
-            drawing_points_mut(d).into_iter().for_each(|p| shift(p));
+            for p in drawing_points_mut(d) {
+                shift(p);
+            }
         }
         Self::new(f)
     }
@@ -348,11 +350,16 @@ impl PlacementPayload {
 /// Every point that places drawing `d` (a circle's centre; its radius is a
 /// length, not a point).
 pub(crate) fn drawing_points(d: &SchDrawing) -> Vec<Point> {
-    let mut copy = d.clone();
-    drawing_points_mut(&mut copy)
-        .into_iter()
-        .map(|p| *p)
-        .collect()
+    match d {
+        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
+            vec![*start, *end]
+        }
+        SchDrawing::Circle { center, .. } => vec![*center],
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => vec![*start, *mid, *end],
+        SchDrawing::Polyline { points, .. } => points.clone(),
+    }
 }
 
 /// [`drawing_points`], to move them.

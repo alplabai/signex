@@ -103,6 +103,33 @@ fn autoplace_fields_with_no_part_selected_changes_nothing() {
     assert_eq!(p1(&app), before);
 }
 
+/// A locked part in the selection keeps its fields; the others are placed.
+#[test]
+fn autoplace_fields_skips_a_locked_part_and_places_the_rest() {
+    let mut sheet = sheet_with_moved_fields();
+    let mut locked = part("P2", "lib:p", 1, (152.4, 101.6));
+    locked.ref_text = Some(field(200.0, 20.0));
+    locked.fields_user_placed = true;
+    locked.locked = true;
+    sheet.symbols.push(locked);
+    let mut app = app_with_sheet(sheet);
+    select(&mut app, &[("P1", 1), ("P2", 1)], false);
+    let p2 = |app: &Signex| {
+        doc(app)
+            .symbols
+            .iter()
+            .find(|s| s.reference == "P2")
+            .cloned()
+            .expect("P2 on the sheet")
+    };
+    let before = p2(&app);
+
+    let _ = extras(&mut app, PlacementExtrasMsg::AutoplaceFieldsRequested);
+
+    assert!(!p1(&app).fields_user_placed, "the unlocked part is placed");
+    assert_eq!(p2(&app), before, "the locked part keeps its fields");
+}
+
 #[test]
 fn copy_attributes_on_a_label_arms_the_label_tool_with_its_text() {
     let mut app = app_with_sheet(populated_sheet());
@@ -116,6 +143,12 @@ fn copy_attributes_on_a_label_arms_the_label_tool_with_its_text() {
     assert_eq!(app.interaction_state.current_tool, Tool::Label);
     let form = app.document_state.panel_ctx.pre_placement.as_ref().unwrap();
     assert_eq!(form.label_text, "D0");
+    let ghost = app.interaction_state.active_canvas().ghost_label.as_ref();
+    assert_eq!(
+        ghost.map(|label| label.text.as_str()),
+        Some("D0"),
+        "the copy follows the cursor"
+    );
     click(&mut app, (60.96, 60.96));
     let texts: Vec<&str> = doc(&app).labels.iter().map(|l| l.text.as_str()).collect();
     assert_eq!(texts.len(), 2, "{texts:?}");

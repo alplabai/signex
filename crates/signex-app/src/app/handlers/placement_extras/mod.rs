@@ -12,6 +12,8 @@ mod copy_attributes;
 mod design_block;
 mod import_graphics;
 
+pub(crate) use import_graphics::read_import_text;
+
 use std::path::{Path, PathBuf};
 
 use iced::Task;

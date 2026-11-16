@@ -18,6 +18,7 @@ mod key_names;
 mod language_switch;
 mod library_window_rows;
 mod place_design_rows;
+mod placement_extras_rows;
 mod sheet_place_rows;
 mod view_rows;
 mod walk;

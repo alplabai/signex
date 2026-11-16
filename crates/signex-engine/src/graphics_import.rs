@@ -4,7 +4,8 @@
 //! VERTEX rows). A polyline's bulges are read as straight segments. Every
 //! other entity is counted as skipped, so the caller can say so. Lengths are
 //! scaled from the header's `$INSUNITS` to mm (no units: mm) and Y is turned
-//! down, as the sheet's Y grows down the page.
+//! down, as the sheet's Y grows down the page. A circle, arc or polyline whose
+//! plane faces down the Z axis is mirrored back into the drawing's X.
 
 use signex_types::schematic::{FillType, Point, SchDrawing};
 use uuid::Uuid;
@@ -151,8 +152,9 @@ struct EntityReader {
     width_mm: f64,
     drawings: Vec<SchDrawing>,
     skipped: usize,
-    /// A POLYLINE being filled by its VERTEX rows, and whether it is closed.
-    polyline: Option<(Vec<Point>, bool)>,
+    /// A POLYLINE being filled by its VERTEX rows, whether it is closed, and
+    /// its plane's X sign (see [`Fields::plane_x`]).
+    polyline: Option<(Vec<Point>, bool, f64)>,
 }
 
 impl EntityReader {
@@ -178,30 +180,34 @@ impl EntityReader {
                 });
             }
             "CIRCLE" => {
-                let center = self.point(fields.number(10)?, fields.number(20)?);
+                let sign = fields.plane_x();
+                let center = self.point(sign * fields.number(10)?, fields.number(20)?);
                 let radius = fields.number(40)? * self.scale;
                 self.push_circle(center, radius);
             }
             "ARC" => self.read_arc(&fields)?,
             "LWPOLYLINE" => {
+                let sign = fields.plane_x();
                 let xs = fields.all(10)?;
                 let ys = fields.all(20)?;
                 let points: Vec<Point> = xs
                     .iter()
                     .zip(&ys)
-                    .map(|(x, y)| self.point(*x, *y))
+                    .map(|(x, y)| self.point(sign * *x, *y))
                     .collect();
                 self.push_polyline(points, fields.flags() & 1 == 1);
             }
             // A POLYLINE's points come in the VERTEX rows that follow it.
             "POLYLINE" => {
                 self.finish_polyline();
-                self.polyline = Some((Vec::new(), fields.flags() & 1 == 1));
+                self.polyline = Some((Vec::new(), fields.flags() & 1 == 1, fields.plane_x()));
             }
             "VERTEX" => {
-                let at = self.point(fields.number(10)?, fields.number(20)?);
+                let (x, y) = (fields.number(10)?, fields.number(20)?);
+                let sign = self.polyline.as_ref().map_or(1.0, |(_, _, sign)| *sign);
+                let at = self.point(sign * x, y);
                 match self.polyline.as_mut() {
-                    Some((points, _)) => points.push(at),
+                    Some((points, _, _)) => points.push(at),
                     None => self.skipped += 1,
                 }
             }
@@ -213,6 +219,7 @@ impl EntityReader {
 
     /// DXF arcs run counter-clockwise from the start angle to the end angle.
     fn read_arc(&mut self, fields: &Fields<'_, '_>) -> Result<(), GraphicsImportError> {
+        let sign = fields.plane_x();
         let (cx, cy) = (fields.number(10)?, fields.number(20)?);
         let radius = fields.number(40)?;
         let from = fields.number(50)?;
@@ -222,13 +229,14 @@ impl EntityReader {
             return Ok(());
         }
         if sweep == 0.0 {
-            let center = self.point(cx, cy);
+            let center = self.point(sign * cx, cy);
             self.push_circle(center, radius * self.scale);
             return Ok(());
         }
+        // Points on the arc in its own plane, then into the drawing's X.
         let on_arc = |degrees: f64| {
             let a = degrees.to_radians();
-            self.point(cx + radius * a.cos(), cy + radius * a.sin())
+            self.point(sign * (cx + radius * a.cos()), cy + radius * a.sin())
         };
         let start = on_arc(from);
         let mid = on_arc(from + sweep / 2.0);
@@ -282,7 +290,7 @@ impl EntityReader {
 
     /// Add the POLYLINE its VERTEX rows filled, if one is open.
     fn finish_polyline(&mut self) {
-        if let Some((points, closed)) = self.polyline.take() {
+        if let Some((points, closed, _)) = self.polyline.take() {
             self.push_polyline(points, closed);
         }
     }
@@ -324,6 +332,19 @@ impl Fields<'_, '_> {
             .ok()
             .filter(|v| v.is_finite())
             .ok_or_else(|| self.missing(code))
+    }
+
+    /// The X sign of the entity's own plane: -1 when its extrusion points
+    /// down the Z axis (code 230 negative), as a drawing mirrored in a CAD
+    /// tool often stores circles, arcs and polylines; else 1.
+    fn plane_x(&self) -> f64 {
+        let down = self
+            .pairs
+            .iter()
+            .find(|(c, _)| *c == 230)
+            .and_then(|(_, v)| v.parse::<f64>().ok())
+            .is_some_and(|z| z < 0.0);
+        if down { -1.0 } else { 1.0 }
     }
 
     /// The entity's flags (code 70); bit 1 is "closed" on a polyline.

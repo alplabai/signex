@@ -14,27 +14,26 @@ impl Engine {
         before: SchematicSheet,
         ids: &[Uuid],
     ) -> CommandResult {
-        let snapshot = self.document.clone();
-        let mut changed = false;
-        for symbol in self
-            .document
+        // Every part is placed against the sheet as it was before the command.
+        let doc = &self.document;
+        let placed: Vec<(usize, signex_types::schematic::Symbol)> = doc
             .symbols
-            .iter_mut()
-            .filter(|s| ids.contains(&s.uuid))
-        {
-            let Some(lib) = snapshot.body_of(symbol) else {
-                continue;
-            };
-            let mut placed = symbol.clone();
-            placed.fields_user_placed = false;
-            autoplace_fields(&mut placed, lib, &snapshot);
-            if placed != *symbol {
-                *symbol = placed;
-                changed = true;
-            }
-        }
-        if !changed {
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| ids.contains(&s.uuid))
+            .filter_map(|(index, symbol)| {
+                let lib = doc.body_of(symbol)?;
+                let mut placed = symbol.clone();
+                placed.fields_user_placed = false;
+                autoplace_fields(&mut placed, lib, doc);
+                (placed != *symbol).then_some((index, placed))
+            })
+            .collect();
+        if placed.is_empty() {
             return CommandResult::unchanged();
+        }
+        for (index, symbol) in placed {
+            self.document.symbols[index] = symbol;
         }
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SymbolFieldsUpdated,

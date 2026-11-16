@@ -15,6 +15,7 @@ use signex_widgets::tree_view::TreeIcon;
 
 mod board_view_rows;
 mod new_project_row;
+mod placement_extras_rows;
 mod row_effects;
 mod sheet_rules;
 mod update_pcb_rows;

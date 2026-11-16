@@ -1,6 +1,6 @@
 # id	category	label	menu_label	group	icon	keybind	enablement	flags	operands
 apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?,expect_revisions:text?
-autoplace_fields	edit	Autoplace fields	-	General	-	-	RequiresSelection	mutates_doc,undoable	id:text,document:document
+autoplace_fields	edit	Autoplace fields	Autoplace Fields	General	-	-	RequiresSelection	mutates_doc,undoable	id:text,document:document
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
 send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -14,7 +14,7 @@ check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:docu
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-
 copy	edit	Copy	-	General	-	-	RequiresSelection	runs_headless	-
-copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
+copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	Copy Attributes	General	-	-	Always	gui_only,mutates_doc,undoable	-
 cross_probe	select	Cross probe the selection to the board or schematic	Cross Probe	General	-	-	RequiresSelection	gui_only	-
 cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
@@ -45,7 +45,7 @@ find_next	search	Find next	-	General	-	-	Always	gui_only	-
 find_previous	search	Find previous	-	General	-	-	Always	gui_only	-
 find_similar_objects	select	Find Similar Objects	Find Similar Objects...	General	-	-	RequiresSelection	gui_only	-
 find_text	search	Find text	-	General	-	-	Always	gui_only	-
-import_graphics	place	Import graphics	-	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
+import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -138,7 +138,7 @@ open_components_panel	panels	Open Components panel / place components	Component.
 open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
+place_design_block	place	Place design block	Design Block...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?,document:document?
 place_hierarchical_label	place	Place hierarchical label	Hierarchical Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?,document:document?
 place_junction	place	Place junction	Junction	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,allow_merge:bool?,document:document?

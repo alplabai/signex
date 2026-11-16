@@ -567,7 +567,9 @@ import_graphics path=<drawing .dxf> at=x,y [document=..]
   shape line width, scaled from the file's `$INSUNITS` to mm (no units: mm),
   Y turned down. It answers `{"placed", "skipped"}`; `skipped` counts the
   entities it does not read (text, blocks, hatches, splines). A polyline's
-  bulges are read as straight segments.
+  bulges are read as straight segments. A circle, arc or polyline whose
+  plane faces down Z (extrusion `0,0,-1`) is mirrored back in X. A file over
+  64 MiB is refused before it is read.
 
 `at` is where the grid-snapped centre of the content lands, as the cursor
 holds it; a point off the grid is refused as for any placement. The file is

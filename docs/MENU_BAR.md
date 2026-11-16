@@ -331,7 +331,9 @@ three has a default key).
 Place on a sheet lists every schematic placement tool the Active Bar has
 (#2415). The top rows are the wiring, part and text tools: Wire, Bus, Bus
 Entry, Net Label, Component, Power Port, Junction, Text, Text Frame, Note, No
-Connect and Sheet Entry. Three submenus follow, grouped like the bar's
+Connect and Sheet Entry. Design Block... (`place_design_block`) and Import
+Graphics... (`import_graphics`) follow (#1667): each asks for a file and puts
+its content on the cursor. Three submenus follow, grouped like the bar's
 buttons (`menu_bar/model/sheet_place.rs`):
 
 - **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
@@ -511,8 +513,10 @@ X, Mirror Y, Delete; Highlight Net (`highlight_net_under_cursor`), Net Color...
 (`open_net_color_palette`), Assign Net Class...; Comment, Pin Mapping, Project
 Options, Preferences; with a selection, Supplier Links and Properties.
 
-Part Actions holds Open Datasheet, Edit Symbol and Change Component, live with
-one placed part selected. Sheet Actions holds Open Child Sheet, Create Sheet
+Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
+Autoplace Fields and Copy Attributes (#1667), live with one placed part
+selected. Copy Attributes copies the object at the point the menu was opened
+over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol and Sync Sheet Pins, live with a sheet symbol selected, and
 Number Schematic Sheets.
 

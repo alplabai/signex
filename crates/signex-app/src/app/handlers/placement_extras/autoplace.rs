@@ -32,12 +32,43 @@ impl Signex {
         ids
     }
 
+    /// `ids` split into the parts the lock rule lets Autoplace Fields edit and
+    /// the references of those it holds, by the engine's own lock rule.
+    fn unlocked_parts(&self, ids: Vec<Uuid>) -> (Vec<Uuid>, Vec<String>) {
+        let Some(engine) = self.document_state.edit_engine() else {
+            return (ids, Vec::new());
+        };
+        let mut held = Vec::new();
+        let free = ids
+            .into_iter()
+            .filter(|id| {
+                let probe = signex_engine::Command::AutoplaceFields {
+                    symbol_ids: vec![*id],
+                };
+                if engine.lock_refusal(&probe).is_none() {
+                    return true;
+                }
+                let name = engine.document().symbols.iter().find(|s| s.uuid == *id);
+                held.push(name.map_or_else(|| id.to_string(), |s| s.reference.clone()));
+                false
+            })
+            .collect();
+        (free, held)
+    }
+
     /// The key, the palette and the menu: the selected parts. Says in the
     /// Messages panel when there is nothing to do.
     pub(super) fn autoplace_selected_fields(&mut self) {
         let ids = self.selected_part_ids();
         if ids.is_empty() {
             crate::diagnostics::log_info("Autoplace fields: select one or more parts first.");
+            return;
+        }
+        // A locked part keeps its fields; the others are still placed, as a
+        // move of a selection skips its locked items.
+        let (ids, held) = self.unlocked_parts(ids);
+        crate::diagnostics::log_locked_skips(&held);
+        if ids.is_empty() {
             return;
         }
         match self.autoplace_fields_of(ids) {

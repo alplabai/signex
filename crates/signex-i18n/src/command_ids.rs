@@ -5,6 +5,7 @@ define_ids! {
     pub mod command_ids {
         CMD_APPLY_EDITS = "cmd-apply-edits";
         CMD_AUTOPLACE_FIELDS = "cmd-autoplace-fields";
+        CMD_MENU_AUTOPLACE_FIELDS = "cmd-menu-autoplace-fields";
         CMD_BRING_DRAWINGS_FORWARD = "cmd-bring-drawings-forward";
         CMD_MENU_BRING_DRAWINGS_FORWARD = "cmd-menu-bring-drawings-forward";
         CMD_BRING_DRAWINGS_TO_FRONT = "cmd-bring-drawings-to-front";
@@ -25,6 +26,7 @@ define_ids! {
         CMD_MENU_CLOSE_ALL_DOCUMENTS = "cmd-menu-close-all-documents";
         CMD_COPY = "cmd-copy";
         CMD_COPY_ATTRIBUTES_OR_ADD_VERTEX = "cmd-copy-attributes-or-add-vertex";
+        CMD_MENU_COPY_ATTRIBUTES_OR_ADD_VERTEX = "cmd-menu-copy-attributes-or-add-vertex";
         CMD_CROSS_PROBE = "cmd-cross-probe";
         CMD_MENU_CROSS_PROBE = "cmd-menu-cross-probe";
         CMD_CUT = "cmd-cut";
@@ -62,6 +64,7 @@ define_ids! {
         CMD_MENU_FIND_SIMILAR_OBJECTS = "cmd-menu-find-similar-objects";
         CMD_FIND_TEXT = "cmd-find-text";
         CMD_IMPORT_GRAPHICS = "cmd-import-graphics";
+        CMD_MENU_IMPORT_GRAPHICS = "cmd-menu-import-graphics";
         CMD_LIST_DOCUMENTS = "cmd-list-documents";
         CMD_MEASURE_DISTANCE = "cmd-measure-distance";
         CMD_MIRROR_X = "cmd-mirror-x";
@@ -192,6 +195,7 @@ define_ids! {
         CMD_PLACE_COMPILE_MASK = "cmd-place-compile-mask";
         CMD_MENU_PLACE_COMPILE_MASK = "cmd-menu-place-compile-mask";
         CMD_PLACE_DESIGN_BLOCK = "cmd-place-design-block";
+        CMD_MENU_PLACE_DESIGN_BLOCK = "cmd-menu-place-design-block";
         CMD_PLACE_GLOBAL_LABEL = "cmd-place-global-label";
         CMD_MENU_PLACE_GLOBAL_LABEL = "cmd-menu-place-global-label";
         CMD_PLACE_HIERARCHICAL_LABEL = "cmd-place-hierarchical-label";

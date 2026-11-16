@@ -388,6 +388,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("find_similar_objects", "FindSimilarObjects"),
     ("open_selection_filter", "OpenSelectionFilter"),
     ("open_net_classes", "OpenNetClasses"),
+    // #1667: fixture names only.
+    ("place_design_block", "PlaceDesignBlock"),
+    ("import_graphics", "ImportGraphics"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

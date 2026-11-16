@@ -13,14 +13,32 @@ use crate::app::{EditMsg, Message, PlacementExtrasMsg, Signex};
 
 const WHAT: &str = "Import graphics";
 
+/// A file larger than this is not a sheet graphic: it is refused before it
+/// is read into memory.
+pub(crate) const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// The text of the file `path` a graphics import reads, refused over
+/// [`MAX_IMPORT_BYTES`]. Blocking: run it off the UI thread.
+pub(crate) fn read_import_text(path: &Path) -> Result<String, String> {
+    let unreadable =
+        |error: std::io::Error| format!("{} could not be read ({error})", path.display());
+    let size = std::fs::metadata(path).map_err(unreadable)?.len();
+    if size > MAX_IMPORT_BYTES {
+        return Err(format!(
+            "{} is {size} bytes; a graphics import reads files up to {MAX_IMPORT_BYTES} bytes",
+            path.display()
+        ));
+    }
+    std::fs::read_to_string(path).map_err(unreadable)
+}
+
 /// Read and convert the DXF file at `path`. Blocking: run it off the UI
 /// thread.
 pub(crate) fn read_graphics_file(
     path: &Path,
     width_mm: f64,
 ) -> Result<Arc<ImportedGraphics>, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|error| format!("{} could not be read ({error})", path.display()))?;
+    let text = read_import_text(path)?;
     signex_engine::drawings_from_dxf(&text, width_mm)
         .map(Arc::new)
         .map_err(|error| format!("{}: {error}", path.display()))

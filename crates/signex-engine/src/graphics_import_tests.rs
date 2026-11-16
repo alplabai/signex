@@ -64,6 +64,24 @@ fn a_quarter_arc_keeps_its_middle_on_the_arc() {
     assert!(close(*end, (0.0, -10.0)), "{end:?}");
 }
 
+/// An arc and a circle stored on a plane facing down Z (extrusion 0,0,-1)
+/// land mirrored back in X, where the drawing shows them.
+#[test]
+fn an_arc_on_a_downward_plane_is_mirrored_back_in_x() {
+    let arc = "0\nARC\n10\n20\n20\n0\n40\n10\n50\n0\n51\n90\n210\n0\n220\n0\n230\n-1\n";
+    let circle = "0\nCIRCLE\n10\n5\n20\n1\n40\n2\n230\n-1.0\n";
+    let imported = drawings_from_dxf(&dxf(None, &format!("{arc}{circle}")), 0.0).unwrap();
+    let SchDrawing::Arc { start, end, .. } = &imported.drawings[0] else {
+        panic!("{:?}", imported.drawings);
+    };
+    assert!(close(*start, (-30.0, 0.0)), "{start:?}");
+    assert!(close(*end, (-20.0, -10.0)), "{end:?}");
+    let SchDrawing::Circle { center, .. } = &imported.drawings[1] else {
+        panic!("{:?}", imported.drawings);
+    };
+    assert!(close(*center, (-5.0, -1.0)), "{center:?}");
+}
+
 #[test]
 fn a_closed_lwpolyline_returns_to_its_first_point() {
     let poly = "0\nLWPOLYLINE\n90\n3\n70\n1\n10\n0\n20\n0\n10\n5\n20\n0\n10\n5\n20\n5\n";
