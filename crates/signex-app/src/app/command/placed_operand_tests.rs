@@ -303,7 +303,8 @@ fn a_sheet_symbols_size_and_position_are_typed_in() {
     assert_eq!(child(&app).size, (20.0, 20.0));
 }
 
-/// A part's parameter is edited in its Parameters row, one undo step.
+/// A part's parameter is edited in its Parameters row, one undo step per
+/// Enter: two commits of the same cell do not merge into one typing run.
 #[test]
 fn a_parameter_is_edited_in_place_in_one_undo_step() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -311,9 +312,13 @@ fn a_parameter_is_edited_in_place_in_one_undo_step() {
     let r1 = item(PART, SelectedKind::Symbol);
     select(&mut app, r1);
     let field = PlacedField::Parameter("Manufacturer".into());
-    type_in(&mut app, r1, field, "Other");
+    type_in(&mut app, r1, field.clone(), "Other");
     let value = |app: &Signex| part(app).fields.get("Manufacturer").cloned();
     assert_eq!(value(&app).as_deref(), Some("Other"));
+    type_in(&mut app, r1, field, "Third");
+    assert_eq!(value(&app).as_deref(), Some("Third"));
+    undo(&mut app);
+    assert_eq!(value(&app).as_deref(), Some("Other"), "one step per Enter");
     undo(&mut app);
     assert_eq!(value(&app).as_deref(), Some("Acme"));
 }

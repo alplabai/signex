@@ -32,4 +32,10 @@ define_ids! {
     PANELS_PLACED_PARAMETERS = "panels-placed-parameters";
     PANELS_PLACED_PARAMETERS_NONE = "panels-placed-parameters-none";
     PANELS_PLACED_NO_PARAMETERS = "panels-placed-no-parameters";
+    PANELS_PLACED_END = "panels-placed-end";
+    PANELS_PLACED_LENGTH = "panels-placed-length";
+    PANELS_PLACED_NAME = "panels-placed-name";
+    PANELS_PLACED_DIRECTION = "panels-placed-direction";
+    PANELS_PLACED_SHEET = "panels-placed-sheet";
+    PANELS_PLACED_SHEET_FILE = "panels-placed-sheet-file";
 }

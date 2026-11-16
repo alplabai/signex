@@ -148,6 +148,13 @@ impl Signex {
         }
     }
 
+    /// End the parameter-typing run of the sheet an edit acts on.
+    fn end_parameter_typing_run(&mut self) {
+        if let Some(engine) = self.document_state.edit_engine_mut() {
+            engine.end_field_edit_run();
+        }
+    }
+
     /// The object's id, kind and geometry after an edit, as the answer.
     fn placed_answer(&self, item: SelectedItem) -> Placed {
         let engine = self
@@ -234,11 +241,16 @@ impl Signex {
                 "`{name}` has its own row and command; it is not a parameter"
             )));
         }
-        self.apply_placed_edit(signex_engine::Command::SetSymbolField {
+        // A commit is a whole value, not a keystroke: it neither joins nor
+        // is joined by a typing run of the same cell (one undo step each).
+        self.end_parameter_typing_run();
+        let applied = self.apply_placed_edit(signex_engine::Command::SetSymbolField {
             symbol_id: item.uuid,
             key: name.to_string(),
             value: value.to_string(),
-        })?;
+        });
+        self.end_parameter_typing_run();
+        applied?;
         let mut answer = self.placed_answer(item)?;
         answer["parameter"] = json!({ "name": name, "value": value });
         Ok(answer)

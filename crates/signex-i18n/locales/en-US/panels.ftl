@@ -600,3 +600,10 @@ panels-placed-locked = Locked: { $reason }
 panels-placed-parameters = Parameters ({ $count })
 panels-placed-parameters-none = Parameters (none)
 panels-placed-no-parameters = No custom parameters
+# Read-only facts of a wire, bus or sheet entry in Properties (#2418).
+panels-placed-end = End
+panels-placed-length = Length
+panels-placed-name = Name
+panels-placed-direction = Direction
+panels-placed-sheet = Sheet
+panels-placed-sheet-file = Sheet File
