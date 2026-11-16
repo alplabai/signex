@@ -106,6 +106,7 @@ impl Signex {
         self.interaction_state.pcb_guide_place = None;
         // A tool takes the clicks Measure would (#2403).
         self.interaction_state.pcb_query.measure = None;
+        self.interaction_state.pcb_arrange_box = None;
         self.interaction_state.pcb_tool = Some(BoardToolSession {
             tool,
             path,

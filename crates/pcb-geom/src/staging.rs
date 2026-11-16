@@ -127,7 +127,7 @@ pub fn stage_up(corner: PointNm, extents: &[RectNm], staging: Staging) -> Vec<Po
 }
 
 /// The smallest multiple of `grid` at or above `v`.
-fn snap_up(v: i64, grid: i64) -> i64 {
+pub(crate) fn snap_up(v: i64, grid: i64) -> i64 {
     v.div_euclid(grid) * grid + if v.rem_euclid(grid) == 0 { 0 } else { grid }
 }
 

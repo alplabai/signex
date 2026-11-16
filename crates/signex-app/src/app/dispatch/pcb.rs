@@ -77,6 +77,10 @@ impl Signex {
                 self.handle_board_net(event);
                 Task::none()
             }
+            PcbMsg::Tools(event) => {
+                self.handle_board_tools(event);
+                Task::none()
+            }
         }
     }
 

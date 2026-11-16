@@ -377,6 +377,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("open_net_inspector", "OpenNetInspector"),
+    // #2408, #2409: fixture names only.
+    ("stitch_vias", "StitchVias"),
+    ("add_teardrops", "AddTeardrops"),
+    ("remove_teardrops", "RemoveTeardrops"),
+    ("gloss_selected_routes", "GlossSelectedRoutes"),
+    ("board_shape_from_selection", "BoardShapeFromSelection"),
+    ("keepout_from_selection", "KeepoutFromSelection"),
+    ("arrange_in_box", "ArrangeInBox"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),
     ("open_preferences", "OpenPreferences"),

@@ -309,12 +309,15 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
 | `add_net_class` | Add a net class | design | — | — |
+| `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
+| `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
 | `board_report_netlist` | Show the board's netlist: each net and the pads on it | pcb | — | — |
+| `board_shape_from_selection` | Make the selected closed lines the board outline | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | `1` | `1` |
 | `change_footprint` | Change the footprint of the selected components | modify | `F` | `F` |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
@@ -327,10 +330,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_similar_items` | Find similar items on a board | search | — | — |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
+| `gloss_selected_routes` | Shorten the selected routes by cutting their corners where the clearance allows | pcb | — | — |
 | `hide_layer` | Hide one layer of the board view | view | — | — |
 | `hide_layer_group` | Hide every layer of one kind | view | — | — |
 | `highlight_board_net` | Highlight a board net | select | — | — |
 | `highlight_layer` | Highlight one layer and dim the others | view | — | — |
+| `keepout_from_selection` | Turn the selected area or closed lines into a keepout on its layer | design | — | — |
 | `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `measure_board` | Measure on a board | search | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
@@ -349,6 +354,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
 | `rename_net_class` | Rename a net class | design | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
@@ -371,6 +377,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
+| `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `toggle_layer_numbers` | Show or hide the numbers on the layer tabs | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |

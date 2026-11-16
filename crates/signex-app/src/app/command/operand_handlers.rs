@@ -24,6 +24,7 @@ use super::placement_operands as place;
 use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
+use crate::app::board_tools as tools;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -131,6 +132,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_layer_sizes", board_edit::set_layer_sizes),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
+    // #2408, #2409: the board Tools edits on the board `document` names.
+    ("stitch_vias", tools::stitch_by_operands),
+    ("add_teardrops", tools::add_teardrops_by_operands),
+    ("remove_teardrops", tools::remove_teardrops_by_operands),
+    ("gloss_selected_routes", tools::gloss_by_operands),
+    ("board_shape_from_selection", tools::board_shape_by_operands),
+    ("keepout_from_selection", tools::keepout_by_operands),
+    ("arrange_in_box", tools::arrange_in_box_by_operands),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

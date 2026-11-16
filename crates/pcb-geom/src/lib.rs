@@ -12,15 +12,19 @@
 //! Hit-testing reads the model, never the render output (#662).
 
 mod area_touch;
+mod arrange;
 mod body;
+mod closed_path;
 mod copper;
 mod flip;
+mod gloss;
 mod graphic;
 mod index;
 mod measure;
 mod mst;
 mod net_length;
 mod net_report;
+mod obstacle;
 mod pick_filter;
 mod ratsnest;
 mod rect;
@@ -32,7 +36,11 @@ mod shape_gap;
 mod shape_overlap;
 mod staging;
 mod stats;
+mod stitch;
+mod teardrop;
 mod text;
+#[cfg(test)]
+mod tool_fixture;
 mod track_follow;
 mod transform;
 mod turned_marquee;
@@ -40,12 +48,15 @@ mod union_find;
 mod units;
 mod zone_fill;
 
+pub use arrange::{arrange_in_box, placed_extent};
 pub use body::footprint_body;
+pub use closed_path::{PathRefusal, closed_path};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     via_layers, via_pieces,
 };
 pub use flip::flip_footprint;
+pub use gloss::{Glossed, gloss};
 pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
     footprint_graphic_placement,
@@ -72,6 +83,8 @@ pub use shape::Shape;
 pub use shape_gap::Separation;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
+pub use stitch::{StitchSpec, stitch_points, stitch_spec_mm};
+pub use teardrop::{Teardrop, TeardropPlan, teardrops};
 pub use text::{TextPlacement, is_board_text_key, property_text_placement};
 pub use track_follow::{TrackEnds, tracks_on_pads};
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};

@@ -47,6 +47,9 @@ pub struct InteractionState {
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
     /// The board Measure tool and the highlighted board net (#2403).
     pub pcb_query: super::pcb_query::PcbQueryState,
+    /// Arrange in Box armed on a board (#2409): the components it moves
+    /// and the first corner once clicked.
+    pub pcb_arrange_box: Option<crate::app::board_tools::ArrangeBox>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

@@ -508,6 +508,16 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "")),
         SEP,
+        // #2408, #2409: the board edits on the board in view and its
+        // selection: docs/MENU_BAR.md#tools-board-edits
+        cmd_item_gated(ctx, cmd("stitch_vias", "")),
+        cmd_item_gated(ctx, cmd("add_teardrops", "")),
+        cmd_item_gated(ctx, cmd("remove_teardrops", "")),
+        cmd_item_gated(ctx, cmd("gloss_selected_routes", "")),
+        cmd_item_gated(ctx, cmd("board_shape_from_selection", "")),
+        cmd_item_gated(ctx, cmd("keepout_from_selection", "")),
+        cmd_item_gated(ctx, cmd("arrange_in_box", "")),
+        SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.
         cmd_item_gated(ctx, cmd("cross_probe", "")),

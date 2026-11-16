@@ -89,6 +89,8 @@ pub enum PcbMsg {
     LockRequested { locked: bool },
     /// A net of the board in view picked or highlighted (#2403).
     Net(BoardNetMsg),
+    /// A board Tools edit was asked for (#2408, #2409).
+    Tools(BoardToolsMsg),
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the
@@ -102,6 +104,29 @@ pub enum BoardNetMsg {
     /// `highlight_board_net` ran, or a Net Inspector row's Highlight was
     /// pressed: the net is drawn bright, or no longer when it already is.
     HighlightRequested(Option<String>),
+}
+
+/// The board Tools edits (#2408, #2409), each asked for by its command on
+/// the board in view and acting on its selection. Each finished edit is one
+/// undo step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardToolsMsg {
+    /// `stitch_vias`: the selected areas, or every pour, filled with vias of
+    /// their net.
+    StitchRequested,
+    /// `add_teardrops`: on the nets of the selection, or every net.
+    TeardropsAddRequested,
+    /// `remove_teardrops`: of the nets of the selection, or every net.
+    TeardropsRemoveRequested,
+    /// `gloss_selected_routes`: the selected tracks.
+    GlossRequested,
+    /// `board_shape_from_selection`: the selected lines close the outline.
+    BoardShapeRequested,
+    /// `keepout_from_selection`: the selected area or closed lines.
+    KeepoutRequested,
+    /// `arrange_in_box`: the box tool is armed for the selected components;
+    /// its two corner clicks arrive as board canvas clicks.
+    ArrangeRequested,
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

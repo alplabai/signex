@@ -204,6 +204,14 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("unlock_board_items", BOARD_EDIT),
     ("set_via_span", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
+    // #2408, #2409: the board Tools edits are board steps of their own.
+    ("stitch_vias", BOARD_EDIT),
+    ("add_teardrops", BOARD_EDIT),
+    ("remove_teardrops", BOARD_EDIT),
+    ("gloss_selected_routes", BOARD_EDIT),
+    ("board_shape_from_selection", BOARD_EDIT),
+    ("keepout_from_selection", BOARD_EDIT),
+    ("arrange_in_box", BOARD_EDIT),
 ];
 
 const BOARD_EDIT: &str =

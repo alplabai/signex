@@ -96,4 +96,8 @@ define_ids! {
     PCB_LAYER_SET_NAME_PLACEHOLDER = "pcb-layer-set-name-placeholder";
     PCB_LAYER_SET_SAVE_BUTTON = "pcb-layer-set-save-button";
     PCB_LAYER_SET_DELETE = "pcb-layer-set-delete";
+    PCB_BOARD_TOOL_DONE = "pcb-board-tool-done";
+    PCB_BOARD_TOOL_SKIPPED = "pcb-board-tool-skipped";
+    PCB_BOARD_TOOL_REFUSED = "pcb-board-tool-refused";
+    PCB_ARRANGE_BOX_HINT = "pcb-arrange-box-hint";
 }

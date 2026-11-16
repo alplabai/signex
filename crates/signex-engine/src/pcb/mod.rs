@@ -12,6 +12,7 @@
 pub mod align;
 mod batch;
 mod board_sketch;
+pub mod board_tools;
 mod clipboard;
 mod command;
 pub mod component;

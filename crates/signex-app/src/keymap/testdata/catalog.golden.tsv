@@ -296,6 +296,13 @@ highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresD
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
 query_board_nets	search	Query board nets	-	PCB	-	-	Always	-	document:document,net:text?
 find_similar_items	search	Find similar items on a board	-	PCB	-	-	Always	-	document:document,id:text,fields:text?
+stitch_vias	pcb	Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets	Via Stitching	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,start:point/mm?,end:point/mm?,net:text?,pitch:length/mm?
+add_teardrops	pcb	Add teardrops where tracks of the selected nets, or of every net, enter a pad or via	Add Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
+remove_teardrops	pcb	Remove the teardrops of the selected nets, or of every net	Remove Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
+gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+keepout_from_selection	design	Turn the selected area or closed lines into a keepout on its layer	Keepout from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+arrange_in_box	modify	Arrange the selected components inside a box drawn on the board	Arrange in Box	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,start:point/mm,end:point/mm
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

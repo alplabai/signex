@@ -66,6 +66,11 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "select_board_net",
     "highlight_board_net",
     "toggle_ratsnest",
+    "gloss_selected_routes",
+    "add_teardrops",
+    "board_shape_from_selection",
+    "keepout_from_selection",
+    "arrange_in_box",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -453,9 +458,10 @@ pub(super) fn pcb_canvas_menu_entries(
             dd_cmd_disabled(i18n, icon, command_id, sc.of(command_id))
         }
     };
-    // A lock row is live only when the selection holds a track or via it
-    // changes (#2407), and its command is enabled.
-    let lock_row = |command_id: &'static str, live: bool| {
+    // A row live only when the selection holds what it acts on (the lock
+    // rows #2407, the board Tools edits #2408, #2409), and its command is
+    // enabled.
+    let gated_row = |command_id: &'static str, live: bool| {
         if live {
             row(None, command_id)
         } else {
@@ -505,13 +511,20 @@ pub(super) fn pcb_canvas_menu_entries(
         // Picks a library footprint for the selected components (#2366).
         row(None, "change_footprint"),
         // Lock or unlock the selected tracks and vias (#2407).
-        lock_row("lock_board_items", ctx.pcb.lockable),
-        lock_row("unlock_board_items", ctx.pcb.unlockable),
+        gated_row("lock_board_items", ctx.pcb.lockable),
+        gated_row("unlock_board_items", ctx.pcb.unlockable),
         DropdownEntry::Separator,
         row(Some(ic::icon_dd_delete(tid)), "delete_selection"),
         DropdownEntry::Separator,
         // Enter or leave the board's sketch mode (#2234).
         row(Some(ic::icon_dd_rect(tid)), "board_sketch"),
+        DropdownEntry::Separator,
+        // The board Tools edits on the selection (#2408, #2409), as in Tools.
+        gated_row("gloss_selected_routes", ctx.pcb.any),
+        gated_row("add_teardrops", true),
+        gated_row("board_shape_from_selection", ctx.pcb.any),
+        gated_row("keepout_from_selection", ctx.pcb.any),
+        gated_row("arrange_in_box", ctx.pcb.placeable),
         DropdownEntry::Separator,
         // The net of the selection or of what is under the cursor (#2403).
         row(None, "select_board_net"),

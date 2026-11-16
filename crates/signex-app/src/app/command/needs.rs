@@ -63,6 +63,9 @@ pub(crate) enum Needs {
     PcbPlacement,
     /// Change Footprint: a board with unlocked footprints selected (#2366).
     SwapFootprints,
+    /// The board Tools edits that act on a selection (#2408, #2409):
+    /// something selected on the board in view.
+    PcbSelection,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -148,6 +151,7 @@ impl Needs {
             Self::SimilarSeed => ctx.has_schematic && ctx.has_selection,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::PcbSelection => ctx.pcb.shown && ctx.pcb.any,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
@@ -209,6 +213,7 @@ impl Needs {
             Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
             Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
+            Self::PcbSelection => "Nothing is selected on the PCB in view",
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
@@ -362,6 +367,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "unlock_board_items"
         | "set_via_span"
         | "set_layer_sizes" => Needs::Pcb,
+        // #2408: with nothing selected these act on every pour or net.
+        "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
+        // #2408, #2409: these act on the selection only.
+        "gloss_selected_routes" | "board_shape_from_selection" | "keepout_from_selection" => {
+            Needs::PcbSelection
+        }
+        "arrange_in_box" => Needs::SwapFootprints,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,

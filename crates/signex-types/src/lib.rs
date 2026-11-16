@@ -40,3 +40,4 @@ pub mod violation;
 pub mod zone_holes;
 pub mod zone_keepout;
 pub mod zone_pour;
+pub mod zone_teardrop;

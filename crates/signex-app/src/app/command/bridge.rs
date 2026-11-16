@@ -69,6 +69,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
     let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
+    let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -349,6 +350,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 super::operand_handlers::board_net_operand(args),
             )))
         }
+        // #2408, #2409: the board Tools edits on the board in view.
+        "stitch_vias" => board_tools(BoardToolsMsg::StitchRequested),
+        "add_teardrops" => board_tools(BoardToolsMsg::TeardropsAddRequested),
+        "remove_teardrops" => board_tools(BoardToolsMsg::TeardropsRemoveRequested),
+        "gloss_selected_routes" => board_tools(BoardToolsMsg::GlossRequested),
+        "board_shape_from_selection" => board_tools(BoardToolsMsg::BoardShapeRequested),
+        "keepout_from_selection" => board_tools(BoardToolsMsg::KeepoutRequested),
+        "arrange_in_box" => board_tools(BoardToolsMsg::ArrangeRequested),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

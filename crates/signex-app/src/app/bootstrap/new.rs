@@ -722,6 +722,7 @@ impl Signex {
                 pcb_tool_defaults: Default::default(),
                 pcb_guide_place: None,
                 pcb_query: Default::default(),
+                pcb_arrange_box: None,
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
                 board_net_classes: Default::default(),

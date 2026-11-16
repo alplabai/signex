@@ -276,3 +276,38 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
         assert!(disabled_of(&place, label), "{label}");
     }
 }
+
+/// #2408, #2409: the board menu offers the selection tools, each running
+/// its command: live with a selection (Arrange in Box with unlocked
+/// components), greyed without; Add Teardrops acts on every net then.
+#[test]
+fn the_board_menu_offers_the_selection_tools() {
+    let picked = rows(PcbTargets {
+        shown: true,
+        any: true,
+        placeable: true,
+        ..PcbTargets::default()
+    });
+    for (label, command) in [
+        ("Gloss Selected Routes", "gloss_selected_routes"),
+        ("Add Teardrops", "add_teardrops"),
+        ("Board Shape from Selection", "board_shape_from_selection"),
+        ("Keepout from Selection", "keepout_from_selection"),
+        ("Arrange in Box", "arrange_in_box"),
+    ] {
+        assert!(runs(row_message(&picked, label), command), "{label}");
+    }
+    let empty = rows(PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    });
+    assert!(runs(row_message(&empty, "Add Teardrops"), "add_teardrops"));
+    for label in [
+        "Gloss Selected Routes",
+        "Board Shape from Selection",
+        "Keepout from Selection",
+        "Arrange in Box",
+    ] {
+        assert!(row_message(&empty, label).is_none(), "{label} greyed");
+    }
+}
