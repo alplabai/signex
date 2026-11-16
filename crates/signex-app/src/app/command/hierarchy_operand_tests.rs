@@ -238,8 +238,13 @@ fn an_entry_off_the_border_twice_named_or_on_an_unknown_sheet_is_refused() {
 fn an_entry_on_an_ambiguous_sheet_name_or_a_wire_end_is_refused() {
     let dir = tempfile::tempdir().expect("tempdir");
     let symbol = |x: f64| {
-        signex_engine::child_sheet_from_corners(grid(x, 20.0), grid(x + 20.0, 40.0), "Twin")
-            .expect("big enough")
+        signex_engine::child_sheet_from_corners(
+            grid(x, 20.0),
+            grid(x + 20.0, 40.0),
+            "Twin",
+            &mut signex_types::object_id::UuidV7Ids,
+        )
+        .expect("big enough")
     };
     let sheet = SchematicSheet {
         child_sheets: vec![symbol(20.0), symbol(60.0)],

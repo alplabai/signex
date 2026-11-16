@@ -227,7 +227,7 @@ impl Signex {
         at: Point,
     ) -> Result<std::collections::HashSet<uuid::Uuid>, String> {
         let commands = payload
-            .place_commands(at)
+            .place_commands(at, &mut signex_types::object_id::UuidV7Ids)
             .map_err(|error| format!("It could not be placed: {error}"))?;
         let placed_ids: std::collections::HashSet<uuid::Uuid> = commands
             .iter()
