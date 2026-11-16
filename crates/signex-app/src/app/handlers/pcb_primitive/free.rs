@@ -216,7 +216,13 @@ impl Signex {
                     .collect();
                 let common = self.primitive_common(board, target, editable)?;
                 let origin = board.options.origin;
-                PcbPrimitiveFacts::Pad(super::facts::pad_facts(origin, common, &pads, i18n))
+                PcbPrimitiveFacts::Pad(super::facts::pad_facts(
+                    origin,
+                    common,
+                    &pads,
+                    &signex_renderer::pcb::board_copper_layers(&board.layers),
+                    i18n,
+                ))
             }
             _ => return None,
         };

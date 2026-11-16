@@ -92,6 +92,12 @@ impl Picked {
                         .nets
                         .extend(pads.filter_map(|p| p.net.as_ref().map(|n| n.number)));
                 }
+                // #2373: a copper arc or free pad brings its net; strings and
+                // dimensions carry none.
+                ItemRef::Arc(_) | ItemRef::FreePad(_) => {
+                    picked.nets.extend(pcb_geom::item_net(board, *item));
+                }
+                ItemRef::Text(_) | ItemRef::Dimension(_) => {}
             }
         }
         picked.nets.remove(&0);

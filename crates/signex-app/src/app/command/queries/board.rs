@@ -30,7 +30,11 @@ fn item_id(item: ItemRef) -> String {
         | ItemRef::Footprint(id)
         | ItemRef::Track(id)
         | ItemRef::Via(id)
-        | ItemRef::Zone { zone: id, .. } => id.to_string(),
+        | ItemRef::Zone { zone: id, .. }
+        | ItemRef::Text(id)
+        | ItemRef::Arc(id)
+        | ItemRef::FreePad(id)
+        | ItemRef::Dimension(id) => id.to_string(),
     }
 }
 

@@ -54,7 +54,13 @@ impl Signex {
                 common.placement_paused = paused;
                 let frame = signex_types::pcb_free::free_pad_frame();
                 let origin = board.options.origin;
-                PcbPrimitiveFacts::Pad(pad_facts(origin, common, &[(&frame, &pad)], i18n))
+                PcbPrimitiveFacts::Pad(pad_facts(
+                    origin,
+                    common,
+                    &[(&frame, &pad)],
+                    &signex_renderer::pcb::board_copper_layers(&board.layers),
+                    i18n,
+                ))
             }
             BoardPlaceTool::Arc => {
                 let arc = self.next_board_arc(board)?;

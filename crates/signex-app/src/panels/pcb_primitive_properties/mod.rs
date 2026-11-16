@@ -14,6 +14,7 @@
 //! tool's values instead of the board.
 
 mod arc;
+mod board_text;
 mod dimension;
 mod facts;
 mod mask;
@@ -21,7 +22,6 @@ mod net_info;
 mod pad;
 mod rows;
 mod stack_rows;
-mod text;
 mod track;
 mod via;
 mod zone;
@@ -152,7 +152,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
         PcbPrimitiveFacts::Pad(f) => pad::view(ctx, f),
         PcbPrimitiveFacts::Zone(f) => zone::view(ctx, f),
         PcbPrimitiveFacts::Arc(f) => arc::view(ctx, f),
-        PcbPrimitiveFacts::Text(f) => text::view(ctx, f),
+        PcbPrimitiveFacts::Text(f) => board_text::view(ctx, f),
         PcbPrimitiveFacts::Dimension(f) => dimension::view(ctx, f),
     };
     let common = facts.common();
