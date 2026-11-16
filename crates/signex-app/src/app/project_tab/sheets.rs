@@ -1,5 +1,5 @@
-//! Sheets section of the Project tab (#1689): the project's sheets in page
-//! order (Sheet N of M, the project tree, PDF pages) with Move up / Move
+//! Sheets section of the Project tab (#1689): the project's sheets in list
+//! order (a title block's Sheet N of M, the project tree) with Move up / Move
 //! down, then what a new sheet starts from (size, orientation, title block),
 //! edited with the New Project dialog's own fields through the Project setup
 //! flow. A move is one step of the General history.

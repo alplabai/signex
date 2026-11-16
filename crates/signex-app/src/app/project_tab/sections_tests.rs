@@ -309,3 +309,31 @@ fn every_section_renders() {
         let _ = app.view_project_tab(id);
     }
 }
+
+/// #1693: the Enable Version Control dialog's success turns commit on save
+/// on as a Project tab step, so the project is dirty and Ctrl+Z in the tab
+/// turns it off again.
+#[test]
+fn enable_version_control_success_is_a_general_step() {
+    let (mut app, id) = app();
+    let project_dir = PathBuf::from(&app.document_state.projects[0].data.dir);
+    let _ = app.update(Message::EnableVersionControl(
+        crate::app::EnableVersionControlMsg::Finished {
+            scope: crate::app::VersionControlScope::Project,
+            project_dir: project_dir.clone(),
+            outcome: crate::app::EnableVersionControlOutcome::Created {
+                adapter_error: None,
+                commit_warning: None,
+            },
+        },
+    ));
+    assert!(app.document_state.projects[0].data.enable_git);
+    assert!(dirty(&app));
+    assert!(
+        !app.document_state.project_fs.facts.lacks_git(&project_dir),
+        "the repository is recorded"
+    );
+    assert!(undo(&mut app, id));
+    assert!(!app.document_state.projects[0].data.enable_git);
+    assert!(!dirty(&app));
+}

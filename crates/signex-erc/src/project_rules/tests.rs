@@ -73,3 +73,13 @@ fn severity_counts_cover_every_rule_once() {
     assert_eq!(off[3], (Severity::Off, RuleKind::ALL.len()));
     assert_eq!(off[0], (Severity::Error, 0));
 }
+
+/// #1692: an on/off-only rule set to another "on" level counts at its
+/// default, as the ERC run applies it.
+#[test]
+fn severity_counts_normalize_an_on_off_only_rule() {
+    let base = severity_counts(&HashMap::new());
+    let mut overrides = HashMap::new();
+    overrides.insert(RuleKind::PinTypeConflict, Severity::Info);
+    assert_eq!(severity_counts(&overrides), base);
+}

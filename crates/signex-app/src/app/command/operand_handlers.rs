@@ -255,7 +255,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_annotate_undo"
         | "project_set_version_control" => Some(
             "the `project_*` edits need their operands — \
-             use the Project tab (Project Options in the project tree)",
+             use the Project tab (Project ▸ Project Options...)",
         ),
         _ => None,
     }

@@ -214,7 +214,7 @@ impl Signex {
         }
         tab.rules_step_newest = false;
         document.sync_project_history_dirty(project_id, true);
-        // The page order is the frame's Sheet N of M: redraw the sheets.
+        // The list order is a title block's Sheet N of M: redraw the sheets.
         let pages_moved = matches!(
             command,
             signex_engine::ProjectSectionCommand::MoveSheet { .. }

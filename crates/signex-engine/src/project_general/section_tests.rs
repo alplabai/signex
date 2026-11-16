@@ -176,3 +176,28 @@ fn a_section_command_round_trips_as_json() {
     let back: ProjectSectionCommand = serde_json::from_str(&text).unwrap();
     assert_eq!(back, command);
 }
+
+#[test]
+fn clearing_the_annotate_choice_over_an_unreadable_section_records_nothing() {
+    let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"designator_standard":"iso9999"}}"#;
+    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    assert!(data.has_unreadable_annotation());
+    let mut history = ProjectGeneralHistory::default();
+    let clear = ProjectSectionCommand::SetAnnotateUndo { choice: None };
+    assert_eq!(apply(&mut history, &mut data, clear), Ok(false));
+    assert!(
+        data.has_unreadable_annotation(),
+        "the newer section is kept"
+    );
+    assert!(!history.can_undo());
+    let pick = ProjectSectionCommand::SetAnnotateUndo {
+        choice: Some(AnnotateUndo::PerSheet),
+    };
+    assert_eq!(apply(&mut history, &mut data, pick), Ok(true));
+    assert_eq!(data.annotate_undo(), Some(AnnotateUndo::PerSheet));
+    assert!(history.undo(&mut data));
+    assert!(
+        data.has_unreadable_annotation(),
+        "undo puts the section back"
+    );
+}

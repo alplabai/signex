@@ -1,6 +1,6 @@
 # Project tab sections
 
-The Project tab (Project Options in the project tree) edits the `.snxprj`
+The Project tab (Project ▸ Project Options...) edits the `.snxprj`
 in memory. Every edit marks the project dirty, is written by Save, and is
 one undo step of the project's history (Ctrl+Z in the tab, or `undo
 document=<.snxprj>`). Storing ERC rules is a step of the project's rule
@@ -8,11 +8,15 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Sections (#1689-#1693)
 
-- **Sheets** — the project's sheets in page order (Sheet N of M on the
-  frame, the project tree, PDF pages) with Move up / Move down, then what a
-  new sheet starts from (size, orientation, title block), edited with the
-  Project setup fields. An undo puts the order back for the sheets it
-  names; a sheet added or renamed since keeps its page.
+- **Sheets** — the project's sheets in list order (the Sheet N of M a
+  sheet's title block shows on the canvas, and the project tree order) with
+  Move up / Move down, then what a new sheet starts from (size,
+  orientation, title block), edited with the Project setup fields. An undo
+  puts the order back for the sheets it names; a sheet added or renamed
+  since keeps its page. The PDF export does not follow this list: it
+  numbers pages by the sheet hierarchy (the root sheet, then the other
+  pages by file key), and changing that would renumber the nets of an
+  exported netlist.
 - **Variants** — Base and the variant definitions, the active one picked
   with its radio. A name is edited in place (Enter renames; the active
   variant follows), Remove makes Base active when it removes the active

@@ -26,7 +26,7 @@ project-move-up = Move up
 project-move-down = Move down
 
 # Sheets section (#1689).
-project-sheets-help = Sheets are numbered in this order: Sheet N of M on the frame, the project tree and PDF export pages. Child sheets placed by sheet symbols are numbered with Tools ▸ Annotation ▸ Number Schematic Sheets.
+project-sheets-help = The project lists its sheets in this order: the Sheet N of M a sheet shows in its title block and the order of the project tree follow it. PDF export numbers its pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
 project-sheets-col-number = Page
 project-sheets-page = { $page }
 project-sheets-col-name = Name
@@ -72,7 +72,7 @@ project-erc-stored = This project stores its own ERC rules; they travel with the
 project-erc-machine = This project uses this machine's ERC rules (User Default). Store them in the project so they travel with it.
 project-erc-unreadable = This project holds ERC rules from a newer version of Signex; they are kept and not applied.
 project-erc-store = Store ERC rules in this project
-project-erc-edit-hint = Change a rule's severity in Design ▸ Electrical Rules Check.
+project-erc-edit-hint = Change a rule's severity in Project ▸ Electrical Rules Check.
 project-erc-col-rules = Rules
 project-erc-col-severity = Severity
 project-erc-rule-count = { $count }

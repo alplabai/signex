@@ -1,7 +1,8 @@
 //! The order of a project's sheets (#1689) and libraries (#1691).
 //!
-//! The sheet list's order is the page order: Sheet N of M on the frame, the
-//! project tree and the PDF export all number by it. The library list's
+//! The sheet list's order is the page order a sheet's title block shows
+//! (Sheet N of M) and the project tree lists; the PDF export numbers by the
+//! sheet hierarchy, not by this list. The library list's
 //! order is the order the project tree shows and mounts them in. Both lists
 //! have other writers (Add, Remove), so an undo puts back an order, never a
 //! list: [`ProjectData::restore_sheet_order`] reorders the entries it names
