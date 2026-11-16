@@ -375,7 +375,7 @@ pub(super) fn blank_reason(frame: &Frame, row: &RuleRow) -> Option<MessageId> {
     }
     match &*frame.checked {
         Checked::NoBoard => Some(ids::RULES_BLANK_NO_BOARD),
-        Checked::NotChecked => Some(ids::RULES_BLANK_NOT_CHECKED),
+        Checked::NotRun => Some(ids::RULES_BLANK_NOT_CHECKED),
         Checked::Ran { stale, used, .. } => {
             if *stale || used.get(&row.name) != row.compiled.as_ref() {
                 return Some(ids::RULES_BLANK_STALE);

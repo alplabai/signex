@@ -38,8 +38,10 @@ fn a_panel_is_one_undo_step_and_its_removal_another() {
 #[test]
 fn a_panel_that_breaks_a_rule_is_refused_and_changes_nothing() {
     let mut engine = BoardEngine::new(board(), 1);
-    let mut panel = BoardPanel::default();
-    panel.rows = 0;
+    let panel = BoardPanel {
+        rows: 0,
+        ..BoardPanel::default()
+    };
     assert_eq!(
         engine.execute(set(Some(panel))),
         Err(BoardCommandError::Panel(PanelError::Count {

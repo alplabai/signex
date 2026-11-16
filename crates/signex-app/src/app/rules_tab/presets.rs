@@ -26,7 +26,7 @@ pub(crate) const PROFILES_NOT_READ: &str =
 /// A preset named by id.
 enum Preset {
     Tier(FabTemplate),
-    Profile(RuleProfile),
+    Profile(Box<RuleProfile>),
 }
 
 /// The id a tier is picked by.
@@ -75,7 +75,7 @@ impl Signex {
             .into_iter()
             .find(|p| p.name == name)
             .cloned()
-            .map(Preset::Profile)
+            .map(|p| Preset::Profile(Box::new(p)))
             .ok_or_else(|| unknown(preset))
     }
 

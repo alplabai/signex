@@ -225,7 +225,7 @@ mod tests {
                 let now = engine.document().symbols[0].rotation;
                 let off = (now - to).rem_euclid(360.0);
                 assert!(
-                    off < 1e-6 || off > 360.0 - 1e-6,
+                    !(1e-6..=360.0 - 1e-6).contains(&off),
                     "mirror {mirror_x}: {from} -> {to} ended at {now}"
                 );
             }

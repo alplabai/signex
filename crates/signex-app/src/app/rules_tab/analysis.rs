@@ -36,7 +36,7 @@ struct ShownKey {
 #[derive(Debug, Clone)]
 pub(crate) enum Checked {
     NoBoard,
-    NotChecked,
+    NotRun,
     Ran {
         /// The board changed since.
         stale: bool,
@@ -183,7 +183,7 @@ impl Signex {
             return Checked::NoBoard;
         };
         let Some(done) = self.interaction_state.pcb_drc.done_for(&path) else {
-            return Checked::NotChecked;
+            return Checked::NotRun;
         };
         let revision = self
             .document_state

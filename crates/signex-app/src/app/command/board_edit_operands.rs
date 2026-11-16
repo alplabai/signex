@@ -71,7 +71,7 @@ fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, String> {
         .collect()
 }
 
-fn board<'a>(app: &'a Signex, path: &PathBuf) -> Option<&'a PcbBoard> {
+fn board<'a>(app: &'a Signex, path: &std::path::Path) -> Option<&'a PcbBoard> {
     app.document_state.pcb_board(path)
 }
 

@@ -24,6 +24,7 @@ use uuid::Uuid;
 use crate::app::handlers::pcb_primitive::{PrimitiveEdit, zone_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, PcbViewMsg, Signex};
+use crate::ignore::IgnoreResult;
 use crate::panels::pcb_primitive_properties::{
     PLACEMENT_INPUT_ID, PrimitiveField as F, PrimitiveTarget,
 };
@@ -93,7 +94,8 @@ impl BoardToolDefaults {
         for edit in edits.into_iter().flatten() {
             // Each value was checked by `apply_zone_edit` when it was set,
             // so none is refused here.
-            let _ = apply_zone_edit(board, &mut zone, edit);
+            apply_zone_edit(board, &mut zone, edit)
+                .ignore("each value was checked when it was set");
         }
         zone
     }

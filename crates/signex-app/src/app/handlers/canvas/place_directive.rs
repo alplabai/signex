@@ -8,6 +8,7 @@ use signex_types::schematic::{Point, SchDirective};
 use super::super::super::*;
 use super::shape_tool::ClickKind;
 use crate::canvas::ShapePreviewKind;
+use crate::ignore::IgnoreResult;
 
 /// A Blanket over the region `start`..`end`.
 pub(crate) fn blanket_directive(
@@ -61,7 +62,8 @@ impl Signex {
                     compile_mask_directive(start, p)
                 };
                 // The gateway logs a refusal itself.
-                let _ = self.place_directive(directive);
+                self.place_directive(directive)
+                    .ignore("the gateway logs a refusal itself");
             }
         }
     }
@@ -69,7 +71,8 @@ impl Signex {
     /// One snapped click of the Differential Pair tool.
     pub(super) fn diff_pair_click(&mut self, at: Point) {
         // The gateway logs a refusal itself.
-        let _ = self.place_directive(diff_pair_directive(at));
+        self.place_directive(diff_pair_directive(at))
+            .ignore("the gateway logs a refusal itself");
     }
 
     /// Place `directive` on the edit target as one undo step, or say why not.
@@ -124,7 +127,8 @@ impl Signex {
             self.end_directive_edit_run();
         }
         // The gateway logs a refusal itself; an unchanged value is no edit.
-        let _ = self.update_directive(directive);
+        self.update_directive(directive)
+            .ignore("the gateway logs a refusal itself; an unchanged value is no edit");
         if !typing {
             self.end_directive_edit_run();
         }
