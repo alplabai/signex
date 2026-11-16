@@ -151,6 +151,7 @@ Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01000000	cmd:open_net_classes
+Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-
 Tools/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch

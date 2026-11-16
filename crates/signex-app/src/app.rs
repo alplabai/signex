@@ -40,10 +40,12 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;
 mod project_tab;
+mod rules_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
@@ -158,6 +160,8 @@ impl Signex {
         self.prune_pcb_component_draft();
         // A New PCB / New Schematic dialog of a closed project closes (#2232).
         self.drop_document_setup_of_closed_project();
+        // The Rules tab in view re-reads its flags when its rules changed (#2398).
+        self.sync_rules_analysis();
         self.sync_undo_depth();
         // A resize, a dock collapsed or expanded, or a panel docked into an
         // empty side all change the room beside the canvas (#2347).

@@ -100,18 +100,22 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
   (#2199), each answered once its run lands, like an edit waiting for its
   reads
-  ([CLI.md](CLI.md), "Checks on demand");
+  ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
+  `rules_list`, `rules_get`, `rules_effective`, `rules_explain` and
+  `rules_conflicts` (#2398);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
   `clear_all_net_colors`, the read-only board reports `board_report_bom`,
   `board_report_netlist`, `board_report_net_length` and
   `board_report_components` (#2404, each answers with its table as JSON),
-  `assign_net_class`, `save_document`, `close_active_document`, and the board
+  `assign_net_class`, `save_document`, `close_active_document`, the board
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences). A test pins this set, so a catalog row that joins or
+  person's preferences), and the Rules manager edits `rules_add`, `rules_set`,
+  `rules_remove` and `rules_enable` (#2398; `document` is the project or any
+  document of it). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision. The CSV and PDF writers
   `export_board_report` and `export_board_pdf` take a `path`, so they are CLI
   only.

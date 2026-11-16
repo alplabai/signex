@@ -83,6 +83,12 @@ impl PcbDrc {
     pub fn done_for(&self, path: &Path) -> Option<&DrcDone> {
         self.done.as_ref().filter(|d| d.path == path)
     }
+
+    /// The number of the last run begun; with [`Self::is_running_for`] it
+    /// changes whenever a run begins, lands or is abandoned.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 #[cfg(test)]

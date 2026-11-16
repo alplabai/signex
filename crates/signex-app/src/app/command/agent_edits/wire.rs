@@ -152,6 +152,22 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "rules_add",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_remove",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_enable",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must

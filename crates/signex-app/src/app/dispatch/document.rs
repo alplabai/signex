@@ -43,13 +43,13 @@ impl Signex {
             }
             EditMsg::Undo => {
                 self.cancel_move_pick();
-                self.handle_undo_requested();
-                self.finish_update()
+                let rerun = self.step_main_window_history(true);
+                Task::batch([rerun, self.finish_update()])
             }
             EditMsg::Redo => {
                 self.cancel_move_pick();
-                self.handle_redo_requested();
-                self.finish_update()
+                let rerun = self.step_main_window_history(false);
+                Task::batch([rerun, self.finish_update()])
             }
             EditMsg::RotateSelectedClockwise => {
                 self.handle_selection_rotate_requested(true);

@@ -343,6 +343,9 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.
         cmd_item_gated(ctx, cmd("open_net_classes", "")),
+        // #2398: the project's design rules as a document tab; greyed with
+        // no project open.
+        cmd_item_gated(ctx, cmd("open_rules", "")),
     ]
 }
 

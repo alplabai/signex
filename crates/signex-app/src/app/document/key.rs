@@ -57,7 +57,7 @@ impl DocumentKey {
                 ce.table.clone(),
                 ce.row_id,
             ))),
-            TabKind::Project(id) => Some(Self::Project(*id)),
+            TabKind::Project(id) | TabKind::Rules(id) => Some(Self::Project(*id)),
             TabKind::LibraryBrowser(_) => None,
         }
     }

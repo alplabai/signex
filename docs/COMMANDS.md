@@ -320,6 +320,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
+| `open_rules` | Open the design rules of the project | design | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
@@ -329,6 +330,15 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `rules_add` | Add a design rule | design | — | — |
+| `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
+| `rules_effective` | Show the rule value that governs a net | validation | — | — |
+| `rules_enable` | Turn a design rule on or off | design | — | — |
+| `rules_explain` | Explain the value a DRC finding asks for | validation | — | — |
+| `rules_get` | Read one design rule | validation | — | — |
+| `rules_list` | List the design rules | validation | — | — |
+| `rules_remove` | Remove a design rule | design | — | — |
+| `rules_set` | Change a field of a design rule | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |

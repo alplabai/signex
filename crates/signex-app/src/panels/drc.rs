@@ -139,6 +139,13 @@ fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> 
                     })
                     .color(primary),
                 Space::new().width(Length::Fill).height(Length::Shrink),
+                // The project's rules, as a document tab (#2398).
+                crate::styles::dialog_button(
+                    t!(i18n, ids::RULES_TAB_TITLE),
+                    crate::styles::DialogButtonKind::Ghost,
+                    Some(PanelMsg::OpenRules),
+                    &ctx.tokens,
+                ),
                 crate::styles::dialog_button(
                     t!(i18n, ids::DRC_RUN),
                     crate::styles::DialogButtonKind::Secondary,

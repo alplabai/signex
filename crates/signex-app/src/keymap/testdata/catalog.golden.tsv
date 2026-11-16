@@ -278,3 +278,13 @@ footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	Requir
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
+open_rules	design	Open the design rules of the project	Rules...	PCB	-	-	Always	gui_only	-
+rules_list	validation	List the design rules	-	PCB	-	-	Always	-	document:document,kind:text?,enabled:bool?
+rules_get	validation	Read one design rule	-	PCB	-	-	Always	-	document:document,id:text
+rules_add	design	Add a design rule	-	PCB	-	-	Always	mutates_doc,undoable	document:document,kind:text,values:text,scope:text?,layer:text?,pair:text?,severity:text?,name:text?
+rules_set	design	Change a field of a design rule	-	PCB	-	-	Always	mutates_doc,undoable	document:document,id:text,field:text,value:text?
+rules_remove	design	Remove a design rule	-	PCB	-	-	Always	mutates_doc,undoable	document:document,id:text
+rules_enable	design	Turn a design rule on or off	-	PCB	-	-	Always	mutates_doc,undoable	document:document,id:text,on:bool
+rules_effective	validation	Show the rule value that governs a net	-	PCB	-	-	Always	-	document:document,net:text,kind:text?,layer:text?
+rules_explain	validation	Explain the value a DRC finding asks for	-	PCB	-	-	Always	-	document:document,violation:text
+rules_conflicts	validation	List shadowed and conflicting design rules	-	PCB	-	-	Always	-	document:document

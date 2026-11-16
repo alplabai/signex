@@ -53,6 +53,10 @@ pub enum TabKind {
     /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
     /// id; `TabInfo.path` is the `.snxprj` path.
     Project(super::state::ProjectId),
+    /// The project's design rules as a Rules tab (#2398). Tab state lives
+    /// in the project's [`crate::app::ProjectTabState::rules`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    Rules(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -98,6 +102,20 @@ impl TabKind {
             TabKind::Project(id) => Some(*id),
             _ => None,
         }
+    }
+
+    /// `Some(id)` if this tab is a project's Rules tab.
+    pub fn as_rules(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Rules(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// A tab that shows a project's own settings, not a drawing: the
+    /// Project and Rules tabs. Neither is undocked or restored from History.
+    pub fn is_project_page(&self) -> bool {
+        matches!(self, TabKind::Project(_) | TabKind::Rules(_))
     }
 }
 

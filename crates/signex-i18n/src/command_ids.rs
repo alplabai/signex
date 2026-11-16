@@ -219,6 +219,17 @@ define_ids! {
         CMD_MENU_OPEN_ERC_DIALOG = "cmd-menu-open-erc-dialog";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
+        CMD_OPEN_RULES = "cmd-open-rules";
+        CMD_MENU_OPEN_RULES = "cmd-menu-open-rules";
+        CMD_RULES_LIST = "cmd-rules-list";
+        CMD_RULES_GET = "cmd-rules-get";
+        CMD_RULES_ADD = "cmd-rules-add";
+        CMD_RULES_SET = "cmd-rules-set";
+        CMD_RULES_REMOVE = "cmd-rules-remove";
+        CMD_RULES_ENABLE = "cmd-rules-enable";
+        CMD_RULES_EFFECTIVE = "cmd-rules-effective";
+        CMD_RULES_EXPLAIN = "cmd-rules-explain";
+        CMD_RULES_CONFLICTS = "cmd-rules-conflicts";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

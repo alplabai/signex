@@ -79,8 +79,9 @@ opens the same dialog. Rules: `BOARD_OUTPUT.md`.
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
-Parameter Manager... and Net Classes (see
-[below](#find-similar-filter-net-classes)). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+Parameter Manager..., Net Classes (see
+[below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
+greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a

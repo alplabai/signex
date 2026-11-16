@@ -12,6 +12,7 @@ mod categories;
 mod general;
 mod operands;
 mod pcb;
+mod rules;
 mod schematic;
 mod threed;
 
@@ -318,6 +319,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     active_bar::ACTIVE_BAR,
     pcb::PCB,
     threed::THREE_D,
+    rules::RULES,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups.
@@ -424,6 +426,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "back_annotate_schematics",
     "new_pcb_document",
     "new_schematic_sheet",
+    "open_rules",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -831,6 +834,7 @@ mod tests {
             ("active_bar.rs", include_str!("active_bar.rs")),
             ("pcb.rs", include_str!("pcb.rs")),
             ("threed.rs", include_str!("threed.rs")),
+            ("rules.rs", include_str!("rules.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

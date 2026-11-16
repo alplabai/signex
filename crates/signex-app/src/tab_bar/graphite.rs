@@ -46,6 +46,7 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
         TabKind::LibraryBrowser(_) => ids::PANELS_TAB_KIND_LIBRARY,
         TabKind::ComponentEditor(_) => ids::PANELS_TAB_KIND_COMPONENT,
         TabKind::Project(_) => ids::PANELS_TAB_KIND_PROJECT,
+        TabKind::Rules(_) => ids::RULES_TAB_KIND,
     }
 }
 

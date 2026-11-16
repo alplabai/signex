@@ -146,7 +146,7 @@ not touched and a shared core can come later.
 
 ```text
 program  := rule*
-rule     := "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
+rule     := "disabled"? "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
 pair     := "between" OBJECT "and" OBJECT
 when     := "when" cond ("and" cond)*
 cond     := SUBJECT ("==" | "matches") (STRING | WORD)

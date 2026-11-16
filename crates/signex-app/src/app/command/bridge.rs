@@ -290,6 +290,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
+        // Design ▸ Rules (#2398): the active document's project.
+        "open_rules" => {
+            Message::Project(ProjectMsg::Rules(crate::app::RulesTabMsg::OpenRequested {
+                project: None,
+            }))
+        }
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
         // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.

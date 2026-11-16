@@ -109,6 +109,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "apply_selection_filter_preset",
         filter::apply_selection_filter_preset,
     ),
+    ("rules_add", crate::app::rules_tab::rules_add),
+    ("rules_set", crate::app::rules_tab::rules_set),
+    ("rules_remove", crate::app::rules_tab::rules_remove),
+    ("rules_enable", crate::app::rules_tab::rules_enable),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -204,6 +208,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_symbol_parameter" => Some(
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
+        ),
+        "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
+            "the `rules_*` edits need their operands — \
+             use the Rules tab (Design ▸ Rules)",
         ),
         _ => None,
     }

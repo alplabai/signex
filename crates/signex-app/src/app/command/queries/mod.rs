@@ -1,6 +1,8 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
 //! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
-//! `check_erc` and `check_drc` (#2199, answered once their run lands). Each
+//! `check_erc` and `check_drc` (#2199, answered once their run lands), and
+//! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
+//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -41,6 +43,11 @@ const QUERY_IDS: &[&str] = &[
     "query_pins",
     "check_erc",
     "check_drc",
+    "rules_list",
+    "rules_get",
+    "rules_effective",
+    "rules_explain",
+    "rules_conflicts",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -103,6 +110,15 @@ impl Signex {
         match id {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
+            // The Rules manager's reads (#2398).
+            "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
+            | "rules_conflicts" => {
+                let outcome = match self.rules_query(id, args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
             _ => {}
         }
         let answer = match id {
