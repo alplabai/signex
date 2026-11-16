@@ -6,6 +6,7 @@
 use super::*;
 
 use super::items::{dd_disabled, dd_msg, text};
+use crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND;
 use crate::app::{LayerStripMsg, LayerTabMenuMsg, LayerTabSubmenu, PcbMsg, PcbViewMsg};
 use crate::layer_strip_prefs::{LayerNameStyle, LayerStripPrefs};
 use signex_i18n::{Arg, I18n, MessageId, ids};
@@ -20,6 +21,9 @@ pub(super) struct TabMenuState<'a> {
     pub view: &'a PcbLayerView,
     pub prefs: &'a LayerStripPrefs,
     pub submenu: Option<LayerTabSubmenu>,
+    /// `board_layer_stack` (#2401) is enabled in the menu's window: the
+    /// command's own rule, the one the Design menu row greys by.
+    pub layer_stack_live: bool,
 }
 
 fn menu_msg(event: LayerTabMenuMsg) -> Message {
@@ -65,7 +69,21 @@ pub(super) fn layer_tab_menu_entries(
         view,
         prefs,
         submenu,
+        layer_stack_live,
     } = *state;
+    // Layer stack... opens the layer stack manager (#2401) through its
+    // catalog command; greyed when that command is.
+    let layer_stack = text(i18n, ids::PCB_LAYER_TAB_LAYER_STACK);
+    let layer_stack = if layer_stack_live {
+        dd_msg(
+            None,
+            &layer_stack,
+            "",
+            menu_msg(LayerTabMenuMsg::LayerStackPicked),
+        )
+    } else {
+        dd_disabled(None, &layer_stack, None)
+    };
     let name = crate::pcb_canvas::layer_style::layer_name(i18n, layer).into_string();
     let with_layer = |id| i18n.message_plain(id, &[("layer", Arg::from(name.clone()))]);
     let setting = |s| menu_msg(LayerTabMenuMsg::SettingPicked(s));
@@ -113,11 +131,7 @@ pub(super) fn layer_tab_menu_entries(
             submenu == Some(LayerTabSubmenu::Show),
         ),
         DropdownEntry::Separator,
-        unavailable(
-            i18n,
-            ids::PCB_LAYER_TAB_LAYER_STACK,
-            ids::PCB_LAYER_TAB_LAYER_STACK_UNAVAILABLE,
-        ),
+        layer_stack,
         unavailable(
             i18n,
             ids::PCB_LAYER_TAB_DRILL_SYMBOLS,
@@ -185,11 +199,16 @@ impl Signex {
             return Vec::new();
         }
         let view = self.pcb_layer_view_of_window(menu.window);
+        let layer_stack_live =
+            crate::keymap::AppCommandId::new(LAYER_STACK_COMMAND).is_ok_and(|id| {
+                crate::app::command::is_enabled(&id, &self.command_context(menu.window))
+            });
         let state = TabMenuState {
             layer: menu.layer,
             view: &view,
             prefs: &self.ui_state.layer_strip,
             submenu: menu.submenu,
+            layer_stack_live,
         };
         let i18n = &self.ui_state.i18n;
         let panel_ctx = &self.document_state.panel_ctx;
@@ -230,6 +249,7 @@ mod tests {
             view: &view,
             prefs: &prefs,
             submenu: None,
+            layer_stack_live: true,
         };
         let rows = rows(layer_tab_menu_entries(&I18n::en_us(), &state));
         let labels: Vec<&str> = rows.iter().map(|(label, _, _)| label.as_str()).collect();
@@ -272,12 +292,15 @@ mod tests {
         );
         assert_eq!(sent("Show all layers"), Some(PcbViewMsg::AllLayersShown));
         assert_eq!(sent("Flip board view"), Some(PcbViewMsg::BoardFlipToggled));
+        // #2401: Layer stack... runs `board_layer_stack` from the menu.
+        assert!(matches!(
+            row("Layer stack...").1,
+            Some(Message::Pcb(PcbMsg::LayerTabMenu(
+                LayerTabMenuMsg::LayerStackPicked
+            )))
+        ));
         // The editors that are not built are greyed, never a silent row.
-        for label in [
-            "Layer stack...",
-            "Drill symbols...",
-            "Layer drawing order...",
-        ] {
+        for label in ["Drill symbols...", "Layer drawing order..."] {
             assert!(row(label).1.is_none(), "{label} is greyed");
         }
         let long = rows.iter().find(|(l, _, _)| l == "Long tab names");
@@ -285,6 +308,24 @@ mod tests {
             long.is_some_and(|(_, _, on)| *on),
             "the default style is checked"
         );
+    }
+
+    /// #2401: Layer stack... greys exactly when `board_layer_stack` is
+    /// disabled in the menu's window.
+    #[test]
+    fn the_layer_stack_row_follows_its_command() {
+        let view = PcbLayerView::default();
+        let prefs = LayerStripPrefs::default();
+        let state = TabMenuState {
+            layer: PcbLayer::Copper(CopperLayer::Top),
+            view: &view,
+            prefs: &prefs,
+            submenu: None,
+            layer_stack_live: false,
+        };
+        let rows = rows(layer_tab_menu_entries(&I18n::en_us(), &state));
+        let stack = rows.iter().find(|(l, _, _)| l == "Layer stack...");
+        assert!(stack.is_some_and(|(_, message, _)| message.is_none()));
     }
 
     #[test]

@@ -17,6 +17,9 @@ use crate::app::{
     LayerTabMenuMsg, Message, PcbViewMsg, Signex,
 };
 
+/// The catalog command the layer tab menu's Layer stack... row runs (#2401).
+pub(crate) const LAYER_STACK_COMMAND: &str = "board_layer_stack";
+
 /// The board whose view a layer set acts on: the board a window shows (a
 /// menu, `None`: the main window), or an open board a command names.
 pub(crate) enum BoardViewTarget {
@@ -57,6 +60,14 @@ impl Signex {
             LayerTabMenuMsg::SettingPicked(setting) => {
                 self.interaction_state.pcb_layer_tab_menu = None;
                 return self.apply_layer_strip_setting(setting);
+            }
+            LayerTabMenuMsg::LayerStackPicked => {
+                if let Some(menu) = self.interaction_state.pcb_layer_tab_menu.take()
+                    && let Ok(id) = crate::keymap::AppCommandId::new(LAYER_STACK_COMMAND)
+                {
+                    let args = crate::app::command::CommandArgs::none();
+                    return self.dispatch_command(&id, args, menu.window);
+                }
             }
         }
         Task::none()

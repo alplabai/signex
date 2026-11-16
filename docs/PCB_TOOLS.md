@@ -363,9 +363,10 @@ A right-click on a layer tab under the board opens its menu (#2379, #2394):
 - Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
   mask (solder mask and adhesive), paste, mechanical (board outline,
   documentation and mechanical layers) and all.
-- Layer stack..., Drill symbols... and Layer drawing order... are greyed with
-  the reason as their hover text: none of those editors exists yet (the layer
-  stack editor is #2401).
+- Layer stack... runs `board_layer_stack` (#2401) from the window the menu
+  was opened in and is greyed exactly when that command is. Drill symbols...
+  and Layer drawing order... are greyed with the reason as their hover text:
+  neither editor exists yet.
 - Short, Medium and Long tab names and Show layer numbers. Short names are
   `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
   `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A

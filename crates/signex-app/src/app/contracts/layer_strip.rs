@@ -32,6 +32,9 @@ pub enum LayerTabMenuMsg {
     /// A tab-name row was picked: the menu closes and `setting` changes the
     /// strip's settings (#2394).
     SettingPicked(LayerStripMsg),
+    /// Layer stack... was picked: the menu closes and `board_layer_stack`
+    /// (#2401) runs from the window the menu was opened in.
+    LayerStackPicked,
 }
 
 /// A flyout of the layer tab menu (#2394).

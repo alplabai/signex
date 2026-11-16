@@ -69,7 +69,6 @@ define_ids! {
     PCB_LAYER_TAB_SHOW_LAYERS = "pcb-layer-tab-show-layers";
     PCB_LAYER_KIND = "pcb-layer-kind";
     PCB_LAYER_TAB_LAYER_STACK = "pcb-layer-tab-layer-stack";
-    PCB_LAYER_TAB_LAYER_STACK_UNAVAILABLE = "pcb-layer-tab-layer-stack-unavailable";
     PCB_LAYER_TAB_DRILL_SYMBOLS = "pcb-layer-tab-drill-symbols";
     PCB_LAYER_TAB_DRILL_SYMBOLS_UNAVAILABLE = "pcb-layer-tab-drill-symbols-unavailable";
     PCB_LAYER_TAB_DRAWING_ORDER = "pcb-layer-tab-drawing-order";

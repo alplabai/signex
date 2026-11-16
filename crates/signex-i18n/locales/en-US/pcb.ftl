@@ -27,8 +27,8 @@ pcb-layer-kind = { $kind ->
 }
 # Rows that open board editors; greyed with the reason while the editor is
 # not built.
+# Opens the layer stack manager (#2401).
 pcb-layer-tab-layer-stack = Layer stack...
-pcb-layer-tab-layer-stack-unavailable = The layer stack editor is not built yet. The Layers panel lists the board's layers.
 pcb-layer-tab-drill-symbols = Drill symbols...
 pcb-layer-tab-drill-symbols-unavailable = Drill symbols cannot be set yet.
 pcb-layer-tab-drawing-order = Layer drawing order...
