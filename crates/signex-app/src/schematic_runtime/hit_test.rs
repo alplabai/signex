@@ -56,10 +56,20 @@ pub fn hit_test_styled(
     world_y: f64,
     widths: WireWidths<'_>,
 ) -> Option<SelectedItem> {
-    let point = Point::new(world_x, world_y);
-    hit_test_items(snapshot, designators, point, widths)
+    hit_test_all_styled(snapshot, designators, world_x, world_y, widths)
         .into_iter()
         .next()
+}
+
+/// Every item under the point, topmost first, hit as [`hit_test_styled`] hits.
+pub fn hit_test_all_styled(
+    snapshot: &SchematicRenderSnapshot,
+    designators: &Designators,
+    world_x: f64,
+    world_y: f64,
+    widths: WireWidths<'_>,
+) -> Vec<SelectedItem> {
+    hit_test_items(snapshot, designators, Point::new(world_x, world_y), widths)
 }
 
 pub fn hit_test_polygon(
