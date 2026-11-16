@@ -167,6 +167,11 @@ pub(super) fn zoom_value(zoom: f64) -> String {
     format!("{zoom:.0}")
 }
 
+/// The zoom segment of the bar: `zoom` as a whole percent.
+fn zoom_text(i18n: &signex_i18n::I18n, zoom: f64) -> Localized {
+    t!(i18n, ids::PANELS_STATUS_BAR_ZOOM, "percent" => zoom_value(zoom))
+}
+
 /// The cursor readout: `(x, y)` as numbers in `unit`.
 pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
     match unit {
@@ -392,13 +397,7 @@ pub(super) fn view<'a>(
         bar = bar.push(view_angle(angle, tokens));
     }
     let bar = bar
-        .push(
-            mono_message(
-                t!(i18n, ids::PANELS_STATUS_BAR_ZOOM, "percent" => zoom_value(r.zoom)),
-                muted,
-            )
-            .boxed(),
-        )
+        .push(mono_message(zoom_text(i18n, r.zoom), muted).boxed())
         .push(
             mono_button(
                 mono_text(format!("{unit}"), muted),
@@ -459,12 +458,11 @@ mod tests {
     #[test]
     fn the_zoom_reads_as_a_whole_percent_without_grouping() {
         let i18n = signex_i18n::I18n::en_us();
-        for zoom in [0.5, 2.5, 99.5, 100.0, 1600.0, 12345.4] {
-            let shown = i18n.message_plain(
-                ids::PANELS_STATUS_BAR_ZOOM,
-                &[("percent", zoom_value(zoom).into())],
-            );
-            assert_eq!(shown, format!("{:.0}%", zoom));
+        for zoom in [0.5, 2.5, 12.5, 99.5, 100.0, 1600.0, 12345.4] {
+            let shown = zoom_text(&i18n, zoom)
+                .into_string()
+                .replace(['\u{2068}', '\u{2069}'], "");
+            assert_eq!(shown, format!("{:.0}%", zoom), "zoom {zoom}");
         }
         assert_eq!(zoom_value(0.5), "0");
         assert_eq!(zoom_value(2.5), "2");
