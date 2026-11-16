@@ -121,6 +121,8 @@ impl Signex {
         };
         if session.tool == BoardPlaceTool::SlicePour {
             preview.segments.push(Segment {
+                locked: false,
+                attributes: Default::default(),
                 uuid: Uuid::nil(),
                 start: first,
                 end: cursor,
