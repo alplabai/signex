@@ -97,6 +97,12 @@ impl IdSpace {
         *items = kept;
     }
 
+    /// An id for the `position`th (from 1) object of `kind` saved with none:
+    /// derived like a repair's, so every read of the file names it alike.
+    pub(in crate::format) fn mint(&self, kind: &str, position: usize) -> Uuid {
+        self.fresh_uuid(kind, position, Uuid::nil(), "unnamed")
+    }
+
     /// A uuid not yet taken, derived from the document's content. `scope`
     /// tells repairs of the same position apart.
     fn fresh_uuid(&self, kind: &str, position: usize, old: Uuid, scope: &str) -> Uuid {

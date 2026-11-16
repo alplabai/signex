@@ -439,8 +439,8 @@ pub struct Zone {
 /// text frame (#2424; kinds in [`crate::pcb_graphic`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BoardGraphic {
-    /// Shares the board's one id space with the other board items. Nil in a
-    /// file written before #2424; the load repair names such drawings.
+    /// Shares the board's one id space with the other board items. A file
+    /// written before #2424 has none; loading derives one per drawing.
     #[serde(default)]
     pub uuid: Uuid,
     #[serde(default)]

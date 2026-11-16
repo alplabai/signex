@@ -50,8 +50,14 @@ pub(super) fn repair_duplicate_uuids(board: &mut PcbBoard) -> Vec<SheetLoadRepai
         None,
         by_field!(|t| t.text.clone()),
     );
-    // A drawing written before #2424 has no id (nil): the first keeps nil
-    // unless the board holds it, each later one is re-minted.
+    // A drawing written before #2424 has no id (nil). It gets a derived one
+    // without a repair note: an id it never had is no repeat, and two equal
+    // old drawings must both stay.
+    for (index, graphic) in board.graphics.iter_mut().enumerate() {
+        if graphic.uuid.is_nil() {
+            graphic.uuid = ids.mint(kind::BOARD_GRAPHIC, index + 1);
+        }
+    }
     ids.check(
         &mut board.graphics,
         kind::BOARD_GRAPHIC,
