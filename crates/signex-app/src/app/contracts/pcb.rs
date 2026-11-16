@@ -84,6 +84,21 @@ pub enum PcbMsg {
     LayerStrip(super::LayerStripMsg),
     /// A saved layer set was saved, shown or deleted (#2394).
     LayerSet(super::LayerSetMsg),
+    /// Length tuning on the board in view (#2389).
+    Tune(TuneMsg),
+}
+
+/// Length tuning asked for on the board in view (#2389), from the PCB
+/// Active Bar's Tune group or the palette. Each acts on the selected tracks'
+/// nets and lands as one undo step, or says in Messages why not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuneMsg {
+    /// `tune_net_length` ran: the selected tracks' nets are lengthened to
+    /// the longest of them.
+    NetLengthRequested,
+    /// `tune_diff_pair` ran: the shorter net of the selected track's pair is
+    /// lengthened to the other's length.
+    DiffPairRequested,
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

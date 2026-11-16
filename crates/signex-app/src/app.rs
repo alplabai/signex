@@ -102,7 +102,7 @@ pub use contracts::{
     ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
     RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
     SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
+    TextEditState, TextEditTarget, TrackItem, TuneMsg, UiMsg, VersionControlScope, ViewAngleEntry,
     ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};

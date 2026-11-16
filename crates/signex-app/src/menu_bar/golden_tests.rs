@@ -290,6 +290,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
     ("place_board_route", "PlaceBoardRoute"),
+    // #2389: the other routing tools.
+    ("place_board_diff_pair", "PlaceBoardDiffPair"),
+    ("place_board_quick_route", "PlaceBoardQuickRoute"),
+    ("place_board_multi_route", "PlaceBoardMultiRoute"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),

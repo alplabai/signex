@@ -444,6 +444,16 @@ define_ids! {
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
+        CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
+        CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
+        CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";
+        CMD_MENU_PLACE_BOARD_QUICK_ROUTE = "cmd-menu-place-board-quick-route";
+        CMD_PLACE_BOARD_MULTI_ROUTE = "cmd-place-board-multi-route";
+        CMD_MENU_PLACE_BOARD_MULTI_ROUTE = "cmd-menu-place-board-multi-route";
+        CMD_TUNE_NET_LENGTH = "cmd-tune-net-length";
+        CMD_MENU_TUNE_NET_LENGTH = "cmd-menu-tune-net-length";
+        CMD_TUNE_DIFF_PAIR = "cmd-tune-diff-pair";
+        CMD_MENU_TUNE_DIFF_PAIR = "cmd-menu-tune-diff-pair";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";

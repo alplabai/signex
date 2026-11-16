@@ -14,8 +14,10 @@ use crate::app::pcb_tools::BoardPlaceTool;
 pub enum PcbBarGroup {
     /// Place a part, swap its footprint.
     Components,
-    /// Route copper between pads.
+    /// Route copper between pads: one net, a pair, straight, a bus.
     Route,
+    /// Lengthen routed nets with meanders (#2389).
+    Tune,
     /// Via and free pad.
     ViaPad,
     /// Copper areas: polygon pour, solid region, fill, and the keepouts
@@ -50,9 +52,10 @@ impl PcbBarRow {
 
 impl PcbBarGroup {
     /// The groups in the bar's order.
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Components,
         Self::Route,
+        Self::Tune,
         Self::ViaPad,
         Self::CopperAreas,
         Self::CopperDrawing,
@@ -67,7 +70,13 @@ impl PcbBarGroup {
         use PcbBarRow::{Command, Tool};
         match self {
             Self::Components => &[Tool(T::Component), Command("change_footprint")],
-            Self::Route => &[Tool(T::InteractiveRouting)],
+            Self::Route => &[
+                Tool(T::InteractiveRouting),
+                Tool(T::DiffPairRouting),
+                Tool(T::QuickRoute),
+                Tool(T::MultiRoute),
+            ],
+            Self::Tune => &[Command("tune_net_length"), Command("tune_diff_pair")],
             Self::ViaPad => &[Tool(T::Via), Tool(T::Pad)],
             Self::CopperAreas => &[
                 Tool(T::PolygonPour),
@@ -86,6 +95,7 @@ impl PcbBarGroup {
         match self {
             Self::Components => "components",
             Self::Route => "route",
+            Self::Tune => "tune",
             Self::ViaPad => "via_pad",
             Self::CopperAreas => "copper_areas",
             Self::CopperDrawing => "copper_drawing",

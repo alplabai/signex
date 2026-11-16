@@ -106,9 +106,10 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 }
 
 /// #2352, #2373, #2388, #2389, #2392: Selection Filter, Move, Align | Components |
-/// Route | Via/Pad, Copper Areas, Copper Drawing | Dimensions, Text | Board
-/// Sketch, Fabrication Outputs | View. A group with a live row runs it; a
-/// group with none is greyed with a tooltip that says it is not on boards yet.
+/// Route, Tune | Via/Pad, Copper Areas, Copper Drawing | Dimensions, Text |
+/// Board Sketch, Fabrication Outputs | View. A group with a live row runs it;
+/// a group with none is greyed with a tooltip that says it is not on boards
+/// yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(
@@ -119,7 +120,7 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         None,
     );
     let all = buttons(&items);
-    assert_eq!(all.len(), 13);
+    assert_eq!(all.len(), 14);
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
@@ -127,23 +128,25 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert_eq!(separators, 6);
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 11,
-        "filter, move, align, components, route, via/pad, areas, drawing, sketch, fabrication outputs, view"
+        live, 12,
+        "filter, move, align, components, route, tune, via/pad, areas, drawing, sketch, fabrication outputs, view"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(
         runs(all[3], "change_footprint"),
         "Component is not live yet"
     );
-    assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
+    assert!(runs(all[4], "place_board_route"));
+    assert!(runs(all[5], "tune_net_length"), "#2389: Tune follows Route");
+    assert!(runs(all[6], "place_board_via"), "#2373: Via is live");
     assert!(
-        runs(all[6], "place_board_polygon_pour"),
+        runs(all[7], "place_board_polygon_pour"),
         "#2216: Polygon Pour heads its group"
     );
-    assert!(runs(all[7], "place_board_track"));
-    assert!(runs(all[10], "board_sketch"));
-    assert!(runs(all[11], "fabrication_outputs"));
-    assert!(runs(all[12], "view_rotate"), "View closes the bar");
+    assert!(runs(all[8], "place_board_track"));
+    assert!(runs(all[11], "board_sketch"));
+    assert!(runs(all[12], "fabrication_outputs"));
+    assert!(runs(all[13], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -154,8 +157,9 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     }
     assert!(all[0].tooltip.starts_with("Selection Filter"));
     assert!(all[4].tooltip.starts_with("Interactive Routing"));
-    assert!(all[8].tooltip.starts_with("Place Dimension"));
-    assert!(all[9].tooltip.starts_with("Place String"));
+    assert_eq!(all[5].tooltip, "Length Tuning");
+    assert!(all[9].tooltip.starts_with("Place Dimension"));
+    assert!(all[10].tooltip.starts_with("Place String"));
 }
 
 /// #2352 / #2360 / #2392: every tool the Place menu greys on a board is

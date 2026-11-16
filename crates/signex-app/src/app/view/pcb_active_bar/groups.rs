@@ -125,12 +125,24 @@ fn row_tooltip(row: PcbBarRow, i18n: &I18n) -> String {
     }
 }
 
-/// The bar button's icon for `row`: the tool's bar icon, the component
-/// glyph for a command of the Components group.
+/// The bar button's icon for `row`: the tool's bar icon, a tuning
+/// command's glyph, the component glyph for a command of the Components
+/// group.
 fn button_icon(row: PcbBarRow, tid: ThemeId) -> ActiveBarIcon {
     match row {
         PcbBarRow::Tool(tool) => tool_icon(tool, tid),
-        PcbBarRow::Command(_) => ActiveBarIcon::Svg(ic::icon_component(tid)),
+        PcbBarRow::Command(id) => {
+            ActiveBarIcon::Svg(command_icon(id, tid).unwrap_or_else(|| ic::icon_component(tid)))
+        }
+    }
+}
+
+/// The glyph of a tuning command row (#2389); `None` for another command.
+fn command_icon(id: &str, tid: ThemeId) -> Option<svg::Handle> {
+    match id {
+        "tune_net_length" => Some(ic::icon_pcb_length_tune(tid)),
+        "tune_diff_pair" => Some(ic::icon_pcb_diff_pair_tune(tid)),
+        _ => None,
     }
 }
 
@@ -140,13 +152,18 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
     use BoardPlaceTool as T;
     let tool = match row {
         PcbBarRow::Tool(tool) => tool,
-        PcbBarRow::Command(_) => return ic::icon_dd_part_actions(tid),
+        PcbBarRow::Command(id) => {
+            return command_icon(id, tid).unwrap_or_else(|| ic::icon_dd_part_actions(tid));
+        }
     };
     match tool {
         T::Component => ic::icon_component(tid),
         T::Pad => ic::icon_pcb_pad(tid),
         T::Via => ic::icon_pcb_via(tid),
         T::InteractiveRouting => ic::icon_dd_wire(tid),
+        T::DiffPairRouting => ic::icon_pcb_diff_pair_route(tid),
+        T::QuickRoute => ic::icon_pcb_quick_route(tid),
+        T::MultiRoute => ic::icon_pcb_multi_route(tid),
         T::Track => ic::icon_dd_line(tid),
         T::Arc => ic::icon_dd_arc(tid),
         T::Fill => ic::icon_dd_rect(tid),

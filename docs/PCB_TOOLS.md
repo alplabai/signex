@@ -123,10 +123,57 @@ clearance the design rules ask from other nets' copper (#2389).
   discards it. When the tool ends with such a route (another tool, a Move,
   paste or part), the route is discarded with a Messages line; it is never
   dropped silently.
-- **Not yet.** Differential pairs (the net classes' `diff_pair_gap` and
-  `diff_pair_width`), arcs, blind and buried vias, board-edge clearance,
-  routing several layers in one search, and a route kept when its board's
-  tab closes mid-route.
+- **Not yet.** Arcs, blind and buried vias, board-edge clearance, routing
+  several layers in one search, and a route kept when its board's tab
+  closes mid-route.
+
+## Differential Pair Routing and Multi-Route
+
+`place_board_diff_pair` and `place_board_multi_route` (no default key;
+Place, the PCB Active Bar's Route group). Several nets run side by side on
+the active copper layer as one route (#2389).
+
+- **Which nets.** Differential Pair Routing takes the pair of the net under
+  the first click (`signex_engine::pcb::route::diff_pair_of`): the net
+  named with the other ending of `_P`/`_N`, `_p`/`_n` or `+`/`-`, else,
+  when the net's class sets a differential-pair gap and holds exactly two
+  of the board's nets, the other one (the first by name is the positive).
+  Multi-Route takes the nets of the selected tracks, pads and vias, two or
+  more. A net in no pair, no selection or a net with no copper on the layer
+  starts nothing, and the Messages panel says why.
+- **Start.** Each net starts at its own copper nearest the first click (a
+  pad centre, a track end or a via); the route's centre line starts in the
+  middle of those points.
+- **Width and gap.** The width is the first net's route width (as
+  Interactive Routing's). A pair takes its class's differential-pair width
+  and gap where they are set; the gap between neighbours is never under the
+  clearance the rules ask between any two of the nets, which is also a
+  bus's gap.
+- **Legs.** Each later click routes the centre line to the point around
+  other nets' copper (`route_bus_leg`): the search sees the whole bus as one
+  wide track, half a pitch wider on each side so a right-angle bend's outer
+  corner fits, and the route's own nets are no obstacle to it
+  (`RouteWorld::with_kin`). Every member then follows the centre line at
+  its offset (`pcb_geom::route::parallel_paths`, corners mitred), the
+  member whose start lies leftmost of the first leg on the left, joined
+  straight from its start. The member tracks are checked one by one against
+  the board, their gaps to each other included (`draft_fits`); a leg that
+  breaks a clearance, or a corner too sharp to follow side by side, adds
+  nothing and Messages says why.
+- **One step.** As for Interactive Routing: nothing lands until the route
+  ends, then all members' tracks land as one undo step, checked against
+  the board revision. The tracks stay on the layer the route started on; a
+  via mid-route, push and shove, and joining the far ends to pads are not
+  done yet.
+
+## Quick Route
+
+`place_board_quick_route` (no default key; Place, the Route group). The
+first click starts on the net of the copper under it, at Interactive
+Routing's width; the second click routes straight to the point, bent only
+by the corner rule, and lands at once as one undo step. Other nets are not
+avoided: the Design Rule Check reports what the track crosses. A copper
+layer change between the clicks adds a via, as for a Track run.
 
 ## Length tuning
 
@@ -142,6 +189,23 @@ The panel's net length readout shows the result after Enter; a live
 length readout while routing is not done yet. A net already as long, a
 shortfall smaller than one lowest bump adds, a track too short for the
 bumps, or no side clear is refused and the Messages panel says why.
+
+The PCB Active Bar's **Tune** group runs the same accordion on nets:
+
+- **Length Tuning** (`tune_net_length`) lengthens the nets of the selected
+  tracks to the longest of them (`tune_nets`), each on its longest straight
+  track that takes the bumps with a clear side, each tuned on the board as
+  the ones before it left it. A net already at the length, or short by
+  less than one bump adds, is left.
+- **Differential Pair Length Tuning** (`tune_diff_pair`) lengthens the
+  shorter net of the selected track's pair to the longer one's routed
+  length (`tune_pair`).
+
+Each is one undo step, and Messages says what was tuned or why nothing
+was. An agent or the CLI names the board (`document`), the net (`net`;
+else the selection, on the board in view only) and for Length Tuning the
+target in mm (`value`); the answer lists each tuned net and its length.
+Coupled (both nets at once) pair meanders are not done yet.
 
 ## Fill and Solid Region
 
@@ -301,7 +365,8 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Group | Rows |
 |---|---|
 | Components | Component, Change Footprint |
-| Route | Interactive Routing |
+| Route | Interactive Routing, Differential Pair Routing, Quick Route, Multi-Route |
+| Tune | Length Tuning, Differential Pair Length Tuning |
 | Via / Pad | Via, Pad |
 | Copper areas | Polygon Pour, Solid Region, Fill, Keepout |
 | Copper drawing | Track, Arc |
@@ -310,7 +375,8 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 
 Every board placement tool is a row of exactly one group, so the bar and
 Place on a board list the same tools; Change Footprint is the Edit and board
-canvas menu row of #2366.
+canvas menu row of #2366, and the Tune rows are the length tuning commands
+of #2389 (palette, no menu row).
 
 - **Button.** It shows and runs the row its group ran last; until then, the
   first row that can run. A click runs it as its menu row does. It is drawn

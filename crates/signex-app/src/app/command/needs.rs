@@ -338,7 +338,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_keepout"
         // #2389: Interactive Routing and its mode.
         | "place_board_route"
-        | "cycle_route_mode" => Needs::Pcb,
+        | "cycle_route_mode"
+        // #2389: the other routing tools and length tuning.
+        | "place_board_diff_pair"
+        | "place_board_quick_route"
+        | "place_board_multi_route"
+        | "tune_net_length"
+        | "tune_diff_pair" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,

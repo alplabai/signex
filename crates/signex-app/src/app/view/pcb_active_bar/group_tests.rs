@@ -74,6 +74,11 @@ fn the_bar_shows_every_group_once() {
 #[test]
 fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
     let cases = [
+        // #2389: every routing tool is a row of Route.
+        (PcbBarGroup::Route, BoardPlaceTool::DiffPairRouting),
+        (PcbBarGroup::Route, BoardPlaceTool::QuickRoute),
+        (PcbBarGroup::Route, BoardPlaceTool::MultiRoute),
+        (PcbBarGroup::Route, BoardPlaceTool::InteractiveRouting),
         (PcbBarGroup::ViaPad, BoardPlaceTool::Via),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Fill),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Keepout),
@@ -119,6 +124,41 @@ fn the_components_group_lists_the_part_rows() {
     assert!(rows[1].disabled, "nothing is selected");
 }
 
+/// #2389: the Route group lists every routing tool and the Tune group both
+/// tuning commands, each with its own icon; a Tune row runs its command
+/// (with no track selected it only says so) and the group shows it next.
+#[test]
+fn the_route_and_tune_groups_list_their_rows() {
+    let mut app = board_app();
+    let route = rows(&app, PcbBarMenu::Group(PcbBarGroup::Route));
+    let labels: Vec<&str> = route.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Interactive Routing",
+            "Differential Pair Routing",
+            "Quick Route",
+            "Multi-Route"
+        ]
+    );
+    assert!(route.iter().all(|row| !row.disabled && row.icon.is_some()));
+    let tune = rows(&app, PcbBarMenu::Group(PcbBarGroup::Tune));
+    let commands: Vec<_> = tune.iter().map(|row| row.command_id).collect();
+    assert_eq!(commands, [Some("tune_net_length"), Some("tune_diff_pair")]);
+    assert_eq!(tune[0].label, "Length Tuning");
+    assert_eq!(tune[1].label, "Differential Pair Length Tuning");
+    assert_ne!(tune[0].icon, tune[1].icon, "each row has its own glyph");
+    let path = app.active_tab_path().expect("a board");
+    let before = serde_json::to_string(app.document_state.pcb_board(&path).unwrap()).unwrap();
+    let _ = pick_from_group(&mut app, PcbBarGroup::Tune, "tune_diff_pair");
+    let after = serde_json::to_string(app.document_state.pcb_board(&path).unwrap()).unwrap();
+    assert_eq!(before, after, "nothing selected: nothing tuned");
+    assert!(runs(
+        &group_button_of(&app, PcbBarGroup::Tune),
+        "tune_diff_pair"
+    ));
+}
+
 /// #2392: a row whose tool is not built yet is greyed, runs nothing, and
 /// its tooltip says why, the reason Place on a board gives.
 #[test]
@@ -150,7 +190,6 @@ fn a_group_with_no_live_row_is_a_greyed_button() {
     let app = board_app();
     let items = bar_of(&app);
     for (group, reason) in [
-        (PcbBarGroup::Route, "Interactive Routing"),
         (PcbBarGroup::Dimensions, "Place Dimension"),
         (PcbBarGroup::Text, "Place String"),
     ] {

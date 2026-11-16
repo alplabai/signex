@@ -106,6 +106,9 @@ mod tests {
                 "save_layer_set",
                 "show_layer_group",
                 "show_layer_set",
+                // #2389: length tuning on the named board.
+                "tune_diff_pair",
+                "tune_net_length",
             ]
         );
     }

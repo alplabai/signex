@@ -204,6 +204,30 @@ pcb-route-board-changed = Interactive Routing: a track the route pushed was chan
 pcb-route-stale = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was added; Esc discards the route
 pcb-route-not-placed = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was placed; undo or redo back to place it, or press Esc again to discard it
 pcb-route-discarded = Interactive Routing: the route no longer fits the board ({ $why }) and was discarded; the board is unchanged
+pcb-route-too-sharp = Routing: a corner turns too sharply for the tracks to follow it side by side, so nothing was added
+# The routing tools that follow Interactive Routing (#2389): Place rows,
+# Active Bar tooltips and Messages hints.
+pcb-tool-diff-pair = Differential Pair Routing
+pcb-tool-quick-route = Quick Route
+pcb-tool-multi-route = Multi-Route
+pcb-bar-diff-pair-tooltip = Differential Pair Routing (Space flips the corner, Shift+Space changes the corner mode)
+pcb-bar-quick-route-tooltip = Quick Route (straight to the point, other nets are not avoided)
+pcb-bar-multi-route-tooltip = Multi-Route (select copper of the nets first)
+pcb-tool-hint-diff-pair = Differential Pair Routing: click copper of a pair's net to start both tracks there, then click each point; the pair keeps its coupled width and gap and walks around other nets. Click the route's end, Esc or a right-click to finish it as one step
+pcb-tool-hint-quick-route = Quick Route: click a pad or track end to start, then click the target; the track goes straight there at the rule width, without avoiding other nets, as one step
+pcb-tool-hint-multi-route = Multi-Route: select copper of the nets to route, click near their ends to start, then click each point; the nets run side by side around other nets. Click the route's end, Esc or a right-click to finish it as one step
+# Why a routing tool did nothing: $tool is its name, $why one of the
+# reasons below ($net is a net's name).
+pcb-route-refused = { $tool }: { $why }
+pcb-route-no-net = click on copper of a net to start
+pcb-route-no-pair = { $net } is in no differential pair; name its nets with _P and _N (or + and -), or give their net class a pair gap
+pcb-route-member-no-copper = { $net } has no copper on the active layer to start from
+pcb-route-bus-needs-nets = select copper of two or more nets first
+# Length tuning from the PCB Active Bar's Tune group, the palette or an
+# agent (#2389). $what is the command's name, $why the reason.
+pcb-tune-needs-tracks = { $what }: select a track of each net to tune
+pcb-tune-refused = { $what }: { $why }
+pcb-tune-done = { $what }: { $count } net(s) brought to { $length } mm
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

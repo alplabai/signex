@@ -480,6 +480,10 @@ fn place_on_a_board_lists_the_boards_tools() {
             "Pad",
             "Via",
             "Interactive Routing",
+            // #2389: the routing tools that follow it.
+            "Differential Pair Routing",
+            "Quick Route",
+            "Multi-Route",
             "Track",
             "Arc",
             "Fill",
@@ -492,7 +496,7 @@ fn place_on_a_board_lists_the_boards_tools() {
         ]
     );
     let tools = crate::app::pcb_tools::BoardPlaceTool::PLACE_MENU;
-    for (row, tool) in rows[..12].iter().zip(tools) {
+    for (row, tool) in rows[..tools.len()].iter().zip(tools) {
         if let Some(command) = tool.command() {
             // #2373: a live tool runs the command its Active Bar button runs.
             assert!(row.is_enabled(), "{} is live", row.label);

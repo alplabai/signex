@@ -258,6 +258,11 @@ place_board_polygon_pour	place	Place a polygon pour on the active copper layer, 
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_route	place	Route on the active copper layer around other nets, keeping the rule clearance	Interactive Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+place_board_diff_pair	place	Route a differential pair side by side at its coupled width and gap, around other nets	Differential Pair Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_quick_route	place	Route straight to the clicked point at the rule width, without avoiding other nets	Quick Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_multi_route	place	Route the selected nets side by side as a bus, around other nets	Multi-Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+tune_net_length	pcb	Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them	Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?,value:text?
+tune_diff_pair	pcb	Lengthen the shorter net of a differential pair with meanders to match the longer one	Differential Pair Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
 show_layer_set	view	Show a layer set on the board view	Show Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 save_layer_set	view	Save the shown layers as a layer set	Save Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 delete_layer_set	view	Delete a saved layer set	Delete Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text

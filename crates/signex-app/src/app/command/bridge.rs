@@ -324,6 +324,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_polygon_pour" => board_tool(BoardPlaceTool::PolygonPour),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
+        "place_board_diff_pair" => board_tool(BoardPlaceTool::DiffPairRouting),
+        "place_board_quick_route" => board_tool(BoardPlaceTool::QuickRoute),
+        "place_board_multi_route" => board_tool(BoardPlaceTool::MultiRoute),
+        "tune_net_length" => Message::Pcb(PcbMsg::Tune(TuneMsg::NetLengthRequested)),
+        "tune_diff_pair" => Message::Pcb(PcbMsg::Tune(TuneMsg::DiffPairRequested)),
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,

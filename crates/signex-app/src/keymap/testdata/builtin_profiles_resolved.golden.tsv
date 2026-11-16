@@ -356,6 +356,11 @@ altium	hint	-	P G	place_board_polygon_pour
 altium	hint	-	-	place_board_keepout
 altium	hint	-	-	place_board_route
 altium	hint	-	-	cycle_route_mode
+altium	hint	-	-	place_board_diff_pair
+altium	hint	-	-	place_board_quick_route
+altium	hint	-	-	place_board_multi_route
+altium	hint	-	-	tune_net_length
+altium	hint	-	-	tune_diff_pair
 altium	hint	-	-	board_report_bom
 altium	hint	-	-	board_report_netlist
 altium	hint	-	-	board_report_net_length
@@ -736,6 +741,11 @@ classic	hint	-	-	place_board_polygon_pour
 classic	hint	-	-	place_board_keepout
 classic	hint	-	-	place_board_route
 classic	hint	-	-	cycle_route_mode
+classic	hint	-	-	place_board_diff_pair
+classic	hint	-	-	place_board_quick_route
+classic	hint	-	-	place_board_multi_route
+classic	hint	-	-	tune_net_length
+classic	hint	-	-	tune_diff_pair
 classic	hint	-	-	board_report_bom
 classic	hint	-	-	board_report_netlist
 classic	hint	-	-	board_report_net_length

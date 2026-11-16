@@ -12,6 +12,12 @@ pub enum BoardPlaceTool {
     Pad,
     Via,
     InteractiveRouting,
+    /// A differential pair routed side by side (#2389).
+    DiffPairRouting,
+    /// Straight to the target, other nets not avoided (#2389).
+    QuickRoute,
+    /// Several selected nets routed side by side as a bus (#2389).
+    MultiRoute,
     Track,
     Arc,
     Fill,
@@ -34,11 +40,14 @@ pub(crate) enum ToolState {
 
 impl BoardPlaceTool {
     /// Place on a board, top to bottom.
-    pub(crate) const PLACE_MENU: [Self; 12] = [
+    pub(crate) const PLACE_MENU: [Self; 15] = [
         Self::Component,
         Self::Pad,
         Self::Via,
         Self::InteractiveRouting,
+        Self::DiffPairRouting,
+        Self::QuickRoute,
+        Self::MultiRoute,
         Self::Track,
         Self::Arc,
         Self::Fill,
@@ -54,6 +63,9 @@ impl BoardPlaceTool {
         match self {
             Self::Via => Live("place_board_via"),
             Self::InteractiveRouting => Live("place_board_route"),
+            Self::DiffPairRouting => Live("place_board_diff_pair"),
+            Self::QuickRoute => Live("place_board_quick_route"),
+            Self::MultiRoute => Live("place_board_multi_route"),
             Self::Track => Live("place_board_track"),
             Self::Fill => Live("place_board_fill"),
             Self::SolidRegion => Live("place_board_region"),
@@ -83,6 +95,9 @@ impl BoardPlaceTool {
             Self::Pad => ids::PCB_TOOL_PAD,
             Self::Via => ids::PCB_TOOL_VIA,
             Self::InteractiveRouting => ids::PCB_TOOL_ROUTE,
+            Self::DiffPairRouting => ids::PCB_TOOL_DIFF_PAIR,
+            Self::QuickRoute => ids::PCB_TOOL_QUICK_ROUTE,
+            Self::MultiRoute => ids::PCB_TOOL_MULTI_ROUTE,
             Self::Track => ids::PCB_TOOL_TRACK,
             Self::Arc => ids::PCB_TOOL_ARC,
             Self::Fill => ids::PCB_TOOL_FILL,
@@ -100,6 +115,15 @@ impl BoardPlaceTool {
         match self {
             Self::Via => (ids::PCB_BAR_VIA_TOOLTIP, ids::PCB_TOOL_HINT_VIA),
             Self::InteractiveRouting => (ids::PCB_BAR_ROUTE_TOOLTIP, ids::PCB_TOOL_HINT_ROUTE),
+            Self::DiffPairRouting => (ids::PCB_BAR_DIFF_PAIR_TOOLTIP, ids::PCB_TOOL_HINT_DIFF_PAIR),
+            Self::QuickRoute => (
+                ids::PCB_BAR_QUICK_ROUTE_TOOLTIP,
+                ids::PCB_TOOL_HINT_QUICK_ROUTE,
+            ),
+            Self::MultiRoute => (
+                ids::PCB_BAR_MULTI_ROUTE_TOOLTIP,
+                ids::PCB_TOOL_HINT_MULTI_ROUTE,
+            ),
             Self::Track => (ids::PCB_BAR_TRACK_TOOLTIP, ids::PCB_TOOL_HINT_TRACK),
             Self::Fill => (ids::PCB_BAR_FILL_TOOLTIP, ids::PCB_TOOL_HINT_FILL),
             Self::SolidRegion => (ids::PCB_BAR_REGION_TOOLTIP, ids::PCB_TOOL_HINT_REGION),

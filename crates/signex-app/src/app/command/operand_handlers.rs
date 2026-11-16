@@ -22,6 +22,7 @@ use super::placement_operands as place;
 use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
+use crate::app::handlers::pcb_tune as tune;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -113,6 +114,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
+    // #2389: length tuning on a named board.
+    ("tune_net_length", tune::tune_net_length),
+    ("tune_diff_pair", tune::tune_diff_pair),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

@@ -113,9 +113,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences), and the Rules manager edits `rules_add`, `rules_set`,
+  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it). A test pins this set, so a catalog row that joins or
+  document of it), and the length tuning commands `tune_net_length` and
+  `tune_diff_pair` (#2389; one undo step on the named board, answered with
+  the tuned nets and their lengths as JSON). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision. The CSV and PDF writers
   `export_board_report` and `export_board_pdf` take a `path`, so they are CLI
   only.

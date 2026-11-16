@@ -16,8 +16,8 @@ use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
 use signex_engine::pcb::placement::grid_step_mm;
 use signex_engine::pcb::route::{
-    LegRequest, PREVIEW_BUDGET, RouteDraft, RouteMode, RouteRefusal, RouteRules, RoutedLeg,
-    SEARCH_BUDGET, draft_fits, route_leg,
+    BusMember, BusStyle, LegRequest, PREVIEW_BUDGET, RouteDraft, RouteMode, RouteRefusal,
+    RouteRules, RoutedLeg, SEARCH_BUDGET, draft_fits, route_leg,
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::corner::CornerRule;
@@ -44,6 +44,17 @@ pub struct RouterState {
     pub refused: bool,
     /// The leg the next click adds, routed for the pointer.
     pub preview: Option<RouterPreview>,
+    /// The nets a Differential Pair or Multi-Route route runs side by side
+    /// (`side_by_side.rs`); `None` for a one-net route.
+    pub bus: Option<BusRoute>,
+}
+
+/// The nets of a pair or bus route and the tracks they run in. The centre
+/// line is the session's points; the draft holds every member's tracks.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BusRoute {
+    pub members: Vec<BusMember>,
+    pub style: BusStyle,
 }
 
 /// The leg on the pointer and what it was routed from: routed again only
@@ -147,7 +158,7 @@ impl Signex {
     }
 
     /// The first click: read the board's rules and start the route at `at`.
-    fn start_route(&mut self, at: Point, layer: CopperLayer) {
+    pub(super) fn start_route(&mut self, at: Point, layer: CopperLayer) {
         let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) else {
             return;
         };
@@ -185,6 +196,7 @@ impl Signex {
                 revision,
                 refused: false,
                 preview: None,
+                bus: None,
             });
         }
     }
@@ -250,7 +262,7 @@ impl Signex {
         let path = session.path.clone();
         let commands = router.draft.commands();
         let expected_revision = router.revision;
-        let label = t!(self.ui_state.i18n, ids::PCB_TOOL_ROUTE).into_string();
+        let label = t!(self.ui_state.i18n, session.tool.name()).into_string();
         let step = CheckedStep {
             label: &label,
             expected_revision,
@@ -265,7 +277,7 @@ impl Signex {
     /// revision it was last checked on (an undo, an edit from another
     /// window or panel); a draft that still fits is then held against the
     /// new revision. Why it does not fit, when it does not.
-    fn recheck_route(&mut self) -> Result<(), String> {
+    pub(super) fn recheck_route(&mut self) -> Result<(), String> {
         let Some(session) = self.interaction_state.pcb_tool.as_ref() else {
             return Ok(());
         };
@@ -304,7 +316,7 @@ impl Signex {
         self.interaction_state.pcb_tool.as_mut()?.router.as_mut()
     }
 
-    fn own_router_mut(&mut self) -> Option<&mut RouterState> {
+    pub(super) fn own_router_mut(&mut self) -> Option<&mut RouterState> {
         self.own_board_tool_mut()?.router.as_mut()
     }
 
@@ -345,8 +357,12 @@ impl Signex {
         }
     }
 
+    /// The key of the leg on the pointer; `None` for the other routing
+    /// tools, which draw theirs straight (`side_by_side.rs`, `quick.rs`).
     fn router_preview_key(&self) -> Option<PreviewKey> {
-        let session = self.own_board_tool().filter(|s| s.router.is_some())?;
+        let session = self
+            .own_board_tool()
+            .filter(|s| s.router.is_some() && s.tool == BoardPlaceTool::InteractiveRouting)?;
         let anchor = *session.points.last()?;
         let cursor = session.cursor?;
         let revision = self.document_state.board_engine(&session.path)?.revision();
@@ -388,6 +404,13 @@ impl Signex {
         let Some(router) = session.router.as_ref() else {
             return;
         };
+        match session.tool {
+            BoardPlaceTool::QuickRoute => return self.quick_route_preview(session, preview),
+            BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute => {
+                return self.bus_route_preview(session, preview);
+            }
+            _ => {}
+        }
         draw_into(&router.draft, preview);
         let key = self.router_preview_key();
         let next = router
@@ -425,6 +448,24 @@ fn route_on(
     route_leg(board, &router.draft, leg, &route, ids)
 }
 
+/// The rules a pair or bus leg is routed by on `board`: `rules`'s
+/// clearances, the corner rule given, walking around other nets.
+pub(super) fn walk_rules<'a>(
+    board: &PcbBoard,
+    clearance: &'a pcb_geom::route::ClearanceRule<'a>,
+    rules: &DrcRules,
+    corner: CornerRule,
+) -> RouteRules<'a> {
+    RouteRules {
+        clearance,
+        reach: rules.widest_clearance(),
+        corner,
+        mode: RouteMode::Walkaround,
+        grid_mm: grid_step_mm(board),
+        budget: SEARCH_BUDGET,
+    }
+}
+
 /// A draft's tracks, vias and pushed tracks, drawn into `preview`.
 fn draw_into(draft: &RouteDraft, preview: &mut PcbBoard) {
     preview.segments.extend(draft.tracks.iter().cloned());
@@ -435,7 +476,12 @@ fn draw_into(draft: &RouteDraft, preview: &mut PcbBoard) {
 /// The width a route of `style`'s net takes: its net class's track width,
 /// else the board's, held within the written rules' minimum and maximum on
 /// its layer.
-fn rule_width(board: &PcbBoard, classes: &[NetClass], rules: &DrcRules, style: &TrackStyle) -> f64 {
+pub(super) fn rule_width(
+    board: &PcbBoard,
+    classes: &[NetClass],
+    rules: &DrcRules,
+    style: &TrackStyle,
+) -> f64 {
     let class_width = board
         .nets
         .iter()
@@ -457,7 +503,7 @@ fn rule_width(board: &PcbBoard, classes: &[NetClass], rules: &DrcRules, style: &
 
 /// `via` grown to the smallest copper diameter and drill the written rules
 /// allow for its net, its copper never narrower than its drill.
-fn rule_via(mut via: Via, rules: &DrcRules) -> Via {
+pub(super) fn rule_via(mut via: Via, rules: &DrcRules) -> Via {
     let (diameter, drill) = rules.via_size_limits(via.net, pcb_geom::via_layers(&via));
     if let Some(min) = diameter {
         via.diameter = via.diameter.max(pcb_geom::nm_to_mm(min));
@@ -476,5 +522,6 @@ fn refusal_line(refusal: RouteRefusal) -> MessageId {
         RouteRefusal::ViaBlocked => ids::PCB_ROUTE_VIA_BLOCKED,
         RouteRefusal::Unrepresentable => ids::PCB_ROUTE_UNREPRESENTABLE,
         RouteRefusal::BoardChanged => ids::PCB_ROUTE_BOARD_CHANGED,
+        RouteRefusal::TooSharp => ids::PCB_ROUTE_TOO_SHARP,
     }
 }
