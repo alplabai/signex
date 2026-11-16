@@ -141,7 +141,8 @@ fn area(n: u128, fill: &str, net: u32) -> signex_types::pcb::Zone {
 }
 
 /// #2403: a drawn area on a net is one of its members and answers its
-/// net; a pour is not selectable, and net 0 has no members.
+/// net; a pour is one too since pours are pickable (#2216), and net 0 has
+/// no members.
 #[test]
 fn a_net_has_its_drawn_areas_as_members() {
     let mut b = board(vec![track(1, (0.0, 0.0), (1.0, 0.0), 4)]);
@@ -150,9 +151,13 @@ fn a_net_has_its_drawn_areas_as_members() {
         zone: Uuid::from_u128(5),
         kind: crate::PickKind::Regions,
     };
+    let pour = ItemRef::Zone {
+        zone: Uuid::from_u128(6),
+        kind: crate::PickKind::Polygons,
+    };
     assert_eq!(
         net_members(&b, 4),
-        vec![ItemRef::Track(Uuid::from_u128(1)), region]
+        vec![ItemRef::Track(Uuid::from_u128(1)), region, pour]
     );
     assert_eq!(item_net(&b, region), Some(4));
     let unnetted = ItemRef::Zone {

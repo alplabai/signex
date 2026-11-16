@@ -274,7 +274,11 @@ fn an_agent_reads_each_report_as_json() {
 #[test]
 fn a_report_without_its_board_is_refused_headless() {
     let (mut app, _task) = Signex::new();
-    let (outcome, _) = headless(&mut app, "board_report_bom", &[]);
+    let command = AppCommandId::new("board_report_bom").unwrap();
+    // The CLI's parse refuses the missing operand first; the handler
+    // refuses too when it is reached without one.
+    assert!(CommandArgs::parse_operands(&command, &[]).is_err());
+    let (outcome, _) = app.run_headless_command_in_test(&command, CommandArgs::none());
     assert!(
         matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("document")),
         "{outcome:?}"

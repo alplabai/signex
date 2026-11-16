@@ -169,7 +169,7 @@ fn lattice_search(
         // Joining the target costs a few clearance checks: try it from a
         // point no farther than any tried yet, and now and then otherwise.
         let left = estimate(here);
-        let try_join = left <= nearest || expanded % JOIN_EVERY == 0;
+        let try_join = left <= nearest || expanded.is_multiple_of(JOIN_EVERY);
         nearest = nearest.min(left);
         if state != start
             && try_join

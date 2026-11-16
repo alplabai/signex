@@ -199,10 +199,10 @@ fn repour_all_named_a_board_answers_with_each_pours_fill() {
     let area = pours[0]["area_mm2"].as_f64().expect("area");
     assert!(is_both_pieces(area), "{area}");
 
-    let (outcome, _) = app.run_headless_command_in_test(
-        &command,
-        CommandArgs::parse_operands(&command, &[]).expect("parse"),
-    );
+    // The CLI's parse refuses the missing operand first; the handler
+    // refuses too when reached without one.
+    assert!(CommandArgs::parse_operands(&command, &[]).is_err());
+    let (outcome, _) = app.run_headless_command_in_test(&command, CommandArgs::none());
     assert!(
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "no board named: {outcome:?}"

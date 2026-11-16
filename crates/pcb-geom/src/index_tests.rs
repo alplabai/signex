@@ -466,6 +466,13 @@ fn an_item_is_found_by_its_uuid() {
             kind: PickKind::Keepouts
         })
     );
-    assert_eq!(item_by_uuid(&b, id(6)), None);
+    // A pour is pickable since #2216.
+    assert_eq!(
+        item_by_uuid(&b, id(6)),
+        Some(ItemRef::Zone {
+            zone: id(6),
+            kind: PickKind::Polygons
+        })
+    );
     assert_eq!(item_by_uuid(&b, id(9)), None);
 }

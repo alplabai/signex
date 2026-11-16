@@ -94,6 +94,8 @@ const SAVES: &[&str] = &[
     "new_project_with_profile",
     // Writes the blank sheet and lists it in the saved project (#2232).
     "new_schematic_sheet",
+    // Writes the block's file in the project's `reuse-blocks` folder (#2410).
+    "save_board_reuse_block",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -170,6 +172,7 @@ mod tests {
             (Capability::Save, "new_schematic_sheet"),
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
+            (Capability::Save, "save_board_reuse_block"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

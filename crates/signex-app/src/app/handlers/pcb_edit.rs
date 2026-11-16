@@ -104,6 +104,9 @@ impl Signex {
         } else {
             self.repaint_undocked_boards(path);
         }
+        // The DRC panel says its results are stale as soon as the board
+        // changes (#2399).
+        self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
     }

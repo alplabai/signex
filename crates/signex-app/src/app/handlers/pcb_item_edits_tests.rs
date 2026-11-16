@@ -221,6 +221,8 @@ fn a_via_span_change_saves_reloads_and_is_the_span_drc_checks() {
 fn a_smaller_inner_via_size_through_the_panel_and_an_agent() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    // The panel edits what it shows: the selected via.
+    app.select_pcb_items(&[ItemRef::Via(VIA)]);
     let via = target(&path, ItemRef::Via(VIA));
     panel(
         &mut app,
@@ -291,6 +293,8 @@ fn submit(app: &mut Signex, target: &PrimitiveTarget, field: PrimitiveField, tex
 fn a_top_middle_bottom_via_is_as_small_as_its_parts_not_its_left_over_diameter() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    // The panel edits what it shows: the selected via.
+    app.select_pcb_items(&[ItemRef::Via(VIA)]);
     let via = target(&path, ItemRef::Via(VIA));
     panel(
         &mut app,

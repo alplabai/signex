@@ -307,10 +307,6 @@ mod tests {
         };
         assert_eq!(pieces.len(), 2);
         assert_eq!(radius(outer), Some(300_000));
-        assert_eq!(
-            radius(u32::MAX & !outer),
-            Some(200_000),
-            "every inner layer"
-        );
+        assert_eq!(radius(!outer), Some(200_000), "every inner layer");
     }
 }

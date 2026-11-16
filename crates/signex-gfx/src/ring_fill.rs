@@ -23,6 +23,9 @@ fn to_points(ring: &[[f32; 2]]) -> Vec<Point2> {
     ring.iter().map(to_point).collect()
 }
 
+/// Vertices and triangles (indices into the vertices) of a filled shape.
+pub type Triangulation = (Vec<[f32; 2]>, Vec<[u32; 3]>);
+
 /// Triangles filling `outline` minus `holes`: the points and the index
 /// triples into them. Holes under 3 points are skipped.
 ///
@@ -35,7 +38,7 @@ fn to_points(ring: &[[f32; 2]]) -> Vec<Point2> {
 pub fn triangulate_with_holes(
     outline: &[[f32; 2]],
     holes: &[Vec<[f32; 2]>],
-) -> Option<(Vec<[f32; 2]>, Vec<[u32; 3]>)> {
+) -> Option<Triangulation> {
     if outline.len() < 3 {
         return None;
     }

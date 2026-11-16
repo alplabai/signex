@@ -75,6 +75,10 @@ pub(crate) enum Needs {
     ReuseSource,
     /// Place Reuse Block: one unlocked footprint selected, the anchor.
     ReuseAnchor,
+    /// The Net Classes panel (#2400, #2416): the project net-class table of a
+    /// sheet or a board. Design ▸ Net Classes and Tools ▸ Net Classes open
+    /// the same panel, so they share this gate.
+    NetClassTable,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -148,6 +152,7 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            Self::NetClassTable => ctx.has_schematic || ctx.has_pcb,
             Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
             Self::MeasureTarget => ctx.has_schematic || ctx.pcb.shown,
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
@@ -222,6 +227,7 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::NetClassTable => "No schematic or PCB is open",
             Self::EditablePcb => "No PCB is open, or the board is read-only",
             Self::MeasureTarget => "No schematic or PCB is in view",
             Self::TurnedPcbView => "The board view is not rotated",
@@ -352,10 +358,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "draw_full_circle"
         | "draw_rectangle"
         | "draw_polygon"
-        // #2416: the selection filter and the Net Classes row act on the
+        // #2416: the selection filter acts on the
         // sheet in view.
         | "open_selection_filter"
-        | "open_net_classes"
         | "open_components_panel"
         | "place_symbol"
         | "break_wire"
@@ -372,8 +377,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "run_drc"
         | "reannotate_board"
         | "fabrication_outputs"
-        | "open_drc_panel"
-        | "open_net_classes_panel" => Needs::Pcb,
+        | "open_drc_panel" => Needs::Pcb,
+        "open_net_classes" | "open_net_classes_panel" => Needs::NetClassTable,
         // #2216: the pours of the board in view.
         "repour_selected" | "repour_all" => Needs::Pcb,
         // #2404, #2402: the board reports and Board Print / PDF.

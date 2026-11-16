@@ -66,6 +66,8 @@ fn tuning_reaches_the_target_length_legally_in_one_step() {
         board: path.clone(),
         items: vec![ItemRef::Track(Uuid::from_u128(TRACK))],
     };
+    // The panel edits what it shows: the selected track.
+    app.select_pcb_items(&target.items);
     tune_to(&mut app, &target, "26");
 
     let tuned = board(&app, &path);

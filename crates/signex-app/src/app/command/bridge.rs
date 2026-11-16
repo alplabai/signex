@@ -1278,15 +1278,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("autoplace_fields").unwrap();
+        let command = AppCommandId::new("reset_local_coordinates").unwrap();
 
         assert!(core_to_message(&command, &CommandArgs::none()).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'autoplace_fields'")
+            entry.message.contains("command 'reset_local_coordinates'")
                 && entry
                     .message
-                    .contains("Autoplace fields is not available yet")
+                    .contains("Reset local coordinates is not available yet")
         }));
     }
 

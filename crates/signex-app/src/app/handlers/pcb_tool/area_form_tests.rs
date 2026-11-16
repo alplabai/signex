@@ -8,7 +8,7 @@ use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::form_tests::{enter, form, panel, tab, typed};
-use super::tests::{app_with_board, board_of, click, escape, right_click, run, undo};
+use super::tests::{app_with_board, board_of, click, escape, hover, right_click, run, undo};
 use crate::app::Signex;
 use crate::panels::PcbPrimitiveMsg;
 use crate::panels::pcb_primitive_properties::{
@@ -76,6 +76,9 @@ fn a_fill_takes_the_net_picked_in_its_form() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     run(&mut app, "place_board_fill");
+    // Off the GND track, which runs from the origin: an area takes the net
+    // under its first corner (#2216).
+    hover(&mut app, 20.0, 20.0);
     let f = zone_form(&app);
     assert_eq!(f.kind, Some(ZoneKind::Fill));
     assert_eq!(

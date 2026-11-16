@@ -239,7 +239,15 @@ impl Signex {
         let edit = if field == PrimitiveField::Text {
             // A text frame reads a typed `\n` as a line break (#2424); a string
             // keeps the text as typed (#2373).
-            if matches!(target.items.first(), Some(ItemRef::Graphic { .. })) {
+            let frame = match target.items.first() {
+                Some(item) => matches!(item, ItemRef::Graphic { .. }),
+                None => self
+                    .interaction_state
+                    .pcb_tool
+                    .as_ref()
+                    .is_some_and(|s| s.tool.graphic_kind().is_some()),
+            };
+            if frame {
                 PrimitiveEdit::Text(signex_types::pcb_graphic::text_from_field(text))
             } else {
                 PrimitiveEdit::Text(text.to_string())
