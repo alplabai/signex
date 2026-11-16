@@ -16,7 +16,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-fn symbol(n: u128, reference: &str, x: f64, y: f64) -> Symbol {
+pub(super) fn symbol(n: u128, reference: &str, x: f64, y: f64) -> Symbol {
     Symbol {
         uuid: Uuid::from_u128(n),
         lib_id: "Device:R".to_string(),
@@ -39,7 +39,7 @@ fn line(n: u128) -> SchDrawing {
 }
 
 /// An app showing `sheet` as its only tab, on the Altium keymap.
-fn app_with(sheet: SchematicSheet) -> Signex {
+pub(super) fn app_with(sheet: SchematicSheet) -> Signex {
     let path = std::path::PathBuf::from("/w/row-effects.snxsch");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -65,7 +65,7 @@ fn app_with(sheet: SchematicSheet) -> Signex {
     app
 }
 
-fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
+pub(super) fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -74,11 +74,11 @@ fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
     }
 }
 
-fn select(app: &mut Signex, items: Vec<SelectedItem>) {
+pub(super) fn select(app: &mut Signex, items: Vec<SelectedItem>) {
     app.interaction_state.active_canvas_mut().selected = items;
 }
 
-fn select_symbols(app: &mut Signex) {
+pub(super) fn select_symbols(app: &mut Signex) {
     let items = doc(app)
         .symbols
         .iter()
@@ -87,7 +87,7 @@ fn select_symbols(app: &mut Signex) {
     select(app, items);
 }
 
-fn doc(app: &Signex) -> &SchematicSheet {
+pub(super) fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -95,7 +95,7 @@ fn doc(app: &Signex) -> &SchematicSheet {
 }
 
 /// `(x, y, rotation, mirror_x, mirror_y)` of every symbol.
-fn poses(app: &Signex) -> Vec<(f64, f64, f64, bool, bool)> {
+pub(super) fn poses(app: &Signex) -> Vec<(f64, f64, f64, bool, bool)> {
     doc(app)
         .symbols
         .iter()
@@ -111,12 +111,12 @@ fn poses(app: &Signex) -> Vec<(f64, f64, f64, bool, bool)> {
         .collect()
 }
 
-fn open_menu(app: &mut Signex) {
+pub(super) fn open_menu(app: &mut Signex) {
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::Show(300.0, 300.0)));
     assert!(app.interaction_state.context_menu.is_some(), "menu opened");
 }
 
-fn assert_menu_closed(app: &Signex, what: &str) {
+pub(super) fn assert_menu_closed(app: &Signex, what: &str) {
     assert!(
         app.interaction_state.context_menu.is_none(),
         "{what}: the menu stays open"
@@ -128,30 +128,29 @@ fn assert_menu_closed(app: &Signex, what: &str) {
 }
 
 /// The canvas menu's rows for the app's current selection, as
-/// `view_context_menu` builds them.
-fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
+/// `view_context_menu` builds them, followed by the rows of its Part Actions
+/// and Sheet Actions flyouts (#2419), as `view_context_submenu` builds them.
+pub(super) fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
+    use super::super::submenu::{part_actions_entries, sheet_actions_entries};
     let (selection, project_key) = app.canvas_menu_inputs(
         app.ui_state
             .main_window_id
             .expect("the app opens its main window"),
     );
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
-    canvas_menu_entries(
-        signex_i18n::I18n::en_us_ref(),
-        TID,
-        selection,
-        None,
-        project_key,
-        &sc,
-    )
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let mut rows = canvas_menu_entries(i18n, TID, selection, None, project_key, &sc);
+    rows.extend(part_actions_entries(i18n, selection, &hint(app)));
+    rows.extend(sheet_actions_entries(i18n, TID, selection, &hint(app)));
+    rows
 }
 
-fn hint(app: &Signex) -> impl Fn(&str) -> String + '_ {
+pub(super) fn hint(app: &Signex) -> impl Fn(&str) -> String + '_ {
     |id| app.keymap_shortcut_label(id)
 }
 
 /// The message of the live row that runs command `id`.
-fn live_row(rows: &[DropdownEntry<Message>], id: &str) -> Message {
+pub(super) fn live_row(rows: &[DropdownEntry<Message>], id: &str) -> Message {
     rows.iter()
         .find_map(|entry| match entry {
             DropdownEntry::Item(item) if item.command_id == Some(id) => item.on_press.clone(),
@@ -160,7 +159,7 @@ fn live_row(rows: &[DropdownEntry<Message>], id: &str) -> Message {
         .unwrap_or_else(|| panic!("no live row runs {id}"))
 }
 
-fn row_is_live(rows: &[DropdownEntry<Message>], id: &str) -> bool {
+pub(super) fn row_is_live(rows: &[DropdownEntry<Message>], id: &str) -> bool {
     rows.iter().any(|entry| match entry {
         DropdownEntry::Item(item) => item.command_id == Some(id) && item.on_press.is_some(),
         _ => false,
@@ -168,7 +167,7 @@ fn row_is_live(rows: &[DropdownEntry<Message>], id: &str) -> bool {
 }
 
 /// Press the canvas menu's row for `id`; the menu is open first.
-fn press(app: &mut Signex, id: &str) -> iced::Task<Message> {
+pub(super) fn press(app: &mut Signex, id: &str) -> iced::Task<Message> {
     open_menu(app);
     let message = live_row(&canvas_rows(app), id);
     app.update(message)
@@ -176,7 +175,7 @@ fn press(app: &mut Signex, id: &str) -> iced::Task<Message> {
 
 // ---- edit rows ----
 
-fn one_symbol() -> Signex {
+pub(super) fn one_symbol() -> Signex {
     let mut app = app_with(sheet_of(vec![symbol(1, "R1", 10.0, 10.0)]));
     select_symbols(&mut app);
     app
@@ -212,7 +211,7 @@ fn delete_row_removes_the_selection_as_one_undo_step() {
 
 /// Run `task` the way the iced runtime does and feed every message back to
 /// the app, answering each clipboard read with `text`.
-fn settle_answering_clipboard(app: &mut Signex, task: iced::Task<Message>, text: &str) {
+pub(super) fn settle_answering_clipboard(app: &mut Signex, task: iced::Task<Message>, text: &str) {
     use futures::StreamExt as _;
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
     let mut pending = vec![task];
@@ -413,7 +412,7 @@ fn arrange_rows_reorder_the_selected_drawing() {
 
 // ---- placed-part rows ----
 
-fn logged(needles: &[&str]) -> bool {
+pub(super) fn logged(needles: &[&str]) -> bool {
     crate::diagnostics::recent_entries()
         .iter()
         .any(|e| needles.iter().all(|n| e.message.contains(n)))

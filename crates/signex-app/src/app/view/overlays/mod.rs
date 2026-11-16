@@ -451,10 +451,7 @@ impl Signex {
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (ctx_menu.x, ctx_menu.y));
         if let (Some(kind), Some(offset)) = (interaction.context_submenu, card.flyout_offset) {
-            let submenu = self.view_context_submenu(
-                kind,
-                interaction.canvas_for_window(window_id).selected.len(),
-            );
+            let submenu = self.view_context_submenu(kind, window_id);
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::Close), menu)
@@ -516,10 +513,7 @@ impl Signex {
         if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
             (interaction.context_submenu, card.flyout_offset)
         {
-            let submenu = self.view_context_submenu(
-                ContextSubmenu::AddNewToProject,
-                interaction.canvas.selected.len(),
-            );
+            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id);
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)

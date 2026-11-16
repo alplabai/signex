@@ -40,6 +40,11 @@ pub enum ContextSubmenu {
     /// "Arrange ›": order the selected drawings (#1583). Shown only when the
     /// selection holds a drawing.
     Arrange,
+    /// "Part Actions ›": the selected placed part's library actions (#2419).
+    PartActions,
+    /// "Sheet Actions ›": the selected sheet symbol's child-sheet actions and
+    /// the project's sheet numbering (#2419).
+    SheetActions,
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,

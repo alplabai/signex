@@ -166,12 +166,14 @@ define_ids! {
         CMD_ASSIGN_FOOTPRINTS = "cmd-assign-footprints";
         CMD_MENU_ASSIGN_FOOTPRINTS = "cmd-menu-assign-footprints";
         CMD_CLEAR_NET_HIGHLIGHTING = "cmd-clear-net-highlighting";
+        CMD_MENU_CLEAR_NET_HIGHLIGHTING = "cmd-menu-clear-net-highlighting";
         CMD_DRAW_GRAPHIC_LINE = "cmd-draw-graphic-line";
         CMD_DRAW_HIERARCHICAL_SHEET = "cmd-draw-hierarchical-sheet";
         CMD_FORCE_ANNOTATE_ALL_SCHEMATICS = "cmd-force-annotate-all-schematics";
         CMD_MENU_FORCE_ANNOTATE_ALL_SCHEMATICS = "cmd-menu-force-annotate-all-schematics";
         CMD_GO_TO_NET_PARTNER = "cmd-go-to-net-partner";
         CMD_HIGHLIGHT_NET_UNDER_CURSOR = "cmd-highlight-net-under-cursor";
+        CMD_MENU_HIGHLIGHT_NET_UNDER_CURSOR = "cmd-menu-highlight-net-under-cursor";
         CMD_HIGHLIGHT_RELATED_NET_OBJECTS = "cmd-highlight-related-net-objects";
         CMD_CREATE_SHEET_FROM_SHEET_SYMBOL = "cmd-create-sheet-from-sheet-symbol";
         CMD_MENU_CREATE_SHEET_FROM_SHEET_SYMBOL = "cmd-menu-create-sheet-from-sheet-symbol";
@@ -184,6 +186,7 @@ define_ids! {
         CMD_OPEN_COMPONENTS_PANEL = "cmd-open-components-panel";
         CMD_MENU_OPEN_COMPONENTS_PANEL = "cmd-menu-open-components-panel";
         CMD_OPEN_NET_COLOR_PALETTE = "cmd-open-net-color-palette";
+        CMD_MENU_OPEN_NET_COLOR_PALETTE = "cmd-menu-open-net-color-palette";
         CMD_PLACE_BUS = "cmd-place-bus";
         CMD_MENU_PLACE_BUS = "cmd-menu-place-bus";
         CMD_PLACE_COMPILE_MASK = "cmd-place-compile-mask";
@@ -340,6 +343,7 @@ define_ids! {
         CMD_CLEAR_ALL_NET_COLORS = "cmd-clear-all-net-colors";
         CMD_MENU_CLEAR_ALL_NET_COLORS = "cmd-menu-clear-all-net-colors";
         CMD_ASSIGN_NET_CLASS = "cmd-assign-net-class";
+        CMD_MENU_ASSIGN_NET_CLASS = "cmd-menu-assign-net-class";
         CMD_PLACE_COMPONENT = "cmd-place-component";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";

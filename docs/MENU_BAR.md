@@ -443,6 +443,35 @@ monitor has been read (the settled geometry reading, shortly after start-up).
 iced reports the monitor's full size, not its work area, so the tiles cover
 the whole monitor. The Messages panel names how many windows were arranged.
 
+## Sheet right-click menu {#sheet-context-menu}
+
+The schematic canvas menu (#2419, `app/view/context_menu/menus.rs`) shows rows
+by what was right-clicked and makes each command row live by the command's own
+enablement rule (`app/command/needs.rs`), the rule the menu bar greys the same
+row by and a keystroke is dropped by. Rows, top to bottom: Find Similar
+Objects, Find, Clear Filter (`clear_net_highlighting`); the Place, Part Actions
+and Sheet Actions submenus; with a selection, References, Align, Arrange (a
+drawing selected), Unions and Snippets; Cross Probe; Undo, Redo; Cut, Copy,
+Paste, Paste Special, Duplicate, Select All; with a selection, Rotate, Mirror
+X, Mirror Y, Delete; Highlight Net (`highlight_net_under_cursor`), Net Color...
+(`open_net_color_palette`), Assign Net Class...; Comment, Pin Mapping, Project
+Options, Preferences; with a selection, Supplier Links and Properties.
+
+Part Actions holds Open Datasheet, Edit Symbol and Change Component, live with
+one placed part selected. Sheet Actions holds Open Child Sheet, Create Sheet
+From Sheet Symbol and Sync Sheet Pins, live with a sheet symbol selected, and
+Number Schematic Sheets.
+
+Assign Net Class... is greyed: `assign_net_class` takes the net and the class
+as operands, which the menu cannot supply yet; its tooltip points at the Net
+Class row of Properties. Planned rows, greyed with a tooltip saying what each
+will do:
+
+- **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
+- **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
+- **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.
+- **Supplier Links**: link the selected part to supplier part numbers and prices through the library's distributor adapter.
+
 ## Rows still planned {#rows-still-planned}
 
 None: every menu row runs a command (#2247).
@@ -462,8 +491,11 @@ and Mirror Y (`mirror_x` / `mirror_y`) and Flip Selection (`flip_selection`).
 They run the same ids as the keys, the palette and the canvas menus, on a sheet
 and on a board alike.
 
-On a sheet a row is live when there is something to act on: a selection, or
-for Rotate and Mirror a part on the cursor or the Bus Entry tool. Move needs an
+On a sheet a row is live when there is something to act on: a selection that
+is not all locked, or for Rotate and Mirror a part on the cursor or the Bus
+Entry tool. A selection of locked objects only greys Move Selection, Rotate,
+Mirror, Cut and Delete (#2419); their keys still reach the handler, which skips
+the locked objects and names them in the Messages panel. Move needs an
 open sheet or board. On a PCB tab the rows act on the selected footprints (a
 selected pad stands for its footprint). They are greyed with nothing selected
 and when a selected footprint is locked; the key for a greyed row on a locked

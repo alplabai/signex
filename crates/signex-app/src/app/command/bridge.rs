@@ -350,7 +350,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "sheet_navigation_back" => net_nav(NetNavMsg::SheetBackRequested),
         "sheet_navigation_forward" => net_nav(NetNavMsg::SheetForwardRequested),
         "go_to_net_partner" => net_nav(NetNavMsg::PartnerJumpRequested),
-        "highlight_net_under_cursor" => net_nav(NetNavMsg::NetHighlightRequested),
+        // From a context menu: the net where the menu was opened (#2419).
+        "highlight_net_under_cursor" => match args.context.origin {
+            Some(at) => net_nav(NetNavMsg::NetHighlightAtRequested { at }),
+            None => net_nav(NetNavMsg::NetHighlightRequested),
+        },
         "highlight_related_net_objects" => net_nav(NetNavMsg::RelatedNetHighlightRequested),
         "next_highlighted_net_item" => net_nav(NetNavMsg::HighlightStepRequested { forward: true }),
         "previous_highlighted_net_item" => {
@@ -1128,6 +1132,19 @@ mod tests {
                     at: Some((5.0, 20.0))
                 }
             ))
+        ));
+        // #2419: Highlight Net from a context menu names the opening point.
+        assert!(matches!(
+            resolve_with(
+                "highlight_net_under_cursor",
+                &CommandArgs::in_context(InvocationContext {
+                    origin: Some((5.0, 20.0)),
+                    project: None
+                })
+            ),
+            Message::Ui(UiMsg::NetNav(NetNavMsg::NetHighlightAtRequested {
+                at: (5.0, 20.0)
+            }))
         ));
         assert!(matches!(
             resolve_with("open_project_options", &CommandArgs::none()),

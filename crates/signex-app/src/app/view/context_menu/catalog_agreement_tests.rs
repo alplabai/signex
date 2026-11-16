@@ -26,7 +26,9 @@ use crate::keymap::AppCommandId;
 use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
-use super::submenu::{align_entries, arrange_entries, place_entries};
+use super::submenu::{
+    align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
+};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
@@ -57,10 +59,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
-    // Canvas: planned stubs that run nothing yet.
-    ("Clear Filter", "planned, no behaviour"),
-    ("Part Actions", "planned submenu stub"),
-    ("Sheet Actions", "planned submenu stub"),
+    // Canvas: planned rows that run nothing yet (docs/MENU_BAR.md,
+    // "Sheet right-click menu").
     ("References", "planned submenu stub"),
     ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
@@ -306,6 +306,25 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                 );
                 check_rows(
                     &format!("canvas {profile} {selection:?}"),
+                    &rows,
+                    &app,
+                    &ctx,
+                    &mut walk,
+                );
+            }
+            // The Part Actions and Sheet Actions flyouts (#2419).
+            let i18n = signex_i18n::I18n::en_us_ref();
+            let hint = |id: &str| app.keymap_shortcut_label(id);
+            let flyouts = [
+                ("part actions", part_actions_entries(i18n, selection, &hint)),
+                (
+                    "sheet actions",
+                    sheet_actions_entries(i18n, TID, selection, &hint),
+                ),
+            ];
+            for (name, rows) in flyouts {
+                check_rows(
+                    &format!("{name} {profile} {selection:?}"),
                     &rows,
                     &app,
                     &ctx,

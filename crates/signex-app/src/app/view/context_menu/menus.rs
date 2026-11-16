@@ -14,11 +14,13 @@
 use super::*;
 
 use super::items::{
-    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_submenu,
-    submenu_launcher, text,
+    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_because,
+    dd_planned_submenu, dd_ruled, submenu_launcher, text,
 };
+use crate::app::command::CommandContext;
 use crate::icons as ic;
-use signex_i18n::{I18n, menu_ids};
+use iced::widget::svg::Handle;
+use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -26,6 +28,12 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "find",
     "find_similar_objects",
+    "clear_net_highlighting",
+    "undo",
+    "redo",
+    "highlight_net_under_cursor",
+    "open_net_color_palette",
+    "assign_net_class",
     "cut",
     "copy",
     "paste",
@@ -107,6 +115,9 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
+            // The window's own facts, so a row greys exactly when the menu
+            // bar's row and the keystroke for the same command would.
+            commands: self.command_context(Some(window_id)),
         };
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
@@ -189,11 +200,16 @@ pub(super) struct CanvasSelection {
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
+    /// The window's command facts: every command row is live exactly when
+    /// its own enablement rule allows it here (#2419).
+    pub(super) commands: CommandContext,
 }
 
 /// Pure canvas-menu data builder. Rows and their enable state are derived
-/// only from the passed selection flags + shortcut hints, so the menu's
-/// shape is unit-testable without a window.
+/// only from the passed selection flags, command facts and shortcut hints,
+/// so the menu's shape is unit-testable without a window. Which rows show
+/// follows the selection; whether a shown row is live follows the
+/// command's own rule (#2419).
 pub(super) fn canvas_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -204,74 +220,76 @@ pub(super) fn canvas_menu_entries(
 ) -> Vec<DropdownEntry<Message>> {
     let CanvasSelection {
         has_selection,
-        child_sheet_selected,
         drawing_selected,
-        placed_part_selected,
+        commands,
+        ..
     } = selection;
-    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
+    let ruled = |icon: Option<Handle>, command_id: &'static str| {
+        dd_ruled(i18n, icon, command_id, sc.of(command_id), &commands, true)
+    };
+    let launcher = |icon: Handle, label: MessageId, kind: ContextSubmenu| {
+        submenu_launcher(
+            Some(icon),
+            &text(i18n, label),
+            kind,
+            active_submenu == Some(kind),
+        )
+    };
+    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(40);
 
-    v.push(dd_command(
-        i18n,
+    v.push(ruled(
         Some(ic::icon_dd_find_similar(tid)),
         "find_similar_objects",
-        sc.of("find_similar_objects"),
-        None,
     ));
-    v.push(dd_command(
-        i18n,
-        Some(ic::icon_chrome_search(tid)),
-        "find",
-        sc.of("find"),
-        None,
-    ));
-    v.push(dd_planned(
-        i18n,
+    v.push(ruled(Some(ic::icon_chrome_search(tid)), "find"));
+    // Ends the net highlight, which dims everything off the net.
+    v.push(ruled(
         Some(ic::icon_dd_clear_filter(tid)),
-        &text(i18n, menu_ids::CTX_CLEAR_FILTER),
-        Some("Shift+C"),
+        "clear_net_highlighting",
     ));
     v.push(DropdownEntry::Separator);
-    v.push(submenu_launcher(
-        Some(ic::icon_dd_place_menu(tid)),
-        &text(i18n, menu_ids::MENU_PLACE),
+    v.push(launcher(
+        ic::icon_dd_place_menu(tid),
+        menu_ids::MENU_PLACE,
         ContextSubmenu::Place,
-        active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_planned_submenu(
-        i18n,
-        Some(ic::icon_dd_part_actions(tid)),
-        &text(i18n, menu_ids::CTX_PART_ACTIONS),
+    v.push(launcher(
+        ic::icon_dd_part_actions(tid),
+        menu_ids::CTX_PART_ACTIONS,
+        ContextSubmenu::PartActions,
     ));
-    v.push(dd_planned_submenu(
-        i18n,
-        Some(ic::icon_dd_sheet_actions(tid)),
-        &text(i18n, menu_ids::CTX_SHEET_ACTIONS),
+    v.push(launcher(
+        ic::icon_dd_sheet_actions(tid),
+        menu_ids::CTX_SHEET_ACTIONS,
+        ContextSubmenu::SheetActions,
     ));
 
     if has_selection {
-        v.push(dd_planned_submenu(
+        v.push(dd_planned_because(
             i18n,
             Some(ic::icon_dd_references(tid)),
-            &text(i18n, menu_ids::CTX_REFERENCES),
+            menu_ids::CTX_REFERENCES,
+            menu_ids::CTX_REFERENCES_PLANNED,
+            true,
         ));
-        v.push(submenu_launcher(
-            Some(ic::icon_dd_align_menu(tid)),
-            &text(i18n, menu_ids::CTX_ALIGN),
+        v.push(launcher(
+            ic::icon_dd_align_menu(tid),
+            menu_ids::CTX_ALIGN,
             ContextSubmenu::Align,
-            active_submenu == Some(ContextSubmenu::Align),
         ));
         if drawing_selected {
-            v.push(submenu_launcher(
-                Some(ic::icon_dd_align_menu(tid)),
-                &text(i18n, menu_ids::MENU_EDIT_ARRANGE),
+            v.push(launcher(
+                ic::icon_dd_align_menu(tid),
+                menu_ids::MENU_EDIT_ARRANGE,
                 ContextSubmenu::Arrange,
-                active_submenu == Some(ContextSubmenu::Arrange),
             ));
         }
-        v.push(dd_planned_submenu(
+        v.push(dd_planned_because(
             i18n,
             Some(ic::icon_dd_unions(tid)),
-            &text(i18n, menu_ids::CTX_UNIONS),
+            menu_ids::CTX_UNIONS,
+            menu_ids::CTX_UNIONS_PLANNED,
+            true,
         ));
         v.push(dd_planned_submenu(
             i18n,
@@ -280,87 +298,30 @@ pub(super) fn canvas_menu_entries(
         ));
     }
 
-    if child_sheet_selected {
-        v.push(dd_command(
-            i18n,
-            Some(ic::icon_dd_open_child_sheet(tid)),
-            "open_child_sheet",
-            sc.of("open_child_sheet"),
-            None,
-        ));
-        for command_id in ["create_sheet_from_sheet_symbol", "sync_sheet_pins"] {
-            v.push(dd_command(i18n, None, command_id, sc.of(command_id), None));
-        }
-        v.push(DropdownEntry::Separator);
-    }
-
     // #1312: the selected part or net on the board, opened when needed.
-    let probe_icon = Some(ic::icon_dd_cross_probe(tid));
-    v.push(if has_selection {
-        dd_command(i18n, probe_icon, "cross_probe", sc.of("cross_probe"), None)
-    } else {
-        dd_cmd_disabled(i18n, probe_icon, "cross_probe", sc.of("cross_probe"))
-    });
+    v.push(ruled(Some(ic::icon_dd_cross_probe(tid)), "cross_probe"));
     v.push(DropdownEntry::Separator);
-    // Cut and Copy have nothing to act on without a selection: greyed, as
-    // the Edit menu greys them and as the keys do nothing there.
-    for (icon, command_id) in [
-        (ic::icon_dd_cut(tid), "cut"),
-        (ic::icon_dd_copy(tid), "copy"),
-    ] {
-        v.push(if has_selection {
-            dd_command(i18n, Some(icon), command_id, sc.of(command_id), None)
-        } else {
-            dd_cmd_disabled(i18n, Some(icon), command_id, sc.of(command_id))
-        });
-    }
-    v.push(dd_command(
-        i18n,
-        Some(ic::icon_dd_paste(tid)),
-        "paste",
-        sc.of("paste"),
-        None,
-    ));
-    v.push(dd_command(
-        i18n,
-        Some(ic::icon_dd_smart_paste(tid)),
-        "smart_paste",
-        sc.of("smart_paste"),
-        None,
-    ));
+    v.push(ruled(Some(ic::icon_undo(tid)), "undo"));
+    v.push(ruled(Some(ic::icon_redo(tid)), "redo"));
+    v.push(DropdownEntry::Separator);
+    v.extend(clipboard_rows(tid, &ruled));
     v.push(DropdownEntry::Separator);
 
     if has_selection {
-        v.push(dd_command(
-            i18n,
+        // Greyed when everything selected is locked: the edit would leave
+        // the sheet as it is (#2419).
+        v.push(ruled(
             Some(ic::icon_dd_rotate(tid)),
             "rotate_counterclockwise",
-            sc.of("rotate_counterclockwise"),
-            None,
         ));
-        v.push(dd_command(
-            i18n,
-            Some(ic::icon_dd_flip_x(tid)),
-            "mirror_x",
-            sc.of("mirror_x"),
-            None,
-        ));
-        v.push(dd_command(
-            i18n,
-            Some(ic::icon_dd_flip_y(tid)),
-            "mirror_y",
-            sc.of("mirror_y"),
-            None,
-        ));
-        v.push(dd_command(
-            i18n,
-            Some(ic::icon_dd_delete(tid)),
-            "delete_selection",
-            sc.of("delete_selection"),
-            None,
-        ));
+        v.push(ruled(Some(ic::icon_dd_flip_x(tid)), "mirror_x"));
+        v.push(ruled(Some(ic::icon_dd_flip_y(tid)), "mirror_y"));
+        v.push(ruled(Some(ic::icon_dd_delete(tid)), "delete_selection"));
         v.push(DropdownEntry::Separator);
     }
+
+    v.extend(net_rows(i18n, tid, sc, &ruled));
+    v.push(DropdownEntry::Separator);
 
     v.push(dd_planned(
         i18n,
@@ -368,11 +329,12 @@ pub(super) fn canvas_menu_entries(
         &text(i18n, menu_ids::CTX_COMMENT),
         None,
     ));
-    v.push(dd_planned(
+    v.push(dd_planned_because(
         i18n,
         Some(ic::icon_dd_pin_mapping(tid)),
-        &text(i18n, menu_ids::CTX_PIN_MAPPING),
-        None,
+        menu_ids::CTX_PIN_MAPPING,
+        menu_ids::CTX_PIN_MAPPING_PLANNED,
+        false,
     ));
     // The project that owns the active sheet, addressed by its tree key the
     // way the project tree's own menu addresses it. No project: greyed, no
@@ -392,44 +354,72 @@ pub(super) fn canvas_menu_entries(
             sc.of("open_project_options"),
         ),
     });
-    v.push(dd_command(
-        i18n,
+    v.push(ruled(
         Some(ic::icon_dd_preferences(tid)),
         "open_preferences",
-        sc.of("open_preferences"),
-        None,
     ));
 
-    if placed_part_selected {
-        // The placed-part actions, all catalog commands.
-        for command_id in [
-            "open_datasheet",
-            "edit_selected_symbol_in_symbol_editor",
-            "change_component",
-        ] {
-            v.push(dd_command(i18n, None, command_id, sc.of(command_id), None));
-        }
-    }
     if has_selection {
-        v.push(dd_planned(
+        v.push(dd_planned_because(
             i18n,
             Some(ic::icon_dd_supplier_links(tid)),
-            &text(i18n, menu_ids::CTX_SUPPLIER_LINKS),
-            None,
+            menu_ids::CTX_SUPPLIER_LINKS,
+            menu_ids::CTX_SUPPLIER_LINKS_PLANNED,
+            false,
         ));
         // Properties → ensure the Properties panel is visible; it already
         // tracks the current selection, so it populates with the
         // right-clicked item's fields once shown.
-        v.push(dd_command(
-            i18n,
+        v.push(ruled(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
-            sc.of("edit_selected_object_properties"),
-            None,
         ));
     }
 
     v
+}
+
+/// The clipboard group, each row live by its own rule: Cut and Copy need a
+/// selection (Cut one that is not all locked), Paste a sheet, Select All a
+/// sheet.
+fn clipboard_rows(
+    tid: ThemeId,
+    ruled: &dyn Fn(Option<Handle>, &'static str) -> DropdownEntry<Message>,
+) -> Vec<DropdownEntry<Message>> {
+    vec![
+        ruled(Some(ic::icon_dd_cut(tid)), "cut"),
+        ruled(Some(ic::icon_dd_copy(tid)), "copy"),
+        ruled(Some(ic::icon_dd_paste(tid)), "paste"),
+        ruled(Some(ic::icon_dd_smart_paste(tid)), "smart_paste"),
+        ruled(None, "duplicate"),
+        ruled(Some(ic::icon_dd_select_all(tid)), "select_all"),
+    ]
+}
+
+/// The net group (#2419): highlight the net under the pointer (else the
+/// selection's) on every sheet, and pick a net colour. Assign Net Class
+/// takes the net and the class as operands, which this menu cannot supply
+/// yet, so it is greyed and says where a class is picked today.
+fn net_rows(
+    i18n: &I18n,
+    tid: ThemeId,
+    sc: &CanvasShortcuts,
+    ruled: &dyn Fn(Option<Handle>, &'static str) -> DropdownEntry<Message>,
+) -> Vec<DropdownEntry<Message>> {
+    let assign = match dd_cmd_disabled(i18n, None, "assign_net_class", sc.of("assign_net_class")) {
+        DropdownEntry::Item(item) => {
+            DropdownEntry::Item(item.tooltip(text(i18n, menu_ids::CTX_ASSIGN_NET_CLASS_ELSEWHERE)))
+        }
+        other => other,
+    };
+    vec![
+        ruled(None, "highlight_net_under_cursor"),
+        ruled(
+            Some(ic::icon_dd_net_color_custom(tid)),
+            "open_net_color_palette",
+        ),
+        assign,
+    ]
 }
 
 /// The board canvas menu (#2240): the placement commands, greyed unless

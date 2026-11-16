@@ -169,12 +169,15 @@ cmd-menu-annotate-schematic-quietly = Annotate Schematics Quietly
 cmd-assign-footprints = Assign footprints
 cmd-menu-assign-footprints = Assign Footprints
 cmd-clear-net-highlighting = Clear net highlighting
+# Verb phrase: ends the net highlight that dims everything off the net.
+cmd-menu-clear-net-highlighting = Clear Filter
 cmd-draw-graphic-line = Draw graphic line
 cmd-draw-hierarchical-sheet = Draw hierarchical sheet
 cmd-force-annotate-all-schematics = Force annotate all schematics
 cmd-menu-force-annotate-all-schematics = Force Annotate All Schematics
 cmd-go-to-net-partner = Go to net partner on another sheet
 cmd-highlight-net-under-cursor = Highlight net under cursor
+cmd-menu-highlight-net-under-cursor = Highlight Net
 cmd-highlight-related-net-objects = Highlight/select related net objects across sheets
 cmd-create-sheet-from-sheet-symbol = Create a child sheet from the selected sheet symbol
 cmd-menu-create-sheet-from-sheet-symbol = Create Sheet From Sheet Symbol
@@ -188,6 +191,7 @@ cmd-open-components-panel = Open Components panel / place components
 # Noun: opens the Components panel, where a part is chosen to place.
 cmd-menu-open-components-panel = Component...
 cmd-open-net-color-palette = Open net color palette
+cmd-menu-open-net-color-palette = Net Color...
 cmd-place-bus = Draw bus
 # Noun: the bus tool, a bundle of signals drawn as one thick wire. Not a computer bus. Same wording as cmd-menu-draw-bus, a different command.
 cmd-menu-place-bus = Bus
@@ -355,6 +359,7 @@ cmd-menu-color-net = Custom Color...
 cmd-clear-all-net-colors = Clear all net colors
 cmd-menu-clear-all-net-colors = Clear All Net Colors
 cmd-assign-net-class = Assign net to class
+cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.
 cmd-menu-place-component = Part

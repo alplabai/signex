@@ -57,6 +57,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// Every selected object on the sheet is locked, so moving, turning,
+    /// mirroring, cutting or deleting the selection changes nothing (#2419).
+    pub selection_all_locked: bool,
     /// The selection holds at least one schematic drawing, which the
     /// Arrange commands act on (#1583).
     pub has_drawing_selection: bool,
@@ -157,18 +160,26 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
     ) || is_planned_command(command)
 }
 
-/// A board placement command greyed because a selected footprint is locked
-/// (#2240): the menu greys it, but its keystroke still reaches the handler,
-/// which says which footprint is locked instead of doing nothing silently.
+/// A placement command greyed because a selected footprint is locked
+/// (#2240), or because everything selected on a sheet is locked (#2419):
+/// the menu greys it, but its keystroke still reaches the handler, which
+/// says what is locked instead of doing nothing silently.
 pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
     let pastes = matches!(
         super::needs::needs(command),
         Some(super::needs::Needs::PasteTarget)
     );
-    ctx.pcb.shown
-        && ((ctx.pcb.any && super::needs::is_placement_command(command))
-            // A paste with no board objects on the clipboard says why (#2361).
-            || pastes)
+    let placement = super::needs::is_placement_command(command);
+    if !ctx.pcb.shown {
+        // Flip Selection is a board command; on a sheet it stays dropped.
+        let board_only = matches!(
+            super::needs::needs(command),
+            Some(super::needs::Needs::PcbPlacement)
+        );
+        return ctx.selection_all_locked && placement && !board_only;
+    }
+    // A paste with no board objects on the clipboard says why (#2361).
+    (ctx.pcb.any && placement) || pastes
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
@@ -210,9 +221,15 @@ impl Signex {
         let (can_undo, can_redo) = self.undo_availability(&self.undo_target(window));
         // A command typed in an undocked sheet window runs against that
         // window's selection, so it is enabled by it (#1966).
-        let shown_canvas = match window {
-            Some(id) if self.is_document_window(id) => self.interaction_state.canvas_for_window(id),
-            _ => self.interaction_state.active_canvas(),
+        let (shown_canvas, shown_engine) = match window {
+            Some(id) if self.is_document_window(id) => (
+                self.interaction_state.canvas_for_window(id),
+                document.engine_for_window(id, &self.ui_state),
+            ),
+            _ => (
+                self.interaction_state.active_canvas(),
+                document.active_engine(),
+            ),
         };
         let main_has_schematic = document.active_engine().is_some();
         let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
@@ -250,6 +267,8 @@ impl Signex {
             has_symbol_editor,
             has_footprint_editor,
             has_selection: !shown_canvas.selected.is_empty(),
+            selection_all_locked: shown_engine
+                .is_some_and(|engine| engine.all_locked(&shown_canvas.selected)),
             has_drawing_selection: shown_canvas
                 .selected
                 .iter()
@@ -1188,5 +1207,42 @@ mod tests {
             .unwrap()
             .active_part = 2;
         assert!(remove_part_menu_enabled(&app.command_context(None)));
+    }
+
+    /// #2419: a sheet selection that is all locked greys the edits that would
+    /// change nothing, but their keys still reach the handler, which names
+    /// the lock; Copy and the board-only Flip Selection keep their own rules.
+    #[test]
+    fn an_all_locked_sheet_selection_greys_the_edits_and_keeps_the_explanation() {
+        let locked = CommandContext {
+            has_schematic: true,
+            has_selection: true,
+            selection_all_locked: true,
+            ..CommandContext::default()
+        };
+        let free = CommandContext {
+            selection_all_locked: false,
+            ..locked
+        };
+        for name in [
+            "rotate_counterclockwise",
+            "mirror_x",
+            "move_selection",
+            "cut",
+            "delete_selection",
+        ] {
+            assert!(
+                !is_enabled(&id(name), &locked),
+                "{name} on a locked selection"
+            );
+            assert!(is_enabled(&id(name), &free), "{name} on a free selection");
+            assert!(explains_refusal_in(&id(name), &locked), "{name} is dropped");
+            assert!(
+                !explains_refusal_in(&id(name), &free),
+                "{name} on a free one"
+            );
+        }
+        assert!(is_enabled(&id("copy"), &locked));
+        assert!(!explains_refusal_in(&id("flip_selection"), &locked));
     }
 }

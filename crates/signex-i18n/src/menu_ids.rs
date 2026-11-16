@@ -46,7 +46,6 @@ define_ids! {
         MENU_HELP_REPORT_ISSUE = "menu-help-report-issue";
         MENU_APP_TITLE = "menu-app-title";
         MENU_PLANNED_TOOLTIP = "menu-planned-tooltip";
-        CTX_CLEAR_FILTER = "ctx-clear-filter";
         CTX_PART_ACTIONS = "ctx-part-actions";
         CTX_SHEET_ACTIONS = "ctx-sheet-actions";
         CTX_REFERENCES = "ctx-references";
@@ -56,6 +55,11 @@ define_ids! {
         CTX_COMMENT = "ctx-comment";
         CTX_PIN_MAPPING = "ctx-pin-mapping";
         CTX_SUPPLIER_LINKS = "ctx-supplier-links";
+        CTX_REFERENCES_PLANNED = "ctx-references-planned";
+        CTX_UNIONS_PLANNED = "ctx-unions-planned";
+        CTX_PIN_MAPPING_PLANNED = "ctx-pin-mapping-planned";
+        CTX_SUPPLIER_LINKS_PLANNED = "ctx-supplier-links-planned";
+        CTX_ASSIGN_NET_CLASS_ELSEWHERE = "ctx-assign-net-class-elsewhere";
         CTX_TAB_CLOSE = "ctx-tab-close";
         CTX_TAB_CLOSE_OTHERS = "ctx-tab-close-others";
         CTX_TAB_OPEN_IN_NEW_WINDOW = "ctx-tab-open-in-new-window";
