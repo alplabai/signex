@@ -126,12 +126,25 @@ impl DrcRules {
     /// through which rules cover it, so that net answers for the others and
     /// the flags cost the number of sets, not the number of nets.
     pub(crate) fn net_representatives(&self, board: &PcbBoard) -> Vec<u32> {
-        let mut seen: BTreeSet<Vec<bool>> = BTreeSet::new();
+        let mut seen: BTreeSet<Vec<u8>> = BTreeSet::new();
         board
             .nets
             .iter()
             .map(|n| n.number)
-            .filter(|&net| seen.insert(self.user.iter().map(|s| s.covers_net(net)).collect()))
+            .filter(|&net| seen.insert(self.user.iter().map(|s| s.side_of(net)).collect()))
+            .collect()
+    }
+
+    /// The other sides a contest for `net` looks at: none, unless `scoped`
+    /// is a class-pair rule, then each representative net it faces.
+    fn partners(scoped: &ScopedRule, net: u32, nets: &[u32]) -> Vec<Option<u32>> {
+        if !scoped.is_pair_scope() {
+            return vec![None];
+        }
+        nets.iter()
+            .copied()
+            .filter(|&other| scoped.covers_partner(net, Some(other)))
+            .map(Some)
             .collect()
     }
 
@@ -150,10 +163,17 @@ impl DrcRules {
             .filter(|bit| self.copper & (1 << bit) != 0)
             .collect();
         for &net in nets.iter().filter(|&&net| scoped.covers_net(net)) {
-            for &bit in bits.iter().filter(|&&bit| scoped.covers(net, 1 << bit)) {
+            let partners = Self::partners(scoped, net, nets);
+            let tries: Vec<(u32, Option<u32>)> = bits
+                .iter()
+                .filter(|&&bit| scoped.covers(net, 1 << bit))
+                .flat_map(|&bit| partners.iter().map(move |&other| (bit, other)))
+                .collect();
+            for (bit, other) in tries {
                 for &objects in &pairs {
-                    let Some((_, won)) = user_rules::pick(&self.user, kind, net, 1 << bit, objects)
-                    else {
+                    let picked =
+                        user_rules::pick_between(&self.user, kind, net, other, 1 << bit, objects);
+                    let Some((_, won)) = picked else {
                         continue;
                     };
                     if std::ptr::eq(won, scoped) {

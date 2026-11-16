@@ -419,6 +419,13 @@ altium	hint	-	-	rules_enable
 altium	hint	-	-	rules_effective
 altium	hint	-	-	rules_explain
 altium	hint	-	-	rules_conflicts
+altium	hint	-	-	rules_matrix_get
+altium	hint	-	-	rules_matrix_set
+altium	hint	-	-	rules_set_create
+altium	hint	-	-	rules_set_edit
+altium	hint	-	-	rules_set_apply
+altium	hint	-	-	rules_preset_diff
+altium	hint	-	-	rules_preset_apply
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -843,3 +850,10 @@ classic	hint	-	-	rules_enable
 classic	hint	-	-	rules_effective
 classic	hint	-	-	rules_explain
 classic	hint	-	-	rules_conflicts
+classic	hint	-	-	rules_matrix_get
+classic	hint	-	-	rules_matrix_set
+classic	hint	-	-	rules_set_create
+classic	hint	-	-	rules_set_edit
+classic	hint	-	-	rules_set_apply
+classic	hint	-	-	rules_preset_diff
+classic	hint	-	-	rules_preset_apply

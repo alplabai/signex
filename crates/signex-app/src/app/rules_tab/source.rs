@@ -164,6 +164,34 @@ impl Signex {
         text: String,
         follows: &[WrittenRuleEdit<'_>],
     ) -> Result<(), String> {
+        self.commit_drc_section(id, |drc| {
+            drc.dsl = (!text.trim().is_empty()).then_some(text);
+            for edit in follows {
+                signex_drc::follow_written_rule_edit(drc, *edit);
+            }
+        })
+    }
+
+    /// `id`'s DRC rules as the first edit stores them: the project's, else
+    /// this machine's (what Run DRC reads while the project stores none).
+    pub(crate) fn rules_drc_of(&self, id: ProjectId) -> Option<DrcRuleSet> {
+        let project = self.document_state.project_by_id(id)?;
+        Some(match &project.data.rules {
+            Some(rules) => rules.drc.clone(),
+            None => self.ui_state.machine_drc_rules.clone(),
+        })
+    }
+
+    /// Store `id`'s DRC rules as `edit` leaves them (rule text, severity
+    /// entries, rule sets): one undo step on the project's rule history,
+    /// the project dirty, nothing written to disk (Save does). A project
+    /// that stores no rules has them stored first, from this machine, in
+    /// the same step. Unchanged rules record no step.
+    pub(crate) fn commit_drc_section(
+        &mut self,
+        id: ProjectId,
+        edit: impl FnOnce(&mut DrcRuleSet),
+    ) -> Result<(), String> {
         let project = self
             .document_state
             .project_by_id(id)
@@ -179,10 +207,7 @@ impl Signex {
         let mut after = before
             .clone()
             .unwrap_or_else(|| self.seeded_project_rules());
-        after.drc.dsl = (!text.trim().is_empty()).then_some(text);
-        for edit in follows {
-            signex_drc::follow_written_rule_edit(&mut after.drc, *edit);
-        }
+        edit(&mut after.drc);
         if before.as_ref() == Some(&after) {
             return Ok(());
         }
@@ -215,6 +240,7 @@ impl Signex {
         let text = self.rules_text_of(id).map(|(text, _)| text);
         let tab = self.rules_tab_mut(id);
         tab.edit = None;
+        tab.matrix_edit = None;
         tab.refused = None;
         if let (Some(view), Some(text)) = (tab.text.as_mut(), text) {
             *view = RulesText::new(&text);

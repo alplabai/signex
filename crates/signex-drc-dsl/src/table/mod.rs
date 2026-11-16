@@ -7,11 +7,14 @@
 //! "Rules manager".
 
 mod edit;
+pub mod matrix;
+pub mod presets;
 mod render;
+pub mod sets;
 
 pub use edit::{
-    EditError, RuleField, add_rule, enable_rule, parse_bool, parse_scope, remove_rule, scope_text,
-    set_field,
+    EditError, RuleField, add_rule, enable_rule, parse_bool, parse_scope, remove_rule,
+    replace_rule, scope_text, set_field,
 };
 pub use render::{RuleDraft, render};
 
@@ -268,12 +271,17 @@ fn row_of(src: &str, ast: &RuleAst, judged: Judged) -> RuleRow {
     let mut text_only = kind.is_none();
     let (mut scope, mut layer) = (NetScope::Board, None);
     let (mut scopes, mut layers) = (0, 0);
+    let mut others: Vec<String> = Vec::new();
     for cond in &ast.when {
         let value = cond.value.text.clone();
         match (cond.subject.text.as_str(), cond.op) {
             ("net", CondOp::Is) => scope = NetScope::Net(value),
             ("net", CondOp::Matches) => scope = NetScope::Pattern(value),
             ("class", CondOp::Is) => scope = NetScope::Class(value),
+            ("other_class", CondOp::Is) => {
+                others.push(value);
+                continue;
+            }
             ("layer", CondOp::Is) => {
                 layer = Some(value);
                 layers += 1;
@@ -285,6 +293,19 @@ fn row_of(src: &str, ast: &RuleAst, judged: Judged) -> RuleRow {
             }
         }
         scopes += 1;
+    }
+    // `class == "A" and other_class == "B"` is one scope cell (#2398).
+    let paired = match (others.as_slice(), &scope) {
+        ([], _) => None,
+        ([other], NetScope::Class(class)) => {
+            Some(Some(NetScope::ClassPair(class.clone(), other.clone())))
+        }
+        _ => Some(None),
+    };
+    match paired {
+        None => {}
+        Some(Some(pair)) => scope = pair,
+        Some(None) => text_only = true,
     }
     text_only |= scopes > 1 || layers > 1;
     let mut limits: Vec<RowLimit> = Vec::new();
@@ -344,5 +365,7 @@ pub(crate) fn tight(src: &str, span: &Span) -> Span {
     start..end.max(start)
 }
 
+#[cfg(test)]
+mod matrix_tests;
 #[cfg(test)]
 mod tests;

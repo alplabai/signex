@@ -168,6 +168,7 @@ severity := "error" | "warning" | "info"
 | `net matches "USB_*"` | a net-name glob (`*`, `?`, as net classes) | 1 |
 | none of the above | every net | 0 |
 | `layer == outer` / `inner` / `TopCopper` | copper layers; a narrowing condition | (adds 1) |
+| `class == "HV" and other_class == "LV"` | a clearance between a net of each class, either order, both sides (#2398, a class matrix cell); clearance rules only | 2 (adds 1) |
 
 A rule takes at most one net, class or pattern condition and one layer
 condition. Words the grammar keeps open on purpose: a region scope (v2) is one

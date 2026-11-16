@@ -59,6 +59,23 @@ impl DrcRules {
             .find(|&net| scoped.covers_net(net))
     }
 
+    /// [`Self::first_net_of`], and for a class-pair rule (#2398) the first
+    /// net across from it, so "Why this value?" resolves the pair.
+    pub fn first_pair_of(&self, board: &PcbBoard, name: &str) -> Option<(u32, Option<u32>)> {
+        let scoped = self.user.iter().find(|s| s.rule.name == name)?;
+        let nets = || board.nets.iter().map(|n| n.number);
+        if !scoped.is_pair_scope() {
+            return nets()
+                .find(|&net| scoped.covers_net(net))
+                .map(|net| (net, None));
+        }
+        nets().find_map(|net| {
+            nets()
+                .find(|&other| scoped.covers_partner(net, Some(other)))
+                .map(|other| (net, Some(other)))
+        })
+    }
+
     /// The copper items written rule `name` applies to on `board`: tracks
     /// for a width rule, vias for a via rule, and the tracks, pads and vias
     /// of its object pair (all three without one) for a clearance rule,

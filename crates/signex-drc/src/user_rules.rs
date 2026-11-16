@@ -23,6 +23,21 @@ pub enum NetScope {
     Class(String),
     /// One net, by name.
     Net(String),
+    /// A clearance between a net of one class and a net of the other, in
+    /// either order (#2398, a class-to-class matrix cell). Ranks as a class
+    /// rule with one more narrowing condition.
+    ClassPair(String, String),
+}
+
+impl NetScope {
+    /// The classes a class or class-pair scope names.
+    pub fn classes(&self) -> Vec<&str> {
+        match self {
+            NetScope::Class(class) => vec![class.as_str()],
+            NetScope::ClassPair(a, b) => vec![a.as_str(), b.as_str()],
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// A copper object a clearance rule can name. Holes, the board edge, mask
@@ -157,11 +172,13 @@ impl UserRule {
     pub fn rank(&self) -> (u8, u8) {
         let scope = match self.nets {
             NetScope::Net(_) => 3,
-            NetScope::Class(_) => 2,
+            NetScope::Class(_) | NetScope::ClassPair(..) => 2,
             NetScope::Pattern(_) => 1,
             NetScope::Board => 0,
         };
-        let narrowing = u8::from(self.layers.is_some()) + u8::from(self.pair.is_some());
+        let narrowing = u8::from(self.layers.is_some())
+            + u8::from(self.pair.is_some())
+            + u8::from(matches!(self.nets, NetScope::ClassPair(..)));
         (scope, narrowing)
     }
 }
@@ -170,34 +187,79 @@ impl UserRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopedRule {
     pub(crate) rule: UserRule,
-    /// `None` for every net.
+    /// `None` for every net; for a class pair, the nets of both classes.
     nets: Option<BTreeSet<u32>>,
+    /// For a class pair, each class's nets: a side is covered only with a
+    /// net of the other class across.
+    sides: Option<[BTreeSet<u32>; 2]>,
 }
 
 impl ScopedRule {
     pub(crate) fn resolve(rule: UserRule, board: &PcbBoard, classes: &[NetClass]) -> Self {
-        let member = |name: &str| match &rule.nets {
-            NetScope::Board => true,
-            NetScope::Net(net) => net == name,
-            NetScope::Pattern(glob) => glob_matches(glob, name),
-            NetScope::Class(class) => {
-                first_matching_class(classes, name).is_some_and(|c| &c.name == class)
-            }
+        let in_class = |class: &str, name: &str| {
+            first_matching_class(classes, name).is_some_and(|c| c.name == class)
         };
-        let nets = (rule.nets != NetScope::Board).then(|| {
+        let collect = |member: &dyn Fn(&str) -> bool| -> BTreeSet<u32> {
             board
                 .nets
                 .iter()
                 .filter(|n| member(&n.name))
                 .map(|n| n.number)
                 .collect()
-        });
-        ScopedRule { rule, nets }
+        };
+        let (nets, sides) = match &rule.nets {
+            NetScope::Board => (None, None),
+            NetScope::Net(net) => (Some(collect(&|name: &str| net == name)), None),
+            NetScope::Pattern(glob) => {
+                (Some(collect(&|name: &str| glob_matches(glob, name))), None)
+            }
+            NetScope::Class(class) => (
+                Some(collect(&|name: &str| in_class(class.as_str(), name))),
+                None,
+            ),
+            NetScope::ClassPair(a, b) => {
+                let side_a = collect(&|name: &str| in_class(a.as_str(), name));
+                let side_b = collect(&|name: &str| in_class(b.as_str(), name));
+                let both = side_a.union(&side_b).copied().collect();
+                (Some(both), Some([side_a, side_b]))
+            }
+        };
+        ScopedRule { rule, nets, sides }
     }
 
-    /// A net, class or pattern scope that covers no net of the board.
+    /// A net, class or pattern scope that covers no net of the board; a
+    /// class pair one of whose classes has none.
     pub(crate) fn covers_no_net(&self) -> bool {
+        if let Some([a, b]) = &self.sides {
+            return a.is_empty() || b.is_empty();
+        }
         self.nets.as_ref().is_some_and(BTreeSet::is_empty)
+    }
+
+    /// Whether it is a class-pair rule.
+    pub(crate) fn is_pair_scope(&self) -> bool {
+        self.sides.is_some()
+    }
+
+    /// For a class pair: whether `net` faces `other` across the pair, in
+    /// either order. Any other rule takes every partner.
+    pub(crate) fn covers_partner(&self, net: u32, other: Option<u32>) -> bool {
+        let Some([a, b]) = &self.sides else {
+            return true;
+        };
+        let Some(other) = other else {
+            return false;
+        };
+        (a.contains(&net) && b.contains(&other)) || (b.contains(&net) && a.contains(&other))
+    }
+
+    /// How it sees `net`: 0 not covered, 1 covered, and for a class pair 1
+    /// or 2 by side (3 on both). Nets alike in this resolve alike.
+    pub(crate) fn side_of(&self, net: u32) -> u8 {
+        match &self.sides {
+            Some([a, b]) => u8::from(a.contains(&net)) + 2 * u8::from(b.contains(&net)),
+            None => u8::from(self.covers_net(net)),
+        }
     }
 
     pub(crate) fn covers_net(&self, net: u32) -> bool {
@@ -223,6 +285,7 @@ impl ScopedRule {
 /// `layers` (for a clearance, one side of the pair, `objects` naming both
 /// sides' kinds): the most specific rule's, the strictest among equals,
 /// the first written among identical ones. `None` when no rule sets one.
+/// A class-pair rule takes no part: see [`pick_between`].
 pub(crate) fn pick(
     rules: &[ScopedRule],
     kind: LimitKind,
@@ -230,9 +293,26 @@ pub(crate) fn pick(
     layers: u32,
     objects: [Option<CopperObject>; 2],
 ) -> Option<(i64, &ScopedRule)> {
+    pick_between(rules, kind, net, None, layers, objects)
+}
+
+/// [`pick`] for one side of a clearance whose other side is `other`: a
+/// class-pair rule takes part when `net` and `other` sit in its two
+/// classes.
+pub(crate) fn pick_between(
+    rules: &[ScopedRule],
+    kind: LimitKind,
+    net: u32,
+    other: Option<u32>,
+    layers: u32,
+    objects: [Option<CopperObject>; 2],
+) -> Option<(i64, &ScopedRule)> {
     let mut best: Option<((u8, u8), i64, &ScopedRule)> = None;
     for scoped in rules {
-        if !scoped.covers(net, layers) || !scoped.pairs_with(objects) {
+        if !scoped.covers(net, layers)
+            || !scoped.pairs_with(objects)
+            || !scoped.covers_partner(net, other)
+        {
             continue;
         }
         let rank = scoped.rule.rank();

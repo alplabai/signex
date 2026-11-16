@@ -14,9 +14,9 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
-type Ran = (CommandOutcome, Task<Message>);
+pub(super) type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(super) fn refused(reason: impl Into<String>) -> Ran {
     (
         CommandOutcome::Disabled {
             reason: reason.into(),
@@ -25,18 +25,18 @@ fn refused(reason: impl Into<String>) -> Ran {
     )
 }
 
-fn answered(value: Value) -> Ran {
+pub(super) fn answered(value: Value) -> Ran {
     (CommandOutcome::Answered(value), Task::none())
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
         _ => None,
     }
 }
 
-fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
+pub(super) fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
     match args.operand(name) {
         Some(OperandValue::Bool(on)) => Some(*on),
         _ => None,
@@ -44,7 +44,10 @@ fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
 }
 
 /// The project and its rule text, or why not.
-fn project_text(app: &mut Signex, args: &CommandArgs) -> Result<(ProjectId, String), String> {
+pub(super) fn project_text(
+    app: &mut Signex,
+    args: &CommandArgs,
+) -> Result<(ProjectId, String), String> {
     let id = app.rules_project_named(args)?;
     let (text, _) = app
         .rules_text_of(id)
@@ -205,11 +208,19 @@ impl Signex {
         let origin = self
             .rules_text_of(project)
             .map(|(_, origin)| origin.as_str());
+        let sets: Vec<Value> = self
+            .rules_drc_of(project)
+            .map(|drc| drc.sets)
+            .unwrap_or_default()
+            .iter()
+            .map(|(name, set)| super::sets::set_json(name, set))
+            .collect();
         json!({
             "stored_in": origin,
             "board": self.rules_board_path(project).map(|p| p.display().to_string()),
             "syntax_errors": syntax,
             "rules": listed,
+            "sets": sets,
         })
     }
 

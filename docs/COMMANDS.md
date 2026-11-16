@@ -367,8 +367,15 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_explain` | Explain the value a DRC finding asks for | validation | — | — |
 | `rules_get` | Read one design rule | validation | — | — |
 | `rules_list` | List the design rules | validation | — | — |
+| `rules_matrix_get` | Read the class-to-class clearance matrix | validation | — | — |
+| `rules_matrix_set` | Set a cell of the class-to-class clearance matrix | design | — | — |
+| `rules_preset_apply` | Apply a rules preset | design | — | — |
+| `rules_preset_diff` | Show what a rules preset would change | validation | — | — |
 | `rules_remove` | Remove a design rule | design | — | — |
 | `rules_set` | Change a field of a design rule | design | — | — |
+| `rules_set_apply` | Apply a named rule set to a class or net | design | — | — |
+| `rules_set_create` | Create a named rule set | design | — | — |
+| `rules_set_edit` | Change the limits of a named rule set | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |

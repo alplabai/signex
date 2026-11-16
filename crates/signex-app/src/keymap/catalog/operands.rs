@@ -148,6 +148,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("sizes", OperandKind::Text),
     ("pitch", OperandKind::Length),
     ("exclude", OperandKind::Text),
+    ("class_a", OperandKind::Text),
+    ("class_b", OperandKind::Text),
+    ("object_pair", OperandKind::Text),
+    ("set", OperandKind::Text),
+    ("preset", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -669,6 +674,40 @@ pub const ARRANGE_BOX: &[Operand] = &[
     required("ids", OperandKind::Text),
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
+];
+/// `rules_matrix_set`: one class-matrix cell; no `value` clears it.
+pub const RULES_MATRIX_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("class_a", OperandKind::Text),
+    required("class_b", OperandKind::Text),
+    optional("object_pair", OperandKind::Text),
+    optional("layer", OperandKind::Text),
+    optional("value", OperandKind::Text),
+];
+/// `rules_set_create`: a named rule set of `values`.
+pub const RULES_SET_CREATE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    required("values", OperandKind::Text),
+    optional("severity", OperandKind::Text),
+];
+/// `rules_set_edit`: new limits for a set; its rules follow.
+pub const RULES_SET_EDIT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("set", OperandKind::Text),
+    required("values", OperandKind::Text),
+    optional("severity", OperandKind::Text),
+];
+/// `rules_set_apply`: a set applied to a scope.
+pub const RULES_SET_APPLY: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("set", OperandKind::Text),
+    required("scope", OperandKind::Text),
+];
+/// `rules_preset_diff`, `rules_preset_apply`: a tier or rule profile.
+pub const RULES_PRESET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("preset", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

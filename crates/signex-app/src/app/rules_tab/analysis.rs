@@ -64,6 +64,8 @@ pub struct RulesAnalysis {
     pub(crate) checked: Checked,
     /// The selected rule's sample value and the net it is for.
     pub why: Option<(Effective, String)>,
+    /// What each class-matrix cell falls back to without its rule.
+    pub(crate) defaults: super::matrix::MatrixDefaults,
 }
 
 impl RulesAnalysis {
@@ -143,6 +145,7 @@ impl Signex {
     }
 
     fn analyse_rules(&self, id: ProjectId, key: AnalysisKey) -> RulesAnalysis {
+        let key_classes = key.classes.clone();
         let mut analysis = RulesAnalysis {
             table: signex_drc_dsl::table::table(&key.text),
             key,
@@ -153,6 +156,7 @@ impl Signex {
             has_board: false,
             checked: Checked::NoBoard,
             why: None,
+            defaults: super::matrix::class_defaults(&key_classes),
         };
         let (Ok(rules), Some((_, board)), Some(project)) = (
             self.rules_resolved(id),
@@ -163,6 +167,7 @@ impl Signex {
         };
         analysis.has_board = true;
         analysis.flags = rules.rule_flags(board, &project.data.net_classes);
+        analysis.defaults = super::matrix::board_defaults(&rules, board, &project.data.net_classes);
         for rule in rules.user_rules() {
             if let Some(items) = rules.scope_items(board, &rule.name) {
                 analysis.scope.insert(rule.name.clone(), items.len());
@@ -218,12 +223,14 @@ impl Signex {
 fn sample(rules: &DrcRules, board: &PcbBoard, row: &RuleRow) -> Option<(Effective, String)> {
     let compiled = row.compiled.as_ref().filter(|_| row.applied)?;
     let field = row.limits.first()?.field;
-    let net = rules.first_net_of(board, &row.name)?;
+    // A class-pair rule (#2398) is resolved with a net of the other class
+    // across.
+    let (net, other) = rules.first_pair_of(board, &row.name)?;
     let objects = compiled
         .pair
         .map_or([None, None], |[a, b]| [Some(a), Some(b)]);
     let layers = compiled.layers.unwrap_or(u32::MAX);
-    let effective = rules.effective(field.limit_kind(), net, layers, objects);
+    let effective = rules.effective_between(field.limit_kind(), net, other, layers, objects);
     let net_name = board
         .nets
         .iter()

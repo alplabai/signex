@@ -26,6 +26,9 @@ impl Signex {
                 self.show_rule_scope(project_id, &rule);
                 Task::none()
             }
+            // The profile library is read off the update loop; its profiles
+            // become presets when it lands.
+            RulesTabMsg::PresetsListRequested { .. } => Self::list_profiles_task(),
             msg => {
                 self.apply_rules_tab_message(msg);
                 Task::none()
@@ -127,7 +130,23 @@ impl Signex {
                 }
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
+            msg @ (RulesTabMsg::ClearanceViewPicked { .. }
+            | RulesTabMsg::MatrixCellOpened { .. }
+            | RulesTabMsg::MatrixCellEdited { .. }
+            | RulesTabMsg::MatrixCellCommitted { .. }
+            | RulesTabMsg::MatrixCellCancelled { .. }
+            | RulesTabMsg::MatrixCellCleared { .. }
+            | RulesTabMsg::MatrixCollapsed { .. }
+            | RulesTabMsg::PanelPicked { .. }
+            | RulesTabMsg::SetFormEdited { .. }
+            | RulesTabMsg::SetCreated { .. }
+            | RulesTabMsg::SetRedefined { .. }
+            | RulesTabMsg::SetApplied { .. }
+            | RulesTabMsg::PresetPicked { .. }
+            | RulesTabMsg::PresetApplied { .. }
+            | RulesTabMsg::PresetDismissed { .. }) => self.apply_rules_panel_message(msg),
             RulesTabMsg::OpenRequested { .. }
+            | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
             | RulesTabMsg::ScopeShown { .. } => {}
         }
@@ -264,7 +283,11 @@ impl Signex {
     }
 
     /// Keep an edit's refusal for the tab to show, or clear the last one.
-    fn note_rules_result<T>(&mut self, id: ProjectId, result: Result<T, String>) -> Option<T> {
+    pub(super) fn note_rules_result<T>(
+        &mut self,
+        id: ProjectId,
+        result: Result<T, String>,
+    ) -> Option<T> {
         match result {
             Ok(value) => {
                 self.rules_tab_mut(id).refused = None;

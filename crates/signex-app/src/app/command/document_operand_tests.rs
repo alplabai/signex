@@ -505,6 +505,13 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_shape_from_selection",
                     "keepout_from_selection",
                     "arrange_in_box",
+                    "rules_matrix_get",
+                    "rules_matrix_set",
+                    "rules_set_create",
+                    "rules_set_edit",
+                    "rules_set_apply",
+                    "rules_preset_diff",
+                    "rules_preset_apply",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

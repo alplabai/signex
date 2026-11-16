@@ -153,6 +153,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "import_dxf_outline",
         crate::app::handlers::pcb_dxf_import::import_dxf_outline,
     ),
+    ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
+    ("rules_set_create", crate::app::rules_tab::rules_set_create),
+    ("rules_set_edit", crate::app::rules_tab::rules_set_edit),
+    ("rules_set_apply", crate::app::rules_tab::rules_set_apply),
+    (
+        "rules_preset_apply",
+        crate::app::rules_tab::rules_preset_apply,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -292,7 +300,8 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
         ),
-        "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
+        "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
+        | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(
             "the `rules_*` edits need their operands — \
              use the Rules tab (Design ▸ Rules)",
         ),

@@ -31,7 +31,7 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
-| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, [`DRC_RULES.md`](../DRC_RULES.md), read by each DRC run that uses this profile and written back as typed; a rule written `disabled rule ...` is kept and not applied, #2398). Omitted when empty. The Rules tab (#2398) edits the project's `rules.drc.dsl`, never a profile's, one rule's text at a time. Enters the content hash when present ([What the hash covers](#what-the-hash-covers)). Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
+| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, [`DRC_RULES.md`](../DRC_RULES.md), read by each DRC run that uses this profile and written back as typed; a rule written `disabled rule ...` is kept and not applied, #2398) and `sets` (named rule sets, #2398: per name its `limits` (limit id to length as written), `severity` and `uses`, each a `scope` and the `rules` it wrote into `dsl`; omitted when empty). Omitted when empty. The Rules tab (#2398) edits the project's `rules.drc`, never a profile's: one rule's text at a time, a rule set with the rules it wrote, or a preset; a profile holding DRC rules is one of its presets, applied after a row-by-row diff as "Update from profile" applies it. A `sets` of another shape refuses the profile like any other `drc` value of the wrong shape. Enters the content hash when present ([What the hash covers](#what-the-hash-covers)). Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
 string). An explicitly empty `erc` or `drc` is the same as an absent one, and
@@ -167,7 +167,8 @@ What each profile action does with `drc`:
   the DRC changes after the ERC ones: one line per severity
   (`DRC severity builtin::unconnected: default -> error`), one for the rule
   text (`DRC rule text: changed (3 lines -> 5 lines)`, `added (…)`,
-  `removed (…)`) and one per foreign key.
+  `removed (…)`), one per named rule set (`DRC rule set HV_08: added`,
+  `removed`, `changed`, #2398) and one per foreign key.
 - **Duplicate** in Preferences ▸ Rule Profiles copies the whole profile, `drc`
   included.
 

@@ -101,8 +101,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#2199), each answered once its run lands, like an edit waiting for its
   reads
   ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
-  `rules_list`, `rules_get`, `rules_effective`, `rules_explain` and
-  `rules_conflicts` (#2398), and the board queries `measure_board`,
+  `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
+  `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
+  the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
@@ -115,8 +116,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
   person's preferences), the Rules manager edits `rules_add`, `rules_set`,
-  `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it), the board's DRC results and net classes
+  `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
+  `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
+  `document` is the project or any document of it), the board's DRC
+  results and net classes
   (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
   `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and

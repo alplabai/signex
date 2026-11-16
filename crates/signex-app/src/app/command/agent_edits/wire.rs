@@ -212,6 +212,26 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("board_shape_from_selection", BOARD_EDIT),
     ("keepout_from_selection", BOARD_EDIT),
     ("arrange_in_box", BOARD_EDIT),
+    (
+        "rules_matrix_set",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_create",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_edit",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_apply",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_preset_apply",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =

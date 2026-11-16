@@ -1230,12 +1230,47 @@
     "category": "validation"
   },
   {
+    "id": "rules_matrix_get",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_matrix_set",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_preset_apply",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_preset_diff",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
     "id": "rules_remove",
     "group": "Pcb",
     "category": "design"
   },
   {
     "id": "rules_set",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_set_apply",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_set_create",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_set_edit",
     "group": "Pcb",
     "category": "design"
   },

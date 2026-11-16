@@ -514,6 +514,10 @@ fn scope_problem(
         signex_drc::NetScope::Class(class) if !frame.classes.contains(class) => {
             Some(t!(i18n, ids::RULES_SCOPE_NO_CLASS, "class" => class.as_str()))
         }
+        signex_drc::NetScope::ClassPair(a, b) => [a, b]
+            .into_iter()
+            .find(|class| !frame.classes.contains(*class))
+            .map(|class| t!(i18n, ids::RULES_SCOPE_NO_CLASS, "class" => class.as_str())),
         signex_drc::NetScope::Pattern(glob) if !nets.iter().any(|n| glob_matches(glob, n)) => {
             Some(t!(i18n, ids::RULES_SCOPE_NO_MATCH, "pattern" => glob.as_str()))
         }

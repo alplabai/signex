@@ -35,6 +35,11 @@ const PROJECT_WIDE: [&str; 10] = [
     "delete_net_class",
     "set_net_class_rules",
     "assign_board_net_class",
+    "rules_matrix_set",
+    "rules_set_create",
+    "rules_set_edit",
+    "rules_set_apply",
+    "rules_preset_apply",
 ];
 
 /// How long a commit worker waits for the journal lines still queued.
