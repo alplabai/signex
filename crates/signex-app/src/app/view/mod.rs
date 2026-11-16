@@ -430,8 +430,9 @@ impl Signex {
     fn locked_window_layer(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
-            signex_widgets::text(signex_widgets::raw(
-                "A dialog is open: click to show it, Esc to cancel",
+            signex_widgets::text(signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::OVERLAY_LOCKED_WINDOW_HINT
             ))
             .size(TS.label)
             .color(crate::styles::ti(tokens.text_secondary)),
@@ -491,6 +492,8 @@ impl Signex {
             } else {
                 container(
                     column![
+                        // raw: a fallback of the component editor, which
+                        // moves with the editors (#2060).
                         signex_widgets::text(signex_widgets::raw(
                             "Component Editor — state not yet loaded"
                         ))
@@ -566,6 +569,8 @@ impl Signex {
                     // out of sync with the tabs vector. Keeps the tab
                     // renderable rather than crashing.
                     return container(
+                        // raw: a fallback of the Library Browser, which moves
+                        // with the library views (#2060).
                         signex_widgets::text(signex_widgets::raw(
                             "Library Browser — state not yet loaded",
                         ))

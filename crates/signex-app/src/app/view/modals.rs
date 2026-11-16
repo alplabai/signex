@@ -558,3 +558,31 @@ impl Signex {
         signex_widgets::Translate::new(card_capturing, (x, y)).into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    /// The rendered Move Selection dialog reads as the `format!` it
+    /// replaced (#2059): the count without grouping, and both field names.
+    #[test]
+    fn move_selection_names_the_count_and_the_offsets() {
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.interaction_state.active_canvas_mut().selected = (0..1200)
+            .map(|_| SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire))
+            .collect();
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            app.view_move_selection_body(),
+            iced::Size::new(600.0, 400.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        for expected in ["1200 item(s) selected", "ΔX (mm)", "ΔY (mm)"] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "{expected:?} not in {texts:?}"
+            );
+        }
+    }
+}

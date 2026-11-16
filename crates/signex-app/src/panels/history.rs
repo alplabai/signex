@@ -221,7 +221,7 @@ fn message_card<'a, M: 'a>(
 /// tab's owning project.
 #[expect(
     clippy::too_many_arguments,
-    reason = "8 arguments: the card reads the entry, the clock, the language and four theme colours"
+    reason = "8 arguments: the language, the entry, the clock, whether a restore awaits confirming, and the primary, muted, border and background colours"
 )]
 fn commit_card<'a>(
     i18n: &I18n,

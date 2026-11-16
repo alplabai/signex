@@ -261,6 +261,42 @@ fn violation_waiver_detail(
 mod tests {
     use super::*;
 
+    fn waiver(status: ErcWaiverStatus) -> ErcViolationWaiverEntry {
+        ErcViolationWaiverEntry {
+            rule_id: "unused-pin".into(),
+            objects: vec![],
+            message: "Pin 3 of U1 is unconnected".into(),
+            reason: "spare gate".into(),
+            author: "hg".into(),
+            date: "2026-11-16".into(),
+            status,
+            severity: None,
+        }
+    }
+
+    /// The rendered section heads the list with the count as `format!` wrote
+    /// it, no grouping, and shows each waiver's line (#2059).
+    #[test]
+    fn the_view_counts_the_stored_waivers() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.erc_violation_waivers = vec![waiver(ErcWaiverStatus::Lapsed); 1200];
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            violation_waivers_section(&ctx),
+            iced::Size::new(600.0, 100_000.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        assert!(
+            texts.iter().any(|t| t == "1200 findings waived"),
+            "{:?}",
+            &texts[..texts.len().min(4)]
+        );
+        assert!(texts.iter().any(|t| t
+            == "unused-pin  Pin 3 of U1 is unconnected  (LAPSED: an involved object changed)\n  Reason: spare gate  by hg 2026-11-16"));
+    }
+
     /// The stored-waiver line reads as the `format!` it replaced (#2059).
     #[test]
     fn a_stored_waiver_reads_as_before() {

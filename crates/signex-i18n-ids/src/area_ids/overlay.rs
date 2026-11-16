@@ -10,4 +10,5 @@ define_ids! {
     OVERLAY_NET_CARD_CLASS = "overlay-net-card-class";
     OVERLAY_NET_CARD_MORE = "overlay-net-card-more";
     OVERLAY_READ_ONLY_BADGE = "overlay-read-only-badge";
+    OVERLAY_LOCKED_WINDOW_HINT = "overlay-locked-window-hint";
 }

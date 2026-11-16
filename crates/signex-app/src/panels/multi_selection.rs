@@ -440,6 +440,59 @@ pub fn view_multi_selection<'a>(
 mod tests {
     use super::*;
 
+    /// The texts the view lays out, isolation marks stripped.
+    fn shown_texts(ctx: &PanelContext) -> Vec<String> {
+        let body = view_multi_selection(ctx, Color::BLACK, Color::BLACK, Color::BLACK);
+        crate::layout_probe::lay_out_texts(body, iced::Size::new(400.0, 2000.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// Each heading of the rendered view shows its own count, written as the
+    /// `format!` before the catalog wrote it: no grouping (#2059).
+    #[test]
+    fn the_view_shows_each_group_with_its_own_count() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_count = 1200;
+        ctx.multi_groups = signex_engine::SelectionGroups {
+            symbols: Some(signex_engine::SymbolGroup {
+                count: 1000,
+                value: Shared::Same("10k".into()),
+                footprint: Shared::Mixed,
+                dnp: Shared::Same(false),
+                in_bom: Shared::Same(true),
+                on_board: Shared::Mixed,
+                parameters: Vec::new(),
+            }),
+            labels: Some(signex_engine::LabelGroup {
+                count: 1001,
+                font_size_mm: Shared::Mixed,
+                justify: Shared::Mixed,
+                rotation_degrees: Shared::Mixed,
+            }),
+            wires: Some(signex_engine::WireGroup {
+                count: 12345,
+                width_mm: Shared::Same(0.15),
+            }),
+        };
+        let texts = shown_texts(&ctx);
+        for expected in [
+            "1200 objects selected",
+            "Symbols (1000)",
+            "Labels (1001)",
+            "Wires (12345)",
+            "Justify <mixed>",
+            "Rotation <mixed>",
+        ] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "{expected:?} not in {texts:?}"
+            );
+        }
+    }
+
     /// The catalog says what the English literals said (#2059).
     #[test]
     fn the_mixed_and_count_texts_read_as_before() {

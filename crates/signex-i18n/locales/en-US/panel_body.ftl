@@ -1,5 +1,5 @@
-# Text inside the panels: History, ERC waivers, colours, Projects,
-# multi-selection, Components and the Properties panel (#2059).
+# Text inside the panels: History, ERC waivers, Projects, multi-selection,
+# Components and the planned panels (#2059).
 
 ## History panel
 panels-history-no-active-file = Open a schematic, PCB, library, or primitive to see its history.

@@ -48,3 +48,6 @@ overlay-net-card-more = +{ $count } more
 # Badge over the canvas of a sheet written by a newer Signex, which opens
 # read-only.
 overlay-read-only-badge = Read-only: written by a newer { -brand-name }
+
+# Over a window that a dialog in its own window has locked.
+overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel

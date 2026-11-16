@@ -325,8 +325,8 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ))
             .size(TS.body)
             .color(muted),
-            // A blank line between the two.
-            text(signex_i18n::UserText::new(String::new())).size(TS.micro),
+            // raw: blank spacer between the two lines, no text.
+            text(raw("")).size(TS.micro),
             text(signex_i18n::t!(
                 ctx.i18n,
                 signex_i18n::ids::PANELS_PROJECTS_OPEN_HINT

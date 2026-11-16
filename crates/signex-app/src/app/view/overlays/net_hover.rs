@@ -113,3 +113,39 @@ fn card_width_estimate(card: &HoverCard, ui_family: &str, i18n: &signex_i18n::I1
     }
     (widest + CARD_PAD_W + 2.0).min(CARD_MAX_W)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::app::state::net_nav::HoverCard;
+    use crate::app::state::net_nav::hover::HoverCardPin;
+
+    /// The rendered card reads as the `format!` lines it replaced (#2059):
+    /// the class line, and the hidden-pin count without grouping.
+    #[test]
+    fn the_card_names_the_class_and_the_hidden_pins() {
+        let (app, _boot) = crate::app::Signex::new();
+        let card = HoverCard {
+            name: "VCC".into(),
+            class: Some("Power".into()),
+            pins: vec![HoverCardPin {
+                pin: "R1.2".into(),
+                sheet: "Main".into(),
+            }],
+            hidden: 1200,
+            screen: (0, 0),
+        };
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            app.view_net_hover_card(&card, iced::window::Id::unique()),
+            iced::Size::new(800.0, 600.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        for expected in ["Class: Power", "R1.2", "+1200 more"] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "{expected:?} not in {texts:?}"
+            );
+        }
+    }
+}
