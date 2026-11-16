@@ -29,6 +29,35 @@ pub fn created_at(id: &Uuid) -> Option<SystemTime> {
     UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
 }
 
+/// Where a new object id comes from. The engine never mints one itself
+/// (ADR-0006): the caller passes a source, like the clock.
+pub trait IdSource {
+    fn next_id(&mut self) -> Uuid;
+}
+
+/// The production source: a fresh v7 id per call.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UuidV7Ids;
+
+impl IdSource for UuidV7Ids {
+    fn next_id(&mut self) -> Uuid {
+        Uuid::now_v7()
+    }
+}
+
+/// A deterministic source for tests: ids 1, 2, 3, ... as `Uuid::from_u128`.
+#[derive(Debug, Clone, Default)]
+pub struct SequentialIds {
+    issued: u128,
+}
+
+impl IdSource for SequentialIds {
+    fn next_id(&mut self) -> Uuid {
+        self.issued += 1;
+        Uuid::from_u128(self.issued)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,6 +81,16 @@ mod tests {
         let made = created_at(&Uuid::now_v7()).expect("a v7 id has a time");
         let after = SystemTime::now() + Duration::from_millis(1);
         assert!(before <= made && made <= after);
+    }
+
+    #[test]
+    fn sequential_ids_repeat_from_a_fresh_source() {
+        let mut a = SequentialIds::default();
+        let mut b = SequentialIds::default();
+        let first = [a.next_id(), a.next_id()];
+        assert_eq!(first, [b.next_id(), b.next_id()]);
+        assert_ne!(first[0], first[1]);
+        assert!(!first[0].is_nil());
     }
 
     #[test]
