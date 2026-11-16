@@ -185,6 +185,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::RenameChildSheetFile { .. }
         | Command::ModifyChildSheet { .. }
         | Command::SetChildSheetInstances { .. }
+        | Command::ResizeChildSheet { .. }
         | Command::SetPaperSize { .. }
         | Command::SetSheetFrame { .. }
         | Command::SetSheetColor { .. }
@@ -396,6 +397,13 @@ impl Engine {
     #[must_use]
     pub fn names_locked_item(&self, cmd: &Command) -> bool {
         self.locked_item_refusal(cmd).is_some()
+    }
+
+    /// Why `execute` would refuse `cmd` for a lock, or `None`: the text a
+    /// caller shows before it sends an edit the gateway would skip (#2418).
+    #[must_use]
+    pub fn lock_refusal(&self, cmd: &Command) -> Option<String> {
+        self.locked_item_refusal(cmd).map(|e| e.to_string())
     }
 
     /// `cmd` with every locked symbol left out, for a caller that would

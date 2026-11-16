@@ -120,6 +120,9 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The editable geometry, lock and draft of the single selected object
+    /// (#2418).
+    pub placed: super::PlacedPanel,
     /// The fields a multi-selection shares, per kind (#1258); empty unless
     /// more than one object is selected.
     pub multi_groups: signex_engine::SelectionGroups,

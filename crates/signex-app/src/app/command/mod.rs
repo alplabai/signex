@@ -46,6 +46,9 @@ mod outcome;
 mod part_operand_tests;
 mod part_operands;
 #[cfg(test)]
+mod placed_operand_tests;
+mod placed_operands;
+#[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]
@@ -79,6 +82,7 @@ pub(crate) use operand_handlers::runs_headless_without_operands;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
+pub(crate) use placed_operands::PlacedRefusal;
 
 use iced::Task;
 

@@ -583,3 +583,20 @@ panels-drawing-start-angle = Start Angle
 panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
+# Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
+panels-placed-location = Location
+panels-placed-properties = Properties
+panels-placed-x = X ({ $unit })
+panels-placed-y = Y ({ $unit })
+panels-placed-start-x = Start X ({ $unit })
+panels-placed-start-y = Start Y ({ $unit })
+panels-placed-width = Width ({ $unit })
+panels-placed-height = Height ({ $unit })
+panels-placed-rotation = Rotation
+# A rotation choice; $degrees is 0, 90, 180 or 270.
+panels-placed-degrees = { $degrees } Degrees
+# Shown above the disabled rows of a locked object; $reason is the lock's own words.
+panels-placed-locked = Locked: { $reason }
+panels-placed-parameters = Parameters ({ $count })
+panels-placed-parameters-none = Parameters (none)
+panels-placed-no-parameters = No custom parameters

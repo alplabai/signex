@@ -8,6 +8,7 @@
 mod batch;
 mod break_wire;
 pub(crate) mod change_component;
+mod child_sheet_size;
 mod designator_in;
 mod drawings;
 mod edits;

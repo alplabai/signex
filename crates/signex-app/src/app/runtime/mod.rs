@@ -13,7 +13,9 @@ mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
+mod pcb_panel_ctx;
 mod pin_focus;
+mod placed_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -264,6 +266,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

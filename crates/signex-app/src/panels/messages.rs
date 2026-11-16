@@ -710,8 +710,6 @@ pub enum PanelMsg {
     /// The Body row of a symbol's Properties picked a body (normal or
     /// alternate / De Morgan).
     SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
-    /// Set absolute rotation on a symbol (degrees).
-    EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
     EditSymbolValueFontSizePt(uuid::Uuid, u32),
     /// Swap a power-port's style: change lib_id and preserve visual direction
@@ -727,8 +725,6 @@ pub enum PanelMsg {
     EditLabelJustifyH(uuid::Uuid, signex_types::schematic::HAlign),
     /// Edit a label direction preset (rotation + horizontal justify).
     EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
-    /// Edit a label's rotation (degrees).
-    EditLabelRotation(uuid::Uuid, f64),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
@@ -1071,6 +1067,9 @@ pub enum PanelMsg {
     Noop,
     /// The multi-selection form of the Properties panel (#1258).
     MultiEdit(super::MultiEditMsg),
+    /// The Position, Rotation, Size and Parameters rows of one placed
+    /// object (#2418).
+    PlacedEdit(super::PlacedEditMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

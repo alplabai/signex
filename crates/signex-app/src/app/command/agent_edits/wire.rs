@@ -317,6 +317,10 @@ mod tests {
             "place_text",
             "place_text_string",
             "place_wire",
+            "set_object_position",
+            "set_object_rotation",
+            "set_sheet_symbol_size",
+            "set_symbol_parameter",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();

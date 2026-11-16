@@ -16,6 +16,7 @@ use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
 use super::part_operands as part;
+use super::placed_operands as placed;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
@@ -81,6 +82,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
+    ("set_object_position", placed::set_object_position),
+    ("set_object_rotation", placed::set_object_rotation),
+    ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
+    ("set_symbol_parameter", placed::set_symbol_parameter),
     ("view_rotate", view_rotate),
 ];
 
@@ -132,6 +137,22 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        "set_object_position" => Some(
+            "`set_object_position` needs the operands `id` and `at` — \
+             use the Position row in Properties",
+        ),
+        "set_object_rotation" => Some(
+            "`set_object_rotation` needs the operands `id` and `rotation` — \
+             use the Rotation row in Properties",
+        ),
+        "set_sheet_symbol_size" => Some(
+            "`set_sheet_symbol_size` needs the operands `id` and `size` — \
+             use the Size row in Properties",
+        ),
+        "set_symbol_parameter" => Some(
+            "`set_symbol_parameter` needs the operands `id` and `name` — \
+             use the Parameters rows in Properties",
         ),
         _ => None,
     }

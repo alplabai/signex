@@ -164,6 +164,10 @@ open_project_options	file	Open Project Options for the active project	Project Op
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
 new_schematic_sheet	file	New schematic sheet in the project	Schematic	Schematic	-	-	Always	mutates_doc	profile:text?,name:text?
 back_annotate_schematics	pcb_sync	Back-annotate the board's designators and values to the schematic	Back Annotate Schematics...	Schematic	-	-	Always	gui_only	-
+set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,at:point/mm,document:document?
+set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,document:document?
+set_sheet_symbol_size	edit	Set the size of a sheet symbol	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,size:point/mm,document:document?
+set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
 tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only	-
 lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
 select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only	-

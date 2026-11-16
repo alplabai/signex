@@ -1070,6 +1070,26 @@
     "category": "modify"
   },
   {
+    "id": "set_object_position",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
+    "id": "set_object_rotation",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
+    "id": "set_sheet_symbol_size",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
+    "id": "set_symbol_parameter",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "sheet_navigation_back",
     "group": "Schematic",
     "category": "navigation"

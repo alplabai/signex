@@ -45,6 +45,24 @@ pub enum EngineError {
     EmptySheetEntryName,
     #[error("this sheet symbol already has an entry named '{0}'")]
     DuplicateSheetEntryName(String),
+    #[error(
+        "a sheet symbol's width and height must each be a finite number of at least {min_mm} mm, got {width} x {height}"
+    )]
+    InvalidChildSheetSize {
+        width: f64,
+        height: f64,
+        min_mm: f64,
+    },
+    #[error(
+        "sheet symbol '{sheet}' cannot take that size, these entries would fall off its border: {}; move them first or choose a larger size",
+        entries.join(", ")
+    )]
+    ChildSheetEntriesOffBorder { sheet: String, entries: Vec<String> },
+    #[error(
+        "sheet symbol '{sheet}' cannot take that size, these entries are connected or would land on a connection: {}; remove those wires first",
+        entries.join(", ")
+    )]
+    ChildSheetEntriesConnected { sheet: String, entries: Vec<String> },
     #[error("failed to open schematic: {0}")]
     OpenFailed(#[source] anyhow::Error),
     #[error("designator counter for prefix {prefix:?} would pass u32::MAX; annotate refused")]

@@ -258,6 +258,10 @@ altium	hint	-	-	open_project_options
 altium	hint	-	-	update_pcb_from_schematic
 altium	hint	-	-	new_schematic_sheet
 altium	hint	-	-	back_annotate_schematics
+altium	hint	-	-	set_object_position
+altium	hint	-	-	set_object_rotation
+altium	hint	-	-	set_sheet_symbol_size
+altium	hint	-	-	set_symbol_parameter
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -612,6 +616,10 @@ classic	hint	-	-	open_project_options
 classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	new_schematic_sheet
 classic	hint	-	-	back_annotate_schematics
+classic	hint	-	-	set_object_position
+classic	hint	-	-	set_object_rotation
+classic	hint	-	-	set_sheet_symbol_size
+classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection

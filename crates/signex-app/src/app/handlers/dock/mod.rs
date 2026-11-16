@@ -13,6 +13,7 @@ mod navigator;
 mod net_classes;
 mod panel_controls;
 mod panel_open;
+mod placed_edit;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
@@ -92,6 +93,7 @@ impl Signex {
             }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)
+                || self.handle_dock_placed_edit_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
             {
                 return self.finish_update();

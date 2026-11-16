@@ -13,11 +13,14 @@ mod drawing_preview;
 mod font_row;
 mod footprint_card;
 mod footprint_section;
-mod generic;
 mod header;
 mod label;
 mod library_rows;
 mod pins;
+mod placed_kinds;
+mod placed_rows;
+#[cfg(test)]
+mod placed_rows_tests;
 mod power_port;
 mod rows;
 mod selected;

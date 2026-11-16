@@ -355,6 +355,10 @@ cmd-menu-color-net = Custom Color...
 cmd-clear-all-net-colors = Clear all net colors
 cmd-menu-clear-all-net-colors = Clear All Net Colors
 cmd-assign-net-class = Assign net to class
+cmd-set-object-position = Set the position of a placed object
+cmd-set-object-rotation = Set the rotation of a placed part or label
+cmd-set-sheet-symbol-size = Set the size of a sheet symbol
+cmd-set-symbol-parameter = Set a parameter of a placed part
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.
 cmd-menu-place-component = Part
