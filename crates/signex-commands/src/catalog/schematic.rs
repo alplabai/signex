@@ -2,9 +2,9 @@
 //! sheet-navigation. Split from `keymap/catalog.rs`; entries verbatim.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
-pub(super) const SCHEMATIC: &[CommandMetadata] = &[
+pub const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {
         id: "annotate_schematic",
         category: "design",

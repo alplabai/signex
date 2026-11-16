@@ -8,6 +8,7 @@ pub use operands::{Operand, OperandKind};
 
 pub mod general;
 pub mod operands;
+pub mod schematic;
 
 /// Coarse editor-surface bucket used by the Keyboard Shortcuts pane to
 /// group commands for display. Distinct from [`CommandMetadata::category`],
