@@ -164,6 +164,9 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
+                self.edit_blanket_field(*uuid, edit);
+            }
             crate::panels::PanelMsg::EditTextFontFamily(target, family) => {
                 self.apply_engine_command(
                     signex_engine::Command::SetTextFontFamily {

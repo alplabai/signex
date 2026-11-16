@@ -113,6 +113,13 @@ a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
 reported once as likely corrupt instead of being enumerated, and a message
 lists at most eight missing units before "(+N more)".
 
+## Blankets and Compile Masks
+
+Added for #2420. ERC never sees what a Compile Mask covers, and drops a
+finding located inside a Blanket that excludes its rule id (or `*`). A
+net-level finding counts as located at its anchor pin. Rules and the file
+format: `docs/SCHEMATIC_DIRECTIVES.md`.
+
 ## Waivers
 
 Added for #1285. A designer can accept one finding with a reason instead of

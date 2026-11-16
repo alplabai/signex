@@ -8,6 +8,7 @@
 
 mod body_row;
 mod child_sheet;
+mod directive;
 mod drawing;
 mod drawing_preview;
 mod font_row;
@@ -32,6 +33,7 @@ pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
 pub(super) use child_sheet::view_child_sheet_properties;
+pub use directive::BlanketEdit;
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
 pub use footprint_card::{

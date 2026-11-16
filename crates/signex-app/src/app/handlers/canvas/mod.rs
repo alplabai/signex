@@ -27,6 +27,8 @@ pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod move_pick;
+mod place_directive;
+pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
 mod place_drawing;
 mod place_label;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};

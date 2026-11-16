@@ -624,3 +624,11 @@ panels-placed-name = Name
 panels-placed-direction = Direction
 panels-placed-sheet = Sheet
 panels-placed-sheet-file = Sheet File
+# Properties section of a selected Blanket directive: a drawn region whose
+# parameters apply to every net inside it.
+panels-directive-blanket = Blanket
+panels-directive-net-class = Net Class
+# Section title: the ERC rules a Blanket does not report inside its region.
+panels-directive-erc-exclusions = ERC Exclusions
+# Checkbox: the Blanket reports no ERC rule at all inside its region.
+panels-directive-all-rules = All Rules

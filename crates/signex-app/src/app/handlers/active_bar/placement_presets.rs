@@ -97,6 +97,16 @@ impl Signex {
             ActiveBarAction::PlaceNoERC => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
+            // #2420: the directive tools, each its own tool.
+            ActiveBarAction::PlaceBlanket => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Blanket)));
+            }
+            ActiveBarAction::PlaceCompileMask => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::CompileMask)));
+            }
+            ActiveBarAction::PlaceDiffPair => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::DiffPair)));
+            }
             // Sheet symbol has its own tool: a hierarchical sheet, not a
             // plain rectangle.
             ActiveBarAction::PlaceSheetSymbol => {

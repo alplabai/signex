@@ -87,6 +87,7 @@ pub(super) struct BaseIds {
     bus_entries: KindIds,
     drawings: KindIds,
     no_erc_directives: KindIds,
+    directives: KindIds,
 }
 
 impl BaseIds {
@@ -103,6 +104,10 @@ impl BaseIds {
             bus_entries: KindIds::of(&base.bus_entries, |b| b.uuid),
             drawings: KindIds::of(&base.drawings, SchDrawing::uuid),
             no_erc_directives: KindIds::of(&base.no_erc_directives, |d| d.uuid),
+            directives: KindIds::of(
+                &base.directives,
+                signex_types::schematic::SchDirective::uuid,
+            ),
         }
     }
 }
@@ -214,6 +219,7 @@ pub(super) fn try_split_ghost_walk(
     kind!(buses, |b: &signex_types::schematic::Bus| b.uuid);
     kind!(bus_entries, |b: &signex_types::schematic::BusEntry| b.uuid);
     kind!(drawings, SchDrawing::uuid);
+    kind!(directives, signex_types::schematic::SchDirective::uuid);
     kind!(
         no_erc_directives,
         |d: &signex_types::schematic::NoConnect| d.uuid

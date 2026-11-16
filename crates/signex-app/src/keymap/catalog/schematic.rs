@@ -228,7 +228,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_COMPILE_MASK),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SEGMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

@@ -137,7 +137,7 @@ open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Ch
 open_components_panel	panels	Open Components panel / place components	Component...	Schematic	-	-	Always	gui_only	-
 open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
-place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?,document:document?
 place_hierarchical_label	place	Place hierarchical label	Hierarchical Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?,document:document?
@@ -209,8 +209,9 @@ place_harness_entry	place	Place harness entry	Harness Entry	Schematic	-	-	Requir
 place_port	place	Place port	Port	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_off_sheet_connector	place	Place off sheet connector	Off Sheet Connector	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_parameter_set	place	Place parameter set	Parameter Set	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_diff_pair	place	Place diff pair	Differential Pair	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_blanket	place	Place blanket	Blanket	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_diff_pair	place	Place diff pair	Differential Pair	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
+place_blanket	place	Place blanket	Blanket	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,class:text?,exclude:text?,document:document?
+edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
 place_text_string	place	Place text string	Text String	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,document:document?
 place_text_frame	place	Place text frame	Text Frame	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_note	place	Place note	Note	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-

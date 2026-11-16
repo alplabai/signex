@@ -319,6 +319,7 @@ altium	hint	-	P C	place_off_sheet_connector
 altium	hint	-	-	place_parameter_set
 altium	hint	-	-	place_diff_pair
 altium	hint	-	-	place_blanket
+altium	hint	-	-	edit_blanket
 altium	hint	-	-	place_text_string
 altium	hint	-	-	place_text_frame
 altium	hint	-	-	place_note
@@ -739,6 +740,7 @@ classic	hint	-	H	place_off_sheet_connector
 classic	hint	-	-	place_parameter_set
 classic	hint	-	-	place_diff_pair
 classic	hint	-	-	place_blanket
+classic	hint	-	-	edit_blanket
 classic	hint	-	-	place_text_string
 classic	hint	-	-	place_text_frame
 classic	hint	-	-	place_note

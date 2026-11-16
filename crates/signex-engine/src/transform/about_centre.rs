@@ -120,6 +120,16 @@ fn supported(kind: SelectedKind) -> bool {
     !matches!(kind, SelectedKind::ChildSheet | SelectedKind::SheetPin)
 }
 
+fn directive_points(d: &signex_types::schematic::SchDirective) -> Vec<Point> {
+    use signex_types::schematic::SchDirective;
+    match d {
+        SchDirective::Blanket { start, end, .. } | SchDirective::CompileMask { start, end, .. } => {
+            vec![*start, *end]
+        }
+        SchDirective::DiffPair { position, .. } => vec![*position],
+    }
+}
+
 fn drawing_points(d: &SchDrawing) -> Vec<Point> {
     match d {
         SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
@@ -230,6 +240,12 @@ impl Engine {
                 .iter()
                 .filter(|d| d.uuid() == id)
                 .flat_map(drawing_points)
+                .collect(),
+            SelectedKind::Directive => doc
+                .directives
+                .iter()
+                .filter(|d| d.uuid() == id)
+                .flat_map(directive_points)
                 .collect(),
             _ => Vec::new(),
         }
@@ -394,6 +410,13 @@ impl Engine {
                 }
                 SchDrawing::Polyline { points, .. } => points.iter_mut().for_each(at),
             }
+        }
+        for d in doc
+            .directives
+            .iter_mut()
+            .filter(|d| has(SelectedKind::Directive, d.uuid()))
+        {
+            d.map_points(|p| transform.point(centre, p));
         }
 
         self.autoplace_symbol_fields(&present_symbol_ids(items));

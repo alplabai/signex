@@ -71,7 +71,11 @@ pub fn placed_geometry(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Pl
         | SelectedKind::NoErcDirective
         | SelectedKind::TextNote
         | SelectedKind::SheetPin => sheet.item_anchor(item).map(at),
-        SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Drawing => None,
+        // A directive (#2420) is moved on the sheet, not from Properties.
+        SelectedKind::SymbolRefField
+        | SelectedKind::SymbolValField
+        | SelectedKind::Drawing
+        | SelectedKind::Directive => None,
     }
 }
 

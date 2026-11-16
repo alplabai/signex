@@ -439,9 +439,7 @@ fn place_menu_greys_only_the_planned_tools() {
         if let DropdownEntry::Item(it) = entry {
             let planned = matches!(
                 it.label.as_str(),
-                "Differential Pair"
-                    | "Parameter Set"
-                    | "Blanket"
+                "Parameter Set"
                     | "Signal Harness"
                     | "Harness Connector"
                     | "Harness Entry"
@@ -560,6 +558,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "Generic No ERC",
             "Differential Pair",
             "Blanket",
+            "Compile Mask",
             "Signal Harness",
             "Harness Connector",
             "Harness Entry",

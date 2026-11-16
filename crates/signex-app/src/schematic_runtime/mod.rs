@@ -21,9 +21,12 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod directives;
 mod drawings;
 pub mod hit_index;
 pub mod hit_test;
+mod invalidation;
+pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
 pub mod overlay;
@@ -50,48 +53,6 @@ pub type SchematicRenderSnapshot = SchematicSheet;
 /// against the installed fonts (`None` is the bundled canvas default).
 fn resolve_family(item: Option<&str>, document: Option<&str>) -> Option<std::sync::Arc<str>> {
     crate::fonts::resolve::resolve_installed(item, document)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct RenderInvalidation(u32);
-
-impl RenderInvalidation {
-    pub const NONE: Self = Self(0);
-    pub const SYMBOLS: Self = Self(1 << 0);
-    pub const WIRES: Self = Self(1 << 1);
-    pub const LABELS: Self = Self(1 << 2);
-    pub const TEXT_NOTES: Self = Self(1 << 3);
-    pub const BUSES: Self = Self(1 << 4);
-    pub const BUS_ENTRIES: Self = Self(1 << 5);
-    pub const JUNCTIONS: Self = Self(1 << 6);
-    pub const NO_CONNECTS: Self = Self(1 << 7);
-    pub const CHILD_SHEETS: Self = Self(1 << 8);
-    pub const DRAWINGS: Self = Self(1 << 9);
-    pub const LIB_SYMBOLS: Self = Self(1 << 10);
-    pub const PAPER: Self = Self(1 << 11);
-    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
-    /// The sheet's net colours: a repaint with no geometry or ERC change.
-    pub const NET_COLORS: Self = Self(1 << 13);
-    pub const FULL: Self = Self(u32::MAX);
-
-    /// True when any bit of `mask` is also set in `self`.
-    pub fn intersects(self, mask: Self) -> bool {
-        self.0 & mask.0 != 0
-    }
-}
-
-impl std::ops::BitOr for RenderInvalidation {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl std::ops::BitOrAssign for RenderInvalidation {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -250,6 +211,9 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
         dst.no_erc_directives.clone_from(&src.no_erc_directives);
+    }
+    if invalidation.intersects(R::DIRECTIVES) {
+        dst.directives.clone_from(&src.directives);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(&src.child_sheets);
@@ -818,7 +782,7 @@ fn collect_item_bounds_with(
             ),
         });
     }
-
+    directives::push_item_bounds(snapshot, &mut out);
     out
 }
 
@@ -1178,6 +1142,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 
 #[cfg(test)]
 mod defaults_tests;
+#[cfg(test)]
+mod directives_tests;
 #[cfg(test)]
 mod drawings_tests;
 #[cfg(test)]

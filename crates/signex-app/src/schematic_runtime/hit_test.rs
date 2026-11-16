@@ -133,6 +133,7 @@ fn hit_test_items(
                 bus_index -= 1;
                 hit_bus(&snapshot.buses[bus_index], point, widths)
             }
+            SelectedKind::Directive => super::directives::hit(snapshot, item.item.uuid, point),
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
         if hit {

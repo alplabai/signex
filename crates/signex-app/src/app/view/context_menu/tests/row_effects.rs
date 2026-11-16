@@ -506,6 +506,9 @@ fn place_rows_arm_the_expected_tools() {
         ("place_junction", Tool::Junction),
         ("place_net_label", Tool::Label),
         ("place_no_erc", Tool::NoErcDirective),
+        ("place_blanket", Tool::Blanket),
+        ("place_compile_mask", Tool::CompileMask),
+        ("place_diff_pair", Tool::DiffPair),
         ("place_text_string", Tool::Text),
     ] {
         let mut app = one_symbol();

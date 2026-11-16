@@ -107,6 +107,7 @@ fn kind_word(item: &SelectedItem, power: bool) -> &'static str {
         SelectedKind::Junction => "junction",
         SelectedKind::NoConnect => "no_connect",
         SelectedKind::NoErcDirective => "no_erc",
+        SelectedKind::Directive => "directive",
         SelectedKind::TextNote => "text",
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Drawing => {
             "other"

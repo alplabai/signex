@@ -228,6 +228,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_rectangle` | Draw rectangle | place | — | — |
 | `draw_round_rectangle` | Draw round rectangle | place | — | — |
 | `draw_wire` | Draw wire | place | — | — |
+| `edit_blanket` | Edit blanket parameters | place | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |

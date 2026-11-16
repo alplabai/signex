@@ -47,4 +47,8 @@ define_ids! {
     PANELS_PLACED_DIRECTION = "panels-placed-direction";
     PANELS_PLACED_SHEET = "panels-placed-sheet";
     PANELS_PLACED_SHEET_FILE = "panels-placed-sheet-file";
+    PANELS_DIRECTIVE_BLANKET = "panels-directive-blanket";
+    PANELS_DIRECTIVE_NET_CLASS = "panels-directive-net-class";
+    PANELS_DIRECTIVE_ERC_EXCLUSIONS = "panels-directive-erc-exclusions";
+    PANELS_DIRECTIVE_ALL_RULES = "panels-directive-all-rules";
 }

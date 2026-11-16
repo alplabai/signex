@@ -23,6 +23,7 @@ pub(in crate::format) mod kind {
     pub const BUS_ENTRY: &str = "bus entry";
     pub const DRAWING: &str = "drawing";
     pub const NO_ERC_DIRECTIVE: &str = "no-ERC directive";
+    pub const DIRECTIVE: &str = "directive";
     pub const FOOTPRINT: &str = "footprint";
     pub const PAD: &str = "pad";
     pub const TRACK: &str = "track";

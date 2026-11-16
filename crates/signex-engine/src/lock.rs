@@ -193,6 +193,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetTitleBlockField { .. }
         | Command::ArrangeDrawings { .. }
         | Command::SetDrawingPlacement { .. }
+        | Command::PlaceDirective { .. }
+        | Command::UpdateDirective { .. }
         | Command::SetDocumentFontFamily { .. }
         | Command::SetNetColors { .. } => return None,
     };

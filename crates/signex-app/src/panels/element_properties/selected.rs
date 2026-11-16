@@ -104,6 +104,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         | None => {
             col = super::placed_kinds::push_placed_kind_sections(col, ctx, st);
         }
+        Some(signex_types::schematic::SelectedKind::Directive) => {
+            col = super::directive::push_directive_sections(col, ctx, uuid, st);
+        }
     }
 
     // ── Wire style ──: width preset and own colour, undoable.

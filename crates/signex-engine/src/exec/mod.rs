@@ -10,6 +10,7 @@ mod break_wire;
 pub(crate) mod change_component;
 mod child_sheet_size;
 mod designator_in;
+mod directives;
 mod drawings;
 mod edits;
 mod font_family;
@@ -24,6 +25,8 @@ pub(crate) mod transaction;
 mod change_component_tests;
 #[cfg(test)]
 mod designator_in_tests;
+#[cfg(test)]
+mod directives_tests;
 #[cfg(test)]
 mod drawings_tests;
 #[cfg(test)]

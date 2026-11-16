@@ -19,6 +19,9 @@ mod board_edit_operands;
 mod board_operands;
 pub(crate) mod bridge;
 #[cfg(test)]
+mod directive_operand_tests;
+mod directive_operands;
+#[cfg(test)]
 mod document_operand_tests;
 mod document_operands;
 #[cfg(test)]
@@ -455,7 +458,7 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_diff_pair").unwrap();
+        let command = AppCommandId::new("place_signal_harness").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
         assert_eq!(
@@ -467,7 +470,7 @@ mod tests {
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Differential Pair")),
+                .starts_with("Planned, not available yet: Signal Harness")),
             "the handler ran and explained"
         );
     }

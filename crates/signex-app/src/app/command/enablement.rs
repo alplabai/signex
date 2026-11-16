@@ -1101,7 +1101,7 @@ mod tests {
     #[test]
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
-        assert!(ids.contains(&"place_diff_pair"), "{ids:?}");
+        assert!(ids.contains(&"place_signal_harness"), "{ids:?}");
         let with_command = crate::active_bar::PLANNED_TOOLS
             .iter()
             .filter(|(planned, _)| {
@@ -1142,11 +1142,11 @@ mod tests {
     fn a_planned_tool_keystroke_still_logs_the_refusal() {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _t) = Signex::new();
-        let _ = app.dispatch_command(&id("place_diff_pair"), CommandArgs::default(), None);
+        let _ = app.dispatch_command(&id("place_signal_harness"), CommandArgs::default(), None);
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Differential Pair")),
+                .starts_with("Planned, not available yet: Signal Harness")),
             "the refusal must reach the Messages panel, not be dropped"
         );
     }

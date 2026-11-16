@@ -41,6 +41,7 @@ fn object_count(app: &Signex) -> usize {
         + doc.text_notes.len()
         + doc.drawings.len()
         + doc.no_erc_directives.len()
+        + doc.directives.len()
 }
 
 #[test]
@@ -80,13 +81,15 @@ fn a_planned_tool_arms_nothing_and_places_nothing() {
     }
 }
 
+/// #2420: Differential Pair is a real tool now; it places its directive, never
+/// the `DIFF_PAIR` text note it once stood in with.
 #[test]
-fn diff_pair_no_longer_drops_a_diff_pair_note() {
+fn diff_pair_places_a_directive_not_a_diff_pair_note() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
         ActiveBarAction::PlaceDiffPair,
     )));
-    assert_ne!(app.interaction_state.current_tool, Tool::Text);
+    assert_eq!(app.interaction_state.current_tool, Tool::DiffPair);
     let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
         world_x: 5.0,
         world_y: 5.0,
@@ -97,6 +100,7 @@ fn diff_pair_no_longer_drops_a_diff_pair_note() {
         .expect("engine")
         .document();
     assert!(doc.text_notes.iter().all(|n| n.text != "DIFF_PAIR"));
+    assert_eq!(doc.directives.len(), 1);
 }
 
 #[test]

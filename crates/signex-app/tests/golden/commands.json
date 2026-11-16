@@ -400,6 +400,11 @@
     "category": "edit"
   },
   {
+    "id": "edit_blanket",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "edit_footprint_field",
     "group": "General",
     "category": "edit"

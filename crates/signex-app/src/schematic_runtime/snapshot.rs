@@ -155,6 +155,15 @@ pub fn build_renderer_snapshot(
             });
         }
     }
+    directives::push_lines(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        &mut wires,
+        &mut wire_line_styles,
+    );
 
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));

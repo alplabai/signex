@@ -147,6 +147,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("stack", OperandKind::Text),
     ("sizes", OperandKind::Text),
     ("pitch", OperandKind::Length),
+    ("exclude", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -177,6 +178,25 @@ pub const AT: &[Operand] = &[
 pub const SEGMENT: &[Operand] = &[
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
+/// A Blanket (#2420): its two corners, the net class it gives the nets
+/// inside it and the ERC rule ids, comma separated, it does not report there.
+pub const BLANKET: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("class", OperandKind::Text),
+    optional("exclude", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A Blanket edit (#2420): the directive `id` and what to set; an operand
+/// left out keeps its value, an empty `class` or `exclude` clears it.
+pub const EDIT_BLANKET: &[Operand] = &[
+    required("id", OperandKind::Text),
+    optional("start", OperandKind::Point),
+    optional("end", OperandKind::Point),
+    optional("class", OperandKind::Text),
+    optional("exclude", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// A wire run, checked against the sheet before it lands (#2199): `allow_merge`

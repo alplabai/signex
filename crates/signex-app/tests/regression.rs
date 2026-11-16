@@ -568,6 +568,10 @@ mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
 
+// #2420 — Blanket, Compile Mask and Differential Pair directives.
+#[path = "regression/schematic_directives.rs"]
+mod schematic_directives;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
 #[path = "regression/text_font_family.rs"]

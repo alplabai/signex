@@ -65,6 +65,8 @@ mod body_style_tests;
 #[cfg(test)]
 mod bus_entry_tests;
 #[cfg(test)]
+mod directive_tests;
+#[cfg(test)]
 mod drawing_placement_tests;
 #[cfg(test)]
 mod extras_unknown_tests;
@@ -633,6 +635,7 @@ impl SnxSchematic {
                 })
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
+            directives: sheet_extras.directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),

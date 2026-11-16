@@ -55,6 +55,11 @@ pub(super) fn shift_snapshot_for_selection(
             d.position = shift(d.position);
         }
     }
+    for d in out.directives.iter_mut() {
+        if is_selected(d.uuid(), SelectedKind::Directive) {
+            d.map_points(&shift);
+        }
+    }
     for l in out.labels.iter_mut() {
         if is_selected(l.uuid, SelectedKind::Label) {
             l.position = shift(l.position);

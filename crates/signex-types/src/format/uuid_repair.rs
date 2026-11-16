@@ -224,6 +224,12 @@ fn repair_objects(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
         None,
         by_field!(no_name),
     );
+    let directive = Access {
+        uuid: |d: &crate::schematic::SchDirective| d.uuid(),
+        set_uuid: |d, u| d.set_uuid(u),
+        name: |d| d.kind().as_str().to_string(),
+    };
+    ids.check(&mut sheet.directives, kind::DIRECTIVE, None, directive);
 }
 
 /// The pins of each sheet symbol; they share the sheet's id space.

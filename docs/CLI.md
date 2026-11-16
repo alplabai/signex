@@ -109,8 +109,10 @@ the dialog cannot be answered.
 The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
-`draw_graphic_line`, `draw_rectangle`) take an optional `document`, an id or a
-path as for `apply_edits`. Given, the command runs on that sheet and never on
+`draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420,
+[SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
+`document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on
 the active tab: pin references, the intent checks and their scratch copies, the
 commit, undo and the dirty flag all go to it, and no tab or focus changes. An
 unknown, unloaded, non-schematic or read-only document is refused with its
