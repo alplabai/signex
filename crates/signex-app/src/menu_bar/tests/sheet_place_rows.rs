@@ -137,6 +137,25 @@ fn place_lists_every_placement_tool_of_the_active_bar() {
     assert!(checked >= 30, "only {checked} placement tools checked");
 }
 
+/// Place ▸ No Connect runs `place_no_connect`, so it shows the key #2416 gave
+/// it (`P X` in the default profile) and still arms the No Connect tool.
+#[test]
+fn no_connect_row_shows_its_key_and_arms_the_tool() {
+    let mut app = one_symbol_selected();
+    let command = AppCommandId::new("place_no_connect").expect("a command id");
+    let key = app
+        .ui_state
+        .active_keymap
+        .shortcut_label(&command)
+        .expect("the default profile binds No Connect");
+    let shown = with_row(&app, "Place/No Connect", |row| {
+        row.shortcut.as_ref().map(|s| s.text.clone())
+    });
+    assert_eq!(shown, Some(key));
+    let _ = click(&mut app, "Place/No Connect");
+    assert_eq!(probe(&app).tool, "NoConnect");
+}
+
 #[test]
 fn find_similar_objects_opens_its_dialog_from_the_selection() {
     let mut app = one_symbol_selected();

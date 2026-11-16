@@ -109,7 +109,7 @@ Place/---	separator	-	-	-	-	-	-
 Place/Text	item	Text	-	-	PlaceText	01-00000	sch
 Place/Text Frame	item	Text Frame	-	-	PlaceTextFrame	01-00000	cmd:place_text_frame
 Place/Note	item	Note	-	-	PlaceNote	01-00000	cmd:place_note
-Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	sch
+Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	cmd:place_no_connect
 Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01-00000	cmd:place_sheet_entry
 Place/---	separator	-	-	-	-	-	-
 Place/Ports & Connectors	submenu	Ports & Connectors	-	-	-	-	-

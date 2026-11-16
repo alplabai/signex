@@ -372,6 +372,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("draw_line", "DrawLine"),
     ("draw_rectangle", "DrawRectangle"),
     ("draw_polygon", "DrawPolygon"),
+    // #2416: No Connect runs its command now, under the name it had.
+    ("place_no_connect", "PlaceNoConnect"),
     // #2416: fixture names only.
     ("find_similar_objects", "FindSimilarObjects"),
     ("open_selection_filter", "OpenSelectionFilter"),
@@ -572,9 +574,9 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
     // View ▸ Next Signal Layer and Single Layer Mode add two more (#2357).
     // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
-    // Symbol and Generic No ERC, Edit ▸ Find Similar Objects, View ▸ Net
-    // Inspector and Tools ▸ Cross Probe add eight.
-    assert_eq!(checked, 48, "the default profile labels 48 menu rows");
+    // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
+    // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
+    assert_eq!(checked, 49, "the default profile labels 49 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

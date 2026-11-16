@@ -336,7 +336,9 @@ the command's key in the active profile. A tool that is a planned placeholder
 tooltip, read from the same list the bar greys its rows by, so the two never
 disagree (`items::tool_item`). Global and hierarchical labels have no rows of
 their own: `place_global_label` and `place_hierarchical_label` arm the same
-Port and Off Sheet Connector tools.
+Port and Off Sheet Connector tools. No Connect runs `place_no_connect`, so it
+shows that command's key (`P X` in the default profile, `Q` in Classic); Text
+still sends its own message (`MenuMessage::PlaceText`) and shows no key.
 
 ## Edit ▸ Find Similar Objects, View ▸ Selection Filter, Design ▸ Net Classes {#find-similar-filter-net-classes}
 

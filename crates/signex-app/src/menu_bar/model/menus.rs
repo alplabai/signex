@@ -312,11 +312,14 @@ fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         cmd_item_gated(ctx, cmd("place_text_frame", "")),
         cmd_item_gated(ctx, cmd("place_note", "")),
-        item_if(
+        // Runs `place_no_connect`, so the row shows its key (#2416); the
+        // command has no menu text of its own.
+        cmd_item_gated_as(
             ctx,
-            menu_ids::MENU_PLACE_NO_CONNECT,
-            MenuMessage::PlaceNoConnect,
-            ctx.commands.has_schematic,
+            cmd("place_no_connect", ""),
+            ctx.i18n
+                .message(menu_ids::MENU_PLACE_NO_CONNECT, &[])
+                .into_string(),
         ),
         cmd_item_gated(ctx, cmd("place_sheet_entry", "")),
         SEP,
