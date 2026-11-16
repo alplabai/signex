@@ -7,7 +7,7 @@
 //! their way to `update`.
 
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, CatalogTextExt};
 
 use super::CommandArgs;
 #[cfg(test)]

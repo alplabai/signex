@@ -1,7 +1,7 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, Platform, ProfileLoadError,
-    ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
-    ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
+    AppCommandId, BindingConflict, CatalogTextExt, CommandGroup, CompiledKeymap, Platform,
+    ProfileLoadError, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile,
+    ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
 

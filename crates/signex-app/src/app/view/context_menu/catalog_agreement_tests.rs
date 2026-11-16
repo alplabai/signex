@@ -22,7 +22,7 @@
 use super::*;
 
 use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge, is_enabled};
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};

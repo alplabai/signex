@@ -5,7 +5,7 @@
 //! `docs/AGENT_SOCKET.md`, "Allowlist".
 
 use crate::app::command::queries::is_query;
-use crate::keymap::{AppCommandId, OperandKind, metadata_for};
+use crate::keymap::{AppCommandId, CatalogTextExt, OperandKind, metadata_for};
 
 /// Commands that name a document and are still the person's: their undo
 /// stack is theirs, and an agent takes back its own step with `revert`.

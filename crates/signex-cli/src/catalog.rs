@@ -2,7 +2,7 @@
 //! command takes and whether a headless run can use it.
 
 use serde_json::{Value, json};
-use signex_app::keymap::{CommandMetadata, all_command_ids, metadata_for_str};
+use signex_app::keymap::{CatalogTextExt, CommandMetadata, all_command_ids, metadata_for_str};
 
 use crate::capability::capability_of;
 

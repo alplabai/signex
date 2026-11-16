@@ -3,6 +3,7 @@
 //! are described with. UI-free: front ends convert their toolkit's input into
 //! these types on their side.
 
+pub mod catalog;
 mod command_id;
 mod document_target;
 #[cfg(test)]

@@ -40,6 +40,7 @@
 //! See `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
 use crate::active_bar::ActiveBarAction;
+use crate::keymap::CatalogTextExt;
 
 /// `(command id, action)` for every Active Bar action with a stable id.
 /// Sorted by id; the lookups are linear scans over ~59 entries, which

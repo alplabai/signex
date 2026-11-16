@@ -19,7 +19,7 @@ use std::sync::LazyLock;
 use iced::widget::Id;
 use signex_i18n::I18n;
 
-use crate::keymap::{AppCommandId, metadata_for};
+use crate::keymap::{AppCommandId, CatalogTextExt, metadata_for};
 use crate::panels::{ALL_PANELS, PanelKind};
 
 /// Stable widget id for the chrome-strip palette `text_input`. Used by

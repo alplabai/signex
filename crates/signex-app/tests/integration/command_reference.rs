@@ -18,7 +18,9 @@
 
 use std::collections::BTreeMap;
 
-use signex_app::keymap::{AppCommandId, CommandGroup, all_command_ids, metadata_for};
+use signex_app::keymap::{
+    AppCommandId, CatalogTextExt, CommandGroup, all_command_ids, metadata_for,
+};
 
 const ALTIUM_TOML: &str = include_str!("../../assets/keyboard-shortcuts/altium.toml");
 const CLASSIC_TOML: &str = include_str!("../../assets/keyboard-shortcuts/classic.toml");
