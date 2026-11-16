@@ -16,6 +16,10 @@ use crate::app::{AnnotateMsg, CheckedStep, Message, Signex};
 /// The file name Report... suggests.
 const REPORT_FILE: &str = "update-pcb-report.txt";
 
+fn board_missing_text(i18n: &signex_i18n::I18n, board: &str) -> String {
+    t!(i18n, ids::UPDATE_PCB_BOARD_MISSING, "board" => board).into_string()
+}
+
 impl Signex {
     /// What the dialog's board lets Execute do; `None` with no board loaded.
     pub(crate) fn update_pcb_board_status(&self) -> Option<BoardStatus> {
@@ -57,9 +61,14 @@ impl Signex {
 
     /// Why Execute is off, when the list is ready but cannot run.
     pub fn update_pcb_execute_block(&self) -> Option<String> {
+        self.update_pcb_execute_block_in(&self.ui_state.i18n)
+    }
+
+    /// [`Self::update_pcb_execute_block`] in a given language (Messages
+    /// takes en-US).
+    fn update_pcb_execute_block_in(&self, i18n: &signex_i18n::I18n) -> Option<String> {
         let state = self.ui_state.update_pcb.as_ref()?;
         let board = file_name(state.board.as_deref()?);
-        let i18n = &self.ui_state.i18n;
         match self.update_pcb_board_status() {
             Some(BoardStatus::Parked) => {
                 return Some(t!(i18n, ids::UPDATE_PCB_PARKED, "board" => board).into_string());
@@ -68,14 +77,10 @@ impl Signex {
                 return Some(t!(i18n, ids::UPDATE_PCB_READ_ONLY, "board" => board).into_string());
             }
             Some(BoardStatus::Editable) => {}
-            None => return Some(self.board_missing_text(&board)),
+            None => return Some(board_missing_text(i18n, &board)),
         }
         self.update_pcb_stale()
             .then(|| t!(i18n, ids::UPDATE_PCB_STALE).into_string())
-    }
-
-    fn board_missing_text(&self, board: &str) -> String {
-        t!(self.ui_state.i18n, ids::UPDATE_PCB_BOARD_MISSING, "board" => board).into_string()
     }
 
     /// Validate: would the ticked rows apply to the board as one step? Runs
@@ -92,7 +97,7 @@ impl Signex {
                 Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_STALE).into_string())
             }
             Some(engine) => check(list, engine).map_err(|e| e.to_string()),
-            None => Err(self.board_missing_text(&file_name(board))),
+            None => Err(board_missing_text(&self.ui_state.i18n, &file_name(board))),
         };
         if let Some(state) = self.ui_state.update_pcb.as_mut() {
             state.validation = Some(verdict);
@@ -113,7 +118,10 @@ impl Signex {
             return Task::none();
         }
         if let Some(why) = self.update_pcb_execute_block() {
-            self.refuse_execute(why);
+            let logged = self
+                .update_pcb_execute_block_in(&signex_i18n::I18n::en_us())
+                .unwrap_or_else(|| why.clone());
+            self.refuse_execute_as(&logged, why);
             return Task::none();
         }
         let Some(engine) = self.document_state.board_engine(&board) else {
@@ -147,7 +155,14 @@ impl Signex {
 
     /// Execute did not run: Validate's line says why (a headless run ends).
     fn refuse_execute(&mut self, why: String) {
-        self.log_update_pcb_refused(&why);
+        let logged = why.clone();
+        self.refuse_execute_as(&logged, why);
+    }
+
+    /// [`Self::refuse_execute`] when Messages (en-US) and the dialog (UI
+    /// language) word the reason differently.
+    fn refuse_execute_as(&mut self, logged: &str, why: String) {
+        self.log_update_pcb_refused(logged);
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };

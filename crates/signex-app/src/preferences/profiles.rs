@@ -7,6 +7,7 @@ use std::sync::Arc;
 use super::*;
 use iced::widget::{Space, Widget, column, container, row};
 use iced::{Border, Color, Element, Length, Theme};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_widgets::{button, raw, text, text_input};
 
 use crate::app::rule_profile_ui::ProfileManager;
@@ -68,18 +69,16 @@ pub(super) fn content_profiles<'a>(
     manager: &'a ProfileManager,
     default_profile: Option<&'a str>,
     tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &'a I18n,
 ) -> Element<'a, PrefMsg> {
     let header = column![
-        text(raw("Rule Profiles"))
+        text(t!(i18n, ids::PREFERENCES_PROFILES_TITLE))
             .size(TS.heading)
             .style(text_primary),
         Space::new().height(4),
-        text(raw(
-            "A profile is a named set of ERC rules. A new project starts with a copy of the \
-             default profile. Changes here are saved to the profile's file at once."
-        ))
-        .size(TS.body)
-        .style(text_muted),
+        text(t!(i18n, ids::PREFERENCES_PROFILES_HELP))
+            .size(TS.body)
+            .style(text_muted),
     ]
     .padding([16, 20]);
 
@@ -88,7 +87,7 @@ pub(super) fn content_profiles<'a>(
         return body
             .push(
                 container(
-                    text(raw("Reading the profile library..."))
+                    text(t!(i18n, ids::PREFERENCES_PROFILES_READING))
                         .size(TS.body)
                         .style(text_muted),
                 )
@@ -99,8 +98,9 @@ pub(super) fn content_profiles<'a>(
     }
 
     let mut list = column![default_row(
+        i18n,
         None,
-        "Automatic (User Default if you have one, else Signex Default)",
+        ids::PREFERENCES_PROFILES_AUTOMATIC,
         default_profile.is_none()
     )]
     .spacing(4);
@@ -108,11 +108,12 @@ pub(super) fn content_profiles<'a>(
         let name = listed.profile.name.as_str();
         let selected = manager.selected.as_deref() == Some(name);
         let note = match listed.kind {
-            ProfileKind::Builtin => "shipped, read-only",
-            ProfileKind::UserDefault => "this machine's rules",
-            ProfileKind::User => "",
+            ProfileKind::Builtin => Some(ids::PREFERENCES_PROFILES_NOTE_BUILTIN),
+            ProfileKind::UserDefault => Some(ids::PREFERENCES_PROFILES_NOTE_USER_DEFAULT),
+            ProfileKind::User => None,
         };
         list = list.push(profile_row(
+            i18n,
             name,
             &listed.profile.version,
             note,
@@ -125,6 +126,7 @@ pub(super) fn content_profiles<'a>(
     for problem in &manager.listing.problems {
         body = body.push(
             container(
+                // raw: the library reader words its problems, in English (#2061).
                 text(raw(problem.clone()))
                     .size(TS.caption)
                     .style(text_warning),
@@ -133,8 +135,9 @@ pub(super) fn content_profiles<'a>(
             .boxed(),
         );
     }
-    body = body.push(h_sep()).push(actions_row(manager));
+    body = body.push(h_sep()).push(actions_row(manager, i18n));
     if let Some((is_error, message)) = &manager.status {
+        // raw: the action result is set by its handler (#2061: handler-worded state text).
         let styled = text(raw(message.clone())).size(TS.caption);
         body = body.push(
             container(if *is_error {
@@ -152,18 +155,17 @@ pub(super) fn content_profiles<'a>(
         Some(listed) => {
             let editable = listed.kind != ProfileKind::Builtin;
             let resolved = signex_erc::project_rules::resolve(&listed.profile.erc);
-            let caption = if editable {
-                format!(
-                    "Editing \"{}\". Changes are saved to the profile's file immediately.",
-                    listed.profile.name
-                )
-            } else {
-                format!(
-                    "\"{}\" is read-only. Duplicate it to change the rules.",
-                    listed.profile.name
-                )
-            };
+            let caption = t!(
+                i18n,
+                if editable {
+                    ids::PREFERENCES_PROFILES_EDITING
+                } else {
+                    ids::PREFERENCES_PROFILES_READ_ONLY
+                },
+                "name" => listed.profile.name.as_str()
+            );
             let editor = rule_editor(RuleEditor {
+                i18n,
                 tokens,
                 severity: &resolved.severity,
                 pin_matrix: &resolved.pin_matrix,
@@ -171,17 +173,16 @@ pub(super) fn content_profiles<'a>(
                 on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
                 on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
             });
-            let mut editing =
-                column![text(raw(caption)).size(TS.label).style(text_primary)].spacing(8);
+            let mut editing = column![text(caption).size(TS.label).style(text_primary)].spacing(8);
             if editable {
-                editing = editing.push(reset_row(manager, &listed.profile.name));
+                editing = editing.push(reset_row(manager, &listed.profile.name, i18n));
             }
             body = body.push(editing.push(editor).padding([12, 20]).boxed());
         }
         None => {
             body = body.push(
                 container(
-                    text(raw("No profile is selected."))
+                    text(t!(i18n, ids::PREFERENCES_PROFILES_NONE_SELECTED))
                         .size(TS.body)
                         .style(text_muted),
                 )
@@ -196,24 +197,36 @@ pub(super) fn content_profiles<'a>(
 /// One selectable profile: its name opens it in the editor, the second button
 /// makes it the default for new projects.
 fn profile_row<'a>(
+    i18n: &I18n,
     name: &'a str,
     version: &'a str,
-    note: &'a str,
+    note: Option<MessageId>,
     selected: bool,
     is_default: bool,
 ) -> Element<'a, PrefMsg> {
-    let label = if note.is_empty() {
-        format!("{name}  v{version}")
-    } else {
-        format!("{name}  v{version}  ({note})")
+    // The name and version are the user's; the kind note is ours.
+    let label = match note {
+        None => t!(
+            i18n,
+            ids::PREFERENCES_PROFILES_ROW,
+            "name" => name,
+            "version" => version
+        ),
+        Some(note) => t!(
+            i18n,
+            ids::PREFERENCES_PROFILES_ROW_NOTE,
+            "name" => name,
+            "version" => version,
+            "note" => t!(i18n, note).into_string()
+        ),
     };
     row![
-        button(text(raw(label)).size(TS.label))
+        button(text(label).size(TS.label))
             .padding([4, 10])
             .width(Length::Fill)
             .on_press(pane(ProfilesMsg::Selected(name.to_string())))
             .style(move |theme: &Theme, status| row_style(theme, status, selected)),
-        default_button(Some(name), is_default),
+        default_button(i18n, Some(name), is_default),
     ]
     .spacing(8)
     .align_y(iced::Alignment::Center)
@@ -221,16 +234,17 @@ fn profile_row<'a>(
 }
 
 fn default_row<'a>(
+    i18n: &I18n,
     name: Option<&'a str>,
-    label: &'a str,
+    label: MessageId,
     is_default: bool,
 ) -> Element<'a, PrefMsg> {
     row![
-        text(raw(label))
+        text(t!(i18n, label))
             .size(TS.body)
             .style(text_muted)
             .width(Length::Fill),
-        default_button(name, is_default),
+        default_button(i18n, name, is_default),
     ]
     .spacing(8)
     .padding([0, 10])
@@ -238,14 +252,18 @@ fn default_row<'a>(
     .boxed()
 }
 
-fn default_button<'a>(name: Option<&'a str>, is_default: bool) -> Element<'a, PrefMsg> {
+fn default_button<'a>(
+    i18n: &I18n,
+    name: Option<&'a str>,
+    is_default: bool,
+) -> Element<'a, PrefMsg> {
     if is_default {
-        return text(raw("Default for new projects"))
+        return text(t!(i18n, ids::PREFERENCES_PROFILES_IS_DEFAULT))
             .size(TS.body)
             .style(text_primary)
             .boxed();
     }
-    button(text(raw("Use as default")).size(TS.body))
+    button(text(t!(i18n, ids::PREFERENCES_PROFILES_USE_AS_DEFAULT)).size(TS.body))
         .padding([4, 10])
         .on_press(pane(ProfilesMsg::DefaultChosen(name.map(str::to_string))))
         .style(secondary_button_style)
@@ -282,24 +300,28 @@ fn row_style(theme: &Theme, status: button::Status, selected: bool) -> button::S
     }
 }
 
-fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
+fn actions_row<'a>(manager: &'a ProfileManager, i18n: &I18n) -> Element<'a, PrefMsg> {
     let selected_kind = manager.selected_profile().map(|l| l.kind);
     let named = !manager.name_input.trim().is_empty();
-    let action = |label: &'static str, enabled: bool, msg: ProfilesMsg| {
-        button(text(raw(label)).size(TS.body))
+    let action = |label: MessageId, enabled: bool, msg: ProfilesMsg| {
+        button(text(t!(i18n, label)).size(TS.body))
             .padding([5, 12])
             .on_press_maybe(enabled.then(|| pane(msg)))
             .style(secondary_button_style)
     };
     let mut buttons = row![
-        action("New", named, ProfilesMsg::CreateRequested),
         action(
-            "Duplicate",
+            ids::PREFERENCES_PROFILES_NEW,
+            named,
+            ProfilesMsg::CreateRequested
+        ),
+        action(
+            ids::PREFERENCES_PROFILES_DUPLICATE,
             named && selected_kind.is_some(),
             ProfilesMsg::DuplicateRequested
         ),
         action(
-            "Rename",
+            ids::PREFERENCES_PROFILES_RENAME,
             named && selected_kind == Some(ProfileKind::User),
             ProfilesMsg::RenameRequested
         ),
@@ -308,23 +330,24 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     buttons = match &manager.confirm_delete {
         Some(name) => buttons
             .push(
-                text(raw(format!(
-                    "Delete \"{name}\"? Projects that recorded it keep their rules but can no \
-                     longer find it for Update from profile."
-                )))
+                text(t!(
+                    i18n,
+                    ids::PREFERENCES_PROFILES_DELETE_CONFIRM,
+                    "name" => name.as_str()
+                ))
                 .size(TS.body)
                 .style(text_warning)
                 .boxed(),
             )
             .push(
-                button(text(raw("Delete")).size(TS.body))
+                button(text(t!(i18n, ids::DIALOG_BUTTON_DELETE)).size(TS.body))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteConfirmed))
                     .style(danger_button_style)
                     .boxed(),
             )
             .push(
-                button(text(raw("Keep")).size(TS.body))
+                button(text(t!(i18n, ids::PREFERENCES_PROFILES_KEEP)).size(TS.body))
                     .padding([5, 12])
                     .on_press(pane(ProfilesMsg::DeleteCancelled))
                     .style(secondary_button_style)
@@ -332,7 +355,7 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
             ),
         None => buttons.push(
             action(
-                "Delete",
+                ids::DIALOG_BUTTON_DELETE,
                 selected_kind == Some(ProfileKind::User),
                 ProfilesMsg::DeleteRequested,
             )
@@ -342,7 +365,10 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
     container(
         column![
             row![
-                text(raw("Name")).size(TS.body).style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_PROFILES_NAME))
+                    .size(TS.body)
+                    .style(text_muted),
+                // raw: placeholders move with #2059.
                 text_input(raw("Profile name"), &manager.name_input)
                     .size(TS.label)
                     .on_input(|v| pane(ProfilesMsg::NameInputChanged(v))),
@@ -358,19 +384,21 @@ fn actions_row(manager: &ProfileManager) -> Element<'_, PrefMsg> {
 }
 
 /// "Reset to Signex Default" for an editable profile, with its confirmation.
-fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, PrefMsg> {
+fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str, i18n: &I18n) -> Element<'a, PrefMsg> {
     if manager.confirm_reset.as_deref() == Some(name) {
         return row![
-            text(raw(format!(
-                "Put every rule of \"{name}\" back to the Signex Default values?"
-            )))
+            text(t!(
+                i18n,
+                ids::PREFERENCES_PROFILES_RESET_CONFIRM,
+                "name" => name
+            ))
             .size(TS.body)
             .style(text_warning),
-            button(text(raw("Reset")).size(TS.body))
+            button(text(t!(i18n, ids::PREFERENCES_PROFILES_RESET)).size(TS.body))
                 .padding([5, 12])
                 .on_press(pane(ProfilesMsg::ResetConfirmed))
                 .style(danger_button_style),
-            button(text(raw("Keep")).size(TS.body))
+            button(text(t!(i18n, ids::PREFERENCES_PROFILES_KEEP)).size(TS.body))
                 .padding([5, 12])
                 .on_press(pane(ProfilesMsg::ResetCancelled))
                 .style(secondary_button_style),
@@ -379,9 +407,40 @@ fn reset_row<'a>(manager: &'a ProfileManager, name: &'a str) -> Element<'a, Pref
         .align_y(iced::Alignment::Center)
         .boxed();
     }
-    button(text(raw("Reset to Signex Default")).size(TS.body))
+    button(text(t!(i18n, ids::PREFERENCES_PROFILES_RESET_TO_DEFAULT)).size(TS.body))
         .padding([5, 12])
         .on_press_maybe((!manager.busy).then(|| pane(ProfilesMsg::ResetRequested)))
         .style(secondary_button_style)
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::{Arg, I18n, LanguagePref, ids};
+
+    fn row(i18n: &I18n) -> String {
+        i18n.message_plain(
+            ids::PREFERENCES_PROFILES_ROW_NOTE,
+            &[
+                ("name", Arg::from("Signex Default")),
+                ("version", Arg::from("1.2")),
+                ("note", Arg::from("shipped, read-only")),
+            ],
+        )
+    }
+
+    /// #2058: a profile row keeps its English and follows the language.
+    #[test]
+    fn a_profile_row_keeps_its_english_and_follows_the_language() {
+        assert_eq!(
+            row(&I18n::en_us()),
+            "Signex Default  v1.2  (shipped, read-only)"
+        );
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        assert_ne!(row(&xa), row(&I18n::en_us()));
+        assert_ne!(
+            xa.message_plain(ids::PREFERENCES_PROFILES_TITLE, &[]),
+            "Rule Profiles"
+        );
+    }
 }

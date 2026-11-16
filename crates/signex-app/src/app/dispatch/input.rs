@@ -1013,7 +1013,7 @@ mod tests {
         assert!(!submit(
             &app.route_key(w, &named(keyboard::key::Named::Enter))
         ));
-        app.ui_state.new_project = Some(crate::app::NewProjectState::new(String::new()));
+        app.ui_state.new_project = Some(Box::new(crate::app::NewProjectState::new(String::new())));
         assert!(submit(
             &app.route_key(w, &named(keyboard::key::Named::Enter))
         ));
