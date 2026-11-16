@@ -49,8 +49,17 @@ fn board() -> PcbBoard {
     board
 }
 
-fn run(board: &mut PcbBoard, command: Option<crate::pcb::BoardCommand>) {
+fn run_command(board: &mut PcbBoard, command: Option<crate::pcb::BoardCommand>) {
     command.expect("a change").apply(board).expect("applies");
+}
+
+/// Runs the command built from the board before the board is borrowed
+/// for the change.
+macro_rules! run {
+    ($board:expr, $command:expr $(,)?) => {{
+        let command = $command;
+        run_command($board, command)
+    }};
 }
 
 fn close(a: f64, b: f64) -> bool {
@@ -66,13 +75,13 @@ fn an_arc_keeps_its_circle_when_its_radius_or_end_changes() {
         close(span.from_deg, 0.0) && close(span.to_deg, 90.0),
         "{span:?}"
     );
-    run(
+    run!(
         &mut b,
         arc_edit_command(&b, &ids, ArcEdit::Radius(2.0)).unwrap(),
     );
     let span = ArcSpan::of(&b.free.arcs[0]).unwrap();
     assert!(close(span.radius, 2.0) && close(span.to_deg, 90.0));
-    run(
+    run!(
         &mut b,
         arc_edit_command(&b, &ids, ArcEdit::ToAngle(180.0)).unwrap(),
     );
@@ -87,7 +96,7 @@ fn an_arc_moved_off_copper_drops_its_net() {
     let mut b = board();
     let ids = [Uuid::from_u128(2)];
     let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
-    run(
+    run!(
         &mut b,
         arc_edit_command(&b, &ids, ArcEdit::Layer(overlay)).unwrap(),
     );
@@ -98,11 +107,11 @@ fn an_arc_moved_off_copper_drops_its_net() {
     let same = arc_edit_command(&b, &ids, ArcEdit::Net(3));
     assert_eq!(same, Ok(None), "a drawing has no net to set");
     let top = PcbLayer::Copper(CopperLayer::Top);
-    run(
+    run!(
         &mut b,
         arc_edit_command(&b, &ids, ArcEdit::Layer(top)).unwrap(),
     );
-    run(&mut b, arc_edit_command(&b, &ids, ArcEdit::Net(3)).unwrap());
+    run!(&mut b, arc_edit_command(&b, &ids, ArcEdit::Net(3)).unwrap());
     assert_eq!(b.free.arcs[0].net, 3);
 }
 
@@ -110,15 +119,15 @@ fn an_arc_moved_off_copper_drops_its_net() {
 fn a_string_takes_its_text_height_and_text_layers_only() {
     let mut b = board();
     let ids = [Uuid::from_u128(3)];
-    run(
+    run!(
         &mut b,
         text_edit_command(&b, &ids, &TextEdit::Text("U7".into())).unwrap(),
     );
-    run(
+    run!(
         &mut b,
         text_edit_command(&b, &ids, &TextEdit::Height(2.5)).unwrap(),
     );
-    run(
+    run!(
         &mut b,
         text_edit_command(&b, &ids, &TextEdit::Rotation(-90.0)).unwrap(),
     );
@@ -143,11 +152,11 @@ fn a_string_takes_its_text_height_and_text_layers_only() {
 fn a_dimension_keeps_two_ends_and_a_sane_precision() {
     let mut b = board();
     let ids = [Uuid::from_u128(4)];
-    run(
+    run!(
         &mut b,
         dimension_edit_command(&b, &ids, DimensionEdit::Precision(3)).unwrap(),
     );
-    run(
+    run!(
         &mut b,
         dimension_edit_command(&b, &ids, DimensionEdit::EndX(20.0)).unwrap(),
     );
@@ -162,15 +171,15 @@ fn a_dimension_keeps_two_ends_and_a_sane_precision() {
 fn a_free_pad_moves_and_turns_on_the_board() {
     let mut b = board();
     let ids = [Uuid::from_u128(5)];
-    run(
+    run!(
         &mut b,
         free_pad_edit_command(&b, &ids, &PadEdit::X(25.0)).unwrap(),
     );
-    run(
+    run!(
         &mut b,
         free_pad_edit_command(&b, &ids, &PadEdit::Rotation(30.0)).unwrap(),
     );
-    run(
+    run!(
         &mut b,
         free_pad_edit_command(&b, &ids, &PadEdit::SizeX(2.0)).unwrap(),
     );
