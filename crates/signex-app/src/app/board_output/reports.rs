@@ -21,16 +21,17 @@ impl Signex {
             self.refuse_board_gone(&board);
             return;
         };
-        self.ui_state.board_output.dialog = Some(BoardOutputDialog::Reports(BoardReportsState {
-            board,
-            board_name,
-            report,
-        }));
+        self.ui_state.board_output.dialog =
+            Some(Box::new(BoardOutputDialog::Reports(BoardReportsState {
+                board,
+                board_name,
+                report,
+            })));
     }
 
     /// Show table `kind`, made from the board as it is now.
     pub(super) fn pick_board_report(&mut self, kind: BoardReportKind) {
-        let Some(BoardOutputDialog::Reports(state)) = self.ui_state.board_output.dialog.as_ref()
+        let Some(BoardOutputDialog::Reports(state)) = self.ui_state.board_output.dialog.as_deref()
         else {
             return;
         };
@@ -39,7 +40,8 @@ impl Signex {
             self.refuse_board_gone(&board);
             return;
         };
-        if let Some(BoardOutputDialog::Reports(state)) = self.ui_state.board_output.dialog.as_mut()
+        if let Some(BoardOutputDialog::Reports(state)) =
+            self.ui_state.board_output.dialog.as_deref_mut()
         {
             state.report = report;
         }
@@ -60,7 +62,7 @@ impl Signex {
     /// The save dialog for the table in view, or the BOM of the board in
     /// view when Board Reports is not open.
     pub(super) fn request_board_report_csv(&mut self) -> Task<Message> {
-        let picked = match self.ui_state.board_output.dialog.as_ref() {
+        let picked = match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Reports(state)) => {
                 Some((state.board.clone(), state.report.kind))
             }

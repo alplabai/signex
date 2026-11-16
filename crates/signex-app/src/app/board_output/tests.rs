@@ -83,14 +83,14 @@ pub(super) fn output(app: &mut Signex, msg: BoardOutputMsg) -> iced::Task<Messag
 }
 
 fn shown_kind(app: &Signex) -> Option<BoardReportKind> {
-    match app.ui_state.board_output.dialog.as_ref()? {
+    match app.ui_state.board_output.dialog.as_deref()? {
         BoardOutputDialog::Reports(state) => Some(state.report.kind),
         BoardOutputDialog::Print(_) => None,
     }
 }
 
 fn shown_rows(app: &Signex) -> Vec<Vec<ReportCell>> {
-    match app.ui_state.board_output.dialog.as_ref() {
+    match app.ui_state.board_output.dialog.as_deref() {
         Some(BoardOutputDialog::Reports(state)) => state.report.rows.clone(),
         _ => Vec::new(),
     }

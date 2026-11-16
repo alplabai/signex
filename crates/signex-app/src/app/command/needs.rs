@@ -57,11 +57,10 @@ pub(crate) enum Needs {
     MoveSelection,
     /// Move: a sheet or a board to pick from.
     MoveObject,
-    /// Find Similar Objects: a selection on a sheet to seed from (#2416), or a
-    /// board in view, which seeds from its selection or what is under the
-    /// cursor (#2403). A
-    /// key or the canvas menu may seed from the object under the cursor, so
-    /// they still reach the handler (`explains_when_unavailable`).
+    /// Find Similar Objects: a selection on a sheet to seed from (#2416), or
+    /// one on the board in view (#2403). A key or the sheet's canvas menu
+    /// may seed from the object under the cursor, so they still reach the
+    /// handler (`explains_when_unavailable`).
     SimilarSeed,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
@@ -167,7 +166,9 @@ impl Needs {
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && editable_selection(ctx),
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
-            Self::SimilarSeed => (ctx.has_schematic && ctx.has_selection) || ctx.pcb.shown,
+            Self::SimilarSeed => {
+                (ctx.has_schematic && ctx.has_selection) || (ctx.pcb.shown && ctx.pcb.any)
+            }
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
             Self::PcbSelection => ctx.pcb.shown && ctx.pcb.any,

@@ -204,6 +204,8 @@ fn the_new_commands_report_their_outcome_to_an_agent() {
         let (outcome, _task) = bare.dispatch_command_reporting(&command, CommandArgs::none(), None);
         let reason = match *id {
             "find_similar_objects" => "Nothing is selected on a sheet to find similar objects to",
+            // The net classes open on a board too (#2400).
+            "open_net_classes" => "No schematic or PCB is open",
             _ => "No schematic is open",
         };
         assert_eq!(

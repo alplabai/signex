@@ -40,17 +40,18 @@ impl Signex {
             return;
         };
         let options = self.ui_state.board_output.print_options.clone();
-        self.ui_state.board_output.dialog = Some(BoardOutputDialog::Print(BoardPrintState {
-            board,
-            board_name,
-            options,
-        }));
+        self.ui_state.board_output.dialog =
+            Some(Box::new(BoardOutputDialog::Print(BoardPrintState {
+                board,
+                board_name,
+                options,
+            })));
     }
 
     /// Change the open dialog's options; the next opening starts from them.
     pub(super) fn edit_board_print(&mut self, change: impl FnOnce(&mut BoardPrintOptions)) {
         let output = &mut self.ui_state.board_output;
-        if let Some(BoardOutputDialog::Print(state)) = output.dialog.as_mut() {
+        if let Some(BoardOutputDialog::Print(state)) = output.dialog.as_deref_mut() {
             change(&mut state.options);
             output.print_options = state.options.clone();
         }
@@ -58,7 +59,7 @@ impl Signex {
 
     /// The save dialog for the PDF, with the options as they are now.
     pub(super) fn request_board_pdf(&mut self) -> Task<Message> {
-        let Some(BoardOutputDialog::Print(state)) = self.ui_state.board_output.dialog.as_ref()
+        let Some(BoardOutputDialog::Print(state)) = self.ui_state.board_output.dialog.as_deref()
         else {
             return Task::none();
         };

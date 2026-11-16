@@ -23,7 +23,7 @@ fn out(msg: BoardOutputMsg) -> Message {
 
 impl Signex {
     pub(in crate::app::view) fn view_board_output_dialog(&self) -> Element<'_, Message> {
-        let size = match self.ui_state.board_output.dialog.as_ref() {
+        let size = match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Print(_)) => sizes::BOARD_PRINT,
             _ => sizes::BOARD_REPORTS,
         };
@@ -33,7 +33,7 @@ impl Signex {
     fn view_board_output_card(&self, size: (f32, f32)) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
-        let (header, body, footer) = match self.ui_state.board_output.dialog.as_ref() {
+        let (header, body, footer) = match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Reports(state)) => {
                 let unit = crate::panels::pcb_board_properties::shown_unit(self.ui_state.unit);
                 reports::parts(state, unit, i18n, tokens)

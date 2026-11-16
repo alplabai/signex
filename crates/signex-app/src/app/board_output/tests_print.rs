@@ -12,7 +12,7 @@ use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 
 fn shown_options(app: &Signex) -> Option<BoardPrintOptions> {
-    match app.ui_state.board_output.dialog.as_ref()? {
+    match app.ui_state.board_output.dialog.as_deref()? {
         BoardOutputDialog::Print(state) => Some(state.options.clone()),
         BoardOutputDialog::Reports(_) => None,
     }

@@ -66,7 +66,7 @@ impl Signex {
         state.panel = panel;
         state.whole_panel = panel.is_some();
         self.interaction_state.context_menu = None;
-        self.ui_state.fab_outputs = Some(state);
+        self.ui_state.fab_outputs = Some(Box::new(state));
     }
 
     fn browse_fab_outputs_folder(&mut self) -> Task<Message> {

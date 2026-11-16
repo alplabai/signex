@@ -134,7 +134,7 @@ pub struct BoardPrintState {
 /// last used, which the next Board Print / PDF opens with.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BoardOutputState {
-    pub dialog: Option<BoardOutputDialog>,
+    pub dialog: Option<Box<BoardOutputDialog>>,
     pub print_options: BoardPrintOptions,
 }
 

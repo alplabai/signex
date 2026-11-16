@@ -480,7 +480,7 @@ pub struct UiState {
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
-    pub fab_outputs: Option<crate::app::FabOutputsState>,
+    pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
@@ -819,6 +819,11 @@ mod tests {
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),
+            ),
+            ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            (
+                "board_output.dialog",
+                field_size(|ui| &ui.board_output.dialog),
             ),
         ];
         for (name, size) in sizes {
