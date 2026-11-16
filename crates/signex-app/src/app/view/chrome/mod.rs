@@ -129,6 +129,7 @@ impl Signex {
             ModalId::FindReplace => crate::find_replace::window_view(
                 &self.ui_state.find_replace,
                 &self.document_state.panel_ctx.tokens,
+                &self.ui_state.i18n,
             )
             .map(Message::FindReplaceMsg)
             .boxed(),

@@ -45,6 +45,7 @@ pub(crate) fn neutral_close_button<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let side = chrome_px(28.0 * 11.0 / 12.0);
     button(
+        // raw: a close glyph, not language.
         text(raw("\u{00D7}"))
             .size(TS.heading)
             .color(tokens::muted_text(theme_tokens))
@@ -93,6 +94,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
+    // raw: the caller passes a title and subtitle it already rendered.
     let mut line = row![
         text(raw(title.into()))
             .size(TS.heading)

@@ -11,6 +11,7 @@ use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::ResolvedPlacement;
 use signex_app::library::place::resolve_placement;
+use signex_i18n::RenderTranslatable;
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};

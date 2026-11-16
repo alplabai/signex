@@ -2,6 +2,7 @@
 //! does not block deleting itself, and a Create Sheet request does not go
 //! stale (#1618).
 
+use signex_i18n::RenderTranslatable;
 use std::path::Path;
 
 use signex_widgets::tree_view::TreeKey;

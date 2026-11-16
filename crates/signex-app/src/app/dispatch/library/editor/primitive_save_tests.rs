@@ -1,5 +1,6 @@
 //! #859 — symbol / footprint container saves run off the UI thread.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::app_workspace;

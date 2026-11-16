@@ -9,6 +9,7 @@ use crate::app::path_ops::{
 };
 use crate::app::state::ErrorNotice;
 use crate::library::state::rebase_path;
+use signex_i18n::RenderTranslatable;
 use signex_types::project::{LibraryEntryKind, LibraryRetarget};
 use std::path::{Path, PathBuf};
 

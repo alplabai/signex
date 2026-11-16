@@ -13,6 +13,8 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 mod page_setup;
 mod preview;
 mod settings;
+#[cfg(test)]
+mod tests;
 
 impl Signex {
     /// Two-tab strip — Preview | Settings — sitting just under the
@@ -29,7 +31,7 @@ impl Signex {
         use iced::Widget;
         use iced::widget::{Space, container, mouse_area, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -48,7 +50,7 @@ impl Signex {
             }
         };
 
-        let tab = |label: &'static str, this: PdfPreviewTab, is_last: bool| {
+        let tab = |label: signex_i18n::MessageId, this: PdfPreviewTab, is_last: bool| {
             let is_active = this == active;
             let label_color = if is_active { text_c } else { text_muted };
             let style = TabPillStyle {
@@ -59,9 +61,13 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(raw(label)).size(TS.label).color(label_color))
-                .padding([6, 18])
-                .boxed();
+            let inner = container(
+                text(signex_i18n::t!(self.ui_state.i18n, label))
+                    .size(TS.label)
+                    .color(label_color),
+            )
+            .padding([6, 18])
+            .boxed();
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))
                 .interaction(iced::mouse::Interaction::Pointer)
@@ -69,8 +75,16 @@ impl Signex {
 
         container(
             row![
-                tab("Preview", PdfPreviewTab::Preview, false),
-                tab("Settings", PdfPreviewTab::Settings, true),
+                tab(
+                    signex_i18n::ids::PDF_TAB_PREVIEW,
+                    PdfPreviewTab::Preview,
+                    false
+                ),
+                tab(
+                    signex_i18n::ids::PDF_TAB_SETTINGS,
+                    PdfPreviewTab::Settings,
+                    true
+                ),
                 Space::new().width(Length::Fill),
             ]
             .spacing(0)

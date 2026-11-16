@@ -3,6 +3,7 @@
 //! and the refusal reaches the Save Failed card and the Messages panel.
 
 use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind};
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::SchematicSheet;
 use tempfile::TempDir;
 

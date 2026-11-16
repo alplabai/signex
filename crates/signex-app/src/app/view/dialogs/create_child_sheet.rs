@@ -4,6 +4,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::RenderTranslatable;
 use signex_i18n::{UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
@@ -70,6 +71,7 @@ impl Signex {
                 "folder" => full_folder.clone()
             ),
         };
+        // raw: an example file name as placeholder (#2059).
         let field = text_input(raw("sheet.snxsch"), &confirm.path_text)
             .style(crate::panels::form_look::text_input_style)
             .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))

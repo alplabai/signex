@@ -242,12 +242,16 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
 /// Subtle section divider used inside the BOM modal's properties
 /// sidebar. Rendered as a 1-line label on a slightly tinted strip
 /// so the panel reads as a stack of named sections.
-pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> {
+pub(super) fn section_header<'a>(
+    title: signex_i18n::Localized,
+    muted: Color,
+) -> Element<'a, Message> {
     container(
         row![
+            // raw: a disclosure glyph, not language.
             text(raw("\u{25BE}")).size(TS.caption).color(muted),
             Space::new().width(6),
-            text(raw(title.to_string())).size(TS.body).color(muted),
+            text(title).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )

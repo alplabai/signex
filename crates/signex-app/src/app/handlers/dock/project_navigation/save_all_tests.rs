@@ -1,5 +1,6 @@
 //! #859 — Save All writes off the UI thread and only then closes / quits.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

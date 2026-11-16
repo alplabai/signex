@@ -2,6 +2,7 @@
 //! per command. Everything reaches the app through `signex_app::headless`
 //! and the app's own task driver.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

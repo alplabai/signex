@@ -14,6 +14,7 @@
 //! - a read-only or unreadable sheet is skipped and named in the Messages
 //!   panel.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

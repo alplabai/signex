@@ -2,6 +2,7 @@
 //! arguments or refuses naming the missing one; no window opens and nothing
 //! waits. Launches are refused and reported.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -257,6 +258,9 @@ fn a_refusal_names_the_dialog_in_english_under_any_language() {
         "New Signex Project (a folder named after the project is created)",
         "path",
     );
+    app.ui_state.new_project = Some(Box::new(crate::app::NewProjectState::new(String::new())));
+    let task = app.update(Message::from(crate::app::NewProjectMsg::BrowseRequested));
+    assert_refused(&mut app, task, "Choose the project location", "path");
 }
 
 #[test]

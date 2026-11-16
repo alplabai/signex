@@ -10,6 +10,7 @@ use signex_app::app::{Message, Signex};
 use signex_app::library::LibraryMessage;
 use signex_app::library::recovery::RecoveryDialog;
 use signex_app::library::state::ComponentsMountSource;
+use signex_i18n::RenderTranslatable;
 
 #[test]
 fn project_add_library_says_it_is_not_available() {

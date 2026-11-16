@@ -7,6 +7,7 @@ use crate::app::state::project_case::fold_of;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
+use signex_i18n::RenderTranslatable;
 
 impl Signex {
     /// Commit the pending title-block drafts of the sheets that belong to
@@ -182,14 +183,15 @@ impl Signex {
                 ));
                 self.refresh_panel_ctx();
             }
-            self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
-                project_id,
-                project_name,
-                dirty_paths: scan.mine,
-                dirty_rows: scan.mine_rows,
-                kept_paths: scan.kept,
-                sheet_refs,
-            });
+            self.ui_state.project_close_confirm =
+                Some(Box::new(crate::app::ProjectCloseConfirmState {
+                    project_id,
+                    project_name,
+                    dirty_paths: scan.mine,
+                    dirty_rows: scan.mine_rows,
+                    kept_paths: scan.kept,
+                    sheet_refs,
+                }));
             return Task::none();
         }
 

@@ -86,7 +86,8 @@ impl Signex {
         let name = file_name(&project.path);
         let board = Self::project_board(project);
         self.interaction_state.context_menu = None;
-        self.ui_state.back_annotate = Some(BackAnnotateState::new(id, name, board.clone()));
+        self.ui_state.back_annotate =
+            Some(Box::new(BackAnnotateState::new(id, name, board.clone())));
         let Some(board) = board else {
             return Task::none();
         };

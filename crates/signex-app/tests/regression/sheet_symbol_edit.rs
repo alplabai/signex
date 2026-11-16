@@ -6,6 +6,7 @@
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
+use signex_i18n::RenderTranslatable;
 use tempfile::TempDir;
 
 use super::place_sheet_tool::{app_with_sheet_tool, drag, sheets};

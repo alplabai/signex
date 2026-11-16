@@ -1,0 +1,17 @@
+[package]
+name = "signex-i18n-ids"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "Signex message ids and the values that carry them, with no locale dependency"
+
+[features]
+# The id lists and an unlisted-id constructor for signex-i18n's tests; not for
+# production code.
+test-support = []
+
+[lints]
+workspace = true

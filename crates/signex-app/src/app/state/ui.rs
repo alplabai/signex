@@ -417,8 +417,8 @@ pub struct UiState {
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
     /// while the user is being asked to save / discard / cancel a
     /// close request that touches a dirty document. Cleared on any
-    /// of the three button choices.
-    pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// of the three button choices. Boxed like `new_project`.
+    pub project_close_confirm: Option<Box<crate::app::ProjectCloseConfirmState>>,
     /// "Create the missing sheet?" confirm; `Some` while it is up.
     pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
     /// A Create Sheet request from the Projects tree waiting for its parent
@@ -439,11 +439,11 @@ pub struct UiState {
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
-    /// until its Create.
-    pub new_project: Option<crate::app::NewProjectState>,
+    /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
+    pub new_project: Option<Box<crate::app::NewProjectState>>,
     /// The New PCB or New Schematic setup dialog, while open (#2232).
-    /// Nothing is made until its Create.
-    pub document_setup: Option<crate::app::DocumentSetupState>,
+    /// Nothing is made until its Create. Boxed like `new_project`.
+    pub document_setup: Option<Box<crate::app::DocumentSetupState>>,
     /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
     /// boot and saved on every Save as profile and Remove.
     pub setup_profiles: Vec<signex_types::project::UserProfile>,
@@ -454,8 +454,8 @@ pub struct UiState {
     /// in Messages this session.
     pub missing_profiles_warned: std::collections::HashSet<String>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
-    /// (#1312).
-    pub update_pcb: Option<crate::app::UpdatePcbState>,
+    /// (#1312). Boxed like `new_project`.
+    pub update_pcb: Option<Box<crate::app::UpdatePcbState>>,
     /// The Number Schematic Sheets dialog, while open (#2247). Apply writes
     /// to memory only; the sheets are saved by the user.
     pub sheet_numbering: Option<crate::app::SheetNumberingState>,
@@ -468,8 +468,9 @@ pub struct UiState {
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
-    /// memory as one undo group; nothing is written to disk.
-    pub back_annotate: Option<crate::app::BackAnnotateState>,
+    /// memory as one undo group; nothing is written to disk. Boxed like
+    /// `new_project`.
+    pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the
@@ -532,7 +533,8 @@ pub struct UiState {
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the
     /// diff it would apply (#1085). Nothing is changed until confirmed.
-    pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
+    /// Boxed like `new_project`.
+    pub pending_profile_update: Option<Box<crate::app::state::PendingProfileUpdate>>,
     /// The machine's rule set, as the `User Default` profile holds it (#1608):
     /// per-rule severity overrides, used by a project that stores no rules of
     /// its own. If empty, each rule's default is used. Loaded from the profile
@@ -772,5 +774,42 @@ mod tests {
     #[test]
     fn the_bottom_dock_opens_tall_enough_for_several_finding_rows() {
         const { assert!(super::DEFAULT_BOTTOM_PANEL_HEIGHT >= 200.0) };
+    }
+
+    fn field_size<T>(_: fn(&super::UiState) -> &T) -> usize {
+        std::mem::size_of::<T>()
+    }
+
+    /// #2412: a closed large dialog costs one pointer in every `Signex`.
+    #[test]
+    fn a_closed_large_dialog_costs_one_pointer() {
+        let pointer = std::mem::size_of::<usize>();
+        let sizes = [
+            ("document_setup", field_size(|ui| &ui.document_setup)),
+            ("new_project", field_size(|ui| &ui.new_project)),
+            (
+                "project_close_confirm",
+                field_size(|ui| &ui.project_close_confirm),
+            ),
+            ("update_pcb", field_size(|ui| &ui.update_pcb)),
+            ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            (
+                "pending_profile_update",
+                field_size(|ui| &ui.pending_profile_update),
+            ),
+        ];
+        for (name, size) in sizes {
+            assert_eq!(size, pointer, "{name} is {size} B");
+        }
+    }
+
+    /// #2412: a new inline dialog draft trips this; box it, or raise the
+    /// bound in the same PR with the measured size rounded up to 256 B.
+    /// Windows gets 512 B more: its `PathBuf`/`OsString` are 8 B larger.
+    #[test]
+    fn ui_state_stays_under_its_size_ceiling() {
+        const CEILING: usize = if cfg!(windows) { 7680 } else { 7168 };
+        let size = std::mem::size_of::<super::UiState>();
+        assert!(size <= CEILING, "UiState is {size} B, over {CEILING} B");
     }
 }

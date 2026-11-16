@@ -193,6 +193,16 @@ fn a_missing_location_is_reported() {
 }
 
 #[test]
+fn the_menu_opens_the_dialog_with_the_suggested_name_and_default_location() {
+    let (mut app, _t) = Signex::new();
+    let location = app.default_project_location();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    let state = app.ui_state.new_project.as_ref().expect("the dialog");
+    assert_eq!(state.name, super::update::SUGGESTED_NAME);
+    assert_eq!(state.location, location);
+}
+
+#[test]
 fn the_menu_opens_the_dialog_and_nothing_is_written_until_create() {
     let tmp = tempfile::tempdir().unwrap();
     let (mut app, _t) = Signex::new();

@@ -1,6 +1,7 @@
 //! Annotate + duplicate-designator reset handlers. Split from `handlers/erc.rs`.
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 
 use super::super::super::*;
 use super::annotate_job::PassKind;

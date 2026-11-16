@@ -36,26 +36,31 @@ pub fn view<'a>(
     let border = theme_ext::border_color(tokens);
     let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
+    // raw: distributor names are product names, the same in every language.
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
         text(raw(title)).size(ts.body).color(muted).boxed()
     };
 
     // ── DigiKey ──────────────────────────────────────────────
-    let digikey_status = match (
+    let digikey_status: signex_widgets::Label<'static> = match (
         settings.digikey_in_flight,
-        settings.digikey_status.as_deref(),
+        settings.digikey_status.clone(),
         settings.digikey_account_email.as_deref(),
     ) {
-        (true, Some(s), _) => s.to_string(),
+        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
+        (true, Some(s), _) => raw(s),
         // In-flight with no status set yet — never let "Not connected"
         // render while the Cancel button is also visible.
-        (true, None, _) => "Connecting…".to_string(),
-        (false, _, Some(label)) => format!("Connected as {label}"),
-        (false, Some(s), _) => s.to_string(),
-        _ => "Not connected".to_string(),
+        (true, None, _) => t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTING).into(),
+        (false, _, Some(label)) => {
+            t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTED_AS, "account" => label).into()
+        }
+        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
+        (false, Some(s), _) => raw(s),
+        _ => t!(i18n, ids::LIBRARY_DIGIKEY_NOT_CONNECTED).into(),
     };
-    let mut digikey_actions = row![text(raw(digikey_status)).size(ts.body).color(text_c)]
-        .align_y(iced::Alignment::Center);
+    let mut digikey_actions =
+        row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
@@ -75,12 +80,9 @@ pub fn view<'a>(
         Space::new().height(sp.s),
         digikey_actions,
         Space::new().height(sp.s),
-        text(raw(
-            "OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS \
-             keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first."
-        ))
-        .size(ts.caption)
-        .color(muted),
+        text(t!(i18n, ids::LIBRARY_DIGIKEY_HELP))
+            .size(ts.caption)
+            .color(muted),
     ]
     .spacing(sp.xs);
 
@@ -91,18 +93,20 @@ pub fn view<'a>(
     // with the bullet string and permanently overwrote the real key.
     // `secure(true)` is the iced-supplied mask — the buffer stays
     // cleartext, only the rendered glyphs are bullets.
-    let mouser_test_status = settings
-        .mouser_status
-        .clone()
-        .unwrap_or_else(|| "Not tested".to_string());
+    let mouser_test_status: signex_widgets::Label<'static> = match settings.mouser_status.clone() {
+        // raw: the key-test status is set by its handler (#2061: handler-worded state text).
+        Some(status) => raw(status),
+        None => t!(i18n, ids::LIBRARY_MOUSER_NOT_TESTED).into(),
+    };
     let mouser_section = column![
         section_title("Mouser"),
         Space::new().height(sp.s),
         row![
-            text(raw("API Key"))
+            text(t!(i18n, ids::LIBRARY_MOUSER_API_KEY))
                 .size(ts.body)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
+            // raw: placeholders move with #2059.
             text_input(raw("Paste API key…"), &settings.mouser_api_key_buf)
                 .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
@@ -117,7 +121,7 @@ pub fn view<'a>(
         ]
         .align_y(iced::Alignment::Center),
         Space::new().height(sp.s),
-        text(raw(mouser_test_status)).size(ts.caption).color(muted),
+        text(mouser_test_status).size(ts.caption).color(muted),
     ]
     .spacing(sp.xs);
 
@@ -125,21 +129,29 @@ pub fn view<'a>(
     let no_key_section = column![
         section_title("LCSC, JLCPCB"),
         Space::new().height(sp.s),
-        text(raw("(no key required)")).size(ts.body).color(text_c),
+        text(t!(i18n, ids::LIBRARY_NO_KEY_REQUIRED))
+            .size(ts.body)
+            .color(text_c),
     ]
     .spacing(sp.xs);
 
     // ── Preference order ───────────────────────────────────
     let mut order_col = column![
-        section_title("Order of Preference"),
+        text(t!(i18n, ids::LIBRARY_ORDER_OF_PREFERENCE))
+            .size(ts.body)
+            .color(muted),
         Space::new().height(sp.s)
     ]
     .spacing(sp.xs);
     let len = settings.preferred_order.len();
     for (i, src) in settings.preferred_order.iter().enumerate() {
-        let label = distributor_label(*src);
+        let label = match distributor_label(*src) {
+            Some(name) => name.to_owned(),
+            None => t!(i18n, ids::LIBRARY_DISTRIBUTOR_OTHER).into_string(),
+        };
         let up_enabled = i > 0;
         let down_enabled = i + 1 < len;
+        // raw: the arrows are glyphs, not language.
         let mut up_btn =
             button(container(text(raw("▲")).size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
                 .padding(0)
@@ -156,10 +168,15 @@ pub fn view<'a>(
                 down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
         }
         let row_widget = row![
-            text(raw(format!("{}.  {}", i + 1, label)))
-                .size(ts.body)
-                .color(text_c)
-                .width(Length::Fill),
+            text(t!(
+                i18n,
+                ids::LIBRARY_ORDER_ROW,
+                "rank" => (i + 1).to_string(),
+                "name" => label
+            ))
+            .size(ts.body)
+            .color(text_c)
+            .width(Length::Fill),
             up_btn,
             Space::new().width(sp.s),
             down_btn,
@@ -179,19 +196,16 @@ pub fn view<'a>(
         order_col = order_col.push(bg_row.boxed());
     }
     order_col = order_col.push(
-        text(raw(
-            "Saved to <config_dir>/signex/distributors.toml. The first matching adapter is \
-         tried first when you paste a distributor URL into the Supply tab.",
-        ))
-        .size(ts.caption)
-        .color(muted)
-        .boxed(),
+        text(t!(i18n, ids::LIBRARY_ORDER_HELP))
+            .size(ts.caption)
+            .color(muted)
+            .boxed(),
     );
     // A failed save must be visible here and now — otherwise the reorder
     // looks applied and silently reverts on next launch.
     if let Some(error) = settings.preferred_order_error.as_deref() {
         order_col = order_col.push(
-            text(raw(format!("Could not save the order: {error}")))
+            text(t!(i18n, ids::LIBRARY_ORDER_SAVE_FAILED, "error" => error))
                 .size(ts.caption)
                 .color(crate::styles::tokens::danger(tokens))
                 .boxed(),
@@ -216,15 +230,16 @@ pub fn view<'a>(
     .boxed()
 }
 
-fn distributor_label(src: DistributorSource) -> &'static str {
+/// The distributor's product name; `None` for "Other", which is a word.
+fn distributor_label(src: DistributorSource) -> Option<&'static str> {
     match src {
-        DistributorSource::DigiKey => "DigiKey",
-        DistributorSource::Mouser => "Mouser",
-        DistributorSource::Lcsc => "LCSC",
-        DistributorSource::Jlcpcb => "JLCPCB",
-        DistributorSource::Octopart => "Octopart",
-        DistributorSource::Oemsecrets => "OEMsecrets",
-        DistributorSource::Other => "Other",
+        DistributorSource::DigiKey => Some("DigiKey"),
+        DistributorSource::Mouser => Some("Mouser"),
+        DistributorSource::Lcsc => Some("LCSC"),
+        DistributorSource::Jlcpcb => Some("JLCPCB"),
+        DistributorSource::Octopart => Some("Octopart"),
+        DistributorSource::Oemsecrets => Some("OEMsecrets"),
+        DistributorSource::Other => None,
     }
 }
 

@@ -185,7 +185,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // A non-empty status (parse / save error, profile action) wins;
     // otherwise fall back to the conflict summary.
     let status_line = if !status.is_empty() {
-        // Worded by the handler that set it.
+        // raw: set by its handler (#2061: handler-worded state text).
         text(raw(status.to_string()))
     } else if conflict_count == 1 {
         text(i18n.message(ids::PREF_KEYMAP_CONFLICT_ONE, &[]))
@@ -322,7 +322,7 @@ fn keymap_table_row<'a>(
         // does nothing, whatever it would have been shadowed by.
         word(ids::PREF_KEYMAP_STATE_UNBOUND)
     } else if let Some(note) = overridden_by.clone() {
-        // Composed from the catalog and the fixed key's action name.
+        // raw: composed from the catalog and the fixed key's action name.
         text(raw(note))
     } else if reserved_by_system {
         word(ids::PREF_KEYMAP_STATE_RESERVED)
@@ -384,6 +384,7 @@ fn keymap_table_row<'a>(
                 .align_y(iced::Alignment::Center)
                 .boxed()
             } else {
+                // raw: a key sequence, already shown with the catalog's key names.
                 text(raw(row_model.trigger.clone()))
                     .size(TS.body)
                     .style(text_muted)
@@ -393,6 +394,8 @@ fn keymap_table_row<'a>(
             trigger_display(i18n, &row_model.trigger, ChipTone::Neutral, tokens)
         };
 
+    // raw: the category title and command label are rendered from the
+    // catalog when the row model is built (#2057).
     row![
         container(
             text(raw(category_title(i18n, &row_model.category)))
@@ -459,6 +462,7 @@ fn shortcut_chip<'a>(
         label.to_string()
     };
     container(
+        // raw: a key sequence shown with the catalog's key names (#2314).
         text(raw(label))
             .size(TS.body)
             .style(move |theme: &Theme| text::Style {
@@ -631,6 +635,8 @@ fn keymap_recorder_control<'a>(
                     text(i18n.message(ids::PREF_KEYMAP_RECORDER_TITLE, &[]))
                         .size(TS.heading)
                         .style(iced::widget::text::base),
+                    // raw: the command label is rendered from the catalog
+                    // when the recorder opens (#2057).
                     text(raw(recorder.command_label.clone()))
                         .size(TS.body)
                         .style(iced::widget::text::secondary),

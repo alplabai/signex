@@ -9,6 +9,7 @@ use signex_app::app::{
     RemoveMsg, RenameDialogState, RenameMsg, Signex, WindowMsg,
 };
 use signex_app::find_replace::{FindReplaceMsg, FindScope};
+use signex_i18n::RenderTranslatable;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{HAlign, Label, LabelType, Point, SchematicSheet, VAlign};
 use std::collections::HashMap;

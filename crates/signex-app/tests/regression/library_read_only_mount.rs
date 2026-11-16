@@ -8,6 +8,7 @@
 //! message *does* write, so the assertions fail if the read-only mark is
 //! removed.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

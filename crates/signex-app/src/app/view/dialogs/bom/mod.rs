@@ -56,7 +56,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
-            "Bill of Materials",
+            t!(i18n, ids::DIALOG_TITLE_BOM).into_string(),
             self.detached_modal_subtitle(crate::app::state::ModalId::BomPreview),
             Message::BomPreview(BomPreviewMsg::Close),
             tokens,
@@ -74,25 +74,40 @@ impl Signex {
         let body = self.bom_table();
         let sidebar = self.bom_sidebar();
 
+        // A named variant is the user's; the base view is ours.
         let active_variant_label = preview
             .options
             .active_variant
             .clone()
-            .unwrap_or_else(|| "Base".to_string());
+            .unwrap_or_else(|| t!(i18n, ids::BOM_VARIANT_BASE).into_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let mut status_label = format!("{} of {} lines visible", row_count, total_count);
-        if let Some(prices) = price_status(&preview.table, &preview.options.columns) {
-            status_label.push_str(" · ");
-            status_label.push_str(&prices);
-        }
-        let variant_label = format!("Current variant: {}", active_variant_label);
+        let status_label = match price_status(i18n, &preview.table, &preview.options.columns) {
+            Some(prices) => t!(
+                i18n,
+                ids::BOM_STATUS_VISIBLE_PRICES,
+                "visible" => row_count,
+                "total" => total_count,
+                "prices" => prices
+            ),
+            None => t!(
+                i18n,
+                ids::BOM_STATUS_VISIBLE,
+                "visible" => row_count,
+                "total" => total_count
+            ),
+        };
+        let variant_label = t!(
+            i18n,
+            ids::BOM_CURRENT_VARIANT,
+            "variant" => active_variant_label.as_str()
+        );
 
         // Variant dropdown for the top toolbar — placeholder in the
         // header strip area, sits to the left. (i) info badge sits
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
-            text(raw(format!("Variant: {}", active_variant_label)))
+            text(t!(i18n, ids::BOM_VARIANT_IS, "variant" => active_variant_label.as_str()))
                 .size(TS.body)
                 .color(text_muted)
                 .boxed()
@@ -100,10 +115,11 @@ impl Signex {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(raw(active_variant_label.clone()))
+                    text(signex_i18n::UserText::new(active_variant_label.clone()))
                         .size(TS.body)
                         .color(text_c),
                     Space::new().width(Length::Fill),
+                    // raw: a disclosure glyph, not language.
                     text(raw("\u{25BE}")).size(TS.caption).color(text_c),
                 ]
                 .align_y(iced::Alignment::Center),
@@ -125,6 +141,7 @@ impl Signex {
             })
             .boxed()
         };
+        // raw: the info badge's "i" is a symbol, not a word.
         let info_badge: Element<'_, Message> =
             container(text(raw("i")).size(TS.body).color(iced::Color::WHITE))
                 .width(20)
@@ -193,23 +210,25 @@ impl Signex {
                     } else {
                         signex_output::BomIssueSeverity::Warning
                     };
+                    // raw: the issue count comes from signex-bom (#2060).
                     text(raw(label))
                         .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted, tokens))
                         .boxed()
                 }
-                None => text(raw("No BOM issues"))
+                None => text(t!(i18n, ids::BOM_NO_ISSUES))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
             };
         let footer = container(
             row![
-                text(raw(status_label)).size(TS.caption).color(text_muted),
+                text(status_label).size(TS.caption).color(text_muted),
                 Space::new().width(12),
+                // raw: a separator glyph, not language.
                 text(raw("|")).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text(raw(variant_label)).size(TS.caption).color(text_muted),
+                text(variant_label).size(TS.caption).color(text_muted),
                 Space::new().width(Length::Fill),
                 issue_badge,
                 Space::new().width(12),
@@ -258,6 +277,7 @@ impl Signex {
 /// total per currency, and how many lines have no cached price (no price
 /// for their library row or MPN). `None` while no price column is shown.
 pub(in crate::app) fn price_status(
+    i18n: &signex_i18n::I18n,
     table: &signex_output::BomTable,
     columns: &[signex_output::BomColumn],
 ) -> Option<String> {
@@ -268,24 +288,24 @@ pub(in crate::app) fn price_status(
         return None;
     }
     let totals = signex_output::bom::price_totals(table);
-    let unpriced = table.rows.iter().filter(|row| row.price.is_none()).count();
-    let mut parts = Vec::new();
     if totals.is_empty() {
-        parts.push("no cached prices".to_string());
+        return Some(i18n.message_plain(ids::BOM_PRICE_NONE, &[]));
+    }
+    let unpriced = table.rows.iter().filter(|row| row.price.is_none()).count();
+    // Amounts and currency codes are written the same in every language.
+    let sums: Vec<String> = totals
+        .iter()
+        .map(|(currency, total)| format!("{} {currency}", signex_output::bom::money(*total)))
+        .collect();
+    let sums = signex_i18n::Arg::from(sums.join(" + "));
+    Some(if unpriced > 0 {
+        i18n.message_plain(
+            ids::BOM_PRICE_TOTAL_UNPRICED,
+            &[("sums", sums), ("count", unpriced.into())],
+        )
     } else {
-        let sums: Vec<String> = totals
-            .iter()
-            .map(|(currency, total)| format!("{} {currency}", signex_output::bom::money(*total)))
-            .collect();
-        parts.push(format!("Total {}", sums.join(" + ")));
-    }
-    if unpriced > 0 && !totals.is_empty() {
-        parts.push(format!(
-            "{unpriced} line{} without a cached price",
-            if unpriced == 1 { "" } else { "s" }
-        ));
-    }
-    Some(parts.join(" · "))
+        i18n.message_plain(ids::BOM_PRICE_TOTAL, &[("sums", sums)])
+    })
 }
 
 #[cfg(test)]
@@ -293,7 +313,9 @@ mod price_status_tests {
     use signex_output::bom::BomPrice;
     use signex_output::{BomColumn, BomRow, BomTable};
 
-    use super::price_status;
+    fn price_status(table: &BomTable, columns: &[BomColumn]) -> Option<String> {
+        super::price_status(&signex_i18n::I18n::en_us(), table, columns)
+    }
 
     fn row(price: Option<(&str, f64)>) -> BomRow {
         BomRow {
@@ -320,6 +342,22 @@ mod price_status_tests {
         assert_eq!(
             price_status(&table, &[BomColumn::UnitPrice]).as_deref(),
             Some("Total 2.00 EUR + 1.50 USD · 1 line without a cached price")
+        );
+        let two_unpriced = BomTable {
+            rows: vec![row(Some(("USD", 1.5))), row(None), row(None)],
+            ..Default::default()
+        };
+        assert_eq!(
+            price_status(&two_unpriced, &[BomColumn::UnitPrice]).as_deref(),
+            Some("Total 1.50 USD · 2 lines without a cached price")
+        );
+        let all_priced = BomTable {
+            rows: vec![row(Some(("USD", 1.5)))],
+            ..Default::default()
+        };
+        assert_eq!(
+            price_status(&all_priced, &[BomColumn::UnitPrice]).as_deref(),
+            Some("Total 1.50 USD")
         );
         let none = BomTable {
             rows: vec![row(None)],
