@@ -1,0 +1,405 @@
+# Hexagonal architecture, DDD and the signex AppCore design: a sourced reference
+
+Prepared 2026-11-13 for epic #2326: [ADR-0006](../adr-0006-application-core.md) (the application core) and the matching ADR-0001 amendment notes (A1, A2, A3.2, D1, D5, D8 and three Part C bullets). It began as a review of a first draft of that amendment. The ADRs adopt most of its recommendations; §8 lists the one still open (the handler ratchet of row 10).
+
+**Method and clean-room note.** Only articles, public book summaries, official documentation and blog posts were read. No source code of any project was read, and no GPL project material. Licences are given for every code-bearing project cited; where GitHub's licence detection and the project's own text differ, both are given. Numbered references are at the end. Text marked *(analysis)* is a judgement with no source.
+
+---
+
+## 1. Hexagonal architecture (ports and adapters)
+
+### 1.1 Cockburn's original definition
+
+- **Intent.** Cockburn's report (HaT Technical Report 2005.02, dated 2005-09-04, v0.9) states the goal as letting an application "equally be driven by users, programs, automated test or batch scripts", and as developing and testing it apart from its eventual devices and databases [1]. The symmetry is the point. A GUI is one driver among several, not the privileged one.
+- **Ports and adapters.** A port is a "purposeful conversation" whose protocol is an API. An adapter "converts the API definition to the signals needed by that device". Several adapters can sit on one port, for example a GUI, a test harness or a mock database [1].
+- **Driving and driven.** A primary actor drives the application. A secondary actor is one the application drives, to get answers or to send notifications. Cockburn draws primary ports and adapters on the left or top, and secondary ones on the right or bottom [1].
+- **Inside vs outside.** The rule is that inside code must not leak to the outside. The key asymmetry is inside versus outside, not left versus right [1].
+- **Testing guidance.**
+  - On primary ports, FIT tables and fixtures act as the test adapter that drives the application from a script.
+  - On secondary ports, an in-memory mock (for example of the database) is the test adapter.
+  - Automated builds run against the mock, and the test and real databases are swapped in later [1].
+
+### 1.2 Common misreadings
+
+| Misreading | What the sources say |
+|---|---|
+| "Hexagonal is three layers: domain, ports, adapters." | Garrido de Paz, Cockburn's 2024 co-author: "the pattern says nothing about layers" [2]. Cockburn says the hexagon shape exists to get away from a one-dimensional layered picture, and that the number six is not significant [1]. |
+| "There is one port per external system." | Cockburn favours "two, three or four ports", chosen largely by intuition [1]. |
+| "There must be one port per use case." | Garrido de Paz treats this as one option among several. A port can group many use cases or few. Other options are one port per use case (SRP), or a command bus with one handler per use case, with command and query ports split CQRS-style [2]. |
+| "The hexagon prescribes the inside." | It does not. Layers, feature components or DDD tactical patterns are all allowed [2]. |
+| "More ports means more decoupling." | Petrov (2026) reports that fine-grained ports produce "constructor explosion, test-double bloat, wiring noise", and he recommends roughly 4–8 coarse ports [3]. This is a practitioner's opinion, not Cockburn's. |
+
+### 1.3 Onion, Clean and Explicit Architecture
+
+| Style | Same as hexagonal | Different |
+|---|---|---|
+| **Onion** (Palermo, 2008) [4] | Dependencies point inward: code "cannot depend on layers further out from the core". Inner layers define interfaces and outer layers implement them. "The database is not the center." | Concentric layers with the domain model at the centre, so layering is explicit. It is object-model first ("puts objects before all others"). |
+| **Clean Architecture** (Martin, 2012) [5] | The Dependency Rule: "source code dependencies can only point inwards". | Four named circles (Entities, Use Cases, Interface Adapters, Frameworks and Drivers), though "there's no rule that says you must always have just these four". Use cases hold the application-specific business rules. Martin presents it as a merger of Hexagonal, Onion, DCI and BCE. |
+| **Explicit Architecture** (Graça, 2017) [6] | Ports belong inside, adapters outside. Primary adapters "translate whatever comes from a delivery mechanism into a method call in the Application Core". | It combines DDD layers inside the hexagon: the Domain Model at the centre, then domain services, then application services or command handlers. Components cut across those layers. It also separates domain events from application events. |
+
+---
+
+## 2. Domain-Driven Design: Evans and Vernon
+
+Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.0) is the primary text used here [7]. It is paraphrased, not quoted.
+
+### 2.1 Aggregates and consistency boundaries
+
+- **Evans** [7]:
+  - Cluster entities and value objects into aggregates, each with one root. Outside objects hold references only to the root.
+  - The root, or a framework mechanism set aside for the purpose, enforces the invariants.
+  - The aggregate boundary is also the transaction and distribution boundary: rules inside one aggregate are kept consistent at once, while changes that span aggregates are applied asynchronously.
+- **Vernon** (*Effective Aggregate Design*, 2011) [8][9]:
+  - "Rule: Model True Invariants In Consistency Boundaries". An invariant "is a business rule that must always be consistent", in the transactional sense.
+  - "Rule: Design Small Aggregates".
+  - "Rule: Reference Other Aggregates By Identity".
+  - "Rule: Use Eventual Consistency Outside the Boundary".
+  - Only one aggregate is modified per transaction.
+  - Vernon allows a principled exception. With **user-aggregate affinity**, where only one user works on a given set of aggregates at a time, "sometimes it works out well to modify multiple aggregate instances in one transaction" [9].
+
+### 2.2 Domain services vs application services
+
+- **Domain service** (Evans): when an important domain process does not belong naturally to any entity or value object, it becomes a standalone service operation, named in the ubiquitous language [7].
+- **Application layer**: Fowler cites Evans: the application layer stays thin, holds no business rules or domain knowledge, and only coordinates tasks and hands the work on [10]. Graça puts it more bluntly: "domain logic should stay out of the application layer!" [6]. Vernon's application service "resolve[s] dependencies", loads aggregates and runs the transaction, and does not license changing two aggregates in one request [9].
+- **Layered Architecture** (Evans): keep the domain model apart from the user interface, the application code and the infrastructure. Evans names Hexagonal Architecture as an alternative that can do this job at least as well [7].
+
+### 2.3 Anemic domain model, transaction script, and data-plus-engine
+
+- **Transaction Script** (Fowler, PoEAA 2002) "organizes business logic by procedures where each procedure handles a single request from the presentation" [11].
+- **Anemic Domain Model** (Fowler, 2003): objects that are "little more than bags of getters and setters". "By pulling all the behavior out into services, however, you essentially end up with Transaction Scripts" [10].
+- **When data plus functions is legitimate.** Seemann (2016) argues that good functional design "is equivalent to the Ports and Adapters architecture": a big core of pure functions and a shell of IO [12]. In that style data and behaviour are split by design. *(analysis)* What makes a model anemic is not where the data sits but where the rules end up. If the rules live in domain functions (the engine) and not in application services, the model is a functional domain model, not an anemic one. It degrades into a transaction script only when the per-request procedures, here the application handlers, start to hold the rules.
+
+### 2.4 Domain events
+
+- **Evans** [7]: model what happens in the domain as a sequence of discrete events. Domain events are not the same thing as system events, which record what the software itself is doing.
+- **Vernon** (2011): "An aggregate command method publishes a domain event that is in time delivered to one or more asynchronous subscribers", through an in-process singleton `DomainEventPublisher` [9].
+- **Immediate vs deferred dispatch.**
+  - Dahan's static `DomainEvents.Raise` dispatches immediately. Microsoft's .NET architecture guide notes that this "makes testing and debugging more difficult" [13].
+  - The deferred alternative is Bogard's "A better domain events pattern" (2014): collect events on the entity and dispatch them just before or just after commit [13][14].
+- **Domain vs integration events** (Microsoft guide): domain events stay in-process. Integration events cross process boundaries and should only be sent after a successful persist [13].
+- **Domain vs application events** (Graça): domain events "live" in the domain model, while application events "represent some outcome of a use case" [6].
+
+*(analysis)* Returning events as part of the call's result, which is what signex plans, is the deferred pattern taken to its end: no dispatcher, no subscribers, and the caller decides what happens.
+
+### 2.5 Bounded contexts and shared kernel
+
+- **Shared Kernel** (Evans) is a relationship *between bounded contexts or teams*: the teams mark out, with an explicit boundary, a part of the domain model they agree to share, and keep that part small. A change to it is made only after the other team has been consulted [7].
+- Graça likewise asks for a shared kernel "as minimal as possible" [6].
+
+---
+
+## 3. Combining hexagonal and DDD
+
+Graça's synthesis [6] is the standard map:
+
+1. The domain model sits at the centre and depends on nothing.
+2. Domain services surround the domain model and know nothing of the application layer.
+3. Application services or command handlers "unfold a use case".
+4. Ports are interfaces owned by the core.
+5. Adapters sit outside: primary adapters call into the core, and secondary adapters implement the core's ports.
+6. Dependencies point inward, which is the same Dependency Rule as Martin's [5] and Palermo's [4].
+
+Hexagonal says nothing about how the inside is organised [2]. DDD supplies that organisation.
+
+---
+
+## 4. Functional core, effects as data, TEA, sans-IO
+
+| Idea | Source | Relation to hexagonal |
+|---|---|---|
+| **Functional core, imperative shell** | Bernhardt, "Boundaries" (SCNA 2012), and the DAS screencast of that name. Simple values "as the boundaries between components and subsystems" [15]. | The values crossing the boundary play the part of ports. Seemann makes the equivalence explicit [12]. |
+| **The Elm Architecture: `Cmd` / `Sub`** | Programs "send `Cmd` and `Sub` values to the runtime system", which performs the work [16]. | An effect is data handed to a runtime, which acts as a single driven adapter. |
+| **iced `Task`** (MIT) | "A set of concurrent actions to be performed by the iced runtime"; `Task::perform` runs a future and maps its output into a message [17]. | iced's version of `Cmd`. It holds an opaque future, so it is not inspectable data. |
+| **Crux** (redbadger/crux, **Apache-2.0** per GitHub) | "Side effects such as calling an API are captured as values and executed by the Shell." The bridge has `update`, `resolve` and `view`. The core compiles to Wasm and must stay side-effect-free [18]. | A direct precedent for signex's `execute` / `complete` / `query`, with Crux's `resolve` playing the part of signex's `complete`. |
+| **sans-IO** | Cannon (2016): a protocol implementation with "no code that does any form of network I/O", built from "synchronous functions returning synchronous results". Its benefits are reuse across all flow-control styles and "no risk of non-determinism in the tests" [19]. | The same move applied to protocols: bytes in, events out. |
+
+*(analysis)* "Commands return events and effects, and the shell performs IO" is the intersection of all four ideas. In hexagonal terms, the effect enum *is* the driven port, and `perform` is its one production adapter.
+
+---
+
+## 5. Desktop and GUI apps that share one core with headless front ends
+
+### 5.1 Patterns
+
+- **Presentation Model** (Fowler, 2004): "Represent the state and behavior of the presentation independently of the GUI controls". Its stated benefit is testing without the UI [20].
+- **IO-free analysis core behind an API-boundary crate** (rust-analyzer; GitHub reports Apache-2.0):
+  - "The analyzer keeps all this input data in memory and never does any IO".
+  - "Only parts touching LSP are allowed to do IO".
+  - `ide` "is an **API Boundary**", built from "POD types with public fields".
+  - `base-db` "doesn't know about file system and file paths".
+  - The vfs crates supply "consistent snapshots" fed by the client [21].
+- **Remote UIs over RPC** (Neovim; mixed Apache-2.0 and Vim licence; only the user docs were read):
+  - UIs are "external client processes communicating with Nvim over the RPC API".
+  - Each UI attaches with `nvim_ui_attach`.
+  - The core sends one "redraw" notification holding a batch of ordered events to every attached UI [22].
+- **Process-split editor, a cautionary case** (xi-editor; Levien's 2020 retrospective):
+  - "the process separation between front-end and core was not a good idea".
+  - "adding async made everything more complicated".
+  - Scrolling through a front-end cache "took months to get it right" [23].
+
+### 5.2 Pitfalls *(analysis, informed by [20][23])*
+
+1. **UI state leaking into the core.** Selection, focus, hover, the active tab and the active tool are presentation state. If the core stores them, every headless driver has to fake them, which is exactly the `gui_only` / `missing_headless_operand` heuristics signex has today.
+2. **Selection ownership.** If the GUI owns selection, every selection-shaped command needs explicit target operands, and the GUI has to prune its selection whenever an event removes or renames items.
+3. **Undo across front ends.** With two drivers editing one document, the policy for "whose step does Ctrl+Z undo?" must be written down. Recording the origin of each step is the minimum.
+4. **Shadow copies.** xi's front-end cache is the warning [23]. Derived caches must be invalidated by events, never treated as state.
+
+### 5.3 Event streams to remote clients without an in-process bus
+
+- Neovim's shape is the one to copy: the serving adapter batches ordered events per attached client and pushes them as one notification [22].
+- The Microsoft guide's integration-event rule applies: send only after the change has committed [13].
+- The core does not need to know that subscribers exist.
+
+---
+
+## 6. Anti-patterns and failure modes
+
+| Failure | Description | Source |
+|---|---|---|
+| Ports for everything | Dozens of fine-grained ports bring constructor explosion and test-double bloat. | [3] |
+| Layer worship | Treating the hexagon as layers, or adding layers the problem doesn't need. | [1][2] |
+| Anemic or transaction-script application services | Rules creep into per-request procedures. | [10][11] |
+| Event-bus spaghetti | Immediate static dispatch hides control flow and hampers tests and debugging. | [13] |
+| Distributed monolith in process | The process split and async of xi brought races and months of cache protocol work for little gain. | [23] |
+| Large aggregates | Large-cluster aggregates bring transactional failures. | [8][9] |
+
+---
+
+## 7. Rust-specific considerations
+
+### 7.1 Ownership and borrowing
+
+*(analysis)* The design fits Rust's ownership model well:
+
+- `update(&mut self)` calls `self.core.execute(..)` while holding `&mut self.core`.
+- `view(&self)` reads `&self.core`. iced's `view` takes `&self`, so reading the core by reference costs nothing.
+
+The friction is the projector. A method `Signex::project(&mut self, ..)` borrows all of `Signex`. A free function `project(ui: &mut UiState, core: &AppCore, events: &[CoreEvent])` uses disjoint field borrows and compiles cleanly. Prefer free functions over `&mut self` methods at the adapter seam.
+
+### 7.2 Trait ports vs an enum of effects
+
+| | `dyn Trait` port | Generic `AppCore<P: Ports>` | `enum Effect` + `perform` |
+|---|---|---|---|
+| Dispatch | Dynamic; inlining is blocked [24] | Static, through monomorphisation [24] | A `match` in the adapter |
+| Compile time | Low | Grows with each instantiation; the type parameter spreads to every type that holds the core | Low |
+| Object safety | Must satisfy dyn compatibility [24] | n/a | n/a |
+| Testability | Needs a mock implementation | Needs a mock type | Assert on the returned `Vec<Effect>` and feed back any `EffectResult`, with no mocks |
+| wasm32 | IO runs inside the core | IO runs inside the core | The core never runs IO |
+| Openness | Open: plugins can add implementations | Open | **Closed**: a new IO kind means a new variant and a new `match` arm |
+| Multi-step flows | Straight-line code | Straight-line code | An explicit state machine across `complete` calls |
+
+Effects-as-data is the idiomatic Rust choice for a core that must not run IO. The protocol crates follow it:
+
+- `quinn-proto` (quinn: GitHub reports Apache-2.0; the README lists Apache-2.0 and MIT) is a "deterministic state machine ... which performs no I/O internally" [25].
+- rustls (Apache-2.0 OR ISC OR MIT) "doesn't make or accept TCP connections, or do DNS, or read or write files". The application pumps bytes through `read_tls` / `write_tls` [26].
+
+No hyper/h2 sans-IO discussion could be verified, so this report does not cite one.
+
+**Cost.** The cost lands on multi-step flows. Save, then git commit, then restore becomes a state machine keyed by effect ids, and those transitions are exactly the persistence invariants the epic marks high-risk.
+
+### 7.3 `async` in a sync core
+
+Cannon's definition [19] and Crux's `resolve` [18] both keep the core synchronous. This matches the Rust guidance of keeping tokio at the edge, which ADR D8 already follows. *(analysis)* Not every `spawn_blocking` site is IO. CPU-heavy pure work, such as a full ERC run or raster export, belongs off the UI thread, but it is compute, not an effect. Calling it an `Effect` muddles the port and adds `complete` round-trips that are not needed.
+
+### 7.4 Errors across ports
+
+- The anyhow README says to use anyhow "if you don't care what error type your functions return... common in application code", and thiserror "if you are a library that wants to design your own dedicated error type(s)" (anyhow: Apache-2.0 or MIT) [27].
+- *(analysis)* The core and `signex-commands` are libraries, so they need typed errors (thiserror), and those errors must serialise for the wire (epic D11) and carry a `Translatable` from the UI-free `signex-i18n-ids` crate (epic D6, ADR-0006), never rendered text. Only binaries such as the CLI `main` should use anyhow.
+- The epic's `query -> Result<Value, QueryError>` keeps a typed error at the port. `QueryError` must itself follow the rule above: serialisable, with a `Translatable`.
+
+### 7.5 Crate boundaries as enforcement
+
+rust-analyzer uses crate boundaries as API boundaries, and only one crate knows LSP and JSON [21]. *(analysis)* A crate boundary enforces the *direction* of dependencies. It does not stop an adapter from mutating the core's state through `pub` fields. The real guarantee that "documents change only through `execute`" comes from **private fields on `AppCore` plus `&`-only accessors**. A `pub` field or a `&mut` getter turns the port into a suggestion.
+
+### 7.6 Large structs, moves and the stack
+
+- `Box::new` is documented as "Allocates memory on the heap and then places `x` into it" [28].
+- Large values can be built on the stack first and then copied, especially in debug builds. Stable Rust has no placement-new. The workarounds are:
+  - `Box::new_uninit` (stable since 1.82) followed by `write` and `assume_init`;
+  - `Box::write` (1.87), where the copy "may" be elided;
+  - building with `Vec` or iterators [28][29].
+- Clippy's `large_stack_frames` and `large_stack_arrays` lints exist but are allow-by-default [29].
+
+*(analysis)* For signex, whose 1 MB Windows main-stack overflow is tracked as #2325:
+
+- Give the core `fn new(..) -> Box<Self>`.
+- Box its big fields individually.
+- Never pass `AppCore` or `CoreOutput` by value through deep call chains.
+- Enable `large_stack_frames` on the core crate.
+- Keep `Effect` variants small with `Box` or `Arc` payloads, and serialise documents to bytes inside the core before they enter `WriteDocument`.
+
+### 7.7 Send and Sync
+
+*(analysis)* If the agent socket thread called `AppCore` directly, `AppCore` would need to be `Send` and sit behind a `Mutex`. The UI thread and the agent would then contend for it, and the single-writer MVU loop would break.
+
+ADR D8 already prescribes the right shape: the worker sends over a channel, and a `Subscription` turns it into a `Message`. If attach requests enter `update` that way, `AppCore` needs neither `Send` nor `Sync`. Only `Effect` and `EffectResult` must be `Send`, so that `perform` can run on the blocking pool. The CLI owns its `Box<AppCore>` on one thread.
+
+### 7.8 Precedents and licences
+
+| Project | Licence | What it shows | What was read |
+|---|---|---|---|
+| Crux | Apache-2.0 | A shared core, effects as values, shells | README [18] |
+| rust-analyzer | GitHub reports Apache-2.0 | An IO-free core and an API-boundary crate | architecture doc [21] |
+| quinn-proto | GitHub reports Apache-2.0; README lists MIT too | A sans-IO state machine | README [25] |
+| rustls | Apache-2.0 OR ISC OR MIT | Caller-driven IO | docs.rs [26] |
+| iced | MIT | `Task` as a runtime-performed action | docs.rs [17] |
+
+### 7.9 What Rust makes cheap and what it makes expensive
+
+*(analysis)*
+
+- **Cheap:**
+  - enums with exhaustive `match` for commands, events and effects;
+  - borrow-checked single-writer mutation;
+  - crate-enforced dependency direction;
+  - `wasm32` and clippy as mechanical gates.
+- **Expensive:**
+  - multi-step async flows written as explicit state machines;
+  - large moves and debug-build stack use;
+  - open extension, because plugins cannot add enum variants;
+  - the field-borrow choreography around `&mut self` methods;
+  - churn in a large codebase, where renames that tools cannot do safely end up done by hand.
+
+---
+
+## 8. Check against signex
+
+Verdict scale: **C** = consistent with the literature, **P** = partly consistent, **I** = inconsistent.
+
+This section keeps only the recommendations that are still relevant to ADR-0006 (the application core, first drafted as ADR-0001 A4) and ADR-0001 D5. The row numbers are kept so that §10 can refer to them. The rest of an earlier check, written against a draft of the amendment, was resolved by the ADR text and is not repeated here.
+
+| # | Element | Verdict | Why | Recommendation | Status in the ADRs | Counter-argument: when the recommendation is wrong for signex |
+|---|---|---|---|---|---|---|
+| 2 | Documents as aggregates, mutated only through the engine command path | **P** | It fits Evans's root and transaction rule [7]. Two gaps: (a) only schematics go through `signex-engine` today, while symbol, footprint and Component rows use app-local history; (b) ECO, Update PCB, back-annotation and hierarchy renames change several documents at once, which breaks Vernon's one-aggregate-per-transaction rule [9]. | Record that cross-document commands are one undo group, justified by Vernon's user-aggregate affinity (one person per desktop session) [9], and that the aggregate rule covers schematics only until #661's `History<S>` slice lands. | Adopted: the ADR-0006 DDD table states both. | Attach mode puts a second actor on the same documents, which weakens affinity. The person-busy targets passed as data in the arguments are what keep the exception honest. |
+| 8 | The wasm32 constraint (epic D10) | **P** (the build alone is weaker than it sounds) | No hexagonal source requires it. It is enforcement, like rust-analyzer's "never does IO" invariant [21]. On `wasm32-unknown-unknown`, `std::fs` compiles and "always return[s] errors" at run time, and `std::thread::spawn` compiles and "will panic" [30]. The build catches native dependencies (libgit2, mio and the like), not `std::fs`. | Add `disallowed-methods` and `disallowed-types` for `std::fs::*`, `std::thread::spawn`, `std::process`, `std::net` and `tokio::*` on the core and domain crates [31]. Keep the wasm32 check, described as "no native-only dependencies". | Lint adopted in ADR-0006, "Enforcement": a source guard while the core lives in `signex-app`, the clippy lint after the lift. No wasm32 gate now: epic D10 was decided 2026-11-15 as "not now, native first". | YAGNI: no web front end is scheduled. The lint alone gives the IO-free guarantee now. The wasm32 job can wait until slice S-IO actually begins. |
+| 10 | Risk that command handlers moved into `AppCore` become a transaction script | **P** (a real risk) | Fowler's definition of Transaction Script is literally "each procedure handles a single request from the presentation" [11]. Per-command handlers *are* procedures, and that is fine for an application layer as long as they hold no rules [6][10]. The risk is that defaults, designator assignment, connectivity or placement maths drift into handlers. | Add a review rule and a ratchet. A core handler only (a) resolves operands, (b) calls engine or domain functions, (c) groups the undo, and (d) assembles events and effects. A loop over document items, or any geometry arithmetic, in a handler is a smell that moves into an engine. Extend `check_layer_ratchet.sh` to count such patterns under `app/core/`. | Review rule adopted ("Handlers stay thin" in ADR-0006). The ratchet is not adopted; it stays open. | A ratchet on heuristics produces false positives. Review discipline may be enough for two maintainers. |
+| 11 | `signex-types` as the "shared kernel" | **P** | Evans's shared kernel is a small subset of the model shared *between bounded contexts or teams*, changed only after consultation [7]. `signex-types` is the whole model's data, shared inside one team. | Either call it "the common domain types", or keep "shared kernel" only for the schematic-to-PCB contract of A3.1 (`Netlist`), which is a genuine context seam. | Adopted in ADR-0006: its DDD table names `signex-types` "the common domain types" and keeps "shared kernel" for the A3.1 `Netlist` contract. The crate keeps its name. | — |
+
+---
+
+## 9. Skeptic's notes: where orthodoxy over-engineers signex
+
+- **One process, one user, two maintainers.** Vernon's small-aggregate and eventual-consistency rules exist for scalability and locks [9]. Microsoft's guide calls real messaging "overkill" for in-process events [13]. None of that pressure applies here. *(analysis)* The epic is right not to add a bus. It should resist adding anything else justified only by "DDD says so".
+- **Ports count.** The three driving entry points plus one effect enum are already minimal [1][3]. Adding trait ports per subsystem, such as a `GitPort` or a `LibraryPort`, would recreate the over-abstraction Petrov describes [3].
+- **Effects for every IO site.** There are 156 production `std::fs::` call sites under `crates/signex-app/src/app` alone (§12). This is the most expensive slice, and it buys mostly the web option. xi's experience says async seams cost more than expected [23]. *(analysis)* Convert only the persistence and git effects, where the invariants live. Leave pure compute on its existing `Task` until a web front end is real.
+- **A crate is not the goal.** Cockburn's goal is symmetric drivers and testability without devices [1]. For signex, that means a CLI that does not build UI, and parity by structure. Both are reached once the CLI calls the core module, before any crate is lifted.
+- **The cheapest alternative**, for comparison. Keep `Signex`, make `UiState` lazy so the headless boot does not construct it, and box the large fields. That fixes #2325 and part of the boot cost. The CLI still compiles every GUI crate, and it does **not** remove the parity heuristics (`gui_only`, `honest_status`), so it is a stopgap, not a substitute.
+
+---
+
+## 10. Risks of adopting this design
+
+1. **Persistence invariants turn into state machines.** Dirty marks, save ordering, the quit barrier and pending restores move across `complete` boundaries. A dropped transition silently loses work. The epic already flags slices 2, 3 and 5 as the high-risk ones.
+2. **Churn against open work.** The references a slice must move keep growing; ADR-0006, "The cost of waiting", gives the counts and the commits they were measured at. Long-lived strangler phases breed dual paths.
+3. **The closed effect enum vs plugins.** S-P plugins cannot add IO kinds without a core change. Decide before S-P whether plugins get a generic `PluginEffect` variant.
+4. **Event granularity.** If `DocumentChanged { patch }` is too coarse, the projector over-invalidates and drags get slow. If it is too fine, events flood. Add a benchmark before slice 2 lands.
+5. **The transaction-script drift** described in item 10 of §8.
+6. **A false sense of IO-freedom** from the wasm32 gate (item 8 of §8).
+7. **Attach-mode concurrency**, if the socket is ever allowed to call the core off the UI thread (§7.7).
+
+---
+
+## 11. Minimum viable version
+
+*(analysis)* The smallest design that still meets the epic's stated goals: no UI built by the CLI, structural parity, and a testable core.
+
+1. **`signex-commands` crate** (slice 1): the catalog, operands and outcome, plus the wire types. Without it the CLI cannot leave `signex-app`.
+2. **An `app/core/` module with private fields.** It exposes `execute` / `query` and returns `CoreOutput { events, effects }`. Read-only accessors only. Guarded by the boundary script and a clippy `disallowed-methods` list instead of a wasm32 job.
+3. **Effects only for persistence**: read, write, stat, git and journal, with effect ids. Everything else stays a `Task` around IO-free domain calls.
+4. **Explicit operands plus the `Targets` kind.** No selection in the core. Attach requests enter through `Subscription` → `update`.
+5. **The CLI uses the core module** through a thin crate split only when a dependency cut is needed (slice 9). The web front end (S-IO and the wasm32 job), the full effect conversion (5e) and the plugin host are deferred until each is scheduled.
+
+This keeps every structural benefit Cockburn's intent asks for [1] and drops the parts that pay off only for a web or plugin future.
+
+---
+
+## 12. Measurements (2026-11-15)
+
+macOS arm64, Rust 1.97.0. Each block names the trunk commit it was measured at: `1bf5750dd` (2026-11-14) for the dependency tree, build, boot and IO counts; `f3d4efc75` (2026-11-15) for the parity counts. ADR-0006 cites these in short form.
+
+**Dependency tree.** Distinct crate versions on the normal-dependency edge:
+
+```sh
+cargo tree -p signex-cli -e normal --prefix none | awk 'NF{print $1" "$2}' | sort -u | wc -l   # 518
+cargo tree -e normal --prefix none -p signex-types -p signex-net -p signex-erc -p signex-engine \
+  -p signex-drc -p signex-library -p signex-output -p signex-bom -p signex-history \
+  | awk 'NF{print $1" "$2}' | sort -u | wc -l                                                 # 115
+```
+
+Counting lines of `cargo tree --prefix none | sort -u` instead gives 685, because the `(*)` repeat markers make duplicate lines; 518 is the distinct count.
+
+**Build time.** `cargo build --release -p signex-cli --timings` took 6 min 01 s of wall time from cold. Summed over the compile units of the timing report (`unit-durations`: one `name seconds` line per unit, 2475 s in total), the GUI/GPU crates matched by the list below take 655 s, about 26%; with `signex-app` (151 s) it is about 32%. A broader list (image codecs, more of the platform stack) gives somewhat more. Summed unit time is not wall time, since units build in parallel. The release binary is 47 MB.
+
+```sh
+GUI='^(iced|wgpu|winit|naga|glyphon|cosmic-text|softbuffer|tiny-skia|metal|ash|gpu-|glow|glutin|khronos|raw-window|objc|block2|core-graphics|core-text|window_clipboard|clipboard|lyon|resvg|usvg|kurbo|signex-gfx|signex-widgets|signex-renderer|muda|rfd|dpi|sctk|smithay|wayland|x11|xkb|calloop|cursor-icon|d3d12|windows|etagere|guillotiere|font-types|skrifa|swash|fontdb|ttf-parser|rustybuzz|harfbuzz)'
+rg "$GUI" unit-durations.txt | awk '{t+=$2} END{print t}'        # 655
+awk '{t+=$2} END{print t}' unit-durations.txt                     # 2475
+```
+
+**Boot time.** `time signex-cli run <project>.snxprj` with no commands, on a one-sheet project: first run 2.26 s, then 1.29, 1.29, 1.29, 1.29, 1.28 s (median of the warm runs 1.29 s). `signex-cli --help` takes 0.026 s, and so does `run` on a missing project. How the 1.29 s splits inside the boot (model construction, keymap load, font catalog, icon decode) is not measured. The run log shows `dropped an iced action a headless run does not perform kind="window"` three times.
+
+**Parity per command** (at `f3d4efc75`; at `1bf5750dd` the same commands gave 34, 20, 240 and 175). Ids with an operand handler, how many of them also have a GUI arm in the bridge, the golden command count and the `gui_only` lines:
+
+```sh
+T=f3d4efc75; d=crates/signex-app/src/app/command
+git show "${T}:$d/operand_handlers.rs" | rg -o '^\s*\("([a-z_]+)",' -r '$1' | sort -u > /tmp/oh.txt; wc -l < /tmp/oh.txt   # 34
+git show "${T}:$d/bridge.rs" | rg -o '"([a-z_]+)"' -r '$1' | sort -u > /tmp/br.txt
+comm -12 /tmp/oh.txt /tmp/br.txt | wc -l                                                                                  # 20
+git show "${T}:crates/signex-app/tests/golden/commands.json" | rg -c '"id"'                                               # 250
+git grep -c gui_only "${T}" -- crates/signex-app | awk -F: '{s+=$3} END{print s}'                                         # 184, in 6 files
+git show "${T}:crates/signex-app/src/keymap/testdata/catalog.golden.tsv" | rg -c gui_only                                  # 166
+```
+
+The guards a command passes are `CommandMetadata::headless_refusal` (`keymap/catalog/mod.rs`), `missing_headless_operand` (`app/command/operands.rs`), `honest_status` (`signex-cli/src/session.rs`) and, on the agent channel, `allow::refusal` (`app/agent/allow.rs`).
+
+**Parity work so far.** Closed issues and PRs of headless-parity work, some of which ADR-0006 reuses (#1934, #2172): #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part.
+
+**IO on the update path.** Production `std::fs::` call sites under `crates/signex-app/src/app`: test files, comment lines and lines after a `#[cfg(test)]` in their file are excluded.
+
+```sh
+git grep -nE 'std::fs::' -- crates/signex-app/src/app ':!**/tests/**' ':!**/*tests.rs' \
+  | rg -v ':\s*//' \
+  | awk -F: '{f=$1; l=$2; c=0; t=0; while((getline line < f)>0){c++; if(line ~ /#\[cfg\(test\)\]/ && c<l) t=1; if(c>=l) break} close(f); if(!t) n++} END{print n}'   # 156
+```
+
+This counts `std::fs::` paths only, not `use std::fs;` followed by `fs::…` calls, nor IO in other crates. A sample of 15 of these sites, read by hand, found about half running synchronously inside a `&mut self` handler on the update path: for example `std::fs::canonicalize` in `handlers/document_identity.rs` (`rekey_document`), `project_sheets::load_sheet` in the Sync Sheet Pins menu action (`handlers/canvas/sync_sheet_pins.rs`; the operand form of the command reads off the UI thread, #2199), and the agent registry and journal. The half is a sample estimate, not a count.
+
+**#2325.** The Windows stack overflow is on the CLI path, but boxing `Signex` or a bigger thread stack fixes it. It is a symptom, not by itself a reason for the epic.
+
+---
+
+## References
+
+1. Alistair Cockburn, "Hexagonal Architecture (Ports & Adapters)", HaT Technical Report 2005.02, 2005-09-04. https://alistair.cockburn.us/hexagonal-architecture/
+2. Juan Manuel Garrido de Paz, "Hexagonal Architecture – Ports and Adapters Pattern", 2018-08-29. https://jmgarridopaz.github.io/content/hexagonalarchitecture
+3. Alexander Petrov, "Ports & Adapters: death by a thousand ports", 2026-01-26. https://world.hey.com/apetrov/ports-adapters-death-by-a-thousand-ports-8b42afcf
+4. Jeffrey Palermo, "The Onion Architecture: part 1", 2008. https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/
+5. Robert C. Martin, "The Clean Architecture", 2012-08-13. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
+6. Herberto Graça, "DDD, Hexagonal, Onion, Clean, CQRS, … How I put it all together", 2017-11-16. https://herbertograca.com/2017/11/16/explicit-architecture-01-ddd-hexagonal-onion-clean-cqrs-how-i-put-it-all-together/
+7. Eric Evans, *DDD Reference*, 2015 (CC BY 4.0; pattern summaries CC BY 3.0). https://www.domainlanguage.com/ddd/reference/ (PDF: https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)
+8. Vaughn Vernon, "Effective Aggregate Design, Part I", 2011. https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf
+9. Vaughn Vernon, "Effective Aggregate Design, Part II: Making Aggregates Work Together", 2011. https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf
+10. Martin Fowler, "AnemicDomainModel", 2003-11-25 (quotes Evans on the application layer). https://martinfowler.com/bliki/AnemicDomainModel.html
+11. Martin Fowler, "Transaction Script", *PoEAA*, 2002. https://martinfowler.com/eaaCatalog/transactionScript.html
+12. Mark Seemann, "Functional architecture is Ports and Adapters", 2016-03-18. https://blog.ploeh.dk/2016/03/18/functional-architecture-is-ports-and-adapters/
+13. Microsoft, ".NET Microservices Architecture: Domain events: design and implementation", 2018 (updated 2024). https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-events-design-implementation
+14. Jimmy Bogard, "A better domain events pattern", 2014-05-13 (direct fetch returned 404; content verified through [13]). https://lostechies.com/jimmybogard/2014/05/13/a-better-domain-events-pattern
+15. Gary Bernhardt, "Boundaries", SCNA 2012, and the screencast "Functional Core, Imperative Shell". https://www.destroyallsoftware.com/talks/boundaries
+16. Evan Czaplicki et al., *An Introduction to Elm*, "Commands and Subscriptions". https://guide.elm-lang.org/effects/
+17. iced 0.14 docs, `Task` (MIT). https://docs.rs/iced/0.14.0/iced/struct.Task.html
+18. Red Badger, Crux README (Apache-2.0). https://github.com/redbadger/crux
+19. Brett Cannon et al., "Writing I/O-Free (Sans-I/O) Protocol Implementations", 2016. https://sans-io.readthedocs.io/how-to-sans-io.html
+20. Martin Fowler, "Presentation Model", 2004-07-19. https://martinfowler.com/eaaDev/PresentationModel.html
+21. rust-analyzer, "Architecture" (GitHub reports Apache-2.0). https://rust-analyzer.github.io/book/contributing/architecture.html
+22. Neovim docs, "UI events" (`api-ui-events`). https://neovim.io/doc/user/api-ui-events/
+23. Raph Levien, "xi-editor retrospective", 2020-06-27. https://raphlinus.github.io/xi/2020/06/27/xi-retrospective.html
+24. *The Rust Programming Language*, "Using Trait Objects to Abstract over Shared Behavior". https://doc.rust-lang.org/book/ch18-02-trait-objects.html
+25. quinn README (GitHub reports Apache-2.0; the README lists Apache-2.0 and MIT). https://github.com/quinn-rs/quinn
+26. rustls crate docs (Apache-2.0 OR ISC OR MIT). https://docs.rs/rustls/latest/rustls/
+27. David Tolnay, anyhow README (Apache-2.0 or MIT). https://github.com/dtolnay/anyhow
+28. Rust std docs, `Box` (`new`, `new_uninit` 1.82, `write` 1.87). https://doc.rust-lang.org/std/boxed/struct.Box.html
+29. Rust Internals, "Returning a large type into a `Box` without copies", 2025-07. https://internals.rust-lang.org/t/returning-a-large-type-into-a-box-without-copies/23224
+30. rustc book, "wasm32-unknown-unknown" platform support. https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-unknown.html
+31. Clippy, "Lint configuration": `disallowed-methods`, `disallowed-types`. https://doc.rust-lang.org/clippy/lint_configuration.html
+
+Related but not cited: the Rust Book chapter on `Send` and `Sync` (https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html), for the §7.7 background.
