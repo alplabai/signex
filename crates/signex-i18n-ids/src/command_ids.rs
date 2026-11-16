@@ -475,7 +475,6 @@ define_ids! {
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
-<<<<<<< HEAD:crates/signex-i18n-ids/src/command_ids.rs
         CMD_BOARD_LAYER_STACK = "cmd-board-layer-stack";
         CMD_MENU_BOARD_LAYER_STACK = "cmd-menu-board-layer-stack";
         CMD_SET_LAYER_STACK = "cmd-set-layer-stack";
@@ -534,7 +533,6 @@ define_ids! {
         CMD_MENU_TUNE_NET_LENGTH = "cmd-menu-tune-net-length";
         CMD_TUNE_DIFF_PAIR = "cmd-tune-diff-pair";
         CMD_MENU_TUNE_DIFF_PAIR = "cmd-menu-tune-diff-pair";
->>>>>>> feat/2389-diff-pairs-quick-multi-route:crates/signex-i18n/src/command_ids.rs
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";
