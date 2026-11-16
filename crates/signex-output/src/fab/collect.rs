@@ -35,7 +35,16 @@ pub(crate) fn collect(
     for footprint in &board.footprints {
         footprint_marks(&mut images, board, footprint, stack, tally);
     }
+    // Free pads (#2373) are marked as pads of the board's own frame.
+    if !board.free.pads.is_empty() {
+        let frame = Footprint {
+            pads: board.free.pads.clone(),
+            ..signex_types::pcb_free::free_pad_frame()
+        };
+        footprint_marks(&mut images, board, &frame, stack, tally);
+    }
     tracks(&mut images, board, tally);
+    arcs(&mut images, board, tally);
     vias(&mut images, board, stack, tally);
     board_graphics(&mut images, board, tally);
     extra_strokes(&mut images, extras, tally);
@@ -60,7 +69,15 @@ pub(crate) fn used_copper(board: &PcbBoard, extras: &FabExtras) -> Vec<CopperLay
                 .iter()
                 .flat_map(|p| p.layers.iter().map(String::as_str))
         }))
-        .chain(board.graphics.iter().map(|g| g.layer.as_str()));
+        .chain(board.graphics.iter().map(|g| g.layer.as_str()))
+        .chain(board.free.arcs.iter().map(|a| a.layer.as_str()))
+        .chain(
+            board
+                .free
+                .pads
+                .iter()
+                .flat_map(|p| p.layers.iter().map(String::as_str)),
+        );
     let named = tokens
         .filter_map(signex_types::format::parse_pcb_layer)
         .filter_map(PcbLayer::copper);
@@ -367,6 +384,49 @@ fn track_mark(board: &PcbBoard, segment: &Segment, layer: FabLayer) -> Result<Ma
         steps: vec![Step::Line(end)],
         attributes,
     })
+}
+
+/// Free arcs (#2373) as strokes along their chords, within the error the
+/// copper list reads them with: conductor of their net on copper, a
+/// drawing on any other layer the images have.
+fn arcs(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+    for arc in &board.free.arcs {
+        let Some(layer) = FabLayer::of_token(&arc.layer) else {
+            continue;
+        };
+        let points = arc
+            .points(pcb_geom::ARC_CHORD_ERROR_MM)
+            .into_iter()
+            .map(board_to_fab)
+            .collect::<Result<Vec<_>, _>>();
+        let width = mm_to_nm(arc.width, "arc.width");
+        let (Ok(points), Ok(width)) = (points, width) else {
+            tally.skipped += 1;
+            continue;
+        };
+        let Some((&start, rest)) = points.split_first() else {
+            continue;
+        };
+        let (function, attributes) = if layer.is_copper() {
+            (
+                Function::Conductor,
+                Attributes::net(net_name(board, arc.net)),
+            )
+        } else {
+            (graphic_function(layer), Attributes::default())
+        };
+        push(
+            images,
+            layer,
+            Mark::Stroke {
+                width: width.abs(),
+                function,
+                start,
+                steps: rest.iter().copied().map(Step::Line).collect(),
+                attributes,
+            },
+        );
+    }
 }
 
 fn vias(images: &mut Images, board: &PcbBoard, stack: &CopperStack, tally: &mut Tally) {

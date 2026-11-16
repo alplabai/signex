@@ -124,11 +124,8 @@ fn the_components_group_lists_the_part_rows() {
 #[test]
 fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
     let app = board_app();
-    let cases = [
-        (PcbBarGroup::ViaPad, "Pad", "Place Pad"),
-        (PcbBarGroup::CopperDrawing, "Arc", "Place Arc"),
-        (PcbBarGroup::Components, "Component", "Place Component"),
-    ];
+    // #2373: Pad and Arc are live; Component is the tool still to build.
+    let cases = [(PcbBarGroup::Components, "Component", "Place Component")];
     for (group, label, reason) in cases {
         let row = rows(&app, PcbBarMenu::Group(group))
             .into_iter()
@@ -143,10 +140,10 @@ fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
     }
 }
 
-/// #2392: a group with no live row is one greyed button with no dropdown,
-/// so it never opens an empty or dead menu.
+/// #2392, #2373: a group of one row is one button with no dropdown; the
+/// Dimensions and Text groups run their tool.
 #[test]
-fn a_group_with_no_live_row_is_a_greyed_button() {
+fn a_group_of_one_row_is_a_button_with_no_dropdown() {
     let app = board_app();
     let items = bar_of(&app);
     for (group, reason) in [
@@ -159,7 +156,8 @@ fn a_group_with_no_live_row_is_a_greyed_button() {
             .into_iter()
             .find(|button| button.tooltip.starts_with(reason))
             .unwrap_or_else(|| panic!("a {group:?} button"));
-        assert!(!button.enabled && button.on_right_press.is_none());
+        assert!(button.enabled, "{group:?} is live");
+        assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
     }
 }
 

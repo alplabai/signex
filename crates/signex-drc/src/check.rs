@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::PcbBoard;
 
-use pcb_geom::{BoardIndex, CopperItem, ItemRef, PointNm, collect_copper, ratsnest, via_pieces};
+use pcb_geom::{
+    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, ratsnest, via_pieces,
+};
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 
@@ -59,29 +61,69 @@ fn per_layer_vias(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> {
 
 /// Shorts and clearance violations between copper of different nets.
 fn copper_pairs(items: &[CopperItem], index: &BoardIndex, rules: &DrcRules) -> Vec<Violation> {
-    // The first copy of a repeated identity is the one the index holds.
-    let mut slot: HashMap<ItemRef, usize> = HashMap::new();
+    // Every copy of an identity, in list order: an arc's chords share one
+    // (#2373), and the index holds each of them.
+    let mut slots: HashMap<ItemRef, Vec<usize>> = HashMap::new();
     for (i, c) in items.iter().enumerate() {
-        slot.entry(c.item).or_insert(i);
+        slots.entry(c.item).or_default().push(i);
     }
     let mut seen: HashSet<(usize, usize)> = HashSet::new();
-    let mut found = Vec::new();
+    // One finding per pair of items, the worst of their parts' findings.
+    let mut found: Vec<Violation> = Vec::new();
+    let mut by_items: HashMap<Vec<ItemRef>, usize> = HashMap::new();
     for (i, a) in items.iter().enumerate() {
         let near = a.shape.aabb().inflate(rules.reach_of(a.net));
         for hit in index.bounds_meeting(&near) {
-            let Some(&j) = slot.get(&hit.item).filter(|&&j| j != i) else {
+            let Some(j) = slot_of(&slots, items, hit).filter(|&j| j != i) else {
                 continue;
             };
             // A pair is looked at once, from whichever side finds it first.
             if !seen.insert((i.min(j), i.max(j))) {
                 continue;
             }
-            if let Some(v) = check_pair(a, &items[j], rules) {
-                found.push(v);
+            let Some(v) = check_pair(a, &items[j], rules) else {
+                continue;
+            };
+            match by_items.get(&v.items) {
+                Some(&k) if is_worse(&v, &found[k]) => found[k] = v,
+                Some(_) => {}
+                None => {
+                    by_items.insert(v.items.clone(), found.len());
+                    found.push(v);
+                }
             }
         }
     }
     found
+}
+
+/// The copper list entry the index entry `hit` is: the first copy of its
+/// identity, or, for an item held as several parts, the part of its shape.
+fn slot_of(
+    slots: &HashMap<ItemRef, Vec<usize>>,
+    items: &[CopperItem],
+    hit: &IndexedItem,
+) -> Option<usize> {
+    let copies = slots.get(&hit.item)?;
+    if hit.item.is_multi_part() {
+        copies
+            .iter()
+            .copied()
+            .find(|&j| items[j].shape == hit.shape)
+    } else {
+        copies.first().copied()
+    }
+}
+
+/// Whether `new` says more than `old` about one pair of items: a short over
+/// a clearance finding, else the smaller gap.
+fn is_worse(new: &Violation, old: &Violation) -> bool {
+    let short = |v: &Violation| matches!(v.kind, ViolationKind::Short);
+    match (short(new), short(old)) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => new.measured_nm < old.measured_nm,
+    }
 }
 
 fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violation> {

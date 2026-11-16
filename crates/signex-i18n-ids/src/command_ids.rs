@@ -494,6 +494,15 @@ define_ids! {
         CMD_MENU_IMPORT_DXF = "cmd-menu-import-dxf";
         CMD_IMPORT_DXF_OUTLINE = "cmd-import-dxf-outline";
         CMD_MENU_IMPORT_DXF_OUTLINE = "cmd-menu-import-dxf-outline";
+        CMD_PLACE_BOARD_PAD = "cmd-place-board-pad";
+        CMD_MENU_PLACE_BOARD_PAD = "cmd-menu-place-board-pad";
+        CMD_PLACE_BOARD_ARC = "cmd-place-board-arc";
+        CMD_MENU_PLACE_BOARD_ARC = "cmd-menu-place-board-arc";
+        CMD_PLACE_BOARD_STRING = "cmd-place-board-string";
+        CMD_MENU_PLACE_BOARD_STRING = "cmd-menu-place-board-string";
+        CMD_PLACE_BOARD_DIMENSION = "cmd-place-board-dimension";
+        CMD_MENU_PLACE_BOARD_DIMENSION = "cmd-menu-place-board-dimension";
+        CMD_CYCLE_ARC_MODE = "cmd-cycle-arc-mode";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";

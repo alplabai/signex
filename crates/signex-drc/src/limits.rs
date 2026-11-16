@@ -43,6 +43,30 @@ fn track_widths(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) 
             object.check(rules, kind, width, found);
         }
     }
+    // A copper arc is a track of its net (#2373), checked at its middle.
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| pcb_geom::arc_is_copper(a))
+    {
+        let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+        let (Ok(width), Ok(at)) = (
+            mm_to_nm(arc.width, "arc width"),
+            PointNm::from_mm(arc.mid, "arc middle"),
+        ) else {
+            continue;
+        };
+        let object = Object {
+            item: ItemRef::Arc(arc.uuid),
+            net: arc.net,
+            layers,
+            at,
+        };
+        for kind in [LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth] {
+            object.check(rules, kind, width, found);
+        }
+    }
 }
 
 fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {

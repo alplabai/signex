@@ -112,6 +112,7 @@ pub(super) fn board(
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -518,4 +519,31 @@ fn the_clearance_between_two_items_is_what_the_check_asks_of_them() {
     assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 1)), 350_000);
     assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 2)), 0);
     assert_eq!(rules.track_width_limits(1, 1), (None, None));
+}
+
+/// #2373: a copper arc is checked along every chord, and a track beside it
+/// is one finding, not one per chord it comes near.
+#[test]
+fn a_track_beside_the_middle_of_an_arc_is_one_clearance_finding() {
+    let mut b = board(
+        vec![],
+        vec![track(1, (4.0, 5.5), (6.0, 5.5), 2, "TopCopper")],
+        vec![],
+    );
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: id(4000),
+        start: Point::new(0.0, 0.0),
+        mid: Point::new(5.0, 5.0),
+        end: Point::new(10.0, 0.0),
+        width: 0.5,
+        layer: "TopCopper".into(),
+        net: 1,
+    });
+    let report = run(&b, &DrcRules::new(RULE));
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    assert!(
+        report.violations[0]
+            .items
+            .contains(&pcb_geom::ItemRef::Arc(id(4000)))
+    );
 }

@@ -349,6 +349,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
         "import_dxf" => crate::app::handlers::pcb_dxf_import::requested(false),
         "import_dxf_outline" => crate::app::handlers::pcb_dxf_import::requested(true),
+        "place_board_pad" => board_tool(BoardPlaceTool::Pad),
+        "place_board_arc" => board_tool(BoardPlaceTool::Arc),
+        "place_board_string" => board_tool(BoardPlaceTool::TextString),
+        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension),
+        "cycle_arc_mode" => Message::Pcb(PcbMsg::ArcModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),

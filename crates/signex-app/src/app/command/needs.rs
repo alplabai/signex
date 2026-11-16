@@ -374,9 +374,14 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_keepout"
         // #2389: Interactive Routing.
         | "place_board_route"
+        // #2373: free pads, arcs, strings and dimensions.
+        | "place_board_pad"
+        | "place_board_arc"
+        | "place_board_string"
+        | "place_board_dimension"
         | "board_sketch" => Needs::EditablePcb,
-        // #2389: the routing mode changes no board.
-        "cycle_route_mode" => Needs::Pcb,
+        // #2389, #2373: the routing and arc modes change no board.
+        "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"

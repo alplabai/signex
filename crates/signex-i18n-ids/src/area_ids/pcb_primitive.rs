@@ -145,4 +145,23 @@ define_ids! {
     PCB_PRIM_KEEPOUT_KINDS = "pcb-prim-keepout-kinds";
     PCB_PRIM_KEEPOUT_ALL_COPPER = "pcb-prim-keepout-all-copper";
     PCB_PRIM_KEEPOUT_KINDS_UNSUPPORTED = "pcb-prim-keepout-kinds-unsupported";
+    PCB_PRIM_ARC_TITLE = "pcb-prim-arc-title";
+    PCB_PRIM_ARC_COUNT = "pcb-prim-arc-count";
+    PCB_PRIM_TEXT_TITLE = "pcb-prim-text-title";
+    PCB_PRIM_TEXT_COUNT = "pcb-prim-text-count";
+    PCB_PRIM_DIMENSION_TITLE = "pcb-prim-dimension-title";
+    PCB_PRIM_DIMENSION_COUNT = "pcb-prim-dimension-count";
+    PCB_PRIM_CENTER = "pcb-prim-center";
+    PCB_PRIM_RADIUS = "pcb-prim-radius";
+    PCB_PRIM_START_ANGLE = "pcb-prim-start-angle";
+    PCB_PRIM_END_ANGLE = "pcb-prim-end-angle";
+    PCB_PRIM_ARC_MODE = "pcb-prim-arc-mode";
+    PCB_PRIM_ARC_MODE_TIP = "pcb-prim-arc-mode-tip";
+    PCB_PRIM_TEXT = "pcb-prim-text";
+    PCB_PRIM_TEXT_HEIGHT = "pcb-prim-text-height";
+    PCB_PRIM_LINE_WIDTH = "pcb-prim-line-width";
+    PCB_PRIM_OFFSET = "pcb-prim-offset";
+    PCB_PRIM_PRECISION = "pcb-prim-precision";
+    PCB_PRIM_VALUE = "pcb-prim-value";
+    PCB_PRIM_NOT_A_PRECISION = "pcb-prim-not-a-precision";
 }

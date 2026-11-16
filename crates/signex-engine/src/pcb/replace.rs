@@ -4,7 +4,9 @@
 use std::collections::{BTreeSet, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{LayerSizes, Pad, PcbBoard, Segment, Via, ViaType};
+use signex_types::pcb::{BoardText, LayerSizes, Pad, PcbBoard, Segment, Via, ViaType};
+use signex_types::pcb_arc::TrackArc;
+use signex_types::pcb_dimension::LinearDimension;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::{LayerSizesFault, board_copper_layers, size_storable};
 use uuid::Uuid;
@@ -51,7 +53,13 @@ pub(super) fn replace(
             match item {
                 BoardItem::Segment(new) => check_segment(board, &board.segments[index], new)?,
                 BoardItem::Via(new) => check_via(board, &board.vias[index], new)?,
-                _ => {}
+                BoardItem::FreePad(new) => check_pad(board, &board.free.pads[index], new)?,
+                BoardItem::Arc(new) => check_arc(board, &board.free.arcs[index], new)?,
+                BoardItem::Text(new) => check_text(&board.texts[index], new)?,
+                BoardItem::Dimension(new) => {
+                    check_dimension(&board.free.dimensions[index], new)?;
+                }
+                BoardItem::Footprint(_) | BoardItem::Zone(_) => {}
             }
         }
         slots.push(index);
@@ -190,6 +198,51 @@ fn check_size_layers<T>(board: &PcbBoard, sizes: &LayerSizes<T>) -> Result<(), B
         if !size.copper().is_some_and(|layer| copper.contains(&layer)) {
             return Err(BoardCommandError::NotCopperLayer(size.layer.clone()));
         }
+    }
+    Ok(())
+}
+
+/// An arc's width is a positive number; a changed layer is one this build
+/// knows; on copper a changed net is in the net table, off copper it has
+/// none (#2373).
+fn check_arc(board: &PcbBoard, old: &TrackArc, new: &TrackArc) -> Result<(), BoardCommandError> {
+    if new.width != old.width {
+        check_positive(new.width, "arc width")?;
+    }
+    let layer = parse_pcb_layer(&new.layer);
+    if new.layer != old.layer && layer.is_none() {
+        return Err(BoardCommandError::UnknownLayer(new.layer.clone()));
+    }
+    if new.net != 0 && layer.is_some_and(|l| !l.is_copper()) {
+        return Err(BoardCommandError::NotCopperLayer(new.layer.clone()));
+    }
+    check_net(board, old.net, new.net)
+}
+
+/// A string's height is a positive number; a changed layer takes text.
+fn check_text(old: &BoardText, new: &BoardText) -> Result<(), BoardCommandError> {
+    if new.font_size != old.font_size {
+        check_positive(new.font_size, "text height")?;
+    }
+    check_text_layer(&old.layer, &new.layer)
+}
+
+/// A dimension's line width and text height are positive numbers; a
+/// changed layer takes text.
+fn check_dimension(old: &LinearDimension, new: &LinearDimension) -> Result<(), BoardCommandError> {
+    if new.line_width != old.line_width {
+        check_positive(new.line_width, "dimension line width")?;
+    }
+    if new.text_height != old.text_height {
+        check_positive(new.text_height, "dimension text height")?;
+    }
+    check_text_layer(&old.layer, &new.layer)
+}
+
+fn check_text_layer(old: &str, new: &str) -> Result<(), BoardCommandError> {
+    let takes_text = parse_pcb_layer(new).is_some_and(|l| l.takes_text());
+    if new != old && !takes_text {
+        return Err(BoardCommandError::NotTextLayer(new.to_string()));
     }
     Ok(())
 }

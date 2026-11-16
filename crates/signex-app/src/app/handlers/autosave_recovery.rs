@@ -548,6 +548,7 @@ mod tests {
             zones: vec![],
             graphics: vec![],
             texts: vec![],
+            free: Default::default(),
         };
         board
             .unknown

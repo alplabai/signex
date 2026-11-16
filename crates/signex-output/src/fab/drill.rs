@@ -113,13 +113,18 @@ pub(crate) fn collect_holes(
         to: stack.count(),
     };
     let mut holes = Vec::new();
-    for footprint in &board.footprints {
-        for pad in &footprint.pads {
-            match pad_hole(footprint, pad, through) {
-                Ok(Some(hole)) => holes.push(hole),
-                Ok(None) => {}
-                Err(_) => *skipped += 1,
-            }
+    // Free pads (#2373) are drilled in the board's own frame.
+    let frame = signex_types::pcb_free::free_pad_frame();
+    let free = board.free.pads.iter().map(|pad| (&frame, pad));
+    let owned = board
+        .footprints
+        .iter()
+        .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)));
+    for (footprint, pad) in owned.chain(free) {
+        match pad_hole(footprint, pad, through) {
+            Ok(Some(hole)) => holes.push(hole),
+            Ok(None) => {}
+            Err(_) => *skipped += 1,
         }
     }
     let vias = board

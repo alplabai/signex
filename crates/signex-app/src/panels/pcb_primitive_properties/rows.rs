@@ -459,3 +459,51 @@ pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Elemen
             .boxed(),
     )
 }
+
+/// The Layer row of an arc, string or dimension (#2373): its colour chip
+/// and a dropdown of the layers it can move to.
+pub(super) fn any_layer_row<'a>(
+    look: Look<'a>,
+    common: &'a PrimitiveCommon,
+    layers: &'a [super::AreaLayerChoice],
+    layer: Option<&'a super::AreaLayerChoice>,
+) -> Element<'a, PanelMsg> {
+    let target = common.target.clone();
+    let list = dropdown(common, layers, layer.cloned(), move |choice| {
+        PcbPrimitiveMsg::AreaLayerPicked {
+            target: target.clone(),
+            layer: choice.layer,
+        }
+    });
+    let swatch = layer.map_or_else(
+        || {
+            container(Space::new())
+                .width(Length::Fixed(TS.body))
+                .boxed()
+        },
+        |l| {
+            chip(crate::pcb_canvas::layer_style::layer_colour(
+                l.layer,
+                look.tokens(),
+            ))
+        },
+    );
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_LAYER,
+        row![swatch, container(list).width(Length::Fill)]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+    )
+}
+
+/// A text field: the draft while one is typed, else `value`.
+pub(super) fn text_field<'a>(
+    common: &PrimitiveCommon,
+    id: PrimitiveField,
+    value: Option<&str>,
+    look: Look<'a>,
+) -> Element<'a, PanelMsg> {
+    field(common, id, value.map(str::to_string), None, look)
+}

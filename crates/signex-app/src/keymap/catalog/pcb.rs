@@ -448,6 +448,59 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2373: the free pad, arc, string and dimension tools. Each click (or
+    // finished arc or dimension) is one undo step. No default key.
+    CommandMetadata {
+        id: "place_board_pad",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_PAD,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_PAD),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_arc",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_ARC,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ARC),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_string",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_STRING,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_STRING),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2373: how the Arc tool's clicks make an arc. Changes no board. No
+    // default key.
+    CommandMetadata {
+        id: "cycle_arc_mode",
+        category: "pcb",
+        label: command_ids::CMD_CYCLE_ARC_MODE,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // #2394: the layer strip under the board. View state and per-user
     // settings only: no undo step, no dirty mark. The rows with operands run
     // from an agent or the CLI on the board `document` names (the per-user

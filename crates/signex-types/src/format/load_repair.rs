@@ -30,6 +30,9 @@ pub(in crate::format) mod kind {
     pub const VIA: &str = "via";
     pub const ZONE: &str = "zone";
     pub const BOARD_TEXT: &str = "board text";
+    pub const ARC: &str = "arc";
+    pub const FREE_PAD: &str = "free pad";
+    pub const DIMENSION: &str = "dimension";
     /// The document's own id (sheet or board), which no object may take.
     pub const SHEET: &str = "sheet";
 }

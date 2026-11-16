@@ -6,10 +6,11 @@ use std::path::Path;
 
 use signex_types::pcb::PcbBoard;
 
-use super::facts::{track_facts, via_facts};
+use super::facts::{pad_facts, track_facts, via_facts};
+use super::free::{arc_facts, dimension_facts, text_facts};
 use super::zone::zone_facts;
 use crate::app::Signex;
-use crate::app::handlers::pcb_tool::has_form;
+use crate::app::handlers::pcb_tool::{arc_mode_name, has_form};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::panels::pcb_primitive_properties::{
     Editability, PcbPrimitiveFacts, PrimitiveTarget, ZoneKind,
@@ -44,6 +45,40 @@ impl Signex {
                     self.primitive_common_on(board, target, Editability::Editable, Some(track.net));
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Track(track_facts(board, common, &[&track], i18n))
+            }
+            BoardPlaceTool::Pad => {
+                let pad = self.next_board_pad(board);
+                let net = Some(pad.net.as_ref().map_or(0, |n| n.number));
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, net);
+                common.placement_paused = paused;
+                let frame = signex_types::pcb_free::free_pad_frame();
+                let origin = board.options.origin;
+                PcbPrimitiveFacts::Pad(pad_facts(origin, common, &[(&frame, &pad)], i18n))
+            }
+            BoardPlaceTool::Arc => {
+                let arc = self.next_board_arc(board)?;
+                let net = pcb_geom::arc_is_copper(&arc).then_some(arc.net);
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, net);
+                common.placement_paused = paused;
+                let mode = self.interaction_state.pcb_tool_defaults.arc_mode;
+                let mode = signex_i18n::t!(i18n, arc_mode_name(mode)).into_string();
+                PcbPrimitiveFacts::Arc(arc_facts(board, common, &[&arc], i18n, Some(mode)))
+            }
+            BoardPlaceTool::TextString => {
+                let text = self.next_board_text()?;
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, None);
+                common.placement_paused = paused;
+                PcbPrimitiveFacts::Text(text_facts(board, common, &[&text], i18n))
+            }
+            BoardPlaceTool::Dimension => {
+                let dimension = self.next_board_dimension()?;
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, None);
+                common.placement_paused = paused;
+                PcbPrimitiveFacts::Dimension(dimension_facts(board, common, &[&dimension], i18n))
             }
             tool => {
                 let kind = area_kind(tool)?;

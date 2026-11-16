@@ -200,29 +200,32 @@ mod tests {
             PcbBarRow::Tool(BoardPlaceTool::PolygonPour),
             "#2216: the first row is live"
         );
-        let mut drawing = PcbBarLastTools::default();
+        let mut parts = PcbBarLastTools::default();
         assert!(matches!(
-            BoardPlaceTool::Arc.state(),
+            BoardPlaceTool::Component.state(),
             ToolState::Unavailable(_)
         ));
-        assert!(!drawing.remember(PcbBarGroup::CopperDrawing, "place_board_arc"));
+        assert!(!parts.remember(PcbBarGroup::Components, "place_board_component"));
+        assert_eq!(
+            parts.current(PcbBarGroup::Components),
+            PcbBarRow::Command("change_footprint"),
+            "a greyed row is never shown while a live one exists"
+        );
+        // #2373: Arc and Dimension are live rows now.
+        let mut drawing = PcbBarLastTools::default();
+        assert!(drawing.remember(PcbBarGroup::CopperDrawing, "place_board_arc"));
         assert_eq!(
             drawing.current(PcbBarGroup::CopperDrawing),
-            PcbBarRow::Tool(BoardPlaceTool::Track),
-            "a greyed row is never shown while a live one exists"
+            PcbBarRow::Tool(BoardPlaceTool::Arc)
         );
         assert!(last.remember(areas, "place_board_fill"));
         assert!(!last.remember(areas, "place_board_fill"), "unchanged");
         assert_eq!(last.current(areas), PcbBarRow::Tool(BoardPlaceTool::Fill));
         assert!(!last.remember(areas, "place_board_via"), "not this group's");
-        assert!(matches!(
-            BoardPlaceTool::Dimension.state(),
-            ToolState::Unavailable(_)
-        ));
         assert_eq!(
             last.current(PcbBarGroup::Dimensions),
             PcbBarRow::Tool(BoardPlaceTool::Dimension),
-            "a group with no live row shows its first, greyed"
+            "#2373: Dimension is live"
         );
     }
 

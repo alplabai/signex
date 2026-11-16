@@ -219,59 +219,103 @@ cursor) is drawn as its outline alone.
 
 ## String
 
-Still greyed, with no catalog command or key yet. A string the canvas
-cannot draw or pick would still be saved with the board and could not be
-selected or deleted, so the row goes live only once board text is drawn
-(#2387) and picked (a Text kind in `pcb_geom::ItemRef`).
-
-The tool behind the row is in. Each click places a string
+`place_board_string` (no default key). Each click places a string
 (`PcbBoard::texts`) on the active layer at the PCB default text size
 (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned, reading the catalog's new-string
-text (`pcb-tool-string-text`, "String"); the string carries no net. Only the
-two overlay layers take a string (`PcbLayer::is_overlay`): on any other
-layer a click places nothing and the Messages panel says to make an overlay
-layer active, and nothing follows the pointer. Copper text would be copper
-that the copper list, the design rule check and the ratsnest never read.
+text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
+its placement form; the string carries no net. A layer takes a string when
+`PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
+and the documentation layers (Dimensions among them). On any other layer a
+click places nothing and the Messages panel names the layers that do.
+Copper text would be copper that the copper list, the design rule check and
+the ratsnest never read. The canvas draws it (#2387); a click or box picks
+it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
 
 ## Arc
 
-Still greyed. The model is in: `signex_types::pcb_arc::TrackArc`, a copper
-track along the circle through its start, a point on it (`mid`, which picks
-the way it bends) and its end, with width, layer and net like a track.
-`TrackArc::sweep` gives the circle and the signed turn (counter-clockwise
-positive), `length_mm` the centre-line length and `points` the polyline
-whose chords each stay within a given error of the arc (at most 360
-chords), which is how drawing, hit-testing, the design rule check and the
-ratsnest are to read it. Three points on one line are a straight track.
+`place_board_arc` (no default key) draws an arc on the active layer, as one
+undo step per arc. `cycle_arc_mode` (palette, no default key) steps how the
+clicks make it (`signex_engine::pcb::draw::ArcMode`); the Messages panel and
+the placement form name the mode:
 
-Still to come before the tool is live: the board list
-(`PcbBoard::arcs`) and its `.snxpcb` rows, a `BoardItem` kind so it is
-added and undone as one step, the renderer, the pick index, the copper list
-the ratsnest and the design rule check share (`pcb_geom::collect_copper`),
-and the three-click tool (start, end, then a point on the arc).
+- **By centre** (the default): the centre, then the start, which sets the
+  radius, then a point whose direction from the centre ends the arc. The arc
+  runs counter-clockwise on screen from start to end, any angle up to a full
+  turn.
+- **By edge**: the two ends of a quarter circle.
+- **Any angle**: the start, the end, then any point the arc bends through.
+
+Points that make no arc (a zero radius, three points on one line) add
+nothing and say so. The model is `signex_types::pcb_arc::TrackArc` (start,
+a point on the arc, end, width, layer, net), kept in `PcbBoard::free.arcs`.
+On a copper layer an arc is copper of the net under its start (or the net
+set in the form): the copper list, the ratsnest, the design rule check (as a
+track: clearance, width rules and keepouts) and fabrication outputs read it
+along its chords (`pcb_geom::ARC_CHORD_ERROR_MM`, 5 µm). Its chords are one
+copper: the ratsnest joins them, and DRC reports one finding per pair of
+items, the worst of their chords'. On any other layer it is a drawing
+with no net. Width follows `PcbSetup::trace_width` unless the form sets it.
+
+The Arc panel shows Net Information and Net (copper only), Layer (any board
+layer; moving off copper drops the net), Width, Centre, Radius, Start and End
+Angle (read from the board origin with Y up, counter-clockwise from start to
+end) and the length; each edit is one undo step
+(`primitive_edit::ArcEdit`, `BoardCommand::ReplaceItems`).
 
 ## Dimension
 
-Still greyed. The model is in: `signex_types::pcb_dimension::LinearDimension`
-measures the straight distance between two points, its dimension line
-standing `offset` mm off them (positive: a quarter turn counter-clockwise
-from start to end), on the Dimensions layer at the PCB default line width
-and text height with two decimals. `LinearDimension::drawing` gives what it
-draws: the two extension lines (running half a text height past the
-dimension line), the dimension line, an arrow at each end (one text height
-long) and the value's centre, a text height off the line, turned to read
-along it and never upside down (text running straight down reads bottom to
-top).
+`place_board_dimension` (no default key) places a linear dimension: two
+clicks for the points it measures, a third for where its line stands (the
+offset is how far the third point stands off the measured line). It goes on
+the active layer when that takes text, else on the Dimensions layer. The
+model is `signex_types::pcb_dimension::LinearDimension`, kept in
+`PcbBoard::free.dimensions`: two extension lines, the dimension line, an
+arrow at each end and the value (`value_text`, to `precision` decimals, at
+most 6), drawn by the board renderer and picked by its strokes and the box
+of its value. Two equal points add nothing and say so.
 
-Still to come before the tool is live: the board list and its `.snxpcb`
-section, a `BoardItem` kind, the renderer, and the tool (two clicks for the
-points, a third for the offset).
+The Dimension panel shows Start, End, Offset, Line Width, Text Height,
+Precision, the value and Layer (layers that take text); each edit is one
+undo step. Angular, radial, diameter, leader, baseline and centre-mark
+dimensions have no model yet and are not offered.
 
 ## Pad
 
-Still greyed. A pad placed on its own needs a board-level pad list next to
-the footprints' pads, read by the copper list, the net table, the design rule
-check, the ratsnest and the pick index; none of that exists yet.
+`place_board_pad` (no default key) places a free pad, one per click: a pad
+with no footprint, kept in `PcbBoard::free.pads` at its board position. By
+default it is a round through-hole pad 1.5 mm across with a 0.8 mm hole on
+the top and bottom copper, numbered `1`, on the net of the copper under it.
+Code that reads footprint pads reads a free pad in the board's own frame
+(`signex_types::pcb_free::free_pad_frame`: a footprint at the origin, not
+turned), so the copper list, ratsnest, design rule check, pick index,
+renderer, drill file and netlist test points treat it as any pad. A click
+selects it and the pad panel edits it, each edit one undo step.
+
+## Placement form (Tab) {#placement-form}
+
+While a tool is armed, Properties shows the object it places next (#2393),
+with the rows of the placed object's panel: Via (Diameter, Hole Size, Net),
+Track and Interactive Routing (Width, Net), the areas, Pad (Designator,
+Shape, X/Y Size, Hole Size, Rotation, Net), Arc (Placement mode, Net, Layer,
+Width), String (Text, Height, Rotation, Layer) and Dimension (Line Width,
+Text Height, Precision, Layer). The location and an arc's shape come from
+the clicks, so the form leaves them out. Tab (`placement_properties`) pauses
+placing and focuses the form's main field (a via's Diameter, a track's or
+arc's Width, a pour's Clearance, a pad's X-Size, a string's Text, a
+dimension's Line Width); Enter or Tab again goes on with
+the values; Esc puts back the values from before the pause and keeps the
+tool armed. A value is checked as an edit of a placed object is (a size not
+above zero, a hole wider than the pad, a precision that is not a whole number
+from 0 to 6 are refused and say why). A Layer pick moves the active layer.
+The values stay the tool's for the session (`BoardToolDefaults`).
+
+## Saving free primitives
+
+Free arcs, pads and dimensions are saved in the optional `[free]` section of
+the `.snxpcb` (`signex_types::format::board_free`), lengths in integer nm.
+A board without any has no section and re-saves byte-identical. Each item
+has its own uuid in the board's one id space; a duplicate is repaired on
+load like any other board object.
 
 ## Selection Filter
 
@@ -281,7 +325,8 @@ toggles its kind and the dropdown stays open; a click outside closes it. It
 edits the same filter as the board Properties panel's chips (#2353),
 through the same `PcbBoardMsg` messages, so the two always show the same
 state. Kinds the board editor cannot pick yet are greyed with why, as their
-chips are.
+chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
+as well as footprint pads, and Other dimensions (`PickKind::of`).
 
 ## Align
 
@@ -321,7 +366,8 @@ canvas menu row of #2366.
 - **Dropdown.** A right-click on a group with more than one row opens its
   rows. A live row runs its command and is greyed by the same gate as its
   menu row; a tool the board editor cannot run yet is greyed and its tooltip
-  is the reason Place gives ("Place Pad: not available on boards yet").
+  is the reason Place gives ("Place Component: not available on boards
+  yet").
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the

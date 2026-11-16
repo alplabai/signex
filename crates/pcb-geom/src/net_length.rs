@@ -35,16 +35,28 @@ pub fn tracks_length_mm<'a>(segments: impl IntoIterator<Item = &'a Segment>) -> 
         .map(nm_to_mm)
 }
 
-/// The routed length of net `net` in mm: every track on it. `None` for net 0
-/// (no net) or a track the geometry cannot hold.
+/// The routed length of net `net` in mm: every track and copper arc on it
+/// (#2373). `None` for net 0 (no net) or an item the geometry cannot hold.
 pub fn net_routed_length_mm(board: &PcbBoard, net: u32) -> Option<f64> {
     if net == 0 {
         return None;
     }
-    tracks_length_mm(board.segments.iter().filter(|s| s.net == net))
+    let tracks = board
+        .segments
+        .iter()
+        .filter(|s| s.net == net)
+        .map(track_length_nm);
+    let arcs = board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| a.net == net && crate::free::arc_is_copper(a))
+        .map(|a| crate::units::mm_to_nm(a.length_mm(), "arc length").ok());
+    tracks.chain(arcs).sum::<Option<i64>>().map(nm_to_mm)
 }
 
-/// The tracks, vias and pads on net `net`, in board order. Empty for net 0.
+/// The tracks, vias, pads, copper arcs and free pads on net `net`, in board
+/// order. Empty for net 0.
 pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     if net == 0 {
         return Vec::new();
@@ -68,7 +80,11 @@ pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
                 pad: p.uuid,
             })
     });
-    tracks.chain(vias).chain(pads).collect()
+    tracks
+        .chain(vias)
+        .chain(pads)
+        .chain(crate::free::free_copper_on(board, net))
+        .collect()
 }
 
 /// Every track, via and pad of `net`, then its selectable drawn areas: what
@@ -112,8 +128,9 @@ pub fn net_copper(board: &PcbBoard, net: u32) -> Vec<Shape> {
     tracks.chain(vias).chain(pads).collect()
 }
 
-/// The net of a track, via, pad or drawn area; `None` for a footprint body,
-/// an item not on the board, or one on no net.
+/// The net of a track, via, pad, copper arc, free pad or drawn area; `None`
+/// for a footprint body, a string, a dimension, an item not on the board, or
+/// one on no net.
 pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
     let net = match item {
         ItemRef::Track(id) => board.segments.iter().find(|s| s.uuid == id)?.net,
@@ -131,7 +148,18 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
                 .number
         }
         ItemRef::Zone { zone, .. } => board.zones.iter().find(|z| z.uuid == zone)?.net,
-        ItemRef::Footprint(_) => return None,
+        ItemRef::Arc(id) => board.free.arcs.iter().find(|a| a.uuid == id)?.net,
+        ItemRef::FreePad(id) => {
+            board
+                .free
+                .pads
+                .iter()
+                .find(|p| p.uuid == id)?
+                .net
+                .as_ref()?
+                .number
+        }
+        ItemRef::Footprint(_) | ItemRef::Text(_) | ItemRef::Dimension(_) => return None,
     };
     (net != 0).then_some(net)
 }

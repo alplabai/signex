@@ -6,7 +6,8 @@
 //! - `no_routing` forbids tracks; `no_vias` vias; `no_copper` tracks, vias
 //!   and pads; `no_drilling` vias and drilled pads, on every layer the
 //!   keepout covers; `no_components` a footprint whose body meets the
-//!   keepout on its own side's outer copper layer.
+//!   keepout on its own side's outer copper layer. A copper arc counts as a
+//!   track and a free pad as a pad (#2373).
 //! - `no_pours` is not checked yet (zones are not tested against keepouts).
 //!
 //! One violation per keepout and item, however many kinds forbid it. A
@@ -15,7 +16,7 @@
 //! (#2300); a track, via or pad that does not convert is already in the
 //! copper index's `skipped`.
 
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{Footprint, Pad, PcbBoard};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_sketch::PcbKeepout;
 
@@ -107,6 +108,23 @@ impl<'a> Area<'a> {
                     self.meet(item, segment.net, layers, &shape, found);
                 }
             }
+            // A copper arc is a track (#2373): one finding however many of
+            // its chords meet the keepout.
+            for arc in board
+                .free
+                .arcs
+                .iter()
+                .filter(|a| pcb_geom::arc_is_copper(a))
+            {
+                let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+                let before = found.len();
+                for shape in pcb_geom::arc_shapes(arc).unwrap_or_default() {
+                    self.meet(ItemRef::Arc(arc.uuid), arc.net, layers, &shape, found);
+                    if found.len() > before {
+                        break;
+                    }
+                }
+            }
         }
         if forbids.no_vias || forbids.no_drilling || copper {
             for via in &board.vias {
@@ -120,23 +138,21 @@ impl<'a> Area<'a> {
                 }
             }
         }
+        if copper || forbids.no_drilling {
+            // Free pads (#2373), in the board's own frame.
+            let frame = signex_types::pcb_free::free_pad_frame();
+            for pad in &board.free.pads {
+                self.pad(&frame, pad, ItemRef::FreePad(pad.uuid), found);
+            }
+        }
         for footprint in &board.footprints {
             if copper || forbids.no_drilling {
                 for pad in &footprint.pads {
-                    let drilled = forbids.no_drilling && pad.drill.is_some();
-                    let layers = match (drilled, copper) {
-                        (true, _) => u32::MAX,
-                        (false, true) => pad_layers(footprint, pad),
-                        (false, false) => continue,
-                    };
-                    let net = pad.net.as_ref().map_or(0, |n| n.number);
                     let item = ItemRef::Pad {
                         footprint: footprint.uuid,
                         pad: pad.uuid,
                     };
-                    if let Ok(shape) = pad_shape(footprint, pad) {
-                        self.meet(item, net, layers, &shape, found);
-                    }
+                    self.pad(footprint, pad, item, found);
                 }
             }
             if forbids.no_components {
@@ -154,6 +170,21 @@ impl<'a> Area<'a> {
                     Err(_) => {}
                 }
             }
+        }
+    }
+
+    /// A pad of `footprint` the keepout forbids (as copper, or drilled).
+    fn pad(&self, footprint: &Footprint, pad: &Pad, item: ItemRef, found: &mut Vec<Violation>) {
+        let forbids = self.keepout.forbids;
+        let drilled = forbids.no_drilling && pad.drill.is_some();
+        let layers = match (drilled, forbids.no_copper) {
+            (true, _) => u32::MAX,
+            (false, true) => pad_layers(footprint, pad),
+            (false, false) => return,
+        };
+        let net = pad.net.as_ref().map_or(0, |n| n.number);
+        if let Ok(shape) = pad_shape(footprint, pad) {
+            self.meet(item, net, layers, &shape, found);
         }
     }
 

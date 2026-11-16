@@ -53,19 +53,32 @@ pub fn ratsnest_with_fills(board: &PcbBoard, fills: &ZoneFills) -> Vec<RatLine> 
         return Vec::new();
     }
     let index = BoardIndex::build(board);
-    let slot: HashMap<ItemRef, usize> =
-        nodes.iter().enumerate().map(|(i, n)| (n.item, i)).collect();
+    // Every node of an identity: an arc's chords share one (#2373).
+    let mut slots: HashMap<ItemRef, Vec<usize>> = HashMap::new();
+    for (i, n) in nodes.iter().enumerate() {
+        slots.entry(n.item).or_default().push(i);
+    }
     let zones = collect_zones(board, fills);
     let mut islands = UnionFind::new(nodes.len() + zones.len());
+    // The parts of one item are one copper.
+    for (item, parts) in &slots {
+        if item.is_multi_part() {
+            for pair in parts.windows(2) {
+                islands.union(pair[0], pair[1]);
+            }
+        }
+    }
+    let copies = |hit: &ItemRef| slots.get(hit).into_iter().flatten().copied();
     for (i, node) in nodes.iter().enumerate() {
         for hit in index.hit_rect(&node.shape.aabb(), RectSelect::Touching) {
-            let Some(&j) = slot.get(&hit) else { continue };
-            let other = &nodes[j];
-            if other.net == node.net
-                && other.layers & node.layers != 0
-                && node.shape.overlaps(&other.shape)
-            {
-                islands.union(i, j);
+            for j in copies(&hit) {
+                let other = &nodes[j];
+                if other.net == node.net
+                    && other.layers & node.layers != 0
+                    && node.shape.overlaps(&other.shape)
+                {
+                    islands.union(i, j);
+                }
             }
         }
     }
@@ -77,13 +90,14 @@ pub fn ratsnest_with_fills(board: &PcbBoard, fills: &ZoneFills) -> Vec<RatLine> 
             .bounds()
             .map(|r| index.hit_rect(&r, RectSelect::Touching));
         for hit in hits.into_iter().flatten() {
-            let Some(&j) = slot.get(&hit) else { continue };
-            let other = &nodes[j];
-            if other.net == zone.net
-                && other.layers & zone.layers != 0
-                && shape_meets_area(&other.shape, &zone.area)
-            {
-                islands.union(nodes.len() + z, j);
+            for j in copies(&hit) {
+                let other = &nodes[j];
+                if other.net == zone.net
+                    && other.layers & zone.layers != 0
+                    && shape_meets_area(&other.shape, &zone.area)
+                {
+                    islands.union(nodes.len() + z, j);
+                }
             }
         }
     }

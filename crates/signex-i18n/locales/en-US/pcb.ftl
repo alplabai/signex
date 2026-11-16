@@ -144,10 +144,6 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 # Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
 # cannot run yet (#2352).
 pcb-bar-component-unavailable = Place Component: not available on boards yet
-pcb-bar-pad-unavailable = Place Pad: not available on boards yet
-pcb-bar-arc-unavailable = Place Arc: not available on boards yet
-pcb-bar-text-unavailable = Place String: not available on boards yet
-pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component
@@ -169,6 +165,10 @@ pcb-bar-fill-tooltip = Place Fill
 pcb-bar-region-tooltip = Place Solid Region (right-click to close)
 pcb-bar-keepout-tooltip = Place Keepout (right-click to close)
 pcb-bar-pour-tooltip = Place Polygon Pour (right-click to close)
+pcb-bar-pad-tooltip = Place Pad
+pcb-bar-arc-tooltip = Place Arc (by centre, by edge or any angle: Cycle Arc Mode in the palette)
+pcb-bar-string-tooltip = Place String
+pcb-bar-dimension-tooltip = Place Dimension
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
@@ -185,8 +185,24 @@ pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer active to draw on it
 # The text a string placed with the String tool reads until it is edited.
 pcb-tool-string-text = String
-# A String click while the active layer is not an overlay layer.
-pcb-tool-string-needs-overlay = String: make an overlay layer active to place a string on it
+# A String click while the active layer takes no text.
+pcb-tool-string-needs-text-layer = String: make an overlay, mechanical or documentation layer active to place a string on it
+# The free pad, arc, string and dimension tools (#2373): what the Messages
+# panel says when one is armed, and when a click adds nothing.
+pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
+pcb-tool-hint-arc = Arc: { $mode }. Esc drops the arc being drawn, then ends the tool
+pcb-tool-hint-string = String: click to place a string on the active overlay, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
+pcb-tool-hint-dimension = Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-no-arc = Arc: those points make no arc, so nothing was added
+pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was added
+# How the Arc tool's clicks make an arc; `cycle_arc_mode` steps through them.
+pcb-arc-mode-centre = click the centre, the start, then where the arc ends (it runs counter-clockwise)
+pcb-arc-mode-edge = click the two ends of a quarter circle
+pcb-arc-mode-any = click the start, the end, then a point the arc bends through
+# The short name of each Arc mode, as Properties shows it while placing.
+pcb-arc-mode-centre-name = By Centre
+pcb-arc-mode-edge-name = By Edge
+pcb-arc-mode-any-name = Any Angle
 # Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
 # lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
 pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)

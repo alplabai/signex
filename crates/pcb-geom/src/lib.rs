@@ -17,6 +17,9 @@ mod body;
 mod closed_path;
 mod copper;
 mod flip;
+mod free;
+#[cfg(test)]
+mod free_tests;
 mod gloss;
 mod graphic;
 mod index;
@@ -56,6 +59,10 @@ pub use copper::{
     via_layers, via_pieces,
 };
 pub use flip::flip_footprint;
+pub use free::{
+    ARC_CHORD_ERROR_MM, arc_is_copper, arc_shapes, dimension_shapes, free_copper_on,
+    free_pad_shape, text_shape,
+};
 pub use gloss::{Glossed, gloss};
 pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,

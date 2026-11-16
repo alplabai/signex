@@ -223,14 +223,21 @@ fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
 }
 
 #[test]
-fn a_board_string_lands_on_an_overlay_layer_only() {
-    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
+    use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
 
     let at = Point::new(2.0, 3.0);
     let id = Uuid::from_u128(0x91);
     let bottom = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
     let text = new_text(id, at, bottom, "J1".into()).unwrap();
     assert_eq!(text.layer, "BottomSilkscreen");
+    let mech = PcbLayer::Mechanical(MechanicalLayer::new(2).unwrap());
+    assert_eq!(
+        new_text(id, at, mech, "J1".into()).unwrap().layer,
+        "Mechanical2"
+    );
+    let dims = PcbLayer::Technical(TechnicalLayer::Dimensions);
+    assert!(new_text(id, at, dims, "J1".into()).is_some(), "#2373");
     for layer in [
         PcbLayer::Copper(CopperLayer::Top),
         PcbLayer::Copper(CopperLayer::Bottom),

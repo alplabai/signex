@@ -248,7 +248,7 @@ impl PcbSelectionState {
         let mut highlight = Highlight::default();
         let is_moving = |item: ItemRef| match item {
             ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
-            ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
+            _ => false,
         };
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
@@ -350,7 +350,7 @@ impl PcbSelectionState {
             .filter_map(|i| match i.item {
                 ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
                 ItemRef::Footprint(id) => Some((true, i.item, id)),
-                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => None,
+                _ => None,
             })
             .collect();
         if under.iter().any(|(_, _, id)| selected.contains(id)) {
@@ -378,7 +378,7 @@ impl PcbSelectionState {
             .items()
             .filter(|i| match i.item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
-                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
+                _ => false,
             })
             .map(|i| i.shape)
             .collect()
@@ -471,7 +471,32 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             });
         }
     }
+    hidden_free_items(board, view, &mut hidden);
     hidden
+}
+
+/// The strings, free arcs, free pads and dimensions on layers `view` hides
+/// (#2373): not picked, as they are not drawn.
+fn hidden_free_items(board: &PcbBoard, view: &PcbLayerView, hidden: &mut HashSet<ItemRef>) {
+    let off = |layer: &String| !view.shows_any(std::slice::from_ref(layer));
+    for text in board.texts.iter().filter(|t| off(&t.layer)) {
+        hidden.insert(ItemRef::Text(text.uuid));
+    }
+    for arc in board.free.arcs.iter().filter(|a| off(&a.layer)) {
+        hidden.insert(ItemRef::Arc(arc.uuid));
+    }
+    for dimension in board.free.dimensions.iter().filter(|d| off(&d.layer)) {
+        hidden.insert(ItemRef::Dimension(dimension.uuid));
+    }
+    let frame = signex_types::pcb_free::free_pad_frame();
+    for pad in board
+        .free
+        .pads
+        .iter()
+        .filter(|p| !view.shows_pad(&frame, p))
+    {
+        hidden.insert(ItemRef::FreePad(pad.uuid));
+    }
 }
 
 /// One line naming the items the index could not take, if any.
@@ -506,6 +531,10 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Via(id) => format!("via {id}"),
         ItemRef::Footprint(id) => format!("footprint {id}"),
         ItemRef::Zone { zone, .. } => format!("area {zone}"),
+        ItemRef::Text(id) => format!("string {id}"),
+        ItemRef::Arc(id) => format!("arc {id}"),
+        ItemRef::FreePad(id) => format!("free pad {id}"),
+        ItemRef::Dimension(id) => format!("dimension {id}"),
     }
 }
 
@@ -547,6 +576,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }

@@ -335,6 +335,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     app.open_pcb_tab(dir.path().join("Board.snxpcb"), "Board".into(), board);
     let repaired = app.reconcile_document_ids();
@@ -482,6 +483,7 @@ fn an_unloaded_board_is_read_from_its_file() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     let file = dir.path().join("Board.snxpcb");
     std::fs::write(
@@ -1013,6 +1015,7 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 

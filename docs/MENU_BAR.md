@@ -422,7 +422,7 @@ run and grey the same set. A live tool (#2373) is a command row that runs the
 same command as its Active Bar button and arms the tool on the board in view;
 see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
 cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
-("Place Pad: not available on boards yet").
+("Place Component: not available on boards yet").
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
 variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`

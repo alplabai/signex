@@ -125,6 +125,7 @@ fn board() -> PcbBoard {
         graphics: Vec::new(),
         texts: Vec::new(),
         stackup: None,
+        free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),
     }

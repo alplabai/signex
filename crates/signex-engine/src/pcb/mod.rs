@@ -19,6 +19,9 @@ pub mod component;
 pub mod component_edit;
 pub mod designators;
 pub mod draw;
+mod draw_free;
+#[cfg(test)]
+mod draw_free_tests;
 pub mod dxf;
 pub mod eco;
 mod engine;

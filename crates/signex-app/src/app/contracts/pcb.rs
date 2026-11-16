@@ -74,6 +74,9 @@ pub enum PcbMsg {
     /// `cycle_route_mode` ran (#2389): Interactive Routing switches between
     /// walking around other nets and pushing their tracks aside.
     RouteModeStepped,
+    /// `cycle_arc_mode` ran (#2373): the Arc tool draws its next arc by
+    /// centre, by edge or at any angle.
+    ArcModeStepped,
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).

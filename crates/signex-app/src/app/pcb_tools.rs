@@ -59,11 +59,11 @@ impl BoardPlaceTool {
             Self::SolidRegion => Live("place_board_region"),
             Self::PolygonPour => Live("place_board_polygon_pour"),
             Self::Keepout => Live("place_board_keepout"),
+            Self::Pad => Live("place_board_pad"),
+            Self::Arc => Live("place_board_arc"),
+            Self::TextString => Live("place_board_string"),
+            Self::Dimension => Live("place_board_dimension"),
             Self::Component => Unavailable(ids::PCB_BAR_COMPONENT_UNAVAILABLE),
-            Self::Pad => Unavailable(ids::PCB_BAR_PAD_UNAVAILABLE),
-            Self::Arc => Unavailable(ids::PCB_BAR_ARC_UNAVAILABLE),
-            Self::TextString => Unavailable(ids::PCB_BAR_TEXT_UNAVAILABLE),
-            Self::Dimension => Unavailable(ids::PCB_BAR_DIMENSION_UNAVAILABLE),
         }
     }
 
@@ -105,7 +105,12 @@ impl BoardPlaceTool {
             Self::SolidRegion => (ids::PCB_BAR_REGION_TOOLTIP, ids::PCB_TOOL_HINT_REGION),
             Self::PolygonPour => (ids::PCB_BAR_POUR_TOOLTIP, ids::PCB_TOOL_HINT_POUR),
             Self::Keepout => (ids::PCB_BAR_KEEPOUT_TOOLTIP, ids::PCB_TOOL_HINT_KEEPOUT),
-            other => (other.name(), other.name()),
+            Self::Pad => (ids::PCB_BAR_PAD_TOOLTIP, ids::PCB_TOOL_HINT_PAD),
+            // The Arc hint names the mode: `Signex::board_tool_hint`.
+            Self::Arc => (ids::PCB_BAR_ARC_TOOLTIP, ids::PCB_TOOL_HINT_ARC),
+            Self::TextString => (ids::PCB_BAR_STRING_TOOLTIP, ids::PCB_TOOL_HINT_STRING),
+            Self::Dimension => (ids::PCB_BAR_DIMENSION_TOOLTIP, ids::PCB_TOOL_HINT_DIMENSION),
+            Self::Component => (Self::Component.name(), Self::Component.name()),
         }
     }
 }

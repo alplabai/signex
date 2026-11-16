@@ -64,6 +64,10 @@ impl Signex {
                 self.step_route_mode();
                 Task::none()
             }
+            PcbMsg::ArcModeStepped => {
+                self.step_arc_mode();
+                Task::none()
+            }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::DxfImport(event) => self.handle_dxf_import(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),

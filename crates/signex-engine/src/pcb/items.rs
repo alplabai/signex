@@ -3,6 +3,8 @@
 use std::collections::HashSet;
 
 use signex_types::pcb::{BoardText, Footprint, Pad, PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb_arc::TrackArc;
+use signex_types::pcb_dimension::LinearDimension;
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -17,6 +19,11 @@ pub enum BoardItemId {
     Via(Uuid),
     Zone(Uuid),
     Text(Uuid),
+    /// A free arc (#2373).
+    Arc(Uuid),
+    /// A pad with no footprint (#2373).
+    FreePad(Uuid),
+    Dimension(Uuid),
 }
 
 /// A removed item, owned so it can be put back.
@@ -27,6 +34,9 @@ pub enum BoardItem {
     Via(Via),
     Zone(Zone),
     Text(BoardText),
+    Arc(TrackArc),
+    FreePad(Pad),
+    Dimension(LinearDimension),
 }
 
 impl BoardItem {
@@ -37,6 +47,9 @@ impl BoardItem {
             Self::Via(v) => BoardItemId::Via(v.uuid),
             Self::Zone(z) => BoardItemId::Zone(z.uuid),
             Self::Text(t) => BoardItemId::Text(t.uuid),
+            Self::Arc(a) => BoardItemId::Arc(a.uuid),
+            Self::FreePad(p) => BoardItemId::FreePad(p.uuid),
+            Self::Dimension(d) => BoardItemId::Dimension(d.uuid),
         }
     }
 }
@@ -57,6 +70,9 @@ enum ListKind {
     Vias,
     Zones,
     Texts,
+    Arcs,
+    FreePads,
+    Dimensions,
 }
 
 impl BoardItemId {
@@ -67,6 +83,9 @@ impl BoardItemId {
             Self::Via(u) => (ListKind::Vias, u),
             Self::Zone(u) => (ListKind::Zones, u),
             Self::Text(u) => (ListKind::Texts, u),
+            Self::Arc(u) => (ListKind::Arcs, u),
+            Self::FreePad(u) => (ListKind::FreePads, u),
+            Self::Dimension(u) => (ListKind::Dimensions, u),
         }
     }
 }
@@ -79,6 +98,9 @@ pub(super) fn position(board: &PcbBoard, id: BoardItemId) -> Option<usize> {
         ListKind::Vias => board.vias.iter().position(|x| x.uuid == uuid),
         ListKind::Zones => board.zones.iter().position(|x| x.uuid == uuid),
         ListKind::Texts => board.texts.iter().position(|x| x.uuid == uuid),
+        ListKind::Arcs => board.free.arcs.iter().position(|x| x.uuid == uuid),
+        ListKind::FreePads => board.free.pads.iter().position(|x| x.uuid == uuid),
+        ListKind::Dimensions => board.free.dimensions.iter().position(|x| x.uuid == uuid),
     }
 }
 
@@ -89,6 +111,9 @@ fn list_len(board: &PcbBoard, list: ListKind) -> usize {
         ListKind::Vias => board.vias.len(),
         ListKind::Zones => board.zones.len(),
         ListKind::Texts => board.texts.len(),
+        ListKind::Arcs => board.free.arcs.len(),
+        ListKind::FreePads => board.free.pads.len(),
+        ListKind::Dimensions => board.free.dimensions.len(),
     }
 }
 
@@ -99,6 +124,9 @@ fn take(board: &mut PcbBoard, list: ListKind, index: usize) -> BoardItem {
         ListKind::Vias => BoardItem::Via(board.vias.remove(index)),
         ListKind::Zones => BoardItem::Zone(board.zones.remove(index)),
         ListKind::Texts => BoardItem::Text(board.texts.remove(index)),
+        ListKind::Arcs => BoardItem::Arc(board.free.arcs.remove(index)),
+        ListKind::FreePads => BoardItem::FreePad(board.free.pads.remove(index)),
+        ListKind::Dimensions => BoardItem::Dimension(board.free.dimensions.remove(index)),
     }
 }
 
@@ -109,6 +137,9 @@ fn put(board: &mut PcbBoard, index: usize, item: BoardItem) {
         BoardItem::Via(x) => board.vias.insert(index, x),
         BoardItem::Zone(x) => board.zones.insert(index, x),
         BoardItem::Text(x) => board.texts.insert(index, x),
+        BoardItem::Arc(x) => board.free.arcs.insert(index, x),
+        BoardItem::FreePad(x) => board.free.pads.insert(index, x),
+        BoardItem::Dimension(x) => board.free.dimensions.insert(index, x),
     }
 }
 
@@ -125,6 +156,13 @@ pub(super) fn swap_at(board: &mut PcbBoard, index: usize, item: BoardItem) -> Bo
         BoardItem::Via(x) => BoardItem::Via(std::mem::replace(&mut board.vias[index], x)),
         BoardItem::Zone(x) => BoardItem::Zone(std::mem::replace(&mut board.zones[index], x)),
         BoardItem::Text(x) => BoardItem::Text(std::mem::replace(&mut board.texts[index], x)),
+        BoardItem::Arc(x) => BoardItem::Arc(std::mem::replace(&mut board.free.arcs[index], x)),
+        BoardItem::FreePad(x) => {
+            BoardItem::FreePad(std::mem::replace(&mut board.free.pads[index], x))
+        }
+        BoardItem::Dimension(x) => {
+            BoardItem::Dimension(std::mem::replace(&mut board.free.dimensions[index], x))
+        }
     }
 }
 
@@ -219,6 +257,7 @@ pub(super) fn check_pad_uuids<'a>(
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.zones.iter().map(|z| z.uuid))
         .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(board.free.uuids())
         .chain(std::iter::once(board.uuid))
         .chain(new_items.iter().copied())
         .collect();
@@ -243,6 +282,7 @@ fn check_item_uuids(board: &PcbBoard, ids: &[BoardItemId]) -> Result<(), BoardCo
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.zones.iter().map(|z| z.uuid))
         .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(board.free.uuids())
         .chain(std::iter::once(board.uuid))
         .collect();
     for &id in ids {
@@ -265,6 +305,15 @@ pub(super) fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
         BoardItem::Via(v) => (finite(v.position), true),
         BoardItem::Zone(z) => (z.outline.iter().all(|p| finite(*p)), true),
         BoardItem::Text(t) => (finite(t.position), t.rotation.is_finite()),
+        BoardItem::Arc(a) => (finite(a.start) && finite(a.mid) && finite(a.end), true),
+        BoardItem::FreePad(p) => {
+            check_pads_finite(std::slice::from_ref(p))?;
+            (true, true)
+        }
+        BoardItem::Dimension(d) => (
+            finite(d.start) && finite(d.end) && d.offset.is_finite(),
+            true,
+        ),
     };
     if !position_ok {
         return Err(BoardCommandError::NonFinite { field: "position" });

@@ -511,6 +511,7 @@ pub(super) fn loaded_board_app() -> Signex {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     let _ = app.update(Message::File(crate::app::FileMsg::PcbOpenFinished {
         disk: None,

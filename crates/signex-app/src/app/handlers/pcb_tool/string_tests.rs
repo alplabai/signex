@@ -1,7 +1,7 @@
-//! #2373 — the String tool through the app. Place ▸ String stays greyed
-//! until board text is drawn and picked (#2387), so these arm it directly:
-//! each click places a board string on the active overlay layer, one undo
-//! step each, and a click on any other layer places nothing.
+//! #2373 — the String tool through the app: `place_board_string` arms it;
+//! each click places a board string on the active overlay, mechanical or
+//! documentation layer, one undo step each, and a click on any other layer
+//! places nothing.
 
 use std::path::Path;
 
@@ -9,7 +9,7 @@ use signex_types::pcb::{PCB_DEFAULT_TEXT_SIZE_MM, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::BoardToolSession;
-use super::tests::{app_with_board, board_of, click, escape, hover, live, undo};
+use super::tests::{app_with_board, board_of, click, escape, hover, live, run, undo};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, PcbMsg, PcbViewMsg, Signex};
 
@@ -33,12 +33,22 @@ fn pick_layer(app: &mut Signex, layer: PcbLayer) {
 }
 
 #[test]
-fn the_string_tool_stays_greyed_until_board_text_is_drawn() {
+fn place_board_string_arms_the_string_tool_and_a_mechanical_layer_takes_it() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, _path) = app_with_board(dir.path());
-    assert_eq!(BoardPlaceTool::TextString.command(), None);
-    app.arm_board_tool(BoardPlaceTool::TextString);
-    assert!(app.interaction_state.pcb_tool.is_none(), "nothing arms it");
+    let (mut app, path) = app_with_board(dir.path());
+    assert_eq!(
+        BoardPlaceTool::TextString.command(),
+        Some("place_board_string")
+    );
+    run(&mut app, "place_board_string");
+    let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
+    assert_eq!(armed, Some(BoardPlaceTool::TextString));
+    let mech = signex_types::pcb_layer::MechanicalLayer::new(1).unwrap();
+    pick_layer(&mut app, PcbLayer::Mechanical(mech));
+    click(&mut app, 4.2, 6.3);
+    let texts = &board_of(&app, &path).texts;
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].layer, "Mechanical1");
 }
 
 #[test]
@@ -86,7 +96,7 @@ fn a_string_lands_on_the_grid_on_the_active_overlay_one_step_per_click() {
 }
 
 #[test]
-fn a_string_click_off_the_overlay_layers_places_nothing() {
+fn a_string_click_on_a_layer_that_takes_no_text_places_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     let before = live(&app, &path);

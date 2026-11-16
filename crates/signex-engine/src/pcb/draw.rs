@@ -28,6 +28,12 @@ fn setup_or(board: &PcbBoard, field: impl Fn(&PcbSetup) -> f64, default: f64) ->
         .unwrap_or(default)
 }
 
+/// The board's track width: `PcbSetup::trace_width`, else the PCB default.
+/// A new arc takes it too (#2373).
+pub fn default_track_width(board: &PcbBoard) -> f64 {
+    setup_or(board, |s| s.trace_width, PCB_DEFAULT_TRACE_WIDTH_MM)
+}
+
 /// The net of the copper under `at` on the copper layers of `layers` (a
 /// `pcb_geom::layer_bit` mask), 0 over bare board or a point the geometry
 /// cannot hold.
@@ -241,15 +247,16 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 }
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
-/// default size and unturned. `None` off the overlay (silkscreen) layers:
-/// copper text would be copper the copper list, DRC and ratsnest never read.
+/// default size and unturned. `None` on a layer that takes no text
+/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
+/// DRC and ratsnest never read.
 pub fn new_text(
     id: Uuid,
     at: Point,
     layer: PcbLayer,
     text: String,
 ) -> Option<signex_types::pcb::BoardText> {
-    if !layer.is_overlay() {
+    if !layer.takes_text() {
         return None;
     }
     Some(signex_types::pcb::BoardText {
@@ -264,10 +271,17 @@ pub fn new_text(
 
 /// Add a board string: one undo step.
 pub fn place_text(text: signex_types::pcb::BoardText) -> BoardCommand {
-    BoardCommand::AddItems {
-        items: vec![BoardItem::Text(text)],
-    }
+    place_item(BoardItem::Text(text))
 }
+
+/// Add one item: one undo step.
+pub fn place_item(item: BoardItem) -> BoardCommand {
+    BoardCommand::AddItems { items: vec![item] }
+}
+
+pub use super::draw_free::{
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+};
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for
 /// fewer than three points, points on one line, or a point the geometry

@@ -10,13 +10,13 @@
 
 use iced::Task;
 use iced::widget::operation;
-use signex_engine::pcb::draw::{self, TrackStyle};
+use signex_engine::pcb::draw::{self, ArcMode, TrackStyle};
 use signex_engine::pcb::primitive_edit::{
     PrimitiveEditRefusal, ZoneEdit, apply_zone_edit, zone_layer_allowed,
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::format::pcb_layer_token;
-use signex_types::pcb::{PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb::{PadShape, PcbBoard, Point, Segment, Via, Zone};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use uuid::Uuid;
@@ -28,7 +28,8 @@ use crate::panels::pcb_primitive_properties::{
     PLACEMENT_INPUT_ID, PrimitiveField as F, PrimitiveTarget,
 };
 
-/// The values the via and track tools place with; `None` follows the board.
+/// The values the placement tools place with; `None` follows the board (or
+/// the tool's own default).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BoardToolDefaults {
     pub via_diameter_mm: Option<f64>,
@@ -43,6 +44,28 @@ pub struct BoardToolDefaults {
     /// A pour's clearance; 0 follows the board's.
     pub pour_clearance_mm: Option<f64>,
     pub pour_min_thickness_mm: Option<f64>,
+    /// How the Arc tool's clicks make an arc (#2373).
+    pub arc_mode: ArcMode,
+    pub arc_width_mm: Option<f64>,
+    /// A copper arc's net; 0 is no net.
+    pub arc_net: Option<u32>,
+    /// A free pad's designator, shape, size, hole, turn and net (#2373).
+    pub pad_designator: Option<String>,
+    pub pad_shape: Option<PadShape>,
+    pub pad_size_x_mm: Option<f64>,
+    pub pad_size_y_mm: Option<f64>,
+    pub pad_hole_mm: Option<f64>,
+    pub pad_rotation: Option<f64>,
+    /// 0 is no net.
+    pub pad_net: Option<u32>,
+    /// A string's text, height and turn (#2373).
+    pub text: Option<String>,
+    pub text_height_mm: Option<f64>,
+    pub text_rotation: Option<f64>,
+    /// A dimension's line width, text height and decimals (#2373).
+    pub dimension_line_width_mm: Option<f64>,
+    pub dimension_text_height_mm: Option<f64>,
+    pub dimension_precision: Option<u8>,
 }
 
 impl BoardToolDefaults {
@@ -101,8 +124,26 @@ pub struct PlacementPause {
 pub(crate) fn has_form(tool: BoardPlaceTool) -> bool {
     matches!(
         tool,
-        BoardPlaceTool::Via | BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting
+        BoardPlaceTool::Via
+            | BoardPlaceTool::Track
+            | BoardPlaceTool::InteractiveRouting
+            | BoardPlaceTool::Pad
+            | BoardPlaceTool::Arc
+            | BoardPlaceTool::TextString
+            | BoardPlaceTool::Dimension
     ) || is_area(tool)
+}
+
+/// Whether `tool` places a free pad, arc, string or dimension (#2373),
+/// whose values `free_form` sets.
+pub(super) fn is_free(tool: BoardPlaceTool) -> bool {
+    matches!(
+        tool,
+        BoardPlaceTool::Pad
+            | BoardPlaceTool::Arc
+            | BoardPlaceTool::TextString
+            | BoardPlaceTool::Dimension
+    )
 }
 
 impl Signex {
@@ -141,7 +182,7 @@ impl Signex {
         }
     }
 
-    fn board_tool_cursor(&self) -> Point {
+    pub(super) fn board_tool_cursor(&self) -> Point {
         self.own_board_tool()
             .and_then(|s| s.cursor)
             .unwrap_or(Point::new(0.0, 0.0))
@@ -237,7 +278,10 @@ impl Signex {
         if let Some(layer) = layer {
             // What the tool draws goes on the active layer.
             let area = self.active_pcb().and_then(|b| self.next_board_area(b));
-            if area.is_some_and(|zone| !zone_layer_allowed(&zone, layer)) {
+            let text_tool = matches!(tool, BoardPlaceTool::TextString | BoardPlaceTool::Dimension);
+            if area.is_some_and(|zone| !zone_layer_allowed(&zone, layer))
+                || (text_tool && !layer.takes_text())
+            {
                 self.refuse_primitive_edit(what, PrimitiveEditRefusal::LayerNotAllowed.to_string());
                 return;
             }
@@ -247,6 +291,10 @@ impl Signex {
         }
         if is_area(tool) {
             self.edit_area_tool_value(edit, what);
+            return;
+        }
+        if is_free(tool) {
+            self.edit_free_tool_value(tool, edit, what);
             return;
         }
         let size = match (tool, edit) {
