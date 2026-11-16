@@ -350,6 +350,9 @@ fn via_on(id: u128, at: Point, via_type: ViaType, layers: &[&str]) -> Via {
         net: 1,
         via_type,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        layer_sizes: None,
+        locked: false,
     }
 }
 

@@ -25,6 +25,7 @@ fn pad(n: u128, x: f64, y: f64, net: u32) -> Pad {
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -60,6 +61,8 @@ fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32) -> Segment {
         layer: "TopCopper".into(),
         net,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 
@@ -73,6 +76,9 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
         net,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        layer_sizes: None,
+        locked: false,
     }
 }
 

@@ -17,18 +17,24 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
-    /// Export-error modal — plain "something went wrong, here's the
-    /// message" dialog with an OK button. Sits on top of the print-preview
-    /// overlay when both would otherwise render; dismiss_layer handles
-    /// click-outside-to-close.
+    /// The export-error dialog in its own OS window: the card filling the
+    /// window surface.
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
+        match self.error_notice_card() {
+            Some(card) => self.fill_dialog_window(card),
+            None => iced::widget::Space::new().boxed(),
+        }
+    }
+
+    /// Export-error card — plain "something went wrong, here's the message"
+    /// dialog with an OK button. The in-window overlay hands it, unpositioned,
+    /// to the dismiss helper so only a press outside the card closes it
+    /// (#2377).
+    pub(super) fn error_notice_card(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container};
-        let Some(notice) = self.document_state.error_notice.as_ref() else {
-            return iced::widget::Space::new().boxed();
-        };
+        let notice = self.document_state.error_notice.as_ref()?;
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
         let i18n = self.ui_state.i18n.as_ref();
 
         let mut buttons = notice_choice_buttons(i18n, notice, tokens);
@@ -82,7 +88,13 @@ impl Signex {
                 },
             ))
             .style(graphite_card);
+        Some(card.boxed())
+    }
 
+    /// `card` centred in a dialog's own OS window, on the panel surface.
+    fn fill_dialog_window<'a>(&self, card: Element<'a, Message>) -> Element<'a, Message> {
+        use iced::widget::container;
+        let panel_bg = crate::styles::ti(self.document_state.panel_ctx.tokens.panel_bg);
         container(card)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -102,6 +114,14 @@ impl Signex {
             .boxed()
     }
 
+    /// The netlist-incomplete prompt in its own OS window.
+    pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
+        match self.netlist_incomplete_prompt_card() {
+            Some(card) => self.fill_dialog_window(card),
+            None => iced::widget::Space::new().boxed(),
+        }
+    }
+
     /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
     ///
     /// Same card idiom as [`Self::view_error_notice`] (theme-token panel /
@@ -110,15 +130,12 @@ impl Signex {
     /// — and offers TWO actions: write the partial `.net` anyway (with the
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
-    pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
+    pub(super) fn netlist_incomplete_prompt_card(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container};
         use signex_widgets::{raw, text};
-        let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
-            return iced::widget::Space::new().boxed();
-        };
+        let prompt = self.document_state.netlist_incomplete_prompt.as_ref()?;
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
         let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
         // The sibling export-error modal's severity cue — reused verbatim so
@@ -181,24 +198,7 @@ impl Signex {
                 },
             ))
             .style(graphite_card);
-
-        container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .style(move |theme: &iced::Theme| {
-                // In its own window the dialog fills the window surface.
-                if crate::styles::is_dialog_window(theme) {
-                    container::Style {
-                        background: Some(panel_bg.into()),
-                        ..container::Style::default()
-                    }
-                } else {
-                    container::Style::default()
-                }
-            })
-            .boxed()
+        Some(card.boxed())
     }
 
     /// Print Preview overlay. Shows thumbnails of every rendered page on

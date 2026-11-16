@@ -26,6 +26,7 @@ const WINDOW: Size = Size::new(1440.0, 900.0);
 fn segment(n: u128, y: f64, layer: &str) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),

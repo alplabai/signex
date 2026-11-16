@@ -32,6 +32,7 @@ fn pad(n: u128, x: f64) -> Pad {
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

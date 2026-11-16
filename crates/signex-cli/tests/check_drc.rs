@@ -33,6 +33,7 @@ fn write_board(path: &Path) {
         .into_iter()
         .map(|(net, y)| Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: uuid::Uuid::from_u128(0x2000 + u128::from(net)),
             start: Point::new(0.0, y),
             end: Point::new(10.0, y),

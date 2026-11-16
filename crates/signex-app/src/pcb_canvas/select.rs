@@ -517,6 +517,7 @@ mod tests {
 
     fn board() -> PcbBoard {
         let via = Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(4),
             position: Point::new(1.0, 1.0),
             diameter: 0.6,
@@ -594,6 +595,7 @@ mod tests {
     fn two_layer_board() -> PcbBoard {
         let segment = |n: u128, y: f64, layer: &str| signex_types::pcb::Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(n),
             start: Point::new(0.0, y),
             end: Point::new(5.0, y),

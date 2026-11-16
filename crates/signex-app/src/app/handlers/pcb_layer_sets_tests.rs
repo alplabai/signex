@@ -33,6 +33,8 @@ fn segment(n: u128, y: f64, layer: &str) -> Segment {
         layer: layer.to_owned(),
         net: 1,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 

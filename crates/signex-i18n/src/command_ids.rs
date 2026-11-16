@@ -480,6 +480,10 @@ define_ids! {
         CMD_MENU_KEEPOUT_FROM_SELECTION = "cmd-menu-keepout-from-selection";
         CMD_ARRANGE_IN_BOX = "cmd-arrange-in-box";
         CMD_MENU_ARRANGE_IN_BOX = "cmd-menu-arrange-in-box";
+        CMD_IMPORT_DXF = "cmd-import-dxf";
+        CMD_MENU_IMPORT_DXF = "cmd-menu-import-dxf";
+        CMD_IMPORT_DXF_OUTLINE = "cmd-import-dxf-outline";
+        CMD_MENU_IMPORT_DXF_OUTLINE = "cmd-menu-import-dxf-outline";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";

@@ -23,6 +23,7 @@ pub mod pcb_dimension;
 pub mod pcb_layer;
 pub mod pcb_options;
 pub mod pcb_origin;
+pub mod pcb_route_attrs;
 pub mod pcb_sketch;
 pub mod pcb_stack;
 pub mod project;

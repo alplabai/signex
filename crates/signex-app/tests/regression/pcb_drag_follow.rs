@@ -92,6 +92,7 @@ fn board() -> PcbBoard {
         footprints: vec![footprint(U1, "U1", 12.7), footprint(U2, "U2", 25.4)],
         segments: vec![Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: TRACK,
             start: pt(11.9, 12.7),
             end: pt(5.08, 12.7),

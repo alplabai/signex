@@ -9,6 +9,7 @@ use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
 
 pub use crate::pcb_component::{ComponentAttributes, ComponentType};
+pub use crate::pcb_route_attrs::{MaskExpansion, TrackAttributes, ViaAttributes, ViaMaskSide};
 pub use crate::schematic::Point;
 
 // ---------------------------------------------------------------------------
@@ -348,6 +349,9 @@ pub struct Segment {
     /// (#2407). Saved in the optional `locked` track column.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub locked: bool,
+    /// Mask settings (#2378); the lock is `locked`.
+    #[serde(default, skip_serializing_if = "TrackAttributes::is_default")]
+    pub attributes: TrackAttributes,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -376,6 +380,9 @@ pub struct Via {
     /// on every layer. Saved in the optional `layer_sizes` via column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer_sizes: Option<LayerSizes<f64>>,
+    /// Mask and tenting settings (#2378); the lock is `locked`.
+    #[serde(default, skip_serializing_if = "ViaAttributes::is_default")]
+    pub attributes: ViaAttributes,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -496,7 +503,7 @@ pub struct Zone {
 // Board-level graphics and text
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BoardGraphic {
     #[serde(default)]
     pub graphic_type: String,

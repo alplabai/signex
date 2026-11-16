@@ -16,6 +16,7 @@ use uuid::Uuid;
 fn track(n: u128, y: f64, net: u32) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),

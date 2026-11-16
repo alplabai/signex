@@ -19,6 +19,8 @@ pub use track::{TrackEdit, track_edit_command, track_location};
 pub use via::{ViaEdit, via_edit_command};
 pub use zone::{ZoneEdit, apply_zone_edit, zone_edit_command, zone_layer_allowed};
 
+use signex_types::pcb::MaskExpansion;
+
 /// Why a field edit was not turned into a command. The board is unchanged.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum PrimitiveEditRefusal {
@@ -40,11 +42,22 @@ pub enum PrimitiveEditRefusal {
     Negative,
     #[error("the area cannot be on that layer")]
     LayerNotAllowed,
+    /// A selected track or via is locked and the edit is not its unlock.
+    #[error("a selected track or via is locked")]
+    ItemLocked,
 }
 
 fn finite(value: f64) -> Result<f64, PrimitiveEditRefusal> {
     if value.is_finite() {
         Ok(value)
+    } else {
+        Err(PrimitiveEditRefusal::NonFinite)
+    }
+}
+
+fn finite_mask(mask: MaskExpansion) -> Result<MaskExpansion, PrimitiveEditRefusal> {
+    if mask.is_finite() {
+        Ok(mask)
     } else {
         Err(PrimitiveEditRefusal::NonFinite)
     }

@@ -14,6 +14,7 @@ use super::pcb_cells::{
     take_layer_sizes_cell, take_locked_cell, take_net_locked_cell, take_rotation_cell,
     with_layer_sizes_cell, with_locked_cell, with_net_locked_cell, with_rotation_cell,
 };
+use super::pcb_row_columns::{take_track_cells, take_via_cells, with_track_cells, with_via_cells};
 use super::tsv::{format_f64, parse_f64, parse_nm, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
@@ -750,13 +751,17 @@ pub(in crate::format) fn track_to_row(s: &Segment) -> Result<PcbTrackRow, NonFin
         start_y: mm_to_nm(s.start.y, "start_y")?,
         end_x: mm_to_nm(s.end.x, "end_x")?,
         end_y: mm_to_nm(s.end.y, "end_y")?,
-        unknown_columns: with_locked_cell(s.unknown_columns.clone(), s.locked),
+        unknown_columns: with_track_cells(
+            with_locked_cell(s.unknown_columns.clone(), s.locked),
+            &s.attributes,
+        )?,
     })
 }
 
-pub(in crate::format) fn row_to_track(mut row: PcbTrackRow) -> Segment {
+fn row_to_track(mut row: PcbTrackRow, block: &str, index: usize) -> Result<Segment, FormatError> {
     let locked = take_locked_cell(&mut row.unknown_columns);
-    Segment {
+    let attributes = take_track_cells(&mut row.unknown_columns, block, index)?;
+    Ok(Segment {
         uuid: row.uuid,
         start: PcbPoint {
             x: nm_to_mm(row.start_x),
@@ -770,8 +775,9 @@ pub(in crate::format) fn row_to_track(mut row: PcbTrackRow) -> Segment {
         layer: row.layer,
         net: row.net,
         locked,
+        attributes,
         unknown_columns: row.unknown_columns,
-    }
+    })
 }
 
 pub(in crate::format) fn via_to_row(v: &Via) -> Result<PcbViaRow, NonFiniteField> {
@@ -784,20 +790,20 @@ pub(in crate::format) fn via_to_row(v: &Via) -> Result<PcbViaRow, NonFiniteField
         diameter: mm_to_nm(v.diameter, "diameter")?,
         layers: join_layers(&v.layers),
         via_type: via_type_str(v.via_type).to_string(),
-        unknown_columns: with_layer_sizes_cell(
-            with_locked_cell(v.unknown_columns.clone(), v.locked),
-            v.layer_sizes.as_ref(),
+        unknown_columns: with_via_cells(
+            with_layer_sizes_cell(
+                with_locked_cell(v.unknown_columns.clone(), v.locked),
+                v.layer_sizes.as_ref(),
+            )?,
+            &v.attributes,
         )?,
     })
 }
 
-pub(in crate::format) fn row_to_via(
-    mut row: PcbViaRow,
-    block: &str,
-    index: usize,
-) -> Result<Via, FormatError> {
+fn row_to_via(mut row: PcbViaRow, block: &str, index: usize) -> Result<Via, FormatError> {
     let locked = take_locked_cell(&mut row.unknown_columns);
     let layer_sizes = take_layer_sizes_cell(&mut row.unknown_columns, block, index)?;
+    let attributes = take_via_cells(&mut row.unknown_columns, block, index)?;
     Ok(Via {
         uuid: row.uuid,
         position: PcbPoint {
@@ -811,6 +817,25 @@ pub(in crate::format) fn row_to_via(
         via_type: parse_via_type(&row.via_type),
         locked,
         layer_sizes,
+        attributes,
         unknown_columns: row.unknown_columns,
     })
+}
+
+/// The `[tracks]` rows as tracks, refusing a row with an unreadable cell.
+pub(in crate::format) fn rows_to_tracks(
+    rows: Vec<PcbTrackRow>,
+) -> Result<Vec<Segment>, FormatError> {
+    rows.into_iter()
+        .enumerate()
+        .map(|(i, row)| row_to_track(row, "tracks", i))
+        .collect()
+}
+
+/// The `[vias]` rows as vias, refusing a row with an unreadable cell.
+pub(in crate::format) fn rows_to_vias(rows: Vec<PcbViaRow>) -> Result<Vec<Via>, FormatError> {
+    rows.into_iter()
+        .enumerate()
+        .map(|(i, row)| row_to_via(row, "vias", i))
+        .collect()
 }

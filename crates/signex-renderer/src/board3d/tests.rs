@@ -105,6 +105,7 @@ fn board() -> PcbBoard {
         ],
         segments: Vec::new(),
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(4),
             position: Point::new(40.0, 20.0),
             diameter: 0.6,
@@ -318,6 +319,9 @@ fn via_at(id: u128, x: f64, y: f64) -> Via {
         net: 1,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        layer_sizes: None,
+        locked: false,
     }
 }
 

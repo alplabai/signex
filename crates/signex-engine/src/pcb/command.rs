@@ -1,5 +1,7 @@
 use signex_net::board::BoardNetEdit;
-use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb::{
+    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
+};
 use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::pcb_stack::LayerStack;
@@ -11,6 +13,7 @@ use super::board_sketch;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
+use super::graphics;
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
 use super::lock;
 use super::options;
@@ -187,6 +190,14 @@ pub enum BoardCommand {
     /// Lock or unlock tracks and vias (#2407). Refused for an id named twice,
     /// gone, or not a track or via. The inverse sets the states it replaced.
     SetItemsLocked { items: Vec<(BoardItemId, bool)> },
+    /// Append board drawings (#2410, a DXF import onto a layer). Refused for
+    /// a number that is not finite. The inverse is a
+    /// [`BoardCommand::RemoveGraphics`].
+    AddGraphics { graphics: Vec<BoardGraphic> },
+    /// Remove these drawings from the end of the board's drawings; the
+    /// inverse of [`BoardCommand::AddGraphics`]. Refused unless the list
+    /// still ends with exactly them.
+    RemoveGraphics { graphics: Vec<BoardGraphic> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -234,6 +245,8 @@ pub enum BoardPatchKind {
     LayerStackChanged,
     /// The lock of tracks and vias.
     ItemsLockSet,
+    /// Board drawings added or removed. Names no items.
+    GraphicsChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -317,6 +330,8 @@ impl BoardCommand {
             Self::SetLayerStack { stack: new } => stack::set(board, *new),
             Self::RestoreLayerStack(snapshot) => stack::restore(board, *snapshot),
             Self::SetItemsLocked { items: locks } => lock::set_locked(board, locks),
+            Self::AddGraphics { graphics } => graphics::add(board, graphics),
+            Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
         }
     }
 }

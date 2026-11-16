@@ -34,6 +34,7 @@ pub(crate) fn pad_at(n: u128, x: f64, y: f64, size: f64, net: u32) -> Footprint 
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
@@ -67,6 +68,8 @@ pub(crate) fn track_at(n: u128, a: (f64, f64), b: (f64, f64), net: u32) -> Segme
         layer: "TopCopper".into(),
         net,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 

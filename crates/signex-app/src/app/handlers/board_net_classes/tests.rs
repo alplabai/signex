@@ -27,6 +27,8 @@ fn track(n: u128, net: u32, y: f64) -> Segment {
         layer: "TopCopper".into(),
         net,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 

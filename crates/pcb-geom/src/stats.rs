@@ -210,6 +210,7 @@ mod tests {
             ],
             segments: Vec::new(),
             vias: vec![Via {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(5),
                 position: Point::new(5.0, 5.0),
                 diameter: 0.6,

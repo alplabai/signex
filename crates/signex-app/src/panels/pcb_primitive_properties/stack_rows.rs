@@ -1,43 +1,17 @@
-//! The rows a lock, a via span and per-layer sizes add to the track, via
-//! and pad panels (#2401, #2407): a live Lock box, From and To layer
-//! dropdowns, the Simple / Top-Middle-Bottom / Full Stack tiles and one size
-//! row per layer.
+//! The rows a via span and per-layer sizes add to the via and pad panels
+//! (#2401, #2407): From and To layer dropdowns, the Simple /
+//! Top-Middle-Bottom / Full Stack tiles and one size row per layer. The Lock
+//! box is `mask::lock_row` (#2378).
 
 use iced::widget::row;
-use iced::{Element, Theme, Widget as _};
+use iced::{Element, Widget as _};
 use signex_i18n::{UserText, ids};
 use signex_types::pcb_stack::StackMode;
-use signex_widgets::{CheckboxLabel as _, button, checkbox, text};
+use signex_widgets::{button, text};
 
 use super::rows::{Look, Section, dropdown, labelled_text, mm_field, pair, with_tip};
-use super::{
-    Editability, LayerChoice, LayerSizeRow, PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, SP,
-    TS,
-};
+use super::{LayerChoice, LayerSizeRow, PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, SP, TS};
 use crate::panels::{PanelMsg, form_look};
-
-/// The Lock box of tracks or vias: live unless the board is read-only; a
-/// mixed selection shows clear and locks all of them.
-pub(super) fn item_lock<'a>(
-    look: Look<'a>,
-    common: &PrimitiveCommon,
-    locked: Option<bool>,
-) -> Element<'a, PanelMsg> {
-    let checked = locked == Some(true);
-    let mut boxed = checkbox::<PanelMsg, Theme, iced::Renderer>(checked)
-        .labelled(look.t(ids::PCB_PRIM_LOCK))
-        .size(TS.body)
-        .text_size(TS.body)
-        .style(form_look::checkbox_style);
-    if common.editability != Editability::ReadOnly {
-        let message = PanelMsg::PcbPrimitive(PcbPrimitiveMsg::LockToggled {
-            target: common.target.clone(),
-            locked: !checked,
-        });
-        boxed = boxed.on_toggle(move |_| message.clone());
-    }
-    with_tip(look, boxed.boxed(), ids::PCB_PRIM_LOCK_TIP)
-}
 
 /// The From and To rows of a via's span; picking one keeps the other end.
 pub(super) fn span_rows<'a>(

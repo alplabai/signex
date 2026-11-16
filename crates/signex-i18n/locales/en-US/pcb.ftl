@@ -376,3 +376,15 @@ pcb-board-tool-skipped = { $tool }: { $count } left out where the copper would b
 pcb-board-tool-refused = { $tool }: { $reason }; nothing changed
 # Messages line when Arrange in Box is waiting for its corners.
 pcb-arrange-box-hint = Arrange in Box: click two opposite corners of the box for the selected components; Esc ends it
+
+## DXF import (#2410).
+# The undo label of an import.
+pcb-dxf-import-step = Import DXF
+# Messages line. $count drawings, $file the file name, $layer the layer.
+pcb-dxf-imported-layer = Imported { $count } drawings from { $file } onto { $layer }.
+pcb-dxf-imported-outline = The board outline is now the { $count }-corner shape from { $file }.
+# $count entities of kinds the import does not read (text, blocks, hatches).
+pcb-dxf-skipped = { $count } entities of { $file } are not lines, arcs, circles or polylines and were skipped.
+pcb-dxf-refused = { $file } was not imported: { $why }
+# Before the file dialog opens; $why says the layer and why it cannot take a drawing.
+pcb-dxf-layer-refused = No DXF file was asked for: { $why }

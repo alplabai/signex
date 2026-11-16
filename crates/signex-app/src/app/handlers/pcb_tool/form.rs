@@ -136,6 +136,8 @@ impl Signex {
             layer: pcb_layer_token(PcbLayer::Copper(layer)),
             net: style.net,
             unknown_columns: Default::default(),
+            attributes: Default::default(),
+            locked: false,
         }
     }
 

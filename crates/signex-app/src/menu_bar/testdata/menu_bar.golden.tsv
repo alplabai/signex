@@ -21,6 +21,8 @@ File/Library/Place Component...	item	Place Component...	-	-	LibraryPlaceComponen
 File/---	separator	-	-	-	-	-	-
 File/Import	submenu	Import	-	-	-	-	-
 File/Import/Altium Project...	item	Altium Project...	-	-	ImportAltium	11111111	always
+File/Import/DXF to Current Layer...	item	DXF to Current Layer...	-	-	ImportDxf	01100000	cmd:import_dxf
+File/Import/DXF as Board Outline...	item	DXF as Board Outline...	-	-	ImportDxfOutline	01100000	cmd:import_dxf_outline
 File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01100000	cmd:print
 File/Fabrication Outputs…	item	Fabrication Outputs…	-	-	FabricationOutputs	01100000	cmd:fabrication_outputs

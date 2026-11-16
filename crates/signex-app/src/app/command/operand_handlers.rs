@@ -140,6 +140,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_shape_from_selection", tools::board_shape_by_operands),
     ("keepout_from_selection", tools::keepout_by_operands),
     ("arrange_in_box", tools::arrange_in_box_by_operands),
+    (
+        "import_dxf",
+        crate::app::handlers::pcb_dxf_import::import_dxf,
+    ),
+    (
+        "import_dxf_outline",
+        crate::app::handlers::pcb_dxf_import::import_dxf_outline,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

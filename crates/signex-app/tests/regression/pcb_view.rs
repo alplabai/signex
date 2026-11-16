@@ -61,6 +61,7 @@ fn pad(n: u128, x: f64) -> Pad {
 fn segment(n: u128, y: f64, layer: &str) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: pt(0.0, y),
         end: pt(10.0, y),
@@ -397,6 +398,7 @@ fn the_board_outline_row_hides_and_shows_the_board_edge() {
 fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
     let mut board = board();
     board.vias.push(signex_types::pcb::Via {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(20),
         position: pt(5.0, 30.0),
         diameter: 0.8,

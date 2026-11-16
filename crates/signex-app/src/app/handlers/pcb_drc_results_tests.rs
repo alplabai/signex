@@ -34,6 +34,8 @@ fn track(id: Uuid, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
         layer: "TopCopper".into(),
         net,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 

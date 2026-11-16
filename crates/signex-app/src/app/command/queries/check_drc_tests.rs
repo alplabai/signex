@@ -23,6 +23,7 @@ const BOARD: &str = "board.snxpcb";
 fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),

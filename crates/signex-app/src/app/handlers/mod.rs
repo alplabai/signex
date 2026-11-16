@@ -50,6 +50,7 @@ mod pcb_drc_check;
 mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
+pub(crate) mod pcb_dxf_import;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 mod pcb_align;

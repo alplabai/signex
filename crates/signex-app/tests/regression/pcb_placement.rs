@@ -115,6 +115,7 @@ fn board() -> PcbBoard {
         footprints: vec![u1, u2],
         segments: vec![Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: TRACK,
             start: Point::new(0.0, 20.0),
             end: Point::new(10.0, 20.0),
@@ -124,6 +125,7 @@ fn board() -> PcbBoard {
             unknown_columns: Default::default(),
         }],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: VIA,
             position: Point::new(20.0, 20.0),
             diameter: 0.6,

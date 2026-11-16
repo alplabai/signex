@@ -44,6 +44,7 @@ pub fn new_via(board: &PcbBoard, id: Uuid, at: Point) -> Via {
     let diameter = setup_or(board, |s| s.via_diameter, PCB_DEFAULT_VIA_DIAMETER_MM);
     let drill = setup_or(board, |s| s.via_drill, PCB_DEFAULT_VIA_DRILL_MM).min(diameter);
     Via {
+        attributes: Default::default(),
         uuid: id,
         position: at,
         diameter,
@@ -123,6 +124,7 @@ pub fn track_run(
         .into_iter()
         .map(|(start, end)| Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: ids(),
             start,
             end,

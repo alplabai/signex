@@ -18,6 +18,7 @@ pub(super) fn id(n: u128) -> Uuid {
 pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: id(2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -30,6 +31,7 @@ pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str
 
 pub(super) fn via(n: u128, at: (f64, f64), net: u32) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: id(3000 + n),
         position: Point::new(at.0, at.1),
         diameter: 0.6,
@@ -351,6 +353,7 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
 
 fn blind_via(n: u128, at: (f64, f64), net: u32, bottom: &str, via_type: ViaType) -> Via {
     Via {
+        attributes: Default::default(),
         layers: vec!["TopCopper".into(), bottom.into()],
         locked: false,
         layer_sizes: None,

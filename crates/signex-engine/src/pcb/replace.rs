@@ -74,7 +74,13 @@ pub(super) fn replace(
 /// and a changed net is in the net table (or 0, no net). Unchanged values
 /// pass, so a board read with an odd value can still be edited elsewhere.
 fn check_segment(board: &PcbBoard, old: &Segment, new: &Segment) -> Result<(), BoardCommandError> {
-    if old.locked && new != old {
+    // A locked track takes only its unlock (the Track panel's Lock row, #2378).
+    if old.locked
+        && (Segment {
+            locked: true,
+            ..new.clone()
+        }) != *old
+    {
         return Err(BoardCommandError::ItemLocked(BoardItemId::Segment(
             old.uuid,
         )));
@@ -92,7 +98,13 @@ fn check_segment(board: &PcbBoard, old: &Segment, new: &Segment) -> Result<(), B
 /// A via's diameter and hole are positive numbers and the hole fits inside
 /// the via, once either changed; a changed net is in the net table.
 fn check_via(board: &PcbBoard, old: &Via, new: &Via) -> Result<(), BoardCommandError> {
-    if old.locked && new != old {
+    // A locked via takes only its unlock (the Via panel's Lock row, #2378).
+    if old.locked
+        && (Via {
+            locked: true,
+            ..new.clone()
+        }) != *old
+    {
         return Err(BoardCommandError::ItemLocked(BoardItemId::Via(old.uuid)));
     }
     if new.layers != old.layers || new.via_type != old.via_type {

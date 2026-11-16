@@ -1,13 +1,13 @@
-//! Via fields: position, diameter, hole size, net, span (#2407) and
-//! per-layer diameters (#2401).
+//! Via fields: position, diameter, hole size, net, span (#2407), per-layer
+//! diameters (#2401), and lock and mask settings (#2378).
 
 use signex_types::format::pcb_layer_token;
-use signex_types::pcb::{LayerSizes, PcbBoard, Via, ViaType};
+use signex_types::pcb::{LayerSizes, MaskExpansion, PcbBoard, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::{StackMode, board_copper_layers, sizes_in_mode};
 use uuid::Uuid;
 
-use super::{PrimitiveEditRefusal, finite};
+use super::{PrimitiveEditRefusal, finite, finite_mask};
 use crate::pcb::{BoardCommand, BoardItem};
 
 /// One field of the selected vias, set to an absolute value.
@@ -31,9 +31,17 @@ pub enum ViaEdit {
     /// The diameter on one layer: its part of the per-layer sizes, or the
     /// one diameter of a via without them.
     LayerDiameter(CopperLayer, f64),
+    /// Lock or unlock; the one edit a locked via takes (#2378).
+    Locked(bool),
+    SolderMaskTop(MaskExpansion),
+    SolderMaskBottom(MaskExpansion),
+    TentedTop(bool),
+    TentedBottom(bool),
+    FromHoleEdge(bool),
 }
 
-/// The command setting `edit` on every via in `vias`.
+/// The command setting `edit` on every via in `vias`. Refused when a via is
+/// locked and the edit is not the unlock.
 pub fn via_edit_command(
     board: &PcbBoard,
     vias: &[Uuid],
@@ -43,13 +51,17 @@ pub fn via_edit_command(
         return Err(PrimitiveEditRefusal::Empty);
     }
     let copper = board_copper_layers(&board.layers);
+    let found: Vec<&Via> = vias
+        .iter()
+        .map(|id| board.vias.iter().find(|v| v.uuid == *id))
+        .collect::<Option<_>>()
+        .ok_or(PrimitiveEditRefusal::Gone)?;
+    let unlocking = matches!(edit, ViaEdit::Locked(_));
+    if !unlocking && found.iter().any(|v| v.locked) {
+        return Err(PrimitiveEditRefusal::ItemLocked);
+    }
     let mut changed = Vec::new();
-    for id in vias {
-        let old = board
-            .vias
-            .iter()
-            .find(|v| v.uuid == *id)
-            .ok_or(PrimitiveEditRefusal::Gone)?;
+    for old in found {
         let mut new = old.clone();
         apply(&mut new, &edit, &copper)?;
         if new != *old {
@@ -78,6 +90,12 @@ fn apply(v: &mut Via, edit: &ViaEdit, copper: &[CopperLayer]) -> Result<(), Prim
                 None => v.diameter = d,
             }
         }
+        ViaEdit::Locked(locked) => v.locked = *locked,
+        ViaEdit::SolderMaskTop(mask) => v.attributes.top.expansion = finite_mask(*mask)?,
+        ViaEdit::SolderMaskBottom(mask) => v.attributes.bottom.expansion = finite_mask(*mask)?,
+        ViaEdit::TentedTop(on) => v.attributes.top.tented = *on,
+        ViaEdit::TentedBottom(on) => v.attributes.bottom.tented = *on,
+        ViaEdit::FromHoleEdge(on) => v.attributes.from_hole_edge = *on,
     }
     Ok(())
 }

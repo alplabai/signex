@@ -28,14 +28,16 @@ use signex_engine::pcb::primitive_edit::{
     via_edit_command,
 };
 use signex_i18n::{MessageId, ids, t};
-use signex_types::pcb::{PadShape, PcbBoard};
+use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::PcbPrimitiveMsg;
-use crate::panels::pcb_primitive_properties::{PrimitiveField, PrimitiveTarget, parse_number};
+use crate::panels::pcb_primitive_properties::{
+    PrimitiveField, PrimitiveFlag, PrimitiveTarget, parse_number,
+};
 
 /// The panel's own state: drafts, search, Show More and the net pick.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -85,6 +87,9 @@ pub(crate) enum PrimitiveEdit {
     Span(CopperLayer, CopperLayer),
     /// How vias or pads size their copper by layer (#2401).
     Mode(StackMode),
+    /// A mask expansion field set to the rule or a manual value (#2378).
+    Mask(PrimitiveField, MaskExpansion),
+    Flag(PrimitiveFlag, bool),
 }
 
 impl Signex {
@@ -140,6 +145,29 @@ impl Signex {
                     target,
                     PrimitiveEdit::Shape(*shape),
                     ids::PCB_PRIM_SHAPE,
+                );
+            }
+            M::MaskModePicked {
+                target,
+                field,
+                manual,
+            } => {
+                let mask = if *manual {
+                    MaskExpansion::Manual { mm: 0.0 }
+                } else {
+                    MaskExpansion::Rule
+                };
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Mask(*field, mask),
+                    field_name(*field),
+                );
+            }
+            M::FlagToggled { target, flag, on } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Flag(*flag, *on),
+                    flag_name(*flag),
                 );
             }
             M::NetPickStarted { target } => {
@@ -200,6 +228,9 @@ impl Signex {
                 Some(value) if field == PrimitiveField::TuneLength => {
                     self.tune_track_length(target, value);
                     return;
+                }
+                Some(value) if field.is_mask() => {
+                    PrimitiveEdit::Mask(field, MaskExpansion::Manual { mm: value })
                 }
                 Some(value) => PrimitiveEdit::Number(field, value),
                 None => {
@@ -284,6 +315,10 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Clearance => ids::PCB_PRIM_CLEARANCE,
         F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
         F::LayerSize(_) | F::LayerSizeY(_) => ids::PCB_PRIM_COPPER,
+        F::PasteMask => ids::PCB_PRIM_PASTE_MASK,
+        F::SolderMask => ids::PCB_PRIM_SOLDER_MASK,
+        F::SolderMaskTop => ids::PCB_PRIM_TOP,
+        F::SolderMaskBottom => ids::PCB_PRIM_BOTTOM,
     }
 }
 
@@ -368,6 +403,9 @@ fn track_edit(edit: &PrimitiveEdit) -> Option<TrackEdit> {
         PrimitiveEdit::Number(F::EndY, v) => TrackEdit::EndY(v),
         PrimitiveEdit::Layer(layer) => TrackEdit::Layer(layer),
         PrimitiveEdit::Net(net) => TrackEdit::Net(net),
+        PrimitiveEdit::Mask(F::PasteMask, m) => TrackEdit::PasteMask(m),
+        PrimitiveEdit::Mask(F::SolderMask, m) => TrackEdit::SolderMask(m),
+        PrimitiveEdit::Flag(PrimitiveFlag::Locked, on) => TrackEdit::Locked(on),
         _ => return None,
     })
 }
@@ -383,6 +421,12 @@ fn via_edit(edit: &PrimitiveEdit) -> Option<ViaEdit> {
         PrimitiveEdit::Net(net) => ViaEdit::Net(net),
         PrimitiveEdit::Span(top, bottom) => ViaEdit::Span(top, bottom),
         PrimitiveEdit::Mode(mode) => ViaEdit::Mode(mode),
+        PrimitiveEdit::Mask(F::SolderMaskTop, m) => ViaEdit::SolderMaskTop(m),
+        PrimitiveEdit::Mask(F::SolderMaskBottom, m) => ViaEdit::SolderMaskBottom(m),
+        PrimitiveEdit::Flag(PrimitiveFlag::Locked, on) => ViaEdit::Locked(on),
+        PrimitiveEdit::Flag(PrimitiveFlag::TentedTop, on) => ViaEdit::TentedTop(on),
+        PrimitiveEdit::Flag(PrimitiveFlag::TentedBottom, on) => ViaEdit::TentedBottom(on),
+        PrimitiveEdit::Flag(PrimitiveFlag::FromHoleEdge, on) => ViaEdit::FromHoleEdge(on),
         _ => return None,
     })
 }
@@ -404,4 +448,13 @@ fn pad_edit(edit: &PrimitiveEdit) -> Option<PadEdit> {
         PrimitiveEdit::Mode(mode) => PadEdit::Mode(*mode),
         _ => return None,
     })
+}
+
+/// The catalog name of `flag`, for undo labels and notices.
+fn flag_name(flag: PrimitiveFlag) -> MessageId {
+    match flag {
+        PrimitiveFlag::Locked => ids::PCB_PRIM_LOCK,
+        PrimitiveFlag::TentedTop | PrimitiveFlag::TentedBottom => ids::PCB_PRIM_TENTED,
+        PrimitiveFlag::FromHoleEdge => ids::PCB_PRIM_FROM_HOLE_EDGE,
+    }
 }

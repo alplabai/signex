@@ -109,6 +109,7 @@ fn board() -> PcbBoard {
         ],
         segments: vec![Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x200),
             start: Point::new(0.0, 0.0),
             end: Point::new(1.0, 0.0),
@@ -118,6 +119,7 @@ fn board() -> PcbBoard {
             unknown_columns: Default::default(),
         }],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x300),
             position: Point::new(0.0, 0.0),
             diameter: 0.6,

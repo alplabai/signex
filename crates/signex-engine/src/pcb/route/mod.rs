@@ -257,6 +257,8 @@ pub fn route_leg(
             layer: layer.clone(),
             net: style.net,
             unknown_columns: Default::default(),
+            attributes: Default::default(),
+            locked: false,
         })
         .collect();
     let shoved: Vec<Segment> = pushed

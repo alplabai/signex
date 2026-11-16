@@ -51,6 +51,7 @@ fn footprint(uuid: Uuid, x: f64, y: f64, rotation: f64, layer: &str, pads: Vec<P
 fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
     Segment {
         locked: false,
+        attributes: Default::default(),
         uuid,
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -63,6 +64,7 @@ fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
 
 fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
     Via {
+        attributes: Default::default(),
         uuid,
         position: Point::new(x, y),
         diameter,

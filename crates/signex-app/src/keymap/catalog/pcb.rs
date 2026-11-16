@@ -852,4 +852,28 @@ pub(super) const PCB: &[CommandMetadata] = &[
         operands: super::operands::ARRANGE_BOX,
         ..CommandMetadata::DEFAULT
     },
+    // #2410: DXF import. Without operands it asks for the file; the import
+    // is one board undo step. No default key.
+    CommandMetadata {
+        id: "import_dxf",
+        category: "file",
+        label: command_ids::CMD_IMPORT_DXF,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_DXF),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::IMPORT_DXF,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "import_dxf_outline",
+        category: "file",
+        label: command_ids::CMD_IMPORT_DXF_OUTLINE,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_DXF_OUTLINE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::IMPORT_DXF_OUTLINE,
+        ..CommandMetadata::DEFAULT
+    },
 ];

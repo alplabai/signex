@@ -374,6 +374,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
             Needs::PcbSelection
         }
         "arrange_in_box" => Needs::SwapFootprints,
+        // #2410: DXF import onto the board in view.
+        "import_dxf" | "import_dxf_outline" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,

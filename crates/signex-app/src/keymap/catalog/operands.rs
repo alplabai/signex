@@ -360,6 +360,19 @@ pub const LAYER_SET_NAME: &[Operand] = &[required("name", OperandKind::Text)];
 /// (#2394).
 pub const LAYER_TAB_NAMES: &[Operand] = &[required("style", OperandKind::Text)];
 
+/// DXF import onto a layer (#2410): the file, the layer token (the active
+/// layer when left out) and the board.
+pub const IMPORT_DXF: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("layer", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// DXF import as the board outline (#2410): the file and the board.
+pub const IMPORT_DXF_OUTLINE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("document", OperandKind::Document),
+];
+
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),

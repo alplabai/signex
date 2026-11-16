@@ -512,6 +512,7 @@ fn snxpcb_round_trip_with_data() {
         ),
     ] {
         board.segments.push(Segment {
+            attributes: Default::default(),
             unknown_columns: Default::default(),
             locked: false,
             uuid: Uuid::parse_str(uuid).unwrap(),
@@ -524,6 +525,7 @@ fn snxpcb_round_trip_with_data() {
     }
 
     board.vias.push(Via {
+        attributes: Default::default(),
         unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0030-7000-8000-000000000001").unwrap(),
         position: PcbPoint { x: 100.0, y: 200.0 },

@@ -61,6 +61,7 @@ fn two_row_board() -> PcbBoard {
     board.footprints.push(fp2);
     for n in 0..2u32 {
         board.segments.push(Segment {
+            attributes: Default::default(),
             unknown_columns: Default::default(),
             locked: false,
             uuid: uuid_n(50 + n),
@@ -74,6 +75,7 @@ fn two_row_board() -> PcbBoard {
             net: 1,
         });
         board.vias.push(Via {
+            attributes: Default::default(),
             unknown_columns: Default::default(),
             uuid: uuid_n(60 + n),
             position: PcbPoint {

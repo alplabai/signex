@@ -100,4 +100,10 @@ define_ids! {
     PCB_BOARD_TOOL_SKIPPED = "pcb-board-tool-skipped";
     PCB_BOARD_TOOL_REFUSED = "pcb-board-tool-refused";
     PCB_ARRANGE_BOX_HINT = "pcb-arrange-box-hint";
+    PCB_DXF_IMPORT_STEP = "pcb-dxf-import-step";
+    PCB_DXF_IMPORTED_LAYER = "pcb-dxf-imported-layer";
+    PCB_DXF_IMPORTED_OUTLINE = "pcb-dxf-imported-outline";
+    PCB_DXF_SKIPPED = "pcb-dxf-skipped";
+    PCB_DXF_REFUSED = "pcb-dxf-refused";
+    PCB_DXF_LAYER_REFUSED = "pcb-dxf-layer-refused";
 }

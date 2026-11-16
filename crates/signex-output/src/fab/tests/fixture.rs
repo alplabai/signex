@@ -99,6 +99,7 @@ pub(crate) fn pad(
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -187,6 +188,8 @@ pub(crate) fn fixture_board() -> PcbBoard {
         layer: "TopCopper".into(),
         net: 2,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }];
     board.vias = vec![Via {
         uuid: Uuid::from_u128(40),
@@ -197,6 +200,9 @@ pub(crate) fn fixture_board() -> PcbBoard {
         net: 2,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        layer_sizes: None,
+        locked: false,
     }];
     board
 }

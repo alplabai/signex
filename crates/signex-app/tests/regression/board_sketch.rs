@@ -52,6 +52,7 @@ pub(crate) fn board() -> PcbBoard {
         footprints: Vec::new(),
         segments: vec![Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(10),
             start: Point::new(5.0, 15.0),
             end: Point::new(25.0, 15.0),

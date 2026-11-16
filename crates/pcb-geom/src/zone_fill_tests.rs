@@ -162,6 +162,7 @@ fn copper_on_another_layer_is_not_cut() {
     let mut b = board(Vec::new());
     b.segments.push(Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(7),
         start: Point::new(-20.0, 0.0),
         end: Point::new(20.0, 0.0),
@@ -228,6 +229,7 @@ fn the_minimum_thickness_drops_a_neck_too_thin_to_make() {
     for (n, y0, y1) in [(7, -20.0, -0.75), (8, 0.75, 20.0)] {
         b.segments.push(Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(n),
             start: Point::new(0.0, y0),
             end: Point::new(0.0, y1),

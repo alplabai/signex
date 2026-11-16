@@ -44,6 +44,8 @@ pub(crate) fn track(n: u128, from: (f64, f64), to: (f64, f64), net: u32) -> Segm
         layer: "TopCopper".into(),
         net,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     }
 }
 
@@ -57,6 +59,9 @@ pub(crate) fn via(n: u128, at: (f64, f64), diameter: f64, net: u32) -> Via {
         net,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        layer_sizes: None,
+        locked: false,
     }
 }
 
@@ -78,6 +83,7 @@ pub(crate) fn pad_part(n: u128, at: (f64, f64), size: f64, net: u32) -> Footprin
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };

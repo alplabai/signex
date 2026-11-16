@@ -14,8 +14,8 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::Signex;
 use crate::panels::pcb_primitive_properties::{
-    Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
+    Editability, LayerChoice, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
 };
 use crate::pcb_canvas::layer_style;
 
@@ -57,11 +57,8 @@ impl Signex {
                         _ => None,
                     })
                     .collect();
-                let common = self.primitive_common(
-                    board,
-                    target,
-                    locked_if(tracks.iter().any(|s| s.locked)),
-                )?;
+                let lock = item_lock(tracks.iter().any(|s| s.locked));
+                let common = self.primitive_common(board, target, lock)?;
                 PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
             }
             ItemRef::Via(_) => {
@@ -73,8 +70,8 @@ impl Signex {
                         _ => None,
                     })
                     .collect();
-                let common =
-                    self.primitive_common(board, target, locked_if(vias.iter().any(|v| v.locked)))?;
+                let lock = item_lock(vias.iter().any(|v| v.locked));
+                let common = self.primitive_common(board, target, lock)?;
                 PcbPrimitiveFacts::Via(via_facts(board, common, &vias, i18n))
             }
             ItemRef::Pad { .. } => {
@@ -246,15 +243,6 @@ impl Signex {
     }
 }
 
-/// A selection holding a locked track or via is shown locked (#2407).
-fn locked_if(locked: bool) -> Editability {
-    if locked {
-        Editability::Locked
-    } else {
-        Editability::Editable
-    }
-}
-
 fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
     match item {
         ItemRef::Track(id) => board.segments.iter().any(|s| s.uuid == id),
@@ -307,6 +295,8 @@ pub(super) fn track_facts(
         ),
         length_mm: pcb_geom::tracks_length_mm(tracks.iter().copied()),
         locked: shared(tracks.iter().map(|s| s.locked)),
+        paste_mask: shared(tracks.iter().map(|s| s.attributes.paste_mask)),
+        solder_mask: shared(tracks.iter().map(|s| s.attributes.solder_mask)),
         common,
     }
 }
@@ -354,6 +344,15 @@ pub(super) fn via_facts(
         locked: shared(vias.iter().map(|v| v.locked)),
         layer_sizes: stack_facts::via_size_rows(i18n, mode, &stack, vias),
         mode,
+        top: MaskSideFacts {
+            expansion: shared(vias.iter().map(|v| v.attributes.top.expansion)),
+            tented: shared(vias.iter().map(|v| v.attributes.top.tented)),
+        },
+        bottom: MaskSideFacts {
+            expansion: shared(vias.iter().map(|v| v.attributes.bottom.expansion)),
+            tented: shared(vias.iter().map(|v| v.attributes.bottom.tented)),
+        },
+        from_hole_edge: shared(vias.iter().map(|v| v.attributes.from_hole_edge)),
         common,
     }
 }
@@ -439,4 +438,14 @@ fn pad_layer(fp: &signex_types::pcb::Footprint, pad: &Pad) -> Option<PcbLayer> {
     pcb_geom::copper_layers(mask)
         .first()
         .map(|c| PcbLayer::Copper(*c))
+}
+
+/// A selection with a locked track or via takes no edit but its unlock
+/// (#2378).
+fn item_lock(any_locked: bool) -> Editability {
+    if any_locked {
+        Editability::ItemLocked
+    } else {
+        Editability::Editable
+    }
 }

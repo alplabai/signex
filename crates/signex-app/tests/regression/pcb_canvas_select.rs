@@ -67,6 +67,7 @@ fn board() -> PcbBoard {
     };
     let segment = Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(3),
         start: pt(0.0, 0.0),
         end: pt(20.0, 0.0),
@@ -76,6 +77,7 @@ fn board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     let via = Via {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(4),
         position: pt(30.0, 0.0),
         diameter: 0.6,

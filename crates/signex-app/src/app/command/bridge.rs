@@ -331,6 +331,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
+        "import_dxf" => crate::app::handlers::pcb_dxf_import::requested(false),
+        "import_dxf_outline" => crate::app::handlers::pcb_dxf_import::requested(true),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),

@@ -120,6 +120,8 @@ define_ids! {
     PCB_PRIM_SHAPE_OVAL = "pcb-prim-shape-oval";
     PCB_PRIM_NO_HOLE = "pcb-prim-no-hole";
     PCB_PRIM_PAD_LOCKED = "pcb-prim-pad-locked";
+    PCB_PRIM_TENTED_TIP = "pcb-prim-tented-tip";
+    PCB_PRIM_FROM_HOLE_EDGE_TIP = "pcb-prim-from-hole-edge-tip";
     PCB_PRIM_REFUSED = "pcb-prim-refused";
     PCB_PRIM_NOT_A_NUMBER = "pcb-prim-not-a-number";
     PCB_PRIM_BOARD_GONE = "pcb-prim-board-gone";

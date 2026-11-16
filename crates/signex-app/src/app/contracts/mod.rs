@@ -187,8 +187,8 @@ pub use messages::*;
 pub use net_nav::NetNavMsg;
 pub use pcb::{
     Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg, BoardSketchMsg, BoardToolsMsg,
-    DrcRunResult, FootprintSwapMsg, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg, ViewAngleEntry,
-    ViewRotationMsg,
+    DrcRunResult, DxfImportMsg, FootprintSwapMsg, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg,
+    ViewAngleEntry, ViewRotationMsg,
 };
 pub use state::*;
 

@@ -502,6 +502,7 @@ fn divider_netlists() -> (Netlist, Netlist) {
 fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
     pcb.segments.push(Segment {
         locked: false,
+        attributes: Default::default(),
         uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(1.0, 0.0),
@@ -511,6 +512,7 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         unknown_columns: Default::default(),
     });
     pcb.vias.push(Via {
+        attributes: Default::default(),
         uuid: Uuid::now_v7(),
         position: pt(1.0, 0.0),
         diameter: 0.6,

@@ -335,6 +335,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `hide_layer_group` | Hide every layer of one kind | view | — | — |
 | `highlight_board_net` | Highlight a board net | select | — | — |
 | `highlight_layer` | Highlight one layer and dim the others | view | — | — |
+| `import_dxf` | Import a DXF drawing onto the active layer of the board | file | — | — |
+| `import_dxf_outline` | Import the largest closed shape of a DXF drawing as the board outline | file | — | — |
 | `keepout_from_selection` | Turn the selected area or closed lines into a keepout on its layer | design | — | — |
 | `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `measure_board` | Measure on a board | search | — | — |

@@ -15,6 +15,8 @@ fn board() -> PcbBoard {
         layer: "TopCopper".into(),
         net: 0,
         unknown_columns: Default::default(),
+        attributes: Default::default(),
+        locked: false,
     };
     PcbBoard {
         sketch: None,
@@ -43,6 +45,9 @@ fn board() -> PcbBoard {
             net: 0,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
+            attributes: Default::default(),
+            layer_sizes: None,
+            locked: false,
         }],
         zones: Vec::new(),
         graphics: Vec::new(),

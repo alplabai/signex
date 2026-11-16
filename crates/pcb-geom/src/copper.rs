@@ -186,6 +186,7 @@ mod tests {
     fn board() -> PcbBoard {
         let track = Segment {
             locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(2),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
@@ -243,6 +244,7 @@ mod tests {
             locked: false,
             layer_sizes: None,
             unknown_columns: Default::default(),
+            attributes: Default::default(),
         };
         assert_eq!(via_pieces(&via).unwrap().len(), 1);
         via.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {

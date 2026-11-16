@@ -144,6 +144,7 @@ pub(super) fn next_leg_style(
         style = style.with_class_width(board, classes);
     }
     let via = (style.layer != layer).then(|| Via {
+        attributes: Default::default(),
         net: style.net,
         ..defaults.via(board, Uuid::now_v7(), anchor)
     });
