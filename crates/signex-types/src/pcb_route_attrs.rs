@@ -1,6 +1,6 @@
 //! The lock and mask settings of a board track or via (#2378): what the
 //! Track and Via panels edit beyond geometry and net. Saved in optional
-//! `[tracks]` / `[vias]` columns (`format::pcb_route_columns`), written only
+//! `[tracks]` / `[vias]` columns (`format::pcb_row_columns`), written only
 //! when a setting differs from the default, so a board that never sets one
 //! re-saves byte-identical.
 

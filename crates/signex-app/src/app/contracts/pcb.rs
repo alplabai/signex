@@ -299,10 +299,13 @@ pub enum DxfImportMsg {
         path: Option<std::path::PathBuf>,
     },
     /// The file was read off the UI thread, or why it could not be.
+    /// `waiting` is the command run with operands that is answered with the
+    /// import's summary or refusal; `None` for the file dialog's answer.
     Read {
         board: std::path::PathBuf,
         target: signex_engine::pcb::dxf::DxfTarget,
         path: std::path::PathBuf,
         text: Result<String, String>,
+        waiting: Option<crate::app::agent::WaitingCommand>,
     },
 }

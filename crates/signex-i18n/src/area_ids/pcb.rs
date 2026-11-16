@@ -58,4 +58,5 @@ define_ids! {
     PCB_DXF_IMPORTED_OUTLINE = "pcb-dxf-imported-outline";
     PCB_DXF_SKIPPED = "pcb-dxf-skipped";
     PCB_DXF_REFUSED = "pcb-dxf-refused";
+    PCB_DXF_LAYER_REFUSED = "pcb-dxf-layer-refused";
 }

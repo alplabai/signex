@@ -90,6 +90,8 @@ pub enum BoardCommandError {
     HoleTooLarge { hole: f64, diameter: f64 },
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
+    #[error("{field} holds a number the board file cannot store")]
+    NotStorable { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]
     NonFiniteSketch(String),
     #[error("the grid step must not be negative, not {0} mm")]

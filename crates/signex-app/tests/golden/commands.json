@@ -470,6 +470,16 @@
     "category": "select"
   },
   {
+    "id": "import_dxf",
+    "group": "Pcb",
+    "category": "file"
+  },
+  {
+    "id": "import_dxf_outline",
+    "group": "Pcb",
+    "category": "file"
+  },
+  {
     "id": "import_graphics",
     "group": "General",
     "category": "library"

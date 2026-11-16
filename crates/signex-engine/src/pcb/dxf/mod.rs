@@ -63,6 +63,24 @@ pub enum DxfError {
     NoClosedShape,
     #[error("the board sketch owns the outline; edit it in Board Sketch")]
     OutlineOwnedBySketch,
+    #[error(
+        "{0} is a copper layer, and a drawing there is copper that DRC, the ratsnest and \
+         connectivity never read; pick a silkscreen or mechanical layer"
+    )]
+    CopperLayer(String),
+    #[error("the drawing reaches past the range a board file holds")]
+    OutOfRange,
+}
+
+/// Whether `target` can take an import at all, before any file is read: a
+/// drawing is never put on a copper layer.
+pub fn check_dxf_target(target: DxfTarget) -> Result<(), DxfError> {
+    match target {
+        DxfTarget::Layer(layer) if layer.is_copper() => {
+            Err(DxfError::CopperLayer(pcb_layer_token(layer)))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// The command importing `text` onto `board` at `target`, and what it makes.
@@ -72,6 +90,7 @@ pub fn dxf_import_command(
     text: &str,
     target: DxfTarget,
 ) -> Result<(BoardCommand, DxfImportSummary), DxfError> {
+    check_dxf_target(target)?;
     let drawing = parse_dxf(text)?;
     if drawing.entities.is_empty() {
         return Err(DxfError::Empty);
@@ -81,6 +100,9 @@ pub fn dxf_import_command(
         DxfTarget::Layer(layer) => {
             let token = pcb_layer_token(layer);
             let graphics = board_graphics(&drawing, origin, &token);
+            if !graphics.iter().all(super::graphics::is_storable) {
+                return Err(DxfError::OutOfRange);
+            }
             let summary = DxfImportSummary {
                 graphics: graphics.len(),
                 outline_points: 0,
@@ -98,6 +120,9 @@ pub fn dxf_import_command(
                 return Err(DxfError::OutlineOwnedBySketch);
             }
             let outline = board_outline(&drawing, origin).ok_or(DxfError::NoClosedShape)?;
+            if !outline.iter().all(super::graphics::is_storable_point) {
+                return Err(DxfError::OutOfRange);
+            }
             let summary = DxfImportSummary {
                 graphics: 0,
                 outline_points: outline.len(),

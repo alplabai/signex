@@ -157,3 +157,64 @@ fn a_layer_import_is_one_step_that_undo_takes_back_whole() {
     redo.inverse.apply(&mut b).unwrap();
     assert_eq!(b.graphics.len(), before + 2);
 }
+
+/// A drawing on copper would be copper nothing electrical reads: refused
+/// before the file is parsed.
+#[test]
+fn a_layer_import_onto_copper_is_refused() {
+    use signex_types::pcb_layer::CopperLayer;
+    let b = board();
+    let top = PcbLayer::Copper(CopperLayer::Top);
+    let text = dxf(4, &line(0.0, 0.0, 1.0, 0.0));
+    assert_eq!(
+        dxf_import_command(&b, &text, DxfTarget::Layer(top)).map(|(_, s)| s),
+        Err(DxfError::CopperLayer("TopCopper".to_string()))
+    );
+    assert_eq!(check_dxf_target(DxfTarget::Layer(SILK)), Ok(()));
+    assert_eq!(check_dxf_target(DxfTarget::Outline), Ok(()));
+}
+
+/// A finite coordinate past the board file's nanometre range would import
+/// and then fail every save: refused at import.
+#[test]
+fn a_drawing_past_the_file_range_is_refused() {
+    let b = board();
+    let far = dxf(4, &line(0.0, 0.0, 1.0e20, 0.0));
+    assert_eq!(
+        dxf_import_command(&b, &far, DxfTarget::Layer(SILK)).map(|(_, s)| s),
+        Err(DxfError::OutOfRange)
+    );
+    let square = [
+        line(0.0, 0.0, 1.0e20, 0.0),
+        line(1.0e20, 0.0, 1.0e20, 1.0e20),
+        line(1.0e20, 1.0e20, 0.0, 1.0e20),
+        line(0.0, 1.0e20, 0.0, 0.0),
+    ]
+    .concat();
+    assert_eq!(
+        dxf_import_command(&b, &dxf(4, &square), DxfTarget::Outline).map(|(_, s)| s),
+        Err(DxfError::OutOfRange)
+    );
+
+    // The command refuses it too, whoever builds it.
+    let mut b = board();
+    let (command, _) = dxf_import_command(
+        &b,
+        &dxf(4, &line(0.0, 0.0, 1.0, 0.0)),
+        DxfTarget::Layer(SILK),
+    )
+    .unwrap();
+    let BoardCommand::AddGraphics { graphics } = &command else {
+        panic!("a layer import adds drawings: {command:?}");
+    };
+    let mut graphics = graphics.clone();
+    graphics[0].end = Some(Point::new(1.0e20, 0.0));
+    let before = b.graphics.len();
+    assert_eq!(
+        BoardCommand::AddGraphics { graphics }
+            .apply(&mut b)
+            .map(|_| ()),
+        Err(crate::pcb::BoardCommandError::NotStorable { field: "drawing" })
+    );
+    assert_eq!(b.graphics.len(), before);
+}

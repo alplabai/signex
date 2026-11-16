@@ -258,3 +258,5 @@ pcb-dxf-imported-outline = The board outline is now the { $count }-corner shape 
 # $count entities of kinds the import does not read (text, blocks, hatches).
 pcb-dxf-skipped = { $count } entities of { $file } are not lines, arcs, circles or polylines and were skipped.
 pcb-dxf-refused = { $file } was not imported: { $why }
+# Before the file dialog opens; $why says the layer and why it cannot take a drawing.
+pcb-dxf-layer-refused = No DXF file was asked for: { $why }

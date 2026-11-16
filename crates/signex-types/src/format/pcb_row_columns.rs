@@ -103,8 +103,8 @@ pub(in crate::format) fn take_track_cells(
 ) -> Result<TrackAttributes, FormatError> {
     Ok(TrackAttributes {
         locked: take_flag(columns, LOCKED_COLUMN),
-        paste_mask: take_mask(columns, PASTE_MASK_COLUMN, block, row)?,
-        solder_mask: take_mask(columns, SOLDER_MASK_COLUMN, block, row)?,
+        paste_mask: take_mask(columns, PASTE_MASK_COLUMN, block, row),
+        solder_mask: take_mask(columns, SOLDER_MASK_COLUMN, block, row),
     })
 }
 
@@ -143,11 +143,11 @@ pub(in crate::format) fn take_via_cells(
     Ok(ViaAttributes {
         locked: take_flag(columns, LOCKED_COLUMN),
         top: ViaMaskSide {
-            expansion: take_mask(columns, SOLDER_MASK_TOP_COLUMN, block, row)?,
+            expansion: take_mask(columns, SOLDER_MASK_TOP_COLUMN, block, row),
             tented: take_flag(columns, TENTED_TOP_COLUMN),
         },
         bottom: ViaMaskSide {
-            expansion: take_mask(columns, SOLDER_MASK_BOTTOM_COLUMN, block, row)?,
+            expansion: take_mask(columns, SOLDER_MASK_BOTTOM_COLUMN, block, row),
             tented: take_flag(columns, TENTED_BOTTOM_COLUMN),
         },
         from_hole_edge: take_flag(columns, FROM_HOLE_EDGE_COLUMN),
@@ -187,20 +187,23 @@ fn set_mask(
     Ok(())
 }
 
-/// An empty cell is the rule; a number is a manual expansion in nm.
-fn take_mask(
-    columns: &mut UnknownColumns,
-    column: &str,
-    block: &str,
-    row: usize,
-) -> Result<MaskExpansion, FormatError> {
-    match columns.take(column) {
-        None => Ok(MaskExpansion::Rule),
-        Some(cell) if cell.trim().is_empty() => Ok(MaskExpansion::Rule),
-        Some(cell) => {
-            let nm = super::tsv::parse_nm(cell.trim(), block, row, column)?;
-            Ok(MaskExpansion::Manual { mm: nm_to_mm(nm) })
+/// An empty cell is the rule; a number is a manual expansion in nm. Any
+/// other value is not ours to read: like a flag's, it stays a foreign cell
+/// that round-trips untouched, and the mask reads as the rule.
+fn take_mask(columns: &mut UnknownColumns, column: &str, block: &str, row: usize) -> MaskExpansion {
+    let read = match columns.get(column) {
+        None => return MaskExpansion::Rule,
+        Some(cell) if cell.trim().is_empty() => Some(MaskExpansion::Rule),
+        Some(cell) => super::tsv::parse_nm(cell.trim(), block, row, column)
+            .ok()
+            .map(|nm| MaskExpansion::Manual { mm: nm_to_mm(nm) }),
+    };
+    match read {
+        Some(mask) => {
+            columns.take(column);
+            mask
         }
+        None => MaskExpansion::Rule,
     }
 }
 
@@ -252,14 +255,24 @@ mod tests {
     }
 
     #[test]
-    fn a_cell_that_is_not_a_flag_stays_foreign_and_a_bad_mask_is_refused() {
+    fn a_cell_that_is_not_a_flag_or_a_mask_stays_foreign() {
         let mut cells = UnknownColumns::default();
         cells.set(LOCKED_COLUMN, "maybe".to_string());
         let read = take_track_cells(&mut cells, "tracks", 3).unwrap();
         assert!(!read.locked);
         assert_eq!(cells.get(LOCKED_COLUMN), Some("maybe"));
         cells.set(SOLDER_MASK_COLUMN, "wide".to_string());
-        assert!(take_track_cells(&mut cells, "tracks", 3).is_err());
+        let read = take_track_cells(&mut cells, "tracks", 3).expect("the row still loads");
+        assert_eq!(read.solder_mask, MaskExpansion::Rule);
+        assert_eq!(cells.get(SOLDER_MASK_COLUMN), Some("wide"));
+        let written = with_track_cells(cells, &read).expect("finite");
+        assert_eq!(written.get(SOLDER_MASK_COLUMN), Some("wide"));
+
+        let mut cells = UnknownColumns::default();
+        cells.set(SOLDER_MASK_TOP_COLUMN, "open".to_string());
+        let read = take_via_cells(&mut cells, "vias", 0).expect("the row still loads");
+        assert_eq!(read.top.expansion, MaskExpansion::Rule);
+        assert_eq!(cells.get(SOLDER_MASK_TOP_COLUMN), Some("open"));
     }
 
     #[test]

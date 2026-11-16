@@ -26,7 +26,60 @@ pub(crate) struct WaitingReply {
     pub(super) token: Option<String>,
 }
 
+/// A command run with operands that waits on its own off-thread work (a file
+/// read): what answering it once the work lands needs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WaitingCommand {
+    pub(crate) ticket: u64,
+    pub(crate) command: AppCommandId,
+    pub(crate) args: CommandArgs,
+    pub(crate) origin: super::Origin,
+}
+
 impl Signex {
+    /// Start waiting for `command`: a new ticket, answered by
+    /// [`Signex::finish_waiting_command`].
+    pub(crate) fn wait_for_command(
+        &mut self,
+        command: &AppCommandId,
+        args: &CommandArgs,
+    ) -> WaitingCommand {
+        let edits = &mut self.document_state.agent_edits;
+        edits.tickets += 1;
+        WaitingCommand {
+            ticket: edits.tickets,
+            command: command.clone(),
+            args: args.clone(),
+            origin: self.agent.origin.clone(),
+        }
+    }
+
+    /// The work `waiting` waited for landed: `run` it on `target` and answer
+    /// the socket request, or keep the outcome for the headless run.
+    pub(crate) fn finish_waiting_command(
+        &mut self,
+        waiting: WaitingCommand,
+        target: &Path,
+        run: impl FnOnce(&mut Self) -> CommandOutcome,
+    ) -> Task<Message> {
+        let WaitingCommand {
+            ticket,
+            command,
+            args,
+            origin,
+        } = waiting;
+        let mark = crate::diagnostics::newest_entry_id();
+        let before = self.change_snapshot();
+        let (outcome, task) = match self.agent_gate_closed(ticket, &command, &args) {
+            Some(reason) => self.turned_away_waiting(ticket, target, reason),
+            None => self.with_origin(origin, |app| {
+                app.journaled(&command, &args, |app| (run(app), Task::none()))
+            }),
+        };
+        self.answer_waiting(ticket, command.as_str(), mark, &before, outcome);
+        task
+    }
+
     /// The reads of a waiting edit landed: run it (`command::edit_reads`) and
     /// answer the socket request that started it, or keep the outcome for the
     /// headless run that waits on its ticket.

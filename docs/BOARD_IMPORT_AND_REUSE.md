@@ -23,12 +23,21 @@ without a board in view.
   layer token as saved (`TopSilkscreen`, `Mechanical1`, ...); left out it is
   the active layer. `document` names an open board; left out it is the
   board in view. A bad layer, a closed board or a document that is not a
-  board is refused before anything is read. The command reports `Ran`; the
-  result goes to the Messages panel.
+  board is refused before anything is read. The command reports `Deferred`
+  and is answered once the file is read: the summary (`graphics`,
+  `outline_points`, `skipped`, `target`) or the refusal, as `Disabled`. The
+  same lines go to the Messages panel. The agent socket refuses both
+  commands, as it refuses every command with a `path` operand; the CLI and
+  headless runs take the answer.
+- A copper layer is refused, from the dialog and from operands, before any
+  file is read: a drawing there would be copper that DRC, the ratsnest and
+  connectivity never read.
 
 **Reading.** The file is picked and read off the UI thread
-(`DxfImportMsg::Picked`, `DxfImportMsg::Read`); a file that is not UTF-8 is
-read lossily. `signex_engine::pcb::dxf` parses it and builds the command;
+(`DxfImportMsg::Picked`, `DxfImportMsg::Read`, the read in a blocking
+task); a file over 64 MiB is not read, and one that is not UTF-8 is read
+lossily. A drawing with a coordinate past the board file's nanometre range
+is refused, so an import never leaves a board that cannot be saved. `signex_engine::pcb::dxf` parses it and builds the command;
 nothing there does IO.
 
 - Entities read: `LINE`, `ARC`, `CIRCLE`, `LWPOLYLINE` and `POLYLINE` with its
