@@ -170,7 +170,7 @@ mod tests {
     fn summary(kinds: &[SelectedKind]) -> Option<String> {
         let selected: Vec<SelectedItem> = kinds
             .iter()
-            .map(|kind| SelectedItem::new(uuid::Uuid::new_v4(), *kind))
+            .map(|kind| SelectedItem::new(uuid::Uuid::now_v7(), *kind))
             .collect();
         selection_summary(&selected, &signex_i18n::I18n::en_us())
             .map(|text| text.into_string().replace(['\u{2068}', '\u{2069}'], ""))
