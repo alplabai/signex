@@ -6,7 +6,8 @@ use super::*;
 use crate::numeric_field::{FieldNumber, parse_field_number};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_widgets::{checkbox, raw, text_input};
+use signex_i18n::{I18n, MessageId, ids, t};
+use signex_widgets::{checkbox, text_input};
 
 use signex_engine::{MultiEdit, Shared};
 use signex_types::schematic::{HAlign, SCHEMATIC_PT_TO_MM};
@@ -14,7 +15,13 @@ use signex_types::schematic::{HAlign, SCHEMATIC_PT_TO_MM};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Shown in place of a value the selection disagrees on.
+/// Shown in place of a value the selection disagrees on. The view now reads
+/// `placeholder-mixed` from the catalog; this English copy is left for the
+/// maintainers to remove.
+#[allow(
+    dead_code,
+    reason = "unused since #2059 part B; removal is the maintainers' call"
+)]
 pub const MIXED: &str = "<mixed>";
 
 /// A text box of the multi-selection form, the key of its draft.
@@ -176,26 +183,27 @@ impl MultiView<'_> {
 /// A checkbox over a flag the group may disagree on; toggling a mixed flag
 /// sets it on every object.
 fn flag_row<'a>(
-    label: &str,
+    i18n: &I18n,
+    label: MessageId,
     shared: &Shared<bool>,
     edit: fn(bool) -> MultiEdit,
     muted: Color,
     primary: Color,
 ) -> Element<'a, PanelMsg> {
     let (checked, state) = match shared {
-        Shared::Same(true) => (true, "On"),
-        Shared::Same(false) => (false, "Off"),
-        Shared::Mixed => (false, MIXED),
+        Shared::Same(true) => (true, ids::PANELS_MULTI_ON),
+        Shared::Same(false) => (false, ids::PANELS_MULTI_OFF),
+        Shared::Mixed => (false, ids::PLACEHOLDER_MIXED),
     };
     container(
         row![
-            property_label(label.to_string(), muted),
+            property_label(t!(i18n, label).into_string(), muted),
             row![
                 checkbox(checked)
                     .on_toggle(move |on| PanelMsg::MultiEdit(MultiEditMsg::Picked(edit(on))))
                     .size(TS.heading)
                     .spacing(SP.s),
-                text(raw(state))
+                text(t!(i18n, state))
                     .size(TS.body)
                     .color(if checked { primary } else { muted }),
             ]
@@ -217,9 +225,10 @@ fn justify_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let accent = crate::styles::ti(ctx.tokens.accent);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
-    let button = |label: &str, to: HAlign| {
+    let i18n = &ctx.i18n;
+    let button = |label: MessageId, to: HAlign| {
         seg_btn(
-            label,
+            &t!(i18n, label).into_string(),
             shared.same() == Some(&to),
             PanelMsg::MultiEdit(MultiEditMsg::Picked(MultiEdit::LabelJustify(to))),
             accent,
@@ -228,17 +237,17 @@ fn justify_row<'a>(
         )
     };
     let label = if matches!(shared, Shared::Mixed) {
-        format!("Justify {MIXED}")
+        t!(i18n, ids::PANELS_MULTI_JUSTIFY_MIXED)
     } else {
-        "Justify".to_owned()
+        t!(i18n, ids::PANELS_MULTI_JUSTIFY)
     };
     container(
         row![
-            property_label(label, muted),
+            property_label(label.into_string(), muted),
             row![
-                button("Left", HAlign::Left),
-                button("Center", HAlign::Center),
-                button("Right", HAlign::Right),
+                button(ids::PANELS_MULTI_JUSTIFY_LEFT, HAlign::Left),
+                button(ids::PANELS_MULTI_JUSTIFY_CENTER, HAlign::Center),
+                button(ids::PANELS_MULTI_JUSTIFY_RIGHT, HAlign::Right),
             ]
             .spacing(SP.xs)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -273,13 +282,13 @@ fn rotation_row<'a>(
         )
     });
     let label = if matches!(shared, Shared::Mixed) {
-        format!("Rotation {MIXED}")
+        t!(ctx.i18n, ids::PANELS_MULTI_ROTATION_MIXED)
     } else {
-        "Rotation".to_owned()
+        t!(ctx.i18n, ids::PANELS_MULTI_ROTATION)
     };
     container(
         row![
-            property_label(label, muted),
+            property_label(label.into_string(), muted),
             row(buttons)
                 .spacing(SP.xs)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -303,52 +312,72 @@ pub fn view_multi_selection<'a>(
         draft: ctx.multi_draft.as_ref(),
         i18n: &ctx.i18n,
     };
+    let i18n = &ctx.i18n;
+    // Counts go in as the `format!` strings they were, so English reads as before.
+    let count = |id: MessageId, n: usize| t!(i18n, id, "count" => n.to_string()).into_string();
+    let shown = |id: MessageId| t!(i18n, id).into_string();
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text(raw("Multi-Selection")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(t!(i18n, ids::PANELS_MULTI_TITLE))
+                .size(TS.body)
+                .color(primary),
+        )
+        .padding([6.0, SP.m])
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(thin_sep(border_c));
     col = col.push(
         container(
-            text(raw(format!("{} objects selected", ctx.selection_count)))
-                .size(TS.caption)
-                .color(muted),
+            text(t!(
+                i18n,
+                ids::PANELS_MULTI_OBJECTS_SELECTED,
+                "count" => ctx.selection_count.to_string()
+            ))
+            .size(TS.caption)
+            .color(muted),
         )
         .padding([SP.s, SP.m])
         .boxed(),
     );
     if let Some(g) = &ctx.multi_groups.symbols {
         col = col.push(section_hdr(
-            &format!("Symbols ({})", g.count),
+            &count(ids::PANELS_MULTI_SYMBOLS, g.count),
             primary,
             border_c,
         ));
-        col = col.push(view.string_row("Value", MultiField::SymbolValue, &g.value, muted));
         col = col.push(view.string_row(
-            "Footprint",
+            &shown(ids::PANELS_MULTI_VALUE),
+            MultiField::SymbolValue,
+            &g.value,
+            muted,
+        ));
+        col = col.push(view.string_row(
+            &shown(ids::PANELS_MULTI_FOOTPRINT),
             MultiField::SymbolFootprint,
             &g.footprint,
             muted,
         ));
         col = col.push(flag_row(
-            "DNP",
+            i18n,
+            ids::PANELS_MULTI_DNP,
             &g.dnp,
             MultiEdit::SymbolDnp,
             muted,
             primary,
         ));
         col = col.push(flag_row(
-            "In BOM",
+            i18n,
+            ids::PANELS_MULTI_IN_BOM,
             &g.in_bom,
             MultiEdit::SymbolInBom,
             muted,
             primary,
         ));
         col = col.push(flag_row(
-            "On board",
+            i18n,
+            ids::PANELS_MULTI_ON_BOARD,
             &g.on_board,
             MultiEdit::SymbolOnBoard,
             muted,
@@ -365,12 +394,12 @@ pub fn view_multi_selection<'a>(
     }
     if let Some(g) = &ctx.multi_groups.labels {
         col = col.push(section_hdr(
-            &format!("Labels ({})", g.count),
+            &count(ids::PANELS_MULTI_LABELS, g.count),
             primary,
             border_c,
         ));
         col = col.push(view.number_row(
-            "Size (pt)",
+            &shown(ids::PANELS_MULTI_SIZE_PT),
             MultiField::LabelFontPt,
             &g.font_size_mm,
             SCHEMATIC_PT_TO_MM,
@@ -381,21 +410,24 @@ pub fn view_multi_selection<'a>(
     }
     if let Some(g) = &ctx.multi_groups.wires {
         col = col.push(section_hdr(
-            &format!("Wires ({})", g.count),
+            &count(ids::PANELS_MULTI_WIRES, g.count),
             primary,
             border_c,
         ));
-        col =
-            col.push(view.number_row("Width (mm)", MultiField::WireWidth, &g.width_mm, 1.0, muted));
+        col = col.push(view.number_row(
+            &shown(ids::PANELS_MULTI_WIDTH_MM),
+            MultiField::WireWidth,
+            &g.width_mm,
+            1.0,
+            muted,
+        ));
     }
     if ctx.multi_groups.is_empty() {
         col = col.push(
             container(
-                text(raw(
-                    "Nothing in this selection has fields shared for editing",
-                ))
-                .size(TS.caption)
-                .color(muted),
+                text(t!(i18n, ids::PANELS_MULTI_NOTHING_SHARED))
+                    .size(TS.caption)
+                    .color(muted),
             )
             .padding([SP.s, SP.m])
             .boxed(),
@@ -407,6 +439,30 @@ pub fn view_multi_selection<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The catalog says what the English literals said (#2059).
+    #[test]
+    fn the_mixed_and_count_texts_read_as_before() {
+        let i18n = I18n::en_us();
+        let plain = |id, args: &[(&str, signex_i18n::Arg)]| i18n.message_plain(id, args);
+        assert_eq!(plain(ids::PLACEHOLDER_MIXED, &[]), MIXED);
+        assert_eq!(
+            plain(ids::PANELS_MULTI_JUSTIFY_MIXED, &[]),
+            format!("Justify {MIXED}")
+        );
+        assert_eq!(
+            plain(ids::PANELS_MULTI_ROTATION_MIXED, &[]),
+            format!("Rotation {MIXED}")
+        );
+        let n = || [("count", "1234".into())];
+        assert_eq!(
+            plain(ids::PANELS_MULTI_OBJECTS_SELECTED, &n()),
+            "1234 objects selected"
+        );
+        assert_eq!(plain(ids::PANELS_MULTI_SYMBOLS, &n()), "Symbols (1234)");
+        assert_eq!(plain(ids::PANELS_MULTI_LABELS, &n()), "Labels (1234)");
+        assert_eq!(plain(ids::PANELS_MULTI_WIRES, &n()), "Wires (1234)");
+    }
 
     #[test]
     fn numbers_are_trimmed_and_text_is_taken_verbatim() {

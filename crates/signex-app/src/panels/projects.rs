@@ -319,11 +319,20 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
         let muted = theme_ext::text_secondary(&ctx.tokens);
         column![
-            text(raw("No project open")).size(TS.body).color(muted),
-            text(raw("")).size(TS.micro),
-            text(raw("File > Open to begin"))
-                .size(TS.caption)
-                .color(muted),
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_PROJECTS_NONE_OPEN
+            ))
+            .size(TS.body)
+            .color(muted),
+            // A blank line between the two.
+            text(signex_i18n::UserText::new(String::new())).size(TS.micro),
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_PROJECTS_OPEN_HINT
+            ))
+            .size(TS.caption)
+            .color(muted),
         ]
         .spacing(SP.xs)
         .padding(6)
@@ -339,17 +348,21 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(section_title("Sheets", &ctx.tokens, &ctx.i18n).boxed());
+    let sheets = signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_NAVIGATOR_SHEETS);
+    col = col.push(section_title(&sheets.into_string(), &ctx.tokens, &ctx.i18n).boxed());
     col = col.push(separator(&ctx.tokens).boxed());
 
     // The tree is the whole project hierarchy, built from the project's root
     // sheet — it does not depend on which sheet is focused.
     if ctx.navigator.tree.is_empty() {
         col = col.push(
-            text(raw("No project"))
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens))
-                .boxed(),
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_NAVIGATOR_NO_PROJECT
+            ))
+            .size(TS.caption)
+            .color(theme_ext::text_secondary(&ctx.tokens))
+            .boxed(),
         );
     } else {
         let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens).text_size(TS.body);

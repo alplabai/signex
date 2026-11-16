@@ -43,3 +43,64 @@ panels-erc-waiver-status-incomplete = ignored: no reason or author
 panels-erc-violation-waiver-row =
     { $rule }  { $message }  ({ $status })
     {"  "}Reason: { $reason }  by { $author } { $date }
+
+## Properties of a multi-selection
+panels-multi-title = Multi-Selection
+# $count is a whole number. The English keeps "objects" for every count.
+panels-multi-objects-selected = { $count } objects selected
+# Group headings; $count is how many objects of the kind are selected.
+panels-multi-symbols = Symbols ({ $count })
+panels-multi-labels = Labels ({ $count })
+panels-multi-wires = Wires ({ $count })
+panels-multi-value = Value
+panels-multi-footprint = Footprint
+# Do not place: the part is left off the board.
+panels-multi-dnp = DNP
+panels-multi-in-bom = In BOM
+panels-multi-on-board = On board
+# Label text size, in points.
+panels-multi-size-pt = Size (pt)
+panels-multi-width-mm = Width (mm)
+# The state of a flag every selected object shares.
+panels-multi-on = On
+panels-multi-off = Off
+panels-multi-justify = Justify
+# The selected labels are justified differently.
+panels-multi-justify-mixed = Justify <mixed>
+panels-multi-justify-left = Left
+panels-multi-justify-center = Center
+panels-multi-justify-right = Right
+panels-multi-rotation = Rotation
+# The selected labels are turned differently.
+panels-multi-rotation-mixed = Rotation <mixed>
+panels-multi-nothing-shared = Nothing in this selection has fields shared for editing
+
+## Projects and Navigator panels
+panels-projects-none-open = No project open
+# The menu path that opens a project.
+panels-projects-open-hint = File > Open to begin
+panels-navigator-sheets = Sheets
+panels-navigator-no-project = No project
+
+## Components panel: the details of the selected row
+panels-components-details-select = Select a component to see its details.
+panels-components-details-loading = Loading…
+panels-components-details-no-symbol = No symbol.
+panels-components-details-footprint-unreadable = Footprint could not be read.
+panels-components-details-no-footprint = No footprint.
+panels-components-details-no-parameters = No parameters.
+
+## Planned panels: what each will do, under its name and the planned note
+panels-stub-drc = Run DRC to check PCB design rules
+panels-stub-layer-stack = PCB mode only
+panels-stub-net-classes = Define net classes and rules
+panels-stub-variants = Design variant management
+panels-stub-output-jobs = Manufacturing output config
+panels-stub-sch-filter = Schematic object filter
+panels-stub-sch-list = Schematic object list inspector
+panels-stub-bom-studio = Bill of Materials management
+panels-stub-favorites = Favorite components and snippets
+panels-stub-snippets = Reusable schematic snippets
+panels-stub-todo = Task and issue tracking
+panels-stub-wiki = Project documentation wiki
+panels-stub-library = Open a library from the Projects panel to browse it.

@@ -119,10 +119,17 @@ pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
         .color(theme_ext::border_color(tokens))
 }
 
-pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, PanelMsg> {
+/// A planned panel: its name (`title`), the planned note and what it will
+/// do (`desc`).
+pub fn view_stub<'a>(
+    title: signex_i18n::MessageId,
+    desc: signex_i18n::MessageId,
+    ctx: &PanelContext,
+) -> Element<'a, PanelMsg> {
+    let title = ctx.i18n.message(title, &[]).into_string();
     container(
         column![
-            section_title(title, &ctx.tokens, &ctx.i18n),
+            section_title(&title, &ctx.tokens, &ctx.i18n),
             separator(&ctx.tokens),
             text(
                 ctx.i18n
@@ -130,7 +137,7 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
             )
             .size(TS.caption)
             .color(theme_ext::text_primary(&ctx.tokens)),
-            text(raw(desc.to_string()))
+            text(ctx.i18n.message(desc, &[]))
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]

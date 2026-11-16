@@ -268,6 +268,8 @@ fn id_clash_notices<'a>(
     let mut notices: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
     for notice in &state.id_clash_notices {
         notices = notices.push(
+            // raw: the id-clash notice is worded in English by the library
+            // mount (#2060).
             text(raw(notice.message()))
                 .size(ROW_TEXT_SIZE)
                 .color(text_c)
@@ -483,7 +485,8 @@ fn view_row_button<'a>(
     let content = container(
         row![
             part,
-            text(raw(label_right))
+            // The manufacturer, as the library row stores it.
+            text(signex_i18n::UserText::new(label_right))
                 .size(HINT_TEXT_SIZE)
                 .color(muted)
                 .width(Length::FillPortion(2))

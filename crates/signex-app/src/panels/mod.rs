@@ -346,6 +346,7 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    use signex_i18n::ids;
     let content = match kind {
         // The Components panel is drawn by `components_panel::view` (the dock and the
         // detached window both route it there); nothing to show here.
@@ -364,29 +365,47 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::SignexAi => {
             return signal::view(ctx);
         }
-        PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
-        PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
+        PanelKind::Drc => view_stub(ids::PANELS_KIND_DRC, ids::PANELS_STUB_DRC, ctx),
+        PanelKind::LayerStack => view_stub(
+            ids::PANELS_KIND_LAYER_STACK,
+            ids::PANELS_STUB_LAYER_STACK,
+            ctx,
+        ),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {
             crate::library::editor::footprint::layers_panel::view(ctx)
         }
         PanelKind::Layers => pcb_layers::view(ctx),
-        PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
-        PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
-        PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
-        PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
-        PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
-        PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
-        PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
-        PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
-        PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
-        PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
-        PanelKind::Library => view_stub(
-            "Library",
-            "Open a library from the Projects panel to browse it.",
+        PanelKind::NetClasses => view_stub(
+            ids::PANELS_KIND_NET_CLASSES,
+            ids::PANELS_STUB_NET_CLASSES,
             ctx,
         ),
+        PanelKind::Variants => view_stub(ids::PANELS_KIND_VARIANTS, ids::PANELS_STUB_VARIANTS, ctx),
+        PanelKind::OutputJobs => view_stub(
+            ids::PANELS_KIND_OUTPUT_JOBS,
+            ids::PANELS_STUB_OUTPUT_JOBS,
+            ctx,
+        ),
+        PanelKind::SchFilter => view_stub(
+            ids::PANELS_KIND_SCH_FILTER,
+            ids::PANELS_STUB_SCH_FILTER,
+            ctx,
+        ),
+        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::BomStudio => view_stub(
+            ids::PANELS_KIND_BOM_STUDIO,
+            ids::PANELS_STUB_BOM_STUDIO,
+            ctx,
+        ),
+        PanelKind::Favorites => {
+            view_stub(ids::PANELS_KIND_FAVORITES, ids::PANELS_STUB_FAVORITES, ctx)
+        }
+        PanelKind::Snippets => view_stub(ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS, ctx),
+        PanelKind::Todo => view_stub(ids::PANELS_KIND_TODO, ids::PANELS_STUB_TODO, ctx),
+        PanelKind::Wiki => view_stub(ids::PANELS_KIND_WIKI, ids::PANELS_STUB_WIKI, ctx),
+        PanelKind::Library => view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
