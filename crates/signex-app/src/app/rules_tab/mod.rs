@@ -19,10 +19,10 @@ mod tests;
 
 pub(crate) use analysis::RulesAnalysis;
 pub(crate) use commands::{rules_add, rules_enable, rules_remove, rules_set};
-pub(crate) use source::RulesOrigin;
+pub(crate) use source::{RulesOrigin, TEXT_UNAPPLIED};
 
 use iced::widget::text_editor;
-use signex_drc_dsl::table::{RuleField, RuleKind};
+use signex_drc_dsl::table::{RuleField, RuleKind, RuleTable};
 
 use crate::app::state::ProjectId;
 
@@ -97,6 +97,9 @@ pub struct RulesText {
     pub content: text_editor::Content,
     /// Typed in since it was opened or applied.
     pub edited: bool,
+    /// What the compiler says about the text as typed, read again in
+    /// `update` after each edit, not in `view`.
+    pub checked: RuleTable,
 }
 
 impl RulesText {
@@ -104,6 +107,18 @@ impl RulesText {
         RulesText {
             content: text_editor::Content::with_text(text),
             edited: false,
+            checked: signex_drc_dsl::table::table(text),
+        }
+    }
+
+    /// Perform `action`; an edit marks the text typed in and checks it
+    /// again.
+    pub fn perform(&mut self, action: text_editor::Action) {
+        let edits = action.is_edit();
+        self.content.perform(action);
+        if edits {
+            self.edited = true;
+            self.checked = signex_drc_dsl::table::table(&self.content.text());
         }
     }
 }
@@ -113,6 +128,7 @@ impl Clone for RulesText {
         RulesText {
             content: text_editor::Content::with_text(&self.content.text()),
             edited: self.edited,
+            checked: self.checked.clone(),
         }
     }
 }
@@ -207,6 +223,10 @@ pub enum RulesTabMsg {
         action: text_editor::Action,
     },
     TextApplied {
+        project_id: ProjectId,
+    },
+    /// The text view's typed text was dropped: it shows the stored text.
+    TextDiscarded {
         project_id: ProjectId,
     },
     /// Show the rule's objects on the board: open its tab, select them.

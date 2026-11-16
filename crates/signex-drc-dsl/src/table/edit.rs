@@ -380,7 +380,8 @@ fn is_plain(text: &str) -> bool {
     !text.is_empty() && !text.contains(['"', '\n', '\r'])
 }
 
-fn parse_bool(text: &str) -> Option<bool> {
+/// An `enabled` value: `true`, `on`, `yes` or `false`, `off`, `no`.
+pub fn parse_bool(text: &str) -> Option<bool> {
     match text {
         "true" | "on" | "yes" => Some(true),
         "false" | "off" | "no" => Some(false),

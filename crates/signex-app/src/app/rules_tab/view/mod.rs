@@ -7,17 +7,20 @@ mod detail;
 mod table;
 mod text_view;
 
-use std::collections::BTreeMap;
+use std::borrow::Cow;
 
 use iced::widget::{Row, Space, column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
-use signex_drc::{DrcRules, RuleResult, UserRule};
+use signex_drc::{Effective, RuleResult};
 use signex_drc_dsl::table::{RuleKind, RuleRow, RuleTable};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::pcb::PcbBoard;
+use signex_types::project::DrcRuleSet;
 use signex_types::theme::ThemeTokens;
+use signex_types::violation::Severity;
 use signex_widgets::{button, text, text_input};
 
+pub(super) use super::analysis::Checked;
 use super::{RulesDomain, RulesFilter, RulesOrigin, RulesTabMsg, RulesTabState};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
@@ -30,48 +33,53 @@ pub(super) fn up(msg: RulesTabMsg) -> Message {
     Message::Project(ProjectMsg::Rules(msg))
 }
 
-/// What the last DRC run of the project's board says, for the Actual,
-/// Margin and Violations cells.
-pub(super) enum Checked {
-    NoBoard,
-    NotChecked,
-    Ran {
-        /// The board changed since.
-        stale: bool,
-        results: BTreeMap<String, RuleResult>,
-        /// The written rules the run applied, by name.
-        used: BTreeMap<String, UserRule>,
-    },
-}
-
-/// What one frame of the tab reads, gathered once.
+/// What one frame of the tab reads, gathered once. The rows, the run
+/// results and "Why this value?" come from the analysis `update` keeps.
 pub(super) struct Frame<'a> {
     pub id: ProjectId,
     pub i18n: &'a I18n,
     pub tokens: &'a ThemeTokens,
     pub state: &'a RulesTabState,
     pub src: String,
-    pub table: RuleTable,
+    pub table: Cow<'a, RuleTable>,
     pub origin: RulesOrigin,
-    pub checked: Checked,
+    pub checked: Cow<'a, Checked>,
     pub running: bool,
-    /// The project's board and its resolved rules, read only while a rule
-    /// is selected (the "Why this value?" chain needs them).
     pub board: Option<&'a PcbBoard>,
-    pub resolved: Option<DrcRules>,
+    /// The selected rule's sample value and the net it is for.
+    pub why: Option<&'a (Effective, String)>,
     /// The net classes' names, for the scope cell's suggestions.
     pub classes: Vec<String>,
+    /// The rule layer whose severity entries outrank a rule's own word.
+    pub layer: Option<&'a DrcRuleSet>,
 }
 
 impl Frame<'_> {
     /// The rule's results in the last run, by rule id.
     pub fn result(&self, row: &RuleRow) -> Option<RuleResult> {
-        match &self.checked {
+        match &*self.checked {
             Checked::Ran { results, .. } => {
                 Some(results.get(&row.id()).copied().unwrap_or_default())
             }
             _ => None,
         }
+    }
+
+    /// The layer's severity entry for `row`: `Some(None)` switches it off.
+    fn entry(&self, row: &RuleRow) -> Option<Option<Severity>> {
+        self.layer
+            .and_then(|layer| signex_drc::written_rule_override(layer, &row.name))
+    }
+
+    /// Whether `row` applies: on in the text and not switched off by an
+    /// entry.
+    pub fn is_on(&self, row: &RuleRow) -> bool {
+        row.enabled && self.entry(row) != Some(None)
+    }
+
+    /// The severity `row`'s findings get: an entry's, else its own word.
+    pub fn severity(&self, row: &RuleRow) -> Severity {
+        self.entry(row).flatten().unwrap_or(row.severity)
     }
 }
 
@@ -136,33 +144,21 @@ impl Signex {
         origin: RulesOrigin,
     ) -> Frame<'a> {
         let drc = &self.interaction_state.pcb_drc;
-        let board_path = self.rules_board(id).map(|(path, _)| path);
-        let checked = match board_path.as_ref() {
-            None => Checked::NoBoard,
-            Some(path) => match drc.done_for(path) {
-                None => Checked::NotChecked,
-                Some(done) => {
-                    let revision = self
-                        .document_state
-                        .pcb_revisions
-                        .get(path)
-                        .copied()
-                        .unwrap_or(0);
-                    Checked::Ran {
-                        stale: done.revision != revision,
-                        results: done.report.rule_results(),
-                        used: done
-                            .report
-                            .rules
-                            .user_rules()
-                            .map(|r| (r.name.clone(), r.clone()))
-                            .collect(),
-                    }
-                }
-            },
+        let board = self.rules_board(id);
+        let running = board
+            .as_ref()
+            .is_some_and(|(path, _)| drc.is_running_for(path));
+        // `update` keeps the analysis of the tab in view; before its first
+        // `update` the tab reads the same thing directly.
+        let analysis = state.analysis.as_ref();
+        let table = match analysis {
+            Some(analysis) => Cow::Borrowed(&analysis.table),
+            None => Cow::Owned(signex_drc_dsl::table::table(&src)),
         };
-        let running = board_path.as_ref().is_some_and(|p| drc.is_running_for(p));
-        let selected = state.selected.is_some();
+        let checked = match analysis {
+            Some(analysis) => Cow::Borrowed(&analysis.checked),
+            None => Cow::Owned(self.rules_checked(id)),
+        };
         let classes = self
             .document_state
             .project_by_id(id)
@@ -173,14 +169,15 @@ impl Signex {
             i18n,
             tokens,
             state,
-            table: signex_drc_dsl::table::table(&src),
+            table,
             src,
             origin,
             checked,
             running,
-            board: self.rules_board(id).map(|(_, board)| board),
-            resolved: selected.then(|| self.rules_resolved(id)).flatten(),
+            board: board.map(|(_, board)| board),
+            why: analysis.and_then(|analysis| analysis.why.as_ref()),
             classes,
+            layer: self.rules_drc_layer(id),
         }
     }
 }
@@ -300,7 +297,7 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     } else {
         ids::RULES_RUN_DRC
     };
-    let can_run = !frame.running && !matches!(frame.checked, Checked::NoBoard);
+    let can_run = !frame.running && !matches!(*frame.checked, Checked::NoBoard);
     bar = bar.push(
         button(text(t!(i18n, drc_label)).size(TS.label))
             .padding([SP.xs, SP.m])

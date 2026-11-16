@@ -127,7 +127,7 @@ fn shown<'f>(frame: &'f Frame) -> Vec<&'f RuleRow> {
             RulesFilter::Flagged => {
                 row.text_only || !row.problems.is_empty() || flags_of(frame, row).next().is_some()
             }
-            RulesFilter::Disabled => !row.enabled,
+            RulesFilter::Disabled => !frame.is_on(row),
         })
         .collect()
 }
@@ -221,7 +221,7 @@ fn cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> 
     match col {
         Col::On => {
             let rule = row.name.clone();
-            checkbox(row.enabled)
+            checkbox(frame.is_on(row))
                 .size(TS.body)
                 .style(checkbox_style)
                 .on_toggle(move |on| {
@@ -275,7 +275,7 @@ fn shown_value(frame: &Frame, row: &RuleRow, col: Col) -> Option<String> {
                 .unwrap_or_else(|| t!(i18n, ids::RULES_CELL_EMPTY).into_string())
         }
         Col::Severity => {
-            let id = match row.severity {
+            let id = match frame.severity(row) {
                 signex_types::violation::Severity::Error => ids::RULES_SEVERITY_ERROR,
                 signex_types::violation::Severity::Warning => ids::RULES_SEVERITY_WARNING,
                 signex_types::violation::Severity::Info => ids::RULES_SEVERITY_INFO,
@@ -368,10 +368,10 @@ fn outcome<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Messag
 /// Why a rule's Actual and Margin are blank; `None` when the last run
 /// speaks for it.
 pub(super) fn blank_reason(frame: &Frame, row: &RuleRow) -> Option<MessageId> {
-    if !row.enabled {
+    if !frame.is_on(row) {
         return Some(ids::RULES_BLANK_OFF);
     }
-    match &frame.checked {
+    match &*frame.checked {
         Checked::NoBoard => Some(ids::RULES_BLANK_NO_BOARD),
         Checked::NotChecked => Some(ids::RULES_BLANK_NOT_CHECKED),
         Checked::Ran { stale, used, .. } => {

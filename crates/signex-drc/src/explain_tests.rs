@@ -184,6 +184,22 @@ fn a_rule_that_never_wins_is_shadowed_and_equal_rules_that_disagree_conflict() {
 }
 
 #[test]
+fn the_flags_check_one_net_per_set_of_covering_rules() {
+    let b = sample();
+    let base = rule("base", NetScope::Board, vec![Limit::MinClearance(300_000)]);
+    let gnd = rule(
+        "gnd",
+        NetScope::Net("GND".into()),
+        vec![Limit::MinClearance(100_000)],
+    );
+    // HV_A and SIG are covered by `base` alone: HV_A answers for both.
+    let r = rules(&b, vec![base.clone(), gnd]);
+    assert_eq!(r.net_representatives(&b), [1u32, 2]);
+    let r = rules(&b, vec![base]);
+    assert_eq!(r.net_representatives(&b), [1u32]);
+}
+
+#[test]
 fn a_rule_below_a_class_value_is_flagged_as_lowering_it() {
     let b = sample();
     let base = rule("base", NetScope::Board, vec![Limit::MinClearance(150_000)]);

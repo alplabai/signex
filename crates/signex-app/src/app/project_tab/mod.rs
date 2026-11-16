@@ -94,6 +94,9 @@ pub struct ProjectTabState {
     /// The project's Rules tab (#2398): sub-tab, search, the cell being
     /// typed in, the text view and the cached flags.
     pub rules: crate::app::RulesTabState,
+    /// The newest edit of the project went to its rule history, not to
+    /// `general_history`: what `undo document=<.snxprj>` steps first.
+    pub rules_step_newest: bool,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each

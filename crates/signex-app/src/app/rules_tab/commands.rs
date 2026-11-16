@@ -5,10 +5,11 @@
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_drc::LimitKind;
+use signex_drc::{LimitKind, WrittenRuleEdit};
 use signex_drc_dsl::table::{self, RuleDraft, RuleField, RuleKind};
 
 use super::json::{effective_json, flag_json, row_json};
+use super::source::{field_follow, rule_name};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
@@ -51,9 +52,16 @@ fn project_text(app: &mut Signex, args: &CommandArgs) -> Result<(ProjectId, Stri
     Ok((id, text))
 }
 
-/// Commit `edited` as the project's rule text and answer `value`.
-fn commit(app: &mut Signex, id: ProjectId, edited: String, value: Value) -> Ran {
-    match app.commit_rules_text(id, edited) {
+/// Store `edited` as the project's rule text, the severity entries
+/// following `follows`, and answer `value`.
+fn commit(
+    app: &mut Signex,
+    id: ProjectId,
+    edited: String,
+    follows: &[WrittenRuleEdit<'_>],
+    value: Value,
+) -> Ran {
+    match app.commit_rules_text(id, edited, follows) {
         Ok(()) => answered(value),
         Err(reason) => refused(reason),
     }
@@ -88,7 +96,8 @@ pub(crate) fn rules_add(app: &mut Signex, args: &CommandArgs) -> Ran {
     match table::add_rule(&src, &draft) {
         Ok((edited, name)) => {
             let value = json!({ "id": format!("{}{name}", table::RULE_ID_PREFIX), "name": name });
-            commit(app, id, edited, value)
+            // A stale entry for the name must not speak for the new rule.
+            commit(app, id, edited, &[WrittenRuleEdit::Dropped(&name)], value)
         }
         Err(error) => refused(error.to_string()),
     }
@@ -108,18 +117,22 @@ pub(crate) fn rules_set(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused(format!("`field` is one of {}", known.join(", ")));
     };
     let value = text(args, "value").unwrap_or_default();
-    match table::set_field(&src, rule, field, value) {
-        Ok(edited) => {
-            let rows = table::table(&edited);
-            let name = match field {
-                RuleField::Name => value.trim(),
-                _ => rule.strip_prefix(table::RULE_ID_PREFIX).unwrap_or(rule),
-            };
-            let row = rows.row(name).map(|row| row_json(row, &edited));
-            commit(app, id, edited, json!({ "rule": row }))
-        }
-        Err(error) => refused(error.to_string()),
+    let edited = match table::set_field(&src, rule, field, value) {
+        Ok(edited) => edited,
+        Err(error) => return refused(error.to_string()),
+    };
+    let follows: Vec<_> = field_follow(rule, field, value).into_iter().collect();
+    if let Err(reason) = app.commit_rules_text(id, edited.clone(), &follows) {
+        return refused(reason);
     }
+    let name = match field {
+        RuleField::Name => value.trim(),
+        _ => rule_name(rule),
+    };
+    let rows = table::table(&edited);
+    let layer = app.rules_drc_layer(id);
+    let row = rows.row(name).map(|row| row_json(row, &edited, layer));
+    answered(json!({ "rule": row }))
 }
 
 /// `rules_remove {document, id}`.
@@ -132,7 +145,10 @@ pub(crate) fn rules_remove(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused("needs the operand `id`");
     };
     match table::remove_rule(&src, rule) {
-        Ok(edited) => commit(app, id, edited, json!({ "removed": rule })),
+        Ok(edited) => {
+            let follows = [WrittenRuleEdit::Dropped(rule_name(rule))];
+            commit(app, id, edited, &follows, json!({ "removed": rule }))
+        }
         Err(error) => refused(error.to_string()),
     }
 }
@@ -147,7 +163,15 @@ pub(crate) fn rules_enable(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused("needs the operands `id` and `on`");
     };
     match table::enable_rule(&src, rule, on) {
-        Ok(edited) => commit(app, id, edited, json!({ "id": rule, "enabled": on })),
+        Ok(edited) => {
+            // Switched on, an `off` severity entry would keep it off.
+            let follows: Vec<_> = on
+                .then(|| WrittenRuleEdit::SwitchedOn(rule_name(rule)))
+                .into_iter()
+                .collect();
+            let value = json!({ "id": rule, "enabled": on });
+            commit(app, id, edited, &follows, value)
+        }
         Err(error) => refused(error.to_string()),
     }
 }
@@ -169,12 +193,13 @@ impl Signex {
         let rows = table::table(src);
         let kind = text(args, "kind").and_then(RuleKind::from_keyword);
         let enabled = flag(args, "enabled");
+        let layer = self.rules_drc_layer(project);
         let listed: Vec<Value> = rows
             .rows
             .iter()
             .filter(|r| kind.is_none_or(|k| r.kind == Some(k)))
             .filter(|r| enabled.is_none_or(|on| r.enabled == on))
-            .map(|r| row_json(r, src))
+            .map(|r| row_json(r, src, layer))
             .collect();
         let syntax: Vec<String> = rows.syntax.iter().map(|d| d.render(src)).collect();
         let origin = self
@@ -199,8 +224,8 @@ impl Signex {
         let row = rows
             .row(name)
             .ok_or_else(|| format!("no rule is called '{name}'"))?;
-        let mut value = row_json(row, src);
-        let resolved = self.rules_resolved(project);
+        let mut value = row_json(row, src, self.rules_drc_layer(project));
+        let resolved = self.rules_resolved(project).ok();
         let board = self.rules_board(project);
         let classes = self
             .document_state
@@ -250,9 +275,10 @@ impl Signex {
             let known: Vec<&str> = LimitKind::ALL.iter().map(|k| k.as_str()).collect();
             format!("`kind` is one of {}", known.join(", "))
         })?;
-        let (rules, (_, board)) = self
-            .rules_resolved(project)
-            .zip(self.rules_board(project))
+        // Why the board's rules cannot be read, when they cannot.
+        let rules = self.rules_resolved(project)?;
+        let (_, board) = self
+            .rules_board(project)
             .ok_or("the project's board is not open")?;
         let net = board
             .nets
@@ -316,9 +342,10 @@ impl Signex {
     }
 
     fn rules_conflicts(&self, project: ProjectId) -> Result<Value, String> {
-        let (rules, (_, board)) = self
-            .rules_resolved(project)
-            .zip(self.rules_board(project))
+        // Why the board's rules cannot be read, when they cannot.
+        let rules = self.rules_resolved(project)?;
+        let (_, board) = self
+            .rules_board(project)
             .ok_or("the project's board is not open")?;
         let classes = self
             .document_state

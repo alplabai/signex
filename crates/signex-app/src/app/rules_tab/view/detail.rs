@@ -81,7 +81,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         }
     }
     body = body.push(scope(frame, row));
-    body = body.push(why(frame, row));
+    body = body.push(why(frame));
     container(scrollable(body).height(Length::Fill))
         .padding(SP.m)
         .width(Length::Fill)
@@ -133,10 +133,10 @@ fn scope<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
 /// "Why this value?" for the first net the rule takes in, on the layers
 /// it names, for its first limit: the value, where it comes from, and how
 /// every rule of that limit fared.
-fn why<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
+fn why<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
     let mut out: Column<'a, Message> = column![section(frame, ids::RULES_WHY_TITLE)].spacing(SP.xs);
-    let found = sample(frame, row);
+    let found = frame.why;
     let Some((effective, net_name)) = found else {
         return out
             .push(
@@ -166,7 +166,7 @@ fn why<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
         text(t!(
             i18n,
             ids::RULES_WHY_FOR,
-            "net" => net_name,
+            "net" => net_name.as_str(),
             "layer" => layer,
             "value" => value,
             "source" => source
@@ -200,27 +200,4 @@ fn why<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
         );
     }
     out.into()
-}
-
-/// The value that governs the first net `row` takes in, on the layers and
-/// objects it names, for its first limit, and that net's name. `None` for
-/// an off or invalid rule, a rule with no net on the board, or no board.
-fn sample(frame: &Frame, row: &RuleRow) -> Option<(signex_drc::Effective, String)> {
-    let rules = frame.resolved.as_ref()?;
-    let board = frame.board?;
-    let compiled = row.compiled.as_ref().filter(|_| row.applied)?;
-    let field = row.limits.first()?.field;
-    let net = rules.first_net_of(board, &row.name)?;
-    let objects = compiled
-        .pair
-        .map_or([None, None], |[a, b]| [Some(a), Some(b)]);
-    let layers = compiled.layers.unwrap_or(u32::MAX);
-    let effective = rules.effective(field.limit_kind(), net, layers, objects);
-    let net_name = board
-        .nets
-        .iter()
-        .find(|n| n.number == net)
-        .map(|n| n.name.clone())
-        .unwrap_or_default();
-    Some((effective, net_name))
 }

@@ -10,7 +10,8 @@ mod edit;
 mod render;
 
 pub use edit::{
-    EditError, RuleField, add_rule, enable_rule, parse_scope, remove_rule, scope_text, set_field,
+    EditError, RuleField, add_rule, enable_rule, parse_bool, parse_scope, remove_rule, scope_text,
+    set_field,
 };
 pub use render::{RuleDraft, render};
 

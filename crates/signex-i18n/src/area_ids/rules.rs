@@ -15,6 +15,7 @@ define_ids! {
     RULES_VIEW_TEXT = "rules-view-text";
     RULES_VIEW_TABLE = "rules-view-table";
     RULES_TEXT_APPLY = "rules-text-apply";
+    RULES_TEXT_DISCARD = "rules-text-discard";
     RULES_RUN_DRC = "rules-run-drc";
     RULES_DRC_RUNNING = "rules-drc-running";
     RULES_ADD_CLEARANCE = "rules-add-clearance";

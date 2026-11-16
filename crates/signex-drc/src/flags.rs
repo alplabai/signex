@@ -5,6 +5,8 @@
 //! resolution the check uses, over the board's nets, copper layers and
 //! object pairs. See `docs/DRC_RULES.md`, "Rules manager".
 
+use std::collections::BTreeSet;
+
 use signex_types::net_class::NetClass;
 use signex_types::pcb::PcbBoard;
 
@@ -76,7 +78,7 @@ impl DrcRules {
                 out.push(flagged);
             }
         };
-        let nets: Vec<u32> = board.nets.iter().map(|n| n.number).collect();
+        let nets = self.net_representatives(board);
         for scoped in &self.user {
             if scoped.covers_no_net() {
                 add(&scoped.rule.name, RuleFlag::NoNets);
@@ -117,6 +119,20 @@ impl DrcRules {
             );
         }
         out
+    }
+
+    /// One net for each distinct set of written rules that cover a net, the
+    /// first of the board's nets with that set. Resolution reads a net only
+    /// through which rules cover it, so that net answers for the others and
+    /// the flags cost the number of sets, not the number of nets.
+    pub(crate) fn net_representatives(&self, board: &PcbBoard) -> Vec<u32> {
+        let mut seen: BTreeSet<Vec<bool>> = BTreeSet::new();
+        board
+            .nets
+            .iter()
+            .map(|n| n.number)
+            .filter(|&net| seen.insert(self.user.iter().map(|s| s.covers_net(net)).collect()))
+            .collect()
     }
 
     /// Where `scoped` applies, whether it ever wins, the first rule that

@@ -487,3 +487,260 @@ fn a_rule_tab_survives_a_project_whose_board_is_closed() {
     assert!(matches!(refused, CommandOutcome::Disabled { .. }));
     let _ = app.view_rules_tab(id);
 }
+
+fn rules_tab(app: &Signex, id: ProjectId) -> &super::RulesTabState {
+    &app.document_state.project_tabs[&id].rules
+}
+
+fn type_hash(app: &mut Signex, id: ProjectId) {
+    let typed =
+        iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Insert('#'));
+    send(
+        app,
+        RulesTabMsg::TextActed {
+            project_id: id,
+            action: typed,
+        },
+    );
+}
+
+fn text_view(app: &Signex, id: ProjectId) -> String {
+    rules_tab(app, id)
+        .text
+        .as_ref()
+        .expect("the text view is open")
+        .content
+        .text()
+}
+
+#[test]
+fn undo_and_the_table_wait_while_the_text_view_holds_typed_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    send(
+        &mut app,
+        RulesTabMsg::EnabledToggled {
+            project_id: id,
+            rule: "sig_a".into(),
+            on: false,
+        },
+    );
+    send(
+        &mut app,
+        RulesTabMsg::TextViewToggled {
+            project_id: id,
+            on: true,
+        },
+    );
+    type_hash(&mut app, id);
+
+    command(&mut app, "undo");
+    assert!(dsl(&app).unwrap().starts_with("disabled rule sig_a"));
+    assert!(text_view(&app, id).starts_with('#'), "the typed text stays");
+    assert!(
+        rules_tab(&app, id).refused.is_some(),
+        "and the tab says why"
+    );
+    send(
+        &mut app,
+        RulesTabMsg::TextViewToggled {
+            project_id: id,
+            on: false,
+        },
+    );
+    assert!(text_view(&app, id).starts_with('#'), "the table waits too");
+    let agent = run(&mut app, "undo", &[]);
+    assert!(
+        matches!(agent, CommandOutcome::Disabled { .. }),
+        "{agent:?}"
+    );
+    assert_eq!(undo_steps(&app, id), 1);
+    let _ = app.view_rules_tab(id);
+
+    send(&mut app, RulesTabMsg::TextDiscarded { project_id: id });
+    let tab = rules_tab(&app, id);
+    assert!(!tab.text.as_ref().unwrap().edited);
+    assert!(tab.refused.is_none());
+    assert!(text_view(&app, id).starts_with("disabled rule sig_a"));
+
+    command(&mut app, "undo");
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT));
+    assert!(
+        text_view(&app, id).starts_with("rule sig_a"),
+        "the text view stays open on the undone text"
+    );
+}
+
+#[test]
+fn an_agent_undoes_a_rules_edit_by_the_project_document() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let description = app.document_state.projects[0].data.description.clone();
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=severity", "value=info"],
+    );
+    // A Project tab edit after it is the project's newest step.
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        crate::app::ProjectTabMsg::DescriptionEdited {
+            project_id: id,
+            text: "edited".into(),
+        },
+    )));
+    assert_ne!(app.document_state.projects[0].data.description, description);
+
+    let first = run(&mut app, "undo", &[]);
+    assert!(matches!(first, CommandOutcome::Ran), "{first:?}");
+    assert_eq!(app.document_state.projects[0].data.description, description);
+    assert!(dsl(&app).unwrap().contains("then info"), "the rules wait");
+
+    let second = run(&mut app, "undo", &[]);
+    assert!(matches!(second, CommandOutcome::Ran), "{second:?}");
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT));
+    let none = run(&mut app, "undo", &[]);
+    assert!(matches!(none, CommandOutcome::Disabled { .. }), "{none:?}");
+
+    let redone = run(&mut app, "redo", &[]);
+    assert!(matches!(redone, CommandOutcome::Ran), "{redone:?}");
+}
+
+#[test]
+fn severity_entries_follow_the_tab_and_the_commands() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let entries = |app: &Signex| {
+        app.document_state.projects[0]
+            .data
+            .rules
+            .as_ref()
+            .unwrap()
+            .drc
+            .severity
+            .clone()
+    };
+    {
+        let drc = &mut app.document_state.projects[0]
+            .data
+            .rules
+            .as_mut()
+            .unwrap()
+            .drc;
+        drc.severity.insert("user::sig_a".into(), "off".into());
+        drc.severity.insert("user::sig_b".into(), "info".into());
+    }
+    let list = answer(&mut app, "rules_list", &[]);
+    assert_eq!(list["rules"][0]["effective_severity"], "off");
+    assert_eq!(list["rules"][1]["severity"], "warning");
+    assert_eq!(list["rules"][1]["effective_severity"], "info");
+
+    open(&mut app);
+    send(
+        &mut app,
+        RulesTabMsg::CellOpened {
+            project_id: id,
+            rule: "sig_b".into(),
+            field: RuleField::Severity,
+        },
+    );
+    let opened = rules_tab(&app, id).edit.clone().unwrap();
+    assert_eq!(opened.text, "info", "the cell opens on what applies");
+    send(&mut app, RulesTabMsg::CellCancelled { project_id: id });
+    let _ = app.view_rules_tab(id);
+
+    // On in the text, off by its entry: switching it on clears the entry.
+    send(
+        &mut app,
+        RulesTabMsg::EnabledToggled {
+            project_id: id,
+            rule: "sig_a".into(),
+            on: true,
+        },
+    );
+    assert!(!entries(&app).contains_key("user::sig_a"));
+    assert_eq!(undo_steps(&app, id), 1);
+
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=name", "value=sig_c"],
+    );
+    let moved = entries(&app);
+    assert_eq!(moved.get("user::sig_c").map(String::as_str), Some("info"));
+    assert!(!moved.contains_key("user::sig_b"), "{moved:?}");
+
+    let set = answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_c", "field=severity", "value=error"],
+    );
+    assert_eq!(set["rule"]["effective_severity"], "error");
+    assert!(entries(&app).is_empty(), "its own word governs again");
+    command(&mut app, "undo");
+    assert_eq!(
+        entries(&app).get("user::sig_c").map(String::as_str),
+        Some("info"),
+        "the entry comes back in the same step"
+    );
+
+    send(
+        &mut app,
+        RulesTabMsg::RuleRemoved {
+            project_id: id,
+            rule: "sig_c".into(),
+        },
+    );
+    assert!(entries(&app).is_empty(), "a removed rule leaves no entry");
+}
+
+#[test]
+fn update_keeps_the_selected_rules_why_and_the_text_view_follows_stored_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    open(&mut app);
+    send(
+        &mut app,
+        RulesTabMsg::RowSelected {
+            project_id: id,
+            rule: "sig_b".into(),
+        },
+    );
+    let analysis = rules_tab(&app, id).analysis.clone().expect("analysed");
+    let (effective, net) = analysis.why.expect("why for the selected rule");
+    assert_eq!(net, "SIG");
+    assert_eq!(effective.value_nm, Some(400_000));
+    assert!(matches!(
+        analysis.checked,
+        super::analysis::Checked::Ran { stale: false, .. }
+    ));
+    let _ = app.view_rules_tab(id);
+
+    send(
+        &mut app,
+        RulesTabMsg::TextViewToggled {
+            project_id: id,
+            on: true,
+        },
+    );
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=min_clearance", "value=0.5mm"],
+    );
+    send(
+        &mut app,
+        RulesTabMsg::SearchEdited {
+            project_id: id,
+            text: String::new(),
+        },
+    );
+    assert!(
+        text_view(&app, id).contains("clearance >= 0.5mm"),
+        "a text view nobody typed in shows the stored rules"
+    );
+}

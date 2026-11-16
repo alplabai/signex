@@ -17,6 +17,7 @@ rules-filter-disabled = Off
 rules-view-text = Text
 rules-view-table = Table
 rules-text-apply = Apply
+rules-text-discard = Discard
 rules-run-drc = Run DRC
 rules-drc-running = Checking...
 rules-add-clearance = Add clearance rule

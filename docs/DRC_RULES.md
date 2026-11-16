@@ -125,6 +125,13 @@ rule's id (`user::<name>`) in the profile or project overrides it, as for the
 built-in rules. The severity is recorded but not shown yet, and `off` does
 not hide findings yet.
 
+The Rules tab shows the severity that applies, the entry's when there is
+one, and a rule an `off` entry switches off as Off. Its edits keep the entry
+in step, in the same undo step: setting the severity (a cell or `rules_set`)
+removes the entry, so the word written governs; switching a rule on removes
+an `off` entry; renaming moves the entry to the new name; removing or adding
+a rule drops any entry for its name.
+
 ## Mistakes in the text
 
 Run DRC says in Messages what it could not apply, with the line and column,
@@ -170,8 +177,11 @@ every other rule stays exactly as typed. A rule with a condition or limit the
 table has no column for is still a row, marked "Text only", and is edited in
 the text view. Every edit (a cell, On, Add, Remove, Apply in the text view) is
 one undo step on the project's rule history, the same history the ERC dialog
-steps; Ctrl+Z and Ctrl+Y in the tab step it. An edit that would make the rule
-fail to compile is refused and the tab says why; nothing changes.
+steps; Ctrl+Z and Ctrl+Y in the tab step it, and ERC runs again when it has
+results the step may outdate. An agent steps the same history with
+`undo document=<.snxprj>`: of the rule history and the Project tab's, the one
+with the project's newest edit first. An edit that would make the rule fail to
+compile is refused and the tab says why; nothing changes.
 
 While the project stores no rules, the tab shows this machine's rules (what
 Run DRC reads) and says so; the first edit stores them in the project, in the
@@ -205,7 +215,10 @@ same undo step.
   applies, an equally specific stricter rule applies, other nets, layers or
   objects).
 - **Text view.** The same rules as text, with what the compiler says about the
-  text as typed; Apply stores it as one undo step.
+  text as typed; Apply stores it as one undo step, Discard drops what was
+  typed. While typed text is not applied, Undo, Redo and the switch back to
+  the table wait and the tab says so; a text view nobody typed in follows the
+  stored rules.
 - **Search and filter.** By name, scope, layer or message; All, With
   violations, Flagged, Off.
 
@@ -216,7 +229,7 @@ step each and answer with data; refusals say why.
 
 | Command | Answer |
 |---|---|
-| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity`, `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
 | `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
 | `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
 | `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |

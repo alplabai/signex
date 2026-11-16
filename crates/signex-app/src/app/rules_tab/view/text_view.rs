@@ -34,9 +34,18 @@ pub(super) fn view<'a>(frame: &Frame<'a>, rules_text: &'a RulesText) -> Element<
                 .edited
                 .then(|| up(RulesTabMsg::TextApplied { project_id: id })),
         );
-    // What the compiler says about the text as typed, not as stored.
+    let discard = button(text(t!(i18n, ids::RULES_TEXT_DISCARD)).size(TS.label))
+        .padding([SP.xs, SP.m])
+        .style(crate::styles::subtle_button(tokens))
+        .on_press_maybe(
+            rules_text
+                .edited
+                .then(|| up(RulesTabMsg::TextDiscarded { project_id: id })),
+        );
+    // What the compiler says about the text as typed, not as stored; read
+    // in `update` after each edit.
     let typed = rules_text.content.text();
-    let table = signex_drc_dsl::table::table(&typed);
+    let table = &rules_text.checked;
     let said = table
         .syntax
         .iter()
@@ -67,7 +76,9 @@ pub(super) fn view<'a>(frame: &Frame<'a>, rules_text: &'a RulesText) -> Element<
     }
     column![
         editor,
-        row![problems.width(Length::Fill), apply].align_y(Alignment::Start),
+        row![problems.width(Length::Fill), discard, apply]
+            .spacing(SP.s)
+            .align_y(Alignment::Start),
     ]
     .spacing(SP.m)
     .height(Length::Fill)

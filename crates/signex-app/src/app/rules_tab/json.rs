@@ -7,6 +7,7 @@ use signex_drc_dsl::table::{RuleRow, scope_text};
 use signex_drc_dsl::{Diagnostic, Level};
 use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::PcbBoard;
+use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
 use super::RulesDomain;
@@ -38,13 +39,23 @@ fn diagnostic_json(d: &Diagnostic, src: &str) -> Value {
     })
 }
 
-/// One rule as `rules_list` and `rules_get` answer it.
-pub(crate) fn row_json(row: &RuleRow, src: &str) -> Value {
+/// One rule as `rules_list` and `rules_get` answer it. `layer` is the rule
+/// layer whose severity entry for the rule outranks its own word.
+pub(crate) fn row_json(row: &RuleRow, src: &str, layer: Option<&DrcRuleSet>) -> Value {
     let limits: Map<String, Value> = row
         .limits
         .iter()
         .map(|l| (l.field.id().to_string(), json!(l.value)))
         .collect();
+    let entry = layer.and_then(|layer| signex_drc::written_rule_override(layer, &row.name));
+    // What a finding of the rule gets: `off` while it is off in the text
+    // or by an entry.
+    let effective = match entry {
+        _ if !row.enabled => "off",
+        Some(None) => "off",
+        Some(Some(severity)) => severity_str(severity),
+        None => severity_str(row.severity),
+    };
     json!({
         "id": row.id(),
         "name": row.name,
@@ -57,6 +68,7 @@ pub(crate) fn row_json(row: &RuleRow, src: &str) -> Value {
         "pair": row.pair.as_ref().map(|[a, b]| format!("{a}-{b}")),
         "limits": limits,
         "severity": severity_str(row.severity),
+        "effective_severity": effective,
         "message": row.message,
         "text_only": row.text_only,
         "problems": row.problems.iter().map(|d| diagnostic_json(d, src)).collect::<Vec<_>>(),

@@ -3,8 +3,10 @@
 //! `rules_*` commands take too.
 
 use iced::Task;
+use signex_drc::WrittenRuleEdit;
 use signex_drc_dsl::table::{self, RuleDraft, RuleField, RuleKind};
 
+use super::source::{TEXT_UNAPPLIED, field_follow, rule_name};
 use super::{CellEdit, RulesTabMsg, RulesTabState, RulesText};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
@@ -31,7 +33,7 @@ impl Signex {
         }
     }
 
-    fn rules_tab_mut(&mut self, id: ProjectId) -> &mut RulesTabState {
+    pub(super) fn rules_tab_mut(&mut self, id: ProjectId) -> &mut RulesTabState {
         &mut self
             .document_state
             .project_tabs
@@ -75,14 +77,31 @@ impl Signex {
                 rule,
                 on,
             } => {
-                self.edit_rules(project_id, |src| table::enable_rule(src, &rule, on));
+                // Switched on, an `off` severity entry would keep it off.
+                let follows: Vec<_> = on
+                    .then(|| WrittenRuleEdit::SwitchedOn(rule_name(&rule)))
+                    .into_iter()
+                    .collect();
+                self.edit_rules(project_id, &follows, |src| {
+                    table::enable_rule(src, &rule, on)
+                });
             }
             RulesTabMsg::RuleAdded { project_id, kind } => self.add_rule_row(project_id, kind),
             RulesTabMsg::RuleRemoved { project_id, rule } => {
-                self.edit_rules(project_id, |src| table::remove_rule(src, &rule));
+                let follows = [WrittenRuleEdit::Dropped(rule_name(&rule))];
+                self.edit_rules(project_id, &follows, |src| table::remove_rule(src, &rule));
                 let tab = self.rules_tab_mut(project_id);
                 if tab.selected.as_deref() == Some(rule.as_str()) {
                     tab.selected = None;
+                }
+            }
+            // Leaving (or reopening) the text view would drop typed text
+            // not applied.
+            RulesTabMsg::TextViewToggled { project_id, on }
+                if self.rules_text_unapplied(project_id) =>
+            {
+                if !on {
+                    self.rules_tab_mut(project_id).refused = Some(TEXT_UNAPPLIED.to_string());
                 }
             }
             RulesTabMsg::TextViewToggled { project_id, on } => {
@@ -91,13 +110,20 @@ impl Signex {
                     .flatten();
                 let tab = self.rules_tab_mut(project_id);
                 tab.edit = None;
+                tab.refused = None;
                 tab.text = text.map(|text| RulesText::new(&text));
+            }
+            RulesTabMsg::TextDiscarded { project_id } => {
+                let stored = self.rules_text_of(project_id).map(|(text, _)| text);
+                let tab = self.rules_tab_mut(project_id);
+                if let (Some(view), Some(stored)) = (tab.text.as_mut(), stored) {
+                    *view = RulesText::new(&stored);
+                    tab.refused = None;
+                }
             }
             RulesTabMsg::TextActed { project_id, action } => {
                 if let Some(text) = self.rules_tab_mut(project_id).text.as_mut() {
-                    let edits = action.is_edit();
-                    text.content.perform(action);
-                    text.edited |= edits;
+                    text.perform(action);
                 }
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
@@ -125,7 +151,14 @@ impl Signex {
                 .as_ref()
                 .map(|[a, b]| format!("{a}-{b}"))
                 .unwrap_or_default(),
-            RuleField::Severity => super::json::severity_str(row.severity).to_string(),
+            // The severity the cell shows: a layer entry outranks the word.
+            RuleField::Severity => {
+                let set = self
+                    .rules_drc_layer(id)
+                    .and_then(|layer| signex_drc::written_rule_override(layer, &row.name))
+                    .flatten();
+                super::json::severity_str(set.unwrap_or(row.severity)).to_string()
+            }
             RuleField::Message => row.message.clone().unwrap_or_default(),
             RuleField::Limit(limit) => row
                 .limit(limit)
@@ -144,7 +177,10 @@ impl Signex {
         let Some(edit) = self.rules_tab_mut(id).edit.clone() else {
             return;
         };
-        let committed = self.edit_rules(id, |src| {
+        let follows: Vec<_> = field_follow(&edit.rule, edit.field, &edit.text)
+            .into_iter()
+            .collect();
+        let committed = self.edit_rules(id, &follows, |src| {
             table::set_field(src, &edit.rule, edit.field, &edit.text)
         });
         if committed {
@@ -168,13 +204,17 @@ impl Signex {
         if draft.set_values(first).is_err() {
             return;
         }
-        let mut added = None;
-        self.edit_rules(id, |src| {
-            let (text, name) = table::add_rule(src, &draft)?;
-            added = Some(name);
-            Ok(text)
-        });
-        if let Some(name) = added {
+        let Some((src, _)) = self.rules_text_of(id) else {
+            return;
+        };
+        let result = table::add_rule(&src, &draft)
+            .map_err(|error| error.to_string())
+            .and_then(|(text, name)| {
+                // A stale entry for the name must not speak for the new rule.
+                let follows = [WrittenRuleEdit::Dropped(&name)];
+                self.commit_rules_text(id, text, &follows).map(|()| name)
+            });
+        if let Some(name) = self.note_rules_result(id, result) {
             self.rules_tab_mut(id).selected = Some(name);
         }
     }
@@ -193,7 +233,7 @@ impl Signex {
         else {
             return;
         };
-        match self.commit_rules_text(id, text) {
+        match self.commit_rules_text(id, text, &[]) {
             Ok(()) => {
                 let tab = self.rules_tab_mut(id);
                 tab.refused = None;
@@ -205,11 +245,13 @@ impl Signex {
         }
     }
 
-    /// Run `edit` on the rule text and store the result as one undo step;
-    /// a refusal is kept for the tab to show. Whether it was stored.
+    /// Run `edit` on the rule text and store the result, with the severity
+    /// entries following `follows`, as one undo step; a refusal is kept for
+    /// the tab to show. Whether it was stored.
     fn edit_rules(
         &mut self,
         id: ProjectId,
+        follows: &[WrittenRuleEdit<'_>],
         edit: impl FnOnce(&str) -> Result<String, table::EditError>,
     ) -> bool {
         let Some((src, _)) = self.rules_text_of(id) else {
@@ -217,10 +259,22 @@ impl Signex {
         };
         let result = edit(&src)
             .map_err(|error| error.to_string())
-            .and_then(|text| self.commit_rules_text(id, text));
-        let ok = result.is_ok();
-        self.rules_tab_mut(id).refused = result.err();
-        ok
+            .and_then(|text| self.commit_rules_text(id, text, follows));
+        self.note_rules_result(id, result).is_some()
+    }
+
+    /// Keep an edit's refusal for the tab to show, or clear the last one.
+    fn note_rules_result<T>(&mut self, id: ProjectId, result: Result<T, String>) -> Option<T> {
+        match result {
+            Ok(value) => {
+                self.rules_tab_mut(id).refused = None;
+                Some(value)
+            }
+            Err(reason) => {
+                self.rules_tab_mut(id).refused = Some(reason);
+                None
+            }
+        }
     }
 
     /// Run DRC on the project's board from its Rules tab.
@@ -237,6 +291,7 @@ impl Signex {
     fn show_rule_scope(&mut self, id: ProjectId, rule: &str) {
         let Some(items) = self
             .rules_resolved(id)
+            .ok()
             .zip(self.rules_board(id))
             .and_then(|(rules, (_, board))| rules.scope_items(board, rule))
         else {
