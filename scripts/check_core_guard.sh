@@ -36,7 +36,10 @@
 # Each file is lexed first (scripts/check_core_guard.awk): `//` and `/* */`
 # comments are dropped, string and char literal contents blanked and the `r#`
 # of a raw identifier cut, so neither a comment nor a string can hide code or
-# fake a `mod x {`. An attribute is joined over its lines, and each `use`
+# fake a `mod x {`. Spaces around `::` are closed up (`std :: fs` in a
+# macro_rules! body), a `pub(crate|super|self|in path)` restriction is cut to
+# `pub`, and rules match the code only, never the file name. An attribute is
+# joined over its lines, and each `use`
 # statement, also one after `#[attr]` or `{` on its line, is joined and
 # flattened to one path per record, so a multi-line form is judged like the
 # one-line form. A failure reports the original source line. A missing or
@@ -119,6 +122,16 @@ core_decl() {
   done
 }
 
+# grep_code <ERE>: the `path:line:code` records whose code matches; the path
+# is left out of the match, so a file named iced_free.rs is not a hit.
+grep_code() {
+  local recs
+  recs="$(scan lines)"
+  [[ -z "$recs" ]] && return 0
+  printf '%s\n' "$recs" | cut -d: -f3- | { grep -nE "$1" || true; } | cut -d: -f1 |
+    "$AWK" 'NR == FNR { want[$1] = 1; next } FNR in want' - <(printf '%s\n' "$recs")
+}
+
 hits() {
   case "$1" in
     core_decl) core_decl ;;
@@ -128,7 +141,7 @@ hits() {
       scan lines | "$AWK" '{ t = $0; sub(/^[^:]*:[0-9]+:/, "", t)
                           gsub(/crate::app::core([^A-Za-z0-9_]|$)/, "", t)
                           if (t ~ /crate::/) print }' ;;
-    *) scan lines | { grep -E "$(pattern "$1")" || true; } ;;
+    *) grep_code "$(pattern "$1")" ;;
   esac
 }
 

@@ -8,6 +8,8 @@
 # string, raw-string and char literal contents are blanked to "" and '', and
 # the `r#` of a raw identifier is cut, across lines. So no comment or string
 # can hide code, open a `mod x {`, shift the brace count or name `super`.
+# Then (tidy) spaces around `::` are closed up and `pub(...)` restrictions
+# are cut to `pub`.
 #
 # mode=lines prints every code line as `f:line:code`. An attribute whose
 # brackets stay open is joined over its lines first. Each `use` statement,
@@ -26,10 +28,36 @@ BEGIN {
   # A `use` that starts a statement: line start, or after `]`, `{`, `}` or `;`.
   USE_ANY = "(^|[];{}])[[:space:]]*" PUB "use[[:space:]]"
   MOD_OPEN = PUB "mod[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\\{"
+  # Keywords that may stand before a leading-`::` path.
+  PATH_LEAD = "^(use|as|in|dyn|impl|for|where|return|mut|ref|let|break|else|match|if|while|move|unsafe|async|pub|const|static|type)$"
   bc = 0; sq = 0; rh = 0
 }
 
 function ident(c) { return c ~ /^[A-Za-z0-9_]$/ }
+
+# Paths with spaces around `::` (rustfmt keeps `std :: fs` in macro_rules!
+# bodies) closed up, and a `pub(crate|super|self|in path)` restriction cut
+# to `pub`: it limits visibility and names no dependency.
+function tidy(t,   out, pre, s, l, w) {
+  gsub(/::[[:space:]]+/, "::", t)
+  out = ""
+  # A space before `::` goes, unless a keyword leads the path (`use ::std`).
+  while (match(t, /[A-Za-z0-9_][[:space:]]+::/)) {
+    s = RSTART; l = RLENGTH
+    pre = substr(t, 1, s)
+    match(pre, /[A-Za-z0-9_]+$/); w = substr(pre, RSTART)
+    out = out pre (w ~ PATH_LEAD ? " " : "") "::"
+    t = substr(t, s + l)
+  }
+  t = out t; out = ""
+  while (match(t, /pub[[:space:]]*\([[:space:]]*(crate|super|self|in[[:space:]][^)]*)[[:space:]]*\)/)) {
+    pre = RSTART > 1 ? substr(t, RSTART - 1, 1) : ""
+    if (ident(pre)) { out = out substr(t, 1, RSTART + 2); t = substr(t, RSTART + 3); continue }
+    out = out substr(t, 1, RSTART - 1) "pub"
+    t = substr(t, RSTART + RLENGTH)
+  }
+  return out t
+}
 
 # A raw string or raw identifier may start at s[i] == "r": not glued to a
 # preceding identifier, except a `b` / `c` literal prefix.
@@ -179,7 +207,7 @@ function process(code, ln,   usepos, prefix) {
 
 {
   gsub(/\r/, "")
-  code = strip($0)
+  code = tidy(strip($0))
   # An attribute left open (rustfmt splits `#[cfg_attr(..., path = ...)]`)
   # is joined until its brackets close, so it is judged as one line.
   if (attr != "") {

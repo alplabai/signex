@@ -220,6 +220,29 @@ run_case signex_widgets_path fail 'let b = signex_widgets::button(x);' "breaks '
 run_case i18n_ids_are_allowed pass 'use signex_i18n_ids::NoticeId;'
 run_case signex_i18n_use fail 'use signex_i18n::I18n;' "breaks 'ui_stack'"
 
+# --- spaced paths (rustfmt leaves them inside macro_rules! bodies) ----------
+
+run_case spaced_std_path fail 'macro_rules! m { () => { std :: fs :: read("x") }; }' \
+  "breaks 'std_fs'"
+run_case spaced_crate_path fail 'macro_rules! m { () => { crate :: app :: handlers :: x() }; }' \
+  "breaks 'crate_outside_core'"
+run_case spaced_super_path fail 'macro_rules! m { () => { super :: super :: handlers :: x() }; }' \
+  "x.rs:1 breaks 'super_escape'" x.rs
+
+# --- visibility restrictions are not dependencies ---------------------------
+
+run_case pub_super_in_core_root pass 'pub(super) fn new() {}' '' mod.rs
+run_case pub_super_in_core_rs pass 'pub(super) fn new() {}' '' ../core.rs
+run_case pub_in_crate_path pass 'pub(in crate::app) fn f() {}
+pub(crate) struct S;'
+run_case super_escape_next_to_pub_super fail 'pub(super) fn new() {}
+use super::super::x;' "mod.rs:2 breaks 'super_escape'" mod.rs
+
+# --- file names are not code ----------------------------------------------------
+
+run_case iced_in_file_name pass 'fn f() {}' '' iced_free.rs
+run_case rfd_in_file_name pass 'fn f() {}' '' sub/rfd.rs
+
 # --- the core declared where the guard does not look ------------------------
 
 run_case inline_core_module_in_app_rs fail 'mod core { use std::fs; }' \
