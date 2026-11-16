@@ -252,7 +252,8 @@ fn the_view_reads_the_selected_component() {
     select_r2(&mut f.app);
     let shown = facts(&f.app);
     assert_eq!(shown.footprints, [R2]);
-    assert_eq!((shown.x, shown.y), (Shared::Same(10.0), Shared::Same(10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!((shown.x, shown.y), (Shared::Same(10.0), Shared::Same(-10.0)));
     assert_eq!(shown.side, Shared::Same(BoardSide::Top));
     assert_eq!(shown.locked, Shared::Same(false));
     assert_eq!(shown.designator, Shared::Same("R2".to_string()));
@@ -456,7 +457,7 @@ fn several_components_share_values_and_take_one_x_as_one_step() {
     let shown = facts(&f.app);
     assert_eq!(shown.footprints, [R2, C7]);
     assert_eq!(shown.x, Shared::Mixed, "a differing X is blank");
-    assert_eq!(shown.y, Shared::Same(10.0));
+    assert_eq!(shown.y, Shared::Same(-10.0), "Y up from the origin (#2384)");
     assert_eq!(shown.designator, Shared::Mixed);
     assert_eq!(shown.comment, Shared::Same("10k".to_string()));
     let edited = assert_one_step(&mut f, |f| {

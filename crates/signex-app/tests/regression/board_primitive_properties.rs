@@ -272,7 +272,8 @@ fn the_net_length_readout_is_the_tracks_geometry() {
     assert_eq!(track.length_mm, Some(5.0));
     assert_eq!((info.tracks, info.vias, info.pads), (2, 1, 0));
     assert_eq!(track.width, Some(0.25));
-    assert_eq!(track.start, (Some(10.0), Some(10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!(track.start, (Some(10.0), Some(-10.0)));
     assert_eq!(track.layer.map(|l| l.layer), Some(CopperLayer::Top));
 }
 
@@ -400,7 +401,8 @@ fn a_mixed_selection_leaves_differing_values_blank() {
     assert_eq!(track.width, Some(0.25), "a shared value shows");
     assert_eq!(track.start, (None, None), "differing values are blank");
     assert_eq!(track.common.net_info.net, None);
-    assert_eq!(track.location, Some((10.0, 10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!(track.location, Some((10.0, -10.0)));
 }
 
 #[test]
@@ -459,7 +461,8 @@ fn pad_size_shape_hole_and_net_are_one_undo_step_each() {
     let PcbPrimitiveFacts::Pad(pad) = facts(&f.app) else {
         panic!("the pad panel shows");
     };
-    assert_eq!((pad.x, pad.y), (Some(60.0), Some(10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!((pad.x, pad.y), (Some(60.0), Some(-10.0)));
     assert_eq!(pad.hole, Some(0.5));
     let pad_of = |b: &PcbBoard| b.footprints[0].pads[0].clone();
     let edited = assert_one_step(&mut f, |f| {

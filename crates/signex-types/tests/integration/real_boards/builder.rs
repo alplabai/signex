@@ -157,12 +157,16 @@ impl Builder {
                 0.0,
             );
         }
+        // A new board counts from its area's bottom-left corner (#2384).
+        self.board.options.origin = signex_types::pcb_origin::BoardOrigin::of_new_board(&points);
         self.board.outline = points;
     }
 
     /// The board outline polygon only; the caller draws its `EdgeCuts`
     /// edges with [`Self::edge`] (an arc as one arc, not its chords).
     pub fn outline_polygon(&mut self, points: Vec<Point>) {
+        // A new board counts from its area's bottom-left corner (#2384).
+        self.board.options.origin = signex_types::pcb_origin::BoardOrigin::of_new_board(&points);
         self.board.outline = points;
     }
 
