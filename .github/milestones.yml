@@ -239,6 +239,10 @@
   state: open
   aliases: ["v2.2.1 — Assembly & 3D Export"]
 
+- title: "Scripted Demo Videos"
+  description: "Scripted, re-recordable feature videos (MP4 and GIF) with captions and a drawn pointer for the README, docs and website."
+  state: open
+
 - title: "3D Viewer"
   description: "3D PCB, PBR materials, STEP model loading."
   state: open
@@ -371,6 +375,30 @@
   description: "Render-time thermal and EM / SI overlays, per-frame interpolation for time-varying simulation data."
   state: open
   aliases: ["v2.7.3 — Simulation Overlay Bake-In"]
+
+- title: "MCAD Kernel"
+  description: "Solid-modelling kernel behind a Signex crate: bodies, exact STEP read/write, tessellation, a native mechanical document."
+  state: open
+
+- title: "Enclosure Fit Check"
+  description: "Check the board against an enclosure STEP: clearance, collisions, component height, mounting-hole alignment, in DRC."
+  state: open
+
+- title: "Part Modelling"
+  description: "Sketch, extrude, revolve, cut, fillet, shell, holes and patterns, with parameters and an editable feature history."
+  state: open
+
+- title: "Board-Driven Enclosure"
+  description: "An enclosure started from the board: walls, lid, standoffs on mounting holes, port cut-outs, kept in step with board changes."
+  state: open
+
+- title: "Assemblies & Interference"
+  description: "Components, joints, interference between parts and exploded views, with the board as one component."
+  state: open
+
+- title: "Sheet Metal & Plastic Parts"
+  description: "Flanges, bends and flat patterns with DXF; bosses, ribs and snap fits for moulded enclosures."
+  state: open
 
 - title: "Pro Release"
   description: "Pro: hosted Signex AI and the Generator, subscription with included AI credits. Team: live collaboration."

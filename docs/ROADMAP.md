@@ -192,6 +192,7 @@ workstream is active in every phase.
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
 | **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
 | **WS-3D** | 3D Viewer                   | `signex-model-import`, `signex-render-3d`    |
+| **WS-MC** | MCAD                        | `signex-mcad`                                |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
 | **WS-AI** | Signex AI (Pro)             | `signex-ai`                                  |
 | **WS-C**  | Collaboration (Team)        | `signex-collab`, Supabase backend            |
@@ -502,6 +503,7 @@ editor: design, validate, route, DRC, and export to fabrication.
 |------|-------|
 | **Community Release** | Gerber RS-274X + X2 export; Excellon drill export; ODB++ export |
 | **Assembly & 3D Export** | Pick-and-place CSV; IPC-2581 export; STEP 3D export (board body); assembly SVG |
+| **Scripted Demo Videos** | A local control port that runs catalog commands from a script; one story script per feature (schematic to board, rules, routing, Signex AI); screen capture with a drawn pointer, click ripples and captions; idle stretches cut; MP4 and GIF output for the README, the docs and the website, re-recorded on every release so the videos never go stale |
 
 **Exit criteria:** a complete project can be designed, validated, and
 exported to manufacturing files; a real PCB designed in Signex has been
@@ -595,6 +597,34 @@ they are planned and scoped, not because they are committed. They carry
 no exit criteria, they gate nothing, and of every band on this page they
 are the most likely to move — including past the Pro Release. Their only hard
 dependency is the 3D Viewer band.
+
+### MCAD (P3)
+
+Mechanical design inside Signex, so the board and the part it goes into are
+designed, checked and changed in one place, by the user or by Signex AI. Solid
+modelling uses an existing Apache-2.0 / MIT pure-Rust B-rep kernel crate
+(`solidcore`), wrapped by a Signex crate; it is a normal dependency, credited in
+the third-party licence list like every other crate. Signex's own sketch solver
+(`signex-sketch`) drives every sketch, so the sketch mode users already know is
+the one they model with. Every operation is a command with an inverse (one undo
+step), a typed agent command with a JSON result, and reachable from menus, the
+Active Bar, context menus, keys and the palette. Board and enclosure stay linked:
+a board change (outline, mounting hole, connector move) is offered as a
+reviewable change to the mechanical design, never applied silently.
+
+| Plan | Scope |
+|------|-------|
+| **MCAD Kernel** | `signex-mcad` crate wrapping the kernel: bodies, faces, edges, persistent face/edge names; exact STEP AP214/AP242 read and write; tessellation for the 3D view; a native mechanical document type in the `.snx*` family; kernel calls guarded so a failed operation is a message, never a crash |
+| **Enclosure Fit Check** | Insert an enclosure or mechanical STEP next to the board in 3D; DRC rules for component-to-enclosure clearance, collisions, component height under a lid, keepouts and mounting-hole-to-standoff alignment; results in the DRC panel with cross-probe; a `mcad.fit_check` agent command |
+| **Part Modelling** | Sketch on a plane or a face, then extrude, revolve, cut, fillet, chamfer, shell, draft, holes, patterns and mirror; named parameters and an editable feature history that rebuilds; measure and section views |
+| **Board-Driven Enclosure** | An enclosure started from the board: outline offset, wall and lid, standoffs placed on the mounting holes, port cut-outs from connector bodies, vents; parameters follow board changes through a reviewable change list |
+| **Assemblies & Interference** | Components and occurrences, joints with limits, ground, interference between parts shown on the bodies, exploded views; the board is one component of the assembly |
+| **Sheet Metal & Plastic Parts** | Flanges, hems, bends, flat pattern with DXF export; bosses, ribs, lip/groove and snap fits for moulded enclosures |
+
+**MCAD is P3 and is not a gate.** It is published because it is planned and
+scoped. Its hard dependencies are the 3D Viewer band and the STEP 3D export in
+Assembly & 3D Export. Enclosure Fit Check needs no modelling and comes first;
+the other plans follow in table order.
 
 ### Pro Release
 
@@ -824,6 +854,18 @@ What that promotion does and does not mean:
 - **Sub-version boundaries within a band are the softest thing on this
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
+
+### 2026-11-16 — MCAD and scripted demo videos
+
+Maintainer request (Caner): Signex should have full MCAD capabilities, so
+electronics and mechanics are designed in one place and Signex AI can work
+across both. Added as a new band, **MCAD (P3)**, with workstream WS-MC. The
+maintainer chose to build on an existing permissive (Apache-2.0 / MIT) Rust
+B-rep kernel crate rather than write a kernel; features are written in Signex,
+from published standards and Signex's own design, not copied from another
+application. Also added **Scripted Demo Videos** as its own plan in Community
+Release: every feature gets a scripted, re-recordable video for the README,
+the docs and the website. No scope was moved out of another plan.
 
 ### 2026-11-13 — Partial and embedded heavy copper
 
