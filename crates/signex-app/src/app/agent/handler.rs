@@ -637,6 +637,10 @@ impl Signex {
             Ok(args) => args,
             Err(error) => return (refused(error.to_string()), none()),
         };
+        // The window layout names no document (#2249).
+        if allow::is_window_layout(&command) {
+            return self.run_agent_window_layout(&command);
+        }
         if let Err(why) = self.check_agent_document(&command, &args) {
             return (refused(why), none());
         }

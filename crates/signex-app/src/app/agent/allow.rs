@@ -1,7 +1,8 @@
 //! Which commands the agent channel accepts (#1924), derived from the command
 //! catalog: the #2172 queries, and a command that names its document with the
 //! `document` operand and no file path (`apply_edits` and `revert` are two of
-//! them). Everything else is refused with the reason. See
+//! them), plus the window-layout commands (#2249). Everything else is refused
+//! with the reason. See
 //! `docs/AGENT_SOCKET.md`, "Allowlist".
 
 use crate::app::command::queries::is_query;
@@ -11,6 +12,20 @@ use crate::keymap::{AppCommandId, OperandKind, metadata_for};
 /// stack is theirs, and an agent takes back its own step with `revert`.
 /// `consistency` in the tests keeps this list to ids the catalog has.
 pub(super) const PERSON_ONLY: &[&str] = &["undo", "redo"];
+
+/// The window-layout commands (#2249): they name no document and act on the
+/// main window's layout, open to agents by the maintainer's rule that
+/// everything is AI-controllable. Each answers with the layout it left.
+pub(super) const WINDOW_LAYOUT: &[&str] = &[
+    "tile_windows_horizontally",
+    "tile_windows_vertically",
+    "untile_documents",
+];
+
+/// Is `command` one of [`WINDOW_LAYOUT`]?
+pub(super) fn is_window_layout(command: &AppCommandId) -> bool {
+    WINDOW_LAYOUT.contains(&command.as_str())
+}
 
 /// Why `command` is not on the agent channel, or `None` when it is.
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
@@ -23,7 +38,7 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
             "`{id}` is the person's own; an agent takes back its step with `revert`"
         ));
     }
-    if is_query(command) {
+    if is_query(command) || is_window_layout(command) {
         return None;
     }
     if let Some(reason) = meta.headless_refusal() {
@@ -113,6 +128,11 @@ mod tests {
                 "show_drc_violation",
                 "show_layer_group",
                 "show_layer_set",
+                // #2249: the window layout, by the maintainer's rule that
+                // everything is AI-controllable.
+                "tile_windows_horizontally",
+                "tile_windows_vertically",
+                "untile_documents",
                 "unwaive_drc_violation",
                 "waive_drc_violation",
             ]

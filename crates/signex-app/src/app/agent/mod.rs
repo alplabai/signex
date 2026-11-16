@@ -23,6 +23,7 @@ mod reply;
 mod state;
 mod token;
 mod transport;
+mod window_layout;
 mod wire;
 
 #[cfg(test)]
