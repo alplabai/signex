@@ -87,8 +87,9 @@ pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
         .collect()
 }
 
-/// Every track, via and pad of `net`, then its selectable drawn areas: what
-/// Select Net puts in the selection (#2403). Empty for net 0.
+/// Every track, via, pad, copper arc and free pad of `net`, then its
+/// selectable drawn areas: what Select Net puts in the selection (#2403,
+/// #2440). An arc is one item. Empty for net 0.
 pub fn net_members(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     let mut items = net_items(board, net);
     if net == 0 {
@@ -103,8 +104,9 @@ pub fn net_members(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     items
 }
 
-/// The copper of the tracks, vias and pads of `net`: what Highlight Net
-/// draws bright (#2403). Items the geometry cannot hold are left out.
+/// The copper of the tracks, vias, pads, copper arcs and free pads of
+/// `net`: what Highlight Net draws bright (#2403, #2440). An arc is all its
+/// chords. Items the geometry cannot hold are left out.
 pub fn net_copper(board: &PcbBoard, net: u32) -> Vec<Shape> {
     if net == 0 {
         return Vec::new();
@@ -125,7 +127,24 @@ pub fn net_copper(board: &PcbBoard, net: u32) -> Vec<Shape> {
             .filter(|p| p.net.as_ref().is_some_and(|n| n.number == net))
             .filter_map(move |p| pad_shape(fp, p).ok())
     });
-    tracks.chain(vias).chain(pads).collect()
+    let arcs = board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| a.net == net && crate::free::arc_is_copper(a))
+        .flat_map(|a| crate::free::arc_shapes(a).unwrap_or_default());
+    let free_pads = board
+        .free
+        .pads
+        .iter()
+        .filter(|p| p.net.as_ref().is_some_and(|n| n.number == net))
+        .filter_map(|p| crate::free::free_pad_shape(p).ok());
+    tracks
+        .chain(vias)
+        .chain(pads)
+        .chain(arcs)
+        .chain(free_pads)
+        .collect()
 }
 
 /// The net of a track, via, pad, copper arc, free pad or drawn area; `None`
