@@ -1,0 +1,30 @@
+id: reqwest-accept-invalid-rust
+snapshots:
+  "reqwest::Client::builder().danger_accept_invalid_certs(true)\n":
+    labels:
+    - source: reqwest::Client::builder().danger_accept_invalid_certs(true)
+      style: primary
+      start: 0
+      end: 60
+  "reqwest::Client::builder().danger_accept_invalid_hostnames(true)\n":
+    labels:
+    - source: reqwest::Client::builder().danger_accept_invalid_hostnames(true)
+      style: primary
+      start: 0
+      end: 64
+  "reqwest::Client::builder().user_agent(\"USER AGENT\").cookie_store(true).danger_accept_invalid_certs(true)      \n":
+    labels:
+    - source: >-
+        reqwest::Client::builder().user_agent("USER
+        AGENT").cookie_store(true).danger_accept_invalid_certs(true)
+      style: primary
+      start: 0
+      end: 104
+  "reqwest::Client::builder().user_agent(\"USER AGENT\").cookie_store(true).danger_accept_invalid_hostnames(true)\n":
+    labels:
+    - source: >-
+        reqwest::Client::builder().user_agent("USER
+        AGENT").cookie_store(true).danger_accept_invalid_hostnames(true)
+      style: primary
+      start: 0
+      end: 108

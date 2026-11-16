@@ -1,0 +1,98 @@
+id: no-case-in-view
+snapshots:
+  "const F: fn(&str) -> String = |s| s.to_uppercase();":
+    labels:
+    - source: s.to_uppercase()
+      style: primary
+      start: 34
+      end: 50
+  "fn f(c: char) -> char { core::primitive::char::to_ascii_uppercase(&c) }":
+    labels:
+    - source: core::primitive::char::to_ascii_uppercase
+      style: primary
+      start: 24
+      end: 65
+  "fn f(s: &[&str]) -> Vec<String> { s.iter().map(|x| str::to_lowercase(x)).collect() }":
+    labels:
+    - source: str::to_lowercase
+      style: primary
+      start: 51
+      end: 68
+  "fn f(s: &[char]) -> Vec<char> { s.iter().map(char::to_ascii_lowercase).collect() }":
+    labels:
+    - source: char::to_ascii_lowercase
+      style: primary
+      start: 45
+      end: 69
+  "fn f(s: &[char]) -> Vec<char> { s.iter().map(char::to_ascii_uppercase).collect() }":
+    labels:
+    - source: char::to_ascii_uppercase
+      style: primary
+      start: 45
+      end: 69
+  "fn f(s: &[u8]) -> Vec<u8> { s.iter().map(u8::to_ascii_lowercase).collect() }":
+    labels:
+    - source: u8::to_ascii_lowercase
+      style: primary
+      start: 41
+      end: 63
+  "fn f(s: &[u8]) -> Vec<u8> { s.iter().map(u8::to_ascii_uppercase).collect() }":
+    labels:
+    - source: u8::to_ascii_uppercase
+      style: primary
+      start: 41
+      end: 63
+  "fn f(s: &mut String) { s.make_ascii_lowercase() }":
+    labels:
+    - source: s.make_ascii_lowercase()
+      style: primary
+      start: 23
+      end: 47
+  "fn f(s: &mut String) { s.make_ascii_uppercase() }":
+    labels:
+    - source: s.make_ascii_uppercase()
+      style: primary
+      start: 23
+      end: 47
+  "fn f(s: &str) -> String { s.chars().flat_map(char::to_uppercase).collect() }":
+    labels:
+    - source: char::to_uppercase
+      style: primary
+      start: 45
+      end: 63
+  "fn f(s: &str) -> String { std::primitive::str::to_lowercase(s) }":
+    labels:
+    - source: std::primitive::str::to_lowercase
+      style: primary
+      start: 26
+      end: 59
+  "fn view(s: &str) -> String { s.to_ascii_lowercase() }":
+    labels:
+    - source: s.to_ascii_lowercase()
+      style: primary
+      start: 29
+      end: 51
+  "fn view(s: &str) -> String { s.to_ascii_uppercase() }":
+    labels:
+    - source: s.to_ascii_uppercase()
+      style: primary
+      start: 29
+      end: 51
+  "fn view(s: &str) -> String { s.to_lowercase() }":
+    labels:
+    - source: s.to_lowercase()
+      style: primary
+      start: 29
+      end: 45
+  "fn view(s: &str) -> String { s.to_uppercase() }":
+    labels:
+    - source: s.to_uppercase()
+      style: primary
+      start: 29
+      end: 45
+  "static NAMES: LazyLock<String> = LazyLock::new(|| \"a\".to_uppercase());":
+    labels:
+    - source: "\"a\".to_uppercase()"
+      style: primary
+      start: 50
+      end: 68

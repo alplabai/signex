@@ -1,0 +1,26 @@
+id: no-raw-spawn
+snapshots:
+  "fn f() { std::thread::spawn(|| {}); }":
+    labels:
+    - source: std::thread::spawn(|| {})
+      style: primary
+      start: 9
+      end: 34
+  "fn f() { thread::spawn(|| {}); }":
+    labels:
+    - source: thread::spawn(|| {})
+      style: primary
+      start: 9
+      end: 29
+  "fn f() { tokio::spawn(async {}); }":
+    labels:
+    - source: tokio::spawn(async {})
+      style: primary
+      start: 9
+      end: 31
+  "fn f() { tokio::task::spawn(async {}); }":
+    labels:
+    - source: tokio::task::spawn(async {})
+      style: primary
+      start: 9
+      end: 37

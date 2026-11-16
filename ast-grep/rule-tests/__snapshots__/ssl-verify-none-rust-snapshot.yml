@@ -1,0 +1,97 @@
+id: ssl-verify-none-rust
+snapshots:
+  "use openssl::ssl::{\n  SslMethod, \n  SslConnectorBuilder, \n  SSL_VERIFY_NONE\n};\nconnector.builder_mut().set_verify(SSL_VERIFY_NONE);\n":
+    labels:
+    - source: connector.builder_mut().set_verify(SSL_VERIFY_NONE)
+      style: primary
+      start: 79
+      end: 130
+    - source: SSL_VERIFY_NONE
+      style: secondary
+      start: 60
+      end: 75
+    - source: |-
+        {
+          SslMethod, 
+          SslConnectorBuilder, 
+          SSL_VERIFY_NONE
+        }
+      style: secondary
+      start: 18
+      end: 77
+    - source: openssl::ssl
+      style: secondary
+      start: 4
+      end: 16
+    - source: |-
+        use openssl::ssl::{
+          SslMethod, 
+          SslConnectorBuilder, 
+          SSL_VERIFY_NONE
+        };
+      style: secondary
+      start: 0
+      end: 78
+    - source: |-
+        use openssl::ssl::{
+          SslMethod, 
+          SslConnectorBuilder, 
+          SSL_VERIFY_NONE
+        };
+      style: secondary
+      start: 0
+      end: 78
+  "use openssl::ssl::{SslMethod, SslConnectorBuilder, SSL_VERIFY_NONE};\nconnector.builder_mut().set_verify(SSL_VERIFY_NONE);\n":
+    labels:
+    - source: connector.builder_mut().set_verify(SSL_VERIFY_NONE)
+      style: primary
+      start: 69
+      end: 120
+    - source: SSL_VERIFY_NONE
+      style: secondary
+      start: 51
+      end: 66
+    - source: "{SslMethod, SslConnectorBuilder, SSL_VERIFY_NONE}"
+      style: secondary
+      start: 18
+      end: 67
+    - source: openssl::ssl
+      style: secondary
+      start: 4
+      end: 16
+    - source: use openssl::ssl::{SslMethod, SslConnectorBuilder, SSL_VERIFY_NONE};
+      style: secondary
+      start: 0
+      end: 68
+    - source: use openssl::ssl::{SslMethod, SslConnectorBuilder, SSL_VERIFY_NONE};
+      style: secondary
+      start: 0
+      end: 68
+  "use openssl::ssl;\nconnector.builder_mut().set_verify(ssl::SSL_VERIFY_NONE);\n":
+    labels:
+    - source: connector.builder_mut().set_verify(ssl::SSL_VERIFY_NONE)
+      style: primary
+      start: 18
+      end: 74
+    - source: use openssl::ssl;
+      style: secondary
+      start: 0
+      end: 17
+    - source: use openssl::ssl;
+      style: secondary
+      start: 0
+      end: 17
+  "use openssl;\nconnector.builder_mut().set_verify(openssl::ssl::SSL_VERIFY_NONE);\n":
+    labels:
+    - source: connector.builder_mut().set_verify(openssl::ssl::SSL_VERIFY_NONE)
+      style: primary
+      start: 13
+      end: 78
+    - source: use openssl;
+      style: secondary
+      start: 0
+      end: 12
+    - source: use openssl;
+      style: secondary
+      start: 0
+      end: 12

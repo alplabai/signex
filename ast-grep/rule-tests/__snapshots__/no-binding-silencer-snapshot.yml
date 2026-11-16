@@ -1,0 +1,30 @@
+id: no-binding-silencer
+snapshots:
+  "fn f() { let _ = &t.far; }":
+    labels:
+    - source: let _ = &t.far;
+      style: primary
+      start: 9
+      end: 24
+    - source: t.far
+      style: secondary
+      start: 18
+      end: 23
+  "fn f() { let _ = (l2, l3, l4); }":
+    labels:
+    - source: let _ = (l2, l3, l4);
+      style: primary
+      start: 9
+      end: 30
+  "fn f() { let _ = a; }":
+    labels:
+    - source: let _ = a;
+      style: primary
+      start: 9
+      end: 19
+  "fn f() { let _ = first.name; }":
+    labels:
+    - source: let _ = first.name;
+      style: primary
+      start: 9
+      end: 28
