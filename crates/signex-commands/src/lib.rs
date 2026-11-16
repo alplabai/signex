@@ -4,6 +4,8 @@
 //! these types on their side.
 
 mod document_target;
+#[cfg(test)]
+mod modifier_tests;
 mod pcb_targets;
 mod platform;
 mod shortcut;
