@@ -310,7 +310,13 @@ impl Signex {
                     Some(unit) => Ok(unit),
                     None => Err(format!("{designator} has no pin {pin}")),
                 };
-                gates(unit(a.as_str())?, unit(b.as_str())?)
+                let (gate_a, gate_b) = (unit(a.as_str())?, unit(b.as_str())?);
+                if gate_a == gate_b {
+                    return Err(format!(
+                        "pins {a} and {b} of {designator} are on one gate; pick a pin of each gate"
+                    ));
+                }
+                gates(gate_a, gate_b)
             }
             SwapRequest::Pins(a, b) => {
                 if !SwapGroups::pins_of(first).same_group(a, b) {

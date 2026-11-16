@@ -6,7 +6,7 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 use super::{TID, row_message, shortcuts};
 use crate::app::handlers::pcb_placement::PcbTargets;
 use crate::app::view::context_menu::menus::{pcb_canvas_menu_entries, pcb_canvas_menu_with_blocks};
-use crate::app::{ContextAction, ContextMenuMsg, Message, PcbMsg, ReuseBlockMsg};
+use crate::app::{ContextAction, ContextMenuMsg, Message, ReuseBlockMsg};
 
 fn runs(message: Option<Message>, command: &str) -> bool {
     matches!(
@@ -49,7 +49,9 @@ fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
     assert!(
         matches!(
             &place,
-            Some(Some(Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::PlaceRequested { name }))))
+            Some(Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::ReuseBlock(
+                ReuseBlockMsg::PlaceRequested { name }
+            )))))
                 if name == "amp"
         ),
         "{place:?}"

@@ -441,8 +441,9 @@ gates outside one swap group, a locked component, a pad whose net is locked,
 a part with no schematic link or whose sheet is closed or read-only, a pin
 tip that meets the middle of a wire or another pin, a rewired wire that would
 then cross a pin or a wire end and join nets, gates that do not draw the same
-pins in the same places, and a part whose gates are on more than one sheet.
-Pads that already share their nets change nothing and say so.
+pins in the same places, a part whose gates are on more than one sheet, and
+for Swap Gates on two pads of one gate. Pads that already share their nets
+change nothing and say so.
 
 ## Design reuse blocks
 
@@ -459,12 +460,17 @@ again on another channel of the same circuit, with its tracks and vias.
 - **Storage**: per project, one file per block,
   `<project folder>/reuse-blocks/<name>.snxpcb`, a board file holding the block
   alone, written off the update thread. A name is letters, digits, spaces,
-  `-`, `_` and `.` inside, at most 64 characters. Saving a name again replaces
-  that block. If the file cannot be written the block can still be placed
+  `-`, `_` and `.` inside, at most 64 characters, and not a name the system
+  keeps for a device (`CON`, `NUL`, `COM1`, ... with or without a dot after
+  it). Saving a name again replaces that block; a name that differs from a
+  block's only in case is refused, since a case-blind file system would
+  overwrite that block's file. A save is refused while the project folder is
+  being renamed. If the file cannot be written the block can still be placed
   until Signex closes, and Messages says so.
 - **Place**: the board menu lists one Place Reuse Block "<name>" row per
   block of the project, live with one unlocked component selected: the
   anchor. The project's blocks are read once, when a board menu first opens.
+  The row closes the menu and acts on the board of the window it was in.
   `place_board_reuse_block document=<board> name=<name> designator=<ref>
   [degrees=<turn>]` does the same; while the project's blocks are not read
   yet it reads them first and answers when they land. Without operands from

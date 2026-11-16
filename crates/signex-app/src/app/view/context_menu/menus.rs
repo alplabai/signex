@@ -145,7 +145,7 @@ impl Signex {
         let ui_font = &self.document_state.panel_ctx.ui_font_name;
         let board = self.pcb_targets(Some(window_id));
         if board.shown {
-            let blocks = self.reuse_block_names_in_view();
+            let blocks = self.reuse_block_names_in_window(Some(window_id));
             let entries =
                 pcb_canvas_menu_with_blocks(&self.ui_state.i18n, tid, board, &sc, &blocks);
             return super::placement::menu_card(entries, tokens, ui_font);
@@ -427,11 +427,8 @@ fn net_rows(
     ]
 }
 
-/// The board canvas menu (#2240): the placement commands, greyed unless
-/// the selection names an unlocked footprint (Delete: anything deletable),
-/// then Cross Probe and Properties, live with anything selected (#1312), then the View
-/// group's Toggle Ratsnest, always live on a board.
-/// Each row runs its catalog command like the keys and the Edit menu do.
+/// The board canvas menu of a project with no reuse block, for the tests
+/// that pin its other rows.
 #[cfg(test)]
 pub(super) fn pcb_canvas_menu_entries(
     i18n: &I18n,
@@ -442,8 +439,13 @@ pub(super) fn pcb_canvas_menu_entries(
     pcb_canvas_menu_with_blocks(i18n, tid, board, sc, &[])
 }
 
-/// [`pcb_canvas_menu_entries`] with the pin swap and reuse block group
-/// (#2410), whose Place rows name the project's `blocks`.
+/// The board canvas menu (#2240): the placement commands, greyed unless
+/// the selection names an unlocked footprint (Delete: anything deletable),
+/// then the pin swap and reuse block group (#2410), whose Place rows name
+/// the project's `blocks`, then Cross Probe and Properties, live with
+/// anything selected (#1312), then the View group's Toggle Ratsnest, always
+/// live on a board. Each row runs its catalog command like the keys and the
+/// Edit menu do.
 pub(super) fn pcb_canvas_menu_with_blocks(
     i18n: &I18n,
     tid: ThemeId,

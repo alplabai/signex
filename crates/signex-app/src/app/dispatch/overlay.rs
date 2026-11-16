@@ -294,7 +294,6 @@ impl Signex {
                 window,
             });
         }
-        // A board's menu lists its project's reuse blocks: read them once.
         self.read_reuse_blocks_in_view()
     }
 
@@ -483,6 +482,7 @@ impl Signex {
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::ReuseBlock(event) => self.handle_reuse_block(event),
                 }
             }
         }

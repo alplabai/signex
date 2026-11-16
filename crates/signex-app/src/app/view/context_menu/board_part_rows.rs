@@ -2,12 +2,14 @@
 //! Swap Gates, live with two pads of one unlocked component selected; Save
 //! as Reuse Block, live with board objects selected; and one Place row per
 //! block of the project, live with one unlocked component selected (the
-//! anchor). With no block saved the Place row is greyed.
+//! anchor). With no block saved the Place row is greyed. A Place row is a
+//! context action, so the menu closes and an undocked window's row acts on
+//! the board that window shows.
 
-use super::items::{dd_cmd_disabled, dd_command, dd_disabled, dd_msg};
+use super::items::{dd_cmd_disabled, dd_command, dd_disabled, dd_kb};
 use super::menus::CanvasShortcuts;
 use crate::app::handlers::pcb_placement::PcbTargets;
-use crate::app::{Message, PcbMsg, ReuseBlockMsg};
+use crate::app::{ContextAction, Message, ReuseBlockMsg};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -37,7 +39,7 @@ pub(super) fn part_rows(
         let label = t!(i18n, ids::PCB_REUSE_BLOCK_PLACE_ROW, "name" => name.as_str()).into_string();
         rows.push(if board.one_footprint {
             let place = ReuseBlockMsg::PlaceRequested { name: name.clone() };
-            dd_msg(None, &label, "", Message::Pcb(PcbMsg::ReuseBlock(place)))
+            dd_kb(None, &label, "", ContextAction::ReuseBlock(place))
         } else {
             dd_disabled(None, &label, None)
         });

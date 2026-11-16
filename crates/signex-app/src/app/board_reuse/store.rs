@@ -128,7 +128,9 @@ pub(crate) fn checked_name(name: &str) -> Result<String, String> {
             "`{name}` cannot name a block: use letters, digits, spaces, `-`, `_` and `.` inside"
         ));
     }
-    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(name)) {
+    // A reserved name stays reserved whatever follows its first dot.
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(stem)) {
         return Err(format!("`{name}` is a name the system keeps for itself"));
     }
     Ok(name.to_string())
@@ -187,4 +189,29 @@ pub(crate) fn read_blocks(folder: &Path) -> BlocksOnDisk {
 /// Blocking.
 pub(crate) fn write_block(file: &Path, text: &str) -> Result<(), String> {
     signex_types::atomic_io::atomic_write(file, text.as_bytes()).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_block_name_is_trimmed_and_must_be_able_to_name_a_file() {
+        assert_eq!(checked_name("  amp 1 "), Ok("amp 1".to_string()));
+        assert!(checked_name("").is_err());
+        assert!(checked_name("../amp").is_err(), "no folder steps");
+        assert!(checked_name("amp.").is_err(), "no trailing dot");
+        assert!(checked_name(&"x".repeat(MAX_NAME_CHARS + 1)).is_err());
+    }
+
+    #[test]
+    fn a_reserved_name_is_refused_with_or_without_a_dot_after_it() {
+        for name in ["CON", "nul", "com1.amp", "Lpt9 .x"] {
+            assert!(
+                checked_name(name).is_err_and(|why| why.contains("keeps for itself")),
+                "{name}"
+            );
+        }
+        assert_eq!(checked_name("console"), Ok("console".to_string()));
+    }
 }

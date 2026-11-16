@@ -145,10 +145,18 @@ impl Signex {
         read_blocks_task(folder, None)
     }
 
-    /// The names of the blocks of the board in view's project, for its menu.
-    pub(crate) fn reuse_block_names_in_view(&self) -> Vec<String> {
-        self.active_tab_path()
-            .filter(|_| self.has_active_pcb())
+    /// The names of the blocks of the project of the board `window` shows
+    /// (`None`: the main window), for its board menu.
+    pub(crate) fn reuse_block_names_in_window(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Vec<String> {
+        let undocked = window.and_then(|id| self.overlay_owner(id));
+        let board = match undocked.and_then(|id| self.ui_state.windows.get(&id)) {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+            _ => self.active_tab_path().filter(|_| self.has_active_pcb()),
+        };
+        board
             .and_then(|board| self.reuse_block_folder(&board).ok())
             .map(|folder| self.document_state.reuse_blocks.names(&folder))
             .unwrap_or_default()
@@ -162,18 +170,36 @@ impl Signex {
         name: &str,
         items: &[BoardItemId],
     ) -> Result<(SavedBlock, Task<Message>), String> {
-        let name = store::checked_name(name)?;
         let folder = self.reuse_block_folder(board)?;
         let pcb = self
             .document_state
             .pcb_board(board)
             .ok_or_else(|| "the board is not open".to_string())?;
+        // What is saved is checked before its name: a menu save of a
+        // selection with no footprint has no designator to name it by.
         let block = reuse_block::capture(pcb, items).map_err(|refusal| refusal.to_string())?;
+        let name = store::checked_name(name)?;
+        // A case-blind file system keeps one file for names that differ only
+        // in case, so such a name would overwrite the other block's file.
+        if let Some(other) = self
+            .document_state
+            .reuse_blocks
+            .names(&folder)
+            .into_iter()
+            .find(|other| *other != name && other.eq_ignore_ascii_case(&name))
+        {
+            return Err(format!(
+                "the project has a reuse block named {other}; use that name or another"
+            ));
+        }
+        let file = store::block_file(&folder, &name);
+        self.refuse_while_project_moves(&file, "save the reuse block to")
+            .map_err(|error| error.to_string())?;
         let text = SnxPcb::new(block.clone())
             .write_string()
             .map_err(|error| format!("the block could not be written out: {error}"))?;
         let saved = SavedBlock {
-            file: store::block_file(&folder, &name),
+            file,
             footprints: block.footprints.len(),
             tracks: block.segments.len(),
             vias: block.vias.len(),

@@ -14,6 +14,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
+use super::part_swap::SwapRequest;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{Message, Signex};
@@ -321,4 +322,41 @@ fn a_component_with_pin_swapping_off_is_refused_with_the_switch_named() {
         matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("Pin Swapping")),
         "{outcome:?}"
     );
+}
+
+/// Swap Gates from the board menu: the two clicked pads name the gates they
+/// belong to; pads of one gate are refused with nothing changed.
+#[test]
+fn swap_gates_on_pads_of_two_gates_trades_the_gates_and_one_gate_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, sheet) = app_with_part(dir.path());
+
+    let refused = app.swap_part(
+        &board,
+        FP,
+        &SwapRequest::GatesOfPins("1".into(), "2".into()),
+    );
+    assert!(
+        refused.is_err_and(|why| why.contains("one gate")),
+        "pads 1 and 2 are both on gate 1"
+    );
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")])
+    );
+
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 11.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_gates");
+
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "C"), ("2", "D"), ("3", "A"), ("4", "B")])
+    );
+    let units: Vec<(Uuid, u32)> = live_sheet(&app, &sheet)
+        .symbols
+        .iter()
+        .map(|s| (s.uuid, s.unit))
+        .collect();
+    assert_eq!(units, [(UNIT_A, 2), (UNIT_B, 1)]);
 }

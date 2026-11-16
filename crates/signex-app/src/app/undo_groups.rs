@@ -80,7 +80,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "back annotate",
             UndoGroupKind::AgentEdit => "agent edit",
             UndoGroupKind::FootprintSwap => "footprint change",
-            UndoGroupKind::PartSwap => "pin swap",
+            UndoGroupKind::PartSwap => "pin or gate swap",
         }
     }
 
@@ -103,7 +103,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "Back annotate",
             UndoGroupKind::AgentEdit => "Agent edit",
             UndoGroupKind::FootprintSwap => "Change Footprint",
-            UndoGroupKind::PartSwap => "Pin swap",
+            UndoGroupKind::PartSwap => "Pin or gate swap",
         }
     }
 

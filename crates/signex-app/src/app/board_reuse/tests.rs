@@ -15,7 +15,7 @@ use super::ReuseBlockMsg;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{Message, PcbMsg, Signex};
+use crate::app::{ContextAction, ContextMenuMsg, Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 use crate::pcb_canvas::PcbCanvasMsg;
@@ -132,6 +132,16 @@ fn save_channel_a(app: &mut Signex) {
     settle(app, task);
 }
 
+/// A right-click on the board, its task (the project's block read) settled.
+fn right_click(app: &mut Signex) {
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::Show(5.0, 5.0)));
+    settle(app, task);
+    assert!(
+        app.interaction_state.context_menu.is_some(),
+        "the menu opened"
+    );
+}
+
 fn headless(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let command = AppCommandId::new(id).unwrap();
     let args = CommandArgs::parse_operands(&command, operands).expect("operands parse");
@@ -150,13 +160,20 @@ fn a_channel_saved_from_the_menu_is_written_and_placed_on_the_other_channel_in_o
         "the block file is written: {}",
         file.display()
     );
-    assert_eq!(app.reuse_block_names_in_view(), ["R1-U1"]);
+    assert_eq!(app.reuse_block_names_in_window(None), ["R1-U1"]);
 
     click(&mut app, 49.0, 50.0, ClickMode::Replace);
+    right_click(&mut app);
     let place = ReuseBlockMsg::PlaceRequested {
         name: "R1-U1".to_string(),
     };
-    let _ = app.update(Message::Pcb(PcbMsg::ReuseBlock(place)));
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::Action(
+        ContextAction::ReuseBlock(place),
+    )));
+    assert!(
+        app.interaction_state.context_menu.is_none(),
+        "the row closes the menu"
+    );
     assert_eq!(at(&app, &board, U2), (50.0, 50.0), "the anchor stays");
     assert_eq!(at(&app, &board, R2), (54.0, 50.0), "R2 lands as R1 sat");
     assert_eq!(segments(&app, &board), 2, "the track came with the block");
@@ -237,4 +254,55 @@ fn place_without_operands_says_what_it_needs() {
         matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("designator")),
         "{outcome:?}"
     );
+}
+
+/// The first right-click on a board reads the project's block folder off
+/// the update thread, so a block saved in an earlier session gets its Place
+/// row.
+#[test]
+fn a_right_click_lists_the_blocks_of_an_earlier_session() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let (mut first, _) = app_with_board(dir.path());
+        save_channel_a(&mut first);
+    }
+    let (mut app, _) = app_with_board(dir.path());
+    assert!(
+        app.reuse_block_names_in_window(None).is_empty(),
+        "not read yet"
+    );
+
+    right_click(&mut app);
+
+    assert_eq!(app.reuse_block_names_in_window(None), ["R1-U1"]);
+}
+
+/// A case-blind file system keeps one file for `amp` and `AMP`: the second
+/// name is refused instead of overwriting the first block's file.
+#[test]
+fn a_name_that_differs_from_a_block_only_in_case_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    let document = format!("document={}", board.display());
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=amp", "ids=U1"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=AMP", "ids=R1"],
+    );
+
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named amp")),
+        "{outcome:?}"
+    );
+    assert_eq!(app.reuse_block_names_in_window(None), ["amp"]);
 }
