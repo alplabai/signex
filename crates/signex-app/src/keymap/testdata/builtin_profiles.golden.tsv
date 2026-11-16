@@ -424,6 +424,10 @@ altium	hint	-	-	keepout_from_selection
 altium	hint	-	-	arrange_in_box
 altium	hint	-	-	import_dxf
 altium	hint	-	-	import_dxf_outline
+altium	hint	-	-	swap_pins
+altium	hint	-	-	swap_gates
+altium	hint	-	-	save_board_reuse_block
+altium	hint	-	-	place_board_reuse_block
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -876,6 +880,10 @@ classic	hint	-	-	keepout_from_selection
 classic	hint	-	-	arrange_in_box
 classic	hint	-	-	import_dxf
 classic	hint	-	-	import_dxf_outline
+classic	hint	-	-	swap_pins
+classic	hint	-	-	swap_gates
+classic	hint	-	-	save_board_reuse_block
+classic	hint	-	-	place_board_reuse_block
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

@@ -520,6 +520,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "remove_board_panel",
                     "set_board_panel",
                     "board_panel",
+                    // #2410: they act on the board they name.
+                    "swap_pins",
+                    "swap_gates",
+                    "save_board_reuse_block",
+                    "place_board_reuse_block",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

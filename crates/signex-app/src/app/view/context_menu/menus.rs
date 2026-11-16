@@ -71,6 +71,9 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "board_shape_from_selection",
     "keepout_from_selection",
     "arrange_in_box",
+    "swap_pins",
+    "swap_gates",
+    "save_board_reuse_block",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -155,8 +158,15 @@ impl Signex {
         let active_submenu = self.interaction_state.context_submenu;
         let context = self.command_context(Some(window_id));
         if context.pcb.shown {
-            let entries =
-                pcb_canvas_menu_entries(&self.ui_state.i18n, tid, &context, active_submenu, &sc);
+            let blocks = self.reuse_block_names_in_window(Some(window_id));
+            let entries = pcb_canvas_menu_with_blocks(
+                &self.ui_state.i18n,
+                tid,
+                &context,
+                active_submenu,
+                &sc,
+                &blocks,
+            );
             return super::placement::menu_card(entries, tokens, ui_font);
         }
         let (selection, project_key) = self.canvas_menu_inputs(window_id);
@@ -435,19 +445,34 @@ fn net_rows(
     ]
 }
 
-/// The board canvas menu (#2240, #2405): Find Similar and Find; the Place
-/// and Align flyouts; Undo and Redo; the clipboard; move, turn, flip and
-/// mirror; Delete; Board Sketch; the net of the selection; Cross Probe and
-/// Properties; then the View group's Toggle Ratsnest. Each row runs its
-/// catalog command like the keys and the Edit menu do, and is live exactly
-/// when that command is enabled in `ctx`: on a read-only board every editing
-/// row is greyed. Align is offered with a selection, as on a sheet.
+/// The board canvas menu of a project with no reuse block, for the tests
+/// that pin its other rows.
+#[cfg(test)]
 pub(super) fn pcb_canvas_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
     ctx: &crate::app::command::CommandContext,
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    pcb_canvas_menu_with_blocks(i18n, tid, ctx, active_submenu, sc, &[])
+}
+
+/// The board canvas menu (#2240, #2405): Find Similar and Find; the Place
+/// and Align flyouts; Undo and Redo; the clipboard; move, turn, flip and
+/// mirror; the pin swap and reuse block group (#2410); Delete; Board Sketch;
+/// the net of the selection; Cross Probe and
+/// Properties; then the View group's Toggle Ratsnest. Each row runs its
+/// catalog command like the keys and the Edit menu do, and is live exactly
+/// when that command is enabled in `ctx`: on a read-only board every editing
+/// row is greyed. Align is offered with a selection, as on a sheet.
+pub(super) fn pcb_canvas_menu_with_blocks(
+    i18n: &I18n,
+    tid: ThemeId,
+    ctx: &crate::app::command::CommandContext,
+    active_submenu: Option<ContextSubmenu>,
+    sc: &CanvasShortcuts,
+    blocks: &[String],
 ) -> Vec<DropdownEntry<Message>> {
     let row = |icon: Option<iced::widget::svg::Handle>, command_id: &'static str| {
         let live =
@@ -513,6 +538,11 @@ pub(super) fn pcb_canvas_menu_entries(
         // Lock or unlock the selected tracks and vias (#2407).
         gated_row("lock_board_items", ctx.pcb.lockable),
         gated_row("unlock_board_items", ctx.pcb.unlockable),
+    ]);
+    // The pin swap and reuse block group (#2410), whose Place rows name the
+    // project's `blocks`.
+    v.extend(super::board_part_rows::part_rows(i18n, ctx.pcb, sc, blocks));
+    v.extend([
         DropdownEntry::Separator,
         row(Some(ic::icon_dd_delete(tid)), "delete_selection"),
         DropdownEntry::Separator,

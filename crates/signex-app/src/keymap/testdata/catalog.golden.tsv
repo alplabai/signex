@@ -328,6 +328,10 @@ keepout_from_selection	design	Turn the selected area or closed lines into a keep
 arrange_in_box	modify	Arrange the selected components inside a box drawn on the board	Arrange in Box	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,start:point/mm,end:point/mm
 import_dxf	file	Import a DXF drawing onto the active layer of the board	DXF to Current Layer...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,layer:text?,document:document?
 import_dxf_outline	file	Import the largest closed shape of a DXF drawing as the board outline	DXF as Board Outline...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,document:document?
+swap_pins	modify	Swap the nets of two equivalent pins of a component, on the board and on its schematic	Swap Pins	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,designator:text,pins:text
+swap_gates	modify	Swap two equivalent gates of a component, on the board and on its schematic	Swap Gates	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,designator:text,units:text
+save_board_reuse_block	design	Save the selected placed and routed parts as a reuse block of the project	Save as Reuse Block	PCB	-	-	RequiresDocument(Pcb)	-	document:document,name:text,ids:text
+place_board_reuse_block	design	Place a reuse block on the channel of the selected component	Place Reuse Block	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text,designator:text,degrees:turn/deg?
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

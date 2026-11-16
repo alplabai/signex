@@ -935,6 +935,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_reuse_block",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "place_board_route",
     "group": "Pcb",
     "category": "place"
@@ -1365,6 +1370,11 @@
     "category": "validation"
   },
   {
+    "id": "save_board_reuse_block",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "save_document",
     "group": "General",
     "category": "file"
@@ -1538,6 +1548,16 @@
     "id": "stitch_vias",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "swap_gates",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "swap_pins",
+    "group": "Pcb",
+    "category": "modify"
   },
   {
     "id": "switch_segment_posture",

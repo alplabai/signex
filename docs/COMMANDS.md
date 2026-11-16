@@ -367,6 +367,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_quick_route` | Route straight to the clicked point at the rule width, without avoiding other nets | place | — | — |
 | `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
+| `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
 | `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |
@@ -398,6 +399,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_set_create` | Create a named rule set | design | — | — |
 | `rules_set_edit` | Change the limits of a named rule set | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
+| `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
@@ -412,6 +414,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
 | `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
+| `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
+| `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |
 | `toggle_layer_numbers` | Show or hide the numbers on the layer tabs | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |

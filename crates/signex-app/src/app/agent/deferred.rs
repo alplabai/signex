@@ -121,6 +121,34 @@ impl Signex {
         task
     }
 
+    /// A command that waited for a read of its own (the project's reuse
+    /// blocks, #2410) runs now that it landed, as the caller and channel that
+    /// sent it, journaled like an edit that did not wait, and its caller is
+    /// answered (the socket, or a headless run by `ticket`).
+    pub(crate) fn rerun_after_read(
+        &mut self,
+        ticket: u64,
+        command: &AppCommandId,
+        args: &CommandArgs,
+        document: &Path,
+        origin: super::Origin,
+        serving: bool,
+    ) -> Task<Message> {
+        let mark = crate::diagnostics::newest_entry_id();
+        let before = self.change_snapshot();
+        let (outcome, task) = match self.agent_gate_closed(ticket, command, args) {
+            Some(reason) => self.turned_away_waiting(ticket, document, reason),
+            None => self.with_origin(origin, |app| {
+                let serving = std::mem::replace(&mut app.agent.serving, serving);
+                let ran = app.journaled(command, args, |app| app.run_operands(command, args));
+                app.agent.serving = serving;
+                ran
+            }),
+        };
+        self.answer_waiting(ticket, command.as_str(), mark, &before, outcome);
+        task
+    }
+
     /// Turned away at the gate, as at request time: an access event, no edit
     /// line.
     fn turned_away_waiting(

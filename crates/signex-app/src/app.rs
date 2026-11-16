@@ -18,6 +18,7 @@ pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
 pub(crate) mod board_tools;
+pub(crate) mod board_reuse;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -91,6 +92,7 @@ pub use board_output::{
 };
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
+pub use board_reuse::ReuseBlockMsg;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -100,7 +102,7 @@ pub use contracts::{
     GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
     LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu,
     LayerTabMenuMsg, LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
-    NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg,
+    NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg,
     PcbMsg, PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
     ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,

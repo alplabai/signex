@@ -75,6 +75,8 @@ impl Signex {
             }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::DxfImport(event) => self.handle_dxf_import(event),
+            PcbMsg::PartSwap(event) => self.handle_part_swap(event),
+            PcbMsg::ReuseBlock(event) => self.handle_reuse_block(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),
             PcbMsg::LayerStrip(setting) => self.apply_layer_strip_setting(setting),

@@ -145,4 +145,15 @@ define_ids! {
     PCB_DXF_SKIPPED = "pcb-dxf-skipped";
     PCB_DXF_REFUSED = "pcb-dxf-refused";
     PCB_DXF_LAYER_REFUSED = "pcb-dxf-layer-refused";
+    PCB_PART_SWAP_REFUSED = "pcb-part-swap-refused";
+    PCB_PINS_SWAPPED = "pcb-pins-swapped";
+    PCB_GATES_SWAPPED = "pcb-gates-swapped";
+    PCB_PART_SWAP_NOTHING = "pcb-part-swap-nothing";
+    PCB_GATES_SWAP_NOTHING = "pcb-gates-swap-nothing";
+    PCB_REUSE_BLOCK_SAVED = "pcb-reuse-block-saved";
+    PCB_REUSE_BLOCK_NOT_WRITTEN = "pcb-reuse-block-not-written";
+    PCB_REUSE_BLOCK_PLACED = "pcb-reuse-block-placed";
+    PCB_REUSE_BLOCK_REFUSED = "pcb-reuse-block-refused";
+    PCB_REUSE_BLOCKS_UNREAD = "pcb-reuse-blocks-unread";
+    PCB_REUSE_BLOCK_PLACE_ROW = "pcb-reuse-block-place-row";
 }

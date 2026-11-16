@@ -10,6 +10,10 @@ mod edits;
 mod facts;
 mod identity;
 mod linked_parts;
+mod part_swap;
+pub(crate) mod part_swap_operands;
+#[cfg(test)]
+mod part_swap_tests;
 mod swap;
 
 use std::collections::{BTreeMap, BTreeSet};

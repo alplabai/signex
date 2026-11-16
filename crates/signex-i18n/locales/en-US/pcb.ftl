@@ -445,3 +445,20 @@ pcb-dxf-skipped = { $count } entities of { $file } are not lines, arcs, circles 
 pcb-dxf-refused = { $file } was not imported: { $why }
 # Before the file dialog opens; $why says the layer and why it cannot take a drawing.
 pcb-dxf-layer-refused = No DXF file was asked for: { $why }
+
+## Pin and gate swap (#2410). Messages lines; $why is the reason from the
+## board or the schematic, in English.
+pcb-part-swap-refused = { $what } did nothing: { $why }
+pcb-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the board and on its schematic
+pcb-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the board and on its schematic
+pcb-part-swap-nothing = { $designator }: pins { $a } and { $b } already share their nets; nothing changed
+pcb-gates-swap-nothing = { $designator }: gates { $a } and { $b } already share their nets; nothing changed
+
+## Design reuse blocks (#2410).
+pcb-reuse-block-saved = Reuse block { $name } saved to { $file }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-not-written = Reuse block { $name } could not be written to { $file }: { $why }. It can be placed until Signex closes.
+pcb-reuse-block-placed = Reuse block { $name } placed on the channel of { $anchor }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-refused = { $what } did nothing: { $why }
+pcb-reuse-blocks-unread = The project's reuse blocks could not be read: { $why }
+# A board menu row: place the block called $name around the selected part.
+pcb-reuse-block-place-row = Place Reuse Block "{ $name }"

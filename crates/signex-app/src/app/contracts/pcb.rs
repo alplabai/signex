@@ -104,6 +104,10 @@ pub enum PcbMsg {
     DxfImport(DxfImportMsg),
     /// Length tuning on the board in view (#2389).
     Tune(TuneMsg),
+    /// Pin and gate swap within a component (#2410).
+    PartSwap(PartSwapMsg),
+    /// Design reuse blocks of the project (#2410).
+    ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the
@@ -153,6 +157,15 @@ pub enum TuneMsg {
     /// `tune_diff_pair` ran: the shorter net of the selected track's pair is
     /// lengthened to the other's length.
     DiffPairRequested,
+}
+
+/// Pin and gate swap within a component on a board (#2410).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartSwapMsg {
+    /// `swap_pins` or `swap_gates` ran without operands (the board menu, the
+    /// palette, a key): the two pads selected on the board in view name the
+    /// two pins, or the two gates they belong to.
+    Requested(signex_engine::pcb::pad_swap::SwapKind),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).

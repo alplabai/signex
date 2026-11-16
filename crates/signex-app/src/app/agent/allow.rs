@@ -121,6 +121,8 @@ mod tests {
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",
+                // #2410: pin and gate swap and design reuse, on the named board.
+                "place_board_reuse_block",
                 "query_board_nets",
                 "query_pins",
                 "read_document",
@@ -147,6 +149,7 @@ mod tests {
                 "rules_set_apply",
                 "rules_set_create",
                 "rules_set_edit",
+                "save_board_reuse_block",
                 "save_document",
                 "save_layer_set",
                 "set_board_graphic",
@@ -159,6 +162,8 @@ mod tests {
                 "show_layer_group",
                 "show_layer_set",
                 "stitch_vias",
+                "swap_gates",
+                "swap_pins",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_horizontally",

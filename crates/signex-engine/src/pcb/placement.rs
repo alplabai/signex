@@ -106,6 +106,24 @@ pub fn name(footprint: &Footprint) -> String {
     }
 }
 
+/// The footprint of `board` whose designator is `designator` (trimmed), for
+/// a command that names a component (#2410). Refused when none or several
+/// carry it.
+pub fn by_designator(board: &PcbBoard, designator: &str) -> Result<Uuid, String> {
+    let designator = designator.trim();
+    let mut found = board
+        .footprints
+        .iter()
+        .filter(|fp| fp.reference == designator);
+    match (found.next(), found.next()) {
+        (Some(fp), None) => Ok(fp.uuid),
+        (None, _) => Err(format!("no component on the board is named {designator}")),
+        (Some(_), Some(_)) => Err(format!(
+            "several components on the board are named {designator}; annotate the board first"
+        )),
+    }
+}
+
 /// Move every footprint in `ids` by `delta`. The track ends on their pads
 /// move with them (`pcb_geom::tracks_on_pads`, #2379), in the same batch,
 /// so the move stays one undo step.

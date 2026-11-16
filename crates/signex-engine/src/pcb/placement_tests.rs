@@ -193,3 +193,18 @@ fn a_move_takes_the_track_ends_on_its_pads_along_in_one_step() {
     );
     assert_eq!(fp(engine.board(), 2).position, fp(&before, 2).position);
 }
+
+/// #2410: a command names a component by its designator; a missing or
+/// shared one is refused with the reason.
+#[test]
+fn a_component_is_found_by_its_designator_once() {
+    let mut b = board();
+    assert_eq!(by_designator(&b, " U2 "), Ok(id(2)));
+    assert!(
+        by_designator(&b, "U9")
+            .unwrap_err()
+            .contains("no component")
+    );
+    b.footprints[2].reference = "U2".into();
+    assert!(by_designator(&b, "U2").unwrap_err().contains("several"));
+}

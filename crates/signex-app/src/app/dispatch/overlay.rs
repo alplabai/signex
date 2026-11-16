@@ -294,7 +294,7 @@ impl Signex {
                 window,
             });
         }
-        Task::none()
+        self.read_reuse_blocks_in_view()
     }
 
     /// Context-menu subsystem handler (canvas / project-tree / tab menus +
@@ -482,6 +482,7 @@ impl Signex {
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::ReuseBlock(event) => self.handle_reuse_block(event),
                 }
             }
         }

@@ -28,6 +28,8 @@ use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_tune as tune;
+use crate::app::board_reuse as reuse;
+use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -175,6 +177,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::board_panel::remove_board_panel,
     ),
     ("set_board_panel", crate::app::board_panel::set_board_panel),
+    ("swap_pins", swap::swap_pins),
+    ("swap_gates", swap::swap_gates),
+    ("save_board_reuse_block", reuse::save_board_reuse_block),
+    ("place_board_reuse_block", reuse::place_board_reuse_block),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -365,6 +371,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \
              select the Blanket to read them in Properties",
+        // #2410: a person picks the block on a component's board menu.
+        "place_board_reuse_block" => Some(
+            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+             right-click a component on the board and pick the block",
         ),
         _ => None,
     }

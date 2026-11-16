@@ -10,6 +10,7 @@ mod history_snapshot;
 mod lock;
 mod multi_edit;
 mod net_class_table;
+pub mod part_swap;
 mod paste_edit;
 mod placed_edit;
 mod placement;

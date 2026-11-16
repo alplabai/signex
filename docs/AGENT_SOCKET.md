@@ -141,8 +141,13 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   board, answered with the tuned nets and their lengths as JSON), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
-  JSON). A test pins this set, so a catalog row that joins or leaves it is a
-  visible decision.
+  JSON), and the board's `swap_pins`, `swap_gates`,
+  `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
+  one undo step across the board and its sheet, a save writes the block's
+  file in the project's `reuse-blocks` folder, and a place may wait for the
+  project's blocks to be read like an edit waiting for its reads). A test
+  pins this set, so a catalog row that joins or leaves it is a visible
+  decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is
