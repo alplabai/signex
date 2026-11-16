@@ -1684,6 +1684,7 @@ x = 0.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000001"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1699,6 +1700,7 @@ x = 40.0
 y = 0.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000002"
 graphic_type = "arc"
 layer = "EdgeCuts"
 width = 0.05
@@ -1718,6 +1720,7 @@ x = 40.0
 y = 10.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000003"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1733,6 +1736,7 @@ x = 50.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000004"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1748,6 +1752,7 @@ x = 0.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000005"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05

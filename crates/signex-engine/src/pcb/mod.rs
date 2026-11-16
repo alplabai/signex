@@ -30,6 +30,7 @@ pub mod find;
 mod footprint;
 mod footprint_content;
 pub mod footprint_swap;
+pub mod graphic;
 mod graphics;
 mod items;
 pub mod lock;

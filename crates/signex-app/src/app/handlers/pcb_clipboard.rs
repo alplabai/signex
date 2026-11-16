@@ -298,6 +298,6 @@ fn item_ref(id: BoardItemId) -> Option<ItemRef> {
         BoardItemId::Arc(id) => Some(ItemRef::Arc(id)),
         BoardItemId::FreePad(id) => Some(ItemRef::FreePad(id)),
         BoardItemId::Dimension(id) => Some(ItemRef::Dimension(id)),
-        BoardItemId::Zone(_) => None,
+        BoardItemId::Zone(_) | BoardItemId::Graphic(_) => None,
     }
 }

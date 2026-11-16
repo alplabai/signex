@@ -86,6 +86,9 @@ mod tests {
         assert_eq!(
             allowed(),
             [
+                // #2424: a drawing added to, or a field of one set on, the
+                // named board.
+                "add_board_graphic",
                 "add_net_class",
                 "add_teardrops",
                 "apply_edits",
@@ -143,6 +146,7 @@ mod tests {
                 "rules_set_edit",
                 "save_document",
                 "save_layer_set",
+                "set_board_graphic",
                 "set_layer_sizes",
                 "set_layer_stack",
                 "set_net_class_rules",

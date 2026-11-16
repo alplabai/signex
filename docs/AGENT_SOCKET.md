@@ -133,7 +133,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
   `keepout_from_selection` and `arrange_in_box`, each one board undo step
   answered with the uuids it added, removed and changed
-  ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"). A test pins this set, so a
+  ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
+  `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
+  each, answered with the drawing as JSON). A test pins this set, so a
   catalog row that joins or leaves it is a visible decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:

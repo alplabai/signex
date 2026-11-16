@@ -28,6 +28,9 @@ pub enum PcbBarGroup {
     Dimensions,
     /// Board text.
     Text,
+    /// Lines, arcs, circles, rectangles and text frames on non-copper
+    /// layers (#2424).
+    Graphics,
 }
 
 /// A row of a group: a board placement tool, or a catalog command that is
@@ -51,7 +54,7 @@ impl PcbBarRow {
 
 impl PcbBarGroup {
     /// The groups in the bar's order.
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Components,
         Self::Route,
         Self::ViaPad,
@@ -59,6 +62,7 @@ impl PcbBarGroup {
         Self::CopperDrawing,
         Self::Dimensions,
         Self::Text,
+        Self::Graphics,
     ];
 
     /// The group's rows, top to bottom. The first live row is what the
@@ -83,6 +87,13 @@ impl PcbBarGroup {
             Self::CopperDrawing => &[Tool(T::Track), Tool(T::Arc)],
             Self::Dimensions => &[Tool(T::Dimension)],
             Self::Text => &[Tool(T::TextString)],
+            Self::Graphics => &[
+                Tool(T::Line),
+                Tool(T::GraphicArc),
+                Tool(T::FullCircle),
+                Tool(T::Rectangle),
+                Tool(T::TextFrame),
+            ],
         }
     }
 
@@ -96,6 +107,7 @@ impl PcbBarGroup {
             Self::CopperDrawing => "copper_drawing",
             Self::Dimensions => "dimensions",
             Self::Text => "text",
+            Self::Graphics => "graphics",
         }
     }
 
@@ -185,7 +197,10 @@ mod tests {
     /// offers each Place row once.
     #[test]
     fn every_place_tool_is_in_one_group() {
-        for tool in BoardPlaceTool::PLACE_MENU {
+        let tools = BoardPlaceTool::PLACE_MENU
+            .into_iter()
+            .chain(BoardPlaceTool::GRAPHICS_MENU);
+        for tool in tools {
             let groups = PcbBarGroup::ALL
                 .into_iter()
                 .filter(|group| group.rows().contains(&PcbBarRow::Tool(tool)))

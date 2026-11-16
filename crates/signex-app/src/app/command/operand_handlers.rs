@@ -13,6 +13,7 @@ use iced::Task;
 
 use super::agent_edits as agent;
 use super::board_edit_operands as board_edit;
+use super::board_graphic_operands as graphic;
 use super::board_operands as board;
 use super::directive_operands as directive;
 use super::document_operands as doc;
@@ -112,6 +113,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_report_components", output::board_report_components),
     ("export_board_report", output::export_board_report),
     ("export_board_pdf", output::export_board_pdf),
+    ("add_board_graphic", graphic::add_board_graphic),
+    ("set_board_graphic", graphic::set_board_graphic),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -300,6 +303,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_symbol_parameter" => Some(
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
+        ),
+        // #2424: a person draws with the Graphics tools and edits in
+        // Properties.
+        "add_board_graphic" => Some(
+            "`add_board_graphic` needs the operands `document` and `kind` — \
+             use Place ▸ Graphics on a board",
+        ),
+        "set_board_graphic" => Some(
+            "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
+             select the drawing and use Properties",
         ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(

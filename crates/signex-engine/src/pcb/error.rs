@@ -90,6 +90,10 @@ pub enum BoardCommandError {
     /// An arc moved to a layer this build does not know (#2373).
     #[error("{0} is not a board layer")]
     UnknownLayer(String),
+    #[error("{field} must not be below zero")]
+    Negative { field: &'static str },
+    #[error("{0} cannot hold a board drawing: drawings go on non-copper layers, not keep-outs")]
+    NotGraphicLayer(String),
     #[error("net {0} is not in the board's net table")]
     UnknownNet(u32),
     #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]

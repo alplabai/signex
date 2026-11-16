@@ -80,7 +80,8 @@ impl BoardClipboard {
                 | BoardItemId::Text(_)
                 | BoardItemId::Arc(_)
                 | BoardItemId::FreePad(_)
-                | BoardItemId::Dimension(_) => {}
+                | BoardItemId::Dimension(_)
+                | BoardItemId::Graphic(_) => {}
             }
         }
         let Some(centre) = copy.anchor_centre() else {

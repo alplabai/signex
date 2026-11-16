@@ -421,9 +421,11 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 Place follows the document in view (#2360). While the window shows a board
 (`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
-String, Dimension and Keepout, then Board Sketch (`board_sketch`, the same
-command as Design ▸ Board Sketch and the PCB Active Bar's button). Every other
-tab keeps the sheet's Place rows.
+String, Dimension and Keepout, the Graphics submenu (Line, Arc, Full Circle,
+Rectangle and Text Frame on non-copper layers, #2424, the PCB Active Bar's
+Graphics group), then Board Sketch (`board_sketch`, the same command as
+Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
+the sheet's Place rows.
 
 The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
 which the PCB Active Bar builds its buttons from (#2352), so the two surfaces

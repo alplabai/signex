@@ -198,6 +198,7 @@ fn an_unknown_or_incomplete_drawing_is_skipped_and_a_non_finite_one_refused() {
 #[test]
 fn a_board_drawing_stays_where_it_is_saved() {
     let edge = BoardGraphic {
+        uuid: Uuid::nil(),
         graphic_type: "arc".into(),
         layer: "EdgeCuts".into(),
         width: 0.05,
@@ -206,6 +207,8 @@ fn a_board_drawing_stays_where_it_is_saved() {
         center: Some(Point::new(40.0, 10.0)),
         radius: 10.0,
         points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
     };
     let at = board_graphic_placement(&edge).unwrap().unwrap();
     let GraphicShape::Arc {

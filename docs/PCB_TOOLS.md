@@ -326,6 +326,55 @@ Precision, the value and Layer (layers that take text); each edit is one
 undo step. Angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
 
+## Graphics {#graphics}
+
+Place ▸ Graphics on a board and the PCB Active Bar's Graphics group (#2424):
+`place_board_line`, `place_board_graphic_arc`, `place_board_circle`,
+`place_board_rectangle` and `place_board_text_frame` (no default keys). Each
+draws a board drawing (`PcbBoard::graphics`, kinds in
+`signex_types::pcb_graphic`) on the active layer, built by
+`signex_engine::pcb::graphic`, one undo step each.
+
+- **Layer.** Any non-copper layer but the two keep-out layers, whose areas
+  the design rule check reads as rules: overlay, solder mask, paste, fab,
+  assembly, courtyard, mechanical, documentation, the board outline. On
+  another layer a click adds nothing and the Messages panel says so.
+- **Line.** The first click starts a run; each later click adds a line from
+  the run's end, any angle. A click on the run's end, Esc or a right-click
+  ends the run.
+- **Arc.** The centre, then the start (its distance from the centre is the
+  radius), then the end, moved onto the circle along its angle. The arc runs
+  from the start the way of increasing angle in the model's axes, clockwise
+  on screen; an end on the start's angle is a full turn. Until the end the
+  pointer draws the full circle.
+- **Full Circle.** The centre, then a point on the circle.
+- **Rectangle, Text Frame.** Two opposite corners; a box with no area adds
+  nothing and the Messages panel says so. A text frame reads the text and
+  height set in its form, else the catalog's new-frame text ("Text") and the
+  PCB default height; its text wraps inside the box (`docs/RENDERING_RULES.md`,
+  "pcb-text-frame").
+- **Form.** Properties shows the drawing placed next (#2393): Layer (the
+  active layer), Width (`PCB_DEFAULT_GRAPHIC_WIDTH_MM` until set), and for a
+  text frame its text and text height. Tab pauses placing to edit them.
+- **Placed drawings.** A drawing is picked on its stroke (a text frame also
+  inside its box) under the selection filter's Other kind (Texts for a text
+  frame); Properties edits its layer, width, corners (line, rectangle, text
+  frame) or centre and radius (arc, circle), and a text frame's text, where
+  `\n` is a line break, and text height, one undo step per field
+  (`signex_engine::pcb::primitive_edit::GraphicEdit`). Delete removes it.
+- **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
+  `uuid`; a text frame's `text` and `font_size`), drawn by the board
+  renderer, printed by Board Print (#2402), and drawn into the fabrication
+  layer's Gerber (#2388) when the layer is one (overlay, mask, paste, the
+  board outline); a text frame's text waits there for the stroke font, as
+  board texts do.
+- **Agents.** `add_board_graphic` (`document`, `kind`: `line`, `arc`,
+  `circle`, `rectangle` or `text_frame`; `start` and `end`, an arc's or
+  circle's centre `at`; optional `layer` and `text`) and `set_board_graphic`
+  (`document`, `id`, `field`, `value`) take points and X/Y from the board
+  origin with Y up, are one undo step each and answer with the drawing as
+  JSON.
+
 ## Pad
 
 `place_board_pad` (no default key) places a free pad, one per click: a pad
@@ -401,10 +450,11 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Copper drawing | Track, Arc |
 | Dimensions | Dimension |
 | Text | String |
+| Graphics | Line, Arc, Full Circle, Rectangle, Text Frame |
 
 Every board placement tool is a row of exactly one group, so the bar and
-Place on a board list the same tools; Change Footprint is the Edit and board
-canvas menu row of #2366.
+Place on a board (its Graphics submenu for the Graphics group) list the same
+tools; Change Footprint is the Edit and board canvas menu row of #2366.
 
 - **Button.** It shows and runs the row its group ran last; until then, the
   first row that can run. A click runs it as its menu row does. It is drawn

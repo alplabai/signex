@@ -1,5 +1,6 @@
 //! An R-tree of a board's pads, tracks and vias (and, for selection, the
-//! footprint bodies and the drawn areas), and the hit-tests on it.
+//! footprint bodies, the drawn areas and the board drawings), and the
+//! hit-tests on it.
 //!
 //! Envelopes are `i128` so every area rstar computes while it builds the
 //! tree fits, at any coordinate [`MAX_ABS_NM`](crate::MAX_ABS_NM) allows.
@@ -50,14 +51,25 @@ pub enum ItemRef {
     /// A board dimension (#2373): its strokes and the box of its value.
     /// Only the selection index holds it.
     Dimension(Uuid),
+    /// A board drawing (#2424): a line, arc, circle, rectangle or text
+    /// frame, as [`PickKind::of_graphic`] names it. Only the selection index
+    /// holds it: one capsule of its stroke per piece of its outline, and a
+    /// text frame's box for a click inside it.
+    Graphic {
+        graphic: Uuid,
+        kind: PickKind,
+    },
 }
 
 impl ItemRef {
     /// Whether the index holds the item as several entries that share its
-    /// identity: a drawn area's edges, an arc's chords, a dimension's
-    /// strokes.
+    /// identity: a drawn area's or drawing's edges, an arc's chords, a
+    /// dimension's strokes.
     pub fn is_multi_part(self) -> bool {
-        matches!(self, Self::Zone { .. } | Self::Arc(_) | Self::Dimension(_))
+        matches!(
+            self,
+            Self::Zone { .. } | Self::Graphic { .. } | Self::Arc(_) | Self::Dimension(_)
+        )
     }
 }
 
@@ -117,12 +129,20 @@ pub struct BoardIndex {
     parts: BTreeMap<ItemRef, usize>,
 }
 
-/// A drawn area's outline: its edges are in the tree, one entry each.
+/// A drawn area's or board drawing's outline: its edges are in the tree,
+/// one entry each.
 #[derive(Debug, Clone)]
-struct Area {
-    item: ItemRef,
-    ring: Vec<PointNm>,
-    bounds: RectNm,
+pub(crate) struct Area {
+    pub(crate) item: ItemRef,
+    pub(crate) ring: Vec<PointNm>,
+    pub(crate) bounds: RectNm,
+    /// How many tree entries the item has: a box holds the item wholly
+    /// when it holds every one.
+    pub(crate) edges: usize,
+    /// A click or box inside `ring`, clear of its edges, takes the item:
+    /// an area, a text frame's box. An outline drawing is taken on its
+    /// stroke only.
+    pub(crate) inside: bool,
 }
 
 impl BoardIndex {
@@ -214,11 +234,14 @@ impl BoardIndex {
             for zone in &board.zones {
                 add_area(zone, &mut areas, &mut items, &mut rejected);
             }
+            for graphic in &board.graphics {
+                crate::graphic_index::add_graphic(graphic, &mut areas, &mut items, &mut rejected);
+            }
         }
         let mut seen = HashSet::new();
         items.retain(|indexed| {
-            // An area's edges, an arc's chords and a dimension's strokes
-            // share its identity.
+            // An area's or drawing's edges, an arc's chords and a dimension's
+            // strokes share its identity.
             if indexed.item.is_multi_part() {
                 return true;
             }
@@ -307,7 +330,8 @@ impl BoardIndex {
             .collect();
         // Inside an area, off its edges: one of its edges answers for it.
         for area in &self.areas {
-            if hits.iter().any(|h| h.item == area.item)
+            if !area.inside
+                || hits.iter().any(|h| h.item == area.item)
                 || !area.bounds.contains_point(p)
                 || !point_in_polygon(&area.ring, p)
             {
@@ -423,8 +447,10 @@ impl BoardIndex {
         for area in &self.areas {
             let hit = edges.get(&area.item).copied().unwrap_or(0);
             let selected = match mode {
-                RectSelect::Inside => hit == area.ring.len(),
-                RectSelect::Touching => hit > 0 || point_in_polygon(&area.ring, probe),
+                RectSelect::Inside => hit == area.edges,
+                RectSelect::Touching => {
+                    hit > 0 || (area.inside && point_in_polygon(&area.ring, probe))
+                }
             };
             if selected {
                 items.push(area.item);
@@ -486,8 +512,15 @@ fn add_area(
             let Some(bounds) = RectNm::bounding(ring.iter().copied()) else {
                 return;
             };
+            let count = edges.len();
             items.extend(edges);
-            areas.push(Area { item, ring, bounds });
+            areas.push(Area {
+                item,
+                ring,
+                bounds,
+                edges: count,
+                inside: true,
+            });
         }
         Err(error) => rejected.push(Rejected { item, error }),
     }
@@ -497,7 +530,9 @@ fn add_area(
 fn count_parts(items: &[IndexedItem]) -> BTreeMap<ItemRef, usize> {
     let mut parts = BTreeMap::new();
     for indexed in items {
-        if indexed.item.is_multi_part() && !matches!(indexed.item, ItemRef::Zone { .. }) {
+        if indexed.item.is_multi_part()
+            && !matches!(indexed.item, ItemRef::Zone { .. } | ItemRef::Graphic { .. })
+        {
             *parts.entry(indexed.item).or_default() += 1;
         }
     }

@@ -7,6 +7,7 @@
 //! colour and dimmed. Esc or a right-click ends the shape being drawn, and
 //! then the tool; a tab switch leaves it behind. Properties shows what the
 //! next click places, and Tab pauses placing to edit it (`form`, #2393).
+//! The Graphics tools draw on non-copper layers (`graphic`, #2424).
 
 use std::path::PathBuf;
 
@@ -25,6 +26,7 @@ mod area;
 mod form;
 mod free;
 mod free_form;
+mod graphic;
 mod pour_cut;
 mod route;
 mod router;
@@ -44,6 +46,8 @@ mod area_tests;
 mod form_tests;
 #[cfg(test)]
 mod free_tests;
+#[cfg(test)]
+mod graphic_tests;
 #[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
@@ -285,6 +289,11 @@ impl Signex {
             | BoardPlaceTool::Keepout => {
                 self.area_clicked(tool, at);
             }
+            BoardPlaceTool::Line
+            | BoardPlaceTool::GraphicArc
+            | BoardPlaceTool::FullCircle
+            | BoardPlaceTool::Rectangle
+            | BoardPlaceTool::TextFrame => self.graphic_clicked(tool, at),
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {
@@ -331,6 +340,11 @@ impl Signex {
             | BoardPlaceTool::Keepout => {
                 self.area_preview(session, board, cursor, &mut preview);
             }
+            BoardPlaceTool::Line
+            | BoardPlaceTool::GraphicArc
+            | BoardPlaceTool::FullCircle
+            | BoardPlaceTool::Rectangle
+            | BoardPlaceTool::TextFrame => self.graphic_preview(session, cursor, &mut preview),
             _ => return None,
         }
         Some(preview)

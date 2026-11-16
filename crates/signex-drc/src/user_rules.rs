@@ -61,7 +61,8 @@ impl CopperObject {
             ItemRef::Footprint(_)
             | ItemRef::Zone { .. }
             | ItemRef::Text(_)
-            | ItemRef::Dimension(_) => None,
+            | ItemRef::Dimension(_)
+            | ItemRef::Graphic { .. } => None,
         }
     }
 }

@@ -294,17 +294,21 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 /// Place on a board: the board placement tools, each running the command its
 /// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), then Board
-/// Sketch, which draws the outline, cutouts and keepouts.
+/// the board editor cannot run it (one table, #2352, #2373), the Graphics
+/// submenu of drawings on non-copper layers (#2424), then Board Sketch,
+/// which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU
-        .into_iter()
-        .map(|tool| match tool.state() {
-            ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
-            ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
-        })
-        .collect();
-    rows.extend([SEP, cmd_item_gated(ctx, cmd("board_sketch", ""))]);
+    let row = |tool: BoardPlaceTool| match tool.state() {
+        ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
+        ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
+    };
+    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU.into_iter().map(row).collect();
+    let graphics = BoardPlaceTool::GRAPHICS_MENU.into_iter().map(row).collect();
+    rows.extend([
+        submenu(ctx, menu_ids::MENU_PLACE_GRAPHICS, graphics),
+        SEP,
+        cmd_item_gated(ctx, cmd("board_sketch", "")),
+    ]);
     rows
 }
 

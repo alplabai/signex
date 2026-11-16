@@ -1,12 +1,16 @@
-//! Replace tracks, vias, zones and texts in place, keeping their uuid and
-//! list index: the edit behind a primitive's Properties fields (#2355).
+//! Replace tracks, vias, zones, texts and drawings in place, keeping their
+//! uuid and list index: the edit behind a primitive's Properties fields
+//! (#2355, #2424).
 
 use std::collections::{BTreeSet, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{BoardText, LayerSizes, Pad, PcbBoard, Segment, Via, ViaType};
+use signex_types::pcb::{
+    BoardGraphic, BoardText, LayerSizes, Pad, PcbBoard, Segment, Via, ViaType,
+};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_graphic::takes_board_graphics;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::{LayerSizesFault, board_copper_layers, size_storable};
 use uuid::Uuid;
@@ -60,6 +64,7 @@ pub(super) fn replace(
                     check_dimension(&board.free.dimensions[index], new)?;
                 }
                 BoardItem::Footprint(_) | BoardItem::Zone(_) => {}
+                BoardItem::Graphic(new) => check_graphic(&board.graphics[index], new)?,
             }
         }
         slots.push(index);
@@ -243,6 +248,25 @@ fn check_text_layer(old: &str, new: &str) -> Result<(), BoardCommandError> {
     let takes_text = parse_pcb_layer(new).is_some_and(|l| l.takes_text());
     if new != old && !takes_text {
         return Err(BoardCommandError::NotTextLayer(new.to_string()));
+    }
+    Ok(())
+}
+
+/// A board drawing's width, radius and text height are not negative; a
+/// changed layer is one a drawing may go on (#2424).
+fn check_graphic(old: &BoardGraphic, new: &BoardGraphic) -> Result<(), BoardCommandError> {
+    for (value, field) in [
+        (new.width, "line width"),
+        (new.radius, "radius"),
+        (new.font_size, "text height"),
+    ] {
+        if value < 0.0 {
+            return Err(BoardCommandError::Negative { field });
+        }
+    }
+    let allowed = parse_pcb_layer(&new.layer).is_some_and(takes_board_graphics);
+    if new.layer != old.layer && !allowed {
+        return Err(BoardCommandError::NotGraphicLayer(new.layer.clone()));
     }
     Ok(())
 }

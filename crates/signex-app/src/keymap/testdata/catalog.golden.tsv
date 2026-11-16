@@ -280,6 +280,13 @@ place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocume
 place_board_string	place	Place a string on the active overlay, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_dimension	place	Place a linear dimension on the board	Dimension	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 cycle_arc_mode	pcb	Switch the Arc tool between by centre, by edge and any angle	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+place_board_line	place	Draw lines on the active non-copper layer	Line	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_graphic_arc	place	Draw an arc by its centre, start and end on the active non-copper layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_circle	place	Draw a full circle by its centre and a point on it on the active non-copper layer	Full Circle	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_rectangle	place	Draw a rectangle by two corners on the active non-copper layer	Rectangle	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_text_frame	place	Place text wrapped in a box on the active non-copper layer	Text Frame	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+add_board_graphic	place	Add a line, arc, circle, rectangle or text frame to a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,kind:text,at:point/mm?,start:point/mm?,end:point/mm?,layer:text?,text:text?
+set_board_graphic	edit	Set one field of a board drawing	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,field:text,value:text
 show_layer_set	view	Show a layer set on the board view	Show Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 save_layer_set	view	Save the shown layers as a layer set	Save Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 delete_layer_set	view	Delete a saved layer set	Delete Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text

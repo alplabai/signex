@@ -352,6 +352,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
+        // #2424: the Graphics tools.
+        "place_board_line" => board_tool(BoardPlaceTool::Line),
+        "place_board_graphic_arc" => board_tool(BoardPlaceTool::GraphicArc),
+        "place_board_circle" => board_tool(BoardPlaceTool::FullCircle),
+        "place_board_rectangle" => board_tool(BoardPlaceTool::Rectangle),
+        "place_board_text_frame" => board_tool(BoardPlaceTool::TextFrame),
         "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
         "import_dxf" => crate::app::handlers::pcb_dxf_import::requested(false),
         "import_dxf_outline" => crate::app::handlers::pcb_dxf_import::requested(true),

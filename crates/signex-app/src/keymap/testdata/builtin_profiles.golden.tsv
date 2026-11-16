@@ -386,6 +386,13 @@ altium	hint	-	-	repour_selected
 altium	hint	-	-	repour_all
 altium	hint	-	-	place_board_route
 altium	hint	-	-	cycle_route_mode
+altium	hint	-	-	place_board_line
+altium	hint	-	-	place_board_graphic_arc
+altium	hint	-	-	place_board_circle
+altium	hint	-	-	place_board_rectangle
+altium	hint	-	-	place_board_text_frame
+altium	hint	-	-	add_board_graphic
+altium	hint	-	-	set_board_graphic
 altium	hint	-	-	board_report_bom
 altium	hint	-	-	board_report_netlist
 altium	hint	-	-	board_report_net_length
@@ -822,6 +829,13 @@ classic	hint	-	-	repour_selected
 classic	hint	-	-	repour_all
 classic	hint	-	-	place_board_route
 classic	hint	-	-	cycle_route_mode
+classic	hint	-	-	place_board_line
+classic	hint	-	-	place_board_graphic_arc
+classic	hint	-	-	place_board_circle
+classic	hint	-	-	place_board_rectangle
+classic	hint	-	-	place_board_text_frame
+classic	hint	-	-	add_board_graphic
+classic	hint	-	-	set_board_graphic
 classic	hint	-	-	board_report_bom
 classic	hint	-	-	board_report_netlist
 classic	hint	-	-	board_report_net_length

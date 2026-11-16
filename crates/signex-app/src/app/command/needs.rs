@@ -383,9 +383,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_arc"
         | "place_board_string"
         | "place_board_dimension"
+        // #2424: the Graphics tools.
+        | "place_board_line"
+        | "place_board_graphic_arc"
+        | "place_board_circle"
+        | "place_board_rectangle"
+        | "place_board_text_frame"
         | "board_sketch" => Needs::EditablePcb,
         // #2389, #2373: the routing and arc modes change no board.
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
+        // #2424: a drawing's edits on the board `document` names.
+        "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"

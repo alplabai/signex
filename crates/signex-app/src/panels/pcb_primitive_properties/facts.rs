@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
 use signex_types::pcb::{MaskExpansion, PadShape};
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 
@@ -90,6 +91,9 @@ pub enum PrimitiveField {
     Priority,
     /// The smallest island a polygon pour keeps, in mm² (#2216).
     MinIslandArea,
+    /// An arc's or circle's centre on a board drawing (#2424).
+    CenterX,
+    CenterY,
 }
 
 /// An on / off setting of a track or via (#2378).
@@ -417,6 +421,27 @@ pub struct DimensionFacts {
     pub layers: Vec<AreaLayerChoice>,
 }
 
+/// Board drawings (#2424): lines, arcs, circles, rectangles and text
+/// frames. Coordinates are shown from the board origin, Y up. A value the
+/// drawings do not share is `None`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicFacts {
+    pub common: PrimitiveCommon,
+    /// The kind every selected drawing is; `None` when they differ.
+    pub kind: Option<BoardGraphicKind>,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers a drawing can move to.
+    pub layers: Vec<AreaLayerChoice>,
+    pub width: Option<f64>,
+    pub start: (Option<f64>, Option<f64>),
+    pub end: (Option<f64>, Option<f64>),
+    pub center: (Option<f64>, Option<f64>),
+    pub radius: Option<f64>,
+    /// A text frame's text as the field shows it (`\n` for a line break).
+    pub text: Option<String>,
+    pub text_height: Option<f64>,
+}
+
 /// The selection the Properties panel shows as a primitive. A free pad
 /// shows the pad panel.
 #[derive(Debug, Clone, PartialEq)]
@@ -428,6 +453,7 @@ pub enum PcbPrimitiveFacts {
     Arc(ArcFacts),
     Text(TextFacts),
     Dimension(DimensionFacts),
+    Graphic(GraphicFacts),
 }
 
 impl PcbPrimitiveFacts {
@@ -440,6 +466,7 @@ impl PcbPrimitiveFacts {
             Self::Arc(f) => &f.common,
             Self::Text(f) => &f.common,
             Self::Dimension(f) => &f.common,
+            Self::Graphic(f) => &f.common,
         }
     }
 }

@@ -14,5 +14,11 @@ Place/Slice Pour	item	Slice Pour	-	-	PlaceBoardSlicePour	1
 Place/String	item	String	-	-	PlaceBoardString	1
 Place/Dimension	item	Dimension	-	-	PlaceBoardDimension	1
 Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1
+Place/Graphics	submenu	Graphics	-	-	-	-
+Place/Graphics/Line	item	Line	-	-	PlaceBoardLine	1
+Place/Graphics/Arc	item	Arc	-	-	PlaceBoardGraphicArc	1
+Place/Graphics/Full Circle	item	Full Circle	-	-	PlaceBoardCircle	1
+Place/Graphics/Rectangle	item	Rectangle	-	-	PlaceBoardRectangle	1
+Place/Graphics/Text Frame	item	Text Frame	-	-	PlaceBoardTextFrame	1
 Place/---	separator	-	-	-	-	-
 Place/Board Sketch	item	Board Sketch	-	-	BoardSketch	1

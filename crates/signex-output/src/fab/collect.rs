@@ -9,6 +9,7 @@ use pcb_geom::{
     pad_world_center, pad_world_rotation_deg, via_layers,
 };
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via};
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use super::draw::{Drawing, Drawn, Pen, draw};
@@ -473,6 +474,11 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
             width_override: (layer == FabLayer::Profile).then_some(PROFILE_WIDTH_NM),
         };
         place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
+        // A text frame's box is drawn; its text waits for the stroke font,
+        // as a board text does (#2424).
+        if graphic.kind() == Some(BoardGraphicKind::TextFrame) && !graphic.text.trim().is_empty() {
+            tally.texts += 1;
+        }
     }
     tally.texts += board
         .texts

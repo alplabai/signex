@@ -176,7 +176,12 @@ impl Builder {
         center: Option<Point>,
         radius: f64,
     ) {
+        // An id space of its own (#2424), so the other items keep theirs.
+        let n = self.board.graphics.len() as u128 + 1;
+        let uuid =
+            Uuid::from_u128(0x6a0d_0000_0000_4000_8000_0000_0000_0000 | self.board_no << 80 | n);
         self.board.graphics.push(BoardGraphic {
+            uuid,
             graphic_type: kind.into(),
             layer: "EdgeCuts".into(),
             width: 0.05,
@@ -185,6 +190,8 @@ impl Builder {
             center,
             radius,
             points: Vec::new(),
+            text: String::new(),
+            font_size: 0.0,
         });
     }
 

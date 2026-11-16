@@ -9,7 +9,7 @@
 //! by it), so only a footprint carrying the board's own id is re-minted. A
 //! pad copied onto another footprint with the same id is never dropped (the
 //! other footprint is a different owner), only re-minted; footprint graphics
-//! carry no id.
+//! carry no id. Board drawings carry one since #2424.
 
 use super::load_repair::{SheetLoadRepair, kind};
 use super::uuid_repair::{IdSpace, by_field, no_name};
@@ -62,6 +62,20 @@ pub(super) fn repair_duplicate_uuids(board: &mut PcbBoard) -> Vec<SheetLoadRepai
         kind::DIMENSION,
         None,
         by_field!(no_name),
+    );
+    // A drawing written before #2424 has no id (nil). It gets a derived one
+    // without a repair note: an id it never had is no repeat, and two equal
+    // old drawings must both stay.
+    for (index, graphic) in board.graphics.iter_mut().enumerate() {
+        if graphic.uuid.is_nil() {
+            graphic.uuid = ids.mint(kind::BOARD_GRAPHIC, index + 1);
+        }
+    }
+    ids.check(
+        &mut board.graphics,
+        kind::BOARD_GRAPHIC,
+        None,
+        by_field!(|g| g.graphic_type.clone()),
     );
     ids.into_repairs()
 }

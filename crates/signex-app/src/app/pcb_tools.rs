@@ -1,11 +1,13 @@
-//! The board placement tools (#2352, #2360, #2373, #2389, #2216). One table, so the PCB
-//! Active Bar and the Place menu on a board run the same command for a live
-//! tool, and grey the same set with the same reason for a tool the board
-//! editor cannot run yet.
+//! The board placement tools (#2352, #2360, #2373, #2389, #2216, #2424). One
+//! table, so the PCB Active Bar and the Place menu on a board run the same
+//! command for a live tool, and grey the same set with the same reason for a
+//! tool the board editor cannot run yet.
 
 use signex_i18n::{MessageId, ids};
+use signex_types::pcb_graphic::BoardGraphicKind;
 
-/// A board placement tool, in the Place menu's order.
+/// A board placement tool, in the Place menu's order, then the Graphics
+/// tools in Place ▸ Graphics order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardPlaceTool {
     Component,
@@ -22,6 +24,14 @@ pub enum BoardPlaceTool {
     TextString,
     Dimension,
     Keepout,
+    /// A line on a non-copper layer (#2424).
+    Line,
+    /// An arc on a non-copper layer by its centre, start and end; `Arc` is
+    /// the copper one.
+    GraphicArc,
+    FullCircle,
+    Rectangle,
+    TextFrame,
 }
 
 /// Whether a tool runs on a board yet.
@@ -53,6 +63,15 @@ impl BoardPlaceTool {
         Self::Keepout,
     ];
 
+    /// Place ▸ Graphics on a board, top to bottom (#2424).
+    pub(crate) const GRAPHICS_MENU: [Self; 5] = [
+        Self::Line,
+        Self::GraphicArc,
+        Self::FullCircle,
+        Self::Rectangle,
+        Self::TextFrame,
+    ];
+
     pub(crate) fn state(self) -> ToolState {
         use ToolState::{Live, Unavailable};
         match self {
@@ -69,6 +88,11 @@ impl BoardPlaceTool {
             Self::Arc => Live("place_board_arc"),
             Self::TextString => Live("place_board_string"),
             Self::Dimension => Live("place_board_dimension"),
+            Self::Line => Live("place_board_line"),
+            Self::GraphicArc => Live("place_board_graphic_arc"),
+            Self::FullCircle => Live("place_board_circle"),
+            Self::Rectangle => Live("place_board_rectangle"),
+            Self::TextFrame => Live("place_board_text_frame"),
             Self::Component => Unavailable(ids::PCB_BAR_COMPONENT_UNAVAILABLE),
         }
     }
@@ -99,6 +123,11 @@ impl BoardPlaceTool {
             Self::TextString => ids::PCB_TOOL_STRING,
             Self::Dimension => ids::PCB_TOOL_DIMENSION,
             Self::Keepout => ids::PCB_TOOL_KEEPOUT,
+            Self::Line => ids::PCB_TOOL_LINE,
+            Self::GraphicArc => ids::PCB_TOOL_GRAPHIC_ARC,
+            Self::FullCircle => ids::PCB_TOOL_FULL_CIRCLE,
+            Self::Rectangle => ids::PCB_TOOL_RECTANGLE,
+            Self::TextFrame => ids::PCB_TOOL_TEXT_FRAME,
         }
     }
 
@@ -127,6 +156,41 @@ impl BoardPlaceTool {
             Self::TextString => (ids::PCB_BAR_STRING_TOOLTIP, ids::PCB_TOOL_HINT_STRING),
             Self::Dimension => (ids::PCB_BAR_DIMENSION_TOOLTIP, ids::PCB_TOOL_HINT_DIMENSION),
             Self::Component => (Self::Component.name(), Self::Component.name()),
+            Self::Line => (ids::PCB_BAR_LINE_TOOLTIP, ids::PCB_TOOL_HINT_LINE),
+            Self::GraphicArc => (
+                ids::PCB_BAR_GRAPHIC_ARC_TOOLTIP,
+                ids::PCB_TOOL_HINT_GRAPHIC_ARC,
+            ),
+            Self::FullCircle => (ids::PCB_BAR_CIRCLE_TOOLTIP, ids::PCB_TOOL_HINT_CIRCLE),
+            Self::Rectangle => (ids::PCB_BAR_RECTANGLE_TOOLTIP, ids::PCB_TOOL_HINT_RECTANGLE),
+            Self::TextFrame => (
+                ids::PCB_BAR_TEXT_FRAME_TOOLTIP,
+                ids::PCB_TOOL_HINT_TEXT_FRAME,
+            ),
         }
+    }
+
+    /// The Graphics tool that places a drawing of `kind`: its name names the
+    /// kind in Properties and undo labels.
+    pub(crate) fn for_graphic(kind: BoardGraphicKind) -> Self {
+        match kind {
+            BoardGraphicKind::Line => Self::Line,
+            BoardGraphicKind::Arc => Self::GraphicArc,
+            BoardGraphicKind::Circle => Self::FullCircle,
+            BoardGraphicKind::Rectangle => Self::Rectangle,
+            BoardGraphicKind::TextFrame => Self::TextFrame,
+        }
+    }
+
+    /// The board drawing a Graphics tool places; `None` for another tool.
+    pub(crate) fn graphic_kind(self) -> Option<BoardGraphicKind> {
+        Some(match self {
+            Self::Line => BoardGraphicKind::Line,
+            Self::GraphicArc => BoardGraphicKind::Arc,
+            Self::FullCircle => BoardGraphicKind::Circle,
+            Self::Rectangle => BoardGraphicKind::Rectangle,
+            Self::TextFrame => BoardGraphicKind::TextFrame,
+            _ => return None,
+        })
     }
 }

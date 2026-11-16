@@ -511,8 +511,14 @@ pub struct Zone {
 // Board-level graphics and text
 // ---------------------------------------------------------------------------
 
+/// A board drawing on a non-copper layer: a line, arc, circle, rectangle or
+/// text frame (#2424; kinds in [`crate::pcb_graphic`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BoardGraphic {
+    /// Shares the board's one id space with the other board items. A file
+    /// written before #2424 has none; loading derives one per drawing.
+    #[serde(default)]
+    pub uuid: Uuid,
     #[serde(default)]
     pub graphic_type: String,
     #[serde(default)]
@@ -526,6 +532,16 @@ pub struct BoardGraphic {
     pub radius: f64,
     #[serde(default)]
     pub points: Vec<Point>,
+    /// A text frame's text; `\n` breaks a line. Not written when empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    /// A text frame's text height in mm. Not written when 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub font_size: f64,
+}
+
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

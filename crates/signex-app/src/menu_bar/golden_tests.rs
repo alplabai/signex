@@ -310,6 +310,12 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_arc", "PlaceBoardArc"),
     ("place_board_string", "PlaceBoardString"),
     ("place_board_dimension", "PlaceBoardDimension"),
+    // #2424: Place ▸ Graphics on a board, fixture names only.
+    ("place_board_line", "PlaceBoardLine"),
+    ("place_board_graphic_arc", "PlaceBoardGraphicArc"),
+    ("place_board_circle", "PlaceBoardCircle"),
+    ("place_board_rectangle", "PlaceBoardRectangle"),
+    ("place_board_text_frame", "PlaceBoardTextFrame"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),

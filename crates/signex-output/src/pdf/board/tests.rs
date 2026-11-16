@@ -247,6 +247,52 @@ fn a_solid_zone_still_prints_filled() {
     assert_eq!(ops.matches("f*\n").count(), 1, "{ops}");
 }
 
+/// The operators a top-set page of `board` draws.
+fn top_page_ops(board: &PcbBoard) -> String {
+    let print = options(&[BoardLayerSet::Top], BoardPrintPages::PerSet);
+    let page = print.page_size.dimensions_mm(print.orientation);
+    let frame = PageFrame::new(board, &print, page, false);
+    let fills = pcb_geom::zone_fills(board);
+    let mut fonts = crate::pdf::embed::FontUsage::new();
+    let mut surface = PdfSurface::new(&mut fonts);
+    draw::page(
+        &mut surface,
+        board,
+        &fills,
+        &print,
+        &frame,
+        &[BoardLayerSet::Top],
+    );
+    String::from_utf8(surface.finish()).expect("ops")
+}
+
+/// #2424: a text frame prints its box and one text per line.
+#[test]
+fn a_text_frame_prints_its_box_and_lines() {
+    let board = fixture();
+    let mut framed = board.clone();
+    framed.graphics.push(
+        serde_json::from_value(serde_json::json!({
+            "uuid": uuid::Uuid::from_u128(0x2424),
+            "graphic_type": "text_frame", "layer": "TopSilkscreen", "width": 0.1,
+            "start": {"x": 5.0, "y": 5.0}, "end": {"x": 25.0, "y": 12.0},
+            "text": "FIRST\nSECOND", "font_size": 1.5
+        }))
+        .expect("a text frame"),
+    );
+    let (before, after) = (top_page_ops(&board), top_page_ops(&framed));
+    assert_eq!(
+        after.matches("BT\n").count(),
+        before.matches("BT\n").count() + 2,
+        "one text per line"
+    );
+    assert_eq!(
+        after.matches("S\n").count(),
+        before.matches("S\n").count() + 1,
+        "the box is stroked"
+    );
+}
+
 #[test]
 fn a_one_to_one_board_larger_than_the_page_is_flagged() {
     let mut board = fixture();

@@ -1,6 +1,6 @@
 //! The PCB Active Bar (#2352): selection filter, move, align | components |
-//! route | via and pad, copper areas, copper drawing | dimensions, text |
-//! board sketch, fabrication outputs | view.
+//! route | via and pad, copper areas, copper drawing | dimensions, text,
+//! graphics | board sketch, fabrication outputs | view.
 //!
 //! Every live button runs its command through the menu bar's own message, so
 //! a click is the menu row. The tool groups (#2392, `groups.rs`) show the row
@@ -282,7 +282,11 @@ const BAR_GROUPS: [&[PcbBarGroup]; 4] = [
         PcbBarGroup::CopperAreas,
         PcbBarGroup::CopperDrawing,
     ],
-    &[PcbBarGroup::Dimensions, PcbBarGroup::Text],
+    &[
+        PcbBarGroup::Dimensions,
+        PcbBarGroup::Text,
+        PcbBarGroup::Graphics,
+    ],
 ];
 
 /// The bar icon of `tool`: the footprint editor's where one fits, its
@@ -305,6 +309,11 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::TextString => svg(ic::icon_text(tid)),
         T::Dimension => ActiveBarIcon::Glyph("\u{2194}"),
         T::Keepout => ActiveBarIcon::Glyph("\u{2298}"),
+        T::Line => svg(ic::icon_shape_line(tid)),
+        T::GraphicArc => svg(ic::icon_shape_arc(tid)),
+        T::FullCircle => svg(ic::icon_shape_circle(tid)),
+        T::Rectangle => svg(ic::icon_shape_rect(tid)),
+        T::TextFrame => svg(ic::icon_dd_text_frame(tid)),
     }
 }
 

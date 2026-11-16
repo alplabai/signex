@@ -16,6 +16,9 @@ mod agent_edit_tests;
 mod agent_edits;
 mod args;
 mod board_edit_operands;
+#[cfg(test)]
+mod board_graphic_operand_tests;
+mod board_graphic_operands;
 mod board_operands;
 pub(crate) mod bridge;
 #[cfg(test)]

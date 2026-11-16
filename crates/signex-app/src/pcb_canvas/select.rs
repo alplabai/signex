@@ -472,6 +472,17 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
         }
     }
     hidden_free_items(board, view, &mut hidden);
+    for graphic in &board.graphics {
+        let Some(kind) = graphic.kind() else {
+            continue;
+        };
+        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+            hidden.insert(ItemRef::Graphic {
+                graphic: graphic.uuid,
+                kind: pcb_geom::PickKind::of_graphic(kind),
+            });
+        }
+    }
     hidden
 }
 
@@ -535,6 +546,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Arc(id) => format!("arc {id}"),
         ItemRef::FreePad(id) => format!("free pad {id}"),
         ItemRef::Dimension(id) => format!("dimension {id}"),
+        ItemRef::Graphic { graphic, .. } => format!("drawing {graphic}"),
     }
 }
 

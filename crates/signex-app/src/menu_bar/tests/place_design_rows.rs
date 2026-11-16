@@ -528,6 +528,24 @@ fn place_on_a_board_lists_the_boards_tools() {
     assert!(app.board_sketch_in_view().is_some(), "sketch mode is on");
 }
 
+/// #2424: each row of Place ▸ Graphics on a board arms its Graphics tool.
+#[test]
+fn place_graphics_on_a_board_arms_each_graphics_tool() {
+    use crate::app::pcb_tools::BoardPlaceTool as T;
+    for (row, tool) in [
+        ("Place/Graphics/Line", T::Line),
+        ("Place/Graphics/Arc", T::GraphicArc),
+        ("Place/Graphics/Full Circle", T::FullCircle),
+        ("Place/Graphics/Rectangle", T::Rectangle),
+        ("Place/Graphics/Text Frame", T::TextFrame),
+    ] {
+        let mut app = loaded_board_app();
+        let _ = click(&mut app, row);
+        let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
+        assert_eq!(armed, Some(tool), "{row}");
+    }
+}
+
 /// #2360: a sheet keeps its Place menu.
 #[test]
 fn place_on_a_sheet_keeps_the_sheets_rows() {

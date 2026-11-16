@@ -78,6 +78,9 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Fill),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Keepout),
         (PcbBarGroup::CopperDrawing, BoardPlaceTool::Track),
+        // #2424: the Graphics group.
+        (PcbBarGroup::Graphics, BoardPlaceTool::GraphicArc),
+        (PcbBarGroup::Graphics, BoardPlaceTool::TextFrame),
     ];
     let mut app = board_app();
     for (group, tool) in cases {

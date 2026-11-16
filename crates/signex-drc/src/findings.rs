@@ -193,7 +193,8 @@ pub fn item_id(item: &ItemRef) -> String {
         | ItemRef::Text(id)
         | ItemRef::Arc(id)
         | ItemRef::FreePad(id)
-        | ItemRef::Dimension(id) => id.to_string(),
+        | ItemRef::Dimension(id)
+        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
     }
 }
 
@@ -207,6 +208,7 @@ pub(crate) fn item_label(item: &ItemRef) -> String {
         ItemRef::Text(_) => "string",
         ItemRef::Arc(_) => "arc",
         ItemRef::Dimension(_) => "dimension",
+        ItemRef::Graphic { .. } => "drawing",
     };
     format!("{kind} {}", item_id(item))
 }

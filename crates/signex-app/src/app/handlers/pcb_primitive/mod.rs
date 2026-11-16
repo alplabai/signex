@@ -1,4 +1,5 @@
-//! The track, via, pad and area panels' events (#2355, #2393). A typed field keeps a
+//! The track, via, pad, area and drawing panels' events (#2355, #2393,
+//! #2424). A typed field keeps a
 //! draft until Enter; Enter, a dropdown pick or a net picked on the board
 //! is one board undo step through `execute_board_commands`. The commands
 //! come from `signex_engine::pcb::primitive_edit`; a refusal changes
@@ -8,6 +9,7 @@
 
 mod facts;
 mod free;
+mod graphic;
 mod links;
 mod placement;
 mod stack_facts;
@@ -17,6 +19,7 @@ mod zone;
 #[cfg(test)]
 mod tune_tests;
 
+pub(crate) use graphic::graphic_edit;
 pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
@@ -79,7 +82,7 @@ impl PcbPrimitivePanel {
 pub(crate) enum PrimitiveEdit {
     Number(PrimitiveField, f64),
     Designator(String),
-    /// A string's text (#2373).
+    /// A string's text (#2373), or a text frame's as the board holds it (#2424).
     Text(String),
     Layer(CopperLayer),
     /// An area's layer: copper, or a keep-out layer for a keepout.
@@ -234,7 +237,13 @@ impl Signex {
     ) {
         let what = field_name(field);
         let edit = if field == PrimitiveField::Text {
-            PrimitiveEdit::Text(text.to_string())
+            // A text frame reads a typed `\n` as a line break (#2424); a string
+            // keeps the text as typed (#2373).
+            if matches!(target.items.first(), Some(ItemRef::Graphic { .. })) {
+                PrimitiveEdit::Text(signex_types::pcb_graphic::text_from_field(text))
+            } else {
+                PrimitiveEdit::Text(text.to_string())
+            }
         } else if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())
         } else {
@@ -343,6 +352,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Precision => ids::PCB_PRIM_PRECISION,
         F::Priority => ids::PCB_PRIM_PRIORITY,
         F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
+        F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
     }
 }
 
@@ -352,10 +362,10 @@ fn in_board(board: &PcbBoard, edit: &PrimitiveEdit) -> PrimitiveEdit {
     use PrimitiveField as F;
     let origin = board.options.origin;
     match *edit {
-        PrimitiveEdit::Number(field @ (F::X | F::StartX | F::EndX), v) => {
+        PrimitiveEdit::Number(field @ (F::X | F::StartX | F::EndX | F::CenterX), v) => {
             PrimitiveEdit::Number(field, origin.board_x(v))
         }
-        PrimitiveEdit::Number(field @ (F::Y | F::StartY | F::EndY), v) => {
+        PrimitiveEdit::Number(field @ (F::Y | F::StartY | F::EndY | F::CenterY), v) => {
             PrimitiveEdit::Number(field, origin.board_y(v))
         }
         _ => edit.clone(),
@@ -414,6 +424,7 @@ fn primitive_command(
         Some(ItemRef::Arc(_) | ItemRef::Text(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_)) => {
             free::free_command(board, items, edit)
         }
+        Some(ItemRef::Graphic { .. }) => graphic::graphic_command(board, items, edit),
         Some(ItemRef::Footprint(_)) | None => Ok(None),
     }
 }

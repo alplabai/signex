@@ -70,6 +70,11 @@ pub struct BoardToolDefaults {
     pub pour_priority: Option<f64>,
     pub pour_min_island_mm2: Option<f64>,
     pub pour_remove_dead_islands: Option<bool>,
+    /// The line width of a drawing the Graphics tools place (#2424).
+    pub graphic_width_mm: Option<f64>,
+    /// A text frame's text; `None` reads the catalog's new-frame text.
+    pub frame_text: Option<String>,
+    pub frame_text_height_mm: Option<f64>,
 }
 
 impl BoardToolDefaults {
@@ -140,6 +145,7 @@ pub(crate) fn has_form(tool: BoardPlaceTool) -> bool {
             | BoardPlaceTool::TextString
             | BoardPlaceTool::Dimension
     ) || is_area(tool)
+        || tool.graphic_kind().is_some()
 }
 
 /// Whether `tool` places a free pad, arc, string or dimension (#2373),
@@ -278,6 +284,10 @@ impl Signex {
             return;
         };
         let (tool, window) = (session.tool, session.window);
+        if tool.graphic_kind().is_some() {
+            self.edit_graphic_tool_value(edit, what);
+            return;
+        }
         let layer = match edit {
             PrimitiveEdit::Layer(layer) => Some(PcbLayer::Copper(*layer)),
             PrimitiveEdit::AreaLayer(layer) => Some(*layer),

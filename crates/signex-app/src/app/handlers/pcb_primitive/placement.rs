@@ -8,6 +8,7 @@ use signex_types::pcb::PcbBoard;
 
 use super::facts::{pad_facts, track_facts, via_facts};
 use super::free::{arc_facts, dimension_facts, text_facts};
+use super::graphic::graphic_facts;
 use super::zone::zone_facts;
 use crate::app::Signex;
 use crate::app::handlers::pcb_tool::{arc_mode_name, has_form};
@@ -85,6 +86,14 @@ impl Signex {
                     self.primitive_common_on(board, target, Editability::Editable, None);
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Dimension(dimension_facts(board, common, &[&dimension], i18n))
+            }
+            // #2424: a drawing has no net.
+            tool if tool.graphic_kind().is_some() => {
+                let graphic = self.next_board_graphic()?;
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, None);
+                common.placement_paused = paused;
+                PcbPrimitiveFacts::Graphic(graphic_facts(board, common, &[&graphic], i18n))
             }
             tool => {
                 let kind = area_kind(tool)?;

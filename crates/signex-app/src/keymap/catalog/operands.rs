@@ -430,6 +430,31 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
 ];
+/// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
+/// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
+/// line, rectangle or text frame takes `start` and `end`; an arc its centre
+/// `at`, `start` and `end`; a circle its centre `at` and a point `end` on it.
+/// `layer` is a layer name (`TopSilkscreen`), else the active layer;
+/// `text` is a text frame's text.
+pub const BOARD_GRAPHIC_ADD: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    optional("at", OperandKind::Point),
+    optional("start", OperandKind::Point),
+    optional("end", OperandKind::Point),
+    optional("layer", OperandKind::Text),
+    optional("text", OperandKind::Text),
+];
+/// `set_board_graphic` (#2424): one `field` (`layer`, `width`, `start_x`,
+/// `start_y`, `end_x`, `end_y`, `center_x`, `center_y`, `radius`, `text`,
+/// `text_height`) of the drawing `id` set to `value`; lengths in mm, X and
+/// Y from the board origin with Y up, as Properties shows them.
+pub const BOARD_GRAPHIC_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
 /// A save dialog's answer for the named document.
 pub const SAVE_DOCUMENT_AS: &[Operand] = &[
     required("document", OperandKind::Document),

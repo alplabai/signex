@@ -232,6 +232,14 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "rules_preset_apply",
         "it writes the project's rule set, which no sheet's undo step covers",
     ),
+    (
+        "add_board_graphic",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_board_graphic",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 const BOARD_EDIT: &str =
