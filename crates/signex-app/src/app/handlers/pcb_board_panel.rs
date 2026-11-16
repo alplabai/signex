@@ -220,10 +220,6 @@ impl Signex {
     }
 }
 
-#[cfg(test)]
-#[path = "pcb_board_panel_tests.rs"]
-mod tests;
-
 /// The task that runs catalog command `id` as its menu row does.
 fn run_menu_command(id: &str) -> Task<Message> {
     match crate::keymap::AppCommandId::new(id) {
@@ -231,3 +227,7 @@ fn run_menu_command(id: &str) -> Task<Message> {
         Err(_) => Task::none(),
     }
 }
+
+#[cfg(test)]
+#[path = "pcb_board_panel_tests.rs"]
+mod tests;
