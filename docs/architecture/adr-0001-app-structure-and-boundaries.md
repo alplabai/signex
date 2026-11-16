@@ -1,7 +1,7 @@
 # ADR-0001 — App structure, MVU, and domain boundaries
 
 - **Status:** Proposed
-- **Amended:** on the date #2327 merges (the merger sets it here) by [ADR-0006](adr-0006-application-core.md), epic #2326: one iced-free application core shared by every front end. The amended parts carry a short *Amended (#2326)* note: A1 (Model, side effects), A2 (the application layer), A3.2, A4 (a pointer), D1, D5, D8, and three Part C bullets.
+- **Amended:** 2026-11-16 by [ADR-0006](adr-0006-application-core.md), epic #2326: one iced-free application core shared by every front end. The amended parts carry a short *Amended (#2326)* note: A1 (Model, side effects), A2 (the application layer), A3.2, A4 (a pointer), D1, D5, D8, and three Part C bullets.
 - **Scope:** `crates/signex-app` internals, the MVU contract, message design, the domain model, and crate-boundary discipline
 - **Framing:** This records *what we do* (target decisions) and the *principles they rest on*. It was written after auditing the workspace against a reference "Cargo workspace + Clean Architecture + Modular Monolith + MVU" layout. That reference is CRUD/database-shaped and only partially transfers; the decisions below keep what fits a single-process, Iced/MVU, canvas-heavy EDA tool and drop what does not.
 
