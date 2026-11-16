@@ -658,10 +658,14 @@ impl canvas::Program<Message> for PcbCanvas {
                 }
             }
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                // A press outside the board belongs to the widget under it:
+                // the layer tabs under the canvas open their menu (#2379).
+                if matches!(button, mouse::Button::Right | mouse::Button::Middle)
+                    && let Some(pos) = cursor.position_in(bounds)
+                {
                     state.panning = true;
                     state.pan_moved = false;
-                    state.last_pan_pos = cursor.position_in(bounds);
+                    state.last_pan_pos = Some(pos);
                     return Some(canvas::Action::capture());
                 }
             }
