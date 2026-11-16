@@ -1,6 +1,7 @@
 //! #1423 — a Save All that is refused over two case-variant spellings of one
 //! file must keep every spelling dirty, name it, and not let quit close.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::save_all_tests::{

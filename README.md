@@ -250,6 +250,7 @@ signex/
 │   ├── signex-library/        # .snxlib component library — port/adapter model (+ signex-library-server)
 │   ├── signex-widgets/        # Reusable iced widgets (tree view, active bar, previews)
 │   ├── signex-i18n/           # UI message catalogs (Fluent) and locale-aware formatting
+│   ├── signex-i18n-ids/       # Message ids and Translatable, with no locale dependency
 │   └── signex-3d-model-importer/  # STEP / WRL importer for 3D body attach
 └── Cargo.toml
 ```

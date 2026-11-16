@@ -2,6 +2,7 @@
 //! `update`, but the disk write runs on a blocking task and its outcome comes
 //! back as `ExportMsg::FileWritten`.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use iced::Task;

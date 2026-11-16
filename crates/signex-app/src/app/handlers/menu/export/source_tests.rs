@@ -1,6 +1,7 @@
 //! #833 — an async PDF-export completion exports the document it was started
 //! from, not whichever tab is active when the OS dialog returns.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;

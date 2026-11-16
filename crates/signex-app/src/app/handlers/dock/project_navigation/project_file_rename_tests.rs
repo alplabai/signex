@@ -2,6 +2,7 @@
 //! runs the move on a worker (#859): nothing moves in `update`, the paths are
 //! held until it reports, and a failure or a closed project is reported.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::project_rename_tests::{Fixture, fixture, run_task, submit_rename};

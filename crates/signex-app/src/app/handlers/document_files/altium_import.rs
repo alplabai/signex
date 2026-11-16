@@ -1,6 +1,7 @@
 //! File ▸ Import ▸ Altium Project: run the converter off-thread, then open
 //! what it wrote. The process contract lives in `crate::altium_import`.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use super::super::super::*;

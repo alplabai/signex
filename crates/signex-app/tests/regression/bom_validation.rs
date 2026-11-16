@@ -5,6 +5,7 @@
 
 use signex_app::app::{BomPreviewMsg, ExportMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
+use signex_i18n::RenderTranslatable;
 use signex_output::BomRule;
 use signex_types::schematic::{SchematicSheet, Symbol};
 use std::path::PathBuf;

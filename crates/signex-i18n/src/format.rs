@@ -18,9 +18,9 @@ use icu_decimal::input::Decimal;
 use icu_list::ListFormatter;
 use icu_list::options::{ListFormatterOptions, ListLength};
 
+use crate::LocalNumber;
 use crate::i18n::I18n;
 use crate::numbers::{format_decimal, format_exact};
-use crate::types::LocalNumber;
 
 /// How much of a date or time to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

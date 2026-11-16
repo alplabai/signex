@@ -8,6 +8,7 @@
     reason = "the test re-runs its own binary as a child process"
 )]
 
+use signex_i18n::RenderTranslatable;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

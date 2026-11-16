@@ -1,6 +1,7 @@
 //! #1877 -- an open document changed on disk is reported on the idle poll,
 //! before the user saves, once per change.
 
+use signex_i18n::RenderTranslatable;
 use std::fs;
 use std::path::Path;
 

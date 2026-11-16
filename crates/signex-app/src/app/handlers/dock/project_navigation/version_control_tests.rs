@@ -2,6 +2,7 @@
 //! lands in the Messages panel instead of only being logged.
 
 use super::*;
+use signex_i18n::RenderTranslatable;
 
 fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
     let (mut app, _task) = Signex::new();

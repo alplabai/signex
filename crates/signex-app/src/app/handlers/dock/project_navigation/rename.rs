@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::app::state::scope::CaseFold;
+use signex_i18n::RenderTranslatable;
 
 impl Signex {
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {

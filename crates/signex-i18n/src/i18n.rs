@@ -12,7 +12,7 @@ use crate::bundle::{self, Bundle};
 use crate::catalog::{self, EN_US};
 use crate::ids;
 use crate::locale::{self, LanguagePref};
-use crate::types::{Arg, Localized, MessageId};
+use crate::{Arg, Localized, MessageId};
 
 /// One row of the Language list.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -9,6 +9,7 @@ use crate::app::path_op_jobs::{DeleteJob, run_blocking};
 use crate::app::path_ops::{DeleteDone, DeleteIo, DeleteRequest, PathOpKind};
 use crate::app::project_entry_disk::{EntryPatch, remove_entries};
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
+use signex_i18n::RenderTranslatable;
 
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {

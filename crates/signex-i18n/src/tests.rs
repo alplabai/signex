@@ -75,7 +75,7 @@ fn the_picker_shows_a_saved_tag_the_list_does_not_have() {
 #[test]
 fn a_problem_is_logged_once_however_often_the_message_is_rendered() {
     let en = i18n("en-US");
-    let missing = MessageId::new("no-such-message");
+    let missing = MessageId::unlisted_for_test("no-such-message");
     for _ in 0..3 {
         let _ = t!(en, missing);
     }
@@ -92,7 +92,7 @@ fn a_problem_is_logged_once_however_often_the_message_is_rendered() {
 fn a_message_missing_everywhere_shows_its_id() {
     let en = i18n("en-US");
     assert_eq!(
-        t!(en, MessageId::new("no-such-message")).to_string(),
+        t!(en, MessageId::unlisted_for_test("no-such-message")).to_string(),
         "no-such-message"
     );
 }

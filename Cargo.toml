@@ -24,6 +24,7 @@ members = [
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
     "crates/signex-i18n",
+    "crates/signex-i18n-ids",
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
@@ -49,6 +50,7 @@ default-members = [
     "crates/signex-renderer",
     "crates/signex-widgets",
     "crates/signex-i18n",
+    "crates/signex-i18n-ids",
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
@@ -112,6 +114,7 @@ signex-gfx = { path = "crates/signex-gfx" }
 signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-i18n = { path = "crates/signex-i18n" }
+signex-i18n-ids = { path = "crates/signex-i18n-ids" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-drc = { path = "crates/signex-drc" }

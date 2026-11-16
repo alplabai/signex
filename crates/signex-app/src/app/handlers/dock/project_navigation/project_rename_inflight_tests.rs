@@ -4,6 +4,7 @@
 //! documents to the new folder.
 
 use super::project_rename_tests::{Fixture, fixture, rename_error, run_task, submit_rename};
+use signex_i18n::RenderTranslatable;
 
 fn rename_foo_to_bar(fx: &mut Fixture) -> iced::Task<crate::app::Message> {
     let file = fx.folder.join("Foo.snxprj");

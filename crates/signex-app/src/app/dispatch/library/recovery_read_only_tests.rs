@@ -4,6 +4,7 @@
 use crate::app::{Message, Signex};
 use crate::library::messages::LibraryMessage;
 use crate::library::recovery::{GitMissingChoice, RecoveryDialog};
+use signex_i18n::RenderTranslatable;
 
 /// A real, valid stock `.snxlib` with an empty `.git/` beside it: the
 /// file parses, so `LocalGitAdapter::open` fails only at the git step

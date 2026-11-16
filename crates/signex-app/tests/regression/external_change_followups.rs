@@ -5,6 +5,7 @@
 //!
 //! Real files in a temp folder and every task driven to completion.
 
+use signex_i18n::RenderTranslatable;
 use std::fs;
 use std::path::{Path, PathBuf};
 

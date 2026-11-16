@@ -5,6 +5,7 @@
 //! pass moved off the update loop; any change to them is a change in what the
 //! user's project ends up numbered as.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use signex_types::format::SnxSchematic;

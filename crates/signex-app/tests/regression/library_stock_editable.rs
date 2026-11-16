@@ -4,6 +4,7 @@
 //! The stock library is a copy of `assets/stock-library` in a temp dir, so
 //! the checkout is never written.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
