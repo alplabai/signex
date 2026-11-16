@@ -2,7 +2,7 @@
 
 - **Status:** Accepted 2026-11-16 (#2327, merged by Hakan; Caner's review decisions of 2026-11-15 applied).
 - **Decides on merge:** epic #2326 decisions D0 (this record and the ADR-0001 notes), D1, D2, D3, D5, D7 and D11. Already decided: D10 (web, [maintainer decision 2026-11-15](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348)) and D12 (no event bus, 2026-11-13). The i18n placement below is Caner's decision of 2026-11-15 (`docs/DECISIONS.md`).
-- **Scope:** an iced-free application core shared by the GUI, `signex-cli` and later front ends; the crates `signex-commands`, `signex-i18n-ids` and `signex-workspace` (all planned)
+- **Scope:** an iced-free application core shared by the GUI, `signex-cli` and later front ends; the crates `signex-commands`, `signex-i18n-ids` and `signex-workspace` (`signex-workspace` planned)
 - **Amends:** [ADR-0001](adr-0001-app-structure-and-boundaries.md) A1, A2, A3.2, D1, D5, D8 and three Part C bullets, each of which carries a short note pointing here
 - **Builds on:** [ADR-0003](adr-0003-deferred-work-and-consistent-history.md) (owed work, the boundary flush, late results)
 - **Tracking:** epic #2326, milestone Application Core (`docs/ROADMAP.md`); the slices ship across releases. Sources and the full measurement commands: [the research note](research/hexagonal-ddd.md)
@@ -93,9 +93,9 @@ flowchart TB
     engine --- drc["signex-drc / signex-drc-dsl"]
     engine --- net["signex-net"]
     output["signex-output / signex-bom"] --- library["signex-library"]
-    history["signex-history"] --- ids["signex-i18n-ids (planned, slice 1)"]
+    history["signex-history"] --- ids["signex-i18n-ids"]
   end
-  commands["signex-commands (planned, slice 1)<br/>catalog · operands · outcome · wire types"]
+  commands["signex-commands<br/>catalog · operands · outcome · wire types"]
   core["AppCore (planned)<br/>app/core/ now, signex-workspace after slice 9<br/>execute · complete · query → events + effects"]
   domain --> core
   commands --> core
@@ -285,6 +285,7 @@ The application core and the crates it uses get the treatment ADR-0001 D5 gives 
 
 - **Arch guard.** Each crate's edges go in `scripts/arch-edges.txt`, and the crate joins `DOMAIN` in `scripts/check_arch_guard.sh` when it is created. `DOMAIN`, not the edges file, is what fails on a UI/GPU dependency.
   - `signex-i18n-ids` and `signex-commands` join at slice 1.
+  - `signex-commands` gets the arch guard at slice 1. The scan of its source for `std::fs`, `std::thread`, `std::process` and runtimes comes with the clippy lint after the lift; until then review keeps it free of IO.
   - `signex-workspace` joins at slice 9.
 - **While the core grows inside `signex-app`.** A guard fails when `app/core/` imports any `crate::` path outside `app/core/`, or names `iced`, `tokio`, `spawn_blocking` / `run_blocking`, `std::fs`, `std::thread` or `std::process`. It lands with slice 1.
 - **After the lift.** Clippy `disallowed-methods` / `disallowed-types` keep the same calls out of the core. They are modelled on the `io_ports` precedent in `clippy.toml`.
