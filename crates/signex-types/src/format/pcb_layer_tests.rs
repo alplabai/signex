@@ -101,6 +101,7 @@ fn mechanical_layers_are_board_wide_and_do_not_flip() {
 #[test]
 fn accessors_keep_unknown_names_as_strings() {
     let segment = crate::pcb::Segment {
+        attributes: Default::default(),
         uuid: uuid::Uuid::nil(),
         start: crate::pcb::Point { x: 0.0, y: 0.0 },
         end: crate::pcb::Point { x: 1.0, y: 0.0 },
@@ -113,6 +114,7 @@ fn accessors_keep_unknown_names_as_strings() {
     assert_eq!(segment.layer, "Mechanical33");
 
     let via = crate::pcb::Via {
+        attributes: Default::default(),
         uuid: uuid::Uuid::nil(),
         position: crate::pcb::Point { x: 0.0, y: 0.0 },
         diameter: 0.6,

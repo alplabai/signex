@@ -367,66 +367,6 @@ pub(super) fn lock<'a>(look: Look<'a>, locked: bool, tip: MessageId) -> Element<
     fixed_checkbox(look, signex_i18n::ids::PCB_PRIM_LOCK, locked, tip)
 }
 
-/// A mask-expansion section: Rule chosen, Manual and the value disabled
-/// until the board stores an expansion per item.
-pub(super) fn mask_section<'a>(
-    look: Look<'a>,
-    common: &PrimitiveCommon,
-    title: MessageId,
-    sides: bool,
-) -> Option<Element<'a, PanelMsg>> {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_MASK_UNSUPPORTED;
-    let mut s = Section::new(look, title);
-    s.push(
-        common,
-        ids::PCB_PRIM_RULE,
-        fixed_tiles(look, &[ids::PCB_PRIM_RULE, ids::PCB_PRIM_MANUAL], 0, tip),
-    );
-    if sides {
-        for side in [ids::PCB_PRIM_TOP, ids::PCB_PRIM_BOTTOM] {
-            s.push(
-                common,
-                side,
-                labelled(
-                    look,
-                    side,
-                    fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip),
-                ),
-            );
-            s.push(
-                common,
-                ids::PCB_PRIM_TENTED,
-                labelled(
-                    look,
-                    ids::PCB_PRIM_TENTED,
-                    fixed_checkbox(look, side, false, tip),
-                ),
-            );
-        }
-        s.push(
-            common,
-            ids::PCB_PRIM_FROM_HOLE_EDGE,
-            labelled(
-                look,
-                ids::PCB_PRIM_FROM_HOLE_EDGE,
-                fixed_checkbox(look, ids::PCB_PRIM_FROM_HOLE_EDGE, false, tip),
-            ),
-        );
-    } else {
-        s.push(
-            common,
-            ids::PCB_PRIM_EXPANSION,
-            labelled(
-                look,
-                ids::PCB_PRIM_EXPANSION,
-                fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip),
-            ),
-        );
-    }
-    s.finish()
-}
-
 /// The Testpoint section: Fabrication and Assembly, top and bottom, all
 /// disabled until the board stores them.
 pub(super) fn testpoint_section<'a>(

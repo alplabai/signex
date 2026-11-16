@@ -4,6 +4,7 @@ define_ids! {
     FILE_DIALOG;
     FILE_DIALOG_OPEN_PROJECT = "file-dialog-open-project";
     FILE_DIALOG_IMPORT_ALTIUM = "file-dialog-import-altium";
+    FILE_DIALOG_IMPORT_DXF = "file-dialog-import-dxf";
     FILE_DIALOG_NEW_PROJECT = "file-dialog-new-project";
     FILE_DIALOG_SAVE_SCHEMATIC_AS = "file-dialog-save-schematic-as";
     FILE_DIALOG_EXPORT_PDF = "file-dialog-export-pdf";
@@ -44,6 +45,7 @@ define_ids! {
     FILE_FILTER_ALTIUM_DESIGN = "file-filter-altium-design";
     FILE_FILTER_ALTIUM_LIBRARY = "file-filter-altium-library";
     FILE_FILTER_TEXT = "file-filter-text";
+    FILE_FILTER_DXF = "file-filter-dxf";
     FILE_FILTER_PDF = "file-filter-pdf";
     FILE_FILTER_HTML_EXT = "file-filter-html-ext";
     FILE_FILTER_PDF_EXT = "file-filter-pdf-ext";

@@ -248,3 +248,13 @@ pcb-3d-iso = Angled
 # Messages line when a part's model could not be read; the part is drawn as
 # a plain body. $source names the library footprint.
 pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.
+
+## DXF import (#2410).
+# The undo label of an import.
+pcb-dxf-import-step = Import DXF
+# Messages line. $count drawings, $file the file name, $layer the layer.
+pcb-dxf-imported-layer = Imported { $count } drawings from { $file } onto { $layer }.
+pcb-dxf-imported-outline = The board outline is now the { $count }-corner shape from { $file }.
+# $count entities of kinds the import does not read (text, blocks, hatches).
+pcb-dxf-skipped = { $count } entities of { $file } are not lines, arcs, circles or polylines and were skipped.
+pcb-dxf-refused = { $file } was not imported: { $why }

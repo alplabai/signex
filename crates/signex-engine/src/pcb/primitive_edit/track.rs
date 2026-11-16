@@ -1,11 +1,11 @@
-//! Track fields: location, width, ends, layer and net.
+//! Track fields: location, width, ends, layer, net, lock and mask settings.
 
 use signex_types::format::pcb_layer_token;
-use signex_types::pcb::{PcbBoard, Point, Segment};
+use signex_types::pcb::{MaskExpansion, PcbBoard, Point, Segment};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
-use super::{PrimitiveEditRefusal, finite};
+use super::{PrimitiveEditRefusal, finite, finite_mask};
 use crate::pcb::{BoardCommand, BoardItem};
 
 /// One field of the selected tracks, set to an absolute value.
@@ -22,6 +22,10 @@ pub enum TrackEdit {
     Layer(CopperLayer),
     /// 0 is no net.
     Net(u32),
+    /// Lock or unlock; the one edit a locked track takes (#2378).
+    Locked(bool),
+    PasteMask(MaskExpansion),
+    SolderMask(MaskExpansion),
 }
 
 /// Where a selection of tracks is: the lower-left corner, as the screen shows
@@ -40,7 +44,8 @@ pub fn track_location<'a>(tracks: impl IntoIterator<Item = &'a Segment>) -> Opti
         })
 }
 
-/// The command setting `edit` on every track in `tracks`.
+/// The command setting `edit` on every track in `tracks`. Refused when a
+/// track is locked and the edit is not the unlock.
 pub fn track_edit_command(
     board: &PcbBoard,
     tracks: &[Uuid],
@@ -52,6 +57,10 @@ pub fn track_edit_command(
         .collect::<Option<_>>()
         .ok_or(PrimitiveEditRefusal::Gone)?;
     let corner = track_location(found.iter().copied()).ok_or(PrimitiveEditRefusal::Empty)?;
+    let unlocking = matches!(edit, TrackEdit::Locked(_));
+    if !unlocking && found.iter().any(|s| s.attributes.locked) {
+        return Err(PrimitiveEditRefusal::ItemLocked);
+    }
     let mut changed = Vec::new();
     for old in found {
         let mut new = old.clone();
@@ -82,6 +91,9 @@ fn apply(s: &mut Segment, edit: TrackEdit, corner: Point) -> Result<(), Primitiv
         TrackEdit::EndY(y) => s.end.y = finite(y)?,
         TrackEdit::Layer(layer) => s.layer = pcb_layer_token(PcbLayer::Copper(layer)),
         TrackEdit::Net(net) => s.net = net,
+        TrackEdit::Locked(locked) => s.attributes.locked = locked,
+        TrackEdit::PasteMask(mask) => s.attributes.paste_mask = finite_mask(mask)?,
+        TrackEdit::SolderMask(mask) => s.attributes.solder_mask = finite_mask(mask)?,
     }
     Ok(())
 }

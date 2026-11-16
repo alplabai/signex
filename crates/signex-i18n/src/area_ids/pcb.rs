@@ -53,4 +53,9 @@ define_ids! {
     PCB_3D_RIGHT = "pcb-3d-right";
     PCB_3D_ISO = "pcb-3d-iso";
     PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
+    PCB_DXF_IMPORT_STEP = "pcb-dxf-import-step";
+    PCB_DXF_IMPORTED_LAYER = "pcb-dxf-imported-layer";
+    PCB_DXF_IMPORTED_OUTLINE = "pcb-dxf-imported-outline";
+    PCB_DXF_SKIPPED = "pcb-dxf-skipped";
+    PCB_DXF_REFUSED = "pcb-dxf-refused";
 }

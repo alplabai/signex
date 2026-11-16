@@ -296,6 +296,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `import_dxf` | Import a DXF drawing onto the active layer of the board | file | — | — |
+| `import_dxf_outline` | Import the largest closed shape of a DXF drawing as the board outline | file | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |

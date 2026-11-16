@@ -104,6 +104,7 @@ fn board() -> PcbBoard {
         ],
         segments: Vec::new(),
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(4),
             position: Point::new(40.0, 20.0),
             diameter: 0.6,

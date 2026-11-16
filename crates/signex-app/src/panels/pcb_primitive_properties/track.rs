@@ -6,9 +6,9 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::ids;
 use signex_types::pcb_layer::PcbLayer;
 
+use super::mask::{lock_row, track_mask_section};
 use super::rows::{
-    Look, Section, chip, dropdown, labelled, lock, mask_section, mm_field, mm_or_na, net_row, pair,
-    stack, value_box,
+    Look, Section, chip, dropdown, labelled, mm_field, mm_or_na, net_row, pair, stack, value_box,
 };
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TrackFacts, net_info};
 use crate::panels::{PanelContext, PanelMsg};
@@ -21,8 +21,20 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a TrackFacts) -> Element<'a, 
         net_info::section(look, common),
         location(look, f),
         properties(look, f),
-        mask_section(look, common, ids::PCB_PRIM_PASTE_MASK, false),
-        mask_section(look, common, ids::PCB_PRIM_SOLDER_MASK, false),
+        track_mask_section(
+            look,
+            common,
+            ids::PCB_PRIM_PASTE_MASK,
+            F::PasteMask,
+            f.paste_mask,
+        ),
+        track_mask_section(
+            look,
+            common,
+            ids::PCB_PRIM_SOLDER_MASK,
+            F::SolderMask,
+            f.solder_mask,
+        ),
     ])
 }
 
@@ -40,15 +52,7 @@ fn location<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, PanelMs
         ids::PCB_PRIM_Y,
         labelled(look, ids::PCB_PRIM_Y, mm_field(common, F::Y, y, look)),
     );
-    s.push(
-        common,
-        ids::PCB_PRIM_LOCK,
-        labelled(
-            look,
-            ids::PCB_PRIM_LOCK,
-            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
-        ),
-    );
+    s.push(common, ids::PCB_PRIM_LOCK, lock_row(look, common, f.locked));
     s.finish()
 }
 

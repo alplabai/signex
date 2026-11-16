@@ -247,6 +247,8 @@ place_board_fill	place	Place a rectangle of solid copper on the active copper la
 place_board_region	place	Place a polygon of solid copper on the active copper layer	Solid Region	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_polygon_pour	place	Place a polygon pour on the active copper layer, filled clear of other nets	Polygon Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+import_dxf	file	Import a DXF drawing onto the active layer of the board	DXF to Current Layer...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,layer:text?,document:document?
+import_dxf_outline	file	Import the largest closed shape of a DXF drawing as the board outline	DXF as Board Outline...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,document:document?
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

@@ -287,6 +287,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_region", "PlaceBoardRegion"),
     ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
+    // #2410: File ▸ Import, fixture names only.
+    ("import_dxf", "ImportDxf"),
+    ("import_dxf_outline", "ImportDxfOutline"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),

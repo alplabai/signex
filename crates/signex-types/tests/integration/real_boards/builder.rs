@@ -300,6 +300,7 @@ impl Builder {
         for leg in points.windows(2) {
             let uuid = self.uuid();
             self.board.segments.push(Segment {
+                attributes: Default::default(),
                 uuid,
                 start: leg[0],
                 end: leg[1],
@@ -328,6 +329,7 @@ impl Builder {
         let net = self.net(net);
         let uuid = self.uuid();
         self.board.vias.push(Via {
+            attributes: Default::default(),
             uuid,
             position: at,
             diameter,

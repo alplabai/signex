@@ -104,6 +104,8 @@ pub enum BoardCommandError {
         "the board changed since revision {expected} (it is at {current}); read it again and retry"
     )]
     StaleRevision { expected: u64, current: u64 },
+    #[error("the board no longer ends with the drawings the import added")]
+    GraphicsMismatch,
     #[error("a failed command could not be rolled back: {0}")]
     RollbackFailed(String),
 }

@@ -45,6 +45,7 @@ fn ten_thousand_tracks() -> PcbBoard {
         for col in 0..100u32 {
             let x = f64::from(col) * 2.0;
             board.segments.push(Segment {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(u128::from(row) * 100 + u128::from(col) + 1),
                 start: Point::new(x, f64::from(row)),
                 end: Point::new(x + 2.0, f64::from(row)),

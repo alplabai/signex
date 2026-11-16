@@ -4,9 +4,10 @@
 use iced::Element;
 use signex_i18n::{UserText, ids};
 
+use super::mask::{lock_row, via_mask_section};
 use super::rows::{
-    Look, Section, fixed_checkbox, fixed_tiles, fixed_value, labelled, lock, mask_section,
-    mm_field, net_row, stack, template_rows, testpoint_section, value_box, with_tip,
+    Look, Section, fixed_checkbox, fixed_tiles, fixed_value, labelled, mm_field, net_row, stack,
+    template_rows, testpoint_section, value_box, with_tip,
 };
 use super::{PrimitiveField as F, ViaFacts, net_info};
 use crate::panels::{PanelContext, PanelMsg};
@@ -18,7 +19,7 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, Pa
         net_info::section(look, common),
         definition(look, f),
         via_stack(look, f),
-        mask_section(look, common, ids::PCB_PRIM_SOLDER_MASK, true),
+        via_mask_section(look, f),
         via_types(look, f),
         testpoint_section(look, common),
     ])
@@ -66,15 +67,7 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         ids::PCB_PRIM_Y,
         labelled(look, ids::PCB_PRIM_Y, mm_field(common, F::Y, f.y, look)),
     );
-    s.push(
-        common,
-        ids::PCB_PRIM_LOCK,
-        labelled(
-            look,
-            ids::PCB_PRIM_LOCK,
-            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
-        ),
-    );
+    s.push(common, ids::PCB_PRIM_LOCK, lock_row(look, common, f.locked));
     s.finish()
 }
 

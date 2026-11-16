@@ -31,6 +31,7 @@ const NETS: [(u32, &str); 8] = [
 
 fn track(n: u128, x: f64, y: f64, net: u32, width: f64) -> Segment {
     Segment {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(x - 5.0, y),
         end: Point::new(x + 5.0, y),
@@ -117,6 +118,7 @@ fn board() -> PcbBoard {
             track(6, 80.0, 0.845, 8, 0.25),
         ],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(30),
             position: Point::new(60.0, 0.0),
             diameter: 0.4,

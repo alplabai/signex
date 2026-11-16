@@ -394,6 +394,10 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_POLYGON_POUR = "cmd-menu-place-board-polygon-pour";
         CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
+        CMD_IMPORT_DXF = "cmd-import-dxf";
+        CMD_MENU_IMPORT_DXF = "cmd-menu-import-dxf";
+        CMD_IMPORT_DXF_OUTLINE = "cmd-import-dxf-outline";
+        CMD_MENU_IMPORT_DXF_OUTLINE = "cmd-menu-import-dxf-outline";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";

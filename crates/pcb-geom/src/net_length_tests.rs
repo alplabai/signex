@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 fn track(n: u128, (ax, ay): (f64, f64), (bx, by): (f64, f64), net: u32) -> Segment {
     Segment {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(ax, ay),
         end: Point::new(bx, by),
@@ -17,6 +18,7 @@ fn track(n: u128, (ax, ay): (f64, f64), (bx, by): (f64, f64), net: u32) -> Segme
 
 fn via(via_type: ViaType, layers: &[&str]) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x99),
         position: Point::new(0.0, 0.0),
         diameter: 0.6,

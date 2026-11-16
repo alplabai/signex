@@ -161,6 +161,7 @@ mod tests {
 
     fn board() -> PcbBoard {
         let track = Segment {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(2),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),

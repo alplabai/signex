@@ -120,6 +120,7 @@ fn next_leg_style(
         style.net = draw::net_under(board, to, 1 << pcb_geom::layer_bit(layer));
     }
     let via = (style.layer != layer).then(|| Via {
+        attributes: Default::default(),
         net: style.net,
         ..draw::new_via(board, Uuid::now_v7(), anchor)
     });

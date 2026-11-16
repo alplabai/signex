@@ -106,6 +106,7 @@ fn board() -> PcbBoard {
             footprint(FP_LOOSE, None, vec![pad(Uuid::from_u128(0x102), Some(1))]),
         ],
         segments: vec![Segment {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x200),
             start: Point::new(0.0, 0.0),
             end: Point::new(1.0, 0.0),
@@ -115,6 +116,7 @@ fn board() -> PcbBoard {
             unknown_columns: Default::default(),
         }],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x300),
             position: Point::new(0.0, 0.0),
             diameter: 0.6,

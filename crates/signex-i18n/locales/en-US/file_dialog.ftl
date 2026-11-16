@@ -6,6 +6,7 @@
 
 file-dialog-open-project = Open Project or Schematic
 file-dialog-import-altium = Import Altium Project
+file-dialog-import-dxf = Import DXF Drawing
 file-dialog-new-project = New { -brand-name } Project (a folder named after the project is created)
 file-dialog-save-schematic-as = Save Schematic As
 file-dialog-export-pdf = Export PDF
@@ -50,6 +51,7 @@ file-filter-all-files = All files
 file-filter-altium-design = Altium Design
 file-filter-altium-library = Altium Library
 file-filter-text = Text
+file-filter-dxf = DXF Drawing
 file-filter-pdf = PDF
 file-filter-html-ext = HTML (.html)
 file-filter-pdf-ext = PDF (.pdf)

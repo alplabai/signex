@@ -82,6 +82,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    (
+        "import_dxf",
+        crate::app::handlers::pcb_dxf_import::import_dxf,
+    ),
+    (
+        "import_dxf_outline",
+        crate::app::handlers::pcb_dxf_import::import_dxf_outline,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn

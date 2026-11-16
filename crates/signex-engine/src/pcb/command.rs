@@ -1,5 +1,7 @@
 use signex_net::board::BoardNetEdit;
-use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb::{
+    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
+};
 use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::property::PcbProperty;
@@ -10,6 +12,7 @@ use super::board_sketch;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
+use super::graphics;
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
 use super::options;
 use super::replace::{self, FootprintPad, Values};
@@ -169,6 +172,14 @@ pub enum BoardCommand {
     /// grid uuid named twice. The inverse is another one holding the old
     /// options.
     SetBoardOptions { options: Box<BoardOptions> },
+    /// Append board drawings (#2410, a DXF import onto a layer). Refused for
+    /// a number that is not finite. The inverse is a
+    /// [`BoardCommand::RemoveGraphics`].
+    AddGraphics { graphics: Vec<BoardGraphic> },
+    /// Remove these drawings from the end of the board's drawings; the
+    /// inverse of [`BoardCommand::AddGraphics`]. Refused unless the list
+    /// still ends with exactly them.
+    RemoveGraphics { graphics: Vec<BoardGraphic> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -211,6 +222,8 @@ pub enum BoardPatchKind {
     GridChanged,
     /// The board options. Names no items.
     OptionsChanged,
+    /// Board drawings added or removed. Names no items.
+    GraphicsChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -291,6 +304,8 @@ impl BoardCommand {
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
+            Self::AddGraphics { graphics } => graphics::add(board, graphics),
+            Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
         }
     }
 }

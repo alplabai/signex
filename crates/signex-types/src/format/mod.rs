@@ -40,6 +40,7 @@ mod header_id;
 mod load_repair;
 mod page_extras;
 mod pcb_footprints;
+mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_uuid_repair;
 mod sch_rows;
@@ -91,6 +92,8 @@ mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
 #[cfg(test)]
+mod pcb_route_attrs_tests;
+#[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -130,7 +133,9 @@ use extras::{
     BoardExtras, FootprintExtras, JunctionExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw,
     SheetExtras, SymbolExtras,
 };
-use pcb_rows::{footprint_to_row, pad_to_row, row_to_track, row_to_via, track_to_row, via_to_row};
+use pcb_rows::{
+    footprint_to_row, pad_to_row, rows_to_tracks, rows_to_vias, track_to_row, via_to_row,
+};
 use sch_rows::{
     junction_to_row, label_to_row, row_to_junction, row_to_label, row_to_symbol, row_to_wire,
     symbol_to_row, wire_to_row,
@@ -944,8 +949,8 @@ impl SnxPcb {
             &extras.pads,
         )?;
 
-        let segments = track_rows.into_iter().map(row_to_track).collect();
-        let vias = via_rows.into_iter().map(row_to_via).collect();
+        let segments = rows_to_tracks(track_rows)?;
+        let vias = rows_to_vias(via_rows)?;
 
         // Reconstitute zones from `[[zones]]` array.
         let zones = raw.zones.unwrap_or_default();

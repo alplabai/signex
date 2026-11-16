@@ -114,6 +114,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
+    ("layer", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -271,6 +272,19 @@ pub const NEW_SCHEMATIC: &[Operand] = &[
 /// Turn the board view by `degrees` (90 when left out), clockwise positive
 /// (#2316).
 pub const TURN: &[Operand] = &[optional("degrees", OperandKind::Turn)];
+
+/// DXF import onto a layer (#2410): the file, the layer token (the active
+/// layer when left out) and the board.
+pub const IMPORT_DXF: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("layer", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// DXF import as the board outline (#2410): the file and the board.
+pub const IMPORT_DXF_OUTLINE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("document", OperandKind::Document),
+];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

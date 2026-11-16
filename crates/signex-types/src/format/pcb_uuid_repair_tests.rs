@@ -18,6 +18,7 @@ fn pt(x: f64) -> PcbPoint {
 
 fn track(n: u128, end_x: f64) -> Segment {
     Segment {
+        attributes: Default::default(),
         uuid: id(n),
         start: pt(0.0),
         end: pt(end_x),
@@ -30,6 +31,7 @@ fn track(n: u128, end_x: f64) -> Segment {
 
 fn via(n: u128, x: f64) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: id(n),
         position: pt(x),
         diameter: 0.6,

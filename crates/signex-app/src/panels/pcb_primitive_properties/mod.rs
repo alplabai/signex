@@ -9,6 +9,7 @@
 //! three meet in `pcb_board_properties::view`, which picks the panel.
 
 mod facts;
+mod mask;
 mod net_info;
 mod pad;
 mod rows;
@@ -25,8 +26,9 @@ use signex_types::pcb_layer::CopperLayer;
 use signex_widgets::{text, text_input};
 
 pub use facts::{
-    Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
+    Editability, LayerChoice, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TrackFacts,
+    ViaFacts, shared,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -60,6 +62,18 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         shape: PadShape,
     },
+    /// Rule or Manual picked for the mask expansion `field` (#2378).
+    MaskModePicked {
+        target: PrimitiveTarget,
+        field: PrimitiveField,
+        manual: bool,
+    },
+    /// An on / off setting ticked or cleared (#2378).
+    FlagToggled {
+        target: PrimitiveTarget,
+        flag: PrimitiveFlag,
+        on: bool,
+    },
     /// The pick button: the next click on the board names the net.
     NetPickStarted {
         target: PrimitiveTarget,
@@ -92,6 +106,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
     match common.editability {
         Editability::ReadOnly => notes = notes.push(note(ids::PCB_PRIM_READ_ONLY)),
         Editability::Locked => notes = notes.push(note(ids::PCB_PRIM_PAD_LOCKED)),
+        Editability::ItemLocked => notes = notes.push(note(ids::PCB_PRIM_ITEM_LOCKED)),
         Editability::Editable => {}
     }
     if common.picking_net {

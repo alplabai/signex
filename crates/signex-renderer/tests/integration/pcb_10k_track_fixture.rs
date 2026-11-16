@@ -96,6 +96,7 @@ pub fn board_10k_tracks() -> PcbBoard {
             let (x0, y0) = joint_nm(row, seg);
             let (x1, y1) = joint_nm(row, seg + 1);
             segments.push(Segment {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(UUID_SEGMENT_BASE + segments.len() as u128),
                 start: point(x0, y0),
                 end: point(x1, y1),
@@ -109,6 +110,7 @@ pub fn board_10k_tracks() -> PcbBoard {
         for joint in (VIA_EVERY..=SEGMENTS_PER_ROW).step_by(VIA_EVERY) {
             let (x, y) = joint_nm(row, joint);
             vias.push(Via {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(UUID_VIA_BASE + vias.len() as u128),
                 position: point(x, y),
                 diameter: mm(600_000),

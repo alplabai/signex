@@ -75,6 +75,10 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
 Parameter Manager.... **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
+Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
+Outline... (`import_dxf_outline`), greyed without a board in view; each asks
+for the file and imports it as one undo step (#2410, see
+[BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's

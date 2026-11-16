@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
-use signex_types::pcb::PadShape;
+use signex_types::pcb::{MaskExpansion, PadShape};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 /// The board and the selected items a panel was built for. Every edit
@@ -35,12 +35,44 @@ pub enum PrimitiveField {
     Rotation,
     SizeX,
     SizeY,
+    /// A track's paste mask expansion (#2378).
+    PasteMask,
+    /// A track's solder mask expansion.
+    SolderMask,
+    /// A via's top solder mask expansion.
+    SolderMaskTop,
+    SolderMaskBottom,
+}
+
+/// An on / off setting of a track or via (#2378).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimitiveFlag {
+    Locked,
+    TentedTop,
+    TentedBottom,
+    FromHoleEdge,
+}
+
+/// One side's mask settings the selected vias share; `None` where they
+/// differ.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct MaskSideFacts {
+    pub expansion: Option<MaskExpansion>,
+    pub tented: Option<bool>,
 }
 
 impl PrimitiveField {
     /// A field typed as text, not as a number.
     pub fn is_text(self) -> bool {
         self == Self::Designator
+    }
+
+    /// A mask expansion field: a typed number sets a manual expansion.
+    pub fn is_mask(self) -> bool {
+        matches!(
+            self,
+            Self::PasteMask | Self::SolderMask | Self::SolderMaskTop | Self::SolderMaskBottom
+        )
     }
 }
 
@@ -89,6 +121,8 @@ pub enum Editability {
     Editable,
     /// A pad's footprint is locked.
     Locked,
+    /// A selected track or via is locked (#2378): only its Lock box acts.
+    ItemLocked,
     /// The board opened read-only (a newer format).
     ReadOnly,
 }
@@ -134,6 +168,15 @@ impl PrimitiveCommon {
         self.editability == Editability::Editable
     }
 
+    /// Whether the Lock box of a track or via acts: anything but a
+    /// read-only board.
+    pub fn can_toggle_lock(&self) -> bool {
+        matches!(
+            self.editability,
+            Editability::Editable | Editability::ItemLocked
+        )
+    }
+
     /// Whether a row labelled `label` passes the search.
     pub fn shows(&self, i18n: &signex_i18n::I18n, label: &str) -> bool {
         let query = self.search.trim();
@@ -156,6 +199,10 @@ pub struct TrackFacts {
     pub start: (Option<f64>, Option<f64>),
     pub end: (Option<f64>, Option<f64>),
     pub length_mm: Option<f64>,
+    /// The lock and masks the tracks share; `None` where they differ.
+    pub locked: Option<bool>,
+    pub paste_mask: Option<MaskExpansion>,
+    pub solder_mask: Option<MaskExpansion>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -167,6 +214,11 @@ pub struct ViaFacts {
     pub hole: Option<f64>,
     /// Its span name, "Thru 1:4"; `None` when the vias differ.
     pub span: Option<String>,
+    /// The lock and solder mask settings the vias share.
+    pub locked: Option<bool>,
+    pub top: MaskSideFacts,
+    pub bottom: MaskSideFacts,
+    pub from_hole_edge: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

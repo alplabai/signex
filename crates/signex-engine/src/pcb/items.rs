@@ -272,6 +272,16 @@ pub(super) fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
     if !rotation_ok {
         return Err(BoardCommandError::NonFinite { field: "rotation" });
     }
+    let masks_ok = match item {
+        BoardItem::Segment(s) => s.attributes.is_finite(),
+        BoardItem::Via(v) => v.attributes.is_finite(),
+        _ => true,
+    };
+    if !masks_ok {
+        return Err(BoardCommandError::NonFinite {
+            field: "mask expansion",
+        });
+    }
     Ok(())
 }
 

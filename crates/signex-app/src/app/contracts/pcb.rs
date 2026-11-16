@@ -71,6 +71,8 @@ pub enum PcbMsg {
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).
     LayerTabMenu(LayerTabMenuMsg),
+    /// DXF import onto the board in view (#2410).
+    DxfImport(DxfImportMsg),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).
@@ -279,4 +281,28 @@ pub struct Board3dModelsRead {
     )>,
     /// The source that could not be read, as text, and why.
     pub failures: Vec<(String, String)>,
+}
+
+/// DXF import onto a board (#2410). Each step names the board and where the
+/// drawing goes, so a tab switch while the dialog is open cannot send the
+/// import to another board or layer.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DxfImportMsg {
+    /// The command ran without operands: ask for the file. `outline` makes
+    /// the largest closed shape the board outline; otherwise the drawing goes
+    /// onto the active layer of the board in view.
+    Requested { outline: bool },
+    /// The file dialog answered; `None` is a cancel.
+    Picked {
+        board: std::path::PathBuf,
+        target: signex_engine::pcb::dxf::DxfTarget,
+        path: Option<std::path::PathBuf>,
+    },
+    /// The file was read off the UI thread, or why it could not be.
+    Read {
+        board: std::path::PathBuf,
+        target: signex_engine::pcb::dxf::DxfTarget,
+        path: std::path::PathBuf,
+        text: Result<String, String>,
+    },
 }

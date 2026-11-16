@@ -408,6 +408,7 @@ fn a_coordinate_that_round_trips_still_opens() {
 fn a_pcb_coordinate_at_the_i64_end_is_refused() {
     let mut board = empty_board();
     board.segments.push(crate::pcb::Segment {
+        attributes: Default::default(),
         uuid: id(3),
         start: crate::pcb::Point { x: 1.0, y: 2.0 },
         end: crate::pcb::Point { x: 5.0, y: 2.0 },

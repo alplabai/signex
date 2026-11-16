@@ -50,11 +50,17 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         submenu(
             ctx,
             menu_ids::MENU_FILE_IMPORT,
-            vec![item(
-                ctx,
-                menu_ids::MENU_FILE_IMPORT_ALTIUM,
-                MenuMessage::ImportAltium,
-            )],
+            vec![
+                item(
+                    ctx,
+                    menu_ids::MENU_FILE_IMPORT_ALTIUM,
+                    MenuMessage::ImportAltium,
+                ),
+                // #2410: a DXF drawing onto the board in view; greyed
+                // without one.
+                cmd_item_gated(ctx, cmd("import_dxf", "")),
+                cmd_item_gated(ctx, cmd("import_dxf_outline", "")),
+            ],
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
         submenu(ctx, menu_ids::MENU_FILE_EXPORT, export(ctx)),

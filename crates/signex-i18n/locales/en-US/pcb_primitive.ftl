@@ -59,7 +59,7 @@ pcb-prim-delay-unknown = The delay needs the dielectric of the board's stackup, 
 pcb-prim-x = X
 pcb-prim-y = Y
 pcb-prim-lock = Lock
-pcb-prim-lock-unsupported = Tracks and vias cannot be locked yet; the board does not store a lock for them.
+pcb-prim-lock-tip = A locked track or via takes no edit until it is unlocked.
 pcb-prim-pad-lock-tip = A pad is locked with its footprint.
 pcb-prim-layer = Layer
 pcb-prim-width = Width
@@ -70,7 +70,7 @@ pcb-prim-picking-net = Click copper on the board to take its net. Esc cancels.
 pcb-prim-rule = Rule
 pcb-prim-manual = Manual
 pcb-prim-expansion = Expansion
-pcb-prim-mask-unsupported = The board does not store a mask expansion per item or a mask rule yet.
+pcb-prim-mask-unsupported = The board does not store a mask expansion per pad yet.
 pcb-prim-top = Top
 pcb-prim-bottom = Bottom
 pcb-prim-fabrication = Fabrication
@@ -138,6 +138,9 @@ pcb-prim-shape-roundrect = Rounded Rectangle
 pcb-prim-shape-oval = Oval
 pcb-prim-no-hole = No hole
 pcb-prim-pad-locked = The footprint of this pad is locked, so the pad cannot be changed.
+pcb-prim-item-locked = A selected track or via is locked. Unlock it to change it.
+pcb-prim-tented-tip = Mask covers the via on this side: no opening.
+pcb-prim-from-hole-edge-tip = Measure the expansion from the hole edge instead of the via copper.
 
 ## Messages panel notices.
 # $what is the field's name; $why the reason.

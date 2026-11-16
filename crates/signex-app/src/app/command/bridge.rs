@@ -300,6 +300,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
         "place_board_polygon_pour" => board_tool(BoardPlaceTool::PolygonPour),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        "import_dxf" => Message::Pcb(PcbMsg::DxfImport(crate::app::DxfImportMsg::Requested {
+            outline: false,
+        })),
+        "import_dxf_outline" => {
+            Message::Pcb(PcbMsg::DxfImport(crate::app::DxfImportMsg::Requested {
+                outline: true,
+            }))
+        }
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),

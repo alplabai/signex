@@ -42,7 +42,7 @@ define_ids! {
     PCB_PRIM_X = "pcb-prim-x";
     PCB_PRIM_Y = "pcb-prim-y";
     PCB_PRIM_LOCK = "pcb-prim-lock";
-    PCB_PRIM_LOCK_UNSUPPORTED = "pcb-prim-lock-unsupported";
+    PCB_PRIM_LOCK_TIP = "pcb-prim-lock-tip";
     PCB_PRIM_PAD_LOCK_TIP = "pcb-prim-pad-lock-tip";
     PCB_PRIM_LAYER = "pcb-prim-layer";
     PCB_PRIM_WIDTH = "pcb-prim-width";
@@ -116,6 +116,9 @@ define_ids! {
     PCB_PRIM_SHAPE_OVAL = "pcb-prim-shape-oval";
     PCB_PRIM_NO_HOLE = "pcb-prim-no-hole";
     PCB_PRIM_PAD_LOCKED = "pcb-prim-pad-locked";
+    PCB_PRIM_ITEM_LOCKED = "pcb-prim-item-locked";
+    PCB_PRIM_TENTED_TIP = "pcb-prim-tented-tip";
+    PCB_PRIM_FROM_HOLE_EDGE_TIP = "pcb-prim-from-hole-edge-tip";
     PCB_PRIM_REFUSED = "pcb-prim-refused";
     PCB_PRIM_NOT_A_NUMBER = "pcb-prim-not-a-number";
     PCB_PRIM_BOARD_GONE = "pcb-prim-board-gone";
