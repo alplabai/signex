@@ -355,6 +355,49 @@ Messages say it (#2300). Each keepout is tested against every item,
 with a bounding-box test first; an index lookup is a follow-up if boards with
 many keepouts make it slow.
 
+## Waivers (#2307)
+
+A designer accepts one finding with a reason. The project stores it in
+`rules.drc_waivers` of the `.snxprj`, in the shape of `erc_waivers`
+(`signex_types::project::DrcWaiver`, the same type as `ErcWaiver`): rule id,
+sorted ids, fingerprint, reason, author, date, the finding's message, and
+any key a newer build wrote. The list sits beside `drc`, not inside it, so a
+waiver never changes the rule-set hash; an empty list is not written, and an
+older build keeps the key verbatim in `unknown`.
+
+`signex_drc::waivers` owns what the ids and the fingerprint mean:
+
+- **Identity** is the rule id (`builtin::<kind>` or `user::<name>`) and the
+  ids of the items the finding names (a pad as `<footprint>/<pad>`, as the
+  check report names it), plus `keepout:<uuid>` for a keepout finding and,
+  for a written rule, `kind:<builtin id>` (one rule can set several limits).
+  Positions are never part of it. A finding that names nothing (an
+  unconnected link with no pad at either end) cannot be waived.
+- **The fingerprint** is SHA-256 over the rule id and, per involved item,
+  the geometry a rule sees of it: a track's layer, net, ends and width; a
+  via's layers, net, position, diameter and drill; a pad's footprint
+  placement (position, turn, side) with its own type, shape, position,
+  size, turn, corner ratio, drill, layers, number and net; a footprint's
+  placement and library id; a keepout's outline, layers and what it
+  forbids. Lengths and angles are quantised to stored nm, so a save and a
+  load keep it. Nets are named, not numbered, so a renumbering keeps it. A
+  designator, value or any item the finding does not name never changes it.
+- **Matching**: a complete waiver (reason and author set) with the same rule
+  and ids hides the finding when the fingerprints agree. When they differ,
+  an involved item changed: the waiver lapses and the finding shows again.
+  The rule's limit is not in the fingerprint, so changing the clearance
+  keeps a waiver. An unconnected link names the pads at its ends; another
+  pad of the net moving can pick other ends, and then the waiver no longer
+  matches anything rather than lapsing.
+
+`check_drc` applies the project's waivers: a hidden finding is in `waived`
+with its waiver, a lapsed waiver in `lapsed` and its finding back in
+`findings`; a rule switched off neither hides nor lapses anything. Board
+item ids do not embed the board's document id, so a Save As or a repaired
+document id leaves the waivers as they are (ERC re-keys its net waivers
+there; DRC has nothing to re-key). Run DRC and the DRC panel do not read
+waivers yet; making and showing one there is the next step.
+
 ## Not checked yet
 
 Hole-to-hole, silk-to-pad, courtyard overlap, zone clearance (#2216), annular

@@ -328,3 +328,5 @@ fn a_malformed_drc_section_is_kept_and_marks_the_rules_unreadable() {
         assert_eq!(saved["rules"], rules_of(&text), "{drc}");
     }
 }
+
+mod drc_waivers;

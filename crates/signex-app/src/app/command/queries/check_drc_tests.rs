@@ -554,6 +554,64 @@ fn an_agent_check_does_not_read_a_fifo() {
     assert!(why.contains("not a regular file"), "{why}");
 }
 
+/// A waiver of `sample_board`'s clearance finding, keyed in memory: the
+/// board read back from disk must give the same fingerprint (#2307).
+fn clearance_waiver() -> signex_types::project::DrcWaiver {
+    let board = sample_board();
+    let rules = signex_drc::DrcRules::for_board(&board, &[]).unwrap();
+    let report = signex_drc::run(&board, &rules);
+    let v = report
+        .violations
+        .iter()
+        .find(|v| v.kind == signex_drc::ViolationKind::Clearance)
+        .expect("a clearance finding");
+    let key = signex_drc::waivers::waiver_key(v, &board).expect("waivable");
+    signex_types::project::DrcWaiver {
+        rule_id: key.rule_id,
+        objects: key.objects,
+        fingerprint: key.fingerprint,
+        reason: "approved".into(),
+        author: "A. Designer".into(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn the_projects_drc_waivers_fill_waived_and_lapsed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let plain = report(&mut app, &path, &[]);
+    let clearance = |r: &Value| {
+        findings(r)
+            .iter()
+            .filter(|f| f["rule"] == "builtin::clearance")
+            .count()
+    };
+    assert_eq!(clearance(&plain), 1, "{plain}");
+    set_rules(
+        &mut app,
+        ProjectRules {
+            drc_waivers: vec![clearance_waiver()],
+            ..ProjectRules::default()
+        },
+    );
+    let waived = report(&mut app, &path, &[]);
+    assert_eq!(clearance(&waived), 0, "{waived}");
+    assert_eq!(waived["waived"].as_array().unwrap().len(), 1, "{waived}");
+    assert_eq!(waived["waived"][0]["finding"]["rule"], "builtin::clearance");
+    assert_eq!(waived["waived"][0]["waiver"]["reason"], "approved");
+    assert!(waived["lapsed"].as_array().unwrap().is_empty());
+    // VCC 0.05 mm closer to GND: still a clearance, now of other geometry.
+    let mut moved = sample_board();
+    moved.segments[1] = track(2, 2, (0.0, 0.3), (10.0, 0.3));
+    write_board(&path, moved);
+    let lapsed = report(&mut app, &path, &[]);
+    assert_eq!(clearance(&lapsed), 1, "{lapsed}");
+    assert!(lapsed["waived"].as_array().unwrap().is_empty());
+    assert_eq!(lapsed["lapsed"].as_array().unwrap().len(), 1, "{lapsed}");
+    assert_eq!(lapsed["lapsed"][0]["rule_id"], "builtin::clearance");
+}
+
 #[test]
 fn a_board_that_cannot_be_read_is_refused_with_the_reason() {
     let dir = tempfile::tempdir().unwrap();

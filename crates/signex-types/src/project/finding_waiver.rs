@@ -1,20 +1,26 @@
-//! A per-violation ERC waiver (#1285), stored in `rules.erc_waivers` of a
-//! `.snxprj`. This crate only stores it; `signex-erc` owns what the
-//! identity and fingerprint mean (`signex_erc::waivers::violation`).
+//! A per-finding waiver, stored in `rules.erc_waivers` (#1285) or
+//! `rules.drc_waivers` (#2307) of a `.snxprj`. Both lists hold the same
+//! shape. This crate only stores it; the check owns what the identity and
+//! fingerprint mean (`signex_erc::waivers::violation`, `signex_drc::waivers`).
 
 use serde::{Deserialize, Serialize};
 
 use super::UnknownJson;
 
-/// One accepted ERC finding. Every field loads with a default so a partial
+/// A per-finding ERC waiver.
+pub type ErcWaiver = FindingWaiver;
+/// A per-finding DRC waiver.
+pub type DrcWaiver = FindingWaiver;
+
+/// One accepted finding. Every field loads with a default so a partial
 /// or hand-edited entry still opens; one without a reason or author is kept
 /// on disk but never honoured.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct ErcWaiver {
+pub struct FindingWaiver {
     /// Stable rule id (`builtin::unused_pin`, `user::my_rule`).
     #[serde(default)]
     pub rule_id: String,
-    /// UUIDs of the objects the finding involves, sorted. This, with the rule
+    /// Ids of the objects the finding involves, sorted. This, with the rule
     /// id, is the waiver's identity: positions never are.
     #[serde(default)]
     pub objects: Vec<String>,
@@ -40,7 +46,7 @@ pub struct ErcWaiver {
     pub unknown: UnknownJson,
 }
 
-impl ErcWaiver {
+impl FindingWaiver {
     /// Whether the waiver may hide a finding: it names a rule and objects
     /// and carries a non-blank reason and author.
     pub fn is_complete(&self) -> bool {

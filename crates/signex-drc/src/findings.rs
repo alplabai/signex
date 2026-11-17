@@ -9,10 +9,13 @@ use std::collections::BTreeMap;
 use pcb_geom::{ItemRef, NM_PER_MM, Rejected, copper_layers};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use signex_types::check::{CheckReport, Finding};
+use signex_types::check::{CheckReport, Finding, WaivedFinding};
 use signex_types::format::pcb_layer_token;
+use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::project::DrcWaiver;
 
+use crate::waivers::{split_waived, waiver_json};
 use crate::{DrcReport, DrcRules, SkippedKeepout, Violation, ViolationKind};
 
 /// The id a report names its check by.
@@ -25,19 +28,42 @@ const KEY_HEX_DIGITS: usize = 32;
 /// `net_names` names the board's nets by number. The warnings are
 /// `warnings`, then what the rule text and the setup said, then one per item
 /// the run could not check (keepouts, then items). `rule_set` gets the clearance the run used.
-/// DRC has no waivers, so `waived` and `lapsed` are empty; a finding of a
-/// rule switched off is not listed.
+/// A finding of a rule switched off is not listed. `pcb` is the board the
+/// run checked; a finding one of `waivers` hides is in `waived`, and a
+/// waiver whose items changed since is in `lapsed` (`crate::waivers`).
 pub fn check_report(
     report: &DrcReport,
     net_names: &BTreeMap<u32, String>,
     board: &str,
     warnings: Vec<String>,
     rule_set: Map<String, Value>,
+    pcb: &PcbBoard,
+    waivers: &[DrcWaiver],
 ) -> CheckReport {
-    let findings = report
+    let listed = report
         .violations
         .iter()
+        .filter(|v| report.severity_of(v).is_some());
+    let split = split_waived(listed, pcb, waivers);
+    let findings = split
+        .kept
+        .iter()
         .filter_map(|v| finding(report, v, net_names, board))
+        .collect();
+    let waived = split
+        .waived
+        .iter()
+        .filter_map(|&(v, i)| {
+            Some(WaivedFinding {
+                finding: finding(report, v, net_names, board)?,
+                waiver: waiver_json(&waivers[i]),
+            })
+        })
+        .collect();
+    let lapsed = split
+        .lapsed
+        .iter()
+        .map(|&i| waiver_json(&waivers[i]))
         .collect();
     let warnings = warnings
         .into_iter()
@@ -48,7 +74,7 @@ pub fn check_report(
     let mut rule_set = rule_set;
     rule_set.insert("clearance_nm".into(), json!(report.rules.clearance));
     rule_set.insert("from_default".into(), json!(report.rules.from_default));
-    CheckReport::new(DRC_CHECK, findings, Vec::new(), Vec::new(), warnings)
+    CheckReport::new(DRC_CHECK, findings, waived, lapsed, warnings)
         .with_rule_set(Value::Object(rule_set))
 }
 
@@ -73,7 +99,7 @@ fn finding(
     })
 }
 
-fn rule_of(v: &Violation) -> &str {
+pub(crate) fn rule_of(v: &Violation) -> &str {
     v.rule.as_deref().unwrap_or(v.kind.rule_id())
 }
 
@@ -183,7 +209,7 @@ fn rule_source(rules: &DrcRules, v: &Violation) -> Option<&'static str> {
 
 /// An item's id: its uuid, or `<footprint>/<pad>` for a pad (a pad's own
 /// uuid repeats across placements of one footprint).
-fn item_id(item: &ItemRef) -> String {
+pub(crate) fn item_id(item: &ItemRef) -> String {
     match item {
         ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
         ItemRef::Track(id) | ItemRef::Via(id) | ItemRef::Footprint(id) => id.to_string(),

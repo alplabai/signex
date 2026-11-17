@@ -61,6 +61,12 @@ pub struct ProjectRules {
     /// so a file without one re-saves without one.
     #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
     pub drc: DrcRuleSet,
+    /// Per-finding DRC waivers with a reason (#2307), the shape of
+    /// `erc_waivers`: rule id + the involved items' ids + a fingerprint of
+    /// their geometry. Beside `drc`, so a waiver never changes the rule set's
+    /// hash. Older builds keep the key verbatim in `unknown`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drc_waivers: Vec<super::DrcWaiver>,
     /// Keys written by a newer build (`annotation`, ...); kept so a save
     /// does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -76,6 +82,7 @@ impl Default for ProjectRules {
             erc_net_waivers: BTreeMap::new(),
             erc_waivers: Vec::new(),
             drc: DrcRuleSet::default(),
+            drc_waivers: Vec::new(),
             unknown: UnknownJson::default(),
         }
     }

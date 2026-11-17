@@ -13,6 +13,7 @@ mod rule_notes;
 mod rules;
 mod severity;
 mod user_rules;
+pub mod waivers;
 
 use uuid::Uuid;
 

@@ -11,7 +11,7 @@ use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
 
 mod annotation;
-mod erc_waiver;
+mod finding_waiver;
 mod rule_file;
 mod rule_profile;
 mod rules;
@@ -25,7 +25,7 @@ mod user_profile;
 #[cfg(test)]
 mod user_profile_tests;
 pub use annotation::{AnnotationSettings, AnnotationState};
-pub use erc_waiver::ErcWaiver;
+pub use finding_waiver::{DrcWaiver, ErcWaiver, FindingWaiver};
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
