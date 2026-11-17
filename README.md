@@ -1,10 +1,10 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/graphite/schematic-dark.webp">
-    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex schematic editor in the Graphite interface, with the Signex AI panel" width="900">
+    <img src="assets/screenshots/graphite/schematic-light.webp" alt="Signex 26.11.0 schematic editor in Graphite Light, a component selected and its Properties shown" width="900">
   </picture>
   <br>
-  <em>Design preview: Graphite, the next Signex interface, coming in the next release. <a href="#graphite-the-next-interface-design-preview">More previews</a> &middot; <a href="#screenshots">the app today</a></em>
+  <em>Signex 26.11.0: the schematic editor in Graphite Light (Graphite Dark when your system is dark). <a href="#screenshots">More screenshots</a></em>
 </p>
 
 <h1 align="center">Signex</h1>
@@ -33,13 +33,14 @@
 
 ---
 
-Signex is source-available EDA tooling built in Rust with GPU-accelerated
-rendering and an Altium Designer-quality UI. Today it is a **schematic
-editor** with symbol, footprint and component-library editors, ERC,
-annotation, and PDF / BOM / netlist export. The PCB editor, 3D viewer,
-simulation and plugin system are on the [roadmap](docs/ROADMAP.md), not in
-the Community Preview. Native file formats (`.snxsch`, `.snxpcb`) are
-line-diffable in git and ~5× smaller than the equivalent JSON.
+Signex is source-available electronics design automation built in Rust, with
+GPU-accelerated rendering through wgpu. Release 26.11.0 ships a **schematic
+editor** and a **PCB editor**: from the schematic to a routed, rule-checked
+board and its fabrication files. Symbol, footprint and component-library
+editors and a board 3D view come with it at an earlier stage. Simulation, the
+plugin system and Signex AI are on the [roadmap](docs/ROADMAP.md). Native file
+formats (`.snxsch`, `.snxpcb`) are line-diffable in git and ~5× smaller than
+the equivalent JSON.
 
 **New here?** Install a package (see [Download](#download)), then follow the
 **[User Guide](docs/USER_GUIDE.md)**: it takes you from **File ▸ New Project**
@@ -62,8 +63,8 @@ board.
 **Editions:**
 
 - **Signex Community** (FSL-1.1-ALv2, free, offline forever) — the full editor:
-  schematic today, then PCB layout, routing and DRC (see the
-  [roadmap](docs/ROADMAP.md)), plus the plugin system and the headless CLI
+  schematic and PCB layout with routing and DRC, and the headless CLI; the
+  plugin system joins it when it ships (see the [roadmap](docs/ROADMAP.md))
 - **Signex Pro** (subscription with included AI credits) — Signex AI (AI
   design assistant, Pro) and the Generator, served by Signex's hosted service
 - **Signex Team** — collaboration
@@ -73,164 +74,161 @@ Pro is built from a separate private workspace on top of this one; nothing in
 Community is locked or gated, and Community shows no upgrade prompts. Customer
 designs are never used for AI training unless the customer opts in.
 
-> **Status:** Early development. **v1.0.0-rc.1** (2026-10-29), the first
-> release candidate of the **Community Preview** (schematic-only), is the
-> latest tag and the last one numbered with SemVer; **v0.15.0** (2026-07-23)
-> is the latest stable release. From the next release on, versions are
-> calendar-based, `YY.MM.MICRO` (for example `v26.11.0`; see
-> [docs/ROADMAP.md](docs/ROADMAP.md) §3). `trunk` carries work past v0.15.0
-> that may not be in a release yet: a stock library with placeable parts, typed component values with a
-> range filter, ERC completeness rules with waivers and an ERC report,
-> cross-sheet net navigation, project-wide Find and Replace, and in-place
-> text editing. The release plan and the Community Preview exit criteria are in
-> [docs/ROADMAP.md](docs/ROADMAP.md). Release candidates are published as
-> GitHub **pre-releases**; see [Download](#download).
+> **Status:** **26.11.0** (2026-11-17) is the latest release and the
+> **Community Preview** release. The **schematic and PCB editors** are
+> supported. The footprint, symbol and library editors and the board 3D view
+> work, at an earlier stage. Signex AI ships in Pro and is not in this build.
+> Versions are calendar-based, `YY.MM.MICRO`: 26.11.0 is the first release of
+> November 2026, a second release that month would be 26.11.1, and release
+> candidates such as `26.11.0-rc.1` are published as GitHub **pre-releases**
+> (see [docs/ROADMAP.md](docs/ROADMAP.md) §3). `trunk` carries work made after
+> the latest release.
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
 
-**What works today (v0.1–v0.15, plus the work on `trunk` since):**
+**Schematic**
 
-- Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
-  legacy files from GPL-based EDA tools via the [import companion repository](https://github.com/alplabai/signex-kicad-import)
-- Full schematic editing: select, move, wire (W), bus (B), label (L),
-  component placement (P), delete, rotate (Space), mirror (X/Y)
-- Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
-  (click-by-click), editable drawing Properties with live preview
-- Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
-  `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
-  in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
-- Two themes: Graphite Light (the default) and Graphite Dark, switchable from
-  Preferences ▸ Theme or the title-bar light/dark toggle
-- Altium-style docking panels with drag-to-undock/dock
-- Active Bar — 13-button floating toolbar with dropdown menus
-- Context menu, in-place text editing (F2), selection filter
-- Properties panel with context-aware field editing, Parameter Manager
-- **Multi-window editing (v0.7)** — undock any tab into its own OS window
-  and edit it independently; each window keeps its own pan/zoom, selection,
-  and undo/redo history
-- **ERC validation (v0.7, extended since)** — 31 built-in rules (`RuleKind` in
-  `crates/signex-erc/src/lib.rs`) including cross-sheet hierarchy checks,
-  net-label conflicts, bus checks and completeness checks (part without
-  footprint / value / MPN, unannotated designator, single-pin net, net with no
-  driver, off-grid, ...); per-finding waivers that carry a reason and an
-  author; Reports ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
-  `.pdf` ([docs/ERC_RULES.md](docs/ERC_RULES.md),
+- Hierarchical, multi-sheet schematics in the native `.snxsch` / `.snxprj`
+  formats: wires, buses, net labels, power ports, junctions, no-connects,
+  sheet symbols and entries, drawing shapes, Design Blocks and imported
+  graphics
+- Editing: move and drag with rubber-banding, rotate, mirror, copy and paste,
+  paste array, in-place text editing (F2), Copy Attributes, Find Similar,
+  project-wide Find and Replace, five selection modes and a selection filter
+- Multi-unit symbols; placed parts keep their library symbol version until you
+  update them from the library
+- Annotation in four modes with per-designator locks, Back Annotate from the
+  board, Number Schematic Sheets
+- ERC: 33 built-in rules, including cross-sheet hierarchy, bus and
+  completeness checks, a pin connection matrix, per-finding waivers with a
+  reason and an author, and an ERC report as `.txt`, `.csv`, `.json`, `.html`
+  or `.pdf` ([docs/ERC_RULES.md](docs/ERC_RULES.md),
   [docs/ERC_REPORT.md](docs/ERC_REPORT.md))
-- **Annotation (v0.7)** — four modes, review-and-confirm dialog,
-  lock/unlock per designator, project-wide consistency
-- F5 net-color palette (Altium profile), F8 ERC, F9 AutoFocus (dim unrelated objects)
-- Pin connection matrix (6×6 axes folding the 14 pin directions, per-cell severity override)
-- Lasso, Inside, Outside, Touching Rectangle and Touching Line selection modes (Active Bar select menu)
-- Native `.snxsch` / `.snxpcb` formats — TOML envelope + TSV bulk blocks,
-  line-diffable, ~5× smaller than JSON, single file per design
-- 60fps pan/zoom on schematics with 500+ components
-- **Output (v0.8)** — PDF export with bookmarks + theme palette, Altium-spec
-  BOM preview with column/variant pickers and CSV/HTML/XLSX export,
-  unified Print Preview / Export PDF modal
-- **Multi-project workspaces (v0.8)** — multiple projects open side-by-side,
-  per-tab project scoping, accent-tinted active project root
-- **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
-  project-close lists every dirty file with Save All / Discard All / Cancel
-- **Hierarchical sheet polish (v0.8)** — Altium-port-style child-sheet pins,
-  per-sheet stroke/fill colours
-- **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
-  inactive fill, drag accent from theme
-- **Clean-room native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
-  canonical format; import of GPL-based EDA tool formats moved to the optional companion tool
-- **Component library subsystem (v0.10–v0.11)** — Library Browser tab, DBLib
-  row model, SCH Library editor, Component Preview, Pick Symbol/Footprint +
-  auto-mount, DigiKey / Mouser / LCSC / JLCPCB distributor adapters,
-  per-library git version control + History panel
-- **Clean-room schematic renderer + Symbol editor (v0.13)** — renderer
-  reimplemented against Signex-only specs (`docs/RENDERING_RULES.md`,
-  IEEE-Std-91); unified Active Bar and TOML `.snxsym` envelope
-- **Multi-unit symbols (v0.14)** — `part_count`, per-unit body geometry and
-  graphics, unit buttons, two-click rect / line / circle + three-click arc
-- **Footprint & sketch editor (v0.14)** — `.snxfpt` pad + parametric-sketch
-  editor driven by a clean-room Newton-LM constraint solver (19 constraint
-  kinds); bake to pads / silk / courtyard; Align / Distribute / Move / Fill /
-  Text tooling; CPU 3D-body extrude preview
-- **Authoritative netlist contract (v0.14)** — one connectivity derivation in
-  `signex-net` (`build_netlist` / `build_project_netlist`) consumed by ERC,
-  net-flood, and export; same-name labels + T-junctions merge correctly
-- **Configurable keyboard-shortcut profiles (v0.14)** — grouped, searchable
-  in-app editor; menu labels sourced from the command table
-- **GPU render alignment (v0.14)** — `signex-gfx` aligned to iced's wgpu 27;
-  the PCB editor draws through the shader widget. The schematic editor still
-  draws on the CPU canvas — its GPU adapter is not mounted yet
+- Net colours (F5), AutoFocus (F9), cross-sheet net navigation and the Net
+  Inspector
+- Undo and redo on every editor, and crash recovery for sheets, boards,
+  library rows and projects
+
+**PCB**
+
+- New PCB setup with profile cards; Update PCB from Schematic as a reviewable
+  change table; cross probe between schematic and board in both directions
+- Footprint placement and the Track, Via, Fill, Solid Region, Keepout, Pad,
+  Arc, String and Dimension tools; board graphics and DXF import
+- Interactive routing that walks around or pushes other nets, differential
+  pairs, Quick Route, Multi-Route and length tuning; via stitching, teardrops
+  and gloss
+- Polygon pours filled in priority order, with island and dead-copper removal,
+  cutouts and Slice Pour
+- Layer Stack Manager with up to 32 copper layers and per-layer pad and via
+  sizes; layer sets
+- Net classes, the Rules manager with its class matrix and presets, a DRC rule
+  language, and the DRC panel with waivers
+  ([docs/DRC_RULES.md](docs/DRC_RULES.md))
+- Pin and gate swap, design reuse blocks, track and via locks, panelisation
+  ([docs/PANELISATION.md](docs/PANELISATION.md))
+- Rotatable board view, coordinates from the board origin with Y up, and a
+  board 3D view with the footprints' STEP or VRML models
+- Fabrication Outputs: Gerber RS-274X with X2 attributes, Excellon drill files
+  and a drill table, a pick-and-place CSV, an IPC-D-356 test netlist and a job
+  file ([docs/FABRICATION_OUTPUTS.md](docs/FABRICATION_OUTPUTS.md)); board
+  PDF, Print and board reports
+
+**Libraries**
+
+- `.snxlib` component libraries in the Library Browser tab, with lifecycle
+  states, range filters and a stock library of placeable parts
+- Component editor: General, Datasheet, Pin Map, Parameters, Supply,
+  Simulation and Alternates
+- Symbol editor and a footprint editor driven by a clean-room constraint
+  solver (parametric sketch, bake to pads, silkscreen and courtyard)
+- DigiKey, Mouser, LCSC and JLCPCB distributor adapters
+- Per-library git version control with a History panel
+
+**Output**
+
+- PDF export with bookmarks, Print Preview, BOM preview with CSV / HTML / XLSX
+  export, and netlist export
+
+**Automation and AI**
+
+- One command catalog drives the menus, the Active Bar, context menus, keys
+  and the command palette ([docs/COMMANDS.md](docs/COMMANDS.md))
+- `signex-cli` runs the same commands from JSON Lines, headless or attached to
+  a running Signex over a local, user-only socket that is off by default
+  ([docs/CLI.md](docs/CLI.md), [docs/AGENT_SOCKET.md](docs/AGENT_SOCKET.md));
+  each agent edit is one labelled undo step, recorded in the project's journal
+- ERC and DRC on demand for scripts and agents (`check_erc`, `check_drc`)
+- Signex AI (assistant, agent and generator) ships in Pro; in this build its
+  panel is a placeholder
+
+**Interface**
+
+- Graphite Light (the default) and Graphite Dark, with Inter as the UI font,
+  switchable from Preferences ▸ Theme or the title-bar light/dark toggle
+- Dockable panels; undock any document tab into its own window, or tile
+  documents in the main window
+- Project tab for sheets, variants, libraries, ERC and annotation settings, and
+  version control
+- Command palette (`Ctrl+Shift+P`), configurable keyboard-shortcut profiles
+  that follow the OS (⌘ on macOS), trackpad pinch-zoom and two-finger pan
+- Start screen with pinned and recent projects
 
 **What's next:**
 
 | Plan | Milestone |
 |---|---|
-| **Community Preview** | Schematic-only release |
-| **AI Design** | PCB layout from the schematic, routing, and Signex AI as assistant and generator for schematic and board |
-| **Community Release** | Manufacturing output (Gerber, drill, ODB++) |
+| **AI Design** | Signex AI as assistant, agent and generator for schematic and board; the router plans |
+| **Community Release** | Manufacturing output: ODB++, IPC-2581, STEP 3D export, assembly drawings |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
+| **MCAD** | Enclosure fit check, part modelling and board-driven enclosures |
 | **Pro Release** | Licensing and billing for Signex AI, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
 | **Signex 365** | Cloud PLM |
 
 ## Screenshots
 
-<p align="center">
-  <img src="assets/screenshots/editor.png" alt="Signex schematic editor with a selected symbol and its Properties panel" width="800">
-  <br>
-  <em>Active Bar, project tree with native <code>.snxsch</code> / <code>.snxprj</code> files, and the Properties panel for the selected symbol</em>
-</p>
-
-### Graphite: the next interface (design preview)
-
-The next Signex interface, Graphite, in its light and dark themes. These are
-design previews: Graphite, the Signex AI panel (Assistant and Generator) and
-PCB layout are in development for the AI Design gate
-([roadmap](docs/ROADMAP.md)); the screenshots above this section show the
-app as it ships today, apart from the design preview at the top of this page.
+The current app, rendered from Signex 26.11.0, in Graphite Light and Graphite
+Dark.
 
 <p align="center">
-  <img src="assets/screenshots/graphite/schematic-light.webp" alt="Schematic editor with the Signex AI panel, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/schematic-dark.webp" alt="Schematic editor with the Signex AI panel, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/pcb-light.webp" alt="PCB editor with nets, layer tabs and board Properties, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/pcb-dark.webp" alt="PCB editor with nets, layer tabs and board Properties, Graphite Dark" width="400">
   <br>
-  <em>Schematic editor: Projects, Properties and Messages docks, the Active Bar, and Signex AI</em>
+  <em>PCB editor: the nets panel, the board with tracks and footprints, layer tabs and the board Properties</em>
 </p>
 
 <details>
-<summary><strong>More Graphite screens</strong></summary>
+<summary><strong>More screens</strong></summary>
 
 <p align="center">
-  <img src="assets/screenshots/graphite/pcb-light.webp" alt="PCB layout with layer stack and DRC, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/pcb-dark.webp" alt="PCB layout with layer stack and DRC, Graphite Dark" width="400">
-  <br>
-  <img src="assets/screenshots/graphite/start-light.webp" alt="Start screen with the Generator, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/start-dark.webp" alt="Start screen with the Generator, Graphite Dark" width="400">
-  <br>
   <img src="assets/screenshots/graphite/library-light.webp" alt="Library Browser, Graphite Light" width="400">
   <img src="assets/screenshots/graphite/library-dark.webp" alt="Library Browser, Graphite Dark" width="400">
   <br>
-  <img src="assets/screenshots/graphite/component-light.webp" alt="Component editor pin map, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/component-dark.webp" alt="Component editor pin map, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/component-light.webp" alt="Component editor, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/component-dark.webp" alt="Component editor, Graphite Dark" width="400">
   <br>
-  <img src="assets/screenshots/graphite/footprint-light.webp" alt="Footprint editor with sketch constraints, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/footprint-dark.webp" alt="Footprint editor with sketch constraints, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/footprint-light.webp" alt="Footprint editor, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/footprint-dark.webp" alt="Footprint editor, Graphite Dark" width="400">
   <br>
   <img src="assets/screenshots/graphite/symbol-light.webp" alt="Symbol editor, Graphite Light" width="400">
   <img src="assets/screenshots/graphite/symbol-dark.webp" alt="Symbol editor, Graphite Dark" width="400">
   <br>
-  <img src="assets/screenshots/graphite/preferences-light.webp" alt="Preferences, theme, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/preferences-dark.webp" alt="Preferences, theme, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/preferences-light.webp" alt="Preferences, theme page, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/preferences-dark.webp" alt="Preferences, theme page, Graphite Dark" width="400">
   <br>
-  <img src="assets/screenshots/graphite/dialogs-light.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Light" width="400">
-  <img src="assets/screenshots/graphite/dialogs-dark.webp" alt="Command palette, Annotate, ERC and BOM dialogs, Graphite Dark" width="400">
+  <img src="assets/screenshots/graphite/palette-light.webp" alt="Command palette, Graphite Light" width="400">
+  <img src="assets/screenshots/graphite/palette-dark.webp" alt="Command palette, Graphite Dark" width="400">
   <br>
-  <em>PCB layout, start screen with the Generator, Library Browser, component, footprint and symbol editors, Preferences and the main dialogs</em>
+  <em>Library Browser, component, footprint and symbol editors, Preferences and the command palette</em>
 </p>
 
 </details>
 
 ## Architecture
 
-A 17-crate Rust workspace (`edition = 2024`), an acyclic DAG with
+A 25-crate Rust workspace (`edition = 2024`), an acyclic DAG with
 `signex-app` at the apex and `signex-types` as the shared foundation:
 
 ```
@@ -238,14 +236,16 @@ signex/
 ├── crates/
 │   ├── signex-app/            # Main binary — iced 0.14 app (panels, dock, canvas, editors)
 │   ├── signex-cli/            # Headless command runner — JSON Lines in, result lines out (docs/CLI.md)
+│   ├── signex-commands/       # The command catalog: ids, labels, keys, operands
 │   ├── signex-types/          # Domain types — schematic/PCB/layer/theme — NO rendering deps
-│   ├── signex-engine/         # Command / patch / undo engine for schematic edits
+│   ├── signex-engine/         # Command / patch / undo engine for schematic edits (+ signex-history)
 │   ├── signex-net/            # Authoritative netlist + connectivity contract
 │   ├── signex-erc/            # ERC rule engine (+ signex-erc-dsl)
 │   ├── signex-drc/            # PCB design rule check (measures with pcb-geom; + signex-drc-dsl)
+│   ├── pcb-geom/              # Integer-nanometre board geometry
 │   ├── signex-sketch/         # Clean-room Newton-LM constraint solver + sketch schema
 │   ├── signex-bake/           # Sketch → footprint bake (pad / silk / courtyard / mask / …)
-│   ├── signex-output/         # PDF / netlist / BOM export pipeline (+ signex-bom)
+│   ├── signex-output/         # PDF / netlist / BOM / fabrication output pipeline (+ signex-bom)
 │   ├── signex-renderer/       # Domain types → render primitives (+ signex-gfx wgpu pipelines)
 │   ├── signex-library/        # .snxlib component library — port/adapter model (+ signex-library-server)
 │   ├── signex-widgets/        # Reusable iced widgets (tree view, active bar, previews)
@@ -261,31 +261,33 @@ signex/
 - **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
 - **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
-- **Nanometer coordinates.** `i64` nanometers internally; exact in both metric and imperial — no float `EPS` comparisons for "same point".
-- **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering (`signex-gfx`, wgpu 27) for large PCB scenes.
+- **Nanometer coordinates on disk.** Files store integer nanometres, exact in both metric and imperial; board geometry (`pcb-geom`) computes in integer nanometres, and "same point" is one shared bucket, never a float `EPS`.
+- **GPU rendering.** wgpu 27 through iced: canvas tessellation for sheets and boards, and instanced pipelines in `signex-gfx`.
 
 ## Download
 
 Before downloading, check the [hardware requirements](#hardware-requirements).
-These packages are published for every release from `v1.0.0-rc.1` on. Release candidates such as `v1.0.0-rc.1` are
-published as GitHub **pre-releases**, which the `releases/latest` link skips:
-open the [Releases page](https://github.com/alplabai/signex/releases) to get
-one. The latest stable release, `v0.15.0`, carries a smaller set (x86_64 Linux
-packages, the aarch64 macOS `.dmg`, the Windows installers and zips) and needs
-glibc 2.39.
+Every release publishes these packages. `v26.11.0` is a full release, so the
+[latest release](https://github.com/alplabai/signex/releases/latest) link
+points at it. Release candidates such as `v26.11.0-rc.1` are published as
+GitHub **pre-releases**, which that link skips: open the
+[Releases page](https://github.com/alplabai/signex/releases) to get one.
 
 | Platform | Package | Architecture | Use |
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
-| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer from `v1.0.0-rc.1` on): `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer): `sudo apt install ./signex_<version>_<arch>.deb` |
 | Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
 | Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
 | All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
-From `v1.0.0-rc.1` on, the Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
+For 26.11.0, `<version>` is `26.11.0`: for example
+`signex-setup-x86_64-26.11.0.exe` or `signex_26.11.0_amd64.deb`.
+
+The Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
 need **glibc 2.35 or newer**, so they run on Ubuntu 22.04, Debian 12 and later
 distributions. Check yours with `ldd --version`.
 
@@ -382,7 +384,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 |---|---|---|
 | Scaffold — Iced shell, panels, themes, dock system | v0.1 | Done |
 | Parser — external format read/write, domain types | v0.2 | Done |
-| Canvas — wgpu pan/zoom/grid, Altium-style camera | v0.3 | Done |
+| Canvas — wgpu pan/zoom/grid and camera | v0.3 | Done |
 | Schematic Viewer — render all elements, multi-sheet nav | v0.4 | Done |
 | Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
@@ -394,11 +396,12 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Symbol & Library — clean-room schematic renderer, unified Active Bar in symbol editor, `.snxsym` TOML envelope | v0.13 | Done |
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
-| Command Registry & Symbol Units | 1.0.0-rc.1 | Done (test follow-up #1727 ships in the next release) |
-| **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
-| **AI Design** — PCB layout from the schematic, routing, Signex AI assistant and generator | **Gate** | Next after the Community Preview |
+| Command Registry & Symbol Units | 1.0.0-rc.1 | Done |
+| **Community Preview** — schematic and PCB editors | **Gate** | Reached: `v26.11.0` (2026-11-17) |
+| **AI Design** — Signex AI assistant, agent and generator for schematic and board; the router plans | **Gate** | Next |
 | **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
+| MCAD — enclosure fit check, part modelling, board-driven enclosures | Planned (P3) | Starts once the schematic and PCB editors are complete |
 | **Pro Release** — licensing and billing for Signex AI, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
@@ -416,6 +419,8 @@ In-repo reference docs live under [`docs/`](docs/): the
 [command reference](docs/COMMANDS.md), [headless command runner](docs/CLI.md),
 [keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
 [main menu bar](docs/MENU_BAR.md), [ERC rules](docs/ERC_RULES.md),
+[DRC rules](docs/DRC_RULES.md), [PCB tools](docs/PCB_TOOLS.md),
+[fabrication outputs](docs/FABRICATION_OUTPUTS.md),
 [ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md),
 [RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md), and
 [REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md). The
