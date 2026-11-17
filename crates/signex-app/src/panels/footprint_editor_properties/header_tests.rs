@@ -170,7 +170,12 @@ fn the_simple_pad_stack_lists_paste_and_mask_as_rows_and_its_switch_writes_the_p
     edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
     let texts = pad_texts(&app);
     let has = |label: &str| texts.iter().any(|t| t.text == label);
-    for label in ["Top Paste", "Top Paste on", "Top Solder", "Top Solder tented"] {
+    for label in [
+        "Top Paste",
+        "Top Paste on",
+        "Top Solder",
+        "Top Solder tented",
+    ] {
         assert!(has(label), "{label:?} missing: {texts:#?}");
     }
     for header in ["PASTE", "SOLDER", "Expansion"] {

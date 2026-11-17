@@ -167,6 +167,24 @@ impl<'a> Form<'a> {
         .boxed()
     }
 
+    /// A labelled control too wide for the field column (a segmented choice
+    /// with long labels): the label on its own line, the control below at
+    /// the full form width (#2262).
+    pub fn stacked(
+        &self,
+        label: &Localized,
+        content: Element<'a, PanelMsg>,
+    ) -> Element<'a, PanelMsg> {
+        let label = text(label.clone())
+            .size(TS.body)
+            .color(self.muted())
+            .wrapping(Wrapping::None);
+        container(iced::widget::column![label, content].spacing(SP.xs))
+            .padding([SP.xs, SP.l])
+            .width(Length::Fill)
+            .boxed()
+    }
+
     /// A read-only value in the mono face.
     pub fn value(&self, value: impl Into<Label<'a>>) -> Element<'a, PanelMsg> {
         text(value)
@@ -272,7 +290,7 @@ impl<'a> Form<'a> {
                     .size(TS.body)
                     .align_x(iced::alignment::Horizontal::Center),
             )
-            .padding([SP.s, 0.0])
+            .padding([SP.s, SP.xs])
             .width(Length::Fill)
             .on_press_maybe(msg)
             .style(move |theme: &Theme, status: button::Status| {
