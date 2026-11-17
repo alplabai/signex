@@ -96,6 +96,16 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "untile_documents",
+        category: "window",
+        label: command_ids::CMD_UNTILE_DOCUMENTS,
+        menu_label: Some(command_ids::CMD_MENU_UNTILE_DOCUMENTS),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "toggle_floating_panels",
         category: "window",
         label: command_ids::CMD_TOGGLE_FLOATING_PANELS,

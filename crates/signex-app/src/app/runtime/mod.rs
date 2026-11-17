@@ -1,5 +1,6 @@
 use super::*;
 
+mod board_ctx;
 mod board_sketch_ctx;
 mod body_style_info;
 mod designators;
@@ -14,6 +15,7 @@ pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
+mod placed_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -224,6 +226,8 @@ impl Signex {
         // sync_visible_document_from_active_tab took the empty-doc
         // branch (which suppresses the implicit refresh).
         self.refresh_panel_ctx();
+        // The pane left behind draws on its own canvas now (#2249).
+        self.settle_document_tiling();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas. While an
@@ -264,6 +268,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

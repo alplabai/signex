@@ -546,6 +546,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
 pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -562,5 +563,6 @@ pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }

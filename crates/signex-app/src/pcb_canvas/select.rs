@@ -197,8 +197,8 @@ impl PcbSelectionState {
         }
     }
 
-    /// Select All (#2361): every footprint, track and via the view lets be
-    /// picked. A pad comes with its footprint and is selected alone only
+    /// Select All (#2361): every footprint, track, via and drawn area the view
+    /// lets be picked. A pad comes with its footprint and is selected alone only
     /// when its footprint's body cannot be picked. Whether the selection
     /// changed.
     pub fn select_all(&mut self, board: &PcbBoard) -> bool {
@@ -248,7 +248,7 @@ impl PcbSelectionState {
         let mut highlight = Highlight::default();
         let is_moving = |item: ItemRef| match item {
             ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
-            ItemRef::Track(_) | ItemRef::Via(_) => false,
+            _ => false,
         };
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
@@ -288,7 +288,7 @@ impl PcbSelectionState {
         let carried = anchored.map_or(&none, |c| &c.footprints);
         let mut highlight = self.highlight_except(board, carried);
         // A Move, a paste or a Place waits for clicks: nothing is grabbed.
-        let waiting = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
+        let waiting = carry.is_some_and(super::PcbCarry::waits_for_clicks);
         let grab = if waiting {
             Vec::new()
         } else {
@@ -350,7 +350,7 @@ impl PcbSelectionState {
             .filter_map(|i| match i.item {
                 ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
                 ItemRef::Footprint(id) => Some((true, i.item, id)),
-                ItemRef::Track(_) | ItemRef::Via(_) => None,
+                _ => None,
             })
             .collect();
         if under.iter().any(|(_, _, id)| selected.contains(id)) {
@@ -378,7 +378,7 @@ impl PcbSelectionState {
             .items()
             .filter(|i| match i.item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
-                ItemRef::Track(_) | ItemRef::Via(_) => false,
+                _ => false,
             })
             .map(|i| i.shape)
             .collect()
@@ -431,18 +431,12 @@ impl PcbSelectionState {
             return index;
         }
         let hidden = hidden_items(board, &self.view);
-        BoardIndex::from_items(
-            index
-                .items()
-                .filter(|indexed| !hidden.contains(&indexed.item))
-                .cloned()
-                .collect(),
-        )
+        index.without(|item| hidden.contains(&item))
     }
 }
 
-/// The pads, tracks, vias and footprint bodies of `board` that sit only on
-/// hidden layers. A footprint body follows the side the footprint is on.
+/// The pads, tracks, vias, footprint bodies and drawn areas of `board` that
+/// sit only on hidden layers. A footprint body follows the side the footprint is on.
 fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
     let mut hidden = HashSet::new();
     for footprint in &board.footprints {
@@ -468,7 +462,52 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             hidden.insert(ItemRef::Via(via.uuid));
         }
     }
+    for zone in &board.zones {
+        let kind = pcb_geom::PickKind::of_zone(zone);
+        if let Some(kind) = kind.filter(|_| !view.shows_any(std::slice::from_ref(&zone.layer))) {
+            hidden.insert(ItemRef::Zone {
+                zone: zone.uuid,
+                kind,
+            });
+        }
+    }
+    hidden_free_items(board, view, &mut hidden);
+    for graphic in &board.graphics {
+        let Some(kind) = graphic.kind() else {
+            continue;
+        };
+        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+            hidden.insert(ItemRef::Graphic {
+                graphic: graphic.uuid,
+                kind: pcb_geom::PickKind::of_graphic(kind),
+            });
+        }
+    }
     hidden
+}
+
+/// The strings, free arcs, free pads and dimensions on layers `view` hides
+/// (#2373): not picked, as they are not drawn.
+fn hidden_free_items(board: &PcbBoard, view: &PcbLayerView, hidden: &mut HashSet<ItemRef>) {
+    let off = |layer: &String| !view.shows_any(std::slice::from_ref(layer));
+    for text in board.texts.iter().filter(|t| off(&t.layer)) {
+        hidden.insert(ItemRef::Text(text.uuid));
+    }
+    for arc in board.free.arcs.iter().filter(|a| off(&a.layer)) {
+        hidden.insert(ItemRef::Arc(arc.uuid));
+    }
+    for dimension in board.free.dimensions.iter().filter(|d| off(&d.layer)) {
+        hidden.insert(ItemRef::Dimension(dimension.uuid));
+    }
+    let frame = signex_types::pcb_free::free_pad_frame();
+    for pad in board
+        .free
+        .pads
+        .iter()
+        .filter(|p| !view.shows_pad(&frame, p))
+    {
+        hidden.insert(ItemRef::FreePad(pad.uuid));
+    }
 }
 
 /// One line naming the items the index could not take, if any.
@@ -502,6 +541,12 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Track(id) => format!("track {id}"),
         ItemRef::Via(id) => format!("via {id}"),
         ItemRef::Footprint(id) => format!("footprint {id}"),
+        ItemRef::Zone { zone, .. } => format!("area {zone}"),
+        ItemRef::Text(id) => format!("string {id}"),
+        ItemRef::Arc(id) => format!("arc {id}"),
+        ItemRef::FreePad(id) => format!("free pad {id}"),
+        ItemRef::Dimension(id) => format!("dimension {id}"),
+        ItemRef::Graphic { graphic, .. } => format!("drawing {graphic}"),
     }
 }
 
@@ -513,17 +558,21 @@ mod tests {
 
     fn board() -> PcbBoard {
         let via = Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(4),
             position: Point::new(1.0, 1.0),
             diameter: 0.6,
             drill: 0.3,
             layers: Vec::new(),
             net: 1,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         };
         PcbBoard {
             sketch: None,
+            stackup: None,
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
@@ -539,6 +588,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }
@@ -586,6 +636,8 @@ mod tests {
 
     fn two_layer_board() -> PcbBoard {
         let segment = |n: u128, y: f64, layer: &str| signex_types::pcb::Segment {
+            locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(n),
             start: Point::new(0.0, y),
             end: Point::new(5.0, y),

@@ -180,6 +180,12 @@ pub fn view<'a>(
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);
 
+    // A board search reaches its own board only (#2403): no scope to pick.
+    let scope: Element<'a, FindSimilarMsg> = if state.board {
+        Space::new().height(0).boxed()
+    } else {
+        container(scope_row).padding([SP.m, 14.0]).boxed()
+    };
     let dialog = container(
         column![
             header,
@@ -195,7 +201,7 @@ pub fn view<'a>(
             )
             .padding([SP.l, 14.0]),
             container(scrollable(table).height(Length::Fill)).padding([0.0, 14.0]),
-            container(scope_row).padding([SP.m, 14.0]),
+            scope,
             container(footer).padding([10, 14]),
         ]
         .width(Length::Fixed(DIALOG_W))

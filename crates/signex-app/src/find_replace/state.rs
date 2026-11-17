@@ -96,6 +96,25 @@ pub struct FindReplaceState {
     /// The undocked window whose sheet the dialog searches and selects in
     /// (`None`: the main window's). Set when the dialog opens (#2037).
     pub window: Option<iced::window::Id>,
+    /// The search ran on a board (#2403): its hits, which take the place of
+    /// `matches`; `None` on a sheet.
+    pub board: Option<BoardFind>,
+}
+
+/// What a search found on a board (#2403).
+#[derive(Debug, Clone, Default)]
+pub struct BoardFind {
+    pub path: PathBuf,
+    pub hits: Vec<signex_engine::pcb::find::BoardFindHit>,
+}
+
+impl FindReplaceState {
+    /// How many results the dialog lists: the board's hits on a board.
+    pub fn result_count(&self) -> usize {
+        self.board
+            .as_ref()
+            .map_or(self.matches.len(), |board| board.hits.len())
+    }
 }
 
 #[derive(Debug, Clone)]

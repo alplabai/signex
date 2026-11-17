@@ -1,12 +1,13 @@
 //! Tools ▸ Annotation ▸ Number Schematic Sheets and Window ▸ Tile
 //! Horizontally / Tile Vertically, the rows #2247 wired from stubs: when
-//! they are live and what a click sends.
+//! they are live and what a click sends; Window ▸ Untile (#2249).
 
 use super::*;
 
 const NUMBER: &str = "Tools/Annotation/Number Schematic Sheets...";
 const TILE_H: &str = "Window/Tile Horizontally";
 const TILE_V: &str = "Window/Tile Vertically";
+const UNTILE: &str = "Window/Untile";
 
 #[test]
 fn number_schematic_sheets_needs_a_sheet_of_a_project() {
@@ -82,4 +83,29 @@ fn tile_rows_are_greyed_until_the_main_window_screen_is_known() {
     assert!(row_is_live(&app, TILE_H));
     assert!(row_is_live(&app, TILE_V));
     assert!(has_work(&click(&mut app, TILE_H)), "the windows move");
+}
+
+/// #2249: two documents in the main window tile into panes from the row,
+/// and Untile is live only while they are tiled.
+#[test]
+fn two_docked_documents_tile_into_panes_and_untile() {
+    let mut app = one_symbol_selected();
+    app.document_state.tabs.push(TabInfo {
+        title: "second".to_string(),
+        path: std::path::PathBuf::from("/w/second.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    assert!(row_is_live(&app, TILE_V));
+    assert!(!row_is_live(&app, UNTILE));
+    let _ = click(&mut app, TILE_V);
+    assert_eq!(
+        app.ui_state.document_tiling,
+        Some(crate::app::TileLayout::SideBySide)
+    );
+    assert!(row_is_live(&app, UNTILE));
+    let _ = click(&mut app, UNTILE);
+    assert_eq!(app.ui_state.document_tiling, None);
+    assert!(!row_is_live(&app, UNTILE));
 }

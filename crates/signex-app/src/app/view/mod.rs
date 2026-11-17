@@ -9,10 +9,12 @@ pub(crate) mod dialogs;
 /// of the private `overlays` module.
 pub(crate) mod overlay_id;
 
+mod board_3d;
 mod board_sketch;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
+mod library_tab;
 mod modals;
 mod overlays;
 mod parameter_manager;
@@ -21,6 +23,7 @@ mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
 mod status;
+mod tiled_panes;
 
 use super::*;
 
@@ -226,7 +229,7 @@ impl Signex {
             left_has_panels && !left_collapsed,
             true,
         );
-        let center = self.view_center(window_id);
+        let center = self.view_documents(window_id);
         let right_handle = self.view_resize_handle(
             DragTarget::RightPanel,
             right_has_panels && !right_collapsed,
@@ -460,128 +463,18 @@ impl Signex {
         if let Some(project_id) = self.project_tab_in_window(is_main) {
             return self.view_project_tab(project_id);
         }
-
-        // When the active tab is a Component Preview, render the
-        // editor inside the main window's content pane. The same
-        // surface lights up via the `WindowKind::ComponentEditor`
-        // branch in `view()` when the user undocks the tab into its
-        // own OS window.
-        if is_main
-            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(editor_id) = active_tab.kind.as_component_editor()
-        {
-            let tokens = &self.document_state.panel_ctx.tokens;
-            let address = crate::library::state::EditorAddress::new(
-                editor_id.library_path.clone(),
-                editor_id.table.clone(),
-                editor_id.row_id,
-            );
-            return if let Some(editor) = self.library.editors.get(&address) {
-                crate::library::editor::view(
-                    editor,
-                    &self.library,
-                    tokens,
-                    &self.document_state.panel_ctx.canvas_colors,
-                    self.sheet_grid(),
-                    self.ui_state.device_px_per_logical_px(window_id),
-                    address,
-                    &self.ui_state.i18n,
-                )
-                .map(Message::Library)
-                .boxed()
-            } else {
-                container(
-                    column![
-                        // raw: a fallback of the component editor, which
-                        // moves with the editors (#2060).
-                        signex_widgets::text(signex_widgets::raw(
-                            "Component Editor — state not yet loaded"
-                        ))
-                        .size(TS.title)
-                        .color(crate::styles::ti(tokens.text_secondary)),
-                    ]
-                    .spacing(SP.s)
-                    .align_x(iced::Alignment::Center),
-                )
-                .center(Length::Fill)
-                .style(crate::styles::panel_region(tokens))
-                .boxed()
-            };
+        if let Some(project_id) = self.rules_tab_in_window(is_main) {
+            return self.view_rules_tab(project_id);
         }
 
-        // Standalone primitive editor and Library Browser tabs, in the main
-        // window or in the undocked window of that tab (#1818). Lookup is
-        // path-keyed via `DocumentState.symbol_editors` / `footprint_editors`.
-        if let Some(active_tab) = self
+        // Component Preview, symbol / footprint editor and Library Browser
+        // tabs, in the main window or the undocked window of that tab.
+        if let Some(tab) = self
             .document_state
             .tab_shown_in_window(window_id, &self.ui_state)
+            && let Some(view) = self.view_library_tab(tab, window_id, is_main)
         {
-            if let Some(path) = active_tab.kind.as_symbol_editor()
-                && let Some(editor) = self.document_state.symbol_editors.get(path)
-            {
-                let panel_ctx = &self.document_state.panel_ctx;
-                // Every editor opened from one library shares its grid,
-                // unit and background, as the status bar does.
-                let display = self.symbol_display(path);
-                return crate::library::editor::standalone::view_symbol(
-                    editor,
-                    panel_ctx,
-                    display,
-                    path,
-                    self.ui_state.device_px_per_logical_px(window_id),
-                )
-                .map(Message::Library)
-                .boxed();
-            }
-            if let Some(path) = active_tab.kind.as_footprint_editor()
-                && let Some(editor) = self.document_state.footprint_editors.get(path)
-            {
-                let tokens = &self.document_state.panel_ctx.tokens;
-                let theme_id = self.ui_state.effective_theme_id();
-                return crate::library::editor::standalone::view_footprint(
-                    editor,
-                    tokens,
-                    theme_id,
-                    &self.ui_state.i18n,
-                    self.shows_footprint_layer_strip(window_id),
-                )
-                .map(Message::Library)
-                .boxed();
-            }
-            // Library Browser tab — `.snxlib` opened as a main-window
-            // tab. Per-tab state lives in
-            // `LibraryState.library_browsers` keyed by the same path
-            // that lives on `TabInfo.path`.
-            if let Some(path) = active_tab.kind.as_library_browser() {
-                let tokens = &self.document_state.panel_ctx.tokens;
-                if let Some(browser) = self.library.library_browsers.get(path) {
-                    return crate::library::browser::view(
-                        path,
-                        &self.library,
-                        browser,
-                        tokens,
-                        &self.ui_state.i18n,
-                    )
-                    .map(Message::Library)
-                    .boxed();
-                } else {
-                    // Fallback when somehow the browser-state map is
-                    // out of sync with the tabs vector. Keeps the tab
-                    // renderable rather than crashing.
-                    return container(
-                        // raw: a fallback of the Library Browser, which moves
-                        // with the library views (#2060).
-                        signex_widgets::text(signex_widgets::raw(
-                            "Library Browser — state not yet loaded",
-                        ))
-                        .size(TS.title)
-                        .color(crate::styles::ti(tokens.text_secondary)),
-                    )
-                    .center(Length::Fill)
-                    .style(crate::styles::panel_region(tokens))
-                    .boxed();
-                }
-            }
+            return view;
         }
 
         let has_schematic = if is_main {
@@ -643,6 +536,9 @@ impl Signex {
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch
+        } else if let Some(board_3d) = self.board_3d_view(window_id) {
+            // The board in 3D (#2390).
+            board_3d
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).
@@ -668,6 +564,7 @@ impl Signex {
                         board,
                         view: &view,
                         window: undocked.map(|_| window_id),
+                        prefs: &self.ui_state.layer_strip,
                     },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,

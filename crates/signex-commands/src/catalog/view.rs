@@ -171,6 +171,20 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2403: the board queries an agent or the CLI asks; each answers with
+    // data about the named board and changes nothing. The person's surfaces
+    // are Measure Distance, the Net Inspector and Find Similar Objects.
+    CommandMetadata {
+        id: "measure_board",
+        category: "search",
+        label: command_ids::CMD_MEASURE_BOARD,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::MEASURE_BOARD,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "reset_local_coordinates",
         category: "view",
@@ -188,6 +202,28 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2390: the board in 3D, or flat again. View state only (no undo
+    // step, no dirty mark); `3` on a board in both built-in profiles.
+    CommandMetadata {
+        id: "view_board_3d",
+        category: "view",
+        label: command_ids::CMD_VIEW_BOARD_3D,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_BOARD_3D),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "flip_board_view",
+        category: "view",
+        label: command_ids::CMD_FLIP_BOARD_VIEW,
+        menu_label: Some(command_ids::CMD_MENU_FLIP_BOARD_VIEW),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

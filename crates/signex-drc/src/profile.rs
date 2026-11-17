@@ -37,6 +37,8 @@ pub enum DrcRuleSection {
     Severity,
     /// The rule-language text, compared as a whole.
     RuleText,
+    /// One named rule set (#2398), by name.
+    RuleSet,
     /// A key under `drc` this build does not recognise.
     Other,
 }
@@ -88,6 +90,11 @@ impl DrcRuleChange {
                     (None, None) => "DRC rule text: unchanged".to_string(),
                 }
             }
+            DrcRuleSection::RuleSet => match (self.from.is_some(), self.to.is_some()) {
+                (false, true) => format!("DRC rule set {}: added", self.id),
+                (true, false) => format!("DRC rule set {}: removed", self.id),
+                _ => format!("DRC rule set {}: changed", self.id),
+            },
             DrcRuleSection::Other => format!(
                 "DRC other setting {}: {} -> {}",
                 self.id,
@@ -110,6 +117,21 @@ pub fn diff_drc_against_profile(current: &DrcRuleSet, profile: &DrcRuleSet) -> V
             from: current.dsl.clone(),
             to: after.dsl.clone(),
         });
+    }
+    let names: BTreeSet<&String> = current.sets.keys().chain(after.sets.keys()).collect();
+    for name in names {
+        let (from, to) = (current.sets.get(name), after.sets.get(name));
+        if from != to {
+            let json = |set: &signex_types::project::NamedRuleSet| {
+                serde_json::to_string(set).unwrap_or_default()
+            };
+            out.push(DrcRuleChange {
+                section: DrcRuleSection::RuleSet,
+                id: name.clone(),
+                from: from.map(json),
+                to: to.map(json),
+            });
+        }
     }
     out.extend(diff_unknown(&current.unknown, &after.unknown));
     out

@@ -110,6 +110,19 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
             }
         }
     }
+    // Free arcs (#2373): their ends are vertices, their centres arc centres.
+    if wants(SnapObject::TrackVertices) && every_layer {
+        out.extend(board.free.arcs.iter().flat_map(|a| [a.start, a.end]));
+    }
+    if wants(SnapObject::ArcCenters) && every_layer {
+        out.extend(
+            board
+                .free
+                .arcs
+                .iter()
+                .filter_map(|a| a.sweep().map(|s| s.center)),
+        );
+    }
     if wants(SnapObject::ArcCenters) && every_layer {
         out.extend(board.graphics.iter().filter_map(|g| g.center));
     }

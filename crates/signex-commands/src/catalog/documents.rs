@@ -1,7 +1,7 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
@@ -148,6 +148,190 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2388: open the Fabrication Outputs dialog on the board in view.
+    // Nothing is written until the dialog's Generate. No default key.
+    CommandMetadata {
+        id: "fabrication_outputs",
+        category: "file",
+        label: command_ids::CMD_FABRICATION_OUTPUTS,
+        menu_label: Some(command_ids::CMD_MENU_FABRICATION_OUTPUTS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2404: the board reports. In a window each opens Board Reports on its
+    // table; named a board (`document`), each answers with the table.
+    // Read-only, no default key.
+    CommandMetadata {
+        id: "board_report_bom",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_BOM,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_BOM),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_netlist",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_NETLIST,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_NETLIST),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_net_length",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_NET_LENGTH,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_NET_LENGTH),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "board_report_components",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_REPORT_COMPONENTS,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_REPORT_COMPONENTS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2404: the report in view (the BOM with none) as a CSV file; headless
+    // it writes `kind` of `document` to `path`.
+    CommandMetadata {
+        id: "export_board_report",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_REPORT,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_REPORT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_REPORT_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2402: the Board Print / PDF dialog (File > Print and Export > PDF on
+    // a board open it too); headless it writes `document` to `path`.
+    CommandMetadata {
+        id: "export_board_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_PDF,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_PDF),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_PDF,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_settings",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SETTINGS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_move_sheet",
+        category: "design",
+        label: command_ids::CMD_PROJECT_MOVE_SHEET,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_MOVE_SHEET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_add_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ADD_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_rename_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_RENAME_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_RENAME_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_remove_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_REMOVE_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_active_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_ACTIVE_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ACTIVE_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_move_library",
+        category: "design",
+        label: command_ids::CMD_PROJECT_MOVE_LIBRARY,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_MOVE_LIBRARY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_annotate_undo",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_ANNOTATE_UNDO,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ANNOTATE_UNDO,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_version_control",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VERSION_CONTROL,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_VERSION_CONTROL,
         ..CommandMetadata::DEFAULT
     },
 ];

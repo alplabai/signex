@@ -266,6 +266,31 @@ impl super::super::super::Signex {
         }
         self.refresh_panel_ctx();
     }
+
+    /// The table of project `id` changed outside this section (the board
+    /// Net Classes panel, its Undo or Redo), from `before`: keep the
+    /// selection on the class it named and reload the drafts, so a stale
+    /// draft never lands on another class.
+    pub(in crate::app) fn resync_net_class_panel(
+        &mut self,
+        id: crate::app::ProjectId,
+        before: &[NetClass],
+    ) {
+        let document = &mut self.document_state;
+        let panel = &mut document.panel_ctx.net_classes;
+        if panel.project != Some(id) {
+            return;
+        }
+        let Some(project) = document.projects.iter().find(|p| p.id == id) else {
+            return;
+        };
+        let classes = &project.data.net_classes;
+        let shown = before.get(panel.selected).map(|c| c.name.as_str());
+        if let Some(at) = shown.and_then(|name| classes.iter().position(|c| c.name == name)) {
+            panel.selected = at;
+        }
+        sync(panel, classes);
+    }
 }
 
 mod assign;

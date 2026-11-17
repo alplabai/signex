@@ -1,0 +1,83 @@
+//! Ids of `locales/en-US/project.ftl` added for the Project tab's section
+//! list and its Sheets, Variants, Libraries, ERC and annotation and Version
+//! control sections (#1689-#1693); the older ids of that file are in
+//! `lib.rs`.
+
+define_ids! {
+    PROJECT;
+    PROJECT_SECTION_GENERAL = "project-section-general";
+    PROJECT_SECTION_PARAMETERS = "project-section-parameters";
+    PROJECT_SECTION_SHEETS = "project-section-sheets";
+    PROJECT_SECTION_VARIANTS = "project-section-variants";
+    PROJECT_SECTION_LIBRARIES = "project-section-libraries";
+    PROJECT_SECTION_ERC_ANNOTATION = "project-section-erc-annotation";
+    PROJECT_SECTION_VERSION_CONTROL = "project-section-version-control";
+    PROJECT_SECTION_SCHEMATIC_DEFAULTS = "project-section-schematic-defaults";
+    PROJECT_SECTION_SETUP = "project-section-setup";
+    PROJECT_MOVE_UP = "project-move-up";
+    PROJECT_MOVE_DOWN = "project-move-down";
+    PROJECT_SHEETS_HELP = "project-sheets-help";
+    PROJECT_SHEETS_COL_NUMBER = "project-sheets-col-number";
+    PROJECT_SHEETS_PAGE = "project-sheets-page";
+    PROJECT_SHEETS_COL_NAME = "project-sheets-col-name";
+    PROJECT_SHEETS_COL_FILE = "project-sheets-col-file";
+    PROJECT_SHEETS_EMPTY = "project-sheets-empty";
+    PROJECT_SHEETS_DEFAULTS_TITLE = "project-sheets-defaults-title";
+    PROJECT_SHEETS_DEFAULTS_HELP = "project-sheets-defaults-help";
+    PROJECT_VARIANTS_HELP = "project-variants-help";
+    PROJECT_VARIANTS_COL_ACTIVE = "project-variants-col-active";
+    PROJECT_VARIANTS_COL_NAME = "project-variants-col-name";
+    PROJECT_VARIANTS_BASE = "project-variants-base";
+    PROJECT_VARIANTS_NEW = "project-variants-new";
+    PROJECT_VARIANTS_ADD = "project-variants-add";
+    PROJECT_VARIANTS_REMOVE = "project-variants-remove";
+    PROJECT_VARIANT_EMPTY = "project-variant-empty";
+    PROJECT_VARIANT_TOO_LONG = "project-variant-too-long";
+    PROJECT_VARIANT_INVALID = "project-variant-invalid";
+    PROJECT_VARIANT_RESERVED = "project-variant-reserved";
+    PROJECT_VARIANT_TAKEN = "project-variant-taken";
+    PROJECT_VARIANT_UNKNOWN = "project-variant-unknown";
+    PROJECT_LIBRARIES_HELP = "project-libraries-help";
+    PROJECT_LIBRARIES_COL_NAME = "project-libraries-col-name";
+    PROJECT_LIBRARIES_COL_LOCATION = "project-libraries-col-location";
+    PROJECT_LIBRARIES_COL_KIND = "project-libraries-col-kind";
+    PROJECT_LIBRARIES_COL_STATE = "project-libraries-col-state";
+    PROJECT_LIBRARIES_KIND_PROJECT = "project-libraries-kind-project";
+    PROJECT_LIBRARIES_KIND_SHARED = "project-libraries-kind-shared";
+    PROJECT_LIBRARIES_KIND_GLOBAL = "project-libraries-kind-global";
+    PROJECT_LIBRARIES_STATE_MOUNTED = "project-libraries-state-mounted";
+    PROJECT_LIBRARIES_STATE_READ_ONLY = "project-libraries-state-read-only";
+    PROJECT_LIBRARIES_STATE_MISSING = "project-libraries-state-missing";
+    PROJECT_LIBRARIES_STATE_NOT_MOUNTED = "project-libraries-state-not-mounted";
+    PROJECT_LIBRARIES_EMPTY = "project-libraries-empty";
+    PROJECT_ERC_ANNOTATION_HELP = "project-erc-annotation-help";
+    PROJECT_ERC_TITLE = "project-erc-title";
+    PROJECT_ERC_STORED = "project-erc-stored";
+    PROJECT_ERC_MACHINE = "project-erc-machine";
+    PROJECT_ERC_UNREADABLE = "project-erc-unreadable";
+    PROJECT_ERC_STORE = "project-erc-store";
+    PROJECT_ERC_EDIT_HINT = "project-erc-edit-hint";
+    PROJECT_ERC_COL_RULES = "project-erc-col-rules";
+    PROJECT_ERC_COL_SEVERITY = "project-erc-col-severity";
+    PROJECT_ERC_RULE_COUNT = "project-erc-rule-count";
+    PROJECT_ERC_SEVERITY_ERROR = "project-erc-severity-error";
+    PROJECT_ERC_SEVERITY_WARNING = "project-erc-severity-warning";
+    PROJECT_ERC_SEVERITY_INFO = "project-erc-severity-info";
+    PROJECT_ERC_SEVERITY_OFF = "project-erc-severity-off";
+    PROJECT_ANNOTATE_TITLE = "project-annotate-title";
+    PROJECT_ANNOTATE_UNDO = "project-annotate-undo";
+    PROJECT_ANNOTATE_UNDO_HELP = "project-annotate-undo-help";
+    PROJECT_ANNOTATE_UNDO_DEFAULT = "project-annotate-undo-default";
+    PROJECT_ANNOTATE_UNDO_PROJECT = "project-annotate-undo-project";
+    PROJECT_ANNOTATE_UNDO_PER_SHEET = "project-annotate-undo-per-sheet";
+    PROJECT_VCS_HELP = "project-vcs-help";
+    PROJECT_VCS_REPOSITORY = "project-vcs-repository";
+    PROJECT_VCS_REPOSITORY_PRESENT = "project-vcs-repository-present";
+    PROJECT_VCS_REPOSITORY_ABSENT = "project-vcs-repository-absent";
+    PROJECT_VCS_REPOSITORY_CHECKING = "project-vcs-repository-checking";
+    PROJECT_VCS_ENABLE = "project-vcs-enable";
+    PROJECT_VCS_AUTO_COMMIT = "project-vcs-auto-commit";
+    PROJECT_VCS_AUTO_COMMIT_HELP = "project-vcs-auto-commit-help";
+    PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO = "project-vcs-auto-commit-needs-repo";
+    PROJECT_VCS_PENDING = "project-vcs-pending";
+}

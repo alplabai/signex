@@ -271,6 +271,8 @@ fn a_non_finite_manifest_stackup_or_zone_number_fails_the_save() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     };
     for bad in [f64::NAN, f64::INFINITY] {

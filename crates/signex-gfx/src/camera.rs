@@ -65,8 +65,10 @@ impl CameraUniform {
         let [cos, sin] = rotation.factors();
         let (sx, sy) = (2.0 / viewport_px[0], -2.0 / viewport_px[1]);
         let s = scale_px_per_mm;
+        // Seen from below (#2394) world x is negated before the turn.
+        let m = if rotation.is_mirrored() { -1.0 } else { 1.0 };
         let view_proj = glam::Mat4::from_cols(
-            glam::Vec4::new(sx * s * cos, sy * s * sin, 0.0, 0.0),
+            glam::Vec4::new(m * sx * s * cos, m * sy * s * sin, 0.0, 0.0),
             glam::Vec4::new(-sx * s * sin, sy * s * cos, 0.0, 0.0),
             // `orthographic_rh_gl` with near -1, far 1 sends z to -z.
             glam::Vec4::new(0.0, 0.0, -1.0, 0.0),
@@ -235,6 +237,20 @@ mod tests {
     fn a_turned_camera_follows_the_screen_mapping() {
         let (vp, offset, scale) = ([800.0, 600.0], [400.0, 300.0], 2.0);
         let rotation = ViewRotation::from_degrees(37.0);
+        let camera = CameraUniform::ortho_turned(vp, offset, scale, rotation);
+        let world = [25.0, -10.0];
+        let turned = rotation.apply(world);
+        let screen = [turned[0] * scale + offset[0], turned[1] * scale + offset[1]];
+        let want = [2.0 * screen[0] / vp[0] - 1.0, 1.0 - 2.0 * screen[1] / vp[1]];
+        let got = clip(&camera, world);
+        assert!((got[0] - want[0]).abs() < 1e-5 && (got[1] - want[1]).abs() < 1e-5);
+    }
+
+    /// #2394: a view seen from below maps as the CPU mapping does.
+    #[test]
+    fn a_mirrored_camera_follows_the_screen_mapping() {
+        let (vp, offset, scale) = ([800.0, 600.0], [400.0, 300.0], 2.0);
+        let rotation = ViewRotation::from_degrees(90.0).with_mirror(true);
         let camera = CameraUniform::ortho_turned(vp, offset, scale, rotation);
         let world = [25.0, -10.0];
         let turned = rotation.apply(world);

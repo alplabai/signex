@@ -151,4 +151,15 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "set_sheet_symbol_size",
+        category: "edit",
+        label: command_ids::CMD_SET_SHEET_SYMBOL_SIZE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL_SIZE,
+        ..CommandMetadata::DEFAULT
+    },
 ];

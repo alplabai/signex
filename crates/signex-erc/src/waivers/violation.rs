@@ -359,7 +359,7 @@ fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> 
             let t = sheet.text_notes.iter().find(|t| t.uuid == id)?;
             json!({"text": t.text, "position": to_value(&t.position)?})
         }
-        SelectedKind::Drawing => return None,
+        SelectedKind::Drawing | SelectedKind::Directive => return None,
     };
     let mut out = String::new();
     write_canonical(&value, &mut out)?;

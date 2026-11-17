@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 fn track(n: u128, y: f64, net: u32) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),
@@ -30,6 +32,7 @@ fn track(n: u128, y: f64, net: u32) -> Segment {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -45,6 +48,7 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

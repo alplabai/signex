@@ -469,6 +469,9 @@ pub struct SchematicSheet {
     pub drawings: Vec<SchDrawing>,
     #[serde(default)]
     pub no_erc_directives: Vec<NoConnect>,
+    /// Blankets, Compile Masks and Differential Pair directives (#2420).
+    #[serde(default)]
+    pub directives: Vec<super::SchDirective>,
     #[serde(default)]
     pub title_block: HashMap<String, String>,
     #[serde(default)]
@@ -539,6 +542,7 @@ impl Default for SchematicSheet {
             bus_entries: Vec::new(),
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
+            directives: Vec::new(),
             title_block: HashMap::new(),
             lib_symbols: LibSymbolTable::default(),
             text_widths: super::TextWidths::default(),
@@ -603,6 +607,8 @@ pub enum SelectedKind {
     TextNote,
     ChildSheet,
     Drawing,
+    /// A Blanket, Compile Mask or Differential Pair directive (#2420).
+    Directive,
     /// Symbol reference field ("C39", "R1", …). UUID = symbol UUID.
     SymbolRefField,
     /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
@@ -724,6 +730,11 @@ impl SchematicSheet {
                 .iter()
                 .find(|d| d.uuid == id)
                 .map(|d| d.position),
+            SelectedKind::Directive => self
+                .directives
+                .iter()
+                .find(|d| d.uuid() == id)
+                .map(super::SchDirective::anchor),
             SelectedKind::TextNote => self
                 .text_notes
                 .iter()

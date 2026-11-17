@@ -6,9 +6,11 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 33] = [
+pub(crate) const EN_US_SOURCES: [&str; 41] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
+    include_str!("../locales/en-US/board_query.ftl"),
     include_str!("../locales/en-US/board_sketch.ftl"),
+    include_str!("../locales/en-US/board-checks.ftl"),
     include_str!("../locales/en-US/cross_probe.ftl"),
     include_str!("../locales/en-US/drc.ftl"),
     include_str!("../locales/en-US/menu.ftl"),
@@ -17,6 +19,7 @@ pub(crate) const EN_US_SOURCES: [&str; 33] = [
     include_str!("../locales/en-US/pcb-board.ftl"),
     include_str!("../locales/en-US/pcb_component.ftl"),
     include_str!("../locales/en-US/pcb_primitive.ftl"),
+    include_str!("../locales/en-US/pcb_stack.ftl"),
     include_str!("../locales/en-US/language.ftl"),
     include_str!("../locales/en-US/dialog.ftl"),
     include_str!("../locales/en-US/overlay.ftl"),
@@ -33,12 +36,17 @@ pub(crate) const EN_US_SOURCES: [&str; 33] = [
     include_str!("../locales/en-US/keys.ftl"),
     include_str!("../locales/en-US/notice.ftl"),
     include_str!("../locales/en-US/file_dialog.ftl"),
+    include_str!("../locales/en-US/fab_outputs.ftl"),
+    include_str!("../locales/en-US/board_output.ftl"),
+    include_str!("../locales/en-US/rules.ftl"),
     include_str!("../locales/en-US/dialog_text.ftl"),
     include_str!("../locales/en-US/bom.ftl"),
     include_str!("../locales/en-US/pdf_preview.ftl"),
     include_str!("../locales/en-US/find.ftl"),
     include_str!("../locales/en-US/chrome.ftl"),
     include_str!("../locales/en-US/placeholder.ftl"),
+    include_str!("../locales/en-US/pcb_graphics.ftl"),
+    include_str!("../locales/en-US/board_panel.ftl"),
     include_str!("../locales/en-US/panel_body.ftl"),
 ];
 

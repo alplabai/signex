@@ -110,12 +110,154 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
     },
     CommandMetadata {
         id: "import_graphics",
-        category: "library",
+        category: "place",
         label: command_ids::CMD_IMPORT_GRAPHICS,
-        menu_label: None,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_GRAPHICS),
         group: CommandGroup::General,
-        enable: Enablement::Always,
+        enable: Enablement::RequiresDocument(super::DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_FILE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "edit_blanket",
+        category: "place",
+        label: command_ids::CMD_EDIT_BLANKET,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::EDIT_BLANKET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_arc",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_ARC,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ARC),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_string",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_STRING,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_STRING),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2424: the Graphics tools, on the active non-copper layer. Each arms
+    // its tool on the board in view; each drawing is one undo step. No
+    // default keys.
+    CommandMetadata {
+        id: "place_board_line",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_LINE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_LINE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_graphic_arc",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_GRAPHIC_ARC,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_GRAPHIC_ARC),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_circle",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_CIRCLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_CIRCLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_rectangle",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_RECTANGLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_RECTANGLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_text_frame",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_TEXT_FRAME,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TEXT_FRAME),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2424: the Graphics tools and the drawing's Properties fields as an
+    // agent or the CLI runs them, on the board `document` names; each is
+    // one undo step and answers with the drawing as JSON.
+    CommandMetadata {
+        id: "add_board_graphic",
+        category: "place",
+        label: command_ids::CMD_ADD_BOARD_GRAPHIC,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_GRAPHIC_ADD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_board_graphic",
+        category: "edit",
+        label: command_ids::CMD_SET_BOARD_GRAPHIC,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_GRAPHIC_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2410: DXF import. Without operands it asks for the file; the import
+    // is one board undo step. No default key.
+    CommandMetadata {
+        id: "import_dxf",
+        category: "file",
+        label: command_ids::CMD_IMPORT_DXF,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_DXF),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::IMPORT_DXF,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "import_dxf_outline",
+        category: "file",
+        label: command_ids::CMD_IMPORT_DXF_OUTLINE,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_DXF_OUTLINE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::IMPORT_DXF_OUTLINE,
         ..CommandMetadata::DEFAULT
     },
 ];

@@ -1,4 +1,5 @@
 # profile	kind	context	sequence	action
+altium	bind	Pcb	Q	command:cycle_unit
 altium	bind	Global	Alt+A	command:annotate_schematic_quietly
 altium	bind	Global	BACKSPACE	command:remove_last_vertex
 altium	bind	Global	Mod+C	command:copy
@@ -78,16 +79,34 @@ altium	bind	Global	Shift+F	command:find_similar_objects
 altium	bind	Global	Shift+F12	command:toggle_schematic_list_panel
 altium	bind	Global	Shift+F3	command:find_previous
 altium	bind	Global	Shift+G	command:cycle_snap_grid_backward
+altium	bind	Global	T C	command:cross_probe
+altium	bind	Global	V N	command:open_net_inspector
+altium	bind	Global	W H	command:tile_windows_horizontally
+altium	bind	Global	W U	command:untile_documents
+altium	bind	Global	W V	command:tile_windows_vertically
+altium	bind	Schematic	P C	command:place_off_sheet_connector
+altium	bind	Schematic	P R	command:place_port
+altium	bind	Schematic	P S	command:place_sheet_symbol
+altium	bind	Schematic	P U	command:place_bus_entry
+altium	bind	Schematic	P X	command:place_no_connect
 altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
+altium	bind	Pcb	1	command:board_sketch
+altium	bind	Pcb	3	command:view_board_3d
+altium	bind	Pcb	F	command:change_footprint
+altium	bind	Pcb	L	command:flip_selection
+altium	bind	Pcb	N	command:toggle_ratsnest
 altium	bind	Pcb	P F	command:place_board_fill
+altium	bind	Pcb	P G	command:place_board_polygon_pour
+altium	bind	Pcb	P K	command:place_board_keepout
 altium	bind	Pcb	P R	command:place_board_region
 altium	bind	Pcb	P T	command:place_board_track
 altium	bind	Pcb	P V	command:place_board_via
 altium	bind	Pcb	Shift+*	command:next_signal_layer
 altium	bind	Pcb	Shift++	command:next_layer
 altium	bind	Pcb	Shift+S	command:toggle_single_layer_mode
+altium	bind	Pcb	T D	command:run_drc
 altium	bind	Footprint	1	command:footprint_mode_sketch
 altium	bind	Footprint	2	command:footprint_mode_pads
 altium	bind	Footprint	3	command:footprint_mode_view_3d
@@ -104,6 +123,22 @@ altium	hint	-	-	close_all_documents
 altium	hint	-	Ctrl+P	print
 altium	hint	-	-	open_project_options
 altium	hint	-	R I	report_manager_bom
+altium	hint	-	-	fabrication_outputs
+altium	hint	-	-	board_report_bom
+altium	hint	-	-	board_report_netlist
+altium	hint	-	-	board_report_net_length
+altium	hint	-	-	board_report_components
+altium	hint	-	-	export_board_report
+altium	hint	-	-	export_board_pdf
+altium	hint	-	-	project_settings
+altium	hint	-	-	project_move_sheet
+altium	hint	-	-	project_add_variant
+altium	hint	-	-	project_rename_variant
+altium	hint	-	-	project_remove_variant
+altium	hint	-	-	project_set_active_variant
+altium	hint	-	-	project_move_library
+altium	hint	-	-	project_set_annotate_undo
+altium	hint	-	-	project_set_version_control
 altium	hint	-	-	document_info
 altium	hint	-	-	list_documents
 altium	hint	-	-	read_document
@@ -132,6 +167,9 @@ altium	hint	-	-	autoplace_fields
 altium	hint	-	-	open_datasheet
 altium	hint	-	-	change_component
 altium	hint	-	-	open_parameter_manager
+altium	hint	-	-	set_symbol_parameter
+altium	hint	-	-	lock_board_items
+altium	hint	-	-	unlock_board_items
 altium	hint	-	-	bring_drawings_forward
 altium	hint	-	-	bring_drawings_to_front
 altium	hint	-	-	send_drawings_backward
@@ -150,6 +188,7 @@ altium	hint	-	-	align_bottom
 altium	hint	-	-	align_vertical_centers
 altium	hint	-	-	distribute_vertically
 altium	hint	-	-	align_to_grid
+altium	hint	-	-	arrange_in_box
 altium	hint	-	-	drag
 altium	hint	-	-	drag_selection
 altium	hint	-	-	drag_keep_connections
@@ -164,12 +203,14 @@ altium	hint	-	-	flip_selected_x
 altium	hint	-	-	flip_selected_y
 altium	hint	-	X	mirror_x
 altium	hint	-	Y	mirror_y
-altium	hint	-	-	flip_selection
+altium	hint	-	L	flip_selection
+altium	hint	-	-	set_object_position
+altium	hint	-	-	set_object_rotation
 altium	hint	-	-	place_component
 altium	hint	-	-	place_symbol
 altium	hint	-	-	place_power_symbol
 altium	hint	-	-	place_junction
-altium	hint	-	-	place_no_connect
+altium	hint	-	P X	place_no_connect
 altium	hint	-	P V N	place_no_erc
 altium	hint	-	P V K	place_compile_mask
 altium	hint	-	-	place_design_block
@@ -182,22 +223,40 @@ altium	hint	-	-	place_text_string
 altium	hint	-	-	place_text_frame
 altium	hint	-	-	place_note
 altium	hint	-	-	place_graphic
+altium	hint	-	-	place_board_pad
+altium	hint	-	-	swap_pins
+altium	hint	-	-	swap_gates
+altium	hint	-	-	save_board_reuse_block
+altium	hint	-	-	place_board_reuse_block
 altium	hint	-	-	draw_wire
 altium	hint	-	P W	place_wire
 altium	hint	-	-	draw_bus
 altium	hint	-	P B	place_bus
-altium	hint	-	-	place_bus_entry
+altium	hint	-	P U	place_bus_entry
 altium	hint	-	-	place_wire_to_bus_entry
 altium	hint	-	E W	break_wire
 altium	hint	-	P N	place_net_label
 altium	hint	-	-	place_local_net_label
 altium	hint	-	-	place_global_label
 altium	hint	-	-	place_hierarchical_label
-altium	hint	-	-	place_port
-altium	hint	-	-	place_off_sheet_connector
+altium	hint	-	P R	place_port
+altium	hint	-	P C	place_off_sheet_connector
 altium	hint	-	-	place_signal_harness
 altium	hint	-	-	place_harness_connector
 altium	hint	-	-	place_harness_entry
+altium	hint	-	-	place_board_route
+altium	hint	-	-	cycle_route_mode
+altium	hint	-	-	cycle_arc_mode
+altium	hint	-	-	place_board_diff_pair
+altium	hint	-	-	place_board_quick_route
+altium	hint	-	-	place_board_multi_route
+altium	hint	-	-	tune_net_length
+altium	hint	-	-	tune_diff_pair
+altium	hint	-	-	set_via_span
+altium	hint	-	-	stitch_vias
+altium	hint	-	-	add_teardrops
+altium	hint	-	-	remove_teardrops
+altium	hint	-	-	gloss_selected_routes
 altium	hint	-	-	draw_arc
 altium	hint	-	-	draw_full_circle
 altium	hint	-	-	draw_elliptical_arc
@@ -209,6 +268,19 @@ altium	hint	-	-	draw_round_rectangle
 altium	hint	-	-	draw_polygon
 altium	hint	-	-	draw_bezier
 altium	hint	-	-	import_graphics
+altium	hint	-	-	edit_blanket
+altium	hint	-	-	place_board_arc
+altium	hint	-	-	place_board_string
+altium	hint	-	-	place_board_dimension
+altium	hint	-	-	place_board_line
+altium	hint	-	-	place_board_graphic_arc
+altium	hint	-	-	place_board_circle
+altium	hint	-	-	place_board_rectangle
+altium	hint	-	-	place_board_text_frame
+altium	hint	-	-	add_board_graphic
+altium	hint	-	-	set_board_graphic
+altium	hint	-	-	import_dxf
+altium	hint	-	-	import_dxf_outline
 altium	hint	-	ESC	cancel_current_tool
 altium	hint	-	ENTER	placement_accept
 altium	hint	-	TAB	placement_properties
@@ -219,7 +291,7 @@ altium	hint	-	-	switch_segment_posture
 altium	hint	-	Ctrl+SPACE	cycle_wiring_mode
 altium	hint	-	-	cycle_wire_bus_graphic_mode
 altium	hint	-	-	draw_hierarchical_sheet
-altium	hint	-	-	place_sheet_symbol
+altium	hint	-	P S	place_sheet_symbol
 altium	hint	-	-	place_sheet_entry
 altium	hint	-	-	place_device_sheet_symbol
 altium	hint	-	-	create_sheet_from_sheet_symbol
@@ -232,6 +304,7 @@ altium	hint	-	-	next_sheet
 altium	hint	-	-	previous_sheet
 altium	hint	-	-	sheet_navigation_back
 altium	hint	-	-	sheet_navigation_forward
+altium	hint	-	-	set_sheet_symbol_size
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
 altium	hint	-	Alt+Shift+A	force_annotate_all_schematics
@@ -241,17 +314,50 @@ altium	hint	-	-	back_annotate_schematics
 altium	hint	-	F8	run_erc
 altium	hint	-	-	check_erc
 altium	hint	-	-	open_erc_dialog
-altium	hint	-	-	run_drc
+altium	hint	-	T D	run_drc
 altium	hint	-	-	check_drc
+altium	hint	-	-	open_drc_panel
+altium	hint	-	-	show_drc_violation
+altium	hint	-	-	waive_drc_violation
+altium	hint	-	-	unwaive_drc_violation
+altium	hint	-	-	filter_drc_results
+altium	hint	-	-	open_rules
+altium	hint	-	-	rules_list
+altium	hint	-	-	rules_get
+altium	hint	-	-	rules_add
+altium	hint	-	-	rules_set
+altium	hint	-	-	rules_remove
+altium	hint	-	-	rules_enable
+altium	hint	-	-	rules_effective
+altium	hint	-	-	rules_explain
+altium	hint	-	-	rules_conflicts
+altium	hint	-	-	rules_matrix_get
+altium	hint	-	-	rules_matrix_set
+altium	hint	-	-	rules_set_create
+altium	hint	-	-	rules_set_edit
+altium	hint	-	-	rules_set_apply
+altium	hint	-	-	rules_preset_diff
+altium	hint	-	-	rules_preset_apply
 altium	hint	-	-	update_pcb_from_schematic
 altium	hint	-	-	assign_footprints
-altium	hint	-	-	change_footprint
+altium	hint	-	F	change_footprint
 altium	hint	-	P V	place_board_via
 altium	hint	-	P T	place_board_track
 altium	hint	-	P F	place_board_fill
 altium	hint	-	P R	place_board_region
-altium	hint	-	-	place_board_keepout
-altium	hint	-	-	board_sketch
+altium	hint	-	P K	place_board_keepout
+altium	hint	-	1	board_sketch
+altium	hint	-	P G	place_board_polygon_pour
+altium	hint	-	-	place_board_pour_cutout
+altium	hint	-	-	place_board_slice_pour
+altium	hint	-	-	repour_selected
+altium	hint	-	-	repour_all
+altium	hint	-	-	board_shape_from_selection
+altium	hint	-	-	keepout_from_selection
+altium	hint	-	-	panelize_board
+altium	hint	-	-	remove_board_panel
+altium	hint	-	-	set_board_panel
+altium	hint	-	-	board_panel
 altium	hint	-	Shift++	next_layer
 altium	hint	-	"-"	prev_layer
 altium	hint	-	Shift+*	next_signal_layer
@@ -259,7 +365,19 @@ altium	hint	-	Shift+S	toggle_single_layer_mode
 altium	hint	-	-	toggle_layer_visibility
 altium	hint	-	-	show_all_layers
 altium	hint	-	-	toggle_layers_panel
-altium	hint	-	-	toggle_ratsnest
+altium	hint	-	N	toggle_ratsnest
+altium	hint	-	-	show_layer_set
+altium	hint	-	-	save_layer_set
+altium	hint	-	-	delete_layer_set
+altium	hint	-	-	hide_layer
+altium	hint	-	-	highlight_layer
+altium	hint	-	-	hide_layer_group
+altium	hint	-	-	show_layer_group
+altium	hint	-	-	set_layer_tab_names
+altium	hint	-	-	toggle_layer_numbers
+altium	hint	-	-	board_layer_stack
+altium	hint	-	-	set_layer_stack
+altium	hint	-	-	set_layer_sizes
 altium	hint	-	-	highlight_net_under_cursor
 altium	hint	-	-	highlight_related_net_objects
 altium	hint	-	-	clear_net_highlighting
@@ -270,8 +388,18 @@ altium	hint	-	-	color_net
 altium	hint	-	-	clear_net_color
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	F5	open_net_color_palette
-altium	hint	-	-	open_net_inspector
+altium	hint	-	V N	open_net_inspector
 altium	hint	-	-	assign_net_class
+altium	hint	-	-	open_net_classes
+altium	hint	-	-	open_net_classes_panel
+altium	hint	-	-	add_net_class
+altium	hint	-	-	rename_net_class
+altium	hint	-	-	delete_net_class
+altium	hint	-	-	set_net_class_rules
+altium	hint	-	-	assign_board_net_class
+altium	hint	-	-	select_board_net
+altium	hint	-	-	highlight_board_net
+altium	hint	-	-	query_board_nets
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -282,8 +410,11 @@ altium	hint	-	-	cycle_selection_mode
 altium	hint	-	Shift+F	find_similar_objects
 altium	hint	-	-	select_expand_connection
 altium	hint	-	-	select_node_or_connection_item
-altium	hint	-	-	cross_probe
+altium	hint	-	T C	cross_probe
 altium	hint	-	Ctrl+Shift+X	toggle_cross_select_mode
+altium	hint	-	-	set_selection_filters
+altium	hint	-	-	apply_selection_filter_preset
+altium	hint	-	-	open_selection_filter
 altium	hint	-	Ctrl+F	find
 altium	hint	-	-	find_items
 altium	hint	-	Ctrl+H	find_and_replace
@@ -291,6 +422,7 @@ altium	hint	-	F3	find_next
 altium	hint	-	Shift+F3	find_previous
 altium	hint	-	-	find_text
 altium	hint	-	-	toggle_search_panel
+altium	hint	-	-	find_similar_items
 altium	hint	-	PGUP	zoom_in_at_cursor
 altium	hint	-	PGDN	zoom_out_at_cursor
 altium	hint	-	-	zoom_to_all_objects
@@ -307,8 +439,11 @@ altium	hint	-	-	view_rotate_180
 altium	hint	-	-	view_rotate_reset
 altium	hint	-	-	toggle_origin_marker
 altium	hint	-	Ctrl+M	measure_distance
+altium	hint	-	-	measure_board
 altium	hint	-	-	reset_local_coordinates
 altium	hint	-	Ctrl+Q	cycle_unit
+altium	hint	-	3	view_board_3d
+altium	hint	-	-	flip_board_view
 altium	hint	-	-	cycle_fast_grid
 altium	hint	-	Shift+G	cycle_snap_grid_backward
 altium	hint	-	G	cycle_snap_grid_forward
@@ -335,12 +470,14 @@ altium	hint	-	F1	show_current_command_hotkeys
 altium	hint	-	Shift+F1	show_current_command_shortcuts
 altium	hint	-	Ctrl+TAB	next_document_tab
 altium	hint	-	Ctrl+Shift+TAB	previous_document_tab
-altium	hint	-	-	tile_windows_horizontally
-altium	hint	-	-	tile_windows_vertically
+altium	hint	-	W H	tile_windows_horizontally
+altium	hint	-	W V	tile_windows_vertically
+altium	hint	-	W U	untile_documents
 altium	hint	-	F4	toggle_floating_panels
 altium	hint	-	F11	toggle_properties_panel
 altium	hint	-	F12	toggle_schematic_filter_panel
 altium	hint	-	Shift+F12	toggle_schematic_list_panel
+classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
 classic	bind	Global	Alt+1	command:fast_grid_1
@@ -365,7 +502,7 @@ classic	bind	Global	Ctrl+F5	command:zoom_to_selection_area
 classic	bind	Global	Ctrl+G	command:toggle_search_panel
 classic	bind	Global	Ctrl+HOME	command:zoom_to_all_objects
 classic	bind	Global	Ctrl+K	command:open_command_palette
-classic	bind	Global	Mod+L	command:place_global_label
+classic	bind	Global	Mod+L	command:place_port
 classic	bind	Global	Mod+N	command:new_document
 classic	bind	Global	Mod+O	command:open_document
 classic	bind	Global	Mod+P	command:print
@@ -397,7 +534,7 @@ classic	bind	Global	F5	command:refresh_view
 classic	bind	Global	F8	command:run_erc
 classic	bind	Global	F9	command:toggle_auto_focus
 classic	bind	Global	G	command:drag_keep_connections
-classic	bind	Global	H	command:place_hierarchical_label
+classic	bind	Global	H	command:place_off_sheet_connector
 classic	bind	Global	HOME	command:zoom_to_fit
 classic	bind	Global	I	command:draw_graphic_line
 classic	bind	Global	INS	command:repeat_last_item
@@ -411,7 +548,7 @@ classic	bind	Global	PGDN	command:next_sheet
 classic	bind	Global	PGUP	command:previous_sheet
 classic	bind	Global	Q	command:place_no_connect
 classic	bind	Global	R	command:rotate_counterclockwise
-classic	bind	Global	S	command:draw_hierarchical_sheet
+classic	bind	Global	S	command:place_sheet_symbol
 classic	bind	Global	Alt+Shift+A	command:force_annotate_all_schematics
 classic	bind	Global	Shift+B	command:place_design_block
 classic	bind	Global	Shift+F3	command:find_previous
@@ -427,12 +564,26 @@ classic	bind	Global	V	command:edit_value
 classic	bind	Global	W	command:place_wire
 classic	bind	Global	X	command:mirror_x
 classic	bind	Global	Y	command:mirror_y
-classic	bind	Global	Z	command:place_wire_to_bus_entry
+classic	bind	Global	Z	command:place_bus_entry
 classic	bind	Global	`	command:highlight_net_under_cursor
 classic	bind	Global	~	command:clear_net_highlighting
+classic	bind	Global	Shift+C	command:cross_probe
+classic	bind	Global	Shift+F	command:find_similar_objects
+classic	bind	Global	Shift+I	command:open_net_inspector
+classic	bind	Global	Alt+Shift+H	command:tile_windows_horizontally
+classic	bind	Global	Alt+Shift+U	command:untile_documents
+classic	bind	Global	Alt+Shift+V	command:tile_windows_vertically
 classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
+classic	bind	Pcb	1	command:board_sketch
+classic	bind	Pcb	3	command:view_board_3d
+classic	bind	Pcb	C	command:toggle_ratsnest
+classic	bind	Pcb	Ctrl+M	command:measure_distance
+classic	bind	Pcb	F	command:change_footprint
+classic	bind	Pcb	F7	command:run_drc
+classic	bind	Pcb	K	command:place_board_keepout
+classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	Shift+*	command:next_signal_layer
 classic	bind	Pcb	Shift++	command:next_layer
 classic	bind	Pcb	Shift+S	command:toggle_single_layer_mode
@@ -452,6 +603,22 @@ classic	hint	-	-	close_all_documents
 classic	hint	-	Ctrl+P	print
 classic	hint	-	-	open_project_options
 classic	hint	-	-	report_manager_bom
+classic	hint	-	-	fabrication_outputs
+classic	hint	-	-	board_report_bom
+classic	hint	-	-	board_report_netlist
+classic	hint	-	-	board_report_net_length
+classic	hint	-	-	board_report_components
+classic	hint	-	-	export_board_report
+classic	hint	-	-	export_board_pdf
+classic	hint	-	-	project_settings
+classic	hint	-	-	project_move_sheet
+classic	hint	-	-	project_add_variant
+classic	hint	-	-	project_rename_variant
+classic	hint	-	-	project_remove_variant
+classic	hint	-	-	project_set_active_variant
+classic	hint	-	-	project_move_library
+classic	hint	-	-	project_set_annotate_undo
+classic	hint	-	-	project_set_version_control
 classic	hint	-	-	document_info
 classic	hint	-	-	list_documents
 classic	hint	-	-	read_document
@@ -480,6 +647,9 @@ classic	hint	-	O	autoplace_fields
 classic	hint	-	D	open_datasheet
 classic	hint	-	-	change_component
 classic	hint	-	-	open_parameter_manager
+classic	hint	-	-	set_symbol_parameter
+classic	hint	-	-	lock_board_items
+classic	hint	-	-	unlock_board_items
 classic	hint	-	-	bring_drawings_forward
 classic	hint	-	-	bring_drawings_to_front
 classic	hint	-	-	send_drawings_backward
@@ -498,6 +668,7 @@ classic	hint	-	-	align_bottom
 classic	hint	-	-	align_vertical_centers
 classic	hint	-	-	distribute_vertically
 classic	hint	-	-	align_to_grid
+classic	hint	-	-	arrange_in_box
 classic	hint	-	-	drag
 classic	hint	-	-	drag_selection
 classic	hint	-	G	drag_keep_connections
@@ -512,7 +683,9 @@ classic	hint	-	-	flip_selected_x
 classic	hint	-	-	flip_selected_y
 classic	hint	-	X	mirror_x
 classic	hint	-	Y	mirror_y
-classic	hint	-	-	flip_selection
+classic	hint	-	L	flip_selection
+classic	hint	-	-	set_object_position
+classic	hint	-	-	set_object_rotation
 classic	hint	-	-	place_component
 classic	hint	-	A	place_symbol
 classic	hint	-	P	place_power_symbol
@@ -530,22 +703,40 @@ classic	hint	-	-	place_text_string
 classic	hint	-	-	place_text_frame
 classic	hint	-	-	place_note
 classic	hint	-	-	place_graphic
+classic	hint	-	-	place_board_pad
+classic	hint	-	-	swap_pins
+classic	hint	-	-	swap_gates
+classic	hint	-	-	save_board_reuse_block
+classic	hint	-	-	place_board_reuse_block
 classic	hint	-	-	draw_wire
 classic	hint	-	W	place_wire
 classic	hint	-	-	draw_bus
 classic	hint	-	B	place_bus
-classic	hint	-	-	place_bus_entry
-classic	hint	-	Z	place_wire_to_bus_entry
+classic	hint	-	Z	place_bus_entry
+classic	hint	-	-	place_wire_to_bus_entry
 classic	hint	-	-	break_wire
 classic	hint	-	-	place_net_label
 classic	hint	-	L	place_local_net_label
-classic	hint	-	Ctrl+L	place_global_label
-classic	hint	-	H	place_hierarchical_label
-classic	hint	-	-	place_port
-classic	hint	-	-	place_off_sheet_connector
+classic	hint	-	-	place_global_label
+classic	hint	-	-	place_hierarchical_label
+classic	hint	-	Ctrl+L	place_port
+classic	hint	-	H	place_off_sheet_connector
 classic	hint	-	-	place_signal_harness
 classic	hint	-	-	place_harness_connector
 classic	hint	-	-	place_harness_entry
+classic	hint	-	-	place_board_route
+classic	hint	-	-	cycle_route_mode
+classic	hint	-	-	cycle_arc_mode
+classic	hint	-	-	place_board_diff_pair
+classic	hint	-	-	place_board_quick_route
+classic	hint	-	-	place_board_multi_route
+classic	hint	-	-	tune_net_length
+classic	hint	-	-	tune_diff_pair
+classic	hint	-	-	set_via_span
+classic	hint	-	-	stitch_vias
+classic	hint	-	-	add_teardrops
+classic	hint	-	-	remove_teardrops
+classic	hint	-	-	gloss_selected_routes
 classic	hint	-	-	draw_arc
 classic	hint	-	-	draw_full_circle
 classic	hint	-	-	draw_elliptical_arc
@@ -557,6 +748,19 @@ classic	hint	-	-	draw_round_rectangle
 classic	hint	-	-	draw_polygon
 classic	hint	-	-	draw_bezier
 classic	hint	-	Ctrl+Shift+F	import_graphics
+classic	hint	-	-	edit_blanket
+classic	hint	-	-	place_board_arc
+classic	hint	-	-	place_board_string
+classic	hint	-	-	place_board_dimension
+classic	hint	-	-	place_board_line
+classic	hint	-	-	place_board_graphic_arc
+classic	hint	-	-	place_board_circle
+classic	hint	-	-	place_board_rectangle
+classic	hint	-	-	place_board_text_frame
+classic	hint	-	-	add_board_graphic
+classic	hint	-	-	set_board_graphic
+classic	hint	-	-	import_dxf
+classic	hint	-	-	import_dxf_outline
 classic	hint	-	ESC	cancel_current_tool
 classic	hint	-	-	placement_accept
 classic	hint	-	-	placement_properties
@@ -566,8 +770,8 @@ classic	hint	-	BACKSPACE	undo_last_segment
 classic	hint	-	/	switch_segment_posture
 classic	hint	-	-	cycle_wiring_mode
 classic	hint	-	Shift+SPACE	cycle_wire_bus_graphic_mode
-classic	hint	-	S	draw_hierarchical_sheet
-classic	hint	-	-	place_sheet_symbol
+classic	hint	-	-	draw_hierarchical_sheet
+classic	hint	-	S	place_sheet_symbol
 classic	hint	-	-	place_sheet_entry
 classic	hint	-	-	place_device_sheet_symbol
 classic	hint	-	-	create_sheet_from_sheet_symbol
@@ -580,6 +784,7 @@ classic	hint	-	PGDN	next_sheet
 classic	hint	-	PGUP	previous_sheet
 classic	hint	-	Alt+LEFT	sheet_navigation_back
 classic	hint	-	Alt+RIGHT	sheet_navigation_forward
+classic	hint	-	-	set_sheet_symbol_size
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
 classic	hint	-	Alt+Shift+A	force_annotate_all_schematics
@@ -589,17 +794,50 @@ classic	hint	-	-	back_annotate_schematics
 classic	hint	-	F8	run_erc
 classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
-classic	hint	-	-	run_drc
+classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
+classic	hint	-	-	open_drc_panel
+classic	hint	-	-	show_drc_violation
+classic	hint	-	-	waive_drc_violation
+classic	hint	-	-	unwaive_drc_violation
+classic	hint	-	-	filter_drc_results
+classic	hint	-	-	open_rules
+classic	hint	-	-	rules_list
+classic	hint	-	-	rules_get
+classic	hint	-	-	rules_add
+classic	hint	-	-	rules_set
+classic	hint	-	-	rules_remove
+classic	hint	-	-	rules_enable
+classic	hint	-	-	rules_effective
+classic	hint	-	-	rules_explain
+classic	hint	-	-	rules_conflicts
+classic	hint	-	-	rules_matrix_get
+classic	hint	-	-	rules_matrix_set
+classic	hint	-	-	rules_set_create
+classic	hint	-	-	rules_set_edit
+classic	hint	-	-	rules_set_apply
+classic	hint	-	-	rules_preset_diff
+classic	hint	-	-	rules_preset_apply
 classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	assign_footprints
-classic	hint	-	-	change_footprint
+classic	hint	-	F	change_footprint
 classic	hint	-	-	place_board_via
 classic	hint	-	-	place_board_track
 classic	hint	-	-	place_board_fill
 classic	hint	-	-	place_board_region
-classic	hint	-	-	place_board_keepout
-classic	hint	-	-	board_sketch
+classic	hint	-	K	place_board_keepout
+classic	hint	-	1	board_sketch
+classic	hint	-	-	place_board_polygon_pour
+classic	hint	-	-	place_board_pour_cutout
+classic	hint	-	-	place_board_slice_pour
+classic	hint	-	-	repour_selected
+classic	hint	-	-	repour_all
+classic	hint	-	-	board_shape_from_selection
+classic	hint	-	-	keepout_from_selection
+classic	hint	-	-	panelize_board
+classic	hint	-	-	remove_board_panel
+classic	hint	-	-	set_board_panel
+classic	hint	-	-	board_panel
 classic	hint	-	Shift++	next_layer
 classic	hint	-	"-"	prev_layer
 classic	hint	-	Shift+*	next_signal_layer
@@ -607,7 +845,19 @@ classic	hint	-	Shift+S	toggle_single_layer_mode
 classic	hint	-	-	toggle_layer_visibility
 classic	hint	-	-	show_all_layers
 classic	hint	-	-	toggle_layers_panel
-classic	hint	-	-	toggle_ratsnest
+classic	hint	-	C	toggle_ratsnest
+classic	hint	-	-	show_layer_set
+classic	hint	-	-	save_layer_set
+classic	hint	-	-	delete_layer_set
+classic	hint	-	-	hide_layer
+classic	hint	-	-	highlight_layer
+classic	hint	-	-	hide_layer_group
+classic	hint	-	-	show_layer_group
+classic	hint	-	-	set_layer_tab_names
+classic	hint	-	-	toggle_layer_numbers
+classic	hint	-	-	board_layer_stack
+classic	hint	-	-	set_layer_stack
+classic	hint	-	-	set_layer_sizes
 classic	hint	-	`	highlight_net_under_cursor
 classic	hint	-	-	highlight_related_net_objects
 classic	hint	-	~	clear_net_highlighting
@@ -618,8 +868,18 @@ classic	hint	-	-	color_net
 classic	hint	-	-	clear_net_color
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	open_net_color_palette
-classic	hint	-	-	open_net_inspector
+classic	hint	-	Shift+I	open_net_inspector
 classic	hint	-	-	assign_net_class
+classic	hint	-	-	open_net_classes
+classic	hint	-	-	open_net_classes_panel
+classic	hint	-	-	add_net_class
+classic	hint	-	-	rename_net_class
+classic	hint	-	-	delete_net_class
+classic	hint	-	-	set_net_class_rules
+classic	hint	-	-	assign_board_net_class
+classic	hint	-	-	select_board_net
+classic	hint	-	-	highlight_board_net
+classic	hint	-	-	query_board_nets
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection
@@ -627,11 +887,14 @@ classic	hint	-	Ctrl+A	select_all
 classic	hint	-	Ctrl+Shift+A	unselect_all
 classic	hint	-	-	toggle_selection
 classic	hint	-	-	cycle_selection_mode
-classic	hint	-	-	find_similar_objects
+classic	hint	-	Shift+F	find_similar_objects
 classic	hint	-	Ctrl+4	select_expand_connection
 classic	hint	-	Alt+3	select_node_or_connection_item
-classic	hint	-	-	cross_probe
+classic	hint	-	Shift+C	cross_probe
 classic	hint	-	-	toggle_cross_select_mode
+classic	hint	-	-	set_selection_filters
+classic	hint	-	-	apply_selection_filter_preset
+classic	hint	-	-	open_selection_filter
 classic	hint	-	Ctrl+F	find
 classic	hint	-	-	find_items
 classic	hint	-	-	find_and_replace
@@ -639,6 +902,7 @@ classic	hint	-	F3	find_next
 classic	hint	-	Shift+F3	find_previous
 classic	hint	-	-	find_text
 classic	hint	-	Ctrl+G	toggle_search_panel
+classic	hint	-	-	find_similar_items
 classic	hint	-	F1	zoom_in_at_cursor
 classic	hint	-	F2	zoom_out_at_cursor
 classic	hint	-	Ctrl+HOME	zoom_to_all_objects
@@ -654,9 +918,12 @@ classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
 classic	hint	-	-	toggle_origin_marker
-classic	hint	-	-	measure_distance
+classic	hint	-	Ctrl+M	measure_distance
+classic	hint	-	-	measure_board
 classic	hint	-	SPACE	reset_local_coordinates
 classic	hint	-	Ctrl+Q	cycle_unit
+classic	hint	-	3	view_board_3d
+classic	hint	-	-	flip_board_view
 classic	hint	-	Alt+4	cycle_fast_grid
 classic	hint	-	-	cycle_snap_grid_backward
 classic	hint	-	-	cycle_snap_grid_forward
@@ -683,8 +950,9 @@ classic	hint	-	-	show_current_command_hotkeys
 classic	hint	-	-	show_current_command_shortcuts
 classic	hint	-	-	next_document_tab
 classic	hint	-	-	previous_document_tab
-classic	hint	-	-	tile_windows_horizontally
-classic	hint	-	-	tile_windows_vertically
+classic	hint	-	Alt+Shift+H	tile_windows_horizontally
+classic	hint	-	Alt+Shift+V	tile_windows_vertically
+classic	hint	-	Alt+Shift+U	untile_documents
 classic	hint	-	-	toggle_floating_panels
 classic	hint	-	-	toggle_properties_panel
 classic	hint	-	-	toggle_schematic_filter_panel

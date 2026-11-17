@@ -144,44 +144,20 @@ fn append_solid_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
 /// holes receive no triangles. Holes under 3 vertices are malformed and
 /// skipped. Matches the CPU path, which fills the same subpaths even-odd.
 ///
-/// Returns `false`, appending nothing, when the triangles do not add up to
-/// the outline minus the holes (degenerate, overlapping or outline-touching
-/// holes). The caller then fills the solid outline, so a zone is never left
-/// invisible. The area check is a heuristic: on valid input a wrong fill
-/// does not pass it, but a self-intersecting outline with the right total
-/// area could.
+/// Returns `false`, appending nothing, when
+/// [`crate::ring_fill::triangulate_with_holes`] refuses the fill
+/// (degenerate, overlapping or outline-touching holes). The caller then
+/// fills the solid outline, so a zone is never left invisible.
 fn append_fill_with_holes(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) -> bool {
-    use signex_sketch::geom::{Point2, signed_area};
-    let to_2d = |p: &[f32; 2]| Point2::new(p[0] as f64, p[1] as f64);
-    let outer: Vec<_> = polygon.vertices.iter().map(to_2d).collect();
-    let holes: Vec<Vec<_>> = polygon
-        .holes
-        .iter()
-        .filter(|hole| hole.len() >= 3)
-        .map(|hole| hole.iter().map(to_2d).collect())
-        .collect();
-    let (merged, triangles) = signex_sketch::geom::ear_clip_with_holes(&outer, &holes);
-
-    let expected =
-        signed_area(&outer).abs() - holes.iter().map(|h| signed_area(h).abs()).sum::<f64>();
-    let filled: f64 = triangles
-        .iter()
-        .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
-        .sum();
-    // A non-finite vertex makes every comparison false, so it would pass the
-    // area check unnoticed; treat it as a failed fill.
-    if triangles.is_empty()
-        || !filled.is_finite()
-        || !expected.is_finite()
-        || (filled - expected).abs() > expected.abs() * 1e-6 + 1e-9
-    {
+    let Some((points, triangles)) =
+        crate::ring_fill::triangulate_with_holes(&polygon.vertices, &polygon.holes)
+    else {
         return false;
-    }
-    for [a, b, c] in triangles {
-        for idx in [a, b, c] {
-            let p = merged[idx];
+    };
+    for triangle in triangles {
+        for idx in triangle {
             vertices.push(PolygonVertex::fill(
-                [p.x as f32, p.y as f32],
+                points[idx as usize],
                 polygon.fill_color,
             ));
         }

@@ -1,0 +1,17 @@
+%TF.GenerationSoftware,Alp Lab,Signex*%
+%TF.FileFunction,Profile,NP*%
+%TF.FilePolarity,Positive*%
+%FSLAX46Y46*%
+%MOMM*%
+%TA.AperFunction,Profile*%
+%ADD10C,0.1*%
+%TD*%
+G75*
+D10*
+X0Y0D02*
+G01*
+X20000000Y0D01*
+X20000000Y-10000000D01*
+X0Y-10000000D01*
+X0Y0D01*
+M02*

@@ -2,9 +2,10 @@
 //! net's pads (#2192).
 //!
 //! Copper that already touches (a track across a pad, a via on a track,
-//! two tracks crossing, anything on a same-net zone's outline, zones
-//! overlapping each other)
-//! forms an island. Per net, the islands that hold pads are joined by a
+//! two tracks crossing, anything on a same-net zone's copper, zones
+//! overlapping each other) forms an island. A pour's copper is its fill,
+//! with its holes and the clearance from other nets cut out (#2216).
+//! Per net, the islands that hold pads are joined by a
 //! minimum spanning forest. The answer is a pure function of the board and
 //! is the same on every run: integer nm throughout, sorted output.
 
@@ -13,13 +14,14 @@ use std::collections::{BTreeMap, HashMap};
 use rstar::{AABB, RTree, RTreeObject};
 use signex_types::pcb::PcbBoard;
 
+use crate::area_touch::{areas_meet, shape_meets_area};
 use crate::copper::{collect_copper, layer_mask};
 use crate::index::{BoardIndex, ItemRef, RectSelect};
 use crate::mst::{Edge, euclidean_mst, spanning_forest};
-use crate::rect::RectNm;
-use crate::shape_overlap::polygons_meet;
+use crate::region::Polygon;
 use crate::union_find::UnionFind;
 use crate::units::PointNm;
+use crate::zone_fill::{ZoneFills, zone_area, zone_fills};
 
 /// Up to this many pad pairs across a net's islands, they are joined at
 /// their closest pads. Beyond it each island is reduced to one
@@ -37,46 +39,69 @@ pub struct RatLine {
 
 /// The ratsnest of `board`, sorted by `(net, from, to)`. Items whose
 /// geometry does not convert are left out (see [`BoardIndex::rejected`]);
-/// net 0 is no net.
+/// net 0 is no net. Computes the board's pour fills; a caller that holds
+/// them already passes them to [`ratsnest_with_fills`].
 pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
+    ratsnest_with_fills(board, &zone_fills(board))
+}
+
+/// [`ratsnest`] with the pours' copper taken from `fills`, which must be
+/// [`zone_fills`] of this same board.
+pub fn ratsnest_with_fills(board: &PcbBoard, fills: &ZoneFills) -> Vec<RatLine> {
     let nodes = collect_copper(board);
     if nodes.is_empty() {
         return Vec::new();
     }
     let index = BoardIndex::build(board);
-    let slot: HashMap<ItemRef, usize> =
-        nodes.iter().enumerate().map(|(i, n)| (n.item, i)).collect();
-    let zones = collect_zones(board);
+    // Every node of an identity: an arc's chords share one (#2373).
+    let mut slots: HashMap<ItemRef, Vec<usize>> = HashMap::new();
+    for (i, n) in nodes.iter().enumerate() {
+        slots.entry(n.item).or_default().push(i);
+    }
+    let zones = collect_zones(board, fills);
     let mut islands = UnionFind::new(nodes.len() + zones.len());
+    // The parts of one item are one copper.
+    for (item, parts) in &slots {
+        if item.is_multi_part() {
+            for pair in parts.windows(2) {
+                islands.union(pair[0], pair[1]);
+            }
+        }
+    }
+    let copies = |hit: &ItemRef| slots.get(hit).into_iter().flatten().copied();
     for (i, node) in nodes.iter().enumerate() {
         for hit in index.hit_rect(&node.shape.aabb(), RectSelect::Touching) {
-            let Some(&j) = slot.get(&hit) else { continue };
-            let other = &nodes[j];
-            if other.net == node.net
-                && other.layers & node.layers != 0
-                && node.shape.overlaps(&other.shape)
-            {
-                islands.union(i, j);
+            for j in copies(&hit) {
+                let other = &nodes[j];
+                if other.net == node.net
+                    && other.layers & node.layers != 0
+                    && node.shape.overlaps(&other.shape)
+                {
+                    islands.union(i, j);
+                }
             }
         }
     }
-    // A zone joins every same-net item it overlaps on a shared layer; the
-    // zones are nodes after the items and hold no pad.
+    // A zone's copper joins every same-net item it overlaps on a shared
+    // layer; the zone pieces are nodes after the items and hold no pad.
     for (z, zone) in zones.iter().enumerate() {
-        let rect = RectNm::bounding(zone.outline.iter().copied());
-        let hits = rect.map(|r| index.hit_rect(&r, RectSelect::Touching));
+        let hits = zone
+            .area
+            .bounds()
+            .map(|r| index.hit_rect(&r, RectSelect::Touching));
         for hit in hits.into_iter().flatten() {
-            let Some(&j) = slot.get(&hit) else { continue };
-            let other = &nodes[j];
-            if other.net == zone.net
-                && other.layers & zone.layers != 0
-                && other.shape.overlaps_polygon(&zone.outline)
-            {
-                islands.union(nodes.len() + z, j);
+            for j in copies(&hit) {
+                let other = &nodes[j];
+                if other.net == zone.net
+                    && other.layers & zone.layers != 0
+                    && shape_meets_area(&other.shape, &zone.area)
+                {
+                    islands.union(nodes.len() + z, j);
+                }
             }
         }
     }
-    // Same-net zones on a shared layer whose outlines meet are one copper.
+    // Same-net zone copper on a shared layer that meets is one copper.
     let tree = RTree::bulk_load(
         zones
             .iter()
@@ -91,7 +116,7 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
             if other.zone > entry.zone
                 && peer.net == zone.net
                 && peer.layers & zone.layers != 0
-                && polygons_meet(&zone.outline, &peer.outline)
+                && areas_meet(&zone.area, &peer.area)
             {
                 islands.union(nodes.len() + entry.zone, nodes.len() + other.zone);
             }
@@ -189,7 +214,7 @@ struct ZoneBox {
 
 impl ZoneBox {
     fn new(zone: usize, copper: &ZoneCopper) -> Option<Self> {
-        let r = RectNm::bounding(copper.outline.iter().copied())?;
+        let r = copper.area.bounds()?;
         Some(ZoneBox {
             zone,
             envelope: AABB::from_corners(
@@ -208,39 +233,41 @@ impl RTreeObject for ZoneBox {
     }
 }
 
-/// A zone's copper: its OUTLINE polygon, since the model stores no filled
-/// polygon (the fill is not computed or saved). Holes and the clearance
-/// the fill keeps from other nets are ignored, so a pad in a hole or a
-/// pad the fill would isolate still counts as joined.
+/// A zone's copper on its one layer: for a pour, one piece of its fill
+/// (holes and the clearance from other nets cut out); for any other zone,
+/// its outline less its usable holes.
 struct ZoneCopper {
     net: u32,
     layers: u32,
-    outline: Vec<PointNm>,
+    area: Polygon,
 }
 
-fn collect_zones(board: &PcbBoard) -> Vec<ZoneCopper> {
-    board
-        .zones
-        .iter()
-        .filter_map(|zone| {
-            let layers = layer_mask(std::iter::once(zone.layer.as_str()));
-            let outline: Result<Vec<PointNm>, _> = zone
-                .outline
-                .iter()
-                .map(|&p| PointNm::from_mm(p, "zone.outline"))
-                .collect();
-            match outline {
-                Ok(outline) if zone.net != 0 && layers != 0 && !outline.is_empty() => {
-                    Some(ZoneCopper {
-                        net: zone.net,
-                        layers,
-                        outline,
-                    })
-                }
-                _ => None,
-            }
-        })
-        .collect()
+fn collect_zones(board: &PcbBoard, fills: &ZoneFills) -> Vec<ZoneCopper> {
+    let mut out = Vec::new();
+    for (index, zone) in board.zones.iter().enumerate() {
+        let layers = layer_mask(std::iter::once(zone.layer.as_str()));
+        if zone.net == 0 || layers == 0 {
+            continue;
+        }
+        if zone.is_pour() {
+            let pieces = fills
+                .of(index)
+                .map(|f| f.pieces.as_slice())
+                .unwrap_or_default();
+            out.extend(pieces.iter().map(|area| ZoneCopper {
+                net: zone.net,
+                layers,
+                area: area.clone(),
+            }));
+        } else if let Some(area) = zone_area(zone).filter(|a| !a.outer.is_empty()) {
+            out.push(ZoneCopper {
+                net: zone.net,
+                layers,
+                area,
+            });
+        }
+    }
+    out
 }
 
 #[cfg(test)]

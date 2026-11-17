@@ -8,6 +8,7 @@
 
 mod items;
 mod menus;
+mod sheet_place;
 
 use super::{MenuContext, MenuMessage};
 use crate::keymap::AppCommandId;

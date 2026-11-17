@@ -5,6 +5,7 @@
 use signex_types::pcb::PcbBoard;
 
 use crate::body::footprint_body;
+use crate::pick_filter::PickKind;
 use crate::shape::Shape;
 use crate::transform::Side;
 use crate::units::{NM_PER_MM, PointNm};
@@ -24,8 +25,13 @@ pub struct BoardStats {
     /// Track segments.
     pub tracks: usize,
     pub vias: usize,
-    /// Copper zones.
+    /// Zones that are not a fill, a solid region or a keepout (#2386).
     pub polygons: usize,
+    /// Fills, solid regions and keepouts drawn on the board (#2373), as
+    /// [`PickKind::of_zone`](crate::PickKind::of_zone) names them.
+    pub fills: usize,
+    pub regions: usize,
+    pub keepouts: usize,
     /// Board texts.
     pub strings: usize,
     /// Pads with a drill.
@@ -41,11 +47,18 @@ impl BoardStats {
             area_mm2: outline_area_mm2(board),
             tracks: board.segments.len(),
             vias: board.vias.len(),
-            polygons: board.zones.len(),
             strings: board.texts.len(),
             via_holes: board.vias.iter().filter(|v| v.drill > 0.0).count(),
             ..BoardStats::default()
         };
+        for zone in &board.zones {
+            match PickKind::of_zone(zone) {
+                Some(PickKind::Fills) => stats.fills += 1,
+                Some(PickKind::Regions) => stats.regions += 1,
+                Some(PickKind::Keepouts) => stats.keepouts += 1,
+                _ => stats.polygons += 1,
+            }
+        }
         for footprint in &board.footprints {
             match Side::of_layer(&footprint.layer) {
                 Side::Top => stats.components_top += 1,
@@ -61,6 +74,14 @@ impl BoardStats {
                 stats.components_area_mm2 += shape_area_mm2(&body);
             }
         }
+        // Free pads count with the footprints' (#2373).
+        stats.pads += board.free.pads.len();
+        stats.pad_holes += board
+            .free
+            .pads
+            .iter()
+            .filter(|pad| pad.drill.as_ref().is_some_and(|d| d.diameter > 0.0))
+            .count();
         stats
     }
 
@@ -139,6 +160,7 @@ mod tests {
             net: None,
             roundrect_ratio: 0.0,
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
@@ -171,6 +193,7 @@ mod tests {
     fn board() -> PcbBoard {
         PcbBoard {
             sketch: None,
+            stackup: None,
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
@@ -195,18 +218,22 @@ mod tests {
             ],
             segments: Vec::new(),
             vias: vec![Via {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(5),
                 position: Point::new(5.0, 5.0),
                 diameter: 0.6,
                 drill: 0.3,
                 layers: Vec::new(),
                 net: 0,
+                locked: false,
+                layer_sizes: None,
                 via_type: ViaType::Through,
                 unknown_columns: Default::default(),
             }],
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }

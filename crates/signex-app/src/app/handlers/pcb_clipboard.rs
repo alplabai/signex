@@ -113,8 +113,10 @@ impl Signex {
         let at = grid.snap(start);
         let window = self.interaction_state.acting_window;
         let load = PasteLoad { copy, ghost };
-        // A paste on the cursor replaces a placement tool (#2373).
-        self.interaction_state.pcb_tool = None;
+        // A paste on the cursor replaces a placement tool (#2373) and
+        // Measure, which would take its click (#2403).
+        self.release_board_tool();
+        self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(PcbCarry::paste(path, window, load, at));
         crate::diagnostics::log_info("Paste: click where the copy should go (Esc to cancel)");
         self.refresh_pcb_highlight();
@@ -212,7 +214,8 @@ impl Signex {
     }
 
     /// What Copy carries of the board selection: footprints (a selected
-    /// pad's included), tracks and vias.
+    /// pad's included), tracks and vias; the board copy leaves drawn areas
+    /// out.
     fn pcb_copy_items(&mut self) -> Vec<BoardItemId> {
         self.with_pcb_selection(|state, _| deletable_items(state.selection()))
             .unwrap_or_default()
@@ -291,6 +294,10 @@ fn item_ref(id: BoardItemId) -> Option<ItemRef> {
         BoardItemId::Footprint(id) => Some(ItemRef::Footprint(id)),
         BoardItemId::Segment(id) => Some(ItemRef::Track(id)),
         BoardItemId::Via(id) => Some(ItemRef::Via(id)),
-        BoardItemId::Zone(_) | BoardItemId::Text(_) => None,
+        BoardItemId::Text(id) => Some(ItemRef::Text(id)),
+        BoardItemId::Arc(id) => Some(ItemRef::Arc(id)),
+        BoardItemId::FreePad(id) => Some(ItemRef::FreePad(id)),
+        BoardItemId::Dimension(id) => Some(ItemRef::Dimension(id)),
+        BoardItemId::Zone(_) | BoardItemId::Graphic(_) => None,
     }
 }

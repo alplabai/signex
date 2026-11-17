@@ -65,6 +65,7 @@ impl Signex {
 
     /// One undo or redo of the board at `path` alone.
     pub(crate) fn step_board_once(&mut self, path: &Path, undo: bool) -> bool {
+        let before = self.drc_waiver_step_start(path);
         let result = if undo {
             self.document_state.undo_board(path)
         } else {
@@ -72,6 +73,7 @@ impl Signex {
         };
         match result {
             Ok(true) => {
+                self.carry_drc_over_waiver_step(path, before);
                 self.drop_pcb_footprint_draft_of(path);
                 self.interaction_state.pcb_primitive.drop_drafts_of(path);
                 self.after_board_change(path);
@@ -102,33 +104,46 @@ impl Signex {
         } else {
             self.repaint_undocked_boards(path);
         }
+        // The DRC panel says its results are stale as soon as the board
+        // changes (#2399).
+        self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
     }
 
-    /// Give each undocked window that shows the board at `path` its new
-    /// geometry.
+    /// Give each undocked window, and the unfocused tile pane (#2249), that
+    /// shows the board at `path` its new geometry.
     pub(crate) fn repaint_undocked_boards(&mut self, path: &Path) {
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
         let snapshot = self.undocked_pcb_snapshot(path, board);
         let board_grid = Some(signex_engine::pcb::placement::grid_step_mm(board));
-        let origin_marker = self.pcb_layer_view(path).origin_marker_visible();
+        let view = self.pcb_layer_view(path);
+        let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = crate::pcb_canvas::BoardMarks::of(board);
-        for (id, canvas) in &mut self.interaction_state.pcb_canvases {
-            let shows = matches!(
-                self.ui_state.windows.get(id),
-                Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
-                    if shown == path
-            );
-            if shows {
-                canvas.set_renderer_snapshot(Some(snapshot.clone()));
-                canvas.set_board_grid(board_grid);
-                canvas.set_board_marks(marks.clone());
-                canvas.set_origin_marker_visible(origin_marker);
-                canvas.clear_content_cache();
-            }
+        let windows = &self.ui_state.windows;
+        let pane = self.interaction_state.tile_panes.board.get_mut(path);
+        let canvases = self
+            .interaction_state
+            .pcb_canvases
+            .iter_mut()
+            .filter(|(id, _)| {
+                matches!(
+                    windows.get(id),
+                    Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
+                        if shown == path
+                )
+            })
+            .map(|(_, canvas)| canvas)
+            .chain(pane);
+        for canvas in canvases {
+            canvas.set_renderer_snapshot(Some(snapshot.clone()));
+            canvas.set_board_grid(board_grid);
+            canvas.set_board_marks(marks.clone());
+            canvas.set_origin_marker_visible(origin_marker);
+            canvas.set_view_flipped(flipped);
+            canvas.clear_content_cache();
         }
     }
 }

@@ -39,7 +39,7 @@ pub(super) const TOOL: &[CommandMetadata] = &[
         id: "copy_attributes_or_add_vertex",
         category: "interactive",
         label: command_ids::CMD_COPY_ATTRIBUTES_OR_ADD_VERTEX,
-        menu_label: None,
+        menu_label: Some(command_ids::CMD_MENU_COPY_ATTRIBUTES_OR_ADD_VERTEX),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_MUTATES,

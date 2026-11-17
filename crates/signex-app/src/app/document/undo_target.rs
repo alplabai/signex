@@ -15,6 +15,9 @@ pub(crate) enum UndoTarget {
     Document(DocumentKey),
     /// The project's stored ERC rule set (the ERC dialog).
     ProjectRules(ProjectId),
+    /// The project's rule set, stepped from its Rules tab (#2398): the same
+    /// history as the ERC dialog's, stepped by `update` directly.
+    RulesTab(ProjectId),
     /// The window shows nothing with a history.
     None,
 }
@@ -41,6 +44,9 @@ impl Signex {
             Some(None) => return UndoTarget::None,
             None => docs.tabs.get(docs.active_tab),
         };
+        if let Some(project) = tab.and_then(|tab| tab.kind.as_rules()) {
+            return UndoTarget::RulesTab(project);
+        }
         tab.and_then(DocumentKey::of)
             .map_or(UndoTarget::None, UndoTarget::Document)
     }
@@ -62,7 +68,7 @@ impl Signex {
         let docs = &self.document_state;
         match target {
             UndoTarget::None => (false, false),
-            UndoTarget::ProjectRules(id) => docs
+            UndoTarget::ProjectRules(id) | UndoTarget::RulesTab(id) => docs
                 .rules_history
                 .get(id)
                 .map_or((false, false), |h| (h.can_undo(), h.can_redo())),
@@ -102,6 +108,9 @@ impl Signex {
     /// sheet is stepped through the active sheet: a window that shows one is
     /// made the active one first (`run_in_window`).
     pub(crate) fn step_undo_target(&mut self, target: &UndoTarget, undo: bool) -> bool {
+        if let UndoTarget::RulesTab(project) = target {
+            return self.step_rules_history(*project, undo);
+        }
         // The ERC dialog steps its rules through `ErcMsg::RulesUndone`/`Redone`.
         let UndoTarget::Document(key) = target else {
             return false;

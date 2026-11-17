@@ -1,4 +1,4 @@
-//! #1269 - Tools ▸ Net Inspector opens a panel that lists every net of the
+//! #1269 - View ▸ Net Inspector (Tools before #2416) opens a panel that lists every net of the
 //! active project from the stitched net index, filterable, each expandable
 //! to its members; a member click goes to it.
 //!

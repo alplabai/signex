@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::command::BoardCommand;
 use super::error::BoardCommandError;
-use super::items::BoardItemId;
+use super::items::{BoardItem, BoardItemId};
 
 /// A quarter turn or a mirror of placed footprints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +106,27 @@ pub fn name(footprint: &Footprint) -> String {
     }
 }
 
-/// Move every footprint in `ids` by `delta`.
+/// The footprint of `board` whose designator is `designator` (trimmed), for
+/// a command that names a component (#2410). Refused when none or several
+/// carry it.
+pub fn by_designator(board: &PcbBoard, designator: &str) -> Result<Uuid, String> {
+    let designator = designator.trim();
+    let mut found = board
+        .footprints
+        .iter()
+        .filter(|fp| fp.reference == designator);
+    match (found.next(), found.next()) {
+        (Some(fp), None) => Ok(fp.uuid),
+        (None, _) => Err(format!("no component on the board is named {designator}")),
+        (Some(_), Some(_)) => Err(format!(
+            "several components on the board are named {designator}; annotate the board first"
+        )),
+    }
+}
+
+/// Move every footprint in `ids` by `delta`. The track ends on their pads
+/// move with them (`pcb_geom::tracks_on_pads`, #2379), in the same batch,
+/// so the move stays one undo step.
 pub fn move_commands(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
@@ -116,13 +136,21 @@ pub fn move_commands(
     if delta.x == 0.0 && delta.y == 0.0 {
         return Ok(Vec::new());
     }
-    Ok(footprints
+    let mut commands: Vec<BoardCommand> = footprints
         .iter()
         .map(|fp| BoardCommand::MoveFootprint {
             footprint: fp.uuid,
             to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
         })
-        .collect())
+        .collect();
+    let tracks: Vec<BoardItem> = pcb_geom::tracks_on_pads(board, ids)
+        .iter()
+        .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
+        .collect();
+    if !tracks.is_empty() {
+        commands.push(BoardCommand::ReplaceItems { items: tracks });
+    }
+    Ok(commands)
 }
 
 /// Turn or mirror the footprints in `ids`. One footprint turns about its
@@ -174,8 +202,8 @@ pub fn transform_commands(
     Ok(commands)
 }
 
-/// Delete `items`, refusing the whole edit if a footprint among them is
-/// locked.
+/// Delete `items`, refusing the whole edit if a footprint, track or via among
+/// them is locked.
 pub fn delete_commands(
     board: &PcbBoard,
     items: Vec<BoardItemId>,
@@ -192,6 +220,10 @@ pub fn delete_commands(
         .collect();
     if !footprints.is_empty() {
         editable_footprints(board, &footprints)?;
+    }
+    let locked = super::lock::locked_names(board, items.iter().copied());
+    if !locked.is_empty() {
+        return Err(PlacementRefusal::Locked(locked));
     }
     Ok(vec![BoardCommand::DeleteItems { items }])
 }

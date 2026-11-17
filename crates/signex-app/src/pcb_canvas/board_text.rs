@@ -25,6 +25,7 @@ pub(super) struct TextKey {
     offset: (f32, f32),
     scale: f32,
     degrees: f32,
+    mirrored: bool,
     scene_generation: u64,
 }
 
@@ -34,6 +35,7 @@ impl TextKey {
             offset: (camera.offset().x, camera.offset().y),
             scale: camera.scale(),
             degrees: camera.rotation().degrees(),
+            mirrored: camera.rotation().is_mirrored(),
             scene_generation: canvas.scene_generation(),
         }
     }
@@ -110,6 +112,9 @@ pub(super) fn paint_texts(
 ) {
     let mut colours: Vec<(PcbLayer, Color)> = Vec::new();
     let turn = camera.rotation().degrees();
+    // Seen from below (#2394) a text turns the other way and its mirror
+    // flips, as its board geometry does.
+    let from_below = camera.rotation().is_mirrored();
     for text in texts {
         let Some(placed) = place(text, camera, view) else {
             continue;
@@ -126,13 +131,18 @@ pub(super) fn paint_texts(
             align_y: alignment::Vertical::Center,
             ..canvas::Text::default()
         };
-        let angle = (text.rotation_deg + turn).rem_euclid(360.0);
+        let (rotation, mirrored) = if from_below {
+            (-text.rotation_deg, !text.mirrored)
+        } else {
+            (text.rotation_deg, text.mirrored)
+        };
+        let angle = (rotation + turn).rem_euclid(360.0);
         frame.with_save(|inner| {
             inner.translate(Vector::new(placed.anchor.x, placed.anchor.y));
             if angle != 0.0 {
                 inner.rotate(Radians(angle.to_radians()));
             }
-            if text.mirrored {
+            if mirrored {
                 inner.scale_nonuniform(Vector::new(-1.0, 1.0));
             }
             inner.fill_text(glyphs);

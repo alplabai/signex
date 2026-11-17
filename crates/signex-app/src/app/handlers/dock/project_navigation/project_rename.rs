@@ -581,6 +581,10 @@ impl Signex {
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
+                // A Rules tab keeps its own title (#2398).
+                if tab.kind.as_rules().is_some() {
+                    continue;
+                }
                 tab.title = if tab.kind.as_project().is_some() {
                     crate::app::project_tab::project_tab_title(to)
                 } else {

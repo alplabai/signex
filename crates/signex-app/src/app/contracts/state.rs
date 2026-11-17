@@ -28,6 +28,9 @@ pub enum ContextAction {
     /// command id (the power ports). Closes both menus and dispatches the
     /// action through the Active Bar handler.
     ActiveBar(crate::active_bar::ActiveBarAction),
+    /// A board menu row of a project's reuse block (#2410): the menu closes,
+    /// then the event runs on the board of the window the menu was in.
+    ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -40,6 +43,11 @@ pub enum ContextSubmenu {
     /// "Arrange ›": order the selected drawings (#1583). Shown only when the
     /// selection holds a drawing.
     Arrange,
+    /// "Part Actions ›": the selected placed part's library actions (#2419).
+    PartActions,
+    /// "Sheet Actions ›": the selected sheet symbol's child-sheet actions and
+    /// the project's sheet numbering (#2419).
+    SheetActions,
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,

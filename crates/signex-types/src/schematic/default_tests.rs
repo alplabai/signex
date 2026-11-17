@@ -70,6 +70,7 @@ fn every_field_is_accounted_for() {
         bus_entries: _,
         drawings: _,
         no_erc_directives: _,
+        directives: _,
         title_block: _,
         lib_symbols: _,
         text_widths: _,

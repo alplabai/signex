@@ -111,6 +111,8 @@ pub struct PanelContext {
     pub net_inspector: super::NetInspectorView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
+    /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
+    pub layer_stack: Option<super::LayerStackFacts>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -120,6 +122,9 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The editable geometry, lock and draft of the single selected object
+    /// (#2418).
+    pub placed: super::PlacedPanel,
     /// The fields a multi-selection shares, per kind (#1258); empty unless
     /// more than one object is selected.
     pub multi_groups: signex_engine::SelectionGroups,

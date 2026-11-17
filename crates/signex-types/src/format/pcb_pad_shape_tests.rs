@@ -44,6 +44,7 @@ fn pad(n: u128, shape: PadShape, ratio: f64, rotation: f64) -> Pad {
         net: None,
         roundrect_ratio: ratio,
         rotation,
+        layer_sizes: None,
         net_locked: false,
     }
 }

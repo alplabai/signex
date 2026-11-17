@@ -39,6 +39,7 @@ fn footprint(id: u128, reference: &str, x: f64, locked: bool) -> Footprint {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -73,6 +74,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,
@@ -91,6 +93,7 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
