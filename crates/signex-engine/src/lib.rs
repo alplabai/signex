@@ -31,6 +31,7 @@ mod transform;
 mod exec;
 mod find;
 mod find_similar;
+mod dxf_plane;
 mod graphics_import;
 
 #[cfg(test)]

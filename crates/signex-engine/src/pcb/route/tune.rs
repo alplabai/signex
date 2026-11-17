@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::super::command::BoardCommand;
 use super::super::items::{BoardItem, BoardItemId};
+use super::super::lock::locked_names;
 
 /// The accordion's shape and the rule it keeps.
 pub struct Meander<'a> {
@@ -66,11 +67,15 @@ pub enum TuneRefusal {
     Unrepresentable,
     #[error("the net has no straight track to tune")]
     NoTrack,
+    /// The tracks that could take the accordion are locked.
+    #[error("{} is locked", .0.join(", "))]
+    Locked(Vec<String>),
 }
 
 /// Lengthen `net` to `target_mm` on its longest straight track that takes
 /// the accordion ([`tune_length`]); a track too short for it, or with no
-/// clear side, hands over to the next longest.
+/// clear side, hands over to the next longest. A locked track is passed
+/// over; a net whose only tracks are locked is refused as locked.
 pub fn tune_net(
     board: &PcbBoard,
     net: u32,
@@ -81,16 +86,21 @@ pub fn tune_net(
     if net == 0 {
         return Err(TuneRefusal::NoNet);
     }
-    let mut tracks: Vec<(f64, Uuid)> = board
+    let (locked, mut tracks): (Vec<_>, Vec<_>) = board
         .segments
         .iter()
         .filter(|s| s.net == net)
-        .filter_map(|s| pcb_geom::track_length_mm(s).map(|length| (length, s.uuid)))
-        .collect();
+        .filter_map(|s| pcb_geom::track_length_mm(s).map(|length| (length, s)))
+        .partition(|(_, s)| s.locked);
     tracks.sort_by(|a, b| b.0.total_cmp(&a.0));
-    let mut refusal = TuneRefusal::NoTrack;
+    let mut refusal = if tracks.is_empty() && !locked.is_empty() {
+        let names = locked.iter().map(|(_, s)| BoardItemId::Segment(s.uuid));
+        TuneRefusal::Locked(locked_names(board, names))
+    } else {
+        TuneRefusal::NoTrack
+    };
     for (_, track) in tracks {
-        match tune_length(board, track, target_mm, meander, &mut ids) {
+        match tune_length(board, track.uuid, target_mm, meander, &mut ids) {
             Ok(commands) => return Ok(commands),
             Err(why @ (TuneRefusal::TooShort | TuneRefusal::Blocked)) => {
                 if refusal == TuneRefusal::NoTrack {
@@ -142,7 +152,8 @@ pub fn tune_nets(
 /// Lengthen `track`'s net to `target_mm`: the track replaced by an
 /// accordion of the fewest bumps no taller than the amplitude, left of the
 /// track if that side is clear, else right. The net ends at the target or
-/// at most a few nm over. `ids` names each new track.
+/// at most a few nm over. `ids` names each new track. A locked track is
+/// refused.
 pub fn tune_length(
     board: &PcbBoard,
     track: Uuid,
@@ -156,6 +167,10 @@ pub fn tune_length(
         .iter()
         .find(|s| s.uuid == track)
         .ok_or(TuneRefusal::Gone)?;
+    if segment.locked {
+        let names = locked_names(board, [BoardItemId::Segment(track)]);
+        return Err(TuneRefusal::Locked(names));
+    }
     if segment.net == 0 {
         return Err(TuneRefusal::NoNet);
     }
@@ -221,6 +236,7 @@ pub fn tune_length(
                 uuid: ids(),
                 start: point(i, leg[0]),
                 end: point(i + 1, leg[1]),
+                locked: false,
                 ..segment.clone()
             })
         })

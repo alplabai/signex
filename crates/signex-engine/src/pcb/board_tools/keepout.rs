@@ -18,6 +18,8 @@ use super::{ToolEdit, ToolRefusal, ToolReport};
 use crate::pcb::command::BoardCommand;
 use crate::pcb::draw::new_keepout;
 use crate::pcb::items::{BoardItem, BoardItemId};
+use crate::pcb::lock::locked_names;
+use crate::pcb::placement::PlacementRefusal;
 
 /// The selected zones `zones` turned into keepouts, or, with no zone
 /// selected, the loop the selected tracks `tracks` close as a new keepout
@@ -48,6 +50,11 @@ pub fn keepout_from_selection(
     let on_net = lines.iter().filter(|s| s.net != 0).count();
     if on_net > 0 {
         return Err(ToolRefusal::LinesOnNet(on_net));
+    }
+    // A locked line is not deleted, so the loop it closes cannot go either.
+    let locked = locked_names(board, lines.iter().map(|s| BoardItemId::Segment(s.uuid)));
+    if !locked.is_empty() {
+        return Err(PlacementRefusal::Locked(locked).into());
     }
     if lines.iter().any(|s| s.layer != first.layer) {
         return Err(ToolRefusal::Path(

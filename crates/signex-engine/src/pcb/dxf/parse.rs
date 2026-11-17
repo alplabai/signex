@@ -5,6 +5,7 @@
 use signex_types::pcb::Point;
 
 use super::DxfError;
+use crate::dxf_plane::plane_x_sign;
 
 /// One drawing entity, in millimetres in the file's own axes (y up).
 #[derive(Debug, Clone, PartialEq)]
@@ -67,14 +68,17 @@ pub fn parse_dxf(text: &str) -> Result<DxfDrawing, DxfError> {
         }
         let end = next_entity(&groups, i + 1);
         let fields = &groups[i + 1..end];
+        let sign = plane_x(fields);
         match g.value {
             "LINE" => drawing.entities.push(line(fields, scale)?),
-            "ARC" => drawing.entities.push(arc(fields, scale)?),
-            "CIRCLE" => drawing.entities.push(circle(fields, scale)?),
-            "LWPOLYLINE" => drawing.entities.push(lw_polyline(fields, scale)?),
+            "ARC" => drawing.entities.push(in_plane(arc(fields, scale)?, sign)),
+            "CIRCLE" => drawing.entities.push(in_plane(circle(fields, scale)?, sign)),
+            "LWPOLYLINE" => drawing
+                .entities
+                .push(in_plane(lw_polyline(fields, scale)?, sign)),
             "POLYLINE" => {
                 let (entity, after) = polyline(&groups, i, scale)?;
-                drawing.entities.push(entity);
+                drawing.entities.push(in_plane(entity, sign));
                 i = after;
                 continue;
             }
@@ -203,6 +207,44 @@ fn circle(fields: &[Group<'_>], scale: f64) -> Result<DxfEntity, DxfError> {
         center: point(fields, 10, "CIRCLE", scale)?,
         radius: required(fields, 40, "CIRCLE")? * scale,
     })
+}
+
+/// The X sign of the entity's own plane ([`plane_x_sign`]); the schematic
+/// Import Graphics reader reads it the same way.
+fn plane_x(fields: &[Group<'_>]) -> f64 {
+    plane_x_sign(fields.iter().find(|g| g.code == 230).map(|g| g.value))
+}
+
+/// `entity`, read in its own plane, in the file's X: a plane facing down Z
+/// (`sign` -1) mirrors X, which also turns an arc's or bulge's sweep the
+/// other way. A LINE is in file axes already and is never passed here.
+fn in_plane(entity: DxfEntity, sign: f64) -> DxfEntity {
+    if sign > 0.0 {
+        return entity;
+    }
+    let flip = |p: Point| Point::new(-p.x, p.y);
+    match entity {
+        DxfEntity::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => DxfEntity::Arc {
+            center: flip(center),
+            radius,
+            start_deg: (180.0 - end_deg).rem_euclid(360.0),
+            end_deg: (180.0 - start_deg).rem_euclid(360.0),
+        },
+        DxfEntity::Circle { center, radius } => DxfEntity::Circle {
+            center: flip(center),
+            radius,
+        },
+        DxfEntity::Polyline { vertices, closed } => DxfEntity::Polyline {
+            vertices: vertices.into_iter().map(|(p, b)| (flip(p), -b)).collect(),
+            closed,
+        },
+        line @ DxfEntity::Line { .. } => line,
+    }
 }
 
 fn closed_flag(fields: &[Group<'_>]) -> bool {

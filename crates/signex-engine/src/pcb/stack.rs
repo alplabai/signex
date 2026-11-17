@@ -47,6 +47,11 @@ pub enum ItemLayerSizes {
         pad: Uuid,
         sizes: Option<LayerSizes<Point>>,
     },
+    /// A free pad (#2373), on the board with no footprint.
+    FreePad {
+        pad: Uuid,
+        sizes: Option<LayerSizes<Point>>,
+    },
 }
 
 /// Replace the stack with `stack`. Refused, before any write, for a row
@@ -219,6 +224,14 @@ fn check_empty(board: &PcbBoard, layer: &str) -> Result<(), BoardCommandError> {
         items += fp.pads.iter().filter(|p| p.layers.iter().any(on)).count();
         items += fp.graphics.iter().filter(|g| on(&g.layer)).count();
     }
+    let free = &board.free;
+    items += free.arcs.iter().filter(|a| on(&a.layer)).count();
+    items += free
+        .pads
+        .iter()
+        .filter(|p| p.layers.iter().any(on))
+        .count();
+    items += free.dimensions.iter().filter(|d| on(&d.layer)).count();
     if keepout_names(board, layer) {
         return Err(BoardCommandError::KeepoutOnLayer(layer.to_string()));
     }
@@ -311,7 +324,8 @@ fn copper_defs(
 }
 
 /// Drop the per-layer size entries on `removed` copper layers from every
-/// via and pad; what each changed item held, to put back.
+/// via and pad, footprint or free; what each changed item held, to put
+/// back.
 fn drop_removed_sizes(board: &mut PcbBoard, removed: &[String]) -> Vec<ItemLayerSizes> {
     let mut held = Vec::new();
     if removed.is_empty() {
@@ -334,6 +348,14 @@ fn drop_removed_sizes(board: &mut PcbBoard, removed: &[String]) -> Vec<ItemLayer
                     sizes: std::mem::replace(&mut pad.layer_sizes, sizes),
                 });
             }
+        }
+    }
+    for pad in &mut board.free.pads {
+        if let Some(sizes) = without_removed(pad.layer_sizes.as_ref(), removed) {
+            held.push(ItemLayerSizes::FreePad {
+                pad: pad.uuid,
+                sizes: std::mem::replace(&mut pad.layer_sizes, sizes),
+            });
         }
     }
     held
@@ -380,6 +402,15 @@ fn current_sizes(board: &PcbBoard, held: &ItemLayerSizes) -> ItemLayerSizes {
                 .and_then(|fp| fp.pads.iter().find(|p| p.uuid == *pad))
                 .and_then(|p| p.layer_sizes.clone()),
         },
+        ItemLayerSizes::FreePad { pad, .. } => ItemLayerSizes::FreePad {
+            pad: *pad,
+            sizes: board
+                .free
+                .pads
+                .iter()
+                .find(|p| p.uuid == *pad)
+                .and_then(|p| p.layer_sizes.clone()),
+        },
     }
 }
 
@@ -402,6 +433,11 @@ fn put_sizes(board: &mut PcbBoard, held: ItemLayerSizes) {
                 .find(|fp| fp.uuid == footprint)
                 .and_then(|fp| fp.pads.iter_mut().find(|p| p.uuid == pad));
             if let Some(p) = pad {
+                p.layer_sizes = sizes;
+            }
+        }
+        ItemLayerSizes::FreePad { pad, sizes } => {
+            if let Some(p) = board.free.pads.iter_mut().find(|p| p.uuid == pad) {
                 p.layer_sizes = sizes;
             }
         }
@@ -450,6 +486,19 @@ fn rename_layers(board: &mut PcbBoard, renames: &[(String, String)]) {
             if let Some(LayerSizes::Full { layers }) = p.layer_sizes.as_mut() {
                 layers.iter_mut().for_each(|l| swap(&mut l.layer));
             }
+        }
+    }
+    let free = &mut board.free;
+    for a in &mut free.arcs {
+        swap(&mut a.layer);
+    }
+    for d in &mut free.dimensions {
+        swap(&mut d.layer);
+    }
+    for p in &mut free.pads {
+        p.layers.iter_mut().for_each(swap);
+        if let Some(LayerSizes::Full { layers }) = p.layer_sizes.as_mut() {
+            layers.iter_mut().for_each(|l| swap(&mut l.layer));
         }
     }
 }

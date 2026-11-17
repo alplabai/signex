@@ -259,3 +259,128 @@ fn a_stack_edit_that_keeps_the_copper_leaves_the_layer_list_alone() {
     set(&mut b, stack).unwrap();
     assert_eq!(b.layers, layers, "the tab order is kept");
 }
+
+/// A free copper arc on `layer`, net 3.
+fn free_arc(layer: &str) -> signex_types::pcb_arc::TrackArc {
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(20), "start": {"x": 0.0, "y": 0.0},
+        "mid": {"x": 1.0, "y": 1.0}, "end": {"x": 2.0, "y": 0.0},
+        "width": 0.25, "layer": layer, "net": 3
+    }))
+    .unwrap()
+}
+
+/// A free through pad on `layers` with a size on each of `sized`, inner
+/// ones smaller.
+fn free_pad(layers: &[&str], sized: &[&str]) -> signex_types::pcb::Pad {
+    let sizes: Vec<serde_json::Value> = sized
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let s = 1.6 - 0.1 * i as f64;
+            serde_json::json!({"layer": l, "size": {"x": s, "y": s}})
+        })
+        .collect();
+    let mut pad = serde_json::json!({
+        "uuid": Uuid::from_u128(21), "number": "1", "pad_type": "thru",
+        "shape": "circle", "position": {"x": 5.0, "y": 5.0},
+        "size": {"x": 1.6, "y": 1.6}, "drill": null, "layers": layers, "net": null
+    });
+    if !sizes.is_empty() {
+        pad["layer_sizes"] = serde_json::json!({"mode": "full", "layers": sizes});
+    }
+    serde_json::from_value(pad).unwrap()
+}
+
+#[test]
+fn a_layer_added_above_an_inner_layer_moves_free_copper_down() {
+    let mut b = board(4, "TopCopper");
+    b.free.arcs.push(free_arc("Inner2Copper"));
+    b.free.pads.push(free_pad(
+        &["Inner2Copper"],
+        &["Inner1Copper", "Inner2Copper"],
+    ));
+    let before = snapshot(&b);
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    add_inner_below(&mut stack, 1);
+    let applied = set(&mut b, stack).unwrap();
+    assert_eq!(
+        b.free.arcs[0].layer, "Inner3Copper",
+        "the free arc moves with its layer"
+    );
+    let pad = &b.free.pads[0];
+    assert_eq!(pad.layers, ["Inner3Copper"], "the free pad moves too");
+    let sizes = pad.layer_sizes.as_ref().unwrap();
+    assert!(sizes.on_token("Inner3Copper").is_some());
+    assert!(sizes.on_token("Inner2Copper").is_none());
+    let after = snapshot(&b);
+    let redo = applied.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), before, "undo is exact");
+    redo.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), after, "redo is exact");
+}
+
+#[test]
+fn a_layer_with_a_free_arc_or_pad_on_it_cannot_be_removed() {
+    let refused = |b: &mut PcbBoard| {
+        let before = snapshot(b);
+        let mut stack = LayerStack::derived(&b.layers, b.thickness);
+        stack.layers.remove(copper_row(&stack, 2));
+        assert_eq!(
+            set(b, stack),
+            Err(BoardCommandError::LayerInUse {
+                layer: "Inner2Copper".into(),
+                items: 1
+            })
+        );
+        assert_eq!(snapshot(b), before, "a refusal changes nothing");
+    };
+    let mut arc = board(4, "TopCopper");
+    arc.free.arcs.push(free_arc("Inner2Copper"));
+    refused(&mut arc);
+    let mut pad = board(4, "TopCopper");
+    pad.free.pads.push(free_pad(&["Inner2Copper"], &[]));
+    refused(&mut pad);
+}
+
+#[test]
+fn removing_an_inner_layer_drops_a_free_pads_sizes_and_undo_puts_them_back() {
+    let mut b = board(4, "TopCopper");
+    let copper = [
+        "TopCopper",
+        "Inner1Copper",
+        "Inner2Copper",
+        "BottomCopper",
+    ];
+    b.free
+        .pads
+        .push(free_pad(&["TopCopper", "BottomCopper"], &copper));
+    let inner2 = b.free.pads[0]
+        .layer_sizes
+        .as_ref()
+        .unwrap()
+        .on_token("Inner2Copper")
+        .unwrap();
+    let before = snapshot(&b);
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    stack.layers.remove(copper_row(&stack, 1));
+    let applied = set(&mut b, stack).unwrap();
+
+    let sizes = b.free.pads[0].layer_sizes.clone().unwrap();
+    let signex_types::pcb::LayerSizes::Full { layers } = &sizes else {
+        panic!("still a full list: {sizes:?}");
+    };
+    let names: Vec<&str> = layers.iter().map(|l| l.layer.as_str()).collect();
+    assert_eq!(
+        names,
+        ["TopCopper", "Inner1Copper", "BottomCopper"],
+        "Inner 1's entry is gone and Inner 2's moved up"
+    );
+    assert_eq!(sizes.on_token("Inner1Copper"), Some(inner2));
+
+    let after = snapshot(&b);
+    let redo = applied.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), before, "undo is exact");
+    redo.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), after, "redo is exact");
+}

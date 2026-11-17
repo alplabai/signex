@@ -221,15 +221,7 @@ pub fn delete_commands(
     if !footprints.is_empty() {
         editable_footprints(board, &footprints)?;
     }
-    let locked: Vec<String> = items
-        .iter()
-        .filter(|id| super::lock::is_locked(board, **id))
-        .map(|id| match *id {
-            BoardItemId::Segment(uuid) => format!("track {uuid}"),
-            BoardItemId::Via(uuid) => format!("via {uuid}"),
-            other => format!("{other:?}"),
-        })
-        .collect();
+    let locked = super::lock::locked_names(board, items.iter().copied());
     if !locked.is_empty() {
         return Err(PlacementRefusal::Locked(locked));
     }

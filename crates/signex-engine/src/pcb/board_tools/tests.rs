@@ -280,3 +280,54 @@ fn arranged_origins_follow_an_offset_components_grid() {
         assert!(fp.position.x > 0.0 && fp.position.y > 20.0);
     }
 }
+
+fn lock(board: &mut PcbBoard, track: u128) {
+    board
+        .segments
+        .iter_mut()
+        .filter(|s| s.uuid == id(track))
+        .for_each(|s| s.locked = true);
+}
+
+fn locked_refusal(tracks: &[u128]) -> ToolRefusal {
+    let names = tracks.iter().map(|n| format!("track {}", id(*n))).collect();
+    ToolRefusal::Placement(crate::pcb::placement::PlacementRefusal::Locked(names))
+}
+
+#[test]
+fn gloss_leaves_locked_tracks_and_refuses_a_locked_only_selection() {
+    let mut board = board();
+    lock(&mut board, 21);
+    let selected: BTreeSet<Uuid> = [id(21), id(30), id(31)].into();
+    let edit = gloss_tracks(&board, &selected, gap).expect("glossed");
+    assert_eq!(edit.report.removed, [id(31)]);
+    assert_eq!(edit.report.skipped, 1, "the locked track is passed over");
+    assert!(!edit.report.changed.contains(&id(21)));
+
+    let mut corner = board.clone();
+    lock(&mut corner, 31);
+    let pair: BTreeSet<Uuid> = [id(30), id(31)].into();
+    if let Ok(edit) = gloss_tracks(&corner, &pair, gap) {
+        let mut touched = edit.report.removed.iter().chain(&edit.report.changed);
+        assert!(
+            touched.all(|t| *t != id(31)),
+            "a locked track is neither merged away nor moved: {edit:?}"
+        );
+    }
+
+    let only: BTreeSet<Uuid> = [id(21)].into();
+    assert_eq!(
+        gloss_tracks(&board, &only, gap),
+        Err(locked_refusal(&[21]))
+    );
+}
+
+#[test]
+fn locked_lines_are_not_turned_into_a_keepout() {
+    let (mut board, lines) = loop_board();
+    lock(&mut board, 82);
+    let before = json(&board);
+    let refused = keepout_from_selection(&board, &BTreeSet::new(), &lines, id(900));
+    assert_eq!(refused, Err(locked_refusal(&[82])));
+    assert_eq!(json(&board), before);
+}
