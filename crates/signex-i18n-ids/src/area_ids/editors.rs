@@ -21,6 +21,8 @@ define_ids! {
     EDITORS_PAD_SIZE_Y = "editors-pad-size-y";
     EDITORS_PAD_CORNER_RADIUS = "editors-pad-corner-radius";
     EDITORS_PAD_RELIEF = "editors-pad-relief";
+    EDITORS_PAD_POSITION_X = "editors-pad-position-x";
+    EDITORS_PAD_POSITION_Y = "editors-pad-position-y";
     EDITORS_PAD_PASTE_ENABLED = "editors-pad-paste-enabled";
     EDITORS_PAD_TENTED = "editors-pad-tented";
     EDITORS_PAD_HOLE_DETAILS = "editors-pad-hole-details";

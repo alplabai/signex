@@ -366,8 +366,8 @@ fn pad_position_rows<'a>(
     [x, y]: [f64; 2],
     i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
-    let x_label = t!(i18n, ids::EDITORS_SILK_POSITION_X).into_string();
-    let y_label = t!(i18n, ids::EDITORS_SILK_POSITION_Y).into_string();
+    let x_label = t!(i18n, ids::EDITORS_PAD_POSITION_X).into_string();
+    let y_label = t!(i18n, ids::EDITORS_PAD_POSITION_Y).into_string();
     let col = props_kv_row(col, label_c, input_bg, &x_label, format!("{x:.3}"));
     props_kv_row(col, label_c, input_bg, &y_label, format!("{y:.3}"))
 }
