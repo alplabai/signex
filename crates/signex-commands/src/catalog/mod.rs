@@ -691,4 +691,36 @@ mod tests {
              decided: {missing:#?}"
         );
     }
+
+    /// The compiled catalog and `scripts/catalog-ids.txt` hold the same ids
+    /// (#2447). `scripts/check_catalog_ids.sh` reads the source with ast-grep;
+    /// this test reads what the program reads through `TABLES`, so a table
+    /// left out of `TABLES` or a row compiled out by a `cfg` fails here even
+    /// when its file still holds the row.
+    #[test]
+    fn compiled_catalog_matches_the_accepted_id_list() {
+        use std::collections::BTreeSet;
+        const LIST: &str = include_str!("../../../../scripts/catalog-ids.txt");
+        let listed: BTreeSet<&str> = LIST
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .collect();
+        let compiled: BTreeSet<&str> = all_command_ids().collect();
+
+        let removed: Vec<&&str> = listed.difference(&compiled).collect();
+        assert!(
+            removed.is_empty(),
+            "listed in scripts/catalog-ids.txt but not in the compiled catalog \
+             (deleted, renamed, or its table left out of TABLES): {removed:?}. \
+             Removing a command needs a maintainer decision and its line \
+             removed from the list in the same PR."
+        );
+        let unlisted: Vec<&&str> = compiled.difference(&listed).collect();
+        assert!(
+            unlisted.is_empty(),
+            "catalog ids missing from scripts/catalog-ids.txt, add one line \
+             each: {unlisted:?}"
+        );
+    }
 }

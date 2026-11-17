@@ -53,6 +53,12 @@ run_case listed_new 0 "$(table "$ROW_A
 $ROW_B
     CommandMetadata { id: \"gamma\", ..CommandMetadata::DEFAULT },")" "$LIST_AB
 gamma"
+run_case list_unsorted 1 "$(table "$ROW_A
+$ROW_B")" 'beta
+alpha'
+run_case list_repeated_line 1 "$(table "$ROW_A
+$ROW_B")" "$LIST_AB
+beta"
 run_case duplicate 1 "$(table "$ROW_A
 $ROW_A
 $ROW_B")" "$LIST_AB"

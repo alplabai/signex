@@ -8,8 +8,12 @@
 # scripts/catalog-ids.txt lists every accepted id, one per line, sorted with
 # LC_ALL=C. The gate reads the real ids out of
 # crates/signex-commands/src/catalog with ast-grep (scripts/catalog-command-id.yml):
-# the `id:` of each `CommandMetadata { .. }` row, outside `#[cfg(test)]`
-# modules. Comments are not code, so a commented-out row counts as removed.
+# the `id:` of each `CommandMetadata { .. }` row, outside a module directly
+# under `#[cfg(test)]`. Comments are not code, so a commented-out row counts as
+# removed. This is a source scan: a table file left out of `TABLES`, or a row
+# compiled out by another `cfg`, still counts here. The test
+# `compiled_catalog_matches_the_accepted_id_list` (signex-commands) checks the
+# same list against the compiled catalog and closes that gap.
 #
 # - A listed id missing from the catalog fails: it was deleted or renamed.
 #   Removing a command on purpose means removing its line here in the same
@@ -37,13 +41,20 @@ if [[ ! -f "$LIST" ]]; then
   echo "Command-id gate: FAIL — no $LIST under $ROOT."
   exit 2
 fi
-if ! command -v ast-grep >/dev/null; then
-  echo "Command-id gate: FAIL — ast-grep is not installed."
+for tool in ast-grep jq; do
+  if ! command -v "$tool" >/dev/null; then
+    echo "Command-id gate: FAIL — $tool is not installed."
+    exit 2
+  fi
+done
+
+if ! scan="$(ast-grep scan --rule "$RULE" --json "$SRC")"; then
+  echo "Command-id gate: FAIL — ast-grep could not run $RULE."
   exit 2
 fi
-
-found="$(ast-grep scan --rule "$RULE" --json "$SRC" | jq -r '.[].text' | LC_ALL=C sort)"
-listed="$(grep -v -e '^#' -e '^[[:space:]]*$' "$LIST" | LC_ALL=C sort)"
+found="$(jq -r '.[].text' <<<"$scan" | LC_ALL=C sort)"
+raw_list="$(grep -v -e '^#' -e '^[[:space:]]*$' "$LIST" || true)"
+listed="$(LC_ALL=C sort <<<"$raw_list")"
 
 if [[ -z "$found" ]]; then
   echo "Command-id gate: FAIL — no command ids found under $SRC; the rule no longer matches the catalog."
@@ -51,6 +62,11 @@ if [[ -z "$found" ]]; then
 fi
 
 status=0
+if [[ "$raw_list" != "$listed" ]] || [[ -n "$(uniq -d <<<"$listed")" ]]; then
+  echo "Command-id gate: FAIL — $LIST must be sorted (LC_ALL=C) with no repeated line."
+  status=1
+fi
+
 duplicates="$(uniq -d <<<"$found")"
 if [[ -n "$duplicates" ]]; then
   echo "Command-id gate: FAIL — ids defined more than once:"
