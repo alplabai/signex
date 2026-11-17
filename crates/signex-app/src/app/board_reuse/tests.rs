@@ -337,12 +337,16 @@ fn an_agent_save_before_the_blocks_are_read_cannot_overwrite_a_block_named_in_an
         before,
         "the file is untouched"
     );
+    // Compare the listed names: on a case-insensitive file system (Windows,
+    // macOS) `exists("r1-u1.snxpcb")` is true for `R1-U1.snxpcb` itself.
+    let names: Vec<String> = std::fs::read_dir(dir.path().join("reuse-blocks"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
     assert!(
-        !dir.path()
-            .join("reuse-blocks")
-            .join("r1-u1.snxpcb")
-            .exists(),
-        "no second file beside it"
+        names.iter().any(|name| name == "R1-U1.snxpcb")
+            && !names.iter().any(|name| name == "r1-u1.snxpcb"),
+        "no second file beside it: {names:?}"
     );
 }
 
