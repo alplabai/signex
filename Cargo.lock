@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "chrome-catalog"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "iced",
  "signex-types",
@@ -4434,7 +4434,7 @@ checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "pcb-geom"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "i_overlay",
  "rstar",
@@ -5665,7 +5665,7 @@ dependencies = [
 
 [[package]]
 name = "signex-3d-model-importer"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -5680,7 +5680,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5737,7 +5737,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bake"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5752,7 +5752,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bom"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "signex-types",
@@ -5760,7 +5760,7 @@ dependencies = [
 
 [[package]]
 name = "signex-cli"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "dirs",
  "serde",
@@ -5775,7 +5775,7 @@ dependencies = [
 
 [[package]]
 name = "signex-commands"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5785,7 +5785,7 @@ dependencies = [
 
 [[package]]
 name = "signex-drc"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "pcb-geom",
  "serde_json",
@@ -5796,7 +5796,7 @@ dependencies = [
 
 [[package]]
 name = "signex-drc-dsl"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chumsky",
  "pcb-geom",
@@ -5807,7 +5807,7 @@ dependencies = [
 
 [[package]]
 name = "signex-engine"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "pcb-geom",
@@ -5825,7 +5825,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5837,7 +5837,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc-dsl"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chumsky",
  "regex",
@@ -5849,7 +5849,7 @@ dependencies = [
 
 [[package]]
 name = "signex-gfx"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -5870,11 +5870,11 @@ dependencies = [
 
 [[package]]
 name = "signex-history"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 
 [[package]]
 name = "signex-i18n"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chrono",
  "fluent-bundle",
@@ -5897,11 +5897,11 @@ dependencies = [
 
 [[package]]
 name = "signex-i18n-ids"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 
 [[package]]
 name = "signex-library"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5935,7 +5935,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library-server"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5960,7 +5960,7 @@ dependencies = [
 
 [[package]]
 name = "signex-net"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "signex-types",
  "uuid",
@@ -5968,7 +5968,7 @@ dependencies = [
 
 [[package]]
 name = "signex-output"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "pcb-geom",
  "pdf-writer",
@@ -5985,7 +5985,7 @@ dependencies = [
 
 [[package]]
 name = "signex-renderer"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "pcb-geom",
  "regex",
@@ -6000,7 +6000,7 @@ dependencies = [
 
 [[package]]
 name = "signex-sketch"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "approx",
  "serde",
@@ -6014,7 +6014,7 @@ dependencies = [
 
 [[package]]
 name = "signex-types"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6028,7 +6028,7 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chrono",
  "iced",
