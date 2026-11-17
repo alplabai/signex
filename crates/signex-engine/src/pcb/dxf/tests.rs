@@ -267,3 +267,54 @@ fn a_drawing_past_the_file_range_is_refused() {
     );
     assert_eq!(b.graphics.len(), before);
 }
+
+/// A mirrored drawing: an arc, a circle and a bulged polyline whose plane
+/// faces down Z (`230 = -1`) are read back into the file's X, each sweep
+/// turned the other way.
+#[test]
+fn entities_with_a_downward_extrusion_are_mirrored_into_the_file_x() {
+    let down = "210\n0\n220\n0\n230\n-1\n";
+    let body = format!(
+        "0\nARC\n{down}10\n2\n20\n0\n40\n1\n50\n0\n51\n90\n\
+         0\nCIRCLE\n{down}10\n1\n20\n1\n40\n0.5\n\
+         0\nLWPOLYLINE\n{down}90\n2\n70\n0\n10\n1\n20\n0\n42\n0.5\n10\n0\n20\n1\n"
+    );
+    let drawing = parse_dxf(&dxf(4, &body)).unwrap();
+    assert_eq!(
+        drawing.entities[0],
+        DxfEntity::Arc {
+            center: Point::new(-2.0, 0.0),
+            radius: 1.0,
+            start_deg: 90.0,
+            end_deg: 180.0
+        },
+        "(3,0)..(2,1) in the arc's plane is (-2,1)..(-3,0) counter-clockwise"
+    );
+    assert_eq!(
+        drawing.entities[1],
+        DxfEntity::Circle {
+            center: Point::new(-1.0, 1.0),
+            radius: 0.5
+        }
+    );
+    assert_eq!(
+        drawing.entities[2],
+        DxfEntity::Polyline {
+            vertices: vec![(Point::new(-1.0, 0.0), -0.5), (Point::new(0.0, 1.0), 0.0)],
+            closed: false
+        }
+    );
+
+    let up = body.replace("230\n-1\n", "230\n1\n");
+    let drawing = parse_dxf(&dxf(4, &up)).unwrap();
+    assert_eq!(
+        drawing.entities[0],
+        DxfEntity::Arc {
+            center: Point::new(2.0, 0.0),
+            radius: 1.0,
+            start_deg: 0.0,
+            end_deg: 90.0
+        },
+        "an upward extrusion is read as it is"
+    );
+}

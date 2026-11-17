@@ -10,6 +10,8 @@
 use signex_types::object_id::IdSource;
 use signex_types::schematic::{FillType, Point, SchDrawing};
 
+use crate::dxf_plane::plane_x_sign;
+
 /// More drawings than this is not a schematic graphic; the import is refused.
 pub const MAX_IMPORTED_DRAWINGS: usize = 50_000;
 
@@ -338,17 +340,10 @@ impl Fields<'_, '_> {
             .ok_or_else(|| self.missing(code))
     }
 
-    /// The X sign of the entity's own plane: -1 when its extrusion points
-    /// down the Z axis (code 230 negative), as a drawing mirrored in a CAD
-    /// tool often stores circles, arcs and polylines; else 1.
+    /// The X sign of the entity's own plane ([`plane_x_sign`]).
     fn plane_x(&self) -> f64 {
-        let down = self
-            .pairs
-            .iter()
-            .find(|(c, _)| *c == 230)
-            .and_then(|(_, v)| v.parse::<f64>().ok())
-            .is_some_and(|z| z < 0.0);
-        if down { -1.0 } else { 1.0 }
+        let z = self.pairs.iter().find(|(c, _)| *c == 230).map(|(_, v)| *v);
+        plane_x_sign(z)
     }
 
     /// The entity's flags (code 70); bit 1 is "closed" on a polyline.

@@ -28,6 +28,7 @@ pub mod pcb;
 mod sheet_placement;
 mod transform;
 
+mod dxf_plane;
 mod exec;
 mod find;
 mod find_similar;

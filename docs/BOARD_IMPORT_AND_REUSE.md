@@ -47,6 +47,11 @@ nothing there does IO.
 - Units: the header's `$INSUNITS` (inches, feet, mm, cm, m, microinches,
   mils, microns, decimetres); a file without it, or unitless, is read as
   mm. Other units are refused.
+- Mirrored entities: an arc, circle or polyline whose extrusion points
+  down Z (code `230` negative, as CAD tools store a mirrored drawing) is
+  read in its own plane and mirrored back in X, its sweep reversed. The
+  schematic Import Graphics reader reads the plane the same way
+  (`signex_engine::dxf_plane`).
 - Placement: the file's origin is the board origin and its y grows up, so
   a point lands where the Properties panel shows the same coordinates. The
   y flip turns a counter-clockwise file arc clockwise in the model, so the

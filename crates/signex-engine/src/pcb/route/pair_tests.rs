@@ -145,7 +145,16 @@ fn several_nets_are_tuned_to_one_target_and_long_ones_left() {
         pitch_mm: 1.0,
         amplitude_mm: 3.0,
     };
-    let commands = tune_nets(&board, &[5, 6, 7], 26.0, &meander, Uuid::now_v7).expect("tuned");
+    let tuned = tune_nets(&board, &[5, 6, 7], 26.0, &meander, Uuid::now_v7).expect("tuned");
+    assert!(
+        matches!(
+            tuned.skipped.as_slice(),
+            [(7, TuneRefusal::LongEnough { .. })]
+        ),
+        "{:?}",
+        tuned.skipped
+    );
+    let commands = tuned.commands;
     let before = serde_json::to_string(&board).unwrap();
     let mut engine = BoardEngine::new(board, 1);
     engine.execute_batch(commands).unwrap();
@@ -160,5 +169,55 @@ fn several_nets_are_tuned_to_one_target_and_long_ones_left() {
         serde_json::to_string(engine.board()).unwrap(),
         before,
         "one undo step"
+    );
+}
+
+#[test]
+fn a_net_with_only_locked_tracks_is_left_and_named_while_the_others_are_tuned() {
+    // Net 5: locked, short. Net 6: free, short. Net 7: locked, long enough.
+    let mut board = named_board(vec![
+        track(11, (0.0, 0.0), (20.0, 0.0), 5),
+        track(12, (0.0, 10.0), (20.0, 10.0), 6),
+        track(13, (0.0, 20.0), (30.0, 20.0), 7),
+    ]);
+    board
+        .segments
+        .iter_mut()
+        .filter(|s| s.net != 6)
+        .for_each(|s| s.locked = true);
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+    let meander = Meander {
+        clearance: &clearance,
+        reach: rules.widest_clearance(),
+        pitch_mm: 1.0,
+        amplitude_mm: 3.0,
+    };
+    let tuned = tune_nets(&board, &[5, 6, 7], 26.0, &meander, Uuid::now_v7).expect("net 6 tuned");
+    assert_eq!(tuned.skipped.len(), 2, "{:?}", tuned.skipped);
+    assert_eq!(
+        tuned.skipped[0],
+        (
+            5,
+            TuneRefusal::Locked(vec![format!("track {}", Uuid::from_u128(11))])
+        )
+    );
+    assert!(
+        matches!(tuned.skipped[1], (7, TuneRefusal::LongEnough { .. })),
+        "a locked net already long enough says so, not that it is locked"
+    );
+    let locked: Vec<_> = board
+        .segments
+        .iter()
+        .filter(|s| s.locked)
+        .cloned()
+        .collect();
+    let mut engine = BoardEngine::new(board, 1);
+    engine.execute_batch(tuned.commands).unwrap();
+    let length = net_routed_length_mm(engine.board(), 6).unwrap();
+    assert!((length - 26.0).abs() < 1e-3, "net 6: {length}");
+    assert!(
+        locked.iter().all(|s| engine.board().segments.contains(s)),
+        "the locked tracks stay as they were"
     );
 }

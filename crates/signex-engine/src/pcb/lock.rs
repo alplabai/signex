@@ -55,6 +55,19 @@ pub fn is_locked(board: &PcbBoard, id: BoardItemId) -> bool {
     }
 }
 
+/// How a lock refusal names each locked track or via among `items`.
+pub fn locked_names(board: &PcbBoard, items: impl IntoIterator<Item = BoardItemId>) -> Vec<String> {
+    items
+        .into_iter()
+        .filter(|id| is_locked(board, *id))
+        .map(|id| match id {
+            BoardItemId::Segment(uuid) => format!("track {uuid}"),
+            BoardItemId::Via(uuid) => format!("via {uuid}"),
+            other => format!("{other:?}"),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "lock_tests.rs"]
 mod tests;

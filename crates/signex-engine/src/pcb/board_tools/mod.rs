@@ -89,7 +89,8 @@ pub struct ToolReport {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub changed: Vec<uuid::Uuid>,
     /// Places the tool passed over because the result would break the
-    /// clearance or a keepout (teardrops).
+    /// clearance or a keepout (teardrops), or locked tracks it left as
+    /// they are (gloss).
     #[serde(skip_serializing_if = "is_zero")]
     pub skipped: usize,
     /// The outline points written, for an outline edit.

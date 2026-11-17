@@ -24,11 +24,13 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex, TuneMsg};
 
-/// What a tuning landed: the nets lengthened and the length they reach.
+/// What a tuning landed: the nets lengthened, the length they reach, and
+/// each net left as it was with the reason.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Tuned {
     pub nets: Vec<u32>,
     pub length_mm: f64,
+    pub skipped: Vec<(u32, TuneRefusal)>,
 }
 
 /// What to tune.
@@ -74,11 +76,28 @@ impl Signex {
                 let line = t!(
                     self.ui_state.i18n,
                     ids::PCB_TUNE_DONE,
-                    "what" => what,
+                    "what" => what.clone(),
                     "count" => tuned.nets.len(),
                     "length" => length
                 );
                 crate::diagnostics::log_info(line.into_string());
+                // A net at the target already is no news: the target is
+                // often its length.
+                let board = self.document_state.pcb_board(&path);
+                let worth_saying = tuned
+                    .skipped
+                    .iter()
+                    .filter(|(_, why)| !matches!(why, TuneRefusal::LongEnough { .. }));
+                for (net, why) in worth_saying {
+                    let line = t!(
+                        self.ui_state.i18n,
+                        ids::PCB_TUNE_SKIPPED,
+                        "what" => what.clone(),
+                        "net" => net_name(board, *net),
+                        "why" => why.to_string()
+                    );
+                    crate::diagnostics::log_warning(line.into_string());
+                }
             }
             Err(why) => {
                 let line =
@@ -181,12 +200,15 @@ fn tune_commands(
                     .filter_map(|&net| net_routed_length_mm(board, net))
                     .fold(0.0, f64::max),
             };
-            let commands = tune_nets(board, nets, target, &meander(nets), Uuid::now_v7)?;
+            let done = tune_nets(board, nets, target, &meander(nets), Uuid::now_v7)?;
+            let left = |net: &u32| done.skipped.iter().any(|(n, _)| n == net);
+            let tuned_nets = nets.iter().copied().filter(|n| !left(n)).collect();
             let tuned = Tuned {
-                nets: nets.to_vec(),
+                nets: tuned_nets,
                 length_mm: target,
+                skipped: done.skipped,
             };
-            Ok((commands, tuned))
+            Ok((done.commands, tuned))
         }
         TuneAsk::Pair(net) => {
             // The caller said already when the net is in no pair.
@@ -196,6 +218,7 @@ fn tune_commands(
             let tuned = Tuned {
                 nets: vec![done.net],
                 length_mm: done.length_mm,
+                skipped: Vec::new(),
             };
             Ok((commands, tuned))
         }
@@ -204,7 +227,8 @@ fn tune_commands(
 
 /// `tune_net_length document=<board> [net=<name>] [value=<mm>]`: tune the
 /// named net (else the selected tracks' nets) to `value` (else the longest
-/// of them). The answer names the nets and the length they reach.
+/// of them). The answer names the nets and the length they reach, and
+/// each net left as it was (`skipped`, with the reason).
 pub(crate) fn tune_net_length(
     app: &mut Signex,
     args: &CommandArgs,
@@ -278,11 +302,24 @@ fn answer(app: &Signex, path: &Path, tuned: &Tuned) -> serde_json::Value {
             json!({ "net": name, "length_mm": length })
         })
         .collect();
+    let skipped: Vec<serde_json::Value> = tuned
+        .skipped
+        .iter()
+        .map(|(net, why)| json!({ "net": net_name(board, *net), "reason": why.to_string() }))
+        .collect();
     json!({
         "document": path.display().to_string(),
         "target_mm": tuned.length_mm,
         "nets": nets,
+        "skipped": skipped,
     })
+}
+
+/// The name of `net` on `board`, else its number.
+fn net_name(board: Option<&PcbBoard>, net: u32) -> String {
+    board
+        .and_then(|b| b.nets.iter().find(|n| n.number == net))
+        .map_or_else(|| net.to_string(), |n| n.name.clone())
 }
 
 /// The selected tracks' nets when the board at `path` is the one in view;

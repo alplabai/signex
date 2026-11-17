@@ -261,6 +261,8 @@ pcb-route-bus-needs-nets = select copper of two or more nets first
 pcb-tune-needs-tracks = { $what }: select a track of each net to tune
 pcb-tune-refused = { $what }: { $why }
 pcb-tune-done = { $what }: { $count } net(s) brought to { $length } mm
+# A net a multi-net tuning left as it was; $net its name, $why the reason.
+pcb-tune-skipped = { $what }: { $net } left as it is: { $why }
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.
@@ -427,8 +429,8 @@ pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. I
 # Messages line when a Tools edit ran; $tool is its menu name, the counts
 # are the items it added, removed and changed.
 pcb-board-tool-done = { $tool }: { $added } added, { $removed } removed, { $changed } changed
-# Messages line when a copper tool left places out; $count of them.
-pcb-board-tool-skipped = { $tool }: { $count } left out where the copper would break the clearance or a keepout
+# Messages line when a copper tool left places or locked tracks out; $count of them.
+pcb-board-tool-skipped = { $tool }: { $count } left out, locked or where the copper would break the clearance or a keepout
 # Messages line when a Tools edit did nothing; $reason says why.
 pcb-board-tool-refused = { $tool }: { $reason }; nothing changed
 # Messages line when Arrange in Box is waiting for its corners.

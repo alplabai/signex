@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::tests::{board, track};
 use super::*;
-use crate::pcb::BoardEngine;
+use crate::pcb::{BoardEngine, BoardItemId};
 
 const TRACK: u128 = 11;
 
@@ -94,5 +94,79 @@ fn tuning_refuses_a_shortfall_smaller_than_one_meander() {
             Err(TuneRefusal::TooLittle { least_mm }) if (least_mm - 1.0).abs() < 1.0e-9
         ),
         "{refused:?}"
+    );
+}
+
+/// Net `net` tuned to `target_mm` with [`tune`]'s accordion.
+fn tune_whole_net(
+    board: &PcbBoard,
+    rules: &DrcRules,
+    net: u32,
+    target_mm: f64,
+) -> Result<Vec<BoardCommand>, TuneRefusal> {
+    let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+    let meander = Meander {
+        clearance: &clearance,
+        reach: rules.widest_clearance(),
+        pitch_mm: 1.0,
+        amplitude_mm: 3.0,
+    };
+    tune_net(board, net, target_mm, &meander, Uuid::now_v7)
+}
+
+#[test]
+fn tuning_refuses_a_locked_track() {
+    let mut board = tuning_board();
+    board.segments[0].locked = true;
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    assert_eq!(
+        tune(&board, &rules, 26.0),
+        Err(TuneRefusal::Locked(vec![format!(
+            "track {}",
+            Uuid::from_u128(TRACK)
+        )]))
+    );
+    assert_eq!(
+        tune_whole_net(&board, &rules, 1, 26.0),
+        Err(TuneRefusal::Locked(vec![format!(
+            "track {}",
+            Uuid::from_u128(TRACK)
+        )])),
+        "a net whose only track is locked is refused as locked"
+    );
+}
+
+#[test]
+fn net_tuning_passes_over_a_locked_track_and_the_meander_is_unlocked() {
+    // Net A: a locked 20 mm track and an unlocked 15 mm one below it.
+    let mut board = board(
+        Vec::new(),
+        vec![
+            track(TRACK, (0.0, 0.0), (20.0, 0.0), 1),
+            track(13, (0.0, -10.0), (15.0, -10.0), 1),
+        ],
+    );
+    board.segments[0].locked = true;
+    let locked = board.segments[0].clone();
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let commands = tune_whole_net(&board, &rules, 1, 41.0).expect("the unlocked track is tuned");
+    for command in &commands {
+        match command {
+            BoardCommand::DeleteItems { items } => {
+                assert_eq!(items, &[BoardItemId::Segment(Uuid::from_u128(13))]);
+            }
+            BoardCommand::AddItems { items } => assert!(
+                items
+                    .iter()
+                    .all(|item| matches!(item, BoardItem::Segment(s) if !s.locked && s.net == 1))
+            ),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    let mut engine = BoardEngine::new(board, 1);
+    engine.execute_batch(commands).unwrap();
+    assert!(
+        engine.board().segments.contains(&locked),
+        "the locked track stays as it was"
     );
 }

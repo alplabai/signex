@@ -118,7 +118,7 @@ pub fn tune_pair(
     } else {
         (pair.negative, positive)
     };
-    let commands = tune_nets(board, &[short], target, meander, ids)?;
+    let commands = tune_nets(board, &[short], target, meander, ids)?.commands;
     Ok((
         commands,
         PairTuned {
