@@ -543,3 +543,35 @@ pub(super) fn solve_and_bake(
     }
     Ok(())
 }
+
+/// Solve the sketch of a footprint just opened, so the editor shows its
+/// constraint state at once instead of "Sketch not solved" (#2468).
+/// Nothing is baked: the footprint stays as it is on disk and the document
+/// stays clean. A sketch that does not solve opens unsolved, as before; the
+/// first edit solves it again and reports why.
+pub(crate) fn solve_on_open(state: &mut FootprintEditorState, footprint: &Footprint) {
+    let Some(sketch) = footprint.sketch.as_ref() else {
+        return;
+    };
+    let outcome = parameter::resolve(&sketch.parameters)
+        .map_err(|e| e.to_string())
+        .and_then(|resolved| {
+            state
+                .sketch_solver
+                .solve_deferring_redundancy(sketch, &resolved)
+                .map_err(|e| e.to_string())
+        });
+    match outcome {
+        Ok(out) => {
+            state
+                .sketch_solve
+                .set_redundancy_owed(out.redundancy_pending);
+            state.last_solve = Some(out);
+        }
+        Err(error) => tracing::debug!(
+            target: "signex::sketch",
+            error = %error,
+            "the opened footprint's sketch did not solve; it opens unsolved"
+        ),
+    }
+}

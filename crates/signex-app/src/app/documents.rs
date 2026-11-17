@@ -685,7 +685,12 @@ impl FootprintDocument {
             &mut baseline,
             log_repairs,
         );
-        let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+        let mut state =
+            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                &file.footprints[active_idx],
+            );
+        crate::library::editor::footprint::sketch_dispatch::solve_on_open(
+            &mut state,
             &file.footprints[active_idx],
         );
         if log_repairs && state.legacy_pad_stack_offered {
