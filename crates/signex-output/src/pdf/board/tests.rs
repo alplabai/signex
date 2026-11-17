@@ -312,3 +312,89 @@ fn a_one_to_one_board_larger_than_the_page_is_flagged() {
     let small = board_pdf(&fixture(), &print, &BoardPrintText::default()).expect("pdf");
     assert!(!small.pages[0].overflows, "50 mm x 30 mm fits A4");
 }
+
+/// How far, in board mm, the copper a `set` page of `board` draws reaches
+/// from `at` along x: drill marks and the outline left out.
+fn copper_reach_mm(board: &PcbBoard, set: BoardLayerSet, at: (f64, f64)) -> f64 {
+    let print = BoardPrintOptions {
+        outline: false,
+        drill_marks: false,
+        ..options(&[set], BoardPrintPages::PerSet)
+    };
+    let page = print.page_size.dimensions_mm(print.orientation);
+    let frame = PageFrame::new(board, &print, page, false);
+    let fills = pcb_geom::zone_fills(board);
+    let mut fonts = crate::pdf::embed::FontUsage::new();
+    let mut surface = PdfSurface::new(&mut fonts);
+    draw::page(&mut surface, board, &fills, &print, &frame, &[set]);
+    let ops = String::from_utf8(surface.finish()).expect("ops");
+    let center = frame.to_pt(at.0, at.1).0;
+    let reach = ops
+        .lines()
+        .filter(|l| l.ends_with(" m") || l.ends_with(" l"))
+        .filter_map(|l| l.split_whitespace().next()?.parse::<f32>().ok())
+        .map(|x| (x - center).abs())
+        .fold(0.0_f32, f32::max);
+    f64::from(reach / frame.length_pt(1.0))
+}
+
+/// `fixture()`'s outline and nothing else on it.
+fn bare_board() -> PcbBoard {
+    let mut board = fixture();
+    board.footprints.clear();
+    board.segments.clear();
+    board.vias.clear();
+    board.zones.clear();
+    board.graphics.clear();
+    board.texts.clear();
+    board.free = Default::default();
+    board
+}
+
+/// #2451 review: a through pad and a via with a larger size on the inner
+/// layers print at that size on the inner page, at the outer size on the
+/// top page.
+#[test]
+fn pads_and_vias_print_at_their_size_on_each_page() {
+    let sizes = |outer: f64, inner: f64| {
+        serde_json::json!({"mode": "top_middle_bottom", "top": outer, "middle": inner, "bottom": outer})
+    };
+    let mut with_via = bare_board();
+    with_via.vias.push(
+        serde_json::from_value(serde_json::json!({
+            "uuid": uuid::Uuid::from_u128(0x51), "position": {"x": 30.0, "y": 10.0},
+            "diameter": 0.6, "drill": 0.3, "layers": ["TopCopper", "BottomCopper"], "net": 0,
+            "layer_sizes": sizes(0.6, 1.2)
+        }))
+        .expect("a via"),
+    );
+    let mut with_pad = bare_board();
+    let pad_size = |side: f64| serde_json::json!({"x": side, "y": side});
+    with_pad.footprints.push(
+        serde_json::from_value(serde_json::json!({
+            "uuid": uuid::Uuid::from_u128(0x52), "reference": "J1", "value": "x",
+            "footprint_id": "P1", "position": {"x": 30.0, "y": 10.0}, "rotation": 0.0,
+            "layer": "TopCopper", "pads": [{
+                "uuid": uuid::Uuid::from_u128(0x53), "number": "1", "pad_type": "thru",
+                "shape": "rect", "position": {"x": 0.0, "y": 0.0}, "size": pad_size(1.6),
+                "drill": null, "layers": ["TopCopper", "BottomCopper"], "net": null,
+                "layer_sizes": {"mode": "top_middle_bottom", "top": pad_size(1.6),
+                    "middle": pad_size(2.4), "bottom": pad_size(1.6)}
+            }]
+        }))
+        .expect("a footprint"),
+    );
+    let reach = |board: &PcbBoard, set| copper_reach_mm(board, set, (30.0, 10.0));
+    let near = |got: f64, want: f64| (got - want).abs() < 0.02;
+
+    let (top, inner) = (
+        reach(&with_via, BoardLayerSet::Top),
+        reach(&with_via, BoardLayerSet::Inner),
+    );
+    assert!(near(top, 0.3) && near(inner, 0.6), "via: {top} {inner}");
+    let (top, inner) = (
+        reach(&with_pad, BoardLayerSet::Top),
+        reach(&with_pad, BoardLayerSet::Inner),
+    );
+    assert!(near(top, 0.8) && near(inner, 1.2), "pad: {top} {inner}");
+}

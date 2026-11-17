@@ -35,8 +35,11 @@ enum ReadState {
     #[default]
     NotRead,
     Read,
-    /// The folder could not be listed; why.
-    Failed(String),
+    /// The folder could not be listed: why, and whether a request was
+    /// already refused for it. A refused failure is read again on the next
+    /// request; one no request has met yet is not, so the request that
+    /// waited for the read does not start another.
+    Failed { why: String, answered: bool },
 }
 
 /// One project's blocks, by name.
@@ -65,10 +68,42 @@ impl ReuseBlockStore {
     }
 
     /// Why the project's block folder could not be read, if it could not.
+    #[cfg(test)]
     pub(crate) fn read_failure(&self, folder: &Path) -> Option<&str> {
         match &self.projects.get(folder)?.state {
-            ReadState::Failed(why) => Some(why),
+            ReadState::Failed { why, .. } => Some(why),
             _ => None,
+        }
+    }
+
+    /// Why the folder could not be read, for a request refused for it: the
+    /// next request reads it again ([`Self::retry_answered_failure`]).
+    pub(crate) fn answer_read_failure(&mut self, folder: &Path) -> Option<String> {
+        match &mut self.projects.get_mut(folder)?.state {
+            ReadState::Failed { why, answered } => {
+                *answered = true;
+                Some(why.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// A request starts: a failed read a request was already refused for is
+    /// to be read again. The blocks kept stay.
+    pub(crate) fn retry_answered_failure(&mut self, folder: &Path) {
+        if let Some(project) = self.projects.get_mut(folder)
+            && matches!(project.state, ReadState::Failed { answered: true, .. })
+        {
+            project.state = ReadState::NotRead;
+        }
+    }
+
+    /// A board menu opens: any failed read is to be read again.
+    pub(crate) fn retry_failed_read(&mut self, folder: &Path) {
+        if let Some(project) = self.projects.get_mut(folder)
+            && matches!(project.state, ReadState::Failed { .. })
+        {
+            project.state = ReadState::NotRead;
         }
     }
 
@@ -119,12 +154,27 @@ impl ReuseBlockStore {
         next
     }
 
+    /// The write [`Self::end_write`] handed out is dropped, not started:
+    /// the file is free again.
+    pub(crate) fn drop_write(&mut self, file: &Path) {
+        self.writes.remove(file);
+    }
+
+    /// Whether a write of `file` is running.
+    #[cfg(test)]
+    pub(crate) fn is_writing(&self, file: &Path) -> bool {
+        self.writes.contains_key(file)
+    }
+
     /// Take a read of the project's folder in. A block saved while the read
     /// ran is newer than its file, so it stays.
     pub(crate) fn land(&mut self, folder: &Path, read: &BlocksOnDisk) {
         let project = self.projects.entry(folder.to_path_buf()).or_default();
         project.state = match &read.error {
-            Some(why) => ReadState::Failed(why.clone()),
+            Some(why) => ReadState::Failed {
+                why: why.clone(),
+                answered: false,
+            },
             None => ReadState::Read,
         };
         for (name, block) in &read.blocks {
@@ -268,6 +318,31 @@ mod tests {
         assert_eq!(store.end_write(Path::new("a")), Some(write("a", "4")));
         assert_eq!(store.end_write(Path::new("a")), None);
         assert_eq!(store.begin_write(write("a", "5")), Some(write("a", "5")));
+    }
+
+    /// #2451: a failed folder listing is read again on the next request
+    /// once a request was refused for it, and on any menu open; not by the
+    /// request that waited for the failed read itself.
+    #[test]
+    fn a_failed_read_is_retried_on_the_next_request_or_menu_open() {
+        let folder = Path::new("p");
+        let failed = BlocksOnDisk {
+            error: Some("busy".into()),
+            ..BlocksOnDisk::default()
+        };
+        let mut store = ReuseBlockStore::default();
+        store.land(folder, &failed);
+        store.retry_answered_failure(folder);
+        assert!(!store.needs_read(folder), "the waiting request meets it");
+        assert_eq!(store.answer_read_failure(folder).as_deref(), Some("busy"));
+        store.retry_answered_failure(folder);
+        assert!(store.needs_read(folder), "the next request reads again");
+
+        store.land(folder, &failed);
+        store.retry_failed_read(folder);
+        assert!(store.needs_read(folder), "a menu open reads again");
+        store.land(folder, &BlocksOnDisk::default());
+        assert_eq!(store.read_failure(folder), None);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use pcb_geom::{
-    GeomError, Placement, PointNm, Side, layer_bit, layer_mask, mm_to_nm, pad_layers,
+    GeomError, Placement, PointNm, Polygon, Side, layer_bit, layer_mask, mm_to_nm, pad_layers,
     pad_world_center, pad_world_rotation_deg, via_layers,
 };
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via};
@@ -120,8 +120,48 @@ fn copper_layers(stack: &CopperStack, mask: u32) -> impl Iterator<Item = CopperL
 
 /// Zone fills, largest outline first: each region's holes are cleared
 /// right after it, and a fill inside another's hole is smaller, so it is
-/// drawn after the clear and survives it.
+/// drawn after the clear and survives it. The regions of one net on one
+/// layer are merged first: a hole of one that another covers is copper,
+/// and clearing it would erase that copper.
 fn zone_fills(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &mut Tally) {
+    let mut by_net: BTreeMap<(FabLayer, String), Vec<Polygon>> = BTreeMap::new();
+    let mut regions = Vec::new();
+    for (layer, net, polygon) in zone_polygons(extras, frame, tally) {
+        if net.is_empty() {
+            regions.push((layer, None, polygon));
+        } else {
+            by_net.entry((layer, net)).or_default().push(polygon);
+        }
+    }
+    for ((layer, net), polygons) in by_net {
+        let merged = if polygons.len() > 1 {
+            pcb_geom::union(&polygons, &[])
+        } else {
+            polygons
+        };
+        regions.extend(merged.into_iter().map(|p| (layer, Some(net.clone()), p)));
+    }
+    regions.sort_by_key(|(_, _, p)| std::cmp::Reverse(doubled_area(&p.outer).abs()));
+    for (layer, net, polygon) in regions {
+        push(
+            images,
+            layer,
+            Mark::Region {
+                outline: polygon.outer,
+                holes: polygon.holes,
+                attributes: Attributes::net(net),
+            },
+        );
+    }
+}
+
+/// Each zone fill of `extras` in the fab frame, with its layer and net
+/// name; one that does not convert is tallied as skipped.
+fn zone_polygons(
+    extras: &FabExtras,
+    frame: FabFrame,
+    tally: &mut Tally,
+) -> Vec<(FabLayer, String, Polygon)> {
     let mut regions = Vec::new();
     for fill in &extras.zone_fills {
         let Some(layer) = FabLayer::of(fill.layer) else {
@@ -143,26 +183,14 @@ fn zone_fills(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &
         });
         match built {
             Ok((outline, holes)) if outline.len() >= 3 => {
-                let area = doubled_area(&outline).abs();
-                regions.push((area, layer, outline, holes, fill.net_name.clone()));
+                let holes = holes.into_iter().filter(|h| h.len() >= 3).collect();
+                let polygon = Polygon::new(outline, holes);
+                regions.push((layer, fill.net_name.clone(), polygon));
             }
             _ => tally.skipped += 1,
         }
     }
-    regions.sort_by_key(|region| std::cmp::Reverse(region.0));
-    for (_, layer, outline, holes, net) in regions {
-        let holes = holes.into_iter().filter(|h| h.len() >= 3).collect();
-        let net = Some(net).filter(|n| !n.is_empty());
-        push(
-            images,
-            layer,
-            Mark::Region {
-                outline,
-                holes,
-                attributes: Attributes::net(net),
-            },
-        );
-    }
+    regions
 }
 
 fn footprint_marks(

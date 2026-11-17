@@ -835,10 +835,15 @@ again on another channel of the same circuit, with its tracks and vias.
   overwrite that block's file. The case check needs the project's blocks
   on disk, so a save before they are read reads them first (the menu saves
   once they land; with operands it answers once they land), and a save is
-  refused when the folder cannot be listed. A save is refused while the
-  project folder is being renamed. One block file is written one save at a
-  time: a save while its file is being written waits for that write to land,
-  and a later save replaces a waiting one, so the file holds the last save.
+  refused when the folder cannot be listed. A folder that could not be
+  listed is listed again on the next save or place, and when a board menu
+  next opens. A save is refused while the project folder is being renamed,
+  and a project folder rename waits while a block file is being written.
+  One block file is written one save at a time: a save while its file is
+  being written waits for that write to land, and a later save replaces a
+  waiting one, so the file holds the last save. A waiting save whose project
+  folder is being renamed, or was renamed, when its turn comes is not
+  written, and Messages says so.
   If the file cannot be written the block can still be placed until Signex
   closes, and Messages says so.
 - **Place**: the board menu lists one Place Reuse Block "<name>" row per

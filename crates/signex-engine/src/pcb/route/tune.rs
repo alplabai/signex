@@ -115,8 +115,6 @@ pub fn tune_net(
     Err(refusal)
 }
 
-/// Bring each of `nets` to `target_mm` ([`tune_net`]), each tuned on the
-/// board as the ones before it left it, so their accordions keep clear of
 /// What [`tune_nets`] did: the commands, one undo step, and each net it
 /// left as it was with the reason.
 #[derive(Debug, Clone, PartialEq)]

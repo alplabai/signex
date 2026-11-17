@@ -104,26 +104,17 @@ fn draw_set(
     }
     let mask = copper_mask(set);
     if mask != 0 {
-        for fp in &board.footprints {
-            for pad in &fp.pads {
-                if pcb_geom::pad_layers(fp, pad) & mask == 0 {
-                    continue;
-                }
-                if let Ok(shape) = pcb_geom::pad_shape(fp, pad) {
-                    let ring: Vec<Pt> = shape.ring(ROUND_STEPS).into_iter().map(mm).collect();
-                    fill(s, &[ring], rgb);
-                }
-            }
-        }
-        for via in &board.vias {
-            if pcb_geom::via_layers(via) & mask != 0 {
-                disc(
-                    s,
-                    frame,
-                    (via.position.x, via.position.y),
-                    via.diameter / 2.0,
-                    rgb,
-                );
+        // Each pad and via at its size on this page's layers (#2401).
+        let pads = board.footprints.iter().flat_map(|fp| {
+            fp.pads
+                .iter()
+                .map(move |pad| pcb_geom::pad_pieces(fp, pad))
+        });
+        let vias = board.vias.iter().map(pcb_geom::via_pieces);
+        for pieces in pads.chain(vias) {
+            for shape in pcb_geom::pieces_on(pieces.unwrap_or_default(), mask) {
+                let ring: Vec<Pt> = shape.ring(ROUND_STEPS).into_iter().map(mm).collect();
+                fill(s, &[ring], rgb);
             }
         }
     }

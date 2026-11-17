@@ -343,3 +343,51 @@ fn a_copper_arc_and_a_free_pad_are_kept_out_like_a_track_and_a_pad() {
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].items, vec![ItemRef::FreePad(id(4300))]);
 }
+
+/// #2451 review: a pad and a via larger on the inner layers reach into an
+/// inner-layer copper keepout that their outer size stays clear of.
+#[test]
+fn inner_copper_larger_than_the_outer_size_meets_an_inner_keepout() {
+    use signex_types::pcb::LayerSizes;
+    let inner1 = CopperLayer::Inner(signex_types::pcb_layer::InnerCopper::new(1).unwrap());
+    // The keepout spans x 20..30. The pad's 1 mm square at x 19 ends at
+    // 19.5, its 3 mm inner square at 20.5; the via's 0.6 mm disc at x 31
+    // starts at 30.7, its 3 mm inner disc at 29.5.
+    let mut through = pad(11, (19.0, 25.0), 1, PadType::Thru, "TopCopper");
+    through.layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(1.0, 1.0),
+        middle: Point::new(3.0, 3.0),
+        bottom: Point::new(1.0, 1.0),
+    });
+    let mut wide = via(1, (31.0, 25.0), 2);
+    wide.layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 0.6,
+        middle: 3.0,
+        bottom: 0.6,
+    });
+    let copper = KeepoutKinds {
+        no_copper: true,
+        ..KeepoutKinds::default()
+    };
+    let b = keep_out(
+        board(vec![footprint(1, vec![through])], vec![], vec![wide]),
+        copper,
+        &[inner1],
+    );
+
+    let hits = keepout_hits(&b);
+
+    let mut items: Vec<ItemRef> = hits.iter().flat_map(|v| v.items.clone()).collect();
+    items.sort_by_key(|item| format!("{item:?}"));
+    let mut want = vec![
+        ItemRef::Pad {
+            footprint: id(1001),
+            pad: id(11),
+        },
+        ItemRef::Via(id(3001)),
+    ];
+    want.sort_by_key(|item| format!("{item:?}"));
+    assert_eq!(items, want, "{hits:?}");
+    let inner_bit = 1 << pcb_geom::layer_bit(inner1);
+    assert!(hits.iter().all(|v| v.layers == inner_bit), "{hits:?}");
+}
