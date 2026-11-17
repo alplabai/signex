@@ -616,6 +616,16 @@ enclosure stay linked: a board change (outline, mounting hole, connector move)
 is offered as a reviewable change to the mechanical design, never applied
 silently.
 
+`signex-mcad` does no IO and builds for `wasm32`, because a web front end is
+possible under the shared application core (#2326, ADR-0001 A4). STEP and the
+native mechanical document are read from and written to bytes (`&[u8]` in,
+`Vec<u8>` out); opening and saving files is the host's job (native, browser or
+test), reached through an `Effect`, never through `std::fs` inside the crate.
+The crate uses no `std::fs`, `std::net`, threads or tokio; long kernel work runs
+as a compute job the host schedules. The kernel dependency must also build for
+`wasm32`. `signex-mcad` joins the `DOMAIN` set in `scripts/check_arch_guard.sh`
+and the `wasm32` CI build when it is created.
+
 | Plan | Scope |
 |------|-------|
 | **MCAD Kernel** | `signex-mcad` crate wrapping the kernel: bodies, faces, edges, persistent face/edge names; a STEP AP214/AP242 B-rep translator (read and write) written in Signex on the kernel's topology, since the kernel provides no STEP support; tessellation for the 3D view; a native mechanical document type in the `.snx*` family; kernel calls guarded so a failed operation is a message, never a crash |
@@ -875,7 +885,10 @@ Release: every feature gets a scripted, re-recordable video for the README,
 the docs and the website. No scope was moved out of another plan. On
 2026-11-17 the maintainer set MCAD's start: once the schematic and PCB editors
 are complete and their release is out, not after the Pro Release as for the
-other P3 bands.
+other P3 bands. The maintainer (Hakan) also required that `signex-mcad` does
+no IO and builds for `wasm32`: STEP and the native document go through bytes,
+file access goes through the host's `Effect`, and long kernel work is a
+host-scheduled compute job.
 
 ### 2026-11-13 — Partial and embedded heavy copper
 
