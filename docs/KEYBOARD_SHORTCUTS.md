@@ -48,7 +48,9 @@ context = "global"
 ```
 
 Command labels and categories are not stored in the TOML. They are owned by
-`crates/signex-app/src/keymap/catalog/` (one file per context).
+the command catalog in `crates/signex-commands/src/catalog/` (one file per
+context), as message ids; the app's `keymap/catalog` only renders them
+(`CatalogTextExt`).
 
 ## Runtime Flow
 
@@ -270,7 +272,8 @@ number.
 
 ## Adding A New Shortcut Command
 
-1. Add a stable command id to the matching file under `keymap/catalog/`.
+1. Add a stable command id to the matching file under
+   `crates/signex-commands/src/catalog/`.
 2. Add default bindings to the relevant built-in TOML profiles.
 3. Map the command id in `core_to_message`'s table (`app/command/bridge.rs`).
 4. Use active-keymap lookup for visible labels instead of hardcoded strings.

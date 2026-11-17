@@ -8,11 +8,12 @@
 //! Windows and Linux resolve it, and `builtin_profiles_macos.golden.tsv` as
 //! macOS shows it. A diff is a behaviour change, not a snapshot to refresh. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app golden`.
 
-use super::catalog::{CommandMetadata, KeyBind, describe_operands};
+use super::catalog::{CatalogTextExt, CommandMetadata, describe_operands};
 use super::{
     AppCommandId, CompiledKeymap, Platform, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
 };
+use signex_commands::catalog::KeyBind;
 use signex_i18n::{I18n, t};
 
 const CATALOG: &str = include_str!("testdata/catalog.golden.tsv");

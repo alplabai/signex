@@ -4,7 +4,7 @@
 //! board (`document`), on that board. Each edit is one undo step.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const PANEL: &[CommandMetadata] = &[
     CommandMetadata {

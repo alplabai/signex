@@ -2,7 +2,7 @@
 //! transform commands, plus anything without an obvious home.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {

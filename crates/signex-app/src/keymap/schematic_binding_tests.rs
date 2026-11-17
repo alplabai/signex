@@ -5,8 +5,8 @@
 //! sheet key never shadows a global one and never makes it wait.
 
 use super::{
-    AppCommandId, KeyStroke, Platform, ShortcutBindingAction, ShortcutContext, ShortcutProfileSet,
-    ShortcutTrigger,
+    AppCommandId, CatalogTextExt, KeyStroke, Platform, ShortcutBindingAction, ShortcutContext,
+    ShortcutProfileSet, ShortcutTrigger,
 };
 use crate::app::command::CommandContext;
 

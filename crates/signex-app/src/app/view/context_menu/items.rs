@@ -13,6 +13,7 @@
 
 use super::*;
 
+use crate::keymap::CatalogTextExt;
 use iced::widget::svg::Handle;
 use signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP;
 use signex_i18n::{I18n, MessageId};

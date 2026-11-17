@@ -3,7 +3,7 @@
 //! each edit is one undo step on the project's rule history.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const RULES: &[CommandMetadata] = &[
     CommandMetadata {

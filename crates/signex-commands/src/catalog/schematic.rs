@@ -1,8 +1,8 @@
 //! Schematic-surface command metadata — placement, net, annotation,
-//! sheet-navigation. Split from `keymap/catalog.rs`; entries verbatim.
+//! sheet-navigation. One of the catalog's per-surface tables.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {

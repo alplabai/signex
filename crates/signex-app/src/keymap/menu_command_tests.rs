@@ -104,6 +104,6 @@ fn every_menu_command_id_resolves_in_the_catalog() {
     assert!(
         orphans.is_empty(),
         "menu rows reference command ids with no CommandMetadata entry \
-         (add them to keymap/catalog): {orphans:?}"
+         (add them to signex-commands/src/catalog): {orphans:?}"
     );
 }

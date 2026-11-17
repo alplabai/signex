@@ -3,7 +3,7 @@
 //! or stacked, and the way back to one document at a time.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const WINDOW: &[CommandMetadata] = &[
     CommandMetadata {

@@ -5,7 +5,7 @@
 //! CLI names the project with `document`.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const PROJECT: &[CommandMetadata] = &[
     CommandMetadata {
