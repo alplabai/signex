@@ -128,7 +128,10 @@ fn zone_fills(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &
             continue;
         };
         let ring = |points: &[Point]| -> Result<Vec<PointNm>, GeomError> {
-            points.iter().map(|p| frame.of_mm(*p, "zone fill")).collect()
+            points
+                .iter()
+                .map(|p| frame.of_mm(*p, "zone fill"))
+                .collect()
         };
         let built = ring(fill.outline.as_slice()).and_then(|outline| {
             let holes = fill
@@ -180,9 +183,7 @@ fn footprint_marks(
         return;
     };
     let to_fab = |p: Point| -> Result<PointNm, GeomError> {
-        Ok(frame.point(
-            placement.to_world(PointNm::from_mm(p, "graphic")?),
-        ))
+        Ok(frame.point(placement.to_world(PointNm::from_mm(p, "graphic")?)))
     };
     for graphic in &footprint.graphics {
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
@@ -331,7 +332,12 @@ fn pad_marks(
 ) -> Result<(), GeomError> {
     // Every size first, so a pad the geometry refuses is skipped whole.
     let flashes = copper_layers(stack, pad_copper(footprint, pad))
-        .map(|copper| Ok((copper, pad_aperture(frame, footprint, pad, pad.size_on(copper))?)))
+        .map(|copper| {
+            Ok((
+                copper,
+                pad_aperture(frame, footprint, pad, pad.size_on(copper))?,
+            ))
+        })
         .collect::<Result<Vec<_>, GeomError>>()?;
     let openings = pad_openings(footprint, pad)
         .into_iter()
@@ -492,11 +498,7 @@ fn vias(
 
 /// A via's centre in the fabrication frame and its pad diameter on
 /// `copper` (#2401).
-fn via_flash(
-    via: &Via,
-    copper: CopperLayer,
-    frame: FabFrame,
-) -> Result<(PointNm, i64), GeomError> {
+fn via_flash(via: &Via, copper: CopperLayer, frame: FabFrame) -> Result<(PointNm, i64), GeomError> {
     let at = frame.of_mm(via.position, "via.position")?;
     Ok((at, mm_to_nm(via.diameter_on(copper), "via.diameter")?.abs()))
 }
@@ -594,7 +596,10 @@ fn profile(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut T
 /// profile's pen on the V-cut image.
 fn v_scores(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
     for score in board.sketch.iter().flat_map(|s| s.v_scores.iter()) {
-        match (frame.of_mm(score.from, "v-score"), frame.of_mm(score.to, "v-score")) {
+        match (
+            frame.of_mm(score.from, "v-score"),
+            frame.of_mm(score.to, "v-score"),
+        ) {
             (Ok(start), Ok(end)) => push(
                 images,
                 FabLayer::VScore,

@@ -187,8 +187,7 @@ fn measure_on_a_board_reads_point_to_point_and_edge_to_edge() {
 fn measuring_upward_reads_a_positive_dy_from_the_board_origin() {
     let dir = tempfile::tempdir().unwrap();
     let mut with_origin = board();
-    with_origin.options.origin =
-        signex_types::pcb_options::BoardOrigin::new(Point::new(0.0, 80.0));
+    with_origin.options.origin = signex_types::pcb_options::BoardOrigin::new(Point::new(0.0, 80.0));
     let (mut app, path) = app_with(dir.path(), with_origin);
     run(&mut app, "measure_distance");
     // 5 mm up the screen: model y falls from 50 to 45.

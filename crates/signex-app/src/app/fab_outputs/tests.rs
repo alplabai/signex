@@ -70,7 +70,10 @@ fn a_pour_and_a_solid_region_are_copper_in_the_gerber_with_no_note() {
                 fill: &str,
                 ring: &[(f64, f64)]|
      -> signex_types::pcb::Zone {
-        let outline: Vec<_> = ring.iter().map(|&(x, y)| serde_json::json!({"x": x, "y": y})).collect();
+        let outline: Vec<_> = ring
+            .iter()
+            .map(|&(x, y)| serde_json::json!({"x": x, "y": y}))
+            .collect();
         serde_json::from_value(serde_json::json!({
             "uuid": Uuid::from_u128(id), "net": net, "net_name": name, "layer": layer,
             "outline": outline, "fill_type": fill
@@ -87,7 +90,10 @@ fn a_pour_and_a_solid_region_are_copper_in_the_gerber_with_no_note() {
     let top = std::fs::read_to_string(tmp.path().join("b-copper-l1-top.gbr")).unwrap();
     assert!(top.contains("%TO.N,GND*%\nG36*"), "the pour's fill: {top}");
     let bottom = std::fs::read_to_string(tmp.path().join("b-copper-l2-bottom.gbr")).unwrap();
-    assert!(bottom.contains("%TO.N,VCC*%\nG36*"), "the solid region: {bottom}");
+    assert!(
+        bottom.contains("%TO.N,VCC*%\nG36*"),
+        "the solid region: {bottom}"
+    );
 }
 
 #[test]

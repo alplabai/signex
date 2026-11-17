@@ -148,7 +148,12 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
     let frame = free_pad_frame();
     for pad in &board.free.pads {
         let net = pad.net.as_ref().map_or(0, |n| n.number);
-        push_pieces(&mut out, ItemRef::FreePad(pad.uuid), net, pad_pieces(&frame, pad));
+        push_pieces(
+            &mut out,
+            ItemRef::FreePad(pad.uuid),
+            net,
+            pad_pieces(&frame, pad),
+        );
     }
     for segment in &board.segments {
         let layers = layer_mask(std::iter::once(segment.layer.as_str()));

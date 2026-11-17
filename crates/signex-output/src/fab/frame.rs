@@ -21,8 +21,8 @@ impl FabFrame {
     /// finite, or beyond 1 km) counts from the model's zero, as a board
     /// saved without one does.
     pub(crate) fn of(board: &PcbBoard) -> Self {
-        let origin = PointNm::from_mm(board.options.origin.at, "board.origin")
-            .unwrap_or(PointNm::new(0, 0));
+        let origin =
+            PointNm::from_mm(board.options.origin.at, "board.origin").unwrap_or(PointNm::new(0, 0));
         FabFrame { origin }
     }
 

@@ -32,7 +32,10 @@ fn zone_regions(board: &PcbBoard, fills: &ZoneFills) -> Vec<FilledRegion> {
             continue;
         }
         let pieces = if zone.is_pour() {
-            fills.of(index).map(|fill| fill.pieces.clone()).unwrap_or_default()
+            fills
+                .of(index)
+                .map(|fill| fill.pieces.clone())
+                .unwrap_or_default()
         } else {
             zone_area(zone).into_iter().collect()
         };

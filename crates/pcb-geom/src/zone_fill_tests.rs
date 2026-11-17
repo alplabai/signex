@@ -485,7 +485,10 @@ fn a_free_pad_or_arc_of_another_net_is_cleared() {
     assert_eq!(fill[0].holes.len(), 1, "the VCC free pad");
     let hole = RectNm::bounding(fill[0].holes[0].iter().copied()).unwrap();
     let w = hole.width();
-    assert!((2 * MM..2 * MM + MM / 50).contains(&w), "1 mm + 2 x 0.5: {w}");
+    assert!(
+        (2 * MM..2 * MM + MM / 50).contains(&w),
+        "1 mm + 2 x 0.5: {w}"
+    );
 
     b.free
         .arcs
@@ -509,7 +512,10 @@ fn a_pad_is_cleared_at_its_size_on_the_pours_layer() {
     let fill = pieces(&board(vec![big_on_top]));
     let hole = RectNm::bounding(fill[0].holes[0].iter().copied()).unwrap();
     let w = hole.width();
-    assert!((3 * MM..3 * MM + MM / 50).contains(&w), "2 mm + 2 x 0.5: {w}");
+    assert!(
+        (3 * MM..3 * MM + MM / 50).contains(&w),
+        "2 mm + 2 x 0.5: {w}"
+    );
 }
 
 /// #2373: an island tied to the pour's net only through a free pad or a
