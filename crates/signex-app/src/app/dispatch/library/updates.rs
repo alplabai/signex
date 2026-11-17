@@ -767,7 +767,7 @@ impl Signex {
                 }
                 _ => self.apply_engine_commands_reporting(commands, true, true),
             };
-            outcome == crate::app::mutation_gateway::CommandOutcome::Failed
+            outcome == crate::app::mutation_gateway::MutationOutcome::Failed
         } else {
             self.replace_on_parked_sheet(sheet, commands, record_history)
         };

@@ -146,7 +146,7 @@ impl Signex {
         let (outcome, refusal) = self.apply_engine_command_reporting(command, true, true);
         match (outcome, refusal) {
             (_, Some(reason)) => Err(reason),
-            (crate::app::mutation_gateway::CommandOutcome::Changed, None) => Ok(()),
+            (crate::app::mutation_gateway::MutationOutcome::Changed, None) => Ok(()),
             _ => Err("the directive is already as given".to_string()),
         }
     }

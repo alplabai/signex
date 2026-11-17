@@ -30,9 +30,10 @@ mod datasheet;
 mod library_message;
 mod placed_part;
 mod range_filter;
+pub use crate::app::core::resolved_placement::ResolvedPlacement;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{
-    BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedPlacement, ResolvedSymbolChoice,
+    BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedSymbolChoice,
 };
 pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
 pub use range_filter::{RangeBound, RangeFilterMsg};

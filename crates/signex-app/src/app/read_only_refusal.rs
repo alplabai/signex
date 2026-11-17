@@ -169,7 +169,7 @@ mod tests {
         let (outcome, _) = app.commit_net_colors(&[wire], colour);
         assert_eq!(
             outcome,
-            crate::app::mutation_gateway::CommandOutcome::Failed
+            crate::app::mutation_gateway::MutationOutcome::Failed
         );
         assert!(!is_dirty(&app), "no colour step, no dirty mark");
         let engine = app.document_state.active_engine().expect("engine");

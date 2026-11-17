@@ -705,7 +705,7 @@ fn a_colour_only_change_is_dirty_and_save_all_writes_it() {
     let (outcome, _) = app.commit_net_colors(&[wire], colour(9));
     assert_eq!(
         outcome,
-        crate::app::mutation_gateway::CommandOutcome::Changed
+        crate::app::mutation_gateway::MutationOutcome::Changed
     );
     assert!(app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.has_dirty_documents());
