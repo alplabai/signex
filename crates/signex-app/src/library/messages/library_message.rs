@@ -5,11 +5,12 @@ use std::path::PathBuf;
 
 use signex_library::{PrimitiveKind, RowId, UseSite};
 
-use super::super::state::{EditorAddress, PrimitivePickerTarget};
+use super::super::state::PrimitivePickerTarget;
 use super::{
     BrowserEditMsg, CloseLibraryChoice, EditorMsg, PickerMsg, PrimitiveEdit, PrimitivePickerMsg,
     SettingsMsg,
 };
+use crate::app::core::editor_address::EditorAddress;
 use crate::app::core::resolved_placement::ResolvedPlacement;
 
 /// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).

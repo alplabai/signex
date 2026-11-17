@@ -36,12 +36,3 @@ impl PinSelectionMode {
         }
     }
 }
-
-impl std::fmt::Display for PinSelectionMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            PinSelectionMode::PinOnly => "Pin only",
-            PinSelectionMode::TextAndPin => "Text and pin",
-        })
-    }
-}

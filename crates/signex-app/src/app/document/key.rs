@@ -4,9 +4,9 @@
 use std::path::Path;
 
 use crate::app::core::document_key::DocumentKey;
+use crate::app::core::editor_address::EditorAddress;
 use crate::app::state::DocumentState;
 use crate::app::{TabInfo, TabKind};
-use crate::library::state::EditorAddress;
 
 impl DocumentState {
     /// The document the file at `path` is held as, by the precedence Save

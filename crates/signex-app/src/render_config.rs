@@ -45,6 +45,15 @@ impl std::fmt::Display for GridStyle {
 
 pub use crate::app::core::pin_selection_mode::PinSelectionMode;
 
+impl std::fmt::Display for PinSelectionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            PinSelectionMode::PinOnly => "Pin only",
+            PinSelectionMode::TextAndPin => "Text and pin",
+        })
+    }
+}
+
 pub fn to_iced(c: &signex_types::theme::Color) -> iced::Color {
     iced::Color::from_rgba8(c.r, c.g, c.b, c.a as f32 / 255.0)
 }

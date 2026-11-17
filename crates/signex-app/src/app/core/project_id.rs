@@ -11,7 +11,7 @@ pub struct ProjectId(u32);
 impl ProjectId {
     /// The id for counter value `raw`. Only `DocumentState::mint_project_id`
     /// calls it, so an id is never reused.
-    pub(crate) const fn from_raw(raw: u32) -> Self {
+    pub(in crate::app) const fn from_raw(raw: u32) -> Self {
         Self(raw)
     }
 
