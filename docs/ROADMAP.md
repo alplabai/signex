@@ -52,8 +52,7 @@ Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
 | Fact | State (2026-11-17) |
 |------|--------------------|
-| Latest tagged release | **v26.11.0-rc.1** (2026-11-07), the first CalVer tag and the second Community Preview release candidate, published as a GitHub pre-release. **v1.0.0-rc.1** (2026-10-29) was the **last SemVer tag**; `1.0.0` final is never cut |
-| Next tag | **v26.11.0**, the Community Preview release, cut from this release-prep PR as a full (not pre-release) GitHub release. The schematic and PCB editors are the supported surface |
+| Latest tagged release | **v26.11.0** (2026-11-17), the Community Preview release and the first full CalVer release; the schematic and PCB editors are the supported surface. **v26.11.0-rc.1** (2026-11-07) was its release candidate; **v1.0.0-rc.1** (2026-10-29) was the **last SemVer tag**, and `1.0.0` final is never cut |
 | `workspace.package.version` | **26.11.0** |
 | Latest CHANGELOG section | **26.11.0** — dated 2026-11-17 |
 | Current work | Community Preview milestone: open issues are tracked on [the milestone](https://github.com/alplabai/signex/milestone/12) (a dated issue list here goes stale). AI Design work runs alongside (§8) |
