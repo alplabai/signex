@@ -96,7 +96,6 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
     list
 }
 
-
 struct Matched {
     /// Part index -> footprint index.
     footprint_of: Vec<Option<usize>>,
