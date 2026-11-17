@@ -116,7 +116,7 @@ stages, in order:
 | Pre-1.0 (shipped, §6) | Foundation and editor build-out. No public users. |
 | Community Preview | First public release. Community schematic editor is real. |
 | PCB Design | PCB layout from the schematic and routing, built together. |
-| Schematic Refinement | Schematic-editor refinement. Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before the Community Release. |
+| Schematic Refinement | Schematic-editor refinement, Design Notebook and Block Diagram. Ships before the Community Release. |
 | Community Release | Manufacturing output for the boards PCB Design produces. |
 | PCB build-out | 3D, advanced PCB, high-speed, the rest of the router. |
 | Plugin System | The plugin system. |
@@ -163,9 +163,10 @@ feature *can* ship, not whether it ships at all.
 P1 and are scheduled first. Schematic Refinement issues keep their
 `tier: p1` label; they are not re-triaged.
 
-**Schematic Refinement before the Community Release (2026-11-17):**
-Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before the
-Community Release. Their tier stays P1.
+**Schematic Refinement before the Community Release (2026-11-17):** all
+five Schematic Refinement bands (Advanced Schematic, SCH Tables & Docs,
+Enhanced Output, Design Notebook, Block Diagram) ship before the Community
+Release. Their tier stays P1.
 
 **Decision rule:** if a feature is proposed for an earlier plan than
 its tier allows, the answer is "after the current target ships." This is
@@ -308,10 +309,10 @@ pre-release. (`v1.0.0-rc.1`, the last SemVer tag, was the first candidate.)
 
 Maintainer decision, 2026-11-07: designing boards from the schematic comes
 first after the Community Preview, and it ships in the first release after
-it. The plans below are built in parallel. Advanced Schematic, SCH Tables
-& Docs and Enhanced Output follow and ship before the Community Release
-(2026-11-17). Every other band on this page waits until this gate ships:
-Design Notebook, Block Diagram, the 3D, Advanced PCB,
+it. The plans below are built in parallel. Schematic Refinement, all five
+of its bands, follows and ships before the Community Release (2026-11-17).
+Every other band on this page waits until this gate ships: the 3D,
+Advanced PCB,
 High-Speed, HQ Render and Animation bands, the Plugin System and
 Simulation. The PCB Viewer gate is folded into the PCB Layout plan here: a
 viewer for boards that nothing in Signex can create is not a milestone
@@ -336,10 +337,11 @@ title, `AI Design`, so existing issues keep their milestone.
 
 ### Schematic Refinement
 
-**Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before
-the Community Release (2026-11-17).** Design Notebook and Block Diagram
-still wait until PCB Design ships. The Command Registry (#278) moved from
-Advanced Schematic to PCB Design.
+**Ships before the Community Release (2026-11-17):** Advanced Schematic,
+SCH Tables & Docs, Enhanced Output, Design Notebook and Block Diagram.
+Only the Community scope written here is pulled in; Signex AI parts are
+Pro and planned in the private Pro roadmap. The Command Registry (#278)
+moved from Advanced Schematic to PCB Design.
 
 **Rules for the whole band (2026-11-17):**
 
@@ -434,6 +436,26 @@ explicitly deferred; `python-control` + `scikit-rf` are deliberate
 MATLAB-API clones covering the legacy use cases without a subprocess
 bridge. The `ComputeRuntime` trait is pluggable if users surface demand.
 
+The Measurements & Signex AI Integration plan is pulled in for the
+measurement scope listed above only; its Signex AI part is Pro.
+
+**Exit criteria (draft, 2026-11-17, for maintainer review):**
+
+- A notebook with `@component`, `@pin` and `@net` references opens beside
+  its project, every reference resolves, and a renamed or deleted target
+  shows a stale warning.
+- Navigating from a notebook reference to the schematic and back works in
+  both directions.
+- A notebook fixture exports to PDF, and two exports of it give the same
+  file.
+- A `#measurement()` entry shows in the timeline of its pin or part and is
+  marked stale when the referenced value changes.
+- A `#python()` cell computes from a schematic value with units, and the
+  sandbox refuses subprocess, network and out-of-project file access, each
+  pinned by a test.
+- The notebook file round-trips in the fixture corpus; every new feature is
+  a catalog command with tests.
+
 #### Block Diagram (P1)
 
 System-level architectural view supporting top-down design: start with
@@ -443,6 +465,18 @@ functional blocks and signal flows, then refine into detailed schematics.
 |------|-------|
 | **Block Diagram** | Block Diagram tab (fifth document mode); block canvas with customizable shapes / colours; block properties (function, rails, key specs, interfaces); signal-flow connections with protocol labels; interface annotations (SPI, I2C, UART, USB, LVDS, power, analog); block diagram file format; SVG / PDF export |
 | **Schematic Linking & Power Tree** | Link blocks to schematic sheets (click block → navigate); auto-generate a block diagram from hierarchical sheet structure; power-tree visualisation auto-detected from the schematic; power budget annotations per block; signal-chain visualisation; block-level net summary |
+
+**Exit criteria (draft, 2026-11-17, for maintainer review):**
+
+- A block diagram generated from a hierarchical fixture project has one
+  block per sheet and matches its golden diagram.
+- Clicking a linked block opens its sheet, and the link follows a sheet
+  rename.
+- The power tree of a fixture project lists every rail from the schematic,
+  with the budget per block.
+- A block diagram exports to SVG and PDF, and the file round-trips in the
+  fixture corpus.
+- Every new feature is a catalog command with tests.
 
 ### PCB Viewer
 
@@ -804,10 +838,13 @@ What that promotion does and does not mean:
 
 Maintainer decisions (Caner), each also a row in `docs/DECISIONS.md`:
 
-- **Pulled forward:** Advanced Schematic, SCH Tables & Docs and Enhanced
-  Output now ship before the Community Release instead of waiting for PCB
-  Design to ship; their tier stays P1. Each band gets draft exit criteria
-  (§8). Design Notebook and Block Diagram keep their place.
+- **Pulled forward:** all of Schematic Refinement (Advanced Schematic,
+  SCH Tables & Docs, Enhanced Output, Design Notebook and Block Diagram)
+  now ships before the Community Release; it was deferred until PCB Design
+  shipped, with no order against the Community Release. The tier stays P1.
+  Each band gets draft exit criteria (§8). Only the Community scope is
+  pulled in; the Signex AI part of Measurements & Signex AI Integration is
+  Pro.
 - **Scope added to the Community Release plan:** PCB rooms from schematic
   sheets (#2457), the Command Log panel (#2458), PCB status-bar counters
   (#2460), compare board with schematic (#2462) and agent-socket coverage
