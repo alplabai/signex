@@ -7,13 +7,33 @@ use signex_i18n_ids::{MessageId, command_ids};
 pub use categories::{category_title_id, title_words};
 pub use operands::{Operand, OperandKind};
 
-mod active_bar;
+mod annotate;
+mod arrange;
+mod board;
 mod categories;
-mod general;
+mod clipboard;
+mod documents;
+mod drawing;
+mod drc;
+mod erc;
+mod grid;
+mod hierarchy;
+mod history;
+mod layers;
+mod library;
+mod nets;
 mod operands;
-mod pcb;
-mod schematic;
-mod threed;
+mod pcb_sync;
+mod placement;
+mod properties;
+mod query;
+mod search;
+mod selection;
+mod tool;
+mod transform;
+mod view;
+mod wiring;
+mod workspace;
 
 /// Coarse editor-surface bucket used by the Keyboard Shortcuts pane to
 /// group commands for display. Distinct from [`CommandMetadata::category`],
@@ -274,16 +294,41 @@ pub fn command_menu_message(command_id: &str) -> MessageId {
     metadata_for_str(command_id).map_or(command_ids::CMD_UNNAMED, CommandMetadata::menu_label_id)
 }
 
-/// Every command-metadata table, one per surface group. `metadata_for`
-/// and the tests iterate across all of them; the split keeps each table
-/// file within the size cap without changing lookup behaviour (command
-/// ids are unique across groups).
+/// Every command-metadata table, one per domain area (#2447). The order of
+/// `TABLES`, and of the rows within each table, is the catalog order: the
+/// command palette with an empty query, `catalog.golden.tsv` and the
+/// `signex commands` JSON list commands in it. `metadata_for` and the tests
+/// iterate across all tables; command ids are unique across them.
+///
+/// Parameterised families (power ports, net colours, selection-arm modes)
+/// have no per-value ids: see
+/// `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 const TABLES: &[&[CommandMetadata]] = &[
-    general::GENERAL,
-    schematic::SCHEMATIC,
-    active_bar::ACTIVE_BAR,
-    pcb::PCB,
-    threed::THREE_D,
+    documents::DOCUMENTS,
+    query::QUERY,
+    history::HISTORY,
+    clipboard::CLIPBOARD,
+    properties::PROPERTIES,
+    arrange::ARRANGE,
+    transform::TRANSFORM,
+    placement::PLACEMENT,
+    wiring::WIRING,
+    drawing::DRAWING,
+    tool::TOOL,
+    hierarchy::HIERARCHY,
+    annotate::ANNOTATE,
+    erc::ERC,
+    drc::DRC,
+    pcb_sync::PCB_SYNC,
+    board::BOARD,
+    layers::LAYERS,
+    nets::NETS,
+    selection::SELECTION,
+    search::SEARCH,
+    view::VIEW,
+    grid::GRID,
+    library::LIBRARY,
+    workspace::WORKSPACE,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in
@@ -583,11 +628,31 @@ mod tests {
     #[test]
     fn every_catalog_entry_sets_enable_and_flags() {
         const TABLE_SRC: &[(&str, &str)] = &[
-            ("general.rs", include_str!("general.rs")),
-            ("schematic.rs", include_str!("schematic.rs")),
-            ("active_bar.rs", include_str!("active_bar.rs")),
-            ("pcb.rs", include_str!("pcb.rs")),
-            ("threed.rs", include_str!("threed.rs")),
+            ("documents.rs", include_str!("documents.rs")),
+            ("query.rs", include_str!("query.rs")),
+            ("history.rs", include_str!("history.rs")),
+            ("clipboard.rs", include_str!("clipboard.rs")),
+            ("properties.rs", include_str!("properties.rs")),
+            ("arrange.rs", include_str!("arrange.rs")),
+            ("transform.rs", include_str!("transform.rs")),
+            ("placement.rs", include_str!("placement.rs")),
+            ("wiring.rs", include_str!("wiring.rs")),
+            ("drawing.rs", include_str!("drawing.rs")),
+            ("tool.rs", include_str!("tool.rs")),
+            ("hierarchy.rs", include_str!("hierarchy.rs")),
+            ("annotate.rs", include_str!("annotate.rs")),
+            ("erc.rs", include_str!("erc.rs")),
+            ("drc.rs", include_str!("drc.rs")),
+            ("pcb_sync.rs", include_str!("pcb_sync.rs")),
+            ("board.rs", include_str!("board.rs")),
+            ("layers.rs", include_str!("layers.rs")),
+            ("nets.rs", include_str!("nets.rs")),
+            ("selection.rs", include_str!("selection.rs")),
+            ("search.rs", include_str!("search.rs")),
+            ("view.rs", include_str!("view.rs")),
+            ("grid.rs", include_str!("grid.rs")),
+            ("library.rs", include_str!("library.rs")),
+            ("workspace.rs", include_str!("workspace.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();
