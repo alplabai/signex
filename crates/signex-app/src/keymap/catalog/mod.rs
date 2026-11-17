@@ -445,7 +445,8 @@ const GLOBAL_COMMANDS: &[&str] = &[
 ///
 /// 1. Ids in [`GLOBAL_COMMANDS`] are global.
 /// 2. A few `General` commands act in one editor (`break_wire`, the grid
-///    picker); they are listed here.
+///    picker) or two (the Net Classes panel: a sheet or a board); they are
+///    listed here.
 /// 3. `Enablement::RequiresDocument(kind)` names the editor outright.
 /// 4. The `Schematic` / `Pcb` / `ThreeD` surface group decides.
 /// 5. Any other `General` command is editor-scoped.
@@ -467,6 +468,10 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         | "switch_segment_posture" => return Some(&[ShortcutContext::Schematic]),
         "open_grid_picker" | "cycle_snap_grid_forward" => {
             return Some(&[ShortcutContext::Footprint]);
+        }
+        // The project's net-class table, from a sheet or a board.
+        "open_net_classes" | "open_net_classes_panel" => {
+            return Some(&[ShortcutContext::Schematic, ShortcutContext::Pcb]);
         }
         _ => {}
     }
@@ -506,6 +511,23 @@ mod tests {
             .find(|metadata| metadata.id == id)
             .unwrap_or_else(|| panic!("missing command metadata for `{id}`"))
             .group
+    }
+
+    /// #2451: Design ▸ Net Classes and its alias Tools ▸ Net Classes open
+    /// one panel on a sheet or a board; the catalog scopes both so.
+    #[test]
+    fn the_net_classes_ids_are_scoped_to_a_sheet_or_a_board() {
+        for id in ["open_net_classes", "open_net_classes_panel"] {
+            let command = AppCommandId::new(id).expect("a catalog id");
+            let metadata = metadata_for(&command).expect("in the catalog");
+            assert_eq!(metadata.enable, Enablement::Always, "{id}");
+            assert_eq!(group_of(id), CommandGroup::General, "{id}");
+            assert_eq!(
+                required_contexts(&command),
+                Some(&[ShortcutContext::Schematic, ShortcutContext::Pcb][..]),
+                "{id}"
+            );
+        }
     }
 
     #[test]

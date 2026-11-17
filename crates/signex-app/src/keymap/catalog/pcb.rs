@@ -72,15 +72,17 @@ pub(super) const PCB: &[CommandMetadata] = &[
         operands: operands::DRC_FILTER,
         ..CommandMetadata::DEFAULT
     },
-    // #2400: the board Net Classes panel and the edits of its table, each
-    // one step of the project's net-class history. No default keys.
+    // #2400: the Net Classes panel and the edits of its table, each one step
+    // of the project's net-class history. `open_net_classes_panel` is an
+    // alias of `open_net_classes`: the same panel on a sheet or a board.
+    // No default keys.
     CommandMetadata {
         id: "open_net_classes_panel",
         category: "design",
         label: command_ids::CMD_OPEN_NET_CLASSES_PANEL,
         menu_label: Some(command_ids::CMD_MENU_OPEN_NET_CLASSES_PANEL),
-        group: CommandGroup::Pcb,
-        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

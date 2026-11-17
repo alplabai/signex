@@ -289,12 +289,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::NetInspector,
         )),
-        // #2416: View ▸ Selection Filter opens the Active Bar's filter;
-        // Design ▸ Net Classes the net-class panel.
+        // #2416: View ▸ Selection Filter opens the Active Bar's filter.
         "open_selection_filter" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::ToggleMenu(
             crate::active_bar::ActiveBarMenu::Filter,
         )),
-        "open_net_classes" => {
+        // Design ▸ Net Classes (#2416) and its alias Tools ▸ Net Classes
+        // (#2400): one route to the panel of the project's net-class table.
+        "open_net_classes" | "open_net_classes_panel" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
         }
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
@@ -311,11 +312,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
-        // #2399, #2400: the board's DRC results and Net Classes panels.
+        // #2399: the board's DRC results panel.
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
-        "open_net_classes_panel" => {
-            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
-        }
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
         // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.
