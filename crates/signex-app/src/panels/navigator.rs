@@ -205,7 +205,7 @@ fn tree_node(
     let node = siblings[index];
     // The cached row reads en-US; the panel names it in its own language
     // with `NavigatorModel::shown_tree`.
-    let label = row_label(signex_i18n::I18n::en_us_ref(), node);
+    let label = row_label(&signex_i18n::I18n::en_us(), node);
     let kids: Vec<&SheetNode> = node.children.iter().collect();
     let children: Vec<TreeNode> = (0..kids.len())
         .map(|i| tree_node(&kids, i, active, open, fold))
