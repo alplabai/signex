@@ -264,7 +264,10 @@ number.
 1. Add a stable command id to the area file it belongs to under
    `crates/signex-commands/src/catalog/` (for example `placement.rs` or
    `nets.rs`). The file's place in `TABLES` (`catalog/mod.rs`) and the row's
-   place in the file set where the command lists.
+   place in the file set where the command lists. Add the id to
+   `scripts/catalog-ids.txt` too: the command-id gate fails on a catalog id
+   that is not listed, and on a listed id that is gone. A command is removed
+   only by removing its line there, with a maintainer decision.
 2. Add default bindings to the relevant built-in TOML profiles.
 3. Map the command id in `core_to_message`'s table (`app/command/bridge.rs`).
 4. Use active-keymap lookup for visible labels instead of hardcoded strings.
