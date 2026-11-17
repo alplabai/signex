@@ -1,5 +1,6 @@
-//! What new copper must keep clear of (#2408): every pad, track and via of
-//! the board and every copper area that is not a pour (Fill, Solid Region,
+//! What new copper must keep clear of (#2408): every pad (footprint or
+//! free), track, copper arc and via of the board, at its size on each
+//! layer, and every copper area that is not a pour (Fill, Solid Region,
 //! teardrop), each with its net and copper layers, no net included, and
 //! the keepouts that forbid it. Via stitching, teardrops and glossing read
 //! this one list, so they agree on what "clear" means: the clearance a
@@ -11,17 +12,18 @@
 //! `docs/PCB_TOOLS.md`, "Board Tools".
 
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_sketch::PcbKeepout;
 
-use crate::copper::{layer_bit, layer_mask, pad_layers, via_layers};
-use crate::index::{ItemRef, track_shape, via_shape};
+use crate::copper::{layer_bit, layer_mask, pad_pieces, via_pieces};
+use crate::free::arc_shapes;
+use crate::index::{ItemRef, track_shape};
 use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
 use crate::region::Polygon;
 use crate::shape::Shape;
 use crate::shape_overlap::{point_in_polygon, polygons_meet};
-use crate::transform::pad_shape;
-use crate::units::PointNm;
+use crate::units::{GeomError, PointNm};
 use crate::zone_fill::zone_area;
 
 /// The copper an obstacle holds.
@@ -44,9 +46,13 @@ pub(crate) struct Obstacle {
 }
 
 impl Obstacle {
-    /// A pad or a via: copper a new via keeps off even on its own net.
+    /// A pad (footprint or free) or a via: copper a new via keeps off even
+    /// on its own net.
     pub fn is_landing(&self) -> bool {
-        matches!(self.item, ItemRef::Pad { .. } | ItemRef::Via(_))
+        matches!(
+            self.item,
+            ItemRef::Pad { .. } | ItemRef::FreePad(_) | ItemRef::Via(_)
+        )
     }
 
     fn bounds(&self) -> Option<RectNm> {
@@ -123,25 +129,26 @@ fn inside_ring(shape: &Shape, ring: &[PointNm]) -> bool {
         })
 }
 
-/// Every pad, track and via whose geometry converts, and every copper zone
-/// that is neither a pour nor a rule area. A track or zone on no copper
-/// layer is not copper and is left out.
+/// Every pad (footprint and free), track, copper arc and via whose geometry
+/// converts, and every copper zone that is neither a pour nor a rule area.
+/// A track, arc or zone on no copper layer is not copper and is left out.
 pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
     let mut out = Vec::new();
     for footprint in &board.footprints {
         for pad in &footprint.pads {
-            if let Ok(shape) = pad_shape(footprint, pad) {
-                out.push(Obstacle {
-                    item: ItemRef::Pad {
-                        footprint: footprint.uuid,
-                        pad: pad.uuid,
-                    },
-                    net: pad.net.as_ref().map_or(0, |n| n.number),
-                    layers: pad_layers(footprint, pad),
-                    copper: Copper::Shape(shape),
-                });
-            }
+            let item = ItemRef::Pad {
+                footprint: footprint.uuid,
+                pad: pad.uuid,
+            };
+            let net = pad.net.as_ref().map_or(0, |n| n.number);
+            push_pieces(&mut out, item, net, pad_pieces(footprint, pad));
         }
+    }
+    // Free pads (#2373), in the board's own frame.
+    let frame = free_pad_frame();
+    for pad in &board.free.pads {
+        let net = pad.net.as_ref().map_or(0, |n| n.number);
+        push_pieces(&mut out, ItemRef::FreePad(pad.uuid), net, pad_pieces(&frame, pad));
     }
     for segment in &board.segments {
         let layers = layer_mask(std::iter::once(segment.layer.as_str()));
@@ -154,15 +161,22 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
             });
         }
     }
-    for via in &board.vias {
-        if let Ok(shape) = via_shape(via) {
-            out.push(Obstacle {
-                item: ItemRef::Via(via.uuid),
-                net: via.net,
-                layers: via_layers(via),
-                copper: Copper::Shape(shape),
-            });
+    // Free copper arcs (#2373), one obstacle per chord.
+    for arc in &board.free.arcs {
+        let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+        if layers == 0 {
+            continue;
         }
+        let shapes = arc_shapes(arc).unwrap_or_default();
+        out.extend(shapes.into_iter().map(|shape| Obstacle {
+            item: ItemRef::Arc(arc.uuid),
+            net: arc.net,
+            layers,
+            copper: Copper::Shape(shape),
+        }));
+    }
+    for via in &board.vias {
+        push_pieces(&mut out, ItemRef::Via(via.uuid), via.net, via_pieces(via));
     }
     for zone in &board.zones {
         let layers = layer_mask(std::iter::once(zone.layer.as_str()));
@@ -182,6 +196,27 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
         }
     }
     out
+}
+
+/// A pad or via as one obstacle per group of layers sharing a size
+/// (#2401); none when its geometry does not convert.
+fn push_pieces(
+    out: &mut Vec<Obstacle>,
+    item: ItemRef,
+    net: u32,
+    pieces: Result<Vec<(u32, Shape)>, GeomError>,
+) {
+    out.extend(
+        pieces
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(layers, shape)| Obstacle {
+                item,
+                net,
+                layers,
+                copper: Copper::Shape(shape),
+            }),
+    );
 }
 
 /// What new copper is.

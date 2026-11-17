@@ -4,14 +4,15 @@
 //! islands under the second rule: no copper is "its net".
 
 use signex_types::pcb::{PcbBoard, Zone};
+use signex_types::pcb_free::free_pad_frame;
 
 use super::zone_area;
 use crate::area_touch::{areas_meet, shape_meets_area};
-use crate::copper::{layer_mask, pad_layers, via_layers};
-use crate::index::{track_shape, via_shape};
+use crate::copper::{layer_mask, pad_pieces, pieces_on, via_pieces};
+use crate::free::arc_shapes;
+use crate::index::track_shape;
 use crate::region::Polygon;
 use crate::shape::Shape;
-use crate::transform::pad_shape;
 
 /// Twice an area of one mm², in nm².
 const TWICE_NM2_PER_MM2: f64 = 2.0e12;
@@ -57,12 +58,18 @@ impl NetCopper {
     fn of(board: &PcbBoard, zone: &Zone, layers: u32) -> Self {
         let net = zone.net;
         let mut shapes = Vec::new();
-        for footprint in &board.footprints {
-            for pad in &footprint.pads {
-                let on_net = pad.net.as_ref().is_some_and(|n| n.number == net);
-                if on_net && pad_layers(footprint, pad) & layers != 0 {
-                    shapes.extend(pad_shape(footprint, pad).ok());
-                }
+        // As the obstacles read them: per-layer sizes (#2401), free pads
+        // and copper arcs (#2373).
+        let frame = free_pad_frame();
+        let pads = board
+            .footprints
+            .iter()
+            .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)))
+            .chain(board.free.pads.iter().map(|pad| (&frame, pad)));
+        for (footprint, pad) in pads {
+            if pad.net.as_ref().is_some_and(|n| n.number == net) {
+                let pieces = pad_pieces(footprint, pad).unwrap_or_default();
+                shapes.extend(pieces_on(pieces, layers));
             }
         }
         let on_layer = |name: &str| layer_mask(std::iter::once(name)) & layers != 0;
@@ -71,9 +78,14 @@ impl NetCopper {
                 shapes.extend(track_shape(segment).ok());
             }
         }
+        for arc in &board.free.arcs {
+            if arc.net == net && on_layer(&arc.layer) {
+                shapes.extend(arc_shapes(arc).unwrap_or_default());
+            }
+        }
         for via in &board.vias {
-            if via.net == net && via_layers(via) & layers != 0 {
-                shapes.extend(via_shape(via).ok());
+            if via.net == net {
+                shapes.extend(pieces_on(via_pieces(via).unwrap_or_default(), layers));
             }
         }
         let areas = board

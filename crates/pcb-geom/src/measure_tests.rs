@@ -64,10 +64,19 @@ fn close(a: f64, b: f64) -> bool {
 
 #[test]
 fn a_point_span_reads_its_length_and_both_legs() {
+    // Model y grows down the screen: (4, 6) is 4 mm below (1, 2).
     let span = Span::between(Point::new(1.0, 2.0), Point::new(4.0, 6.0));
     assert!(close(span.distance_mm, 5.0));
     assert!(close(span.dx_mm, 3.0));
-    assert!(close(span.dy_mm, 4.0));
+    assert!(close(span.dy_mm, -4.0));
+}
+
+#[test]
+fn measuring_five_mm_up_the_screen_reads_dy_plus_five() {
+    let span = Span::between(Point::new(10.0, 70.0), Point::new(10.0, 65.0));
+    assert!(close(span.distance_mm, 5.0));
+    assert!(close(span.dx_mm, 0.0));
+    assert!(close(span.dy_mm, 5.0), "{span:?}");
 }
 
 #[test]

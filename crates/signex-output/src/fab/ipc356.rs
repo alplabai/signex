@@ -6,7 +6,7 @@ use pcb_geom::{PointNm, mm_to_nm, pad_world_rotation_deg};
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard};
 
 use super::collect::{pad_aperture, pad_openings};
-use super::frame::{div_round, fab_angle_udeg, fab_point};
+use super::frame::{FabFrame, div_round, fab_angle_udeg};
 use super::layers::{CopperStack, FabLayer, Face};
 
 /// The longest net name a record holds; a longer one gets an alias.
@@ -43,15 +43,16 @@ pub(crate) fn write_ipc356(
     skipped: &mut usize,
 ) -> String {
     let mut records = Vec::new();
+    let frame = FabFrame::of(board);
     // Free pads (#2373) are tested in the board's own frame.
-    let frame = signex_types::pcb_free::free_pad_frame();
-    let free = board.free.pads.iter().map(|pad| (&frame, pad));
+    let free_frame = signex_types::pcb_free::free_pad_frame();
+    let free = board.free.pads.iter().map(|pad| (&free_frame, pad));
     let owned = board
         .footprints
         .iter()
         .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)));
     for (footprint, pad) in owned.chain(free) {
-        match pad_record(board, footprint, pad) {
+        match pad_record(board, footprint, pad, frame) {
             Some(record) => records.push(record),
             None => *skipped += 1,
         }
@@ -71,7 +72,7 @@ pub(crate) fn write_ipc356(
             pin: String::new(),
             hole: Some((drill.abs(), true)),
             access: Access::Both,
-            at: fab_point(at),
+            at: frame.point(at),
             size: (size.abs(), size.abs()),
             udeg: 0,
             covered: (true, true),
@@ -117,8 +118,13 @@ fn aliases(records: &[Record]) -> Vec<String> {
     long
 }
 
-fn pad_record(board: &PcbBoard, footprint: &Footprint, pad: &Pad) -> Option<Record> {
-    let (_, at) = pad_aperture(footprint, pad).ok()?;
+fn pad_record(
+    board: &PcbBoard,
+    footprint: &Footprint,
+    pad: &Pad,
+    frame: FabFrame,
+) -> Option<Record> {
+    let (_, at) = pad_aperture(frame, footprint, pad, pad.size).ok()?;
     let udeg = fab_angle_udeg(pad_world_rotation_deg(footprint, pad).ok()?);
     let size = (
         mm_to_nm(pad.size.x, "pad.size").ok()?.abs(),

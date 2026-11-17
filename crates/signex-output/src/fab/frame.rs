@@ -1,16 +1,40 @@
 //! The fabrication frame and the number formats every fabrication file
 //! shares. Frame and units: see `docs/FABRICATION_OUTPUTS.md`, "Frame".
 
-use pcb_geom::PointNm;
+use pcb_geom::{GeomError, PointNm};
+use signex_types::pcb::{PcbBoard, Point};
 
 /// Millionths in one unit: nm per mm, micro-degrees per degree.
 const MILLION: i64 = 1_000_000;
 
-/// A board point in the fabrication frame: x to the right and y up, in nm
-/// from the board origin. The board model's y grows down the screen, so
-/// the frame negates it; this is the one place that rule lives.
-pub(crate) fn fab_point(model: PointNm) -> PointNm {
-    PointNm::new(model.x, -model.y)
+/// The fabrication frame of one board: x to the right and y up, in nm from
+/// the board origin (#2384), the coordinates the board shows. The board
+/// model's y grows down the screen, so the frame mirrors it about the
+/// origin; this is the one place that rule lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FabFrame {
+    pub(crate) origin: PointNm,
+}
+
+impl FabFrame {
+    /// The frame of `board`. An origin the geometry cannot hold (not
+    /// finite, or beyond 1 km) counts from the model's zero, as a board
+    /// saved without one does.
+    pub(crate) fn of(board: &PcbBoard) -> Self {
+        let origin = PointNm::from_mm(board.options.origin.at, "board.origin")
+            .unwrap_or(PointNm::new(0, 0));
+        FabFrame { origin }
+    }
+
+    /// A model point in the frame.
+    pub(crate) fn point(self, model: PointNm) -> PointNm {
+        PointNm::new(model.x - self.origin.x, self.origin.y - model.y)
+    }
+
+    /// A model point in mm, in the frame.
+    pub(crate) fn of_mm(self, model: Point, what: &'static str) -> Result<PointNm, GeomError> {
+        Ok(self.point(PointNm::from_mm(model, what)?))
+    }
 }
 
 /// A model angle (degrees, counter-clockwise in the model's axes) as the
@@ -81,7 +105,19 @@ mod tests {
 
     #[test]
     fn the_frame_turns_y_up_and_reverses_the_turn() {
-        assert_eq!(fab_point(PointNm::new(3, 4)), PointNm::new(3, -4));
+        let at_zero = FabFrame {
+            origin: PointNm::new(0, 0),
+        };
+        assert_eq!(at_zero.point(PointNm::new(3, 4)), PointNm::new(3, -4));
+        // From an origin at (0, 80) mm, the model point (10, 70) mm is 10 mm
+        // right of it and 10 mm up.
+        let bottom_left = FabFrame {
+            origin: PointNm::new(0, 80_000_000),
+        };
+        assert_eq!(
+            bottom_left.point(PointNm::new(10_000_000, 70_000_000)),
+            PointNm::new(10_000_000, 10_000_000)
+        );
         assert_eq!(fab_angle_udeg(0.0), 0);
         assert_eq!(fab_angle_udeg(-0.0), 0);
         assert_eq!(fab_angle_udeg(90.0), 270_000_000);

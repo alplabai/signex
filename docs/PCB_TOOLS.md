@@ -251,8 +251,9 @@ A pour's outline only bounds its copper. The copper, its fill, is computed by
 `pcb_geom::zone_fills`, in integer nm:
 
 - the outline less the pour's own holes;
-- less every pad, track and via on the pour's layer whose net is not the
-  pour's, grown by the clearance (copper of no net counts as another net,
+- less every pad (free pads #2373 included), track, free copper arc and via
+  on the pour's layer whose net is not the pour's, at its size on that layer
+  (#2401), grown by the clearance (copper of no net counts as another net,
   and a pour of no net clears all copper);
 - less every solid copper zone (Fill, Solid Region) of another net on the
   layer, grown by the clearance;
@@ -266,7 +267,8 @@ A pour's outline only bounds its copper. The copper, its fill, is computed by
   is set;
 - with every island (separate piece) smaller than `min_island_area` (mm²)
   removed, when it is above 0, and, with `remove_dead_islands`, every island
-  that touches no pad, track, via or solid copper zone of the pour's net (a
+  that touches no pad, free pad, track, free copper arc, via or solid copper
+  zone of the pour's net (a
   pour of no net keeps them). The fill counts the islands it removed.
 
 Pours fill in priority order (#2216): a higher `priority` first, equal
@@ -628,7 +630,9 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
 - **Measure Distance** (`measure_distance`, `Ctrl+M`): the first click marks a
   point, snapped like a placement tool's, and the object under it; the ruler
   follows the pointer to the second click. The Messages panel reads the
-  distance with dx and dy in the display unit and, when both clicks landed on
+  distance with dx and dy in the display unit (X right, Y up, as the
+  coordinate readouts count; measuring upward gives a positive dy) and, when
+  both clicks landed on
   an object, the gap between them edge to edge (copper, footprint body or
   area outline). The ruler stays until the next first click; Esc drops the
   first point, then ends Measure.
@@ -665,8 +669,9 @@ the board an agent or the CLI names by `document`, on items named by uuid
 (`id`, `ids`) or by point (`start`, `end`), and answers with what it did:
 the uuids added, removed and changed, and how many places it left out.
 Copper keeps the clearance the board's setup and its project's net classes
-ask for between two nets (`DrcRules::for_board`), measured between pads,
-tracks and vias as the design rule check measures it, so the result adds
+ask for between two nets (`DrcRules::for_board`), measured between pads
+(free pads #2373 included), tracks, free copper arcs and vias, each at its
+size on the layer (#2401), as the design rule check measures it, so the result adds
 no clearance or short finding. Fills, Solid Regions and teardrops of other
 nets are kept clear too, though the check does not look at them; pours are
 not obstacles, since a pour's fill clears new copper of other nets. Two

@@ -3,15 +3,16 @@
 //! pours filled before it.
 
 use signex_types::pcb::{PcbBoard, Zone};
+use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_layer::PcbLayer;
 
 use super::{ZoneFill, ring_nm, zone_area};
-use crate::copper::{layer_mask, pad_layers, via_layers};
-use crate::index::{track_shape, via_shape};
+use crate::copper::{layer_mask, pad_pieces, pieces_on, via_pieces};
+use crate::free::arc_shapes;
+use crate::index::track_shape;
 use crate::rect::RectNm;
 use crate::region::{Polygon, chord_sag, offset};
 use crate::shape::Shape;
-use crate::transform::pad_shape;
 
 /// Points per quarter turn of a round obstacle's clearance ring.
 const OBSTACLE_ARC_STEPS: usize = 8;
@@ -65,24 +66,37 @@ impl Obstacles<'_> {
 
     pub(super) fn collect(&self) -> Vec<Polygon> {
         let mut out = Vec::new();
-        for footprint in &self.board.footprints {
-            for pad in &footprint.pads {
-                let net = pad.net.as_ref().map_or(0, |n| n.number);
-                if pad_layers(footprint, pad) & self.layers == 0 || !self.clears(net) {
-                    continue;
-                }
-                out.extend(pad_shape(footprint, pad).ok().and_then(|s| self.grown(s)));
+        // Pads and vias at their size on the pour's layer (#2401); free
+        // pads (#2373) in the board's own frame.
+        let frame = free_pad_frame();
+        let pads = self
+            .board
+            .footprints
+            .iter()
+            .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)))
+            .chain(self.board.free.pads.iter().map(|pad| (&frame, pad)));
+        for (footprint, pad) in pads {
+            if self.clears(pad.net.as_ref().map_or(0, |n| n.number)) {
+                let pieces = pad_pieces(footprint, pad).unwrap_or_default();
+                out.extend(pieces_on(pieces, self.layers).filter_map(|s| self.grown(s)));
             }
         }
+        let on_layer = |name: &str| layer_mask(std::iter::once(name)) & self.layers != 0;
         for segment in &self.board.segments {
-            let on_layer = layer_mask(std::iter::once(segment.layer.as_str())) & self.layers != 0;
-            if on_layer && self.clears(segment.net) {
+            if on_layer(&segment.layer) && self.clears(segment.net) {
                 out.extend(track_shape(segment).ok().and_then(|s| self.grown(s)));
             }
         }
+        for arc in &self.board.free.arcs {
+            if on_layer(&arc.layer) && self.clears(arc.net) {
+                let shapes = arc_shapes(arc).unwrap_or_default();
+                out.extend(shapes.into_iter().filter_map(|s| self.grown(s)));
+            }
+        }
         for via in &self.board.vias {
-            if via_layers(via) & self.layers != 0 && self.clears(via.net) {
-                out.extend(via_shape(via).ok().and_then(|s| self.grown(s)));
+            if self.clears(via.net) {
+                let pieces = via_pieces(via).unwrap_or_default();
+                out.extend(pieces_on(pieces, self.layers).filter_map(|s| self.grown(s)));
             }
         }
         self.zones(&mut out);

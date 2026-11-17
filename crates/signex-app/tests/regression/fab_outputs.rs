@@ -246,19 +246,21 @@ fn with_no_board_in_view_the_command_does_not_open_the_dialog() {
 #[test]
 fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
     let mut with_zone = board(true);
+    // A pour wholly off the 20 x 10 mm board fills nothing, so the images
+    // hold no copper for it.
     with_zone.zones.push(Zone {
         uuid: Uuid::from_u128(0x80),
         net: 0,
         net_name: String::new(),
         layer: "TopCopper".into(),
         outline: vec![
-            Point::new(1.0, 1.0),
-            Point::new(9.0, 1.0),
-            Point::new(9.0, 9.0),
+            Point::new(25.0, 1.0),
+            Point::new(30.0, 1.0),
+            Point::new(30.0, 5.0),
         ],
         holes: Vec::new(),
         priority: 0,
-        fill_type: String::new(),
+        fill_type: signex_types::zone_pour::POUR_FILL.into(),
         thermal_relief: false,
         thermal_gap: 0.0,
         thermal_width: 0.0,

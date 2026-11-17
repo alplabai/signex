@@ -2,7 +2,40 @@ use signex_types::pcb::SOLID_FILL;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 
 use super::*;
-use crate::tool_fixture::{MM, clearance, empty_board, track, via, zone};
+use crate::tool_fixture::{MM, clearance, empty_board, pad_part, track, via, zone};
+
+/// #2373: free pads and copper arcs are copper the stitching keeps clear
+/// of, another net's by the clearance and a pad of its own net as a landing.
+#[test]
+fn stitching_keeps_off_free_pads_and_free_copper_arcs() {
+    let mut board = board();
+    let all = stitch_points(&board, &area(&board), spec(), clearance);
+    assert_eq!(all.len(), 20);
+    let free_pad = |n: u128, at: (f64, f64), net: u32| {
+        let mut pad = pad_part(n, (0.0, 0.0), 1.0, net).pads.remove(0);
+        pad.position = signex_types::pcb::Point::new(at.0, at.1);
+        pad
+    };
+    // A SIG free pad on the grid point (-4, -4), a GND one on (4, 4).
+    board.free.pads.push(free_pad(40, (-4.0, -4.0), 3));
+    board.free.pads.push(free_pad(42, (4.0, 4.0), 1));
+    // A SIG free arc through the grid point (0, 4).
+    board.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: uuid::Uuid::from_u128(44),
+        start: signex_types::pcb::Point::new(-1.0, 4.2),
+        mid: signex_types::pcb::Point::new(0.0, 4.0),
+        end: signex_types::pcb::Point::new(1.0, 4.2),
+        width: 0.25,
+        layer: "TopCopper".into(),
+        net: 3,
+    });
+    let points = stitch_points(&board, &area(&board), spec(), clearance);
+    for blocked in [(-4, -4), (4, 4), (0, 4)] {
+        let at = PointNm::new(blocked.0 * MM, blocked.1 * MM);
+        assert!(!points.contains(&at), "a via on the free copper at {at:?}");
+    }
+    assert_eq!(points.len(), 17, "{points:?}");
+}
 use crate::zone_fill::zone_area;
 
 const DIAMETER: i64 = 600_000;

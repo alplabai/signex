@@ -60,7 +60,7 @@ pub use body::footprint_body;
 pub use closed_path::{PathRefusal, closed_path};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
-    via_layers, via_pieces,
+    pad_pieces, via_layers, via_pieces,
 };
 pub use flip::flip_footprint;
 pub use free::{

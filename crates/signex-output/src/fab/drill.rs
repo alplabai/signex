@@ -7,7 +7,7 @@ use pcb_geom::{
 };
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, Via};
 
-use super::frame::{fab_point, mm3};
+use super::frame::{FabFrame, mm3};
 use super::gerber::GENERATION_SOFTWARE;
 use super::layers::CopperStack;
 
@@ -113,15 +113,16 @@ pub(crate) fn collect_holes(
         to: stack.count(),
     };
     let mut holes = Vec::new();
+    let frame = FabFrame::of(board);
     // Free pads (#2373) are drilled in the board's own frame.
-    let frame = signex_types::pcb_free::free_pad_frame();
-    let free = board.free.pads.iter().map(|pad| (&frame, pad));
+    let free_frame = signex_types::pcb_free::free_pad_frame();
+    let free = board.free.pads.iter().map(|pad| (&free_frame, pad));
     let owned = board
         .footprints
         .iter()
         .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)));
     for (footprint, pad) in owned.chain(free) {
-        match pad_hole(footprint, pad, through) {
+        match pad_hole(footprint, pad, through, frame) {
             Ok(Some(hole)) => holes.push(hole),
             Ok(None) => {}
             Err(_) => *skipped += 1,
@@ -142,7 +143,7 @@ pub(crate) fn collect_holes(
         match (built, span) {
             (Ok((_, 0)), _) => {}
             (Ok((at, diameter)), Some(span)) => holes.push(Hole {
-                at: fab_point(at),
+                at: frame.point(at),
                 diameter,
                 plated,
                 span,
@@ -171,7 +172,12 @@ fn via_span(via: &Via, stack: &CopperStack) -> Option<Span> {
 /// A pad's hole. An oval drill is a slot along the pad's longer side,
 /// keeping the annular ring the pad has across it: its length is the
 /// drill width plus the pad's length minus its width.
-fn pad_hole(footprint: &Footprint, pad: &Pad, span: Span) -> Result<Option<Hole>, GeomError> {
+fn pad_hole(
+    footprint: &Footprint,
+    pad: &Pad,
+    span: Span,
+    frame: FabFrame,
+) -> Result<Option<Hole>, GeomError> {
     let Some(drill) = &pad.drill else {
         return Ok(None);
     };
@@ -186,7 +192,7 @@ fn pad_hole(footprint: &Footprint, pad: &Pad, span: Span) -> Result<Option<Hole>
     let reach = (w.max(h) - w.min(h)) / 2;
     if drill.shape != "oval" || reach == 0 {
         return Ok(Some(Hole {
-            at: fab_point(center),
+            at: frame.point(center),
             diameter,
             plated,
             span,
@@ -202,11 +208,11 @@ fn pad_hole(footprint: &Footprint, pad: &Pad, span: Span) -> Result<Option<Hole>
         ((ax * sin + ay * cos) * reach as f64).round() as i64,
     );
     Ok(Some(Hole {
-        at: fab_point(center.minus(tip)),
+        at: frame.point(center.minus(tip)),
         diameter,
         plated,
         span,
-        slot_to: Some(fab_point(center.plus(tip))),
+        slot_to: Some(frame.point(center.plus(tip))),
     }))
 }
 

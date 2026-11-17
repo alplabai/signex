@@ -172,10 +172,13 @@ fn polygon(points: &[PointNm], filled: bool, width: i64, function: Function) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fab::frame::fab_point;
+    use crate::fab::frame::FabFrame;
 
     fn board_to_fab() -> impl Fn(Point) -> Result<PointNm, GeomError> {
-        |p| Ok(fab_point(PointNm::from_mm(p, "test")?))
+        let frame = FabFrame {
+            origin: PointNm::new(0, 0),
+        };
+        move |p| frame.of_mm(p, "test")
     }
 
     fn graphic(kind: &str) -> BoardGraphic {
