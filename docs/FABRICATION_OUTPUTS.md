@@ -89,7 +89,9 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
   rectangles, circles, arcs (`G75` multi-quadrant, with direction) and
   polygons; a filled one as a region.
 - Zone copper is regions with their holes cleared (`%LPC*%`), largest first
-  so a fill inside another's hole is drawn after the clear. Generate builds
+  so a fill inside another's hole is drawn after the clear. The regions of
+  one net on one layer are merged first, so a hole of one that a same-net
+  region covers is copper, not cleared. Generate builds
   it with `FabExtras::of_board`: each pour's fill as `pcb_geom::zone_fills`
   computes it (#2216), the fill the canvas, the board PDF and the ratsnest
   read, and every other copper zone (Fill, Solid Region) solid. A zone's
