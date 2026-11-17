@@ -94,7 +94,7 @@ impl Signex {
 
 /// The board file at `path`, read and parsed; refused when it lies outside
 /// the project folder `confine` or is no file a headless run reads.
-fn read_board(path: &Path, confine: Option<&Path>) -> Result<PcbBoard, String> {
+pub(super) fn read_board(path: &Path, confine: Option<&Path>) -> Result<PcbBoard, String> {
     if let Some(dir) = confine {
         crate::app::document_ids::confined_read(dir, path)?;
     }

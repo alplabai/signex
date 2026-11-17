@@ -145,3 +145,14 @@ fn a_report_names_its_rule_set_only_when_given_one() {
     let back: CheckReport = serde_json::from_value(value).expect("reads back");
     assert_eq!(back, named);
 }
+
+#[test]
+fn a_report_lists_passed_rules_only_when_given_some() {
+    let plain = serde_json::to_value(report(&["k1"])).unwrap();
+    assert!(plain.get("passed").is_none(), "{plain}");
+    let listed = report(&["k1"]).with_passed(vec!["req::size".into()]);
+    let value = serde_json::to_value(&listed).unwrap();
+    assert_eq!(value["passed"], json!(["req::size"]));
+    let back: CheckReport = serde_json::from_value(value).expect("reads back");
+    assert_eq!(back, listed);
+}

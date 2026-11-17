@@ -1,5 +1,5 @@
 //! Design rule check commands: run the DRC on the board in view and check
-//! it headless.
+//! it headless; and check the project's requirements headless.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
@@ -25,6 +25,18 @@ pub(super) const DRC: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::CHECK_DRC,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2339: the project's requirements list run as checks, headless.
+    CommandMetadata {
+        id: "check_requirements",
+        category: "validation",
+        label: command_ids::CMD_CHECK_REQUIREMENTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_REQUIREMENTS,
         ..CommandMetadata::DEFAULT
     },
     // #2399: the DRC results panel and what it does. A violation is named by

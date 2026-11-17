@@ -479,6 +479,13 @@ pub const CHECK_DRC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `check_requirements` (#2339): the requirements of the project the named
+/// document is (or belongs to), answered as a check report; `baseline` is an
+/// earlier answer's `run` on the same project.
+pub const CHECK_REQUIREMENTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("baseline", OperandKind::Text),
+];
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];

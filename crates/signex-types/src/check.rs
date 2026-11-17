@@ -1,7 +1,8 @@
 //! The result of a design check run on demand (#2199, decision
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6798772157):
-//! one shape for every check (`check_erc` now, DRC and the requirement checks
-//! later). What only one check knows goes in a finding's `evidence`. Shape and
+//! one shape for every check (`check_erc`, `check_drc` and
+//! `check_requirements`, #2339). What only one check knows goes in a
+//! finding's `evidence`. Shape and
 //! rules: `docs/CLI.md`, "Checks on demand".
 
 use std::collections::{BTreeSet, HashMap};
@@ -67,6 +68,10 @@ pub struct CheckReport {
     /// rule set came from, its profile and its hash).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule_set: Option<Value>,
+    /// The rules the run checked that raised no finding, for a check that
+    /// lists them (the requirement checks, #2339); left out when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed: Vec<String>,
     /// Present when the run was compared with an earlier one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline: Option<BaselineDiff>,
@@ -99,8 +104,14 @@ impl CheckReport {
             lapsed,
             warnings,
             rule_set: None,
+            passed: Vec::new(),
             baseline: None,
         }
+    }
+
+    /// This report listing the rules it checked that raised no finding.
+    pub fn with_passed(self, passed: Vec<String>) -> Self {
+        Self { passed, ..self }
     }
 
     /// This report naming the rules its run used.

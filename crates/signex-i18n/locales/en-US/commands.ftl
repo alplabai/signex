@@ -19,6 +19,7 @@ cmd-center-on-cursor = Center on cursor
 cmd-center-view-at-cursor = Center/redraw view around cursor
 cmd-check-drc = Check design rules
 cmd-check-erc = Check electrical rules
+cmd-check-requirements = Check project requirements
 cmd-close-active-document = Close active document
 cmd-menu-close-active-document = Close Document
 cmd-close-all-documents = Close all documents

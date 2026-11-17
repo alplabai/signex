@@ -1,0 +1,17 @@
+[package]
+name = "signex-req"
+description = "Project requirement checks: a project's requirements list evaluated as deterministic pass/fail checks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free and IO-free: the app prepares the facts, this crate decides.
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+signex-bom.workspace = true
+signex-types.workspace = true
+
+[lints]
+workspace = true

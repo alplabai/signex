@@ -104,6 +104,7 @@ mod tests {
                 "board_shape_from_selection",
                 "check_drc",
                 "check_erc",
+                "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",

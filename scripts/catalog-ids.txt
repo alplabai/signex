@@ -41,6 +41,7 @@ change_component
 change_footprint
 check_drc
 check_erc
+check_requirements
 clear_all_net_colors
 clear_net_color
 clear_net_highlighting

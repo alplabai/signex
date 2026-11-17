@@ -1,6 +1,7 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
-//! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
-//! `check_erc` and `check_drc` (#2199, answered once their run lands), and
+//! `resolve`, `find_items`, `read_document`, `query_pins`, the checks
+//! `check_erc` and `check_drc` (#2199) and `check_requirements` (#2339),
+//! answered once their run lands, and
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
 //! `rules_explain`, `rules_conflicts`, `rules_matrix_get` and
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
@@ -20,6 +21,7 @@
 mod board;
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 mod check_run;
 pub use check_run::CheckFinished;
 mod documents;
@@ -49,6 +51,7 @@ const QUERY_IDS: &[&str] = &[
     "query_pins",
     "check_erc",
     "check_drc",
+    "check_requirements",
     "rules_list",
     "rules_get",
     "rules_effective",
@@ -65,7 +68,7 @@ const QUERY_IDS: &[&str] = &[
 
 /// The queries that run a check (`check_run`): each says nothing in
 /// Messages; its report names what it did not read.
-const CHECK_IDS: &[&str] = &["check_erc", "check_drc"];
+const CHECK_IDS: &[&str] = &["check_erc", "check_drc", "check_requirements"];
 
 /// Is `command` one of the checks?
 pub(crate) fn is_check(command: &AppCommandId) -> bool {
@@ -123,6 +126,7 @@ impl Signex {
         match id {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
+            "check_requirements" => return Some(self.check_requirements(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -196,3 +200,5 @@ pub(in crate::app) mod pins_tests;
 pub(crate) mod check_drc_tests;
 #[cfg(test)]
 mod check_erc_tests;
+#[cfg(test)]
+mod check_requirements_tests;

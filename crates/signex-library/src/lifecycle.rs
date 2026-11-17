@@ -17,6 +17,18 @@ pub enum LifecycleState {
 }
 
 impl LifecycleState {
+    /// The state's name as a project requirement lists it (`released`,
+    /// `in_review`; #2339).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::InReview => "in_review",
+            Self::Released => "released",
+            Self::Deprecated => "deprecated",
+            Self::Obsolete => "obsolete",
+        }
+    }
+
     /// Whether new placements are allowed (UI may still gate).
     pub fn placeable(self) -> bool {
         matches!(self, Self::Released | Self::Deprecated)
