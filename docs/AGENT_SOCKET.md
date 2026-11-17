@@ -97,10 +97,10 @@ The session token is never written. See `docs/AGENT_JOURNALS.md`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
-  (#2199), each answered once its run lands, like an edit waiting for its
-  reads
-  ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
+  `read_document`, `query_pins`, the checks `check_erc` and `check_drc`
+  (#2199) and `check_requirements` (#2339), each answered once its run lands,
+  like an edit waiting for its reads
+  ([CLI.md](CLI.md), "Checks on demand" and "Requirement checks"), and the Rules manager reads
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
