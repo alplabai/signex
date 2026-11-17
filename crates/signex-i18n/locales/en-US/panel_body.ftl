@@ -92,6 +92,15 @@ panels-projects-file-missing = { $name }  (missing)
 panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
+# Navigator rows of a sheet that is not a plain page. $name is the sheet's name.
+panels-navigator-missing = { $name } (missing)
+panels-navigator-unreadable = { $name } (unreadable)
+# The sheet was refused (it is not a sheet Signex can place).
+panels-navigator-rejected = { $name } (rejected)
+# The sheet places itself further down, so it is not opened again.
+panels-navigator-cycle = { $name } (cycle)
+# The hierarchy is too deep to show this sheet's children.
+panels-navigator-not-expanded = { $name } (not expanded)
 
 ## Components panel: the details of the selected row
 panels-components-details-select = Select a component to see its details.

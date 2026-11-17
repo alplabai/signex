@@ -60,6 +60,11 @@ define_ids! {
     PANELS_PROJECTS_FILE_UNREADABLE = "panels-projects-file-unreadable";
     PANELS_NAVIGATOR_SHEETS = "panels-navigator-sheets";
     PANELS_NAVIGATOR_NO_PROJECT = "panels-navigator-no-project";
+    PANELS_NAVIGATOR_MISSING = "panels-navigator-missing";
+    PANELS_NAVIGATOR_UNREADABLE = "panels-navigator-unreadable";
+    PANELS_NAVIGATOR_REJECTED = "panels-navigator-rejected";
+    PANELS_NAVIGATOR_CYCLE = "panels-navigator-cycle";
+    PANELS_NAVIGATOR_NOT_EXPANDED = "panels-navigator-not-expanded";
     PANELS_COMPONENTS_DETAILS_SELECT = "panels-components-details-select";
     PANELS_COMPONENTS_DETAILS_LOADING = "panels-components-details-loading";
     PANELS_COMPONENTS_DETAILS_NO_SYMBOL = "panels-components-details-no-symbol";

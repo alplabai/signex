@@ -371,7 +371,8 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .boxed(),
         );
     } else {
-        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens).text_size(TS.body);
+        let rows = ctx.navigator.shown_tree(&ctx.i18n);
+        let mut tree = TreeView::new(&rows, &ctx.tokens).text_size(TS.body);
         let selected_key = ctx
             .navigator
             .selected
