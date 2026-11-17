@@ -6,7 +6,7 @@ use signex_types::schematic::SelectedKind;
 use uuid::Uuid;
 
 use crate::app::Signex;
-use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::mutation_gateway::MutationOutcome as Applied;
 
 impl Signex {
     /// The parts in the active selection; a selected reference or value field

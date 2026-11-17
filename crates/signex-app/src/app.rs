@@ -23,6 +23,7 @@ mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
 pub mod contracts;
+pub(crate) mod core;
 mod dir_listing;
 pub(crate) mod dispatch;
 mod document;

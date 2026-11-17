@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::case_fold::CaseFold;
+use super::CaseFold;
 use super::{DocumentState, LoadedProject};
 use crate::app::document_ids::{DocumentKind, referenced_files};
 use crate::app::sheet_hierarchy::normalised_key;

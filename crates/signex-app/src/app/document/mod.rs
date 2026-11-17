@@ -13,7 +13,7 @@ mod unsaved;
 #[cfg(test)]
 mod unsaved_input_tests;
 
-pub(crate) use key::DocumentKey;
+pub(crate) use crate::app::core::document_key::DocumentKey;
 pub(crate) use undo_target::UndoTarget;
 
 use std::path::Path;

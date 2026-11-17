@@ -7,8 +7,7 @@
 > (`docs/internal`, not in this checkout).
 
 This document explains how the Signex repository is organized today, how the
-codebase is expected to evolve, and how the single repository supports both the
-Community and Pro product lines.
+codebase is expected to evolve, and how the shared core is kept whole.
 
 It is intentionally practical. The product plan describes the product thesis.
 The ADRs in `docs/architecture/` describe the target system architecture. This document
@@ -21,23 +20,18 @@ repository should be kept coherent as the project grows.
 
 This repository contains the Signex desktop editor codebase.
 
-The repository exists to build one product family from one shared foundation:
-
-- **Signex Community** — the open desktop EDA editor
-- **Signex Pro** — the commercial edition that adds hosted Signex AI and the
-  Generator (Team adds collaboration; Enterprise adds SSO, a self-hosted AI
-  gateway and data agreements)
+It builds **Signex Community**, the source-available desktop EDA editor.
 
 The core rule is simple:
 
-**There is one editor core, and it lives here. Pro is built from a separate
-private workspace that depends on this core; it is not a fork of it.**
+**There is one editor core, and it lives here. Anything built on Signex
+depends on this core; it is not a fork of it.**
 
 This matters for three reasons:
 
 - Native `.snx*` parser/writer logic must not fork
 - The editing engine must not diverge between editions
-- Community and Pro must open the same projects without format drift or feature
+- Every build must open the same projects without format drift or feature
   fragmentation in the core editor
 
 ---
@@ -62,7 +56,7 @@ for the cleanroom-rewrite audit trail.
 
 This repository is not the right place for:
 
-- Deployment infrastructure for hosted Pro services
+- Deployment infrastructure for hosted services
 - Billing systems
 - External web marketing sites
 - Internal company operations tooling
@@ -93,29 +87,15 @@ services for normal editing workflows.
 
 ### 3.2. Pro
 
-Signex Pro is built on top of the same core and adds capabilities that require
-commercial infrastructure or proprietary integration, especially:
-
-- Signex AI and the Generator, run through Signex's hosted service (Pro)
-- Live collaboration (Team)
-- SSO, a self-hosted AI gateway and data agreements (Enterprise)
-
-The plugin system and the headless CLI are Community, not Pro. Customer
-designs are never used for AI training unless the customer opts in.
-
-Pro-specific integrations should remain separable from the editor core so that:
-
-- the Community build stays clean and understandable
-- the editor engine does not become coupled to hosted services
-- edition boundaries remain explicit instead of leaking through the whole tree
+See [ROADMAP.md](ROADMAP.md) §3, "Signex Pro".
 
 ### 3.3. Hard rule
 
 If a subsystem is required for basic local editing of native `.snx*` projects,
-it belongs in the shared core, not in a Pro-only layer.
-
-If a subsystem depends on paid infrastructure, account-backed multi-user state,
-or managed AI usage, it can live behind the Pro boundary.
+it belongs in the shared core, never in an edition-only layer. The plugin
+system and the headless CLI are Community. Hosted services, paid
+infrastructure and account-backed multi-user state are not part of this
+repository, and the editor engine must not depend on them.
 
 ---
 
@@ -370,12 +350,13 @@ boundaries explicit.
 ### 9.1. Keep the core shared
 
 Anything required for local editing, rendering, persistence, or project opening
-must remain in the shared codebase and must not become Pro-only by accident.
+must remain in the shared codebase and must not move into an edition-only
+layer by accident.
 
 ### 9.2. Do not fork behavior by edition in random places
 
 Edition differences should be introduced behind deliberate seams, not by ad hoc
-`if pro_enabled` branches scattered through unrelated modules.
+edition flags scattered through unrelated modules.
 
 ### 9.3. Keep docs aligned with code
 
@@ -423,10 +404,9 @@ For product and repository planning purposes, the intended licensing model is:
 
 - **Signex Community:** FSL-1.1-ALv2 (each release becomes Apache-2.0 two
   years after it ships)
-- **Signex Pro:** commercial / proprietary terms for Pro-only additions
 
 This document records the intended direction so the repository can be organized
-around a clean open-core boundary.
+around a clean core boundary.
 
 If legal or release files elsewhere in the repository still reflect an older
 license position, those files should be updated deliberately in a separate
@@ -437,7 +417,6 @@ change rather than by silent drift.
 ## 12. One-Sentence Summary
 
 This repository is the shared engineering home of Signex: a clean-room
-EDA editor core with native `.snx*` formats and a clean path to both an
-FSL-1.1-ALv2 Community edition and a commercial Pro edition from the same
-codebase. Optional one-way import from GPL-based EDA tools lives in the separate GPL-3.0
-import companion repository.
+EDA editor core with native `.snx*` formats, released as the FSL-1.1-ALv2
+Community edition. Optional one-way import from GPL-based EDA tools lives in
+the separate GPL-3.0 import companion repository.
