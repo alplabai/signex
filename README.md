@@ -37,8 +37,8 @@ Signex is source-available electronics design automation built in Rust, with
 GPU-accelerated rendering through wgpu. Release 26.11.0 ships a **schematic
 editor** and a **PCB editor**: from the schematic to a routed, rule-checked
 board and its fabrication files. Symbol, footprint and component-library
-editors and a board 3D view come with it at an earlier stage. Simulation, the
-plugin system and Signex AI are on the [roadmap](docs/ROADMAP.md). Native file
+editors and a board 3D view come with it at an earlier stage. Simulation and the
+plugin system are on the [roadmap](docs/ROADMAP.md). Native file
 formats (`.snxsch`, `.snxpcb`) are line-diffable in git and ~5× smaller than
 the equivalent JSON.
 
@@ -65,14 +65,11 @@ board.
 - **Signex Community** (FSL-1.1-ALv2, free, offline forever) — the full editor:
   schematic and PCB layout with routing and DRC, and the headless CLI; the
   plugin system joins it when it ships (see the [roadmap](docs/ROADMAP.md))
-- **Signex Pro** (subscription with included AI credits) — Signex AI (AI
-  design assistant, Pro) and the Generator, served by Signex's hosted service
-- **Signex Team** — collaboration
-- **Signex Enterprise** — SSO, a self-hosted AI gateway, data agreements
+- **Signex Pro** — a separate, proprietary product built on Community that
+  adds Signex AI, team collaboration and PLM
 
-Pro is built from a separate private workspace on top of this one; nothing in
-Community is locked or gated, and Community shows no upgrade prompts. Customer
-designs are never used for AI training unless the customer opts in.
+Nothing in Community is locked or gated, and Community shows no upgrade
+prompts. Pro is planned separately; this repository holds Community only.
 
 > **Status:** **26.11.0** (2026-11-17) is the latest release and the
 > **Community Preview** release. The **schematic and PCB editors** are
@@ -179,13 +176,11 @@ designs are never used for AI training unless the customer opts in.
 
 | Plan | Milestone |
 |---|---|
-| **AI Design** | Signex AI as assistant, agent and generator for schematic and board; the router plans |
+| **PCB Design** | Board layout and routing from the schematic; the router plans |
 | **Community Release** | Manufacturing output: ODB++, IPC-2581, STEP 3D export, assembly drawings |
 | **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
 | **MCAD** | Enclosure fit check, part modelling and board-driven enclosures |
-| **Pro Release** | Licensing and billing for Signex AI, collaboration |
 | **Simulation** | Unified simulation view with SPICE, EM, thermal |
-| **Signex 365** | Cloud PLM |
 
 ## Screenshots
 
@@ -398,13 +393,11 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | 1.0.0-rc.1 | Done |
 | **Community Preview** — schematic and PCB editors | **Gate** | Reached: `v26.11.0` (2026-11-17) |
-| **AI Design** — Signex AI assistant, agent and generator for schematic and board; the router plans | **Gate** | Next |
+| **PCB Design** — board layout and routing from the schematic; the router plans | **Gate** | Next |
 | **Community Release** — manufacturing output; full schematic + PCB editor | **Gate** | |
 | 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
 | MCAD — enclosure fit check, part modelling, board-driven enclosures | Planned (P3) | Starts once the schematic and PCB editors are complete |
-| **Pro Release** — licensing and billing for Signex AI, collaboration | **Gate** | |
 | Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
-| **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed release plan.
 
