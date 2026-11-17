@@ -76,7 +76,8 @@ pub struct DrcWaiver {
     /// Why the finding is accepted; may be empty.
     #[serde(default)]
     pub note: String,
-    /// Empty for a waiver saved before #2307, which holds by `key` alone.
+    /// A waiver saved before #2307 has none; it lapses once and is waived
+    /// again.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub fingerprint: String,
 }

@@ -4,14 +4,14 @@
 //! of their geometry: a waiver whose objects changed lapses. The model and
 //! its inputs: `docs/architecture/pcb-drc.md`, "Waivers".
 
-use pcb_geom::{ItemRef, via_layers};
+use pcb_geom::{ItemRef, is_courtyard, via_layers};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use signex_types::check::finding_waiver_json;
 // Every number, angles and ratios too, quantised as the file stores a length.
 use signex_types::format::{mm_as_stored_nm, parse_pcb_layer};
 use signex_types::pcb::{Footprint, FpGraphic, Pad, PcbBoard};
-use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_options::DrcWaiver;
 use uuid::Uuid;
 
@@ -182,15 +182,7 @@ fn pad_geometry(p: &Pad) -> Value {
 /// Whether a footprint graphic is something DRC sees: copper or courtyard
 /// (the body `footprint_body` takes), not silkscreen or fabrication.
 fn is_checked(graphic: &FpGraphic) -> bool {
-    matches!(
-        parse_pcb_layer(&graphic.layer),
-        Some(
-            PcbLayer::Copper(_)
-                | PcbLayer::Technical(
-                    TechnicalLayer::CourtyardTop | TechnicalLayer::CourtyardBottom
-                )
-        )
-    )
+    is_courtyard(graphic) || matches!(parse_pcb_layer(&graphic.layer), Some(PcbLayer::Copper(_)))
 }
 
 /// Where a footprint sits: its id, position, turn and side.

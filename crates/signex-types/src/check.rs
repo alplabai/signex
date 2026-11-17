@@ -142,6 +142,7 @@ impl CheckReport {
 /// A per-finding waiver as a waiver object of a report, one shape for every
 /// check (#2307): `kind`, `rule_id`, `fingerprint` and `reason`, plus the
 /// check's own fields in `extra` (ERC's objects, DRC's key).
+/// A shared field wins over a same-named key in `extra`.
 pub fn finding_waiver_json(
     rule_id: &str,
     fingerprint: &str,

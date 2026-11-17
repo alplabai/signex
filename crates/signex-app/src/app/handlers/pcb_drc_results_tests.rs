@@ -586,6 +586,24 @@ fn a_waiver_on_stale_results_is_refused() {
     assert!(board_waivers(&app, &path).is_empty());
 }
 
+/// #2307: a change of the project's net classes after the run makes the
+/// results stale too, so Waive is refused until DRC runs again.
+#[test]
+fn a_waiver_after_a_net_class_change_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = key_of(&app, "builtin::clearance");
+    app.document_state.projects[0].data.net_classes =
+        vec![signex_types::net_class::NetClass::named("Power")];
+    let why = app
+        .set_drc_waiver(&path, &key, Some("after classes".into()))
+        .expect_err("a waive on stale results is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
 /// #2307: a run the board was edited during says nothing of lapsed
 /// waivers: its findings are not of the geometry now.
 #[test]
