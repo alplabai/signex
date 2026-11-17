@@ -169,9 +169,10 @@ fn chip_0805_rows_list_the_other_sizes_as_alternates() {
         }
         checked += 1;
     }
+    // C_Polarized joined the polarised land in #2468.
     assert_eq!(
-        checked, 9,
-        "R, C, L, Ferrite, Fuse, D, D_Schottky, D_Zener, LED"
+        checked, 10,
+        "R, C, L, Ferrite, Fuse, D, D_Schottky, D_Zener, LED, C_Polarized"
     );
 }
 

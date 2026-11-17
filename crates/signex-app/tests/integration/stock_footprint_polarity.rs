@@ -51,6 +51,10 @@ fn cathode_parts_use_the_polarised_footprint_and_symmetric_parts_the_generic_one
         if *cathode_on_1 {
             cathode_rows += 1;
             assert_eq!(fp.name, POLARISED, "{pn}");
+        } else if pn == "STOCK-C_Polarized" {
+            // Pin 1 is the positive plate: the marked pad, as the band on a
+            // polarised chip capacitor (#2468).
+            assert_eq!(fp.name, POLARISED, "{pn}");
         } else if fp.name.starts_with("Chip-") {
             assert_eq!(fp.name, GENERIC, "{pn}");
         }

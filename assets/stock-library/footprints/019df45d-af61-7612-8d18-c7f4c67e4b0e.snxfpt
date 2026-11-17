@@ -39,6 +39,8 @@ released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
 schema_version = 3
+description = "QFN-16, 0.5 mm pitch, 3 x 3 mm body."
+default_designator = "U?"
 
 [footprints.courtyard]
 points = []

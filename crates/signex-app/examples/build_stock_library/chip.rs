@@ -117,7 +117,7 @@ pub fn lookup(kind: StockKind) -> Option<(&'static ChipSize, bool)> {
         Chip1206Polarised => ("1206", true),
         Chip1210Polarised => ("1210", true),
         Chip2512Polarised => ("2512", true),
-        Soic8 | Qfn16 | MountingHole3p2 | Fiducial1mm => return None,
+        Soic8 | Qfn16 | MountingHole3p2 | Fiducial1mm | Sot23 => return None,
     };
     CHIP_SIZES
         .iter()

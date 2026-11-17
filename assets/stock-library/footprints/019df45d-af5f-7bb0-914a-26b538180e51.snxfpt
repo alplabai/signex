@@ -31,6 +31,8 @@ released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
 schema_version = 3
+description = "SOIC-8, 1.27 mm pitch, 3.9 x 4.9 mm body."
+default_designator = "U?"
 
 [footprints.courtyard]
 points = []

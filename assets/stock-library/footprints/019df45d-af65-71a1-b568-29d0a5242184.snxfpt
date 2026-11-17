@@ -24,6 +24,8 @@ released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
 schema_version = 3
+description = "Mounting hole, 3.2 mm unplated drill."
+default_designator = "H?"
 
 [footprints.courtyard]
 points = []
