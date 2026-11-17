@@ -317,6 +317,10 @@ editors-pad-size-y = Y-Size
 editors-pad-corner-radius = Corner radius %
 # Thermal relief toggle of the Simple pad stack.
 editors-pad-relief = Relief
+# Simple pad stack: the paste opening on this side is on. $layer is a layer name.
+editors-pad-paste-enabled = { $layer } on
+# Simple pad stack: the solder mask covers the pad. $layer is a layer name.
+editors-pad-tented = { $layer } tented
 editors-pad-hole-details = Hole Details
 editors-pad-hole-tolerance-plus = Tolerance + (mm)
 editors-pad-hole-tolerance-minus = Tolerance − (mm)

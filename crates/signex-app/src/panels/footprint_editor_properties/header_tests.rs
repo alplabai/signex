@@ -135,3 +135,84 @@ fn a_running_placement_keeps_the_footprint_header() {
     ctx.placement_paused = true;
     assert_eq!(shown(&ctx), None);
 }
+
+/// The Pad Properties body of `app` laid out at a dock's width, with the
+/// isolation marks Fluent puts around arguments removed.
+fn pad_texts(app: &Signex) -> Vec<crate::layout_probe::LaidOutText> {
+    let ctx = &app.document_state.panel_ctx;
+    let fp = ctx.footprint_editor.as_ref().expect("footprint context");
+    let palette = crate::panels::PanelPalette::from_tokens(&ctx.tokens);
+    let i18n = signex_i18n::I18n::en_us();
+    let view = super::view_footprint_editor_properties(
+        fp,
+        palette,
+        &ctx.collapsed_sections,
+        signex_types::coord::Unit::Mm,
+        &i18n,
+    );
+    crate::layout_probe::lay_out_texts(view, DOCK)
+        .into_iter()
+        .map(|mut t| {
+            t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+            t
+        })
+        .collect()
+}
+
+const DOCK: iced::Size = iced::Size::new(260.0, 3000.0);
+
+/// #2262: the Simple pad stack shows paste and solder mask as one labelled
+/// row each, not the cramped tables, and the Paste switch on its row writes
+/// the selected pad through `Signex::update`.
+#[test]
+fn the_simple_pad_stack_lists_paste_and_mask_as_rows_and_its_switch_writes_the_pad() {
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    let texts = pad_texts(&app);
+    let has = |label: &str| texts.iter().any(|t| t.text == label);
+    for label in ["Top Paste", "Top Paste on", "Top Solder", "Top Solder tented"] {
+        assert!(has(label), "{label:?} missing: {texts:#?}");
+    }
+    for header in ["PASTE", "SOLDER", "Expansion"] {
+        assert!(!has(header), "{header:?} table header in Simple");
+    }
+
+    let before = app.document_state.footprint_editors[&PathBuf::from(PATH)]
+        .state
+        .pads[2]
+        .stack
+        .paste_enabled_top;
+    let row = texts
+        .iter()
+        .find(|t| t.text == "Top Paste on")
+        .expect("the Paste switch row")
+        .bounds;
+    let y = row.y + row.height / 2.0;
+    let msg = (0..)
+        .map(|i| row.x + row.width + i as f32 * 4.0)
+        .take_while(|x| *x < DOCK.width)
+        .find_map(|x| {
+            let ctx = &app.document_state.panel_ctx;
+            let fp = ctx.footprint_editor.as_ref().expect("footprint context");
+            let palette = crate::panels::PanelPalette::from_tokens(&ctx.tokens);
+            let i18n = signex_i18n::I18n::en_us();
+            let view = super::view_footprint_editor_properties(
+                fp,
+                palette,
+                &ctx.collapsed_sections,
+                signex_types::coord::Unit::Mm,
+                &i18n,
+            );
+            crate::layout_probe::messages_on_click_at(view, DOCK, None, iced::Point::new(x, y))
+                .into_iter()
+                .next()
+        })
+        .expect("a click right of the label reaches the switch");
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(msg)));
+    let after = app.document_state.footprint_editors[&PathBuf::from(PATH)]
+        .state
+        .pads[2]
+        .stack
+        .paste_enabled_top;
+    assert_ne!(before, after, "the switch toggled the pad's top paste");
+}
