@@ -1,5 +1,5 @@
 //! What a Gerber image is made of: flashes, strokes and filled regions, all
-//! in the fabrication frame (`frame::fab_point`), in integer nm.
+//! in the fabrication frame (`frame::FabFrame`), in integer nm.
 
 use pcb_geom::PointNm;
 

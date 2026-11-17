@@ -810,6 +810,8 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 - `measure_board` answers `kind` (`point_to_point`, or `edge_to_edge` for
   `ids`: the closest approach of the two items' copper, footprint body or
   area outline), `distance_mm`, `dx_mm`, `dy_mm`, and `from` / `to` in mm.
+  `start`, `end`, `from` and `to` count from the board origin with Y up, and
+  `dy_mm` is positive when `to` is above `from`.
 - `query_board_nets` answers `count` and `nets`, by name: `net`, `name`,
   `routed_length_mm` (the tracks' centre lines), `tracks`, `vias`, `pads`,
   `unrouted` (connections still to route) and `routed`.

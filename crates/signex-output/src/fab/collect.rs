@@ -14,7 +14,7 @@ use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use super::draw::{Drawing, Drawn, Pen, draw};
-use super::frame::{fab_angle_udeg, fab_point, is_quarter_turn, swaps_axes};
+use super::frame::{FabFrame, fab_angle_udeg, is_quarter_turn, swaps_axes};
 use super::layers::{CopperStack, FabLayer, Face};
 use super::marks::{ApertureShape, Attributes, Function, Mark, Step, doubled_area};
 use super::notes::Tally;
@@ -33,25 +33,26 @@ pub(crate) fn collect(
     tally: &mut Tally,
 ) -> Images {
     let mut images = Images::new();
-    zone_fills(&mut images, extras, tally);
+    let frame = FabFrame::of(board);
+    zone_fills(&mut images, extras, frame, tally);
     for footprint in &board.footprints {
-        footprint_marks(&mut images, board, footprint, stack, tally);
+        footprint_marks(&mut images, board, footprint, stack, frame, tally);
     }
     // Free pads (#2373) are marked as pads of the board's own frame.
     if !board.free.pads.is_empty() {
-        let frame = Footprint {
+        let free = Footprint {
             pads: board.free.pads.clone(),
             ..signex_types::pcb_free::free_pad_frame()
         };
-        footprint_marks(&mut images, board, &frame, stack, tally);
+        footprint_marks(&mut images, board, &free, stack, frame, tally);
     }
-    tracks(&mut images, board, tally);
-    arcs(&mut images, board, tally);
-    vias(&mut images, board, stack, tally);
-    board_graphics(&mut images, board, tally);
-    extra_strokes(&mut images, extras, tally);
-    profile(&mut images, board, tally);
-    v_scores(&mut images, board, tally);
+    tracks(&mut images, board, frame, tally);
+    arcs(&mut images, board, frame, tally);
+    vias(&mut images, board, stack, frame, tally);
+    board_graphics(&mut images, board, frame, tally);
+    extra_strokes(&mut images, extras, frame, tally);
+    profile(&mut images, board, frame, tally);
+    v_scores(&mut images, board, frame, tally);
     images
 }
 
@@ -120,7 +121,7 @@ fn copper_layers(stack: &CopperStack, mask: u32) -> impl Iterator<Item = CopperL
 /// Zone fills, largest outline first: each region's holes are cleared
 /// right after it, and a fill inside another's hole is smaller, so it is
 /// drawn after the clear and survives it.
-fn zone_fills(images: &mut Images, extras: &FabExtras, tally: &mut Tally) {
+fn zone_fills(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &mut Tally) {
     let mut regions = Vec::new();
     for fill in &extras.zone_fills {
         let Some(layer) = FabLayer::of(fill.layer) else {
@@ -129,7 +130,7 @@ fn zone_fills(images: &mut Images, extras: &FabExtras, tally: &mut Tally) {
         let ring = |points: &[Point]| -> Result<Vec<PointNm>, GeomError> {
             points
                 .iter()
-                .map(|p| PointNm::from_mm(*p, "zone fill").map(fab_point))
+                .map(|p| frame.of_mm(*p, "zone fill"))
                 .collect()
         };
         let built = ring(fill.outline.as_slice()).and_then(|outline| {
@@ -169,10 +170,11 @@ fn footprint_marks(
     board: &PcbBoard,
     footprint: &Footprint,
     stack: &CopperStack,
+    frame: FabFrame,
     tally: &mut Tally,
 ) {
     for pad in &footprint.pads {
-        if pad_marks(images, board, footprint, pad, stack).is_err() {
+        if pad_marks(images, board, footprint, pad, stack, frame).is_err() {
             tally.skipped += 1;
         }
     }
@@ -181,9 +183,7 @@ fn footprint_marks(
         return;
     };
     let to_fab = |p: Point| -> Result<PointNm, GeomError> {
-        Ok(fab_point(
-            placement.to_world(PointNm::from_mm(p, "graphic")?),
-        ))
+        Ok(frame.point(placement.to_world(PointNm::from_mm(p, "graphic")?)))
     };
     for graphic in &footprint.graphics {
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
@@ -271,15 +271,18 @@ pub(crate) fn pad_openings(footprint: &Footprint, pad: &Pad) -> Vec<FabLayer> {
     }
 }
 
-/// A pad's aperture and its centre in the fabrication frame.
+/// A pad's aperture at `size` (its size on the layer flashed, #2401) and
+/// its centre in the fabrication frame.
 pub(crate) fn pad_aperture(
+    frame: FabFrame,
     footprint: &Footprint,
     pad: &Pad,
+    size: Point,
 ) -> Result<(ApertureShape, PointNm), GeomError> {
-    let at = fab_point(pad_world_center(footprint, pad)?);
+    let at = frame.point(pad_world_center(footprint, pad)?);
     let udeg = fab_angle_udeg(pad_world_rotation_deg(footprint, pad)?);
-    let w = mm_to_nm(pad.size.x, "pad.size")?.abs();
-    let h = mm_to_nm(pad.size.y, "pad.size")?.abs();
+    let w = mm_to_nm(size.x, "pad.size")?.abs();
+    let h = mm_to_nm(size.y, "pad.size")?.abs();
     let upright = |w: i64, h: i64| if swaps_axes(udeg) { (h, w) } else { (w, h) };
     let shape = match pad.shape {
         PadShape::Circle => ApertureShape::Circle { diameter: w.min(h) },
@@ -304,6 +307,15 @@ pub(crate) fn pad_aperture(
     Ok((shape, at))
 }
 
+/// The outer copper layer under a mask or paste opening: the one whose pad
+/// size the opening follows.
+fn face_copper(layer: FabLayer) -> CopperLayer {
+    match layer {
+        FabLayer::Mask(Face::Bottom) | FabLayer::Paste(Face::Bottom) => CopperLayer::Bottom,
+        _ => CopperLayer::Top,
+    }
+}
+
 /// A round-rect pad's corner radius in nm, as `pcb_geom::pad_shape` reads it.
 fn round_radius(pad: &Pad, w: i64, h: i64) -> i64 {
     let short = w.min(h);
@@ -316,8 +328,24 @@ fn pad_marks(
     footprint: &Footprint,
     pad: &Pad,
     stack: &CopperStack,
+    frame: FabFrame,
 ) -> Result<(), GeomError> {
-    let (shape, at) = pad_aperture(footprint, pad)?;
+    // Every size first, so a pad the geometry refuses is skipped whole.
+    let flashes = copper_layers(stack, pad_copper(footprint, pad))
+        .map(|copper| {
+            Ok((
+                copper,
+                pad_aperture(frame, footprint, pad, pad.size_on(copper))?,
+            ))
+        })
+        .collect::<Result<Vec<_>, GeomError>>()?;
+    let openings = pad_openings(footprint, pad)
+        .into_iter()
+        .map(|layer| {
+            let size = pad.size_on(face_copper(layer));
+            Ok((layer, pad_aperture(frame, footprint, pad, size)?))
+        })
+        .collect::<Result<Vec<_>, GeomError>>()?;
     let function = pad_function(pad);
     let net = pad
         .net
@@ -327,7 +355,7 @@ fn pad_marks(
         .or_else(|| pad.net.as_ref().and_then(|n| net_name(board, n.number)));
     let pin = (!footprint.reference.is_empty())
         .then(|| (footprint.reference.clone(), pad.number.clone()));
-    for copper in copper_layers(stack, pad_copper(footprint, pad)) {
+    for (copper, (shape, at)) in flashes {
         let attributes = Attributes {
             net: net.clone(),
             pin: pin.clone(),
@@ -343,7 +371,7 @@ fn pad_marks(
             },
         );
     }
-    for layer in pad_openings(footprint, pad) {
+    for (layer, (shape, at)) in openings {
         push(
             images,
             layer,
@@ -358,21 +386,26 @@ fn pad_marks(
     Ok(())
 }
 
-fn tracks(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+fn tracks(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
     for segment in &board.segments {
         let Some(layer) = FabLayer::of_token(&segment.layer) else {
             continue;
         };
-        match track_mark(board, segment, layer) {
+        match track_mark(board, segment, layer, frame) {
             Ok(mark) => push(images, layer, mark),
             Err(_) => tally.skipped += 1,
         }
     }
 }
 
-fn track_mark(board: &PcbBoard, segment: &Segment, layer: FabLayer) -> Result<Mark, GeomError> {
-    let start = fab_point(PointNm::from_mm(segment.start, "track.start")?);
-    let end = fab_point(PointNm::from_mm(segment.end, "track.end")?);
+fn track_mark(
+    board: &PcbBoard,
+    segment: &Segment,
+    layer: FabLayer,
+    frame: FabFrame,
+) -> Result<Mark, GeomError> {
+    let start = frame.of_mm(segment.start, "track.start")?;
+    let end = frame.of_mm(segment.end, "track.end")?;
     let width = mm_to_nm(segment.width, "track.width")?.abs();
     let (function, attributes) = if layer.is_copper() {
         let net = net_name(board, segment.net);
@@ -392,7 +425,7 @@ fn track_mark(board: &PcbBoard, segment: &Segment, layer: FabLayer) -> Result<Ma
 /// Free arcs (#2373) as strokes along their chords, within the error the
 /// copper list reads them with: conductor of their net on copper, a
 /// drawing on any other layer the images have.
-fn arcs(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+fn arcs(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
     for arc in &board.free.arcs {
         let Some(layer) = FabLayer::of_token(&arc.layer) else {
             continue;
@@ -400,7 +433,7 @@ fn arcs(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
         let points = arc
             .points(pcb_geom::ARC_CHORD_ERROR_MM)
             .into_iter()
-            .map(board_to_fab)
+            .map(|p| frame.of_mm(p, "arc"))
             .collect::<Result<Vec<_>, _>>();
         let width = mm_to_nm(arc.width, "arc.width");
         let (Ok(points), Ok(width)) = (points, width) else {
@@ -432,14 +465,23 @@ fn arcs(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
     }
 }
 
-fn vias(images: &mut Images, board: &PcbBoard, stack: &CopperStack, tally: &mut Tally) {
+fn vias(
+    images: &mut Images,
+    board: &PcbBoard,
+    stack: &CopperStack,
+    frame: FabFrame,
+    tally: &mut Tally,
+) {
     for via in &board.vias {
-        let Ok((at, diameter)) = via_flash(via) else {
+        let flashes = copper_layers(stack, via_layers(via))
+            .map(|copper| Ok((copper, via_flash(via, copper, frame)?)))
+            .collect::<Result<Vec<_>, GeomError>>();
+        let Ok(flashes) = flashes else {
             tally.skipped += 1;
             continue;
         };
         let net = net_name(board, via.net);
-        for copper in copper_layers(stack, via_layers(via)) {
+        for (copper, (at, diameter)) in flashes {
             push(
                 images,
                 FabLayer::Copper(copper),
@@ -454,17 +496,15 @@ fn vias(images: &mut Images, board: &PcbBoard, stack: &CopperStack, tally: &mut 
     }
 }
 
-/// A via's centre in the fabrication frame and its pad diameter.
-fn via_flash(via: &Via) -> Result<(PointNm, i64), GeomError> {
-    let at = fab_point(PointNm::from_mm(via.position, "via.position")?);
-    Ok((at, mm_to_nm(via.diameter, "via.diameter")?.abs()))
+/// A via's centre in the fabrication frame and its pad diameter on
+/// `copper` (#2401).
+fn via_flash(via: &Via, copper: CopperLayer, frame: FabFrame) -> Result<(PointNm, i64), GeomError> {
+    let at = frame.of_mm(via.position, "via.position")?;
+    Ok((at, mm_to_nm(via.diameter_on(copper), "via.diameter")?.abs()))
 }
 
-fn board_to_fab(p: Point) -> Result<PointNm, GeomError> {
-    Ok(fab_point(PointNm::from_mm(p, "graphic")?))
-}
-
-fn board_graphics(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
+    let board_to_fab = |p: Point| frame.of_mm(p, "graphic");
     for graphic in &board.graphics {
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
             continue;
@@ -489,23 +529,27 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
         .count();
 }
 
-fn extra_strokes(images: &mut Images, extras: &FabExtras, tally: &mut Tally) {
+fn extra_strokes(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &mut Tally) {
     for stroke in &extras.strokes {
         let Some(layer) = FabLayer::of(stroke.layer) else {
             continue;
         };
-        match stroke_mark(stroke, layer) {
+        match stroke_mark(stroke, layer, frame) {
             Ok(Some(mark)) => push(images, layer, mark),
             Ok(None) | Err(_) => tally.skipped += 1,
         }
     }
 }
 
-fn stroke_mark(stroke: &FabStroke, layer: FabLayer) -> Result<Option<Mark>, GeomError> {
+fn stroke_mark(
+    stroke: &FabStroke,
+    layer: FabLayer,
+    frame: FabFrame,
+) -> Result<Option<Mark>, GeomError> {
     let points = stroke
         .points
         .iter()
-        .map(|p| board_to_fab(*p))
+        .map(|p| frame.of_mm(*p, "stroke"))
         .collect::<Result<Vec<_>, _>>()?;
     let width = mm_to_nm(stroke.width_mm, "stroke.width")?.abs();
     let Some((&start, rest)) = points.split_first() else {
@@ -521,7 +565,7 @@ fn stroke_mark(stroke: &FabStroke, layer: FabLayer) -> Result<Option<Mark>, Geom
 }
 
 /// The board outline and every through cutout, on the profile image.
-fn profile(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+fn profile(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
     let rings = std::iter::once(board.outline.as_slice()).chain(
         board
             .sketch
@@ -533,7 +577,7 @@ fn profile(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
     for ring in rings {
         let points = ring
             .iter()
-            .map(|p| board_to_fab(*p))
+            .map(|p| frame.of_mm(*p, "profile"))
             .collect::<Result<Vec<_>, _>>();
         let mark = points
             .as_ref()
@@ -550,9 +594,12 @@ fn profile(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
 
 /// The board sketch's V-score lines (#2410), each a straight stroke with the
 /// profile's pen on the V-cut image.
-fn v_scores(images: &mut Images, board: &PcbBoard, tally: &mut Tally) {
+fn v_scores(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally: &mut Tally) {
     for score in board.sketch.iter().flat_map(|s| s.v_scores.iter()) {
-        match (board_to_fab(score.from), board_to_fab(score.to)) {
+        match (
+            frame.of_mm(score.from, "v-score"),
+            frame.of_mm(score.to, "v-score"),
+        ) {
             (Ok(start), Ok(end)) => push(
                 images,
                 FabLayer::VScore,

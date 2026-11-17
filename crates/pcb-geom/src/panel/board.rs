@@ -22,6 +22,7 @@ use crate::units::{PointNm, nm_to_mm};
 pub const PANEL_ROUTE_LAYER: &str = "EdgeCuts";
 
 const TOP_COPPER: &str = "TopCopper";
+const TOP_SOLDER_MASK: &str = "TopSolderMask";
 
 /// How deep a panel's V-score cuts, as a fraction of the thickness.
 const V_SCORE_DEPTH: f64 = 1.0 / 3.0;
@@ -308,7 +309,8 @@ fn fiducial(index: usize, at: Point, diameter: f64) -> Footprint {
         position: Point::new(0.0, 0.0),
         size: Point::new(diameter, diameter),
         drill: None,
-        layers: vec![TOP_COPPER.to_string()],
+        // Listing the mask opening keeps the fiducial off the paste image.
+        layers: vec![TOP_COPPER.to_string(), TOP_SOLDER_MASK.to_string()],
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,

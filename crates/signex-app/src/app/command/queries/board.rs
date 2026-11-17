@@ -46,15 +46,19 @@ fn point_operand(args: &CommandArgs, name: &str) -> Option<Point> {
     }
 }
 
-fn span_json(kind: &str, document: &str, span: &Span) -> Value {
+/// A span as the agent reads it: `from` and `to` from the board origin, Y
+/// up (#2384), like every other board readout.
+fn span_json(kind: &str, document: &str, board: &PcbBoard, span: &Span) -> Value {
+    let origin = board.options.origin;
+    let (from, to) = (origin.to_user(span.from), origin.to_user(span.to));
     json!({
         "document": document,
         "kind": kind,
         "distance_mm": span.distance_mm,
         "dx_mm": span.dx_mm,
         "dy_mm": span.dy_mm,
-        "from": [span.from.x, span.from.y],
-        "to": [span.to.x, span.to.y],
+        "from": [from.x, from.y],
+        "to": [to.x, to.y],
     })
 }
 
@@ -103,17 +107,17 @@ impl Signex {
             };
             let span = pcb_geom::edge_gap(board, *a, *b)
                 .ok_or("an item has no geometry the board can measure")?;
-            return Ok(span_json("edge_to_edge", &name, &span));
+            return Ok(span_json("edge_to_edge", &name, board, &span));
         }
         let (Some(start), Some(end)) = (point_operand(args, "start"), point_operand(args, "end"))
         else {
             return Err("`measure_board` needs `start` and `end`, or `ids`".into());
         };
-        Ok(span_json(
-            "point_to_point",
-            &name,
-            &Span::between(start, end),
-        ))
+        // `start` and `end` count from the board origin, Y up, as typed
+        // board points do elsewhere.
+        let origin = board.options.origin;
+        let span = Span::between(origin.from_user(start), origin.from_user(end));
+        Ok(span_json("point_to_point", &name, board, &span))
     }
 
     /// `query_board_nets document= [net=]`: every net of the board, or the

@@ -153,6 +153,39 @@ pub fn via_pieces(via: &Via) -> Result<Vec<(u32, Shape)>, GeomError> {
     Ok(pieces)
 }
 
+/// A pad's copper per group of the layers it reaches that share one size
+/// (#2401): one piece, its [`pad_shape`], for a pad without per-layer
+/// sizes. The layers are a [`layer_bit`] mask.
+pub fn pad_pieces(footprint: &Footprint, pad: &Pad) -> Result<Vec<(u32, Shape)>, GeomError> {
+    let layers = pad_layers(footprint, pad);
+    if pad.layer_sizes.is_none() {
+        return Ok(vec![(layers, pad_shape(footprint, pad)?)]);
+    }
+    let mut pieces: Vec<(u32, Shape)> = Vec::new();
+    for layer in copper_layers(layers) {
+        let sized = Pad {
+            size: pad.size_on(layer),
+            ..pad.clone()
+        };
+        let shape = pad_shape(footprint, &sized)?;
+        let bit = 1 << layer_bit(layer);
+        match pieces.iter_mut().find(|(_, s)| *s == shape) {
+            Some((mask, _)) => *mask |= bit,
+            None => pieces.push((bit, shape)),
+        }
+    }
+    Ok(pieces)
+}
+
+/// The copper of `pieces` (from [`pad_pieces`] or [`via_pieces`]) on any
+/// layer of the [`layer_bit`] mask `layers`.
+pub(crate) fn pieces_on(pieces: Vec<(u32, Shape)>, layers: u32) -> impl Iterator<Item = Shape> {
+    pieces
+        .into_iter()
+        .filter(move |(mask, _)| mask & layers != 0)
+        .map(|(_, shape)| shape)
+}
+
 /// A through-hole pad reaches every copper layer; a surface pad the copper
 /// layers it lists, or its footprint's side when it lists none.
 pub fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {

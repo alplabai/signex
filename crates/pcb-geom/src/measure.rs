@@ -9,7 +9,9 @@ use crate::index::{BoardIndex, ItemRef};
 use crate::shape::Shape;
 use crate::units::PointNm;
 
-/// A measured span: where it runs and how long it is.
+/// A measured span: where it runs and how long it is. `from` and `to` are
+/// board (model) points; the legs read in the shown axes, X right and Y up
+/// (#2384), whatever the board origin.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
     pub from: Point,
@@ -18,14 +20,15 @@ pub struct Span {
     pub distance_mm: f64,
     /// `to.x - from.x` in mm.
     pub dx_mm: f64,
-    /// `to.y - from.y` in mm.
+    /// How far `to` is above `from`, in mm: `from.y - to.y`, as the
+    /// model's y grows down the screen.
     pub dy_mm: f64,
 }
 
 impl Span {
     /// The span from `from` to `to`.
     pub fn between(from: Point, to: Point) -> Self {
-        let (dx, dy) = (to.x - from.x, to.y - from.y);
+        let (dx, dy) = (to.x - from.x, from.y - to.y);
         Span {
             from,
             to,

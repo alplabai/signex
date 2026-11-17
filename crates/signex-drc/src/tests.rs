@@ -411,6 +411,30 @@ fn a_via_is_checked_with_its_size_on_each_layer() {
     assert_eq!(report.violations[0].layers, 1, "on the top layer only");
 }
 
+#[test]
+fn a_pad_is_checked_with_its_size_on_each_layer() {
+    // A through pad at (5, 0): 1 mm outside, 1.6 mm on the inner layers
+    // (#2401). A track at y = 1 mm has copper from 0.875 mm: 0.375 mm from
+    // the outer copper's edge, 0.075 mm from the inner one's.
+    let rules = DrcRules::new(RULE);
+    let mut big_inside = pad(1, (5.0, 0.0), 1, PadType::Thru, "TopCopper");
+    big_inside.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: Point::new(1.0, 1.0),
+        middle: Point::new(1.6, 1.6),
+        bottom: Point::new(1.0, 1.0),
+    });
+    let part = footprint(1, vec![big_inside]);
+    let track_on = |layer: &str| track(1, (0.0, 1.0), (10.0, 1.0), 2, layer);
+    let top = board(vec![part.clone()], vec![track_on("TopCopper")], vec![]);
+    assert!(run(&top, &rules).is_clean(), "the base size is clear");
+    let inner = board(vec![part], vec![track_on("Inner1Copper")], vec![]);
+    let report = run(&inner, &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    let v = &report.violations[0];
+    assert_eq!(v.layers, 1 << 1, "on the inner layer only");
+    assert!((74_000..=76_000).contains(&v.measured_nm), "{v:?}");
+}
+
 fn pad_sized(size: (f64, f64), shape: PadShape) -> Footprint {
     let mut p = pad(1, (5.0, 0.0), 1, PadType::Smd, "TopCopper");
     p.size = Point::new(size.0, size.1);

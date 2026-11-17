@@ -26,15 +26,16 @@ pub struct FabWritten {
 }
 
 /// Build `board`'s files and write them into `folder`, creating it. A file
-/// of the same name is replaced. Zone fills (#2216) and board text strokes
-/// (#2387) join through [`FabExtras`] once those land; until then the
-/// notes say what is left out.
+/// of the same name is replaced. The copper images hold the zones' copper,
+/// pour fills included (#2216), as the canvas and the board PDF draw it;
+/// board text strokes (#2387) are not drawn yet, and the notes say so.
 pub(crate) fn write_fab_outputs(
     board: &PcbBoard,
     options: &FabOptions,
     folder: &Path,
 ) -> Result<FabWritten, FabProblem> {
-    let set = generate(board, &FabExtras::default(), options).map_err(FabProblem::Refused)?;
+    let extras = FabExtras::of_board(board);
+    let set = generate(board, &extras, options).map_err(FabProblem::Refused)?;
     std::fs::create_dir_all(folder)
         .map_err(|e| FabProblem::WriteFailed(format!("{}: {e}", folder.display())))?;
     let mut files = Vec::with_capacity(set.files.len());

@@ -4,7 +4,7 @@
 use pcb_geom::{Placement, Side};
 use signex_types::pcb::PcbBoard;
 
-use super::frame::{deg3, fab_angle_udeg, fab_point, mm3};
+use super::frame::{FabFrame, deg3, fab_angle_udeg, mm3};
 
 const HEADER: &str = "Designator,Value,Footprint,X (mm),Y (mm),Rotation,Side\n";
 
@@ -15,6 +15,7 @@ const HEADER: &str = "Designator,Value,Footprint,X (mm),Y (mm),Rotation,Side\n";
 /// counter-clockwise in that frame, the turn its pads are flashed with.
 pub(crate) fn write_centroid(board: &PcbBoard, unnamed: &mut usize, skipped: &mut usize) -> String {
     let mut rows: Vec<(&str, uuid::Uuid, String)> = Vec::new();
+    let frame = FabFrame::of(board);
     for footprint in &board.footprints {
         if !footprint.component.component_type.in_bom() {
             continue;
@@ -27,7 +28,7 @@ pub(crate) fn write_centroid(board: &PcbBoard, unnamed: &mut usize, skipped: &mu
             *skipped += 1;
             continue;
         };
-        let at = fab_point(placement.origin);
+        let at = frame.point(placement.origin);
         let side = match placement.side {
             Side::Top => "Top",
             Side::Bottom => "Bottom",

@@ -2,6 +2,7 @@ use super::*;
 use crate::rect::RectNm;
 use crate::transform::pad_shape;
 use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment};
+use signex_types::pcb_arc::TrackArc;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
 
@@ -458,4 +459,82 @@ fn the_fill_area_is_in_square_millimetres() {
     let fills = zone_fills(&board(Vec::new()));
     let area = fills.of(0).expect("filled").area_mm2();
     assert!((area - 400.0).abs() < 1e-9, "{area}");
+}
+
+/// A free arc (#2373) of `net` on the top copper bowed through `mid`.
+fn free_arc(n: u128, net: u32, start: (f64, f64), mid: (f64, f64), end: (f64, f64)) -> TrackArc {
+    TrackArc {
+        uuid: Uuid::from_u128(n),
+        start: Point::new(start.0, start.1),
+        mid: Point::new(mid.0, mid.1),
+        end: Point::new(end.0, end.1),
+        width: 0.2,
+        layer: "TopCopper".into(),
+        net,
+    }
+}
+
+/// #2373: a free pad or copper arc of another net inside the pour is
+/// cleared like a footprint's copper; one of the pour's own net is not.
+#[test]
+fn a_free_pad_or_arc_of_another_net_is_cleared() {
+    let mut b = board(Vec::new());
+    b.free.pads.push(pad(9, -5.0, 2));
+    let fill = pieces(&b);
+    assert_eq!(fill.len(), 1);
+    assert_eq!(fill[0].holes.len(), 1, "the VCC free pad");
+    let hole = RectNm::bounding(fill[0].holes[0].iter().copied()).unwrap();
+    let w = hole.width();
+    assert!(
+        (2 * MM..2 * MM + MM / 50).contains(&w),
+        "1 mm + 2 x 0.5: {w}"
+    );
+
+    b.free
+        .arcs
+        .push(free_arc(10, 2, (2.0, 0.0), (5.0, 3.0), (8.0, 0.0)));
+    assert_eq!(pieces(&b)[0].holes.len(), 2, "and the VCC free arc");
+
+    b.free.pads[0].net.as_mut().unwrap().number = 1;
+    b.free.arcs[0].net = 1;
+    assert!(pieces(&b)[0].holes.is_empty(), "GND copper is filled over");
+}
+
+/// #2401: a pad is cleared at its size on the pour's layer.
+#[test]
+fn a_pad_is_cleared_at_its_size_on_the_pours_layer() {
+    let mut big_on_top = pad(1, 0.0, 2);
+    big_on_top.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: Point::new(2.0, 2.0),
+        middle: Point::new(1.0, 1.0),
+        bottom: Point::new(1.0, 1.0),
+    });
+    let fill = pieces(&board(vec![big_on_top]));
+    let hole = RectNm::bounding(fill[0].holes[0].iter().copied()).unwrap();
+    let w = hole.width();
+    assert!(
+        (3 * MM..3 * MM + MM / 50).contains(&w),
+        "2 mm + 2 x 0.5: {w}"
+    );
+}
+
+/// #2373: an island tied to the pour's net only through a free pad or a
+/// free copper arc of that net is alive.
+#[test]
+fn an_island_on_a_free_pad_or_arc_of_the_net_is_kept() {
+    let mut b = board(vec![pad(1, 0.0, 1)]);
+    b.segments.push(track_across(7, 8.0));
+    b.zones[0].remove_dead_islands = true;
+    assert_eq!(pieces(&b).len(), 1, "the strip above the track is dead");
+
+    let mut free = pad(9, 0.0, 1);
+    free.position = Point::new(0.0, 9.3);
+    b.free.pads.push(free);
+    assert_eq!(pieces(&b).len(), 2, "the GND free pad keeps the strip");
+
+    b.free.pads.clear();
+    b.free
+        .arcs
+        .push(free_arc(10, 1, (-3.0, 9.3), (0.0, 9.5), (3.0, 9.3)));
+    assert_eq!(pieces(&b).len(), 2, "the GND free arc keeps the strip");
 }

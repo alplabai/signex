@@ -4,6 +4,8 @@
 //! `UPDATE_GOLDEN=1 cargo test -p signex-output fab`.
 
 pub(crate) mod fixture;
+mod layer_sizes;
+mod origin;
 mod panel;
 
 use std::path::PathBuf;

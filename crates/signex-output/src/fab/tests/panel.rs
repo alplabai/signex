@@ -57,3 +57,18 @@ fn a_panel_is_written_as_one_board_with_its_copies_holes_and_scores() {
     let set = generated(&whole);
     assert!(file(&set, "fab-vscore.gbr").is_some());
 }
+
+#[test]
+fn a_panel_fiducial_opens_the_mask_and_takes_no_paste() {
+    let board = fixture_board();
+    let panel = BoardPanel::default();
+    assert_eq!(panel.fiducial_diameter, 1.0, "the dot this test looks for");
+    let whole = pcb_geom::panel::panel_board(&board, &panel).expect("panelised");
+    let set = generated(&whole);
+    // The fixture flashes no other 1 mm circle on these images.
+    let dot = "C,1*%";
+    let mask = file(&set, "fab-soldermask-top.gbr").expect("top mask");
+    assert!(mask.contains(dot), "the fiducial's mask opening: {mask}");
+    let paste = file(&set, "fab-paste-top.gbr").expect("top paste of R1's pads");
+    assert!(!paste.contains(dot), "no paste on a fiducial: {paste}");
+}

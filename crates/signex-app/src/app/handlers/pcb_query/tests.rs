@@ -184,6 +184,33 @@ fn measure_on_a_board_reads_point_to_point_and_edge_to_edge() {
 }
 
 #[test]
+fn measuring_upward_reads_a_positive_dy_from_the_board_origin() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut with_origin = board();
+    with_origin.options.origin = signex_types::pcb_options::BoardOrigin::new(Point::new(0.0, 80.0));
+    let (mut app, path) = app_with(dir.path(), with_origin);
+    run(&mut app, "measure_distance");
+    // 5 mm up the screen: model y falls from 50 to 45.
+    click(&mut app, 40.0, 50.0);
+    click(&mut app, 40.0, 45.0);
+    let measure = app.interaction_state.pcb_query.measure.as_ref().unwrap();
+    let span = measure.result.expect("a reading").span;
+    assert!(close(span.dy_mm, 5.0), "{span:?}");
+    assert!(close(span.dx_mm, 0.0), "{span:?}");
+
+    // The agent types and reads points from the origin, Y up.
+    let points = answer(
+        &mut app,
+        "measure_board",
+        &[document(&path).as_str(), "start=10,10", "end=10,15"],
+    );
+    assert!(close(points["dy_mm"].as_f64().unwrap(), 5.0), "{points}");
+    assert!(close(points["dx_mm"].as_f64().unwrap(), 0.0), "{points}");
+    assert_eq!(points["from"], serde_json::json!([10.0, 10.0]), "{points}");
+    assert_eq!(points["to"], serde_json::json!([10.0, 15.0]), "{points}");
+}
+
+#[test]
 fn find_on_a_board_lists_values_and_nets_and_replace_is_one_undo_step() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with(dir.path(), board());

@@ -46,13 +46,14 @@ paste images are written only when they hold something.
 
 ## Frame
 
-All files share one frame: x to the right and y up, from the board origin,
-as seen from the top. The board model's y grows down the screen, so every
-file negates y, and an angle that is counter-clockwise in the model is
-clockwise in the files (`fab/frame.rs` is the one place this lives). #2384 puts a new
-board's origin at its bottom-left with y up; when it lands, `fab_point` and
-`fab_angle_udeg` follow whatever axis direction the model then has, and the
-golden files change with them.
+All files share one frame: x to the right and y up, from the board origin
+(#2384, `BoardOptions::origin`), as seen from the top: the coordinates the
+board shows. Gerber, drill, pick-and-place and IPC-D-356 all read it. The
+board model's y grows down the screen, so every file mirrors y about the
+origin, and an angle that is counter-clockwise in the model is clockwise in
+the files (`FabFrame` in `fab/frame.rs` is the one place this lives). A part
+at model (10, 70) on a board whose origin is at model (0, 80) is written at
+(10, 10). A board saved without an origin counts from the model's zero.
 
 Output is deterministic: no date, no version, no hash-map order. The same
 board gives the same bytes, so a diff of two generations shows only real
@@ -73,26 +74,32 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
   standard aperture, a turned rectangle or stadium and every round-rect as a
   macro (primitives 21 and 1, turned about the aperture origin). The shape,
   centre and turn come from `pcb_geom` (`pad_world_center`,
-  `pad_world_rotation_deg`), the same transform the canvas and DRC read.
+  `pad_world_rotation_deg`), the same transform the canvas and DRC read. A
+  pad with per-layer sizes (#2401) is flashed at its size on each copper
+  image.
 - Mask and paste: the mask and paste layers a pad lists; a pad that lists
   none opens the mask (and takes paste, for a surface pad) on its
-  footprint's side, a hole on both faces. No expansion is applied: the board
-  has no mask or paste rule yet. Vias are tented.
+  footprint's side, a hole on both faces. An opening takes the pad's size on
+  the outer copper layer of its face. No expansion is applied: the board
+  has no mask or paste rule yet. Vias are tented. A panel fiducial lists the
+  top mask, so it opens the mask and takes no paste.
 - Tracks are drawn with a round aperture of their width; vias flashed on
-  every copper layer they span.
+  every copper layer they span, at their diameter there (#2401).
 - Board and footprint graphics on a fabrication layer are drawn: lines,
   rectangles, circles, arcs (`G75` multi-quadrant, with direction) and
   polygons; a filled one as a region.
-- Zone fills are regions with their holes cleared (`%LPC*%`), largest first
-  so a fill inside another's hole is drawn after the clear.
+- Zone copper is regions with their holes cleared (`%LPC*%`), largest first
+  so a fill inside another's hole is drawn after the clear. Generate builds
+  it with `FabExtras::of_board`: each pour's fill as `pcb_geom::zone_fills`
+  computes it (#2216), the fill the canvas, the board PDF and the ratsnest
+  read, and every other copper zone (Fill, Solid Region) solid. A zone's
+  outline is never written in place of its fill: it would short every net it
+  crosses. When no zone has any copper to write (a pour that fills nothing),
+  the dialog and Messages note how many zones were left out. A keepout (a
+  zone with `fill_type` `keepout`, #2373) has no copper and is not counted.
 
 ### Not drawn yet
 
-- **Zone fills (#2216).** A zone's outline is never written in place of its
-  fill: it would short every net it crosses. Fills enter through
-  `FabExtras::zone_fills`; until zone filling lands the dialog and Messages
-  note how many zones were left out. A keepout (a zone with `fill_type`
-  `keepout`, #2373) has no copper and is not counted.
 - **Text (#2387).** Board and footprint text needs the stroke font board text
   drawing brings; stroked glyphs enter through `FabExtras::strokes`. Until
   then the dialog notes how many texts were not drawn.
@@ -143,7 +150,10 @@ IPC-D-356, fixed 80-column records, `UNITS CUST 1` (millimetres, coordinates
 and sizes in micrometres). Record 317 for a hole (pad or via, `VIA` for a
 via), 327 for a surface pad; access `A00` for a hole, `A01` top, `A<n>`
 bottom; `S0`–`S3` from the mask openings. A net name longer than 14
-characters gets an `NNAME<k>` alias header. An unconnected pad is `N/C`.
+characters gets an `NNAME<k>` alias header. An unconnected pad is `N/C`. A
+record's size is the pad's or via's size on the probed layer (#2401): the
+top copper for a hole (`A00`) or a top pad, the bottom copper for a bottom
+pad.
 
 ## Job file
 

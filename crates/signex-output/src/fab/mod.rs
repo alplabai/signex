@@ -7,14 +7,16 @@
 //! gives the same bytes every time. Frame, units and formats:
 //! `docs/FABRICATION_OUTPUTS.md`.
 //!
-//! Two inputs come from work that lands separately, through [`FabExtras`]:
-//! the zone fills (#2216) and stroked board text (#2387). Without them the
+//! Two inputs the board does not hold as items come through [`FabExtras`]:
+//! the zones' copper ([`FabExtras::of_board`] computes the pour fills,
+//! #2216) and stroked board text (#2387, not drawn yet). Without them the
 //! files leave zones and texts out and [`FabSet::notes`] says so.
 
 mod centroid;
 mod collect;
 mod draw;
 mod drill;
+mod extras;
 mod frame;
 mod gerber;
 mod ipc356;
@@ -293,10 +295,11 @@ fn drill_files(
 /// The outline's bounding box in the fabrication frame; `None` when a
 /// vertex is not representable.
 fn outline_extent(board: &PcbBoard) -> Option<(PointNm, PointNm)> {
+    let fab_frame = frame::FabFrame::of(board);
     let points = board
         .outline
         .iter()
-        .map(|p| PointNm::from_mm(*p, "outline").map(frame::fab_point))
+        .map(|p| fab_frame.of_mm(*p, "outline"))
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
     let min = PointNm::new(
