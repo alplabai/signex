@@ -277,6 +277,32 @@ fn project_dirty(app: &Signex) -> bool {
         .is_document_dirty(&app.document_state.projects[0].path)
 }
 
+/// #2445: a pick stepped through the sheet's path (as an agent's `undo`
+/// does) is display-only for the sheet: ERC's epoch stays, the sheet's dirty
+/// mark is re-read and stays clean, and the project follows the pick.
+#[test]
+fn a_pick_stepped_by_path_leaves_the_erc_epoch_and_keeps_the_sheet_clean() {
+    let (mut app, _symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .mark_saved();
+    app.document_state.mark_document_clean(&path);
+    pick(&mut app, "GND", Some("Power"));
+    let epoch = app.document_state.sheet_edit_epoch;
+
+    assert_eq!(app.step_sheet_on(&path, true), Ok(true));
+    assert!(nets(&app).is_empty(), "the pick is reverted");
+    assert_eq!(app.document_state.sheet_edit_epoch, epoch);
+    assert!(!sheet_dirty(&app) && !project_dirty(&app));
+    assert_eq!(app.step_sheet_on(&path, false), Ok(true));
+    assert_eq!(nets(&app), ["GND"]);
+    assert_eq!(app.document_state.sheet_edit_epoch, epoch);
+    assert!(!sheet_dirty(&app) && project_dirty(&app));
+}
+
 /// A pick changes the project, never the sheet: the sheet stays clean, the
 /// project reads dirty, and undoing the pick reads the project clean again.
 #[test]
