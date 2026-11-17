@@ -387,6 +387,44 @@ fn the_rotation_pick_list_is_typed() {
     assert_eq!(picked, [90.0], "the list hands back the next rotation");
 }
 
+/// A stored 89.9999 highlights the 90 entry, as the string-matched list
+/// did (`{:.0}` reads 90): Command + wheel picks the entry after it, 180.
+#[test]
+fn a_rotation_that_rounds_to_a_step_selects_that_step() {
+    let ctx = net_label_form(89.9999);
+    let shown = texts(&ctx);
+    assert_eq!(beside(&shown, "Rotation"), "90 Degrees");
+    let label = shown
+        .iter()
+        .find(|t| t.text == "Rotation")
+        .expect("the Rotation row");
+    let over_list = iced::Point::new(
+        WINDOW.width - 60.0,
+        label.bounds.y + label.bounds.height / 2.0,
+    );
+    let events = [
+        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+            iced::keyboard::Modifiers::COMMAND,
+        )),
+        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
+        }),
+    ];
+    let picked: Vec<f64> = messages_for_events(
+        view_panel(PanelKind::Properties, &ctx),
+        WINDOW,
+        over_list,
+        &events,
+    )
+    .into_iter()
+    .filter_map(|m| match m {
+        PanelMsg::SetPrePlacementRotation(deg) => Some(deg),
+        _ => None,
+    })
+    .collect();
+    assert_eq!(picked, [180.0], "the 90 entry is the selected one");
+}
+
 /// The name a rotation entry shows.
 fn properties_parameters_rotation_label(i18n: &I18n, degrees: f64) -> String {
     crate::panels::properties_parameters::rotation_choice(i18n, degrees).label

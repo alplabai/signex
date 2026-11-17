@@ -50,4 +50,13 @@ mod tests {
             SignalMode::Generator
         );
     }
+
+    /// #2059: each mode reads in en-US as its name did before the catalog.
+    #[test]
+    fn each_mode_keeps_its_english_name() {
+        let en = signex_i18n::I18n::en_us();
+        let name = |mode: SignalMode| en.message_plain(mode.label(), &[]);
+        assert_eq!(name(SignalMode::Assistant), "Assistant");
+        assert_eq!(name(SignalMode::Generator), "Generator");
+    }
 }

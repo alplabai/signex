@@ -124,6 +124,13 @@ impl Arg {
             _ => self.clone(),
         }
     }
+
+    /// Whether this argument is a nested message, the only kind
+    /// [`Arg::rendered_with`] changes.
+    #[doc(hidden)]
+    pub fn is_message(&self) -> bool {
+        matches!(self.0, ArgKind::Message(_))
+    }
 }
 
 impl From<Translatable> for Arg {

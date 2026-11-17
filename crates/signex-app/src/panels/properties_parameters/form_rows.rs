@@ -249,6 +249,16 @@ pub(crate) fn rotation_choice(
     }
 }
 
+/// The step whose `{:.0}` name `current` shares (89.9999 is the 90 entry),
+/// as the string-matched list highlighted it; else `current` itself.
+fn shown_rotation_step(current: f64) -> f64 {
+    let shown = format!("{current:.0}");
+    ROTATION_STEPS
+        .into_iter()
+        .find(|step| format!("{step:.0}") == shown)
+        .unwrap_or(current)
+}
+
 /// Form row: the Rotation pick list over [`ROTATION_STEPS`], showing
 /// `current` even when it is not a quarter turn; picking reports degrees.
 pub fn form_rotation_row<'a>(
@@ -264,7 +274,7 @@ pub fn form_rotation_row<'a>(
     form_choice_row(
         t!(i18n, ids::PROPERTIES_ROTATION),
         choices,
-        rotation_choice(i18n, current),
+        rotation_choice(i18n, shown_rotation_step(current)),
         on_change,
         label_c,
     )
