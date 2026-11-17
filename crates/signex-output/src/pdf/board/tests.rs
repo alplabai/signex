@@ -356,9 +356,7 @@ fn bare_board() -> PcbBoard {
 /// top page.
 #[test]
 fn pads_and_vias_print_at_their_size_on_each_page() {
-    let sizes = |outer: f64, inner: f64| {
-        serde_json::json!({"mode": "top_middle_bottom", "top": outer, "middle": inner, "bottom": outer})
-    };
+    let sizes = |outer: f64, inner: f64| serde_json::json!({"mode": "top_middle_bottom", "top": outer, "middle": inner, "bottom": outer});
     let mut with_via = bare_board();
     with_via.vias.push(
         serde_json::from_value(serde_json::json!({

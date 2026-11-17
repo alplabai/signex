@@ -39,7 +39,10 @@ enum ReadState {
     /// already refused for it. A refused failure is read again on the next
     /// request; one no request has met yet is not, so the request that
     /// waited for the read does not start another.
-    Failed { why: String, answered: bool },
+    Failed {
+        why: String,
+        answered: bool,
+    },
 }
 
 /// One project's blocks, by name.

@@ -440,7 +440,11 @@ fn a_waiting_block_write_is_dropped_when_the_project_folder_moves() {
     }
 
     assert!(!old.exists(), "the old project folder is not made again");
-    assert_eq!(said_about(mark, &file, "saved to"), 1, "the first save only");
+    assert_eq!(
+        said_about(mark, &file, "saved to"),
+        1,
+        "the first save only"
+    );
     assert_eq!(
         said_about(mark, &file, "could not be written"),
         1,

@@ -235,7 +235,11 @@ impl Signex {
         degrees: f64,
     ) -> Result<PlacedBlock, String> {
         let folder = self.reuse_block_folder(board)?;
-        if let Some(why) = self.document_state.reuse_blocks.answer_read_failure(&folder) {
+        if let Some(why) = self
+            .document_state
+            .reuse_blocks
+            .answer_read_failure(&folder)
+        {
             return Err(format!(
                 "the project's reuse blocks could not be read: {why}"
             ));

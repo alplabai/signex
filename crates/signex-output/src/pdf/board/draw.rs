@@ -105,11 +105,10 @@ fn draw_set(
     let mask = copper_mask(set);
     if mask != 0 {
         // Each pad and via at its size on this page's layers (#2401).
-        let pads = board.footprints.iter().flat_map(|fp| {
-            fp.pads
-                .iter()
-                .map(move |pad| pcb_geom::pad_pieces(fp, pad))
-        });
+        let pads = board
+            .footprints
+            .iter()
+            .flat_map(|fp| fp.pads.iter().map(move |pad| pcb_geom::pad_pieces(fp, pad)));
         let vias = board.vias.iter().map(pcb_geom::via_pieces);
         for pieces in pads.chain(vias) {
             for shape in pcb_geom::pieces_on(pieces.unwrap_or_default(), mask) {

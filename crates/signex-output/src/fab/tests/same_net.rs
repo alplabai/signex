@@ -7,8 +7,14 @@ use signex_types::pcb::{NetDef, PadNet, PadShape, PadType, Zone};
 use super::fixture::{empty_board, footprint, p, pad};
 use super::{FabExtras, FabOptions, file, generate};
 
-fn gnd_zone(id: u128, fill_type: &str, outline: [(f64, f64); 2], holes: Vec<[(f64, f64); 2]>) -> Zone {
-    let rect = |[(x0, y0), (x1, y1)]: [(f64, f64); 2]| vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)];
+fn gnd_zone(
+    id: u128,
+    fill_type: &str,
+    outline: [(f64, f64); 2],
+    holes: Vec<[(f64, f64); 2]>,
+) -> Zone {
+    let rect =
+        |[(x0, y0), (x1, y1)]: [(f64, f64); 2]| vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)];
     Zone {
         uuid: uuid::Uuid::from_u128(id),
         net: 1,
@@ -52,7 +58,14 @@ fn a_same_net_region_hole_inside_a_pour_does_not_erase_the_pour() {
         number: 1,
         name: "GND".into(),
     });
-    board.footprints = vec![footprint(10, "TP1", p(10.0, 5.0), 0.0, "TopCopper", vec![gnd])];
+    board.footprints = vec![footprint(
+        10,
+        "TP1",
+        p(10.0, 5.0),
+        0.0,
+        "TopCopper",
+        vec![gnd],
+    )];
     board.zones = vec![
         gnd_zone(0x80, "pour", [(1.0, 1.0), (19.0, 9.0)], Vec::new()),
         gnd_zone(
