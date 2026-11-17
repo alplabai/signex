@@ -10,6 +10,7 @@ use crate::graphic::{GraphicShape, board_graphic_placement};
 use crate::index::{Area, IndexedItem, ItemRef, Rejected};
 use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
+use crate::region::Polygon;
 use crate::shape::Shape;
 use crate::units::{GeomError, PointNm};
 
@@ -69,7 +70,7 @@ pub(crate) fn add_graphic(
                 item,
                 edges: entries.len(),
                 inside: kind == BoardGraphicKind::TextFrame,
-                ring: outline.points,
+                region: Polygon::new(outline.points, Vec::new()),
                 bounds,
             });
             items.extend(entries);

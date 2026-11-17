@@ -341,14 +341,7 @@ pub(crate) fn keepout_areas(board: &PcbBoard) -> Vec<KeepoutArea> {
 /// Whether the disc of `radius` about `center` lies inside `area`, clear of
 /// its outer ring and of every hole by at least `margin`.
 pub(crate) fn disc_inside(area: &Polygon, center: PointNm, radius: i64, margin: i64) -> bool {
-    if area.outer.len() < 3 || !point_in_polygon(&area.outer, center) {
-        return false;
-    }
-    if area
-        .holes
-        .iter()
-        .any(|hole| hole.len() >= 3 && point_in_polygon(hole, center))
-    {
+    if !area.contains_point(center) {
         return false;
     }
     let disc = Shape::Disc {
