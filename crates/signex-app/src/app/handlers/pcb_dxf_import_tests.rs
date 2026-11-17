@@ -279,6 +279,13 @@ fn the_menu_row_on_a_copper_layer_opens_no_dialog() {
     // registry probes) settles before the row is pressed.
     let first = f.app.update(Message::noop());
     drive(&mut f.app, first);
+    // Messages reads the ring the logger fills; run alone, this test
+    // installs it.
+    {
+        use crate::ignore::IgnoreResult;
+        crate::diagnostics::init_logging()
+            .ignore("another test in this binary already installed the same logger");
+    }
     let mark = crate::diagnostics::newest_entry_id();
     let task = f
         .app

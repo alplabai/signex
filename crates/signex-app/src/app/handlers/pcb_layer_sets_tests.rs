@@ -140,9 +140,17 @@ fn open_set_menu(app: &mut Signex, window: iced::window::Id, shown: &str) {
     assert!(app.interaction_state.pcb_layer_set_menu.is_some());
 }
 
-/// Click the open menu's row `label`.
+/// Click the open menu's row `label`. A text of that name elsewhere (the
+/// board's Properties lists "All Layers" too) lies under the menu's dismiss
+/// layer: its click closes the menu and is not the row.
 fn pick_row(app: &mut Signex, window: iced::window::Id, label: &str) {
-    click_where(app, window, label, |m| matches!(m, Message::Pcb(_)));
+    click_where(app, window, label, |m| {
+        matches!(m, Message::Pcb(_))
+            && !matches!(
+                m,
+                Message::Pcb(PcbMsg::LayerSetMenu(LayerSetMenuMsg::Dismissed))
+            )
+    });
 }
 
 fn traces(app: &Signex) -> Vec<(f32, bool)> {
