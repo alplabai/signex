@@ -189,7 +189,7 @@ fn discrete_stock_parts_have_a_footprint_and_logic_parts_a_value() {
         row("STOCK-74HC00").parameters.get("value"),
         Some(&ParamValue::Text("74HC00".into()))
     );
-    assert!(row("STOCK-R").parameters.get("value").is_none(), "generic");
+    assert!(!row("STOCK-R").parameters.contains_key("value"), "generic");
 }
 
 /// #2468 — a stock footprint opens described: SOIC-8 names itself and the
