@@ -7,7 +7,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 pub use crate::violation::Severity;
 
@@ -137,6 +137,23 @@ impl CheckReport {
             ..self
         }
     }
+}
+
+/// A per-finding waiver as a waiver object of a report, one shape for every
+/// check (#2307): `kind`, `rule_id`, `fingerprint` and `reason`, plus the
+/// check's own fields in `extra` (ERC's objects, DRC's key).
+pub fn finding_waiver_json(
+    rule_id: &str,
+    fingerprint: &str,
+    reason: &str,
+    extra: Map<String, Value>,
+) -> Value {
+    let mut out = extra;
+    out.insert("kind".into(), "finding".into());
+    out.insert("rule_id".into(), rule_id.into());
+    out.insert("fingerprint".into(), fingerprint.into());
+    out.insert("reason".into(), reason.into());
+    Value::Object(out)
 }
 
 /// Where `finding` goes in a report: see [`CheckReport::new`].
