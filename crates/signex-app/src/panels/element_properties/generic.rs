@@ -19,13 +19,19 @@ pub(super) fn push_generic_sections<'a>(
         .cloned()
         .collect();
     col = col.push(
-        ctx.collapsible("sel_general", "Properties", &ctx.collapsed_sections, || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            for (key, value) in &info {
-                c = c.push(prop_kv_row(key, value, muted, primary));
-            }
-            c
-        })
+        ctx.collapsible(
+            "sel_general",
+            signex_i18n::ids::PROPERTIES_SECTION_PROPERTIES,
+            &ctx.collapsed_sections,
+            || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                for (key, value) in &info {
+                    // raw: the key is worded by signex-engine's selection info (#2060).
+                    c = c.push(prop_kv_row(raw(key.clone()), value, muted, primary));
+                }
+                c
+            },
+        )
         .boxed(),
     );
     col

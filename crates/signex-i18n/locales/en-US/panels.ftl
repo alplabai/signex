@@ -366,6 +366,9 @@ panels-component-sheet-table = Table
 panels-component-sheet-updated = Updated
 # Shown in place of an empty field.
 panels-component-sheet-no-value = —
+# Section titles of a component row's sheet; shown upper-cased.
+panels-component-sheet-section-component = Component
+panels-component-sheet-section-storage = Storage
 
 ## Projects panel footer summary
 
@@ -529,6 +532,15 @@ panels-net-classes-color-hint = #RRGGBB, empty = theme
 panels-net-classes-width-hint = empty = wire's own
 panels-net-classes-nets-hint = GND, +3V3
 panels-net-classes-patterns-hint = VCC*, ?SDA
+# Section title in Document Options; shown upper-cased.
+panels-net-classes-section = Net Classes
+# Row labels of the selected net class.
+panels-net-classes-name = Name
+panels-net-classes-color = Colour
+panels-net-classes-width = Width (mm)
+panels-net-classes-line = Line
+panels-net-classes-nets = Nets
+panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
 panels-child-sheet-line-width = Line Width (mm)

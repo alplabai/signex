@@ -349,7 +349,7 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     let sheets = signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_NAVIGATOR_SHEETS);
-    col = col.push(section_title(&sheets.into_string(), &ctx.tokens, &ctx.i18n).boxed());
+    col = col.push(section_title(sheets, &ctx.tokens, &ctx.i18n).boxed());
     col = col.push(separator(&ctx.tokens).boxed());
 
     // The tree is the whole project hierarchy, built from the project's root

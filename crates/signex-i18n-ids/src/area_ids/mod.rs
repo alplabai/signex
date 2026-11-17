@@ -21,6 +21,7 @@ mod pcb_primitive;
 mod pdf_preview;
 mod placeholder;
 mod preferences;
+mod properties;
 mod update_pcb;
 
 pub use bom::*;
@@ -42,6 +43,7 @@ pub use pcb_primitive::*;
 pub use pdf_preview::*;
 pub use placeholder::*;
 pub use preferences::*;
+pub use properties::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -67,6 +69,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pdf_preview::PDF_PREVIEW,
         placeholder::PLACEHOLDER,
         preferences::PREFERENCES,
+        properties::PROPERTIES,
         update_pcb::UPDATE_PCB,
     ]
     .concat()

@@ -87,10 +87,10 @@ pub use properties_parameters::{
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
-    form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_label, form_mm_edit_row,
-    form_pick_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
-    net_params_tabs, preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn,
-    thin_sep,
+    form_choice_row, form_edit_row, form_font_link_row, form_grid_row, form_input_row, form_label,
+    form_mm_edit_row, form_pick_row, form_rotation_row, justification_grid, net_numeric_row,
+    net_params_add_bar, net_params_header, net_params_tabs, preplacement_justification_grid,
+    props_tab_btn, section_hdr, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;

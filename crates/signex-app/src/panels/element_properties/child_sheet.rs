@@ -59,7 +59,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_props",
-            "Properties",
+            signex_i18n::ids::PROPERTIES_SECTION_PROPERTIES,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
@@ -80,8 +80,18 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                     move |s| PanelMsg::ChildSheetFileTyping(id, s),
                     PanelMsg::CommitChildSheetFile(id),
                 ));
-                c = c.push(prop_kv_row("Position", &position, muted, primary));
-                c = c.push(prop_kv_row("Size", &size, muted, primary));
+                c = c.push(prop_kv_row(
+                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_POSITION),
+                    &position,
+                    muted,
+                    primary,
+                ));
+                c = c.push(prop_kv_row(
+                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_SIZE),
+                    &size,
+                    muted,
+                    primary,
+                ));
                 c
             },
         )
@@ -92,28 +102,28 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_style",
-            "Style",
+            signex_i18n::ids::PROPERTIES_SECTION_STYLE,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
                 c = c.push(child_sheet_color_row(
-                    "Border Colour",
                     id,
                     stroke_color,
                     border_picker_open,
                     border_advanced_open,
                     palette,
                     /* is_border */ true,
+                    i18n,
                 ));
                 c = c.push(child_sheet_color_row(
-                    "Fill Colour",
                     id,
                     fill_color,
                     fill_picker_open,
                     fill_advanced_open,
                     palette,
                     /* is_border */ false,
+                    i18n,
                 ));
                 c = c.push(child_sheet_stroke_width_row(
                     id,
@@ -163,14 +173,15 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 /// same `EditChildSheet*Color` message so engine command + undo/redo
 /// round-trip is identical for both paths.
 fn child_sheet_color_row<'a>(
-    label: &'a str,
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
     palette: PanelPalette,
     is_border: bool,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
     use std::rc::Rc;
 
     let PanelPalette {
@@ -209,20 +220,28 @@ fn child_sheet_color_row<'a>(
         .is_some()
         .then_some(PanelMsg::ResetChildSheetStyle(sheet_id));
 
-    color_field(ColorFieldProps {
-        label,
-        current: current_rgba,
-        none_label: "Default",
-        show_palette: show_picker,
-        show_advanced,
-        muted,
-        border_c,
-        on_toggle,
-        on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
-        on_cancel: PanelMsg::CancelChildSheetColorPicker,
-        on_pick,
-        on_clear,
-    })
+    let label = if is_border {
+        ids::PROPERTIES_BORDER_COLOUR
+    } else {
+        ids::PROPERTIES_FILL_COLOUR
+    };
+    color_field(
+        ColorFieldProps {
+            label: t!(i18n, label).into(),
+            current: current_rgba,
+            none_label: t!(i18n, ids::PROPERTIES_COLOR_DEFAULT).into(),
+            show_palette: show_picker,
+            show_advanced,
+            muted,
+            border_c,
+            on_toggle,
+            on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
+            on_cancel: PanelMsg::CancelChildSheetColorPicker,
+            on_pick,
+            on_clear,
+        },
+        i18n,
+    )
 }
 
 /// Numeric stroke-width row for the child-sheet Style section.

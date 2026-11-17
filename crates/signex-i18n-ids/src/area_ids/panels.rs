@@ -29,4 +29,13 @@ define_ids! {
     PANELS_STATUS_BAR_SELECTED_LABELS = "panels-status-bar-selected-labels";
     PANELS_STATUS_BAR_SELECTED_SHAPES = "panels-status-bar-selected-shapes";
     PANELS_STATUS_BAR_SELECTED_OTHER = "panels-status-bar-selected-other";
+    PANELS_NET_CLASSES_SECTION = "panels-net-classes-section";
+    PANELS_NET_CLASSES_NAME = "panels-net-classes-name";
+    PANELS_NET_CLASSES_COLOR = "panels-net-classes-color";
+    PANELS_NET_CLASSES_WIDTH = "panels-net-classes-width";
+    PANELS_NET_CLASSES_LINE = "panels-net-classes-line";
+    PANELS_NET_CLASSES_NETS = "panels-net-classes-nets";
+    PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
+    PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
+    PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
 }

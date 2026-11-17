@@ -48,14 +48,22 @@ impl FootprintCardFacts {
         }
     }
 
-    /// "0.95 mm pitch, 5 pads"; the pitch only when it can be derived.
-    pub fn summary(&self) -> String {
+    /// "0.95 mm pitch, 5 pads" in `i18n`'s language; the pitch only when it
+    /// can be derived. Numbers go in as `format!` wrote them.
+    pub fn summary(&self, i18n: &signex_i18n::I18n) -> String {
+        use signex_i18n::ids;
         let pads = match self.pad_count {
-            1 => "1 pad".to_string(),
-            n => format!("{n} pads"),
+            1 => i18n.message_plain(ids::PROPERTIES_FOOTPRINT_ONE_PAD, &[]),
+            n => i18n.message_plain(
+                ids::PROPERTIES_FOOTPRINT_PADS,
+                &[("count", n.to_string().into())],
+            ),
         };
         match self.pitch_mm {
-            Some(pitch) => format!("{} mm pitch, {pads}", trimmed_mm(pitch)),
+            Some(pitch) => i18n.message_plain(
+                ids::PROPERTIES_FOOTPRINT_PITCH_PADS,
+                &[("pitch", trimmed_mm(pitch).into()), ("pads", pads.into())],
+            ),
             None => pads,
         }
     }

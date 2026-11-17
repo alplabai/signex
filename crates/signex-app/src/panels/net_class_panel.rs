@@ -181,7 +181,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
     let i18n: &'a I18n = &ctx.i18n;
     ctx.collapsible(
         "prop_net_classes",
-        "Net Classes",
+        ids::PANELS_NET_CLASSES_SECTION,
         &ctx.collapsed_sections,
         move || {
             let muted = hint_ink;
@@ -281,42 +281,42 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
                 .boxed(),
             );
 
-            let field = |label_text: &str, hint: MessageId, f: NetClassField, value: &str| {
-                commit_row(label_text, t!(i18n, hint), value, muted, f)
+            let field = |label: MessageId, hint: MessageId, f: NetClassField, value: &str| {
+                commit_row(t!(i18n, label), t!(i18n, hint), value, muted, f)
             };
             c = c.push(field(
-                "Name",
+                ids::PANELS_NET_CLASSES_NAME,
                 ids::PANELS_NET_CLASSES_NAME_HINT,
                 NetClassField::Name,
                 &panel.draft.name,
             ));
             c = c.push(field(
-                "Colour",
+                ids::PANELS_NET_CLASSES_COLOR,
                 ids::PANELS_NET_CLASSES_COLOR_HINT,
                 NetClassField::Color,
                 &panel.draft.color,
             ));
             c = c.push(field(
-                "Width (mm)",
+                ids::PANELS_NET_CLASSES_WIDTH,
                 ids::PANELS_NET_CLASSES_WIDTH_HINT,
                 NetClassField::Width,
                 &panel.draft.width,
             ));
             c = c.push(form_pick_row(
-                "Line",
+                t!(i18n, ids::PANELS_NET_CLASSES_LINE),
                 ClassLine::options(),
                 ClassLine(panel.classes[selected].style.line),
                 |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
                 muted,
             ));
             c = c.push(field(
-                "Nets",
+                ids::PANELS_NET_CLASSES_NETS,
                 ids::PANELS_NET_CLASSES_NETS_HINT,
                 NetClassField::Nets,
                 &panel.draft.nets,
             ));
             c = c.push(field(
-                "Patterns",
+                ids::PANELS_NET_CLASSES_PATTERNS,
                 ids::PANELS_NET_CLASSES_PATTERNS_HINT,
                 NetClassField::Patterns,
                 &panel.draft.patterns,
@@ -421,7 +421,7 @@ fn history_button<'a>(
 
 /// Label | text input that edits a draft and commits on Enter.
 fn commit_row<'a>(
-    label: &str,
+    label: Localized,
     hint: Localized,
     value: &str,
     label_c: Color,
@@ -429,7 +429,7 @@ fn commit_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            widgets::property_label(label.to_string(), label_c),
+            widgets::property_label(label, label_c),
             signex_widgets::text_input(hint, value.to_string())
                 .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
                 .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))

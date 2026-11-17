@@ -2,11 +2,10 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
-use super::rows::{
-    PanelStyle, h_align_from_row, info_row, justify_h_row, pick_list_degrees, rotation_degrees,
-};
+use super::rows::{PanelStyle, h_align_from_row, info_row, justify_h_row, rotation_degrees};
 use crate::styles::Spacing;
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 const SP: Spacing = Spacing::DEFAULT;
 
@@ -48,26 +47,20 @@ pub(super) fn push_label_sections<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_location",
-                "Location",
+                ids::PROPERTIES_SECTION_LOCATION,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row("(X/Y)", &pos_clone, muted, input_bg));
-                    let rotation_opts: Vec<String> = vec![
-                        "0 Degrees".into(),
-                        "90 Degrees".into(),
-                        "180 Degrees".into(),
-                        "270 Degrees".into(),
-                    ];
-                    let rot_label = format!("{:.0} Degrees", rot_current);
-                    c = c.push(form_pick_row(
-                        "Rotation",
-                        rotation_opts,
-                        rot_label,
-                        move |s| {
-                            let deg = pick_list_degrees(&s);
-                            PanelMsg::EditLabelRotation(id, deg)
-                        },
+                    c = c.push(form_input_row(
+                        t!(i18n, ids::PROPERTIES_XY),
+                        &pos_clone,
+                        muted,
+                        input_bg,
+                    ));
+                    c = c.push(form_rotation_row(
+                        i18n,
+                        rot_current,
+                        move |deg| PanelMsg::EditLabelRotation(id, deg),
                         muted,
                     ));
                     c
@@ -92,16 +85,19 @@ pub(super) fn push_label_sections<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_props",
-                "Properties",
+                ids::PROPERTIES_SECTION_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
-                        PanelMsg::EditLabelText(id, s)
-                    }));
+                    c = c.push(form_edit_row(
+                        t!(i18n, ids::PROPERTIES_NET_NAME),
+                        &net_name,
+                        muted,
+                        move |s| PanelMsg::EditLabelText(id, s),
+                    ));
                     if let Some((project, net, choices, current)) = net_class_picker {
                         c = c.push(form_pick_row(
-                            "Net Class",
+                            t!(i18n, ids::PROPERTIES_NET_CLASS),
                             choices,
                             current,
                             move |choice| {
@@ -116,7 +112,7 @@ pub(super) fn push_label_sections<'a>(
                     }
                     // Font family (stored on the label; size is below, colour is cosmetic for now)
                     c = c.push(font_family_row(
-                        "Font",
+                        t!(i18n, ids::PROPERTIES_FONT),
                         label_font_family.as_deref(),
                         muted,
                         move |family| {
@@ -125,13 +121,14 @@ pub(super) fn push_label_sections<'a>(
                                 family,
                             )
                         },
+                        i18n,
                     ));
                     let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
                         .iter()
                         .map(|n| n.to_string())
                         .collect();
                     c = c.push(form_pick_row(
-                        "Font Size",
+                        t!(i18n, ids::PROPERTIES_FONT_SIZE),
                         size_opts,
                         text_size_pt.to_string(),
                         move |s| {

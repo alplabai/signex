@@ -79,9 +79,8 @@ pub(super) fn section<'a>(
         return None;
     }
     let ctx = form.ctx;
-    let title = form.text(title);
     Some(
-        ctx.collapsible(key, &title, &ctx.collapsed_sections, move || {
+        ctx.collapsible(key, title, &ctx.collapsed_sections, move || {
             rows.into_iter()
                 .fold(Column::new().spacing(0).width(Length::Fill), |col, row| {
                     col.push(row)
@@ -99,7 +98,9 @@ pub(super) fn row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         Row::new()
-            .push(property_label(label, form.ink))
+            // raw: the label is rendered from the catalog by the caller (kept
+            // as text for the row search), or a parameter name from the board.
+            .push(property_label(signex_widgets::raw(label), form.ink))
             .push(
                 container(control)
                     .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))

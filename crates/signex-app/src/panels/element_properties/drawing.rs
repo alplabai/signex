@@ -70,12 +70,14 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
             row![
                 iced::widget::svg(icon).width(16).height(16),
+                // raw: the engine's type name has no catalog message yet (#2060).
                 text(raw(elem_type.clone())).size(TS.body).color(ink),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .boxed()
         } else {
+            // raw: the engine's type name has no catalog message yet (#2060).
             text(raw(elem_type.clone()))
                 .size(TS.body)
                 .color(ink)
@@ -130,7 +132,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_line",
-                    "Properties",
+                    ids::PROPERTIES_SECTION_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -182,7 +184,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_rect",
-                    "Properties",
+                    ids::PROPERTIES_SECTION_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -236,7 +238,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_circle",
-                    "Properties",
+                    ids::PROPERTIES_SECTION_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -285,7 +287,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_arc",
-                    "Properties",
+                    ids::PROPERTIES_SECTION_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -342,12 +344,12 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_poly",
-                    "Properties",
+                    ids::PROPERTIES_SECTION_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(prop_kv_row(
-                            "Vertices",
+                            t!(ctx.i18n, ids::PROPERTIES_VERTICES),
                             &ctx.i18n.count(vert_count as i64),
                             muted,
                             ink,
@@ -371,7 +373,8 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         _ => {
             for (key, value) in &ctx.selection_info {
                 if key != "Type" {
-                    col = col.push(prop_kv_row(key, value, muted, ink));
+                    // raw: the key is worded by signex-engine's selection info (#2060).
+                    col = col.push(prop_kv_row(raw(key.clone()), value, muted, ink));
                 }
             }
         }
@@ -455,6 +458,7 @@ fn drawing_stroke_color_row<'a>(
      -> Element<'a, PanelMsg> {
         let face = match label {
             Some(id) => text(t!(i18n, id)),
+            // raw: an empty face for a colour swatch, no text.
             None => text(raw("")),
         };
         button(face.size(TS.body))

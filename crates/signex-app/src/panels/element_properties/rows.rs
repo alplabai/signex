@@ -20,6 +20,11 @@ pub(super) fn rotation_degrees(text: &str) -> f64 {
 }
 
 /// Rotation, in degrees, from a rotation pick-list label (`90 Degrees`).
+/// The pick lists hold typed choices now (`form_rotation_row`).
+#[allow(
+    dead_code,
+    reason = "unused since #2059 part C; removal is the maintainers' call"
+)]
 pub(super) fn pick_list_degrees(label: &str) -> f64 {
     rotation_degrees(label.split_whitespace().next().unwrap_or(""))
 }

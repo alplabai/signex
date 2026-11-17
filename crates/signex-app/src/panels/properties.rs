@@ -404,7 +404,6 @@ fn view_pre_placement<'a>(
     let tool_name = pp.tool_name.clone();
     let kind = pp.kind;
     let pos_str = pre_placement_readout(pp, ctx);
-    let rot_label = format!("{:.0} Degrees", rotation);
     let font = pp.font.clone();
     let font_size_pt = pp.font_size_pt;
     let justify_h = pp.justify_h;
@@ -415,6 +414,8 @@ fn view_pre_placement<'a>(
     col = col.push(
         container(
             row![
+                // raw: the tool name is worded by the placement dispatch, in
+                // English (#2061: handler-worded state text).
                 text(raw(tool_name.clone())).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
                 crate::styles::dialog_button(
@@ -446,29 +447,20 @@ fn view_pre_placement<'a>(
     col = col.push(
         ctx.collapsible(
             "preplace_location",
-            "Location",
+            ids::PROPERTIES_SECTION_LOCATION,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg));
-                let rotation_opts: Vec<String> = vec![
-                    "0 Degrees".into(),
-                    "90 Degrees".into(),
-                    "180 Degrees".into(),
-                    "270 Degrees".into(),
-                ];
-                c = c.push(form_pick_row(
-                    "Rotation",
-                    rotation_opts,
-                    rot_label.clone(),
-                    |s| {
-                        let deg = s
-                            .split_whitespace()
-                            .next()
-                            .and_then(|n| n.parse::<f64>().ok())
-                            .unwrap_or(0.0);
-                        PanelMsg::SetPrePlacementRotation(deg)
-                    },
+                c = c.push(form_input_row(
+                    t!(i18n, ids::PROPERTIES_XY),
+                    &pos_str,
+                    muted,
+                    input_bg,
+                ));
+                c = c.push(form_rotation_row(
+                    i18n,
+                    rotation,
+                    PanelMsg::SetPrePlacementRotation,
                     muted,
                 ));
                 c
@@ -479,16 +471,16 @@ fn view_pre_placement<'a>(
 
     // ── Properties (kind-specific) ──
     let text_label_for_kind = match kind {
-        PrePlacementKind::NetLabel => "Net Name",
-        PrePlacementKind::GlobalPort => "Port Name",
-        PrePlacementKind::HierPort => "Sheet Name",
-        PrePlacementKind::PowerPort => "Net Name",
-        PrePlacementKind::TextNote => "Text",
-        PrePlacementKind::Component => "Value",
-        _ => "",
+        PrePlacementKind::NetLabel => Some(ids::PROPERTIES_NET_NAME),
+        PrePlacementKind::GlobalPort => Some(ids::PROPERTIES_PORT_NAME),
+        PrePlacementKind::HierPort => Some(ids::PROPERTIES_SHEET_NAME),
+        PrePlacementKind::PowerPort => Some(ids::PROPERTIES_NET_NAME),
+        PrePlacementKind::TextNote => Some(ids::PROPERTIES_TEXT),
+        PrePlacementKind::Component => Some(ids::PROPERTIES_VALUE),
+        _ => None,
     };
 
-    let show_text_field = !text_label_for_kind.is_empty();
+    let show_text_field = text_label_for_kind.is_some();
     let show_designator = matches!(kind, PrePlacementKind::Component);
     let show_text_styling = matches!(
         kind,
@@ -504,13 +496,13 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_props",
-                "Properties",
+                ids::PROPERTIES_SECTION_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    if show_text_field {
+                    if let Some(label) = text_label_for_kind {
                         c = c.push(form_edit_row(
-                            text_label_for_kind,
+                            t!(i18n, label),
                             &label_text,
                             muted,
                             PanelMsg::SetPrePlacementText,
@@ -518,7 +510,7 @@ fn view_pre_placement<'a>(
                     }
                     if show_designator {
                         c = c.push(form_edit_row(
-                            "Designator",
+                            t!(i18n, ids::PROPERTIES_DESIGNATOR),
                             &designator,
                             muted,
                             PanelMsg::SetPrePlacementDesignator,
@@ -527,7 +519,7 @@ fn view_pre_placement<'a>(
                     if show_text_styling {
                         let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
                         c = c.push(form_pick_row(
-                            "Font",
+                            t!(i18n, ids::PROPERTIES_FONT),
                             font_opts,
                             font.clone(),
                             PanelMsg::SetPrePlacementFont,
@@ -539,7 +531,7 @@ fn view_pre_placement<'a>(
                                 .map(|n| n.to_string())
                                 .collect();
                         c = c.push(form_pick_row(
-                            "Font Size",
+                            t!(i18n, ids::PROPERTIES_FONT_SIZE),
                             size_opts,
                             font_size_pt.to_string(),
                             |s| PanelMsg::SetPrePlacementFontSize(s.parse().unwrap_or(10)),
@@ -584,12 +576,12 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_shape",
-                "Properties",
+                ids::PROPERTIES_SECTION_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_edit_row_f64(
-                        "Width (mm)",
+                        t!(i18n, ids::PROPERTIES_WIDTH_MM),
                         width,
                         crate::panels::NumericFieldKey::ShapeWidth,
                         numeric_draft,
@@ -608,7 +600,7 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_wire",
-                "Properties",
+                ids::PROPERTIES_SECTION_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     Column::new()
@@ -618,6 +610,7 @@ fn view_pre_placement<'a>(
                             width,
                             PanelMsg::SetPrePlacementWireWidth,
                             muted,
+                            i18n,
                         ))
                         .push(super::wire_color_row(
                             color,
@@ -625,6 +618,7 @@ fn view_pre_placement<'a>(
                             std::rc::Rc::new(PanelMsg::SetPrePlacementWireColor),
                             muted,
                             border_c,
+                            i18n,
                         ))
                 },
             )
@@ -651,3 +645,7 @@ fn view_pre_placement<'a>(
     .width(Length::Fill)
     .boxed()
 }
+
+#[cfg(test)]
+#[path = "properties_tests.rs"]
+mod tests;

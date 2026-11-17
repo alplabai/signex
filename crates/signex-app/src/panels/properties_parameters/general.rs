@@ -6,18 +6,66 @@
 //! module.
 
 use super::super::*;
+use crate::choice::{Choice, chosen};
 use crate::panels::PaperEdge;
 use crate::panels::form_look;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, RenderTranslatable, UserText, ids, t};
 use signex_types::schematic::{SheetOrientation, SheetSize};
 use signex_widgets::Label;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// The catalog name of a page orientation.
+fn orientation_label(orientation: SheetOrientation) -> signex_i18n::MessageId {
+    match orientation {
+        SheetOrientation::Landscape => ids::PROPERTIES_ORIENTATION_LANDSCAPE,
+        SheetOrientation::Portrait => ids::PROPERTIES_ORIENTATION_PORTRAIT,
+    }
+}
+
+/// The catalog name of a page origin.
+fn origin_label(origin: PageOrigin) -> signex_i18n::MessageId {
+    match origin {
+        PageOrigin::UpperLeft => ids::PROPERTIES_ORIGIN_UPPER_LEFT,
+        PageOrigin::LowerLeft => ids::PROPERTIES_ORIGIN_LOWER_LEFT,
+    }
+}
+
+/// A Sheet Color pick-list choice, named from the catalog; a colour that is
+/// no preset shows its hex code.
+fn sheet_color_choice(
+    i18n: &I18n,
+    color: crate::panels::SchematicSheetColor,
+) -> Choice<crate::panels::SchematicSheetColor> {
+    use crate::panels::SchematicSheetColor as S;
+    use crate::panels::SheetColor as P;
+    let id = match color {
+        S::Default => ids::PROPERTIES_SHEET_COLOR_DEFAULT,
+        S::Preset(P::Black) => ids::PROPERTIES_SHEET_COLOR_BLACK,
+        S::Preset(P::White) => ids::PROPERTIES_SHEET_COLOR_WHITE,
+        S::Preset(P::DarkGray) => ids::PROPERTIES_SHEET_COLOR_DARK_GRAY,
+        S::Preset(P::LightGray) => ids::PROPERTIES_SHEET_COLOR_LIGHT_GRAY,
+        S::Preset(P::Cream) => ids::PROPERTIES_SHEET_COLOR_CREAM,
+        S::Custom(custom) => {
+            return Choice {
+                value: color,
+                label: i18n.message_plain(
+                    ids::PROPERTIES_SHEET_COLOR_CUSTOM,
+                    &[("hex", custom.to_hex().into())],
+                ),
+            };
+        }
+    };
+    Choice {
+        value: color,
+        label: i18n.message_plain(id, &[]),
+    }
+}
 
 /// The section on the Graphite section chrome.
 fn selection_filters_section_for<'a>(
@@ -30,7 +78,7 @@ fn selection_filters_section_for<'a>(
     Column::new().spacing(0).width(Length::Fill).push(
         ctx.collapsible(
             "prop_sel_filter",
-            "Custom Selection Filters",
+            ids::PROPERTIES_SECTION_SELECTION_FILTERS,
             &ctx.collapsed_sections,
             move || selection_filters_body(presets, tab, palette, &i18n),
         )
@@ -181,7 +229,7 @@ pub fn view_properties_general<'a>(
         col = col.push(
             ctx.collapsible(
                 "prop_general",
-                "General",
+                ids::PROPERTIES_SECTION_GENERAL,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
@@ -191,7 +239,7 @@ pub fn view_properties_general<'a>(
                         container(
                             row![
                                 seg_btn(
-                                    "mm",
+                                    t!(i18n, ids::PROPERTIES_UNIT_MM),
                                     unit == Unit::Mm,
                                     PanelMsg::SetUnit(Unit::Mm),
                                     input_bg,
@@ -199,7 +247,7 @@ pub fn view_properties_general<'a>(
                                     muted,
                                 ),
                                 seg_btn(
-                                    "mils",
+                                    t!(i18n, ids::PROPERTIES_UNIT_MILS),
                                     unit == Unit::Mil,
                                     PanelMsg::SetUnit(Unit::Mil),
                                     input_bg,
@@ -216,7 +264,7 @@ pub fn view_properties_general<'a>(
                     );
                     // Altium-style: Visible Grid and Snap Grid are independent
                     c = c.push(form_grid_row(
-                        "Visible Grid",
+                        t!(i18n, ids::PROPERTIES_VISIBLE_GRID),
                         visible_grid_mm,
                         unit,
                         false,
@@ -226,7 +274,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::ToggleGrid,
                     ));
                     c = c.push(form_grid_row(
-                        "Snap Grid",
+                        t!(i18n, ids::PROPERTIES_SNAP_GRID),
                         grid_size_mm,
                         unit,
                         true,
@@ -236,14 +284,14 @@ pub fn view_properties_general<'a>(
                         PanelMsg::ToggleSnap,
                     ));
                     c = c.push(form_check_row_shortcut(
-                        "Snap to Hotspots",
+                        t!(i18n, ids::PROPERTIES_SNAP_TO_HOTSPOTS),
                         snap_hotspots,
                         PanelMsg::ToggleSnapHotspots,
                         "Shift+E",
                         muted,
                     ));
                     c = c.push(form_font_link_row(
-                        "Canvas Font",
+                        t!(i18n, ids::PROPERTIES_CANVAS_FONT),
                         &canvas_font_name,
                         canvas_font_size,
                         canvas_font_bold,
@@ -270,10 +318,14 @@ pub fn view_properties_general<'a>(
                             .boxed(),
                         );
                     }
-                    c = c.push(form_pick_row(
-                        "Sheet Color",
-                        crate::panels::SchematicSheetColor::options(),
-                        sheet_color,
+                    let sheet_colors = crate::panels::SchematicSheetColor::options()
+                        .into_iter()
+                        .map(|color| sheet_color_choice(i18n, color))
+                        .collect();
+                    c = c.push(form_choice_row(
+                        t!(i18n, ids::PROPERTIES_SHEET_COLOR),
+                        sheet_colors,
+                        sheet_color_choice(i18n, sheet_color),
                         PanelMsg::SetSheetColor,
                         muted,
                     ));
@@ -295,7 +347,7 @@ pub fn view_properties_general<'a>(
         col = col.push(
             ctx.collapsible(
                 "prop_page_opts",
-                "Page Options",
+                ids::PROPERTIES_SECTION_PAGE_OPTIONS,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c: Column<Element<'a, PanelMsg>> =
@@ -305,7 +357,7 @@ pub fn view_properties_general<'a>(
                         container(
                             row![
                                 seg_btn(
-                                    "Template",
+                                    t!(i18n, ids::PROPERTIES_FORMAT_TEMPLATE),
                                     format_mode == PageFormatMode::Template,
                                     PanelMsg::SetPageFormatMode(PageFormatMode::Template),
                                     input_bg,
@@ -313,7 +365,7 @@ pub fn view_properties_general<'a>(
                                     muted,
                                 ),
                                 seg_btn(
-                                    "Standard",
+                                    t!(i18n, ids::PROPERTIES_FORMAT_STANDARD),
                                     format_mode == PageFormatMode::Standard,
                                     PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
                                     input_bg,
@@ -321,7 +373,7 @@ pub fn view_properties_general<'a>(
                                     muted,
                                 ),
                                 seg_btn(
-                                    "Custom",
+                                    t!(i18n, ids::PROPERTIES_FORMAT_CUSTOM),
                                     format_mode == PageFormatMode::Custom,
                                     PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
                                     input_bg,
@@ -345,7 +397,7 @@ pub fn view_properties_general<'a>(
                         PageFormatMode::Standard | PageFormatMode::Template => {
                             let paper_options = paper_size_options();
                             c = c.push(form_pick_row(
-                                "Paper",
+                                t!(i18n, ids::PROPERTIES_PAPER),
                                 paper_options,
                                 SheetSize::parse(&paper_size)
                                     .0
@@ -368,7 +420,7 @@ pub fn view_properties_general<'a>(
                         PageFormatMode::Custom => {
                             let (w, h) = paper_dimensions(&paper_size);
                             c = c.push(form_mm_edit_row(
-                                "Width",
+                                t!(i18n, ids::PROPERTIES_PAPER_WIDTH),
                                 w,
                                 ctx.title_block_sheet
                                     .as_deref()
@@ -382,7 +434,7 @@ pub fn view_properties_general<'a>(
                                 input_bdr,
                             ));
                             c = c.push(form_mm_edit_row(
-                                "Height",
+                                t!(i18n, ids::PROPERTIES_PAPER_HEIGHT),
                                 h,
                                 ctx.title_block_sheet
                                     .as_deref()
@@ -398,24 +450,35 @@ pub fn view_properties_general<'a>(
                         }
                     }
                     if sheet_size.is_recognized() {
-                        c = c.push(form_pick_row(
-                            "Orientation",
-                            vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
-                            orientation,
+                        let orientations = Choice::named(
+                            &[SheetOrientation::Landscape, SheetOrientation::Portrait],
+                            orientation_label,
+                            i18n,
+                        );
+                        let current = chosen(&orientations, &orientation)
+                            .unwrap_or_else(|| orientations[0].clone());
+                        c = c.push(form_choice_row(
+                            t!(i18n, ids::PROPERTIES_ORIENTATION),
+                            orientations,
+                            current,
                             PanelMsg::SetSheetOrientation,
                             muted,
                         ));
                     }
                     let (w, h) = paper_dimensions(&paper_size);
-                    let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
+                    // The sizes go in as `format!` wrote them and the text has no
+                    // isolation marks, so English reads byte for byte as before.
+                    let dims = signex_i18n::Translatable::new(ids::PROPERTIES_PAPER_DIMENSIONS)
+                        .arg("width", format!("{w:.0}"))
+                        .arg("height", format!("{h:.0}"));
                     c = c.push(
-                        container(text(raw(dims)).size(TS.caption).color(muted))
+                        container(text(dims.localized(i18n)).size(TS.caption).color(muted))
                             .padding([3.0, SP.m])
                             .boxed(),
                     );
                     c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_BORDER_ZONES)));
                     c = c.push(form_check_row(
-                        "Show Border",
+                        t!(i18n, ids::PROPERTIES_SHOW_BORDER),
                         sheet_frame.show_border,
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
                             !sheet_frame.show_border,
@@ -424,7 +487,7 @@ pub fn view_properties_general<'a>(
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
-                        "Show Title Block",
+                        t!(i18n, ids::PROPERTIES_SHOW_TITLE_BLOCK),
                         sheet_frame.show_title_block,
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
                             !sheet_frame.show_title_block,
@@ -434,34 +497,39 @@ pub fn view_properties_general<'a>(
                     ));
                     let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
                     c = c.push(form_pick_row(
-                        "Vertical",
+                        t!(i18n, ids::PROPERTIES_ZONES_VERTICAL),
                         zone_counts.clone(),
                         sheet_frame.vertical_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
                         muted,
                     ));
                     c = c.push(form_pick_row(
-                        "Horizontal",
+                        t!(i18n, ids::PROPERTIES_ZONES_HORIZONTAL),
                         zone_counts,
                         sheet_frame.horizontal_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
                         muted,
                     ));
-                    let origin_opts: Vec<PageOrigin> =
-                        vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
-                    c = c.push(form_pick_row(
-                        "Origin",
-                        origin_opts,
-                        origin,
+                    let origins = Choice::named(
+                        &[PageOrigin::UpperLeft, PageOrigin::LowerLeft],
+                        origin_label,
+                        i18n,
+                    );
+                    let current = chosen(&origins, &origin).unwrap_or_else(|| origins[0].clone());
+                    c = c.push(form_choice_row(
+                        t!(i18n, ids::PROPERTIES_ORIGIN),
+                        origins,
+                        current,
                         PanelMsg::SetPageOrigin,
                         muted,
                     ));
                     c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_TEXT)));
                     c = c.push(crate::panels::element_properties::font_family_row(
-                        "Default Font",
+                        t!(i18n, ids::PROPERTIES_DEFAULT_FONT),
                         document_font.as_deref(),
                         muted,
                         PanelMsg::SetDocumentFontFamily,
+                        i18n,
                     ));
                     c
                 },
@@ -517,14 +585,18 @@ pub fn view_properties_parameters<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    col = col.push(form_look::section_label("Parameters", tokens, i18n));
+    col = col.push(form_look::section_label(
+        t!(i18n, ids::PROPERTIES_SECTION_PARAMETERS),
+        tokens,
+        i18n,
+    ));
 
     // Sub-tabs: All | Parameters | Rules
     col = col.push(
         container(
             row![
                 seg_btn(
-                    "All",
+                    t!(i18n, ids::PROPERTIES_TAB_ALL),
                     false,
                     PanelMsg::PropertiesTab(1),
                     input_bg,
@@ -532,7 +604,7 @@ pub fn view_properties_parameters<'a>(
                     muted,
                 ),
                 seg_btn(
-                    "Parameters",
+                    t!(i18n, ids::PROPERTIES_TAB_PARAMETERS),
                     true,
                     PanelMsg::PropertiesTab(1),
                     input_bg,
@@ -540,7 +612,7 @@ pub fn view_properties_parameters<'a>(
                     muted,
                 ),
                 seg_btn(
-                    "Rules",
+                    t!(i18n, ids::PROPERTIES_TAB_RULES),
                     false,
                     PanelMsg::PropertiesTab(1),
                     input_bg,
@@ -683,7 +755,7 @@ pub(crate) fn seg_text(
 
 /// Segmented button (for units toggle etc).
 pub fn seg_btn<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     active: bool,
     msg: PanelMsg,
     active_bg: Color,
@@ -692,7 +764,7 @@ pub fn seg_btn<'a>(
 ) -> Element<'a, PanelMsg> {
     let text_c = seg_text(active, text_active, text_inactive, active_bg);
     signex_widgets::button(
-        text(raw(label.to_string()))
+        text(label)
             .size(TS.body)
             .color(text_c)
             .align_x(iced::alignment::Horizontal::Center),
