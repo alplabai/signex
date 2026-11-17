@@ -134,13 +134,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 collapsed_sections,
                 i18n,
             );
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                "Position",
-                format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
-            );
+            col = pad_position_rows(col, muted, input_bg, pad.position_mm, i18n);
             col = render_pad_form_pad_stack(
                 col,
                 &values,
@@ -361,4 +355,19 @@ fn props_kv_row<'a>(
     value: String,
 ) -> Column<Element<'a, PanelMsg>> {
     col.push(rows::value_row(key, &value, label_c, input_bg))
+}
+
+/// A pad's read-only position as two rows, X then Y, so neither value is
+/// cut at the dock edge as the one "(x, y) mm" field was (#2262).
+fn pad_position_rows<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    label_c: Color,
+    input_bg: Color,
+    [x, y]: [f64; 2],
+    i18n: &signex_i18n::I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    let x_label = t!(i18n, ids::EDITORS_SILK_POSITION_X).into_string();
+    let y_label = t!(i18n, ids::EDITORS_SILK_POSITION_Y).into_string();
+    let col = props_kv_row(col, label_c, input_bg, &x_label, format!("{x:.3}"));
+    props_kv_row(col, label_c, input_bg, &y_label, format!("{y:.3}"))
 }

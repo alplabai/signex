@@ -181,6 +181,11 @@ fn the_simple_pad_stack_lists_paste_and_mask_as_rows_and_its_switch_writes_the_p
     for header in ["PASTE", "SOLDER", "Expansion"] {
         assert!(!has(header), "{header:?} table header in Simple");
     }
+    // The read-only position is two rows, X and Y, not one "(x, y) mm" field.
+    for row in ["Position X (mm)", "3.000", "Position Y (mm)", "0.000"] {
+        assert!(has(row), "{row:?} missing");
+    }
+    assert!(!texts.iter().any(|t| t.text.starts_with("(3.000")));
 
     let before = app.document_state.footprint_editors[&PathBuf::from(PATH)]
         .state
