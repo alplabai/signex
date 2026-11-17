@@ -349,7 +349,11 @@ fn stitching_keeps_a_written_clearance_rule() {
     let dir = tempfile::tempdir().unwrap();
     let mut board = board();
     board.nets[1].name = "VCC".into();
-    let vcc = board.segments.iter_mut().find(|s| s.uuid == id(11)).unwrap();
+    let vcc = board
+        .segments
+        .iter_mut()
+        .find(|s| s.uuid == id(11))
+        .unwrap();
     vcc.start.y = -1.275;
     vcc.end.y = -1.275;
     let (mut app, path) = app_with(dir.path(), board);
@@ -387,7 +391,11 @@ fn stitching_keeps_a_written_clearance_rule() {
     let kept = gaps(&app);
     assert!(!kept.is_empty(), "the rest of the area is stitched");
     assert!(kept.iter().all(|g| *g >= 0.5 - 1e-9), "{kept:?}");
-    assert_eq!(checked(&app), 0, "the rule's DRC finds nothing the tool wrote");
+    assert_eq!(
+        checked(&app),
+        0,
+        "the rule's DRC finds nothing the tool wrote"
+    );
     undo(&mut app);
 
     let outcome = run_operands(
@@ -397,6 +405,10 @@ fn stitching_keeps_a_written_clearance_rule() {
         &["start=-4,-4", "end=4,4", "net=GND", "pitch=2"],
     );
     assert!(answered_uuids(&outcome, "added") > 0);
-    assert!(gaps(&app).iter().all(|g| *g >= 0.5 - 1e-9), "{:?}", gaps(&app));
+    assert!(
+        gaps(&app).iter().all(|g| *g >= 0.5 - 1e-9),
+        "{:?}",
+        gaps(&app)
+    );
     assert_eq!(checked(&app), 0);
 }

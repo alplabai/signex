@@ -332,9 +332,16 @@ fn an_agent_save_before_the_blocks_are_read_cannot_overwrite_a_block_named_in_an
         matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named R1-U1")),
         "{outcome:?}"
     );
-    assert_eq!(std::fs::read(&file).unwrap(), before, "the file is untouched");
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        before,
+        "the file is untouched"
+    );
     assert!(
-        !dir.path().join("reuse-blocks").join("r1-u1.snxpcb").exists(),
+        !dir.path()
+            .join("reuse-blocks")
+            .join("r1-u1.snxpcb")
+            .exists(),
         "no second file beside it"
     );
 }
@@ -352,7 +359,10 @@ fn a_second_save_of_a_block_is_written_after_the_first() {
         let operands = [document.as_str(), "name=amp", ids];
         let args = CommandArgs::parse_operands(&command, &operands).expect("operands parse");
         let (outcome, task) = app.run_headless_command_in_test(&command, args);
-        assert!(matches!(outcome, CommandOutcome::Answered(_)), "{outcome:?}");
+        assert!(
+            matches!(outcome, CommandOutcome::Answered(_)),
+            "{outcome:?}"
+        );
         task
     };
     let first = save(&mut app, "ids=U1");
