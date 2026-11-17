@@ -192,7 +192,8 @@ fn a_baseline_of_another_check_is_refused() {
     let CommandOutcome::Deferred { ticket } = outcome else {
         panic!("not deferred: {outcome:?}");
     };
-    app.settle_deferred(ticket, task);
+    let (erc, _) = app.settle_deferred(ticket, task);
+    assert!(matches!(erc, CommandOutcome::Answered(_)), "{erc:?}");
     let project = project_path(&app);
     let reason = refusal(check(&mut app, &project, &["baseline=1"]));
     assert!(reason.contains("was a `erc` check"), "{reason}");

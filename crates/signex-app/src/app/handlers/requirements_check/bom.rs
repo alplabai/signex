@@ -89,7 +89,7 @@ pub(super) fn project_boms(
         .map(|(path, why)| format!("BOM: sheet {} {why}", path.display()))
         .collect();
     let dir = Some(inputs.dir.as_path());
-    let graph = project_graph_quiet(&set.sheets, dir, Some(&root), set.fold);
+    let graph = project_graph_quiet(&set.sheets, dir, Some(root.as_path()), set.fold);
     warnings.extend(
         graph
             .issues

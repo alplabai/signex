@@ -20,7 +20,7 @@ fn board_of(board: &Board) -> Result<(&str, &PcbBoard), Miss> {
         ))
         .with("reason", json!(why))
         .on(path)),
-        Board::Read { path, board } => Ok((path, board)),
+        Board::Read { path, board } => Ok((path.as_str(), &**board)),
     }
 }
 
