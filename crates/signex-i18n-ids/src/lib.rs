@@ -394,6 +394,9 @@ define_ids! {
     LIBRARY_BROWSER_SHOW = "library-browser-show";
     LIBRARY_BROWSER_SHOWN = "library-browser-shown";
     LIBRARY_BROWSER_SHOWN_SORTED = "library-browser-shown-sorted";
+    LIBRARY_STATUS_SUMMARY = "library-status-summary";
+    LIBRARY_STATUS_SELECTED = "library-status-selected";
+    LIBRARY_STATUS_COMPONENT = "library-status-component";
     LIBRARY_BROWSER_FILTER_ACTIVE = "library-browser-filter-active";
     LIBRARY_BROWSER_FILTER_PREFERRED = "library-browser-filter-preferred";
     LIBRARY_BROWSER_FILTER_DEPRECATED = "library-browser-filter-deprecated";

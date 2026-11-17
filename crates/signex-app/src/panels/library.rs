@@ -439,11 +439,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         container(
             row![
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_NAME))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted)
                     .width(Length::Fill),
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_PADS))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted),
             ]
             .spacing(SP.m)

@@ -42,6 +42,7 @@ mod shape_tool;
 mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;
 #[cfg(test)]

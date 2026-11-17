@@ -591,8 +591,9 @@ panels-footprint-library-breadcrumb = { $file }  ({ $count ->
         [one] { $count } footprint
        *[other] { $count } footprints
     })
-panels-footprint-library-column-name = Name
-panels-footprint-library-column-pads = Pads
+# Column headings of the Footprint Library list, in the section-label case.
+panels-footprint-library-column-name = FOOTPRINT
+panels-footprint-library-column-pads = PADS
 
 ## Library Browser row in the Properties panel
 panels-library-row-title = Library Row
