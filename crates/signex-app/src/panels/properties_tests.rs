@@ -186,6 +186,10 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PANELS_NET_CLASSES_COLOR, "Colour"),
     (ids::PANELS_NET_CLASSES_WIDTH, "Width (mm)"),
     (ids::PANELS_NET_CLASSES_LINE, "Line"),
+    (ids::PANELS_NET_CLASSES_LINE_DEFAULT, "Default"),
+    (ids::PANELS_NET_CLASSES_LINE_SOLID, "Solid"),
+    (ids::PANELS_NET_CLASSES_LINE_DASHED, "Dashed"),
+    (ids::PANELS_NET_CLASSES_LINE_DOTTED, "Dotted"),
     (ids::PANELS_NET_CLASSES_NETS, "Nets"),
     (ids::PANELS_NET_CLASSES_PATTERNS, "Patterns"),
     (ids::PANELS_COMPONENT_SHEET_SECTION_COMPONENT, "Component"),
@@ -390,4 +394,115 @@ fn the_rotation_pick_list_is_typed() {
 /// The name a rotation entry shows.
 fn properties_parameters_rotation_label(i18n: &I18n, degrees: f64) -> String {
     crate::panels::properties_parameters::rotation_choice(i18n, degrees).label
+}
+
+/// A panel context with one object of `kind` selected and `info` its rows.
+fn one_selected(kind: SelectedKindForTest, info: &[(&str, &str)]) -> PanelContext {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.has_schematic = true;
+    ctx.selection_count = 1;
+    ctx.selected_uuid = Some(uuid::Uuid::from_u128(7));
+    ctx.selected_kind = Some(kind);
+    ctx.selection_info = info
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    ctx
+}
+
+type SelectedKindForTest = signex_types::schematic::SelectedKind;
+
+/// The text laid out on the same line as `label`, right of it.
+fn beside<'t>(shown: &'t [LaidOutText], label: &str) -> &'t str {
+    let at = shown
+        .iter()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("{label:?} missing from {shown:#?}"));
+    shown
+        .iter()
+        .filter(|t| (t.bounds.y - at.bounds.y).abs() < 4.0 && t.bounds.x > at.bounds.x)
+        .min_by(|a, b| a.bounds.x.total_cmp(&b.bounds.x))
+        .map_or("", |t| t.text.as_str())
+}
+
+/// The clicked pin's rows pair each label with its own value; a hidden pin
+/// reads Yes.
+#[test]
+fn the_focused_pin_rows_pair_labels_with_their_values() {
+    let ctx = one_selected(
+        SelectedKindForTest::Symbol,
+        &[
+            ("Type", "Symbol"),
+            ("Pin: 1", "ANODE\tPassive\tYes"),
+            ("Focused Pin", "1"),
+        ],
+    );
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "PIN 1"), "{shown:#?}");
+    assert_eq!(beside(&shown, "Designator"), "1");
+    assert_eq!(beside(&shown, "Name"), "ANODE");
+    assert_eq!(beside(&shown, "Electrical Type"), "Passive");
+    assert_eq!(beside(&shown, "Hidden"), "Yes");
+}
+
+/// A selected Reference field says so on its Field row.
+#[test]
+fn the_field_row_names_the_selected_field() {
+    let info = [("Type", "Symbol Field")];
+    let reference = one_selected(SelectedKindForTest::SymbolRefField, &info);
+    assert_eq!(beside(&texts(&reference), "Field"), "Reference");
+    let value = one_selected(SelectedKindForTest::SymbolValField, &info);
+    assert_eq!(beside(&texts(&value), "Field"), "Value");
+}
+
+/// The Border Colour row opens the border picker and the Fill Colour row
+/// the fill picker.
+#[test]
+fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
+    let id = uuid::Uuid::from_u128(9);
+    let mut ctx = one_selected(SelectedKindForTest::ChildSheet, &[("Type", "Sheet Symbol")]);
+    ctx.selected_child_sheet = Some(signex_types::schematic::ChildSheet {
+        uuid: id,
+        name: "Power".into(),
+        filename: "power.snxsch".into(),
+        position: signex_types::schematic::Point::new(10.0, 10.0),
+        size: (40.0, 30.0),
+        stroke_width: 0.0,
+        fill: signex_types::schematic::FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    });
+    let shown = texts(&ctx);
+    let click = |label: &str| {
+        let at = shown
+            .iter()
+            .find(|t| t.text == label)
+            .unwrap_or_else(|| panic!("{label:?} missing from {shown:#?}"));
+        let swatch = iced::Point::new(
+            at.bounds.x + 96.0 + 30.0,
+            at.bounds.y + at.bounds.height / 2.0,
+        );
+        crate::layout_probe::messages_on_click_at(
+            view_panel(PanelKind::Properties, &ctx),
+            WINDOW,
+            None,
+            swatch,
+        )
+    };
+    assert!(
+        click("Border Colour")
+            .iter()
+            .any(|m| matches!(m, PanelMsg::ToggleChildSheetBorderPicker(i) if *i == id)),
+        "Border Colour opens the border picker"
+    );
+    assert!(
+        click("Fill Colour")
+            .iter()
+            .any(|m| matches!(m, PanelMsg::ToggleChildSheetFillPicker(i) if *i == id)),
+        "Fill Colour opens the fill picker"
+    );
 }

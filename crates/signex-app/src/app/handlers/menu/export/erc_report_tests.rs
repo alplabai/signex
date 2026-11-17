@@ -130,6 +130,14 @@ fn the_refusal_card_renders_the_menu_path_in_the_view() {
         !xa.iter().any(|t| t.contains("Electrical Rules Check")),
         "the menu path follows the language switch: {xa:#?}"
     );
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let card = notice.detail.render(&*app.ui_state.i18n);
+    let path = crate::menu_bar::erc_menu_path().render(&*app.ui_state.i18n);
+    assert!(card.contains(&path), "{card:?} names {path:?}");
+    assert!(
+        xa.contains(&card),
+        "the card still shows, in en-XA: {xa:#?}"
+    );
 }
 
 #[test]

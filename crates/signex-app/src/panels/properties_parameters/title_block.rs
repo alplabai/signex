@@ -176,3 +176,18 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
     )
     .boxed()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each field's catalog name reads as `TitleBlockField::label`, the
+    /// English the panel showed before.
+    #[test]
+    fn each_field_keeps_its_english_name() {
+        let en = signex_i18n::I18n::en_us();
+        for field in TitleBlockField::ALL {
+            assert_eq!(en.message_plain(field.message(), &[]), field.label());
+        }
+    }
+}

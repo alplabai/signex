@@ -205,7 +205,8 @@ properties-sheet-color-white = White
 properties-sheet-color-dark-gray = Dark Gray
 properties-sheet-color-light-gray = Light Gray
 properties-sheet-color-cream = Cream
-# A sheet colour from the file that is no preset. $hex is its #RRGGBB code.
+# A sheet colour from the file that is no preset. $hex is its code as
+# #rrggbbaa (lowercase, eight digits).
 properties-sheet-color-custom = Custom ({ $hex })
 properties-format-template = Template
 properties-format-standard = Standard

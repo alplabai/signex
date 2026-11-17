@@ -218,4 +218,23 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
         !xa.iter().any(|t| t.contains(REFUSED)),
         "the refusal follows the language switch: {xa:#?}"
     );
+    let refusal = app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .and_then(|session| session.refusal.as_ref())
+        .expect("the refusal")
+        .render(&*app.ui_state.i18n);
+    let card = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("the card")
+        .detail
+        .render(&*app.ui_state.i18n);
+    assert!(card.contains(&refusal), "{card:?} carries {refusal:?}");
+    assert!(
+        xa.contains(&card),
+        "the card still shows, in en-XA ({card:?}): {xa:#?}"
+    );
 }

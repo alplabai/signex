@@ -5,6 +5,7 @@
 //! `signex_engine::NetClassCommand`; nothing here mutates the table.
 
 use super::*;
+use crate::choice::{Choice, chosen};
 use crate::icons;
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{Spacing, TypeScale, ti};
@@ -302,10 +303,13 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
                 NetClassField::Width,
                 &panel.draft.width,
             ));
-            c = c.push(form_pick_row(
+            let lines = Choice::named(&ClassLine::options(), ClassLine::label, i18n);
+            let current = ClassLine(panel.classes[selected].style.line);
+            let current = chosen(&lines, &current).unwrap_or_else(|| lines[0].clone());
+            c = c.push(form_choice_row(
                 t!(i18n, ids::PANELS_NET_CLASSES_LINE),
-                ClassLine::options(),
-                ClassLine(panel.classes[selected].style.line),
+                lines,
+                current,
                 |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
                 muted,
             ));
@@ -449,6 +453,24 @@ fn commit_row<'a>(
 mod tests {
     use super::NetClassChoice;
 
+    /// #2059: each Line entry reads as the `Display` text it had, and a
+    /// choice is found by its value.
+    #[test]
+    fn each_line_style_keeps_its_english_name() {
+        use super::{Choice, ClassLine, I18n, chosen};
+        let en = I18n::en_us();
+        let options = ClassLine::options();
+        let choices = Choice::named(&options, ClassLine::label, &en);
+        assert_eq!(options.len(), 4);
+        for line in options {
+            assert_eq!(
+                chosen(&choices, &line).map(|c| c.label),
+                Some(line.to_string()),
+                "{line:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_class_named_like_the_clear_entry_is_shown_distinctly() {
         let clear = NetClassChoice::NoClass.to_string();
@@ -469,6 +491,16 @@ impl ClassLine {
         std::iter::once(Self(None))
             .chain(NetLineStyle::ALL.iter().map(|line| Self(Some(*line))))
             .collect()
+    }
+
+    /// The choice's name in the Line pick list.
+    fn label(self) -> MessageId {
+        match self.0 {
+            None => ids::PANELS_NET_CLASSES_LINE_DEFAULT,
+            Some(NetLineStyle::Solid) => ids::PANELS_NET_CLASSES_LINE_SOLID,
+            Some(NetLineStyle::Dashed) => ids::PANELS_NET_CLASSES_LINE_DASHED,
+            Some(NetLineStyle::Dotted) => ids::PANELS_NET_CLASSES_LINE_DOTTED,
+        }
     }
 }
 

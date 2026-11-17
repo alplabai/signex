@@ -178,8 +178,14 @@ impl I18n {
     }
 
     /// Render `id`. A message the locale lacks falls back to `en-US`; one
-    /// `en-US` lacks too shows its id and is logged.
+    /// `en-US` lacks too shows its id and is logged. A nested message
+    /// argument is rendered first, in this language, as plain text.
     pub fn message(&self, id: MessageId, args: &[(&str, Arg)]) -> Localized {
+        let args: Vec<(&str, Arg)> = args
+            .iter()
+            .map(|(name, arg)| (*name, arg.rendered_with(self)))
+            .collect();
+        let args = args.as_slice();
         if let Some(done) = bundle::render(&self.primary, id.as_str(), args) {
             return self.finish(id, done);
         }

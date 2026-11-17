@@ -34,6 +34,10 @@ define_ids! {
     PANELS_NET_CLASSES_COLOR = "panels-net-classes-color";
     PANELS_NET_CLASSES_WIDTH = "panels-net-classes-width";
     PANELS_NET_CLASSES_LINE = "panels-net-classes-line";
+    PANELS_NET_CLASSES_LINE_DEFAULT = "panels-net-classes-line-default";
+    PANELS_NET_CLASSES_LINE_SOLID = "panels-net-classes-line-solid";
+    PANELS_NET_CLASSES_LINE_DASHED = "panels-net-classes-line-dashed";
+    PANELS_NET_CLASSES_LINE_DOTTED = "panels-net-classes-line-dotted";
     PANELS_NET_CLASSES_NETS = "panels-net-classes-nets";
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";

@@ -539,6 +539,11 @@ panels-net-classes-name = Name
 panels-net-classes-color = Colour
 panels-net-classes-width = Width (mm)
 panels-net-classes-line = Line
+# Line pick-list entries. Default follows the project's line style.
+panels-net-classes-line-default = Default
+panels-net-classes-line-solid = Solid
+panels-net-classes-line-dashed = Dashed
+panels-net-classes-line-dotted = Dotted
 panels-net-classes-nets = Nets
 panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name

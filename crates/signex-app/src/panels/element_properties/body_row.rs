@@ -37,16 +37,6 @@ impl BodyChoice {
     }
 }
 
-impl std::fmt::Display for BodyChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Normal => "Normal",
-            Self::Alternate => "Alternate (De Morgan)",
-            Self::AlternateMissing => "Alternate (not in symbol; drawn as Normal)",
-        })
-    }
-}
-
 impl BodyChoice {
     /// The entry's name in the drop-down.
     fn label(self) -> MessageId {
@@ -109,5 +99,34 @@ pub(super) fn push_body_row<'a>(
             iced::widget::tooltip::Position::Bottom,
         ))),
         _ => c,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::choice::chosen;
+
+    /// Each entry reads as the `Display` text it had before #2059 part C,
+    /// and a choice is found by its value.
+    #[test]
+    fn each_body_entry_keeps_its_english_name() {
+        let en = I18n::en_us();
+        let all = [
+            (BodyChoice::Normal, "Normal"),
+            (BodyChoice::Alternate, "Alternate (De Morgan)"),
+            (
+                BodyChoice::AlternateMissing,
+                "Alternate (not in symbol; drawn as Normal)",
+            ),
+        ];
+        let choices = Choice::named(&all.map(|(b, _)| b), BodyChoice::label, &en);
+        for (body, english) in all {
+            assert_eq!(en.message_plain(body.label(), &[]), english, "{body:?}");
+            assert_eq!(
+                chosen(&choices, &body).map(|c| c.label).as_deref(),
+                Some(english)
+            );
+        }
     }
 }

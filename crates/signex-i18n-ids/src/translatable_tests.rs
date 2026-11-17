@@ -54,10 +54,20 @@ fn a_language_switch_re_renders_the_nested_message_too() {
     assert_eq!(text.render(&Fake("tr")), "tr:outer(menu=tr:inner())");
 }
 
+/// Verbatim text inside a nested message passes through unchanged. It sits
+/// one level down because, at the top level, verbatim text and its
+/// unrendered fallback read the same; under a catalog message, a skipped
+/// render would show `middle` instead.
 #[test]
 fn a_nested_verbatim_text_passes_through() {
-    let text = Translatable::new(OUTER).arg("path", Translatable::from(UserText::new("a/b")));
-    assert_eq!(text.render(&Fake("tr")), "tr:outer(path=a/b)");
+    let text = Translatable::new(OUTER).arg(
+        "why",
+        Translatable::new(MIDDLE).arg("path", Translatable::from(UserText::new("a/b"))),
+    );
+    assert_eq!(
+        text.render(&Fake("tr")),
+        "tr:outer(why=tr:middle(path=a/b))"
+    );
 }
 
 #[test]
@@ -70,8 +80,14 @@ fn a_nested_message_keeps_equality_and_clone() {
     );
 }
 
+/// A renderer that reads `value()` without `rendered_with` (a third-party
+/// `MessageRenderer`) sees the nested message's id, not a blank.
 #[test]
 fn an_unrendered_nested_message_reads_as_its_id() {
     let arg = Arg::from(Translatable::new(INNER));
     assert_eq!(arg.value(), ArgValue::Text("inner"));
+    assert_eq!(
+        arg.rendered_with(&Fake("en")).value(),
+        ArgValue::Text("en:inner()")
+    );
 }

@@ -91,3 +91,23 @@ pub fn wire_color_row<'a>(
         i18n,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each preset reads as `WireWidthPreset::label`, the English the list
+    /// showed before, and a choice is found by its value.
+    #[test]
+    fn each_width_preset_keeps_its_english_name() {
+        let en = I18n::en_us();
+        let choices = Choice::named(&WireWidthPreset::ALL, preset_label, &en);
+        for preset in WireWidthPreset::ALL {
+            assert_eq!(en.message_plain(preset_label(preset), &[]), preset.label());
+            assert_eq!(
+                chosen(&choices, &preset).map(|c| c.label).as_deref(),
+                Some(preset.label())
+            );
+        }
+    }
+}

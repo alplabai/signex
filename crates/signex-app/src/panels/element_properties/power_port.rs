@@ -263,3 +263,23 @@ pub(super) fn push_power_port_sections<'a>(
 
     col
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each style reads as `PowerPortStyle::label`, the English the list
+    /// showed before, and a choice is found by its value.
+    #[test]
+    fn each_style_keeps_its_english_name() {
+        let en = signex_i18n::I18n::en_us();
+        let choices = Choice::named(&PowerPortStyle::ALL, style_label, &en);
+        for style in PowerPortStyle::ALL {
+            assert_eq!(en.message_plain(style_label(style), &[]), style.label());
+            assert_eq!(
+                chosen(&choices, &style).map(|c| c.label).as_deref(),
+                Some(style.label())
+            );
+        }
+    }
+}

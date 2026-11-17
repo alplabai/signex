@@ -778,3 +778,7 @@ pub fn seg_btn<'a>(
     })
     .boxed()
 }
+
+#[cfg(test)]
+#[path = "general_tests.rs"]
+mod tests;

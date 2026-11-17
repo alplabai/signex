@@ -101,9 +101,10 @@ pub enum ArgValue<'a> {
 }
 
 impl Arg {
-    /// What the argument holds, for the formatter. A nested message gets here only when it skipped
-    /// [`Translatable::render`]; it then reads as its id, the way a message
-    /// missing from the catalog does.
+    /// What the argument holds, for the formatter. A renderer passes every
+    /// argument through [`Arg::rendered_with`] first; a nested message that
+    /// skipped it reads as its id, the way a message missing from the
+    /// catalog does.
     #[doc(hidden)]
     pub fn value(&self) -> ArgValue<'_> {
         match &self.0 {
@@ -113,8 +114,11 @@ impl Arg {
         }
     }
 
-    /// `self`, with a nested message rendered by `renderer` into text.
-    pub(crate) fn rendered_with<R: MessageRenderer + ?Sized>(&self, renderer: &R) -> Self {
+    /// `self`, with a nested message rendered by `renderer` into text; any
+    /// other argument unchanged. Every render path calls it on its
+    /// arguments, so the ids crate itself never renders.
+    #[doc(hidden)]
+    pub fn rendered_with<R: MessageRenderer + ?Sized>(&self, renderer: &R) -> Self {
         match &self.0 {
             ArgKind::Message(message) => Self::from(message.render(renderer)),
             _ => self.clone(),
