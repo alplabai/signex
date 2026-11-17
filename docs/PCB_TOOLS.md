@@ -664,16 +664,18 @@ and runs it as one board undo step. The same command with operands acts on
 the board an agent or the CLI names by `document`, on items named by uuid
 (`id`, `ids`) or by point (`start`, `end`), and answers with what it did:
 the uuids added, removed and changed, and how many places it left out.
-Copper keeps the clearance the board's setup and its project's net classes
-ask for between two nets (`DrcRules::for_board`), measured between pads,
+Copper keeps the clearance the board's setup, its project's net classes and
+the written DRC rules ask for between two nets: the rules a check of the
+board applies (`board_design_rules`), read per net pair
+(`DrcRules::net_pair_clearance`, a class-pair rule included; a rule for one
+object pair takes no part, since the tool knows only the nets), measured between pads,
 tracks and vias as the design rule check measures it, so the result adds
 no clearance or short finding. Fills, Solid Regions and teardrops of other
 nets are kept clear too, though the check does not look at them; pours are
 not obstacles, since a pour's fill clears new copper of other nets. Two
 items on no net count as different nets here, the safe side. A board setup
 clearance the geometry cannot hold refuses the copper tools (stitching,
-teardrops, gloss) instead of guessing a value.
-Written DRC rules are not read yet. The work runs on the update thread,
+teardrops, gloss) instead of guessing a value. The work runs on the update thread,
 like Align. A refusal says why in Messages and changes nothing.
 
 ### Via Stitching
@@ -824,9 +826,15 @@ again on another channel of the same circuit, with its tracks and vias.
   keeps for a device (`CON`, `NUL`, `COM1`, ... with or without a dot after
   it). Saving a name again replaces that block; a name that differs from a
   block's only in case is refused, since a case-blind file system would
-  overwrite that block's file. A save is refused while the project folder is
-  being renamed. If the file cannot be written the block can still be placed
-  until Signex closes, and Messages says so.
+  overwrite that block's file. The case check needs the project's blocks
+  on disk, so a save before they are read reads them first (the menu saves
+  once they land; with operands it answers once they land), and a save is
+  refused when the folder cannot be listed. A save is refused while the
+  project folder is being renamed. One block file is written one save at a
+  time: a save while its file is being written waits for that write to land,
+  and a later save replaces a waiting one, so the file holds the last save.
+  If the file cannot be written the block can still be placed until Signex
+  closes, and Messages says so.
 - **Place**: the board menu lists one Place Reuse Block "<name>" row per
   block of the project, live with one unlocked component selected: the
   anchor. The project's blocks are read once, when a board menu first opens.

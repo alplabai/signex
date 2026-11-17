@@ -29,8 +29,13 @@ the window cannot act on to the Messages panel ("Menu: <id> did nothing:
 No button without a function: `menu_bar/tests/walk.rs` also presses every live
 row in each window state (no document, a project alone, a schematic with and
 without selection, a dirty one, a symbol editor, a footprint editor, a PCB tab,
-an undocked window) and fails if a click moves nothing and starts no job.
-`KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
+an undocked window) and fails if a click moves nothing, starts no job and says
+nothing. A row whose click posts a Messages line on the clicking thread
+(`diagnostics::said_on_this_thread`) counts as live: a board tool with nothing
+to act on says so (Repour on a board with no pour, #2216) instead of changing
+the board. Any `info` or `warn` line counts, so the check does not tell a
+real answer from a "not implemented" line; a handler that only says that is
+still a dead row and a review finding. `KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
 shrink.
 
 A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
@@ -115,8 +120,11 @@ as the Run DRC button of the Messages panel; no keymap preset binds it.
 
 Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
 and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
-DRC results panel and Net Classes panel. Both are greyed while no PCB is
-open, and no keymap preset binds them.
+DRC results panel and the Net Classes panel. DRC Results is greyed while no
+PCB is open. Net Classes is an alias of Design ▸ Net Classes
+(`open_net_classes`), live on a sheet or a board: see
+[Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset
+binds them.
 
 The DRC results panel lists the last run's violations grouped by rule, each
 group with its count. A row shows the severity, what broke, the nets, the
@@ -428,7 +436,10 @@ Rows added by #2416, each a catalog command greyed without a sheet:
   Active Bar's Filter dropdown of the sheet in view.
 - **Design ▸ Net Classes** runs `open_net_classes`, which opens the Net
   Classes panel: the project's net-class table, the same section the sheet's
-  Properties shows.
+  Properties shows. It is live on a sheet or a board (`Needs::NetClassTable`),
+  and Tools ▸ Net Classes (`open_net_classes_panel`) is its alias: one route,
+  one gate, and in the catalog both are `General` commands whose keys work on
+  a sheet or a board tab.
 
 ## Place on a board {#place-board}
 
@@ -637,6 +648,28 @@ will do:
 
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
+
+Place on a sheet has eleven planned commands (#2415), greyed with the planned
+tooltip in every state until their tools are built
+(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
+
+| Submenu | Row | Command |
+|---|---|---|
+| Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
+| Ports & Connectors | Reuse Block... | `place_reuse_block` |
+| Ports & Connectors | Signal Harness | `place_signal_harness` |
+| Ports & Connectors | Harness Connector | `place_harness_connector` |
+| Ports & Connectors | Harness Entry | `place_harness_entry` |
+| Directives | Parameter Set | `place_parameter_set` |
+| Graphics | Elliptical Arc | `draw_elliptical_arc` |
+| Graphics | Ellipse | `draw_ellipse` |
+| Graphics | Round Rectangle | `draw_round_rectangle` |
+| Graphics | Bezier | `draw_bezier` |
+| Graphics | Graphic... | `place_graphic` |
+
+Each one is the row of a planned Active Bar tool. It is not a
+`stub()` row: it names its catalog command and goes live when that tool is
+built, with no menu change.
 
 ## Save and Save As {#file-save}
 

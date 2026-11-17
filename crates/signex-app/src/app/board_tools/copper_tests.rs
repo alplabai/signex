@@ -340,3 +340,75 @@ fn a_teardrop_follows_a_track_that_enters_its_via_off_centre() {
     // The tip sits on the track's two edges, 0.2 mm off the via's axis.
     assert!(near(0.325) && near(0.075), "{:?}", drop.outline);
 }
+
+/// #2451: the copper tools keep the written DRC rules, not only the board
+/// and net-class clearance. A VCC track 0.3 mm from a stitching row: the
+/// board's 0.2 mm lets the row in, a written 0.5 mm VCC rule keeps it out.
+#[test]
+fn stitching_keeps_a_written_clearance_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    board.nets[1].name = "VCC".into();
+    let vcc = board
+        .segments
+        .iter_mut()
+        .find(|s| s.uuid == id(11))
+        .unwrap();
+    vcc.start.y = -1.275;
+    vcc.end.y = -1.275;
+    let (mut app, path) = app_with(dir.path(), board);
+    app.ui_state.machine_drc_rules = signex_types::project::DrcRuleSet::default();
+    // Edge to edge from the VCC track: via radius 0.3, track half width 0.125.
+    let gaps = |app: &Signex| -> Vec<f64> {
+        board_of(app, &path)
+            .vias
+            .iter()
+            .filter(|v| v.uuid != id(20))
+            .map(|v| (v.position.y + 1.275).abs() - 0.425)
+            .collect()
+    };
+    let checked = |app: &Signex| {
+        let board = board_of(app, &path);
+        let (rules, _) = app.board_design_rules(&path, board).expect("rules");
+        let report = signex_drc::run(board, &rules);
+        report.count(ViolationKind::Short) + report.count(ViolationKind::Clearance)
+    };
+    let before = live(&app, &path);
+
+    // With no written rule the board's 0.2 mm lets a row in 0.3 mm off.
+    select_zone(&mut app, &path, id(10));
+    run(&mut app, "stitch_vias");
+    assert!(gaps(&app).iter().any(|g| *g < 0.5), "{:?}", gaps(&app));
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before);
+
+    app.ui_state.machine_drc_rules.dsl = Some(
+        "rule vcc_wide on clearance when net == \"VCC\" require clearance >= 0.5mm then error"
+            .into(),
+    );
+    select_zone(&mut app, &path, id(10));
+    run(&mut app, "stitch_vias");
+    let kept = gaps(&app);
+    assert!(!kept.is_empty(), "the rest of the area is stitched");
+    assert!(kept.iter().all(|g| *g >= 0.5 - 1e-9), "{kept:?}");
+    assert_eq!(
+        checked(&app),
+        0,
+        "the rule's DRC finds nothing the tool wrote"
+    );
+    undo(&mut app);
+
+    let outcome = run_operands(
+        &mut app,
+        &path,
+        "stitch_vias",
+        &["start=-4,-4", "end=4,4", "net=GND", "pitch=2"],
+    );
+    assert!(answered_uuids(&outcome, "added") > 0);
+    assert!(
+        gaps(&app).iter().all(|g| *g >= 0.5 - 1e-9),
+        "{:?}",
+        gaps(&app)
+    );
+    assert_eq!(checked(&app), 0);
+}

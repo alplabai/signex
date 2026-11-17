@@ -9,6 +9,11 @@ use std::path::{Path, PathBuf};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::PcbBoard;
 
+use super::SavedBlock;
+
+/// A block file write: what was saved and the file's text.
+pub(crate) type BlockWrite = (SavedBlock, String);
+
 /// The folder of a project's blocks, under the project folder.
 pub(crate) const BLOCK_FOLDER: &str = "reuse-blocks";
 
@@ -45,6 +50,10 @@ struct ProjectBlocks {
 #[derive(Debug, Clone, Default)]
 pub struct ReuseBlockStore {
     projects: HashMap<PathBuf, ProjectBlocks>,
+    /// Block files being written, each with the newest save that waits for
+    /// that write to land: one file is never written twice at once, so the
+    /// last save is what the file holds.
+    writes: HashMap<PathBuf, Option<BlockWrite>>,
 }
 
 impl ReuseBlockStore {
@@ -82,6 +91,32 @@ impl ReuseBlockStore {
             .or_default()
             .blocks
             .insert(name.to_string(), block);
+    }
+
+    /// The write to start for `write`: itself, or none while its file is
+    /// being written, when it waits for that write to land instead. A later
+    /// save of the file replaces a waiting one; its text is older.
+    pub(crate) fn begin_write(&mut self, write: BlockWrite) -> Option<BlockWrite> {
+        match self.writes.get_mut(&write.0.file) {
+            Some(waiting) => {
+                *waiting = Some(write);
+                None
+            }
+            None => {
+                self.writes.insert(write.0.file.clone(), None);
+                Some(write)
+            }
+        }
+    }
+
+    /// The write of `file` landed: the save that waited for it, to write
+    /// now, if one did.
+    pub(crate) fn end_write(&mut self, file: &Path) -> Option<BlockWrite> {
+        let next = self.writes.get_mut(file)?.take();
+        if next.is_none() {
+            self.writes.remove(file);
+        }
+        next
     }
 
     /// Take a read of the project's folder in. A block saved while the read
@@ -202,6 +237,37 @@ mod tests {
         assert!(checked_name("../amp").is_err(), "no folder steps");
         assert!(checked_name("amp.").is_err(), "no trailing dot");
         assert!(checked_name(&"x".repeat(MAX_NAME_CHARS + 1)).is_err());
+    }
+
+    fn write(file: &str, text: &str) -> BlockWrite {
+        let saved = SavedBlock {
+            name: "amp".into(),
+            file: PathBuf::from(file),
+            footprints: 0,
+            tracks: 0,
+            vias: 0,
+        };
+        (saved, text.into())
+    }
+
+    /// #2451: a second save of one file waits for the first write to land,
+    /// a third replaces the second, and the last save is written last.
+    #[test]
+    fn writes_of_one_file_run_one_at_a_time_and_the_newest_waits() {
+        let mut store = ReuseBlockStore::default();
+        assert_eq!(store.begin_write(write("a", "1")), Some(write("a", "1")));
+        assert_eq!(store.begin_write(write("a", "2")), None);
+        assert_eq!(store.begin_write(write("a", "3")), None);
+        assert_eq!(
+            store.begin_write(write("b", "1")),
+            Some(write("b", "1")),
+            "another file is written at once"
+        );
+        assert_eq!(store.end_write(Path::new("a")), Some(write("a", "3")));
+        assert_eq!(store.begin_write(write("a", "4")), None, "3 is running");
+        assert_eq!(store.end_write(Path::new("a")), Some(write("a", "4")));
+        assert_eq!(store.end_write(Path::new("a")), None);
+        assert_eq!(store.begin_write(write("a", "5")), Some(write("a", "5")));
     }
 
     #[test]

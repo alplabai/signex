@@ -806,12 +806,12 @@
   },
   {
     "id": "open_net_classes",
-    "group": "Schematic",
+    "group": "General",
     "category": "design"
   },
   {
     "id": "open_net_classes_panel",
-    "group": "Pcb",
+    "group": "General",
     "category": "design"
   },
   {

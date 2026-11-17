@@ -550,14 +550,15 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #2416: Design ▸ Net Classes opens the panel of the project's net-class
-    // table. No default key.
+    // table, on a sheet or a board (`open_net_classes_panel` is its alias;
+    // both keys work in those two contexts). No default key.
     CommandMetadata {
         id: "open_net_classes",
         category: "design",
         label: command_ids::CMD_OPEN_NET_CLASSES,
         menu_label: Some(command_ids::CMD_MENU_OPEN_NET_CLASSES),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
