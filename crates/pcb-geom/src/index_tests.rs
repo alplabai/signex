@@ -491,9 +491,17 @@ fn a_zone_is_not_picked_inside_its_holes() {
             Point::new(x, y + side),
         ]
     };
-    let mut pour = area(id(7), "pour", &[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+    let mut pour = area(
+        id(7),
+        "pour",
+        &[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+    );
     pour.holes = vec![square(4.0, 4.0, 2.0), square(-1.0, 7.0, 2.0)];
-    assert_eq!(pour.usable_holes(), vec![0], "the second hole crosses the outline");
+    assert_eq!(
+        pour.usable_holes(),
+        vec![0],
+        "the second hole crosses the outline"
+    );
     b.zones = vec![pour];
     let index = BoardIndex::build_selectable(&b);
     let zone = ItemRef::Zone {
@@ -502,12 +510,19 @@ fn a_zone_is_not_picked_inside_its_holes() {
     };
     let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
     assert_eq!(index.hit_point(at(2.0, 2.0), 0), vec![zone], "the copper");
-    assert!(index.hit_point(at(5.0, 5.0), 0).is_empty(), "inside the hole");
+    assert!(
+        index.hit_point(at(5.0, 5.0), 0).is_empty(),
+        "inside the hole"
+    );
     assert!(
         index.hit_point(at(5.0, 5.0), MM / 10).is_empty(),
         "inside the hole, the edge out of reach"
     );
-    assert_eq!(index.hit_point(at(4.0, 5.0), 0), vec![zone], "the hole's edge");
+    assert_eq!(
+        index.hit_point(at(4.0, 5.0), 0),
+        vec![zone],
+        "the hole's edge"
+    );
     assert_eq!(
         index.hit_point(at(4.05, 5.0), MM / 10),
         vec![zone],

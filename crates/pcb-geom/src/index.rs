@@ -15,11 +15,11 @@ use crate::body::footprint_body;
 use crate::free::{arc_is_copper, arc_shapes, dimension_shapes, free_pad_shape, text_shape};
 use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
-use crate::shape::Shape;
 use crate::region::Polygon;
+use crate::shape::Shape;
 use crate::transform::pad_shape;
-use crate::zone_fill::zone_area;
 use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
+use crate::zone_fill::zone_area;
 
 /// A model item the index holds, by identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

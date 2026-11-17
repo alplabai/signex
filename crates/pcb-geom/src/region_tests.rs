@@ -163,6 +163,12 @@ fn a_point_in_a_hole_is_not_in_the_polygon() {
     assert!(!area.contains_point(p(4, 5)), "on the hole's edge");
     assert!(!area.contains_point(p(11, 5)), "outside");
     let degenerate = Polygon::new(square(0, 0, 10 * MM), vec![vec![p(4, 4), p(6, 6)]]);
-    assert!(degenerate.contains_point(p(5, 5)), "a two-point hole cuts nothing");
-    assert!(!Polygon::default().contains_point(p(0, 0)), "an empty polygon holds nothing");
+    assert!(
+        degenerate.contains_point(p(5, 5)),
+        "a two-point hole cuts nothing"
+    );
+    assert!(
+        !Polygon::default().contains_point(p(0, 0)),
+        "an empty polygon holds nothing"
+    );
 }
