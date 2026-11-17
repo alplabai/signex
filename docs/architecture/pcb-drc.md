@@ -383,8 +383,8 @@ applied.
   placement (position, turn, side) with its own type, shape, position,
   size, turn, corner ratio, drill, layers, number and net; a footprint's
   placement, library id and body (`footprint_body`: the courtyard's extent,
-  else the pads'); a keepout's outline, layers and what it forbids. Lengths and angles are quantised to stored nm, so a save and a
-  load keep it. Nets are named, not numbered, so a renumbering keeps it. A
+  else the pads'); a keepout's outline, layers and what it forbids. Lengths
+  and angles are quantised to stored nm, so a save and a load keep it. Nets are named, not numbered, so a renumbering keeps it. A
   designator, value or any item the finding does not name never changes it.
 - **Matching**: a complete waiver (reason and author set) with the same rule
   and ids hides the finding when the fingerprints agree. When they differ,
