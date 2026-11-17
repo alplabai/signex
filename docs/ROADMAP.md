@@ -2,7 +2,8 @@
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
 > reality 2026-11-07 (PCB design moved first, §9); Pro planning moved to
-> the private Pro repository 2026-11-17 (§9).
+> the private Pro repository 2026-11-17 (§9); Community goal decisions
+> 2026-11-17 (§9).
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the release axis. The ordering, names and gates of every planned
@@ -115,8 +116,8 @@ stages, in order:
 | Pre-1.0 (shipped, §6) | Foundation and editor build-out. No public users. |
 | Community Preview | First public release. Community schematic editor is real. |
 | PCB Design | PCB layout from the schematic and routing, built together. |
+| Schematic Refinement | Schematic-editor refinement. Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before the Community Release. |
 | Community Release | Manufacturing output for the boards PCB Design produces. |
-| Schematic Refinement | Schematic-editor refinement. Deferred until PCB Design ships. |
 | PCB build-out | 3D, advanced PCB, high-speed, the rest of the router. |
 | Plugin System | The plugin system. |
 | Simulation band | Simulation, advanced output, foreign-format import. |
@@ -154,13 +155,17 @@ feature *can* ship, not whether it ships at all.
 | Tier   | Meaning                                              | Ships in       | Label |
 |:------:|------------------------------------------------------|----------------|-------|
 | **P0** | Required for the Community Preview. Cannot ship Community without it. | Up to and including Community Preview | `tier: p0` |
-| **P1** | Required for PCB Design, or a professional schematic feature users expect. | PCB Design, then Schematic Refinement | `tier: p1` |
+| **P1** | Required for PCB Design, or a professional schematic feature users expect. | PCB Design, then Schematic Refinement, both before the Community Release | `tier: p1` |
 | **P2** | Differentiator.                                       | PCB Routing through the Community Release | `tier: p2` |
 | **P3** | Nice-to-have. Stable core required first.             | After the Community Release (the P3 bands of §8) | `tier: p3` |
 
 **PCB Design first (2026-11-07):** the plans of the PCB Design gate (§8) are
 P1 and are scheduled first. Schematic Refinement issues keep their
-`tier: p1` label but wait until PCB Design ships; they are not re-triaged.
+`tier: p1` label; they are not re-triaged.
+
+**Schematic Refinement before the Community Release (2026-11-17):**
+Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before the
+Community Release. Their tier stays P1.
 
 **Decision rule:** if a feature is proposed for an earlier plan than
 its tier allows, the answer is "after the current target ships." This is
@@ -293,7 +298,7 @@ macOS, Linux.
   (`docs/RELEASE_SIGNING.md`), so Windows and macOS first-launch warnings apply.
 - *Zero `tier: p0` bugs:* no open issue carries both `tier: p0` and
   `type: bug`. Open `tier: p0` issues exist that are not bugs (#859, #322,
-  #271, #278, #115).
+  #271, #278). #115 moved to the Pro repository on 2026-11-17.
 
 A release candidate is a tag of the form `vYY.MM.MICRO-rc.N`; `release.yml`
 builds the same packages as a final release and publishes them as a
@@ -303,8 +308,10 @@ pre-release. (`v1.0.0-rc.1`, the last SemVer tag, was the first candidate.)
 
 Maintainer decision, 2026-11-07: designing boards from the schematic comes
 first after the Community Preview, and it ships in the first release after
-it. The plans below are built in parallel. Every other band on this page
-waits until this gate ships: Schematic Refinement, the 3D, Advanced PCB,
+it. The plans below are built in parallel. Advanced Schematic, SCH Tables
+& Docs and Enhanced Output follow and ship before the Community Release
+(2026-11-17). Every other band on this page waits until this gate ships:
+Design Notebook, Block Diagram, the 3D, Advanced PCB,
 High-Speed, HQ Render and Animation bands, the Plugin System and
 Simulation. The PCB Viewer gate is folded into the PCB Layout plan here: a
 viewer for boards that nothing in Signex can create is not a milestone
@@ -329,8 +336,25 @@ title, `AI Design`, so existing issues keep their milestone.
 
 ### Schematic Refinement
 
-**Deferred until PCB Design ships (2026-11-07).** The Command Registry
-(#278) moved from Advanced Schematic to PCB Design.
+**Advanced Schematic, SCH Tables & Docs and Enhanced Output ship before
+the Community Release (2026-11-17).** Design Notebook and Block Diagram
+still wait until PCB Design ships. The Command Registry (#278) moved from
+Advanced Schematic to PCB Design.
+
+**Rules for the whole band (2026-11-17):**
+
+- **Format versioning lands first.** Before any Schematic Refinement
+  addition to a file format, every `.snx*` file carries a version stamp,
+  Signex refuses to save over a file written by a newer version, and the
+  user gets a clear error saying so (#2207).
+- **Signex names.** Plan text and the UI use Signex's own names: Object
+  List, PDF Export, Export Job, Net Blanket and the Net Parameters
+  directive. Harnesses keep the generic name.
+- **Dock panels.** The Object List, the compiled design view and the
+  Parameter Manager are dock panels.
+- **Rich notes.** Typst (Apache-2.0) is allowed as a dependency for rich
+  text notes (#1114). A project carries a font (#1178) only when the
+  font's licence permits redistribution.
 
 Sub-versions are enumerated because they are staged releases, not
 milestones-of-convenience: each one ships on its own. Order within a band
@@ -342,7 +366,21 @@ between bands.
 
 | Plan | Scope |
 |------|-------|
-| **Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager; net classes + diff-pair classes; smart paste (rubber stamp, paste array); change component; Command Registry (#278: dispatch, command palette, args, CLI, plugin hooks) |
+| **Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager, Object List and compiled design view as dock panels; net classes + diff-pair classes, assigned with a Net Blanket or a Net Parameters directive; smart paste (rubber stamp, paste array); change component; Command Registry (#278: dispatch, command palette, args, CLI, plugin hooks) |
+
+**Exit criteria (draft, 2026-11-17, for maintainer review):**
+
+- A 4-channel design with two variants exports a correct per-variant BOM
+  and PDF; the project is a fixture with a golden BOM per variant.
+- A nested harness connects through its entries, and the netlist of a
+  harness fixture matches its golden netlist.
+- Net classes and diff-pair classes assigned with a Net Blanket and with a
+  Net Parameters directive appear in the netlist and reach the board through
+  Update PCB.
+- A Parameter Manager edit across several sheets is one undo step; the
+  Object List and the Parameter Manager show the same values as the canvas.
+- Every new feature is a catalog command with tests, and every new file
+  row round-trips in the fixture corpus.
 
 #### SCH Tables & Docs (P1)
 
@@ -350,11 +388,32 @@ between bands.
 |------|-------|
 | **SCH Tables & Docs** | Schematic tables (pin assignment, register map, connector pinout); auto-generated Table of Contents for multi-sheet designs; drawing tools (bezier, dimension annotation); named unions (hierarchical groups with tags) |
 
+**Exit criteria (draft, 2026-11-17, for maintainer review):**
+
+- Tables of contents and pin tables render on the canvas and export to PDF
+  and match their golden output.
+- A table of contents follows a sheet that is added, renamed or removed,
+  and a pin table follows a pin edit on its part.
+- A rich text note renders the same on the canvas and in the PDF; a
+  project-carried font is used by both.
+- Bezier and dimension objects round-trip in the fixture corpus.
+- Every new feature is a catalog command with tests.
+
 #### Enhanced Output (P1)
 
 | Plan | Scope |
 |------|-------|
-| **Enhanced Output** | Smart PDF with bookmarks + PDF layers; variant-specific BOM export; watermarking (DRAFT / CONFIDENTIAL overlay); Output Job file; workspace layout save/restore |
+| **Enhanced Output** | PDF Export with bookmarks + PDF layers; variant-specific BOM export; watermarking (DRAFT / CONFIDENTIAL overlay); Export Job file; workspace layout save/restore |
+
+**Exit criteria (draft, 2026-11-17, for maintainer review):**
+
+- An Export Job reproduces a full PDF, BOM and netlist set headless, and
+  two runs on the same project give the same files.
+- The exported PDF has a bookmark per sheet and per part, and its PDF
+  layers and watermark show in a standard PDF reader.
+- A variant BOM export of a fixture project matches its golden BOM.
+- Saved workspace layouts restore the same panels and documents.
+- Every new feature is a catalog command with tests.
 
 #### Design Notebook (P1)
 
@@ -404,13 +463,18 @@ management land in this band.
 | Plan | Scope |
 |------|-------|
 | **PCB Routing** | Router stage 1, greedy single-trace. `pcb-geom` crate (polygon offset, R-tree, Delaunay, Minkowski); `pcb-router` skeleton (session model, preview / commit); single-trace routing with 45° / 90° / arc45 / arc90 corners; via placement (through / blind / buried); net-class editor (width, clearance, via size per class); live DRC feedback with the 15 base rules (`signex-drc`) |
-| **Router: Walkaround** | Obstacle graph with clearance-inflated Minkowski offsets; A* pathfinder with corner / via / layer costs; corner-insertion pass preserving 45° / 90° / arc style; incremental debounced DRC on the proposed path; routing test-corpus tooling (50 open-source PCBs) |
+| **Router: Walkaround** | Obstacle graph with clearance-inflated Minkowski offsets; A* pathfinder with corner / via / layer costs; corner-insertion pass preserving 45° / 90° / arc style; incremental debounced DRC on the proposed path; routing test-corpus tooling (50 boards under permissive licences, see below) |
 | **Router: Push-and-Shove** | Topology-preserving shove solver with fixed-point iteration; rigidity heuristics (pad / via / edge proximity); via shove within a rigidity budget; preview buffer + commit barrier with Escape rollback; the whole shove cascade undone as one action |
 | **Router: Diff Pairs & Length Tuning** | Coupled two-net router with gap control; length meander generator (accordion / trombone / sawtooth); length and skew reporting per net and per pair; teardrops as a design rule and a per-pad property |
 | **Copper Pour** | Zone fill engine (polygon boolean via `pcb-geom`); thermal relief + island removal; fill priority and on-demand fill; back annotation / ECO |
 
 Routing is the hardest single feature in EDA and is fundamentally one
 engineer's deep work. See `PCB_ROUTER_PLAN.md` for the authoritative plan.
+
+**Routing test corpus (2026-11-17):** the corpus boards come only from
+permissive licences (MIT, CC-BY, CERN-OHL-P), imported through the import
+companion. Each file records its source and licence in a manifest. The
+corpus lives outside `crates/`, in `testdata/routing-corpus/`.
 
 **Exit criteria:** 50-board fixture corpus routes end-to-end with no
 panic, stuck state, or geometry corruption across 10,000 random routing
@@ -427,8 +491,8 @@ editor: design, validate, route, DRC, and export to fabrication.
 
 | Plan | Scope |
 |------|-------|
-| **Community Release** | Gerber RS-274X + X2 export; Excellon drill export; ODB++ export |
-| **Assembly & 3D Export** | Pick-and-place CSV; IPC-2581 export; STEP 3D export (board body); assembly SVG |
+| **Community Release** | Gerber RS-274X + X2 export; Excellon drill export; ODB++ export; added 2026-11-17: PCB rooms from schematic sheets (#2457); Command Log panel (#2458); PCB status-bar counters (#2460); compare board with schematic (#2462); agent-socket coverage of the existing catalog commands (#2470) |
+| **Assembly & 3D Export** | Pick-and-place CSV; IPC-2581 export; STEP 3D export (board body), written with Signex's own STEP translator from MCAD Kernel, pulled forward (2026-11-17); assembly SVG |
 | **Scripted Demo Videos** | Scripts that run catalog commands through the existing agent socket (or the CLI), with no second control port; one story script per feature (schematic to board, rules, routing); screen capture with a drawn pointer, click ripples and captions; idle stretches cut; MP4 and GIF output for the README, the docs and the website, re-recorded on every release so the videos never go stale |
 
 **Exit criteria:** a complete project can be designed, validated, and
@@ -582,7 +646,10 @@ scoped. Work on it starts once the schematic and PCB editors are complete
 and the release that ships them, with its demo videos and website, is out.
 The goal is one tool for
 every electronic and mechanical design. Its hard dependencies are the 3D Viewer
-band and the STEP 3D export in Assembly & 3D Export. Enclosure Fit Check needs
+band and the STEP 3D export in Assembly & 3D Export. The STEP translator of
+MCAD Kernel is pulled forward into the Community Release (2026-11-17):
+Assembly & 3D Export writes the board's STEP with it, so it is built before
+the rest of MCAD Kernel, which stays P3. Enclosure Fit Check needs
 no modelling and comes first; the other plans follow in table order.
 
 ---
@@ -732,6 +799,32 @@ What that promotion does and does not mean:
 - **Sub-version boundaries within a band are the softest thing on this
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
+
+### 2026-11-17 — Community goal decisions
+
+Maintainer decisions (Caner), each also a row in `docs/DECISIONS.md`:
+
+- **Pulled forward:** Advanced Schematic, SCH Tables & Docs and Enhanced
+  Output now ship before the Community Release instead of waiting for PCB
+  Design to ship; their tier stays P1. Each band gets draft exit criteria
+  (§8). Design Notebook and Block Diagram keep their place.
+- **Scope added to the Community Release plan:** PCB rooms from schematic
+  sheets (#2457), the Command Log panel (#2458), PCB status-bar counters
+  (#2460), compare board with schematic (#2462) and agent-socket coverage
+  of the existing catalog commands (#2470). Nothing moved out of the plan;
+  the maintainer chose to grow it.
+- **Pulled forward from MCAD (P3):** the STEP translator of MCAD Kernel, so
+  the Community Release writes the board's STEP with Signex's own
+  translator.
+- **Routing test corpus:** boards under permissive licences only, with
+  per-file source and licence, outside `crates/`.
+- **Schematic Refinement rules:** format versioning lands first (#2207);
+  Signex names in the plan text; the Object List, the compiled design view
+  and the Parameter Manager are dock panels; Typst is allowed for rich
+  notes.
+- **New milestone:** `Requirements & Verification` (#2339).
+- **Moved out of this repository:** #115 (library-server hardening) to the
+  Pro repository. #1707 (library packages from a git URL) stays Community.
 
 ### 2026-11-17 — Pro roadmap moved to the private Pro repository
 
@@ -891,3 +984,6 @@ Planned for a **small team**: 2–3 engineers up to the Community Preview, scali
   stays in `.github/milestones.yml` so its issues keep it, with a neutral
   one-line description and no Pro detail. New Pro plans get no public
   milestone. `AI Design` is the milestone of the PCB Design gate (§8).
+- **Plans of a gate** have their own milestones when they ship on their own:
+  `Requirements & Verification` (#2339) is a plan of the PCB Design gate
+  with its own milestone, since it can ship ahead of the gate.
