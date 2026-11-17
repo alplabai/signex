@@ -143,7 +143,12 @@ impl PcbCanvas {
         viewport: Rectangle,
         camera: &BoardCamera,
     ) {
-        paint_texts(frame, self.drag_preview_texts(), camera, viewport);
+        let paint = self
+            .renderer_snapshot
+            .as_ref()
+            .map(|s| s.paint.clone())
+            .unwrap_or_default();
+        paint_texts(frame, self.drag_preview_texts(), &paint, camera, viewport);
     }
 
     /// The carried footprints tessellated for a `viewport` of the highlight

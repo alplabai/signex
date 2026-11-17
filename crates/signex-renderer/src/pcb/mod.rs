@@ -84,6 +84,8 @@ pub struct ZonePolygonInput {
     /// (which is then only stroked); `None` for a zone whose copper is its
     /// outline. Set by [`PcbSnapshot::with_zone_fills`].
     pub fill: Option<Vec<ZoneFillPiece>>,
+    /// The View Options row it belongs to: its transparency (#2363).
+    pub object: BoardObject,
 }
 
 /// Whose colour copper is drawn in: the colour the Layers panel lists that
@@ -154,6 +156,9 @@ pub struct PcbSnapshot {
     /// Footprint silkscreen, fab, assembly and courtyard drawings and the
     /// board's own drawings (#2387), drawn in the overlay buckets.
     pub graphics: Vec<GraphicInput>,
+    /// The view's own layer colours and transparencies (#2363); the board
+    /// text layer reads its colours too.
+    pub paint: BoardPaint,
 }
 
 impl PcbSnapshot {
@@ -173,19 +178,24 @@ impl PcbSnapshot {
 }
 
 mod board_features;
+mod board_paint;
 mod emit;
 mod footprint_text;
 mod graphics;
 mod layer_colour;
+mod layer_pairs;
 mod layer_rows;
 mod layer_sets;
 mod layer_view;
 mod ratsnest;
+mod used_layers;
 mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
+pub use board_paint::{BoardObject, BoardPaint};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
 pub use graphics::{GraphicInput, GraphicShapeInput};
+pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
     signal_layers,
@@ -194,8 +204,9 @@ pub use layer_sets::{
     BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
     listed_layers,
 };
-pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
+pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView, zone_object};
 pub use ratsnest::ratsnest_inputs;
+pub use used_layers::used_layers;
 pub use zone_fill::ZoneFillPiece;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -309,6 +320,14 @@ impl ViewRenderer for PcbRenderer {
         dirty: DirtyFlags,
         scene: &mut Scene,
     ) {
+        // The view's own colours and transparencies over the palette.
+        let painted;
+        let theme = if snapshot.paint.is_default() {
+            theme
+        } else {
+            painted = theme.clone().with_paint(snapshot.paint.clone());
+            &painted
+        };
         if dirty.contains(DirtyFlags::LINES) {
             emit_traces(snapshot, theme, scene);
         }
@@ -707,6 +726,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -720,6 +740,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -733,6 +754,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                object: super::BoardObject::Polygons,
             },
         ];
 

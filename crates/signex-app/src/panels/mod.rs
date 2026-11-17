@@ -146,7 +146,7 @@ pub use pcb_component::{
     PartIdentity, PcbComponentFacts, PcbComponentMsg, PcbFootprintFacts, PcbFootprintTextMsg,
     Shared,
 };
-pub use pcb_layers::PcbLayersPanel;
+pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};

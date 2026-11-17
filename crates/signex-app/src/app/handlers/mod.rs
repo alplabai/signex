@@ -71,6 +71,7 @@ pub(crate) mod pcb_footprint_text;
 pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
+mod pcb_layers_panel;
 #[cfg(test)]
 mod pcb_origin_tests;
 mod pcb_parking;

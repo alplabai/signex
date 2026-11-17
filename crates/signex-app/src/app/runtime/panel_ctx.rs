@@ -526,6 +526,7 @@ impl Signex {
         let properties_tab = self.document_state.panel_ctx.properties_tab;
         let signal_mode = self.document_state.panel_ctx.signal_mode;
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
+        let pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -673,6 +674,7 @@ impl Signex {
             projects_view,
             net_classes,
             pcb_layers,
+            pcb_layers_ui,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
