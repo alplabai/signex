@@ -98,7 +98,10 @@ pub(super) fn project_boms(
     );
     let root_key = sheet_key_with(&root, dir, set.fold);
     if !graph.sheets.contains_key(&root_key) {
-        return Err(format!("the root sheet {} could not be read", root.display()));
+        return Err(format!(
+            "the root sheet {} could not be read",
+            root.display()
+        ));
     }
     let roots = project_roots(root_key, &set, &graph, dir, set.fold);
     let walk = signex_net::ProjectGraph {

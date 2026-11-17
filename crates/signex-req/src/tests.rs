@@ -73,7 +73,13 @@ fn run_report(check: &str, severities: &[Severity]) -> CheckReport {
             key: format!("k{i}"),
         })
         .collect();
-    CheckReport::new(check, findings, Vec::new(), Vec::new(), vec!["a sheet was not read".into()])
+    CheckReport::new(
+        check,
+        findings,
+        Vec::new(),
+        Vec::new(),
+        vec!["a sheet was not read".into()],
+    )
 }
 
 fn row(references: &[&str], fitted: u32, library_row: Option<&str>, mpn: &str) -> BomRow {

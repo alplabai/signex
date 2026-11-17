@@ -179,8 +179,18 @@ pub(crate) fn net_class(board: &Board, classes: &[NetClass], wanted: &NetClassWa
             continue;
         };
         let limits = [
-            ("track width", "trace_width", class.trace_width, wanted.min_trace_width_mm),
-            ("clearance", "clearance", class.clearance, wanted.min_clearance_mm),
+            (
+                "track width",
+                "trace_width",
+                class.trace_width,
+                wanted.min_trace_width_mm,
+            ),
+            (
+                "clearance",
+                "clearance",
+                class.clearance,
+                wanted.min_clearance_mm,
+            ),
         ];
         for (words, field, set, min) in limits {
             let Some(min) = min else { continue };

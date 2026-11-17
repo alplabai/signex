@@ -9,7 +9,10 @@ use signex_types::check::{CheckReport, Severity};
 use crate::{Board, Miss};
 
 /// `erc_clean`.
-pub(crate) fn erc_clean(run: Option<&Result<CheckReport, String>>, allow_warnings: bool) -> Vec<Miss> {
+pub(crate) fn erc_clean(
+    run: Option<&Result<CheckReport, String>>,
+    allow_warnings: bool,
+) -> Vec<Miss> {
     clean("ERC", run, allow_warnings, None)
 }
 
@@ -20,7 +23,9 @@ pub(crate) fn drc_clean(
     allow_warnings: bool,
 ) -> Vec<Miss> {
     match board {
-        Board::NotListed => vec![Miss::new("The project lists no board, so there is no DRC to run")],
+        Board::NotListed => vec![Miss::new(
+            "The project lists no board, so there is no DRC to run",
+        )],
         Board::Read { path, .. } | Board::Unreadable { path, .. } => {
             clean("DRC", run, allow_warnings, Some(path.as_str()))
         }

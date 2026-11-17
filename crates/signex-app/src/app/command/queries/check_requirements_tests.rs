@@ -116,7 +116,10 @@ fn a_project_without_requirements_answers_with_an_empty_report_that_says_so() {
     assert_eq!(value["check"], "requirements");
     assert_eq!(value["run"], 1);
     assert_eq!(value["findings"], json!([]));
-    assert_eq!(value["warnings"], json!(["The project lists no requirements"]));
+    assert_eq!(
+        value["warnings"],
+        json!(["The project lists no requirements"])
+    );
     assert_eq!(value["rule_set"]["source"], "project");
 }
 
@@ -155,10 +158,7 @@ fn a_sheet_or_the_board_of_the_project_names_the_same_check() {
     let first = report(&mut app, &dir.path().join("top.snxsch"), &[]);
     let second = report(&mut app, &board, &["baseline=1"]);
     assert_eq!(second["findings"], first["findings"]);
-    assert_eq!(
-        second["baseline"],
-        json!({"run": 1, "new": [], "gone": []})
-    );
+    assert_eq!(second["baseline"], json!({"run": 1, "new": [], "gone": []}));
 }
 
 #[test]
@@ -245,5 +245,8 @@ fn a_document_outside_every_project_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
     let reason = refusal(check(&mut app, &dir.path().join("elsewhere.snxsch"), &[]));
-    assert!(reason.contains("not an open or referenced document"), "{reason}");
+    assert!(
+        reason.contains("not an open or referenced document"),
+        "{reason}"
+    );
 }

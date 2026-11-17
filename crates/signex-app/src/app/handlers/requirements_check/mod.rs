@@ -153,4 +153,3 @@ fn row_states(library: &LibraryState) -> HashMap<String, String> {
     }
     states
 }
-

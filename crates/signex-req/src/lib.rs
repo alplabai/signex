@@ -70,8 +70,14 @@ impl Needs {
 pub enum Board {
     /// The project lists no board.
     NotListed,
-    Read { path: String, board: Box<PcbBoard> },
-    Unreadable { path: String, why: String },
+    Read {
+        path: String,
+        board: Box<PcbBoard>,
+    },
+    Unreadable {
+        path: String,
+        why: String,
+    },
 }
 
 /// Everything a run checks. A fact is `None` when the app did not prepare it
@@ -147,10 +153,15 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     let mut passed = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
     if facts.unreadable_list {
-        let miss = Miss::new(
-            "The project's requirements are not a list, so none of them was checked",
-        );
-        findings.push(finding(facts, "req::requirements", Severity::Error, "", miss));
+        let miss =
+            Miss::new("The project's requirements are not a list, so none of them was checked");
+        findings.push(finding(
+            facts,
+            "req::requirements",
+            Severity::Error,
+            "",
+            miss,
+        ));
     }
     for (index, entry) in facts.requirements.iter().enumerate() {
         let label = entry_label(entry, index);
@@ -200,9 +211,15 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     }
     warnings.extend(run_warnings("ERC", facts.erc.as_ref()));
     warnings.extend(run_warnings("DRC", facts.drc.as_ref()));
-    CheckReport::new(REQUIREMENTS_CHECK, findings, Vec::new(), Vec::new(), warnings)
-        .with_passed(passed)
-        .with_rule_set(rule_set(facts))
+    CheckReport::new(
+        REQUIREMENTS_CHECK,
+        findings,
+        Vec::new(),
+        Vec::new(),
+        warnings,
+    )
+    .with_passed(passed)
+    .with_rule_set(rule_set(facts))
 }
 
 /// What `requirement` finds unmet.

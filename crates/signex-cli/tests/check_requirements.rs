@@ -57,7 +57,12 @@ fn check_requirements_answers_with_a_report_and_compares_with_its_baseline() {
     let findings = first["data"]["findings"].as_array().expect("findings");
     assert_eq!(findings.len(), 1, "{}", out.stdout);
     assert_eq!(findings[0]["rule"], "req::size", "{}", out.stdout);
-    assert_eq!(first["data"]["passed"], json!(["req::tall"]), "{}", out.stdout);
+    assert_eq!(
+        first["data"]["passed"],
+        json!(["req::tall"]),
+        "{}",
+        out.stdout
+    );
 
     let second = &out.lines[1];
     assert_eq!(second["status"], "answered", "{}", out.stdout);
@@ -68,5 +73,9 @@ fn check_requirements_answers_with_a_report_and_compares_with_its_baseline() {
         "{}",
         out.stdout
     );
-    assert_eq!(without_journals(snapshot(&root)), before, "a check writes nothing");
+    assert_eq!(
+        without_journals(snapshot(&root)),
+        before,
+        "a check writes nothing"
+    );
 }
