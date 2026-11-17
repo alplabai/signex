@@ -523,6 +523,7 @@ define_ids! {
     DIALOG_ANNOTATE_NOTHING_TO_NUMBER = "dialog-annotate-nothing-to-number";
     DIALOG_ANNOTATE_SUMMARY_NOTHING = "dialog-annotate-summary-nothing";
     DIALOG_ANNOTATE_SUMMARY_CHANGES = "dialog-annotate-summary-changes";
+    DIALOG_ANNOTATE_CHANGE_COUNT = "dialog-annotate-change-count";
     DIALOG_ANNOTATE_SUMMARY_HEADING = "dialog-annotate-summary-heading";
     DIALOG_ANNOTATE_REPREFIX_UNAVAILABLE = "dialog-annotate-reprefix-unavailable";
     DIALOG_ANNOTATE_REPREFIX_NOTE = "dialog-annotate-reprefix-note";
