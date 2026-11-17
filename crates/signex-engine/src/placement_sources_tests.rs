@@ -90,7 +90,7 @@ fn a_placed_design_block_is_one_batch_with_fresh_ids() {
     let commands = block
         .copied
         .payload
-        .place_commands(Point::new(100.0, 100.0))
+        .place_commands(Point::new(100.0, 100.0), &mut SequentialIds::default())
         .unwrap();
     let mut target = Engine::new(test_sheet()).unwrap();
     target.execute_batch(commands).unwrap();
@@ -151,7 +151,9 @@ fn a_part_copy_sits_on_the_origin_with_its_fields_alongside() {
     let field = copy.ref_text.as_ref().unwrap().position;
     assert!((field.y + 2.54).abs() < 1e-9, "{field:?}");
     assert!(payload.fragment().body_of(copy).is_some());
-    let placed = payload.place_commands(Point::new(5.08, 5.08)).unwrap();
+    let placed = payload
+        .place_commands(Point::new(5.08, 5.08), &mut SequentialIds::default())
+        .unwrap();
     assert!(
         placed
             .iter()
