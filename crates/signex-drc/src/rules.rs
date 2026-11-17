@@ -175,6 +175,34 @@ impl DrcRules {
         self.required_between(a, b, shared).0
     }
 
+    /// The clearance copper of nets `a` and `b` needs when only the nets are
+    /// known: each side by its written rule (a class-pair rule included)
+    /// or its implicit value, the stricter side on the strictest copper
+    /// layer of the board. What a tool that lays copper keeps, so the next
+    /// run finds nothing it wrote. A rule for an object pair takes no part.
+    pub fn net_pair_clearance(&self, a: u32, b: u32) -> i64 {
+        if !user_rules::sets(&self.user, LimitKind::MinClearance) {
+            return self.required(a, b);
+        }
+        let layers = self.on_board(u32::MAX);
+        let mut most = i64::MIN;
+        for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
+            for (net, other) in [(a, b), (b, a)] {
+                let side = user_rules::pick_between(
+                    &self.user,
+                    LimitKind::MinClearance,
+                    net,
+                    Some(other),
+                    1 << bit,
+                    [None, None],
+                )
+                .map_or_else(|| self.required(net, net), |(nm, _)| nm);
+                most = most.max(side);
+            }
+        }
+        most
+    }
+
     /// The narrowest and widest track the written rules allow for `net` on
     /// `layers`, in nm; `None` where no rule sets one.
     pub fn track_width_limits(&self, net: u32, layers: u32) -> (Option<i64>, Option<i64>) {

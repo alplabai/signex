@@ -7,7 +7,8 @@
 //! operands (`operands.rs`) acts on the board an agent names. Both build the
 //! edit in `signex_engine::pcb::board_tools` and run it here as one undo
 //! step through the board's mutation gateway. Copper keeps the clearance the
-//! board and its project's net classes ask for. Behaviour:
+//! board, its project's net classes and the written DRC rules ask for.
+//! Behaviour:
 //! `docs/PCB_TOOLS.md`, "Board Tools".
 
 mod arrange_box;
@@ -105,21 +106,23 @@ impl Picked {
     }
 }
 
-/// The clearance rule copper tools keep on `board`: the board's clearance
-/// and its project's net classes, as the design rule check reads them. A
-/// clearance the geometry cannot hold is refused, never replaced by a
-/// default that would drop the net-class rules.
+/// The clearance rule copper tools keep on `board`: the board's clearance,
+/// its project's net classes and the written rules, the rules a design
+/// rule check of the board applies. A clearance the geometry cannot hold
+/// is refused, never replaced by a default that would drop the rules.
 pub(crate) fn clearance_rules(
     app: &Signex,
     path: &Path,
     board: &PcbBoard,
 ) -> Result<DrcRules, ToolRefusal> {
-    let classes = app
-        .document_state
-        .board_project(path, None)
-        .map(|project| project.data.net_classes.clone())
-        .unwrap_or_default();
-    DrcRules::for_board(board, &classes).map_err(|error| ToolRefusal::Rules(error.to_string()))
+    app.board_design_rules(path, board)
+        .map(|(rules, _)| rules)
+        .map_err(ToolRefusal::Rules)
+}
+
+/// The gap copper of nets `a` and `b` keeps under `rules`; none without.
+fn pair_gap(rules: Option<&DrcRules>, a: u32, b: u32) -> i64 {
+    rules.map_or(0, |r| r.net_pair_clearance(a, b))
 }
 
 /// Whether the tool lays copper and so needs the clearance rule.
@@ -158,7 +161,7 @@ impl Signex {
             }
             Err(_) => None,
         };
-        let gap = |a: u32, b: u32| rules.as_ref().map_or(0, |r| r.required(a, b));
+        let gap = |a: u32, b: u32| pair_gap(rules.as_ref(), a, b);
         let nets = (!picked.nets.is_empty()).then_some(&picked.nets);
         let built = match event {
             BoardToolsMsg::StitchRequested => stitch_selection(board, &picked, gap),

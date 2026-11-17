@@ -167,3 +167,21 @@ fn why_this_value_names_the_cell_with_the_net_across() {
         .map(|c| c.verdict);
     assert_eq!(verdict, Some(Verdict::OtherNets));
 }
+
+#[test]
+fn a_tool_that_knows_only_the_nets_keeps_the_cell_and_net_rules() {
+    let b = facing(2);
+    // The cell raises HV-LV past the HV class's 0.5 mm, on both orders.
+    let rules = rules_for(&b, vec![cell(800_000)]);
+    assert_eq!(rules.net_pair_clearance(1, 2), 800_000);
+    assert_eq!(rules.net_pair_clearance(2, 1), 800_000);
+    // A pair the cell does not cover keeps the class value.
+    assert_eq!(rules.net_pair_clearance(1, 3), 500_000);
+    // A rule for one net counts on either side.
+    let net = rule("sig", NetScope::Net("SIG".into()), 900_000);
+    let rules = rules_for(&b, vec![net]);
+    assert_eq!(rules.net_pair_clearance(2, 3), 900_000);
+    // Without written rules it is the implicit pair value.
+    let plain = rules_for(&b, vec![]);
+    assert_eq!(plain.net_pair_clearance(1, 2), plain.required(1, 2));
+}

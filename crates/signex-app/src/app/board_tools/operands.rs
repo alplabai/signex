@@ -15,7 +15,7 @@ use signex_engine::pcb::board_tools::{
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
-use super::clearance_rules;
+use super::{clearance_rules, pair_gap};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{DocumentKey, Message, Signex};
 
@@ -109,7 +109,7 @@ fn run(
         Err(refusal) if copper => return refused(refusal.to_string()),
         Err(_) => None,
     };
-    let gap = |a: u32, b: u32| rules.as_ref().map_or(0, |r| r.required(a, b));
+    let gap = |a: u32, b: u32| pair_gap(rules.as_ref(), a, b);
     let built = match build(board, &gap) {
         Ok(edit) => Ok(edit),
         Err(reason) => return refused(reason),
