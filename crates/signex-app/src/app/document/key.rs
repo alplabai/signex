@@ -1,22 +1,12 @@
-//! The identity of a document, derived from the tab that shows it.
+//! The identity of a document, derived from the tab that shows it. The key
+//! type itself lives in `app::core::document_key`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::app::state::{DocumentState, ProjectId};
+use crate::app::core::document_key::DocumentKey;
+use crate::app::state::DocumentState;
 use crate::app::{TabInfo, TabKind};
 use crate::library::state::EditorAddress;
-
-/// Which document a tab hosts. Each kind keeps its state in a different map,
-/// so the key names the owner instead of boxing it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) enum DocumentKey {
-    Schematic(PathBuf),
-    Pcb(PathBuf),
-    Symbol(PathBuf),
-    Footprint(PathBuf),
-    Row(EditorAddress),
-    Project(ProjectId),
-}
 
 impl DocumentState {
     /// The document the file at `path` is held as, by the precedence Save

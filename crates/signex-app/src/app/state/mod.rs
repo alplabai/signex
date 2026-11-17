@@ -9,7 +9,8 @@ use super::TabInfo;
 mod agent_edits;
 mod board_project;
 mod board_sketch;
-mod case_fold;
+#[cfg(test)]
+mod case_fold_tests;
 pub(crate) mod check_runs;
 pub(crate) mod cross_select;
 pub(crate) mod dir_case;
@@ -58,9 +59,9 @@ mod window_scales;
 mod window_sizes;
 mod window_tab;
 
+pub use crate::app::core::case_fold::CaseFold;
 pub use agent_edits::AgentEdits;
 pub use board_sketch::BoardSketchSession;
-pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
@@ -239,32 +240,7 @@ pub enum ModalId {
 
 pub use signex_types::schematic::AnnotateOrder;
 
-/// Opaque identifier for a loaded project in the workspace. Assigned by
-/// `DocumentState::next_project_id` on load and never reused, so stale
-/// references (e.g. a tab pointing at a closed project) resolve to `None`
-/// via `DocumentState::project_by_id` instead of silently aliasing another
-/// project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct ProjectId(u32);
-
-impl ProjectId {
-    /// The id as an engine pick marker carries it.
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-
-    /// A fixed id for a test that has no `DocumentState` to mint one from.
-    #[cfg(test)]
-    pub(crate) const fn test_id(n: u32) -> Self {
-        Self(n)
-    }
-}
-
-impl std::fmt::Display for ProjectId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "proj:{}", self.0)
-    }
-}
+pub use crate::app::core::project_id::ProjectId;
 
 /// One loaded project in the multi-project workspace. `path` is the
 /// canonical identity (`.snxprj` location on disk); `data`
@@ -938,7 +914,7 @@ impl PreviewState {
 impl DocumentState {
     /// Mint a fresh `ProjectId` and bump the counter. Never reuses ids.
     pub fn mint_project_id(&mut self) -> ProjectId {
-        let id = ProjectId(self.next_project_id);
+        let id = ProjectId::from_raw(self.next_project_id);
         self.next_project_id = self.next_project_id.wrapping_add(1);
         id
     }

@@ -276,7 +276,7 @@ mod tests {
         let (mut ds, _id) = state_with_project("/w/known-694", "Top.snxsch");
         let before = ds.projects[0].case_fold;
 
-        assert!(!ds.apply_case_probe(ProjectId(9999), CaseProbeOutcome::Decided(true)));
+        assert!(!ds.apply_case_probe(ProjectId::test_id(9999), CaseProbeOutcome::Decided(true)));
         assert_eq!(ds.projects[0].case_fold, before);
     }
 

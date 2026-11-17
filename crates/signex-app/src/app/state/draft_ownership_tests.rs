@@ -12,7 +12,7 @@ use crate::app::{Signex, SymbolDocument};
 
 fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
     LoadedProject {
-        id: ProjectId(id),
+        id: ProjectId::test_id(id),
         path: Path::new(dir).join("p.snxprj"),
         data: signex_types::project::ProjectData {
             document_id: None,

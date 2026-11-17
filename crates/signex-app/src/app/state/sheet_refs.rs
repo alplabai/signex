@@ -989,7 +989,7 @@ mod tests {
 
     fn loaded_project(id: u32, dir: &Path, sheet: &str) -> crate::app::state::LoadedProject {
         crate::app::state::LoadedProject {
-            id: ProjectId(id),
+            id: ProjectId::test_id(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
                 document_id: None,
