@@ -4,9 +4,9 @@
 //! geometry: moving, resizing or re-netting one of them lapses it, an edit
 //! anywhere else does not. See `docs/architecture/pcb-drc.md`, "Waivers".
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use pcb_geom::ItemRef;
+use pcb_geom::{ItemRef, Shape, footprint_body, via_layers};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 // Every number, angles and ratios too, quantised as the file stores a length.
@@ -71,30 +71,61 @@ pub struct WaiverSplit<'a> {
     pub lapsed: BTreeSet<usize>,
 }
 
+/// The keys of one run's `violations` on `board`, in order. A finding whose
+/// identity (rule and ids) another finding of the run shares gets none: one
+/// waiver must never hide several findings (stacked pads give two links the
+/// same end pads).
+pub fn waiver_keys(violations: &[&Violation], board: &PcbBoard) -> Vec<Option<WaiverKey>> {
+    let keys: Vec<Option<WaiverKey>> = violations.iter().map(|v| waiver_key(v, board)).collect();
+    let mut seen: BTreeMap<(&str, &[String]), usize> = BTreeMap::new();
+    for key in keys.iter().flatten() {
+        *seen.entry((&key.rule_id, &key.objects)).or_default() += 1;
+    }
+    let shared: BTreeSet<(String, Vec<String>)> = seen
+        .into_iter()
+        .filter(|&(_, n)| n > 1)
+        .map(|((rule, objects), _)| (rule.to_string(), objects.to_vec()))
+        .collect();
+    keys.into_iter()
+        .map(|key| key.filter(|k| !shared.contains(&(k.rule_id.clone(), k.objects.clone()))))
+        .collect()
+}
+
 /// Split `violations` on `board` by `waivers`. An incomplete waiver (no
-/// reason or author) never hides anything.
+/// reason or author) never hides anything. A waiver whose identity names
+/// several findings of the run hides none of them and is lapsed.
 pub fn split_waived<'a>(
     violations: impl IntoIterator<Item = &'a Violation>,
     board: &PcbBoard,
     waivers: &[DrcWaiver],
 ) -> WaiverSplit<'a> {
+    let violations: Vec<&Violation> = violations.into_iter().collect();
     let mut split = WaiverSplit::default();
-    for v in violations {
-        let Some(key) = waiver_key(v, board) else {
-            split.kept.push(v);
-            continue;
+    if !waivers.iter().any(DrcWaiver::is_complete) {
+        split.kept = violations;
+        return split;
+    }
+    let keys = waiver_keys(&violations, board);
+    for (v, key) in violations.into_iter().zip(keys) {
+        let identity = match &key {
+            Some(k) => Some((k.rule_id.clone(), k.objects.clone())),
+            None => waiver_key(v, board).map(|k| (k.rule_id, k.objects)),
         };
-        let same = waivers
-            .iter()
-            .enumerate()
-            .find(|(_, w)| w.is_complete() && w.same_identity(&key.rule_id, &key.objects));
-        match same {
-            Some((i, w)) if w.fingerprint == key.fingerprint => split.waived.push((v, i)),
-            Some((i, _)) => {
+        let same = identity.and_then(|(rule, objects)| {
+            waivers
+                .iter()
+                .enumerate()
+                .find(|(_, w)| w.is_complete() && w.same_identity(&rule, &objects))
+        });
+        match (same, key) {
+            (Some((i, w)), Some(k)) if w.fingerprint == k.fingerprint => {
+                split.waived.push((v, i));
+            }
+            (Some((i, _)), _) => {
                 split.lapsed.insert(i);
                 split.kept.push(v);
             }
-            None => split.kept.push(v),
+            (None, _) => split.kept.push(v),
         }
     }
     split
@@ -131,9 +162,10 @@ fn item_geometry(board: &PcbBoard, item: &ItemRef) -> Option<String> {
         }
         ItemRef::Via(id) => {
             let v = board.vias.iter().find(|v| v.uuid == id)?;
+            // The resolved span: a through via reaches every layer whatever it lists.
             Some(format!(
-                "via {id} {} net={} {} d={} drill={}",
-                v.layers.join(","),
+                "via {id} span={:x} net={} {} d={} drill={}",
+                via_layers(v),
                 net_name(board, v.net),
                 point(v.position)?,
                 nm(v.diameter)?,
@@ -160,9 +192,30 @@ fn item_geometry(board: &PcbBoard, item: &ItemRef) -> Option<String> {
         }
         ItemRef::Footprint(id) => {
             let fp = board.footprints.iter().find(|f| f.uuid == id)?;
-            Some(format!("footprint {} {}", placement(fp)?, fp.footprint_id))
+            Some(format!(
+                "footprint {} {} body={}",
+                placement(fp)?,
+                fp.footprint_id,
+                body(fp)?
+            ))
         }
     }
+}
+
+/// The body a `no_components` keepout tests (`footprint_body`): its centre
+/// and half sizes in nm; the turn is the placement's.
+fn body(fp: &Footprint) -> Option<String> {
+    Some(match footprint_body(fp).ok()? {
+        Shape::Rect {
+            center,
+            half_w,
+            half_h,
+            ..
+        } => format!("({},{}) {half_w}x{half_h}", center.x, center.y),
+        Shape::Disc { center, radius } => format!("({},{}) r{radius}", center.x, center.y),
+        // `footprint_body` makes no other shape.
+        other => format!("{other:?}"),
+    })
 }
 
 /// Where a footprint sits: its id, position, turn and side.

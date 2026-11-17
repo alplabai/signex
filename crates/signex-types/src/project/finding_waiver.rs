@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use super::UnknownJson;
 
-/// A per-finding ERC waiver.
+/// A per-finding ERC waiver. The ERC helpers (`rekey_sheet`, `with_waiver`,
+/// ...) take `erc_waivers` only, never `drc_waivers`.
 pub type ErcWaiver = FindingWaiver;
 /// A per-finding DRC waiver.
 pub type DrcWaiver = FindingWaiver;

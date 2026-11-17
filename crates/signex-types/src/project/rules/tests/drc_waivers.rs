@@ -67,6 +67,28 @@ fn a_drc_waiver_from_a_newer_build_keeps_its_unknown_keys() {
     assert_eq!(saved["rules"], rules_of(&text));
 }
 
+/// A `drc_waivers` of another shape makes the whole section unreadable
+/// (#1180), as for `erc_waivers`: kept byte for byte, not applied.
+#[test]
+fn a_malformed_drc_waivers_list_is_kept_and_marks_the_rules_unreadable() {
+    for waivers in [
+        r#""legacy""#,
+        "null",
+        r#"{"a":1}"#,
+        "[1]",
+        r#"[{"rule_id":5}]"#,
+        r#"[{"objects":"u"}]"#,
+    ] {
+        let text = project_with_rules(&format!(
+            r#"{{"schema":1,"erc":{{"severity":{{"unused_pin":"error"}}}},"drc_waivers":{waivers}}}"#
+        ));
+        let (data, saved) = open_and_resave(&text);
+        assert!(data.rules.is_none(), "{waivers}");
+        assert!(data.has_unreadable_rules(), "{waivers}");
+        assert_eq!(saved["rules"], rules_of(&text), "{waivers}");
+    }
+}
+
 #[test]
 fn drc_waivers_never_change_the_rule_set_hash() {
     let mut rules = ProjectRules::default();

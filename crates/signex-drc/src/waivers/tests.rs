@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use pcb_geom::{ItemRef, PointNm};
 use serde_json::Map;
 use signex_types::check::CheckReport;
-use signex_types::pcb::{NetDef, PadType, PcbBoard, Point};
+use signex_types::pcb::{FpGraphic, NetDef, PadType, PcbBoard, Point, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_sketch::{BoardSketch, PcbKeepout};
 use signex_types::project::DrcWaiver;
@@ -13,7 +13,7 @@ use signex_types::sketch::attr::KeepoutKinds;
 
 use super::*;
 use crate::findings::check_report;
-use crate::tests::{board, footprint, id, pad, track};
+use crate::tests::{board, footprint, id, pad, track, via};
 use crate::{DrcRules, ViolationKind, run};
 
 const RULE: i64 = 200_000;
@@ -335,4 +335,112 @@ fn a_waiver_of_a_rule_switched_off_neither_hides_nor_lapses() {
     );
     assert!(checked.findings.is_empty() && checked.waived.is_empty());
     assert!(checked.lapsed.is_empty(), "{checked:?}");
+}
+
+/// A blind via (TopCopper to Inner1) of a keepout finding, keyed and waived.
+fn blind_via_board() -> (PcbBoard, Violation, DrcWaiver) {
+    let mut v = via(1, (25.0, 25.0), 0);
+    v.via_type = ViaType::Blind;
+    v.layers = vec!["TopCopper".into(), "Inner1Copper".into()];
+    let b = board(vec![], vec![], vec![v, via(2, (60.0, 60.0), 0)]);
+    let finding = violation(vec![ItemRef::Via(id(3001))], None);
+    let waiver = waived(&waiver_key(&finding, &b).unwrap());
+    (b, finding, waiver)
+}
+
+#[test]
+fn a_via_whose_span_changes_lapses_its_waiver() {
+    let (mut b, finding, waiver) = blind_via_board();
+    b.vias[0].via_type = ViaType::Through;
+    let split = split_waived([&finding], &b, std::slice::from_ref(&waiver));
+    assert!(split.waived.is_empty());
+    assert_eq!(split.lapsed.iter().copied().collect::<Vec<_>>(), [0]);
+}
+
+#[test]
+fn a_through_vias_listed_layers_or_another_via_never_lapse_it() {
+    let (mut b, _, _) = blind_via_board();
+    b.vias[0].via_type = ViaType::Through;
+    let finding = violation(vec![ItemRef::Via(id(3001))], None);
+    let waiver = waived(&waiver_key(&finding, &b).unwrap());
+    // A through via reaches every layer whatever it lists.
+    b.vias[0].layers = vec!["TopCopper".into(), "Inner2Copper".into()];
+    shift(&mut b.vias[1].position, 5.0);
+    b.vias[1].diameter = 1.0;
+    let split = split_waived([&finding], &b, std::slice::from_ref(&waiver));
+    assert_eq!(split.waived.len(), 1, "{split:?}");
+    assert!(split.lapsed.is_empty());
+}
+
+fn courtyard(to: (f64, f64)) -> FpGraphic {
+    FpGraphic {
+        graphic_type: "rect".into(),
+        layer: "TopCourtyard".into(),
+        width: 0.0,
+        start: Some(Point::new(-1.0, -1.0)),
+        end: Some(Point::new(to.0, to.1)),
+        center: None,
+        mid: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+        position: None,
+        rotation: 0.0,
+        fill: String::new(),
+    }
+}
+
+#[test]
+fn a_footprint_whose_courtyard_grows_lapses_its_waiver() {
+    let mut fp = footprint(1, vec![pad(5, (0.0, 0.0), 1, PadType::Smd, "TopCopper")]);
+    fp.graphics = vec![courtyard((1.0, 1.0))];
+    let b = board(vec![fp], vec![], vec![]);
+    let finding = violation(vec![ItemRef::Footprint(id(1001))], None);
+    let before = waiver_key(&finding, &b).unwrap();
+    let mut grown = b.clone();
+    grown.footprints[0].graphics = vec![courtyard((3.0, 1.0))];
+    assert_ne!(
+        waiver_key(&finding, &grown).unwrap().fingerprint,
+        before.fingerprint
+    );
+    let mut silk = b.clone();
+    silk.footprints[0].graphics.push(FpGraphic {
+        layer: "TopSilkscreen".into(),
+        ..courtyard((9.0, 9.0))
+    });
+    assert_eq!(waiver_key(&finding, &silk).unwrap(), before);
+}
+
+#[test]
+fn two_findings_of_one_identity_cannot_be_waived_and_their_waiver_lapses() {
+    let b = board(
+        vec![],
+        vec![track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper")],
+        vec![],
+    );
+    let one = violation(vec![ItemRef::Track(id(2001))], None);
+    let mut two = one.clone();
+    two.at = PointNm::new(500_000, 0);
+    let waiver = waived(&waiver_key(&one, &b).unwrap());
+    assert_eq!(waiver_keys(&[&one, &two], &b), [None, None]);
+    assert!(waiver_keys(&[&one], &b)[0].is_some());
+    let split = split_waived([&one, &two], &b, std::slice::from_ref(&waiver));
+    assert_eq!(split.kept.len(), 2, "{split:?}");
+    assert!(split.waived.is_empty());
+    assert_eq!(split.lapsed.iter().copied().collect::<Vec<_>>(), [0]);
+}
+
+#[test]
+fn without_a_complete_waiver_every_finding_is_kept_in_order() {
+    let b = pair();
+    let report = run(&b, &DrcRules::new(RULE));
+    let incomplete = DrcWaiver {
+        author: String::new(),
+        ..waived(&only_key(&b))
+    };
+    let split = split_waived(&report.violations, &b, &[incomplete]);
+    let kept: Vec<&Violation> = report.violations.iter().collect();
+    assert_eq!(split.kept, kept);
+    assert!(split.waived.is_empty() && split.lapsed.is_empty());
 }

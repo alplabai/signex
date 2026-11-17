@@ -705,7 +705,12 @@ The answer is a check report (above), `"check": "drc"`:
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
-- `waived` and `lapsed` are empty: DRC has no waivers yet.
+- `waived`: the findings a waiver of the project's `rules.drc_waivers`
+  hides (`"kind": "finding"`), each with that waiver; they are not in
+  `findings`. `lapsed`: the waivers whose items' geometry changed since they
+  were made, so their finding is in `findings` again; a waiver whose
+  identity names more than one finding of the run is lapsed too. A board in
+  no project has no waivers. See `docs/architecture/pcb-drc.md`, "Waivers".
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.
 

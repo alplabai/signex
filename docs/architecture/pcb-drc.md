@@ -363,7 +363,10 @@ A designer accepts one finding with a reason. The project stores it in
 sorted ids, fingerprint, reason, author, date, the finding's message, and
 any key a newer build wrote. The list sits beside `drc`, not inside it, so a
 waiver never changes the rule-set hash; an empty list is not written, and an
-older build keeps the key verbatim in `unknown`.
+older build keeps the key verbatim in `unknown`. A `drc_waivers` value of
+another shape makes the whole `rules` section unreadable, as a malformed
+`erc_waivers` does (#1180): the section is kept byte for byte and not
+applied.
 
 `signex_drc::waivers` owns what the ids and the fingerprint mean:
 
@@ -375,11 +378,12 @@ older build keeps the key verbatim in `unknown`.
   unconnected link with no pad at either end) cannot be waived.
 - **The fingerprint** is SHA-256 over the rule id and, per involved item,
   the geometry a rule sees of it: a track's layer, net, ends and width; a
-  via's layers, net, position, diameter and drill; a pad's footprint
+  via's copper span (`via_layers`: a through via reaches every layer,
+  whatever it lists), net, position, diameter and drill; a pad's footprint
   placement (position, turn, side) with its own type, shape, position,
   size, turn, corner ratio, drill, layers, number and net; a footprint's
-  placement and library id; a keepout's outline, layers and what it
-  forbids. Lengths and angles are quantised to stored nm, so a save and a
+  placement, library id and body (`footprint_body`: the courtyard's extent,
+  else the pads'); a keepout's outline, layers and what it forbids. Lengths and angles are quantised to stored nm, so a save and a
   load keep it. Nets are named, not numbered, so a renumbering keeps it. A
   designator, value or any item the finding does not name never changes it.
 - **Matching**: a complete waiver (reason and author set) with the same rule
@@ -389,6 +393,11 @@ older build keeps the key verbatim in `unknown`.
   keeps a waiver. An unconnected link names the pads at its ends; another
   pad of the net moving can pick other ends, and then the waiver no longer
   matches anything rather than lapsing.
+- **One waiver, one finding.** When two findings of a run share an
+  identity (two ratsnest links between stacked pads end on the same pads),
+  neither can be waived (`waiver_keys` gives them no key), and a waiver
+  with that identity hides neither and is listed as lapsed. A run without
+  a complete waiver skips the matching.
 
 `check_drc` applies the project's waivers: a hidden finding is in `waived`
 with its waiver, a lapsed waiver in `lapsed` and its finding back in
