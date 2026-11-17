@@ -5,11 +5,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use signex_engine::UndoGroupId;
+use signex_engine::{DocumentPatch, UndoGroupId};
 
 use super::DocumentState;
 use crate::app::agent::Origin;
-use crate::schematic_runtime::RenderInvalidation;
 
 #[derive(Debug, Default)]
 pub struct AgentEdits {
@@ -33,8 +32,9 @@ pub struct AgentEdits {
     /// The outcome of each waiting edit that ran, by ticket, until the caller
     /// that is not the agent socket (a headless run) takes it.
     pub(crate) finished: HashMap<u64, crate::app::command::CommandOutcome>,
-    /// The repaint the edits so far owe the target sheet.
-    pub(crate) owed: RenderInvalidation,
+    /// What the edits so far changed on the target sheet, refreshed once at
+    /// the end.
+    pub(crate) owed: DocumentPatch,
     /// The Undo label of each undo step an agent made ("Agent: ...").
     pub(crate) labels: HashMap<UndoGroupId, String>,
     /// Who made each of those steps, for the steps an agent made.

@@ -24,7 +24,7 @@ struct Pick {
 /// One sheet Apply changed, before the whole run is committed.
 struct Changed {
     path: PathBuf,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -142,9 +142,7 @@ impl Signex {
             match outcome {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => {}
                 Err(error) => {
@@ -191,11 +189,11 @@ impl Signex {
             kind: crate::app::UndoGroupKind::Footprints,
             ..Default::default()
         };
-        let mut active_invalidation = None;
+        let mut active_patch = None;
         for done in &changed {
             recorded.live.push(done.path.clone());
             if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
+                active_patch = done.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&done.path);
             }
@@ -208,10 +206,10 @@ impl Signex {
             );
             return;
         }
-        match active_invalidation {
+        match active_patch {
             // Notes the sheet edit for ERC itself.
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, true);
+            Some(patch) => {
+                self.finish_schematic_mutation(patch, true, true);
             }
             None => self.document_state.note_sheet_edit(),
         }

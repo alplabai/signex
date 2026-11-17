@@ -15,7 +15,7 @@ use crate::keymap::AppCommandId;
 use crate::schematic_runtime::{RenderInvalidation as R, SchematicRenderCache};
 
 fn project(patch: P) -> R {
-    Signex::render_invalidation_for_patch(patch)
+    R::from(patch)
 }
 
 /// Every single-bit patch and the render bits it projects to.

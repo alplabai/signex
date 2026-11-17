@@ -30,7 +30,8 @@ pub enum SemanticPatch {
     StyleUpdated,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What an edit changed in a document. `Default` is [`Self::NONE`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DocumentPatch(u16);
 
 impl DocumentPatch {
@@ -80,6 +81,12 @@ impl DocumentPatch {
 
     pub fn intersects(self, other: Self) -> bool {
         (self.0 & other.0) != 0
+    }
+
+    /// Whether the edit changed only how the sheet is shown (its net
+    /// colours), never what ERC finds: no ERC refresh, no new edit epoch.
+    pub fn is_display_only(self) -> bool {
+        self == Self::NET_COLORS
     }
 
     pub fn from_selected_kind(kind: SelectedKind) -> Self {
@@ -155,5 +162,29 @@ impl CommandResult {
             changed: false,
             patch_pair: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DocumentPatch as P;
+
+    #[test]
+    fn only_a_net_colour_change_alone_is_display_only() {
+        assert!(P::NET_COLORS.is_display_only());
+        for shift in 0..16 {
+            let bit = P(1 << shift);
+            assert_eq!(bit.is_display_only(), bit == P::NET_COLORS, "{bit:?}");
+            if bit != P::NET_COLORS {
+                assert!(!(bit | P::NET_COLORS).is_display_only(), "{bit:?}");
+            }
+        }
+        assert!(!P::NONE.is_display_only());
+        assert!(!P::FULL.is_display_only());
+    }
+
+    #[test]
+    fn the_default_patch_is_none() {
+        assert_eq!(P::default(), P::NONE);
     }
 }
