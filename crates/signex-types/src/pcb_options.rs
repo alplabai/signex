@@ -65,7 +65,9 @@ pub struct BoardOptions {
 
 /// One accepted design-rule finding. `key` names the finding the same way
 /// in every run (`signex_drc::waiver_key`): its rule and the objects, not
-/// where they are, so moving an object keeps the waiver.
+/// where they are. `fingerprint` is the objects' geometry when it was
+/// waived (`signex_drc::fingerprint`, #2307): moving, resizing or re-netting
+/// one of them lapses the waiver and the finding comes back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DrcWaiver {
     pub key: String,
@@ -74,16 +76,15 @@ pub struct DrcWaiver {
     /// Why the finding is accepted; may be empty.
     #[serde(default)]
     pub note: String,
+    /// A waiver saved before #2307 has none; it lapses once and is waived
+    /// again.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
 }
 
 impl BoardOptions {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
-    }
-
-    /// The waiver of the finding `key`, if it is waived.
-    pub fn drc_waiver(&self, key: &str) -> Option<&DrcWaiver> {
-        self.drc_waivers.iter().find(|w| w.key == key)
     }
 
     /// The grid a carry or placement of `what` snaps to: the first extra

@@ -52,6 +52,7 @@ fn options() -> BoardOptions {
             key: "0123456789abcdef0123456789abcdef".into(),
             rule: "builtin::clearance".into(),
             note: "Checked by hand: \"tested\" on rev A\nsecond line".into(),
+            fingerprint: String::new(),
         }],
         panel: Some(panel()),
     }
@@ -83,9 +84,48 @@ fn a_waived_finding_round_trips_with_its_note() {
         key: "k1".into(),
         rule: "user::hv".into(),
         note: String::new(),
+        fingerprint: String::new(),
     }];
     let text = SnxPcb::new(board.clone()).write_string().expect("writes");
     assert!(text.contains("drc_waivers"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// #2307: a waiver saved before the fingerprint (no `fingerprint` key)
+/// loads with an empty one and re-saves byte-identical, without the key.
+#[test]
+fn a_waiver_without_a_fingerprint_loads_and_re_saves_unchanged() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: "old".into(),
+        fingerprint: String::new(),
+    }];
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    assert!(!text.contains("fingerprint"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.drc_waivers[0].fingerprint, "");
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// #2307: a waiver's geometry fingerprint is written and read back.
+#[test]
+fn a_waiver_fingerprint_round_trips() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: String::new(),
+        fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+    }];
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(
+        text.contains("fingerprint = \"00ff00ff00ff00ff00ff00ff00ff00ff\""),
+        "{text}"
+    );
     let back = SnxPcb::parse(&text).expect("reads back").board;
     assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
     assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);

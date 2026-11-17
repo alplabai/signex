@@ -40,7 +40,8 @@ pub fn footprint_body(footprint: &Footprint) -> Result<Shape, GeomError> {
     })
 }
 
-fn is_courtyard(graphic: &FpGraphic) -> bool {
+/// Whether `graphic` is on a courtyard layer, which the body is taken from.
+pub fn is_courtyard(graphic: &FpGraphic) -> bool {
     matches!(
         parse_pcb_layer(&graphic.layer),
         Some(PcbLayer::Technical(

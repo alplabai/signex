@@ -111,6 +111,11 @@ impl PcbDrc {
         self.done.as_ref().filter(|d| d.path == path)
     }
 
+    /// The last report, whichever board it is for.
+    pub fn last(&self) -> Option<&DrcDone> {
+        self.done.as_ref()
+    }
+
     /// The number of the last run begun; with [`Self::is_running_for`] it
     /// changes whenever a run begins, lands or is abandoned.
     pub fn generation(&self) -> u64 {

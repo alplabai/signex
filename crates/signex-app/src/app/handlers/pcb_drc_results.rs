@@ -139,14 +139,32 @@ impl Signex {
 
     /// Waive the last run's violation `key` on `board` with `note`, or take
     /// its waiver back (`None`): one board undo step. The report stays
-    /// current, since a waiver changes nothing the check reads.
+    /// current, since a waiver changes nothing the check reads. A waiver is
+    /// refused on a stale run: it would fingerprint geometry the run never
+    /// checked (#2307).
     pub(crate) fn set_drc_waiver(
         &mut self,
         board: &Path,
         key: &str,
         note: Option<String>,
     ) -> Result<Value, String> {
-        let rule = self
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(board)
+            .copied()
+            .unwrap_or(0);
+        let stale = self
+            .interaction_state
+            .pcb_drc
+            .done_for(board)
+            .is_some_and(|done| done.is_stale(revision, self.board_net_classes(board)));
+        if note.is_some() && stale {
+            return Err(
+                "the board changed since the last DRC run; run DRC again before waiving".into(),
+            );
+        }
+        let violation = self
             .interaction_state
             .pcb_drc
             .done_for(board)
@@ -155,8 +173,7 @@ impl Signex {
                     .violations
                     .iter()
                     .find(|v| signex_drc::waiver_key(v) == key)
-            })
-            .map(|v| signex_drc::rule_id(v).to_string());
+            });
         let engine = self
             .document_state
             .board_engine(board)
@@ -168,13 +185,15 @@ impl Signex {
         let note = note.map(|n| n.trim().to_string());
         match &note {
             Some(note) => {
-                let rule = rule.ok_or_else(|| {
+                let v = violation.ok_or_else(|| {
                     format!("the last DRC run of this board has no violation `{key}`")
                 })?;
+                // Its objects as they are now: a later change lapses it (#2307).
                 options.drc_waivers.push(DrcWaiver {
                     key: key.to_string(),
-                    rule,
+                    rule: signex_drc::rule_id(v).to_string(),
                     note: note.clone(),
+                    fingerprint: signex_drc::fingerprint(v, engine.board()),
                 });
             }
             None if options.drc_waivers.len() == had => {

@@ -577,3 +577,65 @@ fn a_board_that_cannot_be_read_is_refused_with_the_reason() {
             .is_err()
     );
 }
+
+/// The clearance finding of `report` (GND and VCC tracks).
+fn clearance_finding(report: &Value) -> &Value {
+    findings(report)
+        .iter()
+        .find(|f| f["rule"] == "builtin::clearance")
+        .unwrap_or_else(|| panic!("no clearance finding: {report}"))
+}
+
+/// #2307: `check_drc` reads the board-file waivers the DRC panel writes.
+/// A finding's `evidence.waiver_key` is the id `waive_drc_violation`
+/// takes; the waived finding moves to `waived`, and moving one of its
+/// tracks by 0.05 mm lapses the waiver and brings the finding back.
+#[test]
+fn a_board_file_waiver_is_applied_and_lapses_when_its_track_moves() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    open_board(&mut app, &path);
+    run_drc(&mut app, &path);
+    let before = report(&mut app, &path, &[]);
+    let finding = clearance_finding(&before).clone();
+    let waiver_key = finding["evidence"]["waiver_key"].as_str().unwrap();
+    let id = AppCommandId::new("waive_drc_violation").expect("a catalog id");
+    let operands = [
+        format!("document={}", path.display()),
+        format!("id={waiver_key}"),
+        "text=reviewed".to_string(),
+    ];
+    let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = CommandArgs::parse_operands(&id, &operands).expect("operands parse");
+    let outcome = app.run_operands_settled(&id, &args).0;
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+
+    let waived = report(&mut app, &path, &[]);
+    assert!(
+        !findings(&waived)
+            .iter()
+            .any(|f| f["rule"] == "builtin::clearance"),
+        "{waived}"
+    );
+    assert_eq!(waived["waived"][0]["finding"]["key"], finding["key"]);
+    assert_eq!(waived["waived"][0]["waiver"]["key"], waiver_key);
+    assert_eq!(waived["waived"][0]["waiver"]["reason"], "reviewed");
+    assert!(waived["lapsed"].as_array().unwrap().is_empty());
+
+    let moved = track(2, 2, (0.0, 0.30), (10.0, 0.30));
+    let command = signex_engine::pcb::BoardCommand::ReplaceItems {
+        items: vec![signex_engine::pcb::BoardItem::Segment(moved)],
+    };
+    app.execute_board_commands(&path, vec![command], None)
+        .expect("the track moves");
+    let lapsed = report(&mut app, &path, &[]);
+    assert_eq!(
+        clearance_finding(&lapsed)["evidence"]["waiver_key"],
+        waiver_key
+    );
+    assert!(lapsed["waived"].as_array().unwrap().is_empty(), "{lapsed}");
+    assert_eq!(lapsed["lapsed"][0]["key"], waiver_key, "{lapsed}");
+}
