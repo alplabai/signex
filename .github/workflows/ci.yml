@@ -498,6 +498,17 @@ jobs:
           ast-grep test --skip-snapshot-tests
           ast-grep scan --error
 
+      # Command ids may be added, never silently removed (#2447): every id in
+      # scripts/catalog-ids.txt must still be a CommandMetadata row in the
+      # catalog, and every catalog id must be listed. Hard gate.
+      - name: Command-id gate
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_catalog_ids.sh
+
+      - name: Command-id gate controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_catalog_ids.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace

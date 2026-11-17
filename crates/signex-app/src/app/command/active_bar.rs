@@ -284,7 +284,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "Active Bar command ids with no CommandMetadata entry — add them \
-             to signex-commands/src/catalog/active_bar.rs: {orphans:?}"
+             to their area file in signex-commands/src/catalog/: {orphans:?}"
         );
     }
 

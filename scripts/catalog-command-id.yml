@@ -1,0 +1,22 @@
+# ast-grep rule for scripts/check_catalog_ids.sh: the string of every
+# `id: "..."` field of a `CommandMetadata { .. }` row, outside a
+# `#[cfg(test)]` module. Kept out of ast-grep/rules on purpose: `ast-grep
+# scan --error` would report each of the ids as a lint hit.
+id: catalog-command-id
+language: rust
+rule:
+  kind: string_content
+  inside:
+    kind: string_literal
+    inside:
+      kind: field_initializer
+      has: {field: field, regex: ^id$}
+      inside:
+        kind: struct_expression
+        stopBy: end
+        has: {field: name, regex: ^CommandMetadata$}
+        not:
+          inside:
+            kind: mod_item
+            stopBy: end
+            follows: {kind: attribute_item, regex: 'cfg\(test\)'}

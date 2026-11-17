@@ -1,11 +1,88 @@
-//! The Rules manager commands (#2398): the Rules tab, and the `rules_*`
-//! commands an agent or the CLI drives it with. The reads answer with data;
-//! each edit is one undo step on the project's rule history.
+//! Design rule check commands: run the DRC on the board in view and check
+//! it headless.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
-pub(super) const RULES: &[CommandMetadata] = &[
+pub(super) const DRC: &[CommandMetadata] = &[
+    // Read-only: the report goes to the Messages panel, the board is not touched.
+    CommandMetadata {
+        id: "run_drc",
+        category: "pcb",
+        label: command_ids::CMD_RUN_DRC,
+        menu_label: Some(command_ids::CMD_MENU_RUN_DRC),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::RUNS_HEADLESS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "check_drc",
+        category: "validation",
+        label: command_ids::CMD_CHECK_DRC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_DRC,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2399: the DRC results panel and what it does. A violation is named by
+    // its waiver key (`id`), the same in every run. No default keys.
+    CommandMetadata {
+        id: "open_drc_panel",
+        category: "pcb",
+        label: command_ids::CMD_OPEN_DRC_PANEL,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DRC_PANEL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "show_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_SHOW_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: operands::DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "waive_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_WAIVE_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::WAIVE_DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "unwaive_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_UNWAIVE_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "filter_drc_results",
+        category: "pcb",
+        label: command_ids::CMD_FILTER_DRC_RESULTS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: operands::DRC_FILTER,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "open_rules",
         category: "design",
