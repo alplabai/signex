@@ -12,7 +12,7 @@ impl ProjectId {
     /// The next id from the workspace counter `next`, which it bumps, so an
     /// id is never handed out twice. `DocumentState::mint_project_id` owns
     /// the counter.
-    pub(crate) fn mint(next: &mut u32) -> Self {
+    pub(in crate::app) fn mint(next: &mut u32) -> Self {
         let id = Self(*next);
         *next = next.wrapping_add(1);
         id
