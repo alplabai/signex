@@ -789,8 +789,8 @@ The answer is a check report (above), `"check": "drc"`:
   the finding's `evidence.waiver_key`. A finding of a rule switched `off` is
   not listed and its waiver is in neither list. To waive a finding, run
   `waive_drc_violation document=<board> id=<evidence.waiver_key>
-  text=<note>` after a Run DRC of the board (`docs/architecture/pcb-drc.md`,
-  "Waivers").
+  text=<note>` after a Run DRC of the board; it is refused when the board
+  changed since that run (`docs/architecture/pcb-drc.md`, "Waivers").
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.
 

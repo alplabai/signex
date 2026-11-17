@@ -350,10 +350,12 @@ Decision: https://github.com/alplabai/signex/pull/2455#issuecomment-6955039336
   - footprint pad: the footprint's placement (id, position, stored turn,
     side) and the pad in its footprint's frame: type, shape, position, size,
     turn, corner ratio, drill, layers, per-layer sizes (`size_on`) and net;
-  - footprint: its placement, footprint id, and its pads and graphics in its
-    own frame. Nothing that went through sin/cos (such as the placed body
-    of `footprint_body`) is hashed, so another platform's libm never lapses
-    a waiver;
+  - footprint: its placement, footprint id, and, in its own frame, its pads
+    and its copper and courtyard graphics (the courtyard is what
+    `footprint_body` reads); silkscreen, fabrication and other graphics are
+    left out, so a silk edit keeps the waiver. Nothing that went through
+    sin/cos (such as the placed body of `footprint_body`) is hashed, so
+    another platform's libm never lapses a waiver;
   - free pad: as a footprint pad, on the board;
   - zone, string, arc, dimension, drawing: the stored object;
   - keepout: its boundary, layers and what it forbids.
@@ -362,20 +364,28 @@ Decision: https://github.com/alplabai/signex/pull/2455#issuecomment-6955039336
   An item or keepout the board no longer has hashes as a fixed
   `missing:<id>` marker.
 - **Matching (`waiver_state`).** Of the waivers with the finding's key, one
-  whose fingerprint matches the current geometry wins (waived). Otherwise a
-  waiver with an empty fingerprint, saved before #2307, holds by key alone,
-  as it did before (waived). Otherwise the last waiver with that key has
-  lapsed: the finding is open again. So a newer waiver of the same finding
-  is never shadowed by an older stale one, in either order. The fingerprint
-  is only computed when a waiver with that key and a fingerprint exists.
+  whose fingerprint matches the current geometry wins (waived). Otherwise
+  the last waiver with that key has lapsed: the finding is open again. So a
+  newer waiver of the same finding is never shadowed by an older stale one,
+  in either order. A waiver without a fingerprint (made before this change,
+  by #2451, which no release shipped) never matches: it lapses once and is
+  waived again. The fingerprint is only computed for a finding some waiver
+  names.
+- **Waiving needs current results.** Waive and `waive_drc_violation` are
+  refused when the board or its net classes changed since the last run
+  ("run DRC again before waiving"), so a waiver never fingerprints geometry
+  the run did not check. Unwaiving is allowed on stale results. A run the
+  board was edited during logs no lapsed-waiver line.
 - **Lapsed.** The panel shows a lapsed finding as an open row, and a run
   logs one Messages line with the number of waived findings that are back.
   `check_drc` lists the lapsed waiver under `lapsed` and the finding in
   `findings`. Waiving it again replaces the old waiver: the writer keeps
   one waiver per key.
-- **Report shape.** `waiver_json` is the one adapter for a DRC waiver in a
-  report: `{"kind": "finding", "rule_id", "key", "fingerprint", "reason"}`,
-  field names shared with ERC's `finding_waiver` where they overlap.
+- **Report shape.** One adapter serves ERC and DRC:
+  `signex_types::check::finding_waiver_json` writes `kind` (`finding`),
+  `rule_id`, `fingerprint` and `reason`, plus each check's own fields. DRC's
+  `waiver_json` adds `key`; ERC's `finding_waiver` adds `objects`, `author`,
+  `date` and `message`.
 
 ## Zones
 
