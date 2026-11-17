@@ -240,7 +240,11 @@ mod tests {
         );
         assert!(dock.is_collapsed(PanelPosition::Bottom));
         assert_eq!(dock.preferred_width(PanelPosition::Left), 310.0);
-        assert!(crate::panels::ALL_PANELS.iter().all(|k| panel_kind_key(*k) != "signex_ai"));
+        assert!(
+            crate::panels::ALL_PANELS
+                .iter()
+                .all(|k| panel_kind_key(*k) != "signex_ai")
+        );
     }
 
     #[test]

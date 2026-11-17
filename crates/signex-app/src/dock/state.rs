@@ -442,7 +442,10 @@ mod tests {
         dock.add_panel(PanelPosition::Bottom, PanelKind::Components);
         dock.add_panel(PanelPosition::Right, PanelKind::Components);
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Components]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left),
+            [PanelKind::Components]
+        );
         assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
         assert!(dock.panel_kinds(PanelPosition::Right).is_empty());
     }
@@ -463,7 +466,10 @@ mod tests {
             dock.add_panel(pos, kind);
         }
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Components]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left),
+            [PanelKind::Components]
+        );
         assert_eq!(
             dock.panel_kinds(PanelPosition::Right),
             [PanelKind::Messages]
@@ -633,7 +639,10 @@ mod tests {
 
         dock.update(DockMessage::DockFloating(0));
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Components]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left),
+            [PanelKind::Components]
+        );
         assert!(dock.floating.is_empty());
     }
 
