@@ -160,9 +160,33 @@ fn summary_cell<'a>(
     .boxed()
 }
 
+/// The DRC cell: the open board's unwaived violations from its last run, or
+/// "Not run" when no board in view has a report.
+fn drc_value(ctx: &PanelContext) -> (Localized, Color) {
+    let i18n = &*ctx.i18n;
+    match ctx.pcb_drc.as_ref().filter(|d| d.ran) {
+        Some(drc) => {
+            let count = drc.rows.iter().filter(|row| row.waiver.is_none()).count();
+            let color = if count > 0 {
+                ti(ctx.tokens.error)
+            } else {
+                resolve(&ctx.tokens).ink3
+            };
+            (
+                t!(i18n, ids::PANELS_SUMMARY_DRC_VIOLATIONS, "count" => count),
+                color,
+            )
+        }
+        None => (
+            t!(i18n, ids::PANELS_SUMMARY_NOT_RUN),
+            resolve(&ctx.tokens).ink3,
+        ),
+    }
+}
+
 /// The Projects panel footer card: ERC counts, DRC and "Last commit".
-/// ERC and DRC show a dash without data (no ERC findings recorded, no DRC
-/// engine). "Unrouted" is left out: no routing status exists to count.
+/// ERC and DRC read "Not run" until a check has run (#2262). "Unrouted" is
+/// left out: no routing status exists to count.
 /// "Last commit" shows only when the active project has git and its history
 /// has loaded.
 pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMsg>> {
@@ -175,8 +199,8 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
             .filter(|d| d.severity == severity)
             .count()
     };
-    let (erc, erc_color) = if ctx.erc_diagnostics.is_empty() {
-        (t!(i18n, ids::PANELS_SUMMARY_NO_VALUE), r.ink3)
+    let (erc, erc_color) = if !ctx.erc_ran && ctx.erc_diagnostics.is_empty() {
+        (t!(i18n, ids::PANELS_SUMMARY_NOT_RUN), r.ink3)
     } else {
         let errors = count(ErcSeverityLite::Error);
         let warnings = count(ErcSeverityLite::Warning);
@@ -197,14 +221,10 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
             color,
         )
     };
+    let (drc, drc_color) = drc_value(ctx);
     let mut cells = vec![
         summary_cell(tokens, t!(i18n, ids::PANELS_SUMMARY_ERC), erc, erc_color),
-        summary_cell(
-            tokens,
-            t!(i18n, ids::PANELS_SUMMARY_DRC),
-            t!(i18n, ids::PANELS_SUMMARY_NO_VALUE),
-            r.ink3,
-        ),
+        summary_cell(tokens, t!(i18n, ids::PANELS_SUMMARY_DRC), drc, drc_color),
     ];
     let has_git = ctx
         .projects
@@ -319,5 +339,76 @@ mod selection_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+    use crate::layout_probe::lay_out_texts;
+    use signex_drc::ViolationKind;
+
+    fn context() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        app.document_state.panel_ctx.clone()
+    }
+
+    fn texts(ctx: &PanelContext) -> Vec<String> {
+        let card = summary_card(ctx).expect("the card builds");
+        lay_out_texts(card, iced::Size::new(240.0, 200.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    fn drc_row(index: usize, waiver: Option<&str>) -> super::super::DrcRow {
+        super::super::DrcRow {
+            index,
+            kind: ViolationKind::Clearance,
+            a: "GND".into(),
+            b: "VCC".into(),
+            measured_mm: "0.100".into(),
+            required_mm: "0.150".into(),
+            over_maximum: false,
+            x_mm: "1.000".into(),
+            y_mm: "2.000".into(),
+            layer: None,
+            layers: Vec::new(),
+            key: format!("k{index}"),
+            rule: "builtin::clearance".into(),
+            severity: None,
+            objects: 2,
+            waiver: waiver.map(str::to_string),
+        }
+    }
+
+    /// #2262: before any check runs, ERC and DRC read "Not run", not a dash.
+    #[test]
+    fn checks_that_have_not_run_say_so() {
+        let ctx = context();
+        let shown = texts(&ctx);
+        assert_eq!(
+            shown.iter().filter(|t| *t == "Not run").count(),
+            2,
+            "{shown:#?}"
+        );
+        assert!(shown.iter().all(|t| t != "—"), "{shown:#?}");
+    }
+
+    /// A clean ERC run reads as zero counts, and a DRC report counts its
+    /// unwaived violations.
+    #[test]
+    fn a_clean_erc_run_and_a_drc_report_show_their_counts() {
+        let mut ctx = context();
+        ctx.erc_ran = true;
+        ctx.pcb_drc = Some(super::super::DrcPanel {
+            ran: true,
+            rows: vec![drc_row(0, None), drc_row(1, Some("accepted"))],
+            ..super::super::DrcPanel::default()
+        });
+        let shown = texts(&ctx);
+        assert!(shown.iter().any(|t| t == "0 errors · 0 warn"), "{shown:#?}");
+        assert!(shown.iter().any(|t| t == "1 violation"), "{shown:#?}");
+        assert!(shown.iter().all(|t| t != "Not run"), "{shown:#?}");
     }
 }

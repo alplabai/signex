@@ -375,8 +375,13 @@ panels-summary-erc = ERC
 panels-summary-drc = DRC
 # Caption: how long ago the last git commit was made.
 panels-summary-last-commit = Last commit
-# A value that is not known yet.
-panels-summary-no-value = —
+# The check has not run on this project yet.
+panels-summary-not-run = Not run
+# DRC result: violations in the last run. $count is a whole number.
+panels-summary-drc-violations = { $count ->
+        [one] { $count } violation
+       *[other] { $count } violations
+    }
 # ERC result counts. Both are whole numbers.
 panels-summary-erc-counts =
     { $errors ->
@@ -557,8 +562,14 @@ panels-sch-library-empty = Open a `.snxsym` to see its symbols here. Right-click
 # Stands in for the file name of a symbol file not saved yet.
 panels-sch-library-untitled-file = <untitled>
 # $library is the library name, $file the symbol file; $count is a whole number.
-panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count } symbols)
-panels-sch-library-breadcrumb = { $file }  ({ $count } symbols)
+panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
+panels-sch-library-breadcrumb = { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
 panels-sch-library-column-design-item-id = Design Item ID
 panels-sch-library-column-description = Description
 panels-sch-library-part-shared = Part 0 (shared)

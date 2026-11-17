@@ -242,8 +242,6 @@ editors-symbol-status-part-pins = Part { $part } of { $parts } · { $pins ->
     }
 editors-symbol-status-pin-selected = Pin { $number } { $name } selected
 editors-symbol-status-items-selected = { $count } selected
-editors-symbol-status-hint-selected = Del removes · drag to move
-editors-symbol-status-hint-idle = { $undo } undo · { $redo } redo · scroll zooms · right-drag pans · Home fits
 editors-symbol-copy-again = Copy Again
 
 ## Graphite views (#2225)
@@ -261,10 +259,10 @@ editors-component-header-unparsed = { $count ->
 
 ## Footprint editor status bar (Graphite)
 editors-footprint-status-pad-selected = Pad { $number } — { $width } × { $height } { $unit } @ ({ $x }, { $y })
-editors-footprint-status-hint-idle = { $pads ->
+editors-footprint-status-pad-count = { $pads ->
     [one] { $pads } pad
    *[other] { $pads } pads
-} · Click empty area to add, drag to move, Del to remove
+}
 
 ## Footprint editor Properties panel
 # Header while a pad is selected: its number, its kind (SMD, Through-hole…)

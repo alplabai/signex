@@ -1,5 +1,5 @@
 //! The footprint editor's segment of the global status bar: the selected
-//! pad's number, size and position, or the pad count and the key hints.
+//! pad's number, size and position, or the pad count.
 //! X / Y and zoom come from the editor through the status readout.
 
 use signex_i18n::{I18n, ids, t};
@@ -30,7 +30,7 @@ fn length(mm: f64, unit: Unit, signed: bool) -> String {
 }
 
 /// "Pad 1 — 1.55 × 0.60 mm @ (-2.700, +1.905)" for the primary selected
-/// pad, else "8 pads · Click empty area to add, …".
+/// pad, else "8 pads". The bar names state only, no key hints (#2262).
 fn summary(editor: &FootprintDocument, unit: Unit, i18n: &I18n) -> String {
     let state = &editor.state;
     if let Some(pad) = state.selected_pad.and_then(|idx| state.pads.get(idx)) {
@@ -48,7 +48,7 @@ fn summary(editor: &FootprintDocument, unit: Unit, i18n: &I18n) -> String {
     }
     t!(
         i18n,
-        ids::EDITORS_FOOTPRINT_STATUS_HINT_IDLE,
+        ids::EDITORS_FOOTPRINT_STATUS_PAD_COUNT,
         "pads" => state.pads.len()
     )
     .into_string()
@@ -77,13 +77,14 @@ mod tests {
     }
 
     #[test]
-    fn with_nothing_selected_the_segment_counts_the_pads_and_hints_at_the_keys() {
+    fn with_nothing_selected_the_segment_counts_the_pads() {
         let editor = editor_with_pads(8);
         let i18n = i18n();
         let shown = segment(&editor, Unit::Mm, &i18n);
         assert!(!shown.is_error);
-        let expected = t!(i18n, ids::EDITORS_FOOTPRINT_STATUS_HINT_IDLE, "pads" => 8usize);
+        let expected = t!(i18n, ids::EDITORS_FOOTPRINT_STATUS_PAD_COUNT, "pads" => 8usize);
         assert_eq!(shown.text, expected.into_string());
+        assert!(!shown.text.contains("Click"), "{}", shown.text);
     }
 
     #[test]
@@ -101,7 +102,7 @@ mod tests {
         let mut editor = editor_with_pads(1);
         editor.state.selected_pad = Some(5);
         let i18n = i18n();
-        let expected = t!(i18n, ids::EDITORS_FOOTPRINT_STATUS_HINT_IDLE, "pads" => 1usize);
+        let expected = t!(i18n, ids::EDITORS_FOOTPRINT_STATUS_PAD_COUNT, "pads" => 1usize);
         assert_eq!(
             segment(&editor, Unit::Mm, &i18n).text,
             expected.into_string()

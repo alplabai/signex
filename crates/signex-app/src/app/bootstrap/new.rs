@@ -663,6 +663,7 @@ impl Signex {
                     erc_focus_index: None,
                     erc_running: false,
                     erc_results_stale: false,
+                    erc_ran: false,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,

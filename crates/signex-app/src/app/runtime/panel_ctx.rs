@@ -725,6 +725,7 @@ impl Signex {
             erc_focus_index: self.ui_state.erc_focus_global_index,
             erc_running: self.ui_state.erc_running,
             erc_results_stale: self.erc_results_stale(),
+            erc_ran: !self.ui_state.erc_violations_by_path.is_empty(),
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             pcb_drc: self.pcb_drc_panel(),
