@@ -100,10 +100,14 @@ non_components = false
 The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
 
 Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
-table per waiver with `key` (`signex_drc::waiver_key`), `rule` and `note`,
-written only when the board waives one. The DRC results panel and the
-`waive_drc_violation` and `unwaive_drc_violation` commands set them, each
-as one `SetBoardOptions` undo step.
+table per waiver with `key` (`signex_drc::waiver_key`), `rule`, `note` and
+`fingerprint`, written only when the board waives one. The DRC results panel
+and the `waive_drc_violation` and `unwaive_drc_violation` commands set them,
+each as one `SetBoardOptions` undo step. `fingerprint` (#2307, 32 hex digits,
+`signex_drc::fingerprint`) is the geometry of the finding's objects when it
+was waived; when they change the waiver lapses. A waiver saved before #2307
+has no `fingerprint` key, loads with an empty one, holds by `key` alone and
+is re-saved without the key. See `docs/architecture/pcb-drc.md`, "Waivers".
 
 The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
 

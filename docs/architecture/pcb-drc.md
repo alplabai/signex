@@ -323,6 +323,60 @@ what a headless run reports. A logged violation is worded by
 round (`0.2`, #2334). A report is marked stale when the board's revision
 moved after it.
 
+## Waivers
+
+Decision: https://github.com/alplabai/signex/pull/2455#issuecomment-6955039336
+(`docs/DECISIONS.md`, 2026-11-17). Code: `crates/signex-drc/src/waiver.rs`.
+
+- **One store, the board file.** A waiver is a `DrcWaiver` in
+  `BoardOptions::drc_waivers` (`[board_options] drc_waivers` in the
+  `.snxpcb`, `docs/PCB_BOARD_OPTIONS.md`). The DRC panel's Waive and
+  `waive_drc_violation` write it, as one `SetBoardOptions` undo step; Run
+  DRC, the DRC panel, `get_drc_results` and `check_drc` read it.
+- **Identity: `waiver_key`.** A hash of the rule id (and, for a written
+  rule, the kind of limit broken), the items and the keepout; not the board
+  path, the nets, the layers or the place. A finding with no item and no
+  keepout is named by where it is. It is the key the panel rows, the waive
+  commands and `check_drc`'s `evidence.waiver_key` use.
+- **Fingerprint: `fingerprint(v, board)`.** A hash of the geometry of every
+  item the finding names and of its keepout, taken when the finding is
+  waived and compared on every run. Every length, angle and ratio is
+  quantised to stored nm (`mm_as_stored_nm`), so a save and a load never
+  change it, and objects are written with sorted keys. Per item kind:
+  - track: layer, net, ends, width;
+  - via: position, diameter, drill, per-layer diameters (`layer_sizes`, as
+    DRC measures with `diameter_on`) and the resolved copper span
+    (`via_layers`: a through via reaches every layer);
+  - footprint pad: the footprint's placement (id, position, stored turn,
+    side) and the pad in its footprint's frame: type, shape, position, size,
+    turn, corner ratio, drill, layers, per-layer sizes (`size_on`) and net;
+  - footprint: its placement, footprint id, and its pads and graphics in its
+    own frame. Nothing that went through sin/cos (such as the placed body
+    of `footprint_body`) is hashed, so another platform's libm never lapses
+    a waiver;
+  - free pad: as a footprint pad, on the board;
+  - zone, string, arc, dimension, drawing: the stored object;
+  - keepout: its boundary, layers and what it forbids.
+
+  Nets are hashed by name, so renumbering the board's nets keeps a waiver.
+  An item or keepout the board no longer has hashes as a fixed
+  `missing:<id>` marker.
+- **Matching (`waiver_state`).** Of the waivers with the finding's key, one
+  whose fingerprint matches the current geometry wins (waived). Otherwise a
+  waiver with an empty fingerprint, saved before #2307, holds by key alone,
+  as it did before (waived). Otherwise the last waiver with that key has
+  lapsed: the finding is open again. So a newer waiver of the same finding
+  is never shadowed by an older stale one, in either order. The fingerprint
+  is only computed when a waiver with that key and a fingerprint exists.
+- **Lapsed.** The panel shows a lapsed finding as an open row, and a run
+  logs one Messages line with the number of waived findings that are back.
+  `check_drc` lists the lapsed waiver under `lapsed` and the finding in
+  `findings`. Waiving it again replaces the old waiver: the writer keeps
+  one waiver per key.
+- **Report shape.** `waiver_json` is the one adapter for a DRC waiver in a
+  report: `{"kind": "finding", "rule_id", "key", "fingerprint", "reason"}`,
+  field names shared with ERC's `finding_waiver` where they overlap.
+
 ## Zones
 
 `Unconnected` is the ratsnest, so it joins copper through zones the way the
