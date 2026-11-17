@@ -107,3 +107,24 @@ fn a_track_with_a_branch_off_its_side_does_not_move() {
         "moving the run would leave the branch behind"
     );
 }
+
+/// #2451 review: a locked track is not pushed, nor stretched when it joins
+/// a pushed one, so the route walks around it instead of offering a move
+/// the board then refuses.
+#[test]
+fn a_locked_track_is_not_pushed_or_stretched() {
+    let mut run = track_at(1, (2.0, 0.3), (8.0, 0.3), 2);
+    run.locked = true;
+    let locked_run = board(Vec::new(), vec![run]);
+    let world = RouteWorld::new(&locked_run, &rule);
+    assert_eq!(shove(&world, &[leg()]), None, "the locked run stays");
+
+    let mut riser = track_at(2, (2.0, 0.3), (2.0, 5.0), 2);
+    riser.locked = true;
+    let locked_riser = board(
+        Vec::new(),
+        vec![track_at(1, (2.0, 0.3), (8.0, 0.3), 2), riser],
+    );
+    let world = RouteWorld::new(&locked_riser, &rule);
+    assert_eq!(shove(&world, &[leg()]), None, "its locked riser stays");
+}

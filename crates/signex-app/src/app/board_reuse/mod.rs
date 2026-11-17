@@ -108,9 +108,9 @@ impl Signex {
                 Task::none()
             }
             ReuseBlockMsg::Written { saved, result } => {
+                self.end_project_write(&saved.file);
                 self.report_block_written(&saved, result);
-                let next = self.document_state.reuse_blocks.end_write(&saved.file);
-                next.map_or_else(Task::none, write_block_task)
+                self.start_waiting_block_write(&saved.file)
             }
             ReuseBlockMsg::Read {
                 folder,
@@ -140,6 +140,7 @@ impl Signex {
         let Ok(folder) = self.reuse_block_folder(&board) else {
             return Task::none();
         };
+        self.document_state.reuse_blocks.retry_failed_read(&folder);
         if !self.document_state.reuse_blocks.needs_read(&folder) {
             return Task::none();
         }
@@ -182,11 +183,11 @@ impl Signex {
         let name = store::checked_name(name)?;
         // The case check below needs the folder's listing: without it a
         // block of an earlier session is not seen.
-        let blocks = &self.document_state.reuse_blocks;
+        let blocks = &mut self.document_state.reuse_blocks;
         if blocks.needs_read(&folder) {
             return Err("the project's reuse blocks are not read yet".to_string());
         }
-        if let Some(why) = blocks.read_failure(&folder) {
+        if let Some(why) = blocks.answer_read_failure(&folder) {
             return Err(format!(
                 "the project's reuse blocks could not be read: {why}"
             ));
@@ -217,9 +218,10 @@ impl Signex {
         };
         let blocks = &mut self.document_state.reuse_blocks;
         blocks.put(&folder, &saved.name, block);
-        let task = blocks
-            .begin_write((saved.clone(), text))
-            .map_or_else(Task::none, write_block_task);
+        let task = match blocks.begin_write((saved.clone(), text)) {
+            Some(write) => self.start_block_write(write),
+            None => Task::none(),
+        };
         Ok((saved, task))
     }
 
@@ -233,13 +235,18 @@ impl Signex {
         degrees: f64,
     ) -> Result<PlacedBlock, String> {
         let folder = self.reuse_block_folder(board)?;
-        let blocks = &self.document_state.reuse_blocks;
-        if let Some(why) = blocks.read_failure(&folder) {
+        if let Some(why) = self
+            .document_state
+            .reuse_blocks
+            .answer_read_failure(&folder)
+        {
             return Err(format!(
                 "the project's reuse blocks could not be read: {why}"
             ));
         }
-        let block = blocks
+        let block = self
+            .document_state
+            .reuse_blocks
             .block(&folder, name.trim())
             .ok_or_else(|| format!("the project has no reuse block named {}", name.trim()))?
             .clone();
@@ -300,7 +307,7 @@ impl Signex {
             return Task::none();
         };
         if let Ok(folder) = self.reuse_block_folder(&board)
-            && self.document_state.reuse_blocks.needs_read(&folder)
+            && self.retry_and_need_read(&folder)
         {
             let again = Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested));
             return read_blocks_task(folder, None).chain(Task::done(again));
@@ -318,6 +325,38 @@ impl Signex {
                 Task::none()
             }
         }
+    }
+
+    /// A save or place request starts: whether the project's blocks in
+    /// `folder` are to be read first. A failed read a request was refused
+    /// for is read again.
+    pub(crate) fn retry_and_need_read(&mut self, folder: &Path) -> bool {
+        let blocks = &mut self.document_state.reuse_blocks;
+        blocks.retry_answered_failure(folder);
+        blocks.needs_read(folder)
+    }
+
+    /// Start the block write `write`, registered as a project write: a
+    /// project folder rename waits for it ([`Self::begin_project_write`]).
+    fn start_block_write(&mut self, write: store::BlockWrite) -> Task<Message> {
+        self.begin_project_write(&write.0.file);
+        write_block_task(write)
+    }
+
+    /// The write of `file` landed: start the save that waited for it, unless
+    /// the project folder is being renamed or was renamed since. The write
+    /// would then recreate the old folder, so it is dropped and Messages
+    /// says why.
+    fn start_waiting_block_write(&mut self, file: &Path) -> Task<Message> {
+        let Some(next) = self.document_state.reuse_blocks.end_write(file) else {
+            return Task::none();
+        };
+        if let Err(refusal) = self.refuse_while_project_moves(file, "save the reuse block to") {
+            self.document_state.reuse_blocks.drop_write(file);
+            self.report_block_written(&next.0, Err(refusal.to_string()));
+            return Task::none();
+        }
+        self.start_block_write(next)
     }
 
     /// The designators of the footprints in `items`, sorted and joined by

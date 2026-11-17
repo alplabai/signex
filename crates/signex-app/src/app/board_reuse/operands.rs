@@ -64,7 +64,7 @@ fn read_first(app: &mut Signex, board: &Path, id: &str, args: &CommandArgs) -> O
         Ok(folder) => folder,
         Err(reason) => return Some(refused(reason)),
     };
-    if !app.document_state.reuse_blocks.needs_read(&folder) {
+    if !app.retry_and_need_read(&folder) {
         return None;
     }
     let Ok(command) = AppCommandId::new(id) else {

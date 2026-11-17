@@ -22,7 +22,7 @@ use signex_types::pcb_sketch::PcbKeepout;
 
 use pcb_geom::{
     GeomError, ItemRef, PointNm, RectNm, Rejected, Shape, Side, footprint_body, layer_bit,
-    layer_mask, pad_layers, pad_shape, track_shape, via_layers, via_shape,
+    layer_mask, pad_pieces, pad_shape, track_shape, via_pieces, via_shape,
 };
 
 use super::{SkippedKeepout, Violation, ViolationKind};
@@ -128,14 +128,15 @@ impl<'a> Area<'a> {
         }
         if forbids.no_vias || forbids.no_drilling || copper {
             for via in &board.vias {
-                let layers = if forbids.no_drilling {
-                    u32::MAX
-                } else {
-                    via_layers(via)
-                };
-                if let Ok(shape) = via_shape(via) {
-                    self.meet(ItemRef::Via(via.uuid), via.net, layers, &shape, found);
+                // Its copper at its size on each layer (#2401); drilled, its
+                // base disc on every layer as well.
+                let mut pieces = via_pieces(via).unwrap_or_default();
+                if forbids.no_drilling
+                    && let Ok(shape) = via_shape(via)
+                {
+                    pieces.push((u32::MAX, shape));
                 }
+                self.meet_pieces(ItemRef::Via(via.uuid), via.net, &pieces, found);
             }
         }
         if copper || forbids.no_drilling {
@@ -173,18 +174,44 @@ impl<'a> Area<'a> {
         }
     }
 
-    /// A pad of `footprint` the keepout forbids (as copper, or drilled).
+    /// A pad of `footprint` the keepout forbids: as copper, at its size on
+    /// each layer (#2401), or drilled, its base shape on every layer.
     fn pad(&self, footprint: &Footprint, pad: &Pad, item: ItemRef, found: &mut Vec<Violation>) {
         let forbids = self.keepout.forbids;
-        let drilled = forbids.no_drilling && pad.drill.is_some();
-        let layers = match (drilled, forbids.no_copper) {
-            (true, _) => u32::MAX,
-            (false, true) => pad_layers(footprint, pad),
-            (false, false) => return,
-        };
+        let mut pieces = Vec::new();
+        if forbids.no_copper {
+            pieces = pad_pieces(footprint, pad).unwrap_or_default();
+        }
+        if forbids.no_drilling
+            && pad.drill.is_some()
+            && let Ok(shape) = pad_shape(footprint, pad)
+        {
+            pieces.push((u32::MAX, shape));
+        }
         let net = pad.net.as_ref().map_or(0, |n| n.number);
-        if let Ok(shape) = pad_shape(footprint, pad) {
-            self.meet(item, net, layers, &shape, found);
+        self.meet_pieces(item, net, &pieces, found);
+    }
+
+    /// Record one violation when any of `pieces`, each a layer mask and its
+    /// copper there, meets the keepout, on every layer one meets it.
+    fn meet_pieces(
+        &self,
+        item: ItemRef,
+        net: u32,
+        pieces: &[(u32, Shape)],
+        found: &mut Vec<Violation>,
+    ) {
+        let mut met: Option<(u32, RectNm)> = None;
+        for (layers, shape) in pieces {
+            if let Some((shared, aabb)) = self.hit(*layers, shape) {
+                met = Some(match met {
+                    Some((mask, rect)) => (mask | shared, rect.union(&aabb)),
+                    None => (shared, aabb),
+                });
+            }
+        }
+        if let Some((shared, aabb)) = met {
+            self.record(item, net, shared, aabb, found);
         }
     }
 
@@ -197,11 +224,29 @@ impl<'a> Area<'a> {
         shape: &Shape,
         found: &mut Vec<Violation>,
     ) {
+        if let Some((shared, aabb)) = self.hit(layers, shape) {
+            self.record(item, net, shared, aabb, found);
+        }
+    }
+
+    /// The layers `shape`, on `layers`, meets the keepout on, and its box.
+    fn hit(&self, layers: u32, shape: &Shape) -> Option<(u32, RectNm)> {
         let shared = layers & self.layers;
         let aabb = shape.aabb();
         if shared == 0 || !aabb.intersects(&self.bounds) || !shape.overlaps_polygon(&self.polygon) {
-            return;
+            return None;
         }
+        Some((shared, aabb))
+    }
+
+    fn record(
+        &self,
+        item: ItemRef,
+        net: u32,
+        shared: u32,
+        aabb: RectNm,
+        found: &mut Vec<Violation>,
+    ) {
         found.push(Violation {
             kind: ViolationKind::Keepout,
             items: vec![item],

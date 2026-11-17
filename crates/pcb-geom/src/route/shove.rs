@@ -3,7 +3,8 @@
 //! the rules ask. A moved track's ends carry the tracks joined there with
 //! them (their far ends stay put), so the net stays connected. What a
 //! moved track then crowds is pushed in turn, a few rounds deep. Nothing
-//! moves when a track ends on a pad or via, when same-net copper joins it
+//! moves when a track is locked or ends on a pad or via, or a locked track
+//! is joined at its end, when same-net copper joins it
 //! other than at a shared end (a T-junction, an overlap), when the leg
 //! crosses a track, when something else than a track is in the way, or
 //! when the moved copper would break a clearance or enter a keepout: the
@@ -86,7 +87,7 @@ fn push_one(
     let Shape::Capsule { a, b, radius } = item.shape else {
         return None;
     };
-    if world.is_anchored(index, a) || world.is_anchored(index, b) {
+    if world.is_locked(index) || world.is_anchored(index, a) || world.is_anchored(index, b) {
         return None;
     }
     let joined_ends = [world.joined_at(index, a), world.joined_at(index, b)];
@@ -106,7 +107,7 @@ fn push_one(
             else {
                 return None;
             };
-            if moved.contains_key(&joined) {
+            if moved.contains_key(&joined) || world.is_locked(joined) {
                 return None;
             }
             let (ja, jb) = if ja == end {

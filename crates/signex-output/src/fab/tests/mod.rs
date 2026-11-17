@@ -7,6 +7,7 @@ pub(crate) mod fixture;
 mod layer_sizes;
 mod origin;
 mod panel;
+mod same_net;
 
 use std::path::PathBuf;
 

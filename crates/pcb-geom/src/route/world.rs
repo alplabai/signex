@@ -5,7 +5,7 @@
 //! vias for `no_vias`, `no_copper` or `no_drilling`, the last on every
 //! layer.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use rstar::{AABB, RTree, RTreeObject};
 use signex_types::pcb::PcbBoard;
@@ -143,6 +143,8 @@ pub struct RouteWorld<'a> {
     /// Nets routed together (a differential pair, a bus): none is an
     /// obstacle to another ([`Self::with_kin`]).
     kin: Vec<u32>,
+    /// The board's locked tracks: a push never moves one.
+    locked_tracks: HashSet<Uuid>,
 }
 
 impl<'a> RouteWorld<'a> {
@@ -182,6 +184,12 @@ impl<'a> RouteWorld<'a> {
             rule,
             reach: reach.max(0),
             kin: Vec::new(),
+            locked_tracks: board
+                .segments
+                .iter()
+                .filter(|s| s.locked)
+                .map(|s| s.uuid)
+                .collect(),
         }
     }
 
@@ -283,6 +291,12 @@ impl<'a> RouteWorld<'a> {
             .collect();
         found.sort_unstable();
         found
+    }
+
+    /// Whether item `index` is a locked track: one a push cannot move or
+    /// stretch, so the route walks around it instead.
+    pub(super) fn is_locked(&self, index: usize) -> bool {
+        matches!(self.items[index].item, ItemRef::Track(id) if self.locked_tracks.contains(&id))
     }
 
     /// Whether `end` of item `index` sits on a pad or via of its net: an

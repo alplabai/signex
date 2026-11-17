@@ -58,8 +58,10 @@ size on the active copper layer; DRC checks a via and a pad with their
 copper on each layer (`pcb_geom::via_pieces`, `pcb_geom::pad_pieces`), and a
 via's smallest ring against a minimum diameter rule (`Via::min_diameter`:
 the layers its span passes, the via's own diameter only where its sizes do
-not cover a layer). Pour fills, the board tools and the fabrication outputs
-read the size on each layer too (`docs/FABRICATION_OUTPUTS.md`).
+not cover a layer); the keepout check tests each layer's copper against a
+keepout on that layer. Pour fills, the board tools, the board PDF (each page
+draws the size on its layers) and the fabrication outputs read the size on
+each layer too (`docs/FABRICATION_OUTPUTS.md`).
 
 ## Locks and the via span {#locks}
 
@@ -67,8 +69,9 @@ Tracks and vias carry a lock (`Segment::locked`, `Via::locked`), saved in
 the optional `locked` track and via column. `BoardCommand::SetItemsLocked`
 sets it as one step. A locked item refuses a checked replace (any Properties
 edit), Delete refuses it, and a moved footprint leaves a locked track where
-it is (`pcb_geom::tracks_on_pads`). Routing adds copper and never edits a
-track, so it needs no check. The Properties Lock box, the board menu's Lock
+it is (`pcb_geom::tracks_on_pads`). Routing adds copper; push and shove
+never moves or stretches a locked track, so the route walks around it. The
+Properties Lock box, the board menu's Lock
 and Unlock rows (`lock_board_items`, `unlock_board_items`) and an agent with
 `ids` set it.
 

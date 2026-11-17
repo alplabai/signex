@@ -378,3 +378,131 @@ fn a_second_save_of_a_block_is_written_after_the_first() {
     let written = signex_types::format::SnxPcb::parse(&text).unwrap().board;
     assert_eq!(written.footprints.len(), 2, "the second save is the file");
 }
+
+/// What Messages said, since `mark`, about the block file `file` with
+/// `word` in it.
+fn said_about(mark: Option<u64>, file: &Path, word: &str) -> usize {
+    let file = file.display().to_string();
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .iter()
+        .filter(|entry| entry.message.contains(&file) && entry.message.contains(word))
+        .count()
+}
+
+/// #2451 review: a block write holds a project folder rename off until it
+/// lands, and the save that waited behind it is dropped, not written, when
+/// the folder is being renamed by then. The old folder is not made again
+/// and Messages does not say the second save was saved.
+#[test]
+fn a_waiting_block_write_is_dropped_when_the_project_folder_moves() {
+    let root = tempfile::tempdir().unwrap();
+    let old = root.path().join("Foo");
+    std::fs::create_dir(&old).unwrap();
+    let (mut app, board) = app_with_board(&old);
+    right_click(&mut app);
+    let document = format!("document={}", board.display());
+    let save = |app: &mut Signex, ids: &str| {
+        let command = AppCommandId::new("save_board_reuse_block").unwrap();
+        let operands = [document.as_str(), "name=amp", ids];
+        let args = CommandArgs::parse_operands(&command, &operands).expect("operands parse");
+        let (outcome, task) = app.run_headless_command_in_test(&command, args);
+        assert!(
+            matches!(outcome, CommandOutcome::Answered(_)),
+            "{outcome:?}"
+        );
+        task
+    };
+    let first = save(&mut app, "ids=U1");
+    let second = save(&mut app, "ids=U1,R1");
+    let file = old.join("reuse-blocks").join("amp.snxpcb");
+    assert_eq!(
+        app.document_state.project_writes,
+        std::slice::from_ref(&file),
+        "a folder rename waits for the running write"
+    );
+    settle(&mut app, second);
+
+    // The first write lands on disk; the project folder moves before the
+    // app takes its landing in.
+    let landed = crate::task_driver::TaskDriver::new()
+        .outputs(first)
+        .expect("the first write ran");
+    assert!(file.is_file(), "the first save is written before the move");
+    let _ = crate::diagnostics::logged_count("");
+    let mark = crate::diagnostics::newest_entry_id();
+    std::fs::rename(&old, root.path().join("Bar")).unwrap();
+    let project = app.document_state.projects[0].id;
+    app.document_state.project_folder_renames.insert(project);
+    for message in landed {
+        let task = app.update(message);
+        settle(&mut app, task);
+    }
+
+    assert!(!old.exists(), "the old project folder is not made again");
+    assert_eq!(
+        said_about(mark, &file, "saved to"),
+        1,
+        "the first save only"
+    );
+    assert_eq!(
+        said_about(mark, &file, "could not be written"),
+        1,
+        "the second save says it was not written"
+    );
+    assert!(app.document_state.project_writes.is_empty());
+    assert!(!app.document_state.reuse_blocks.is_writing(&file));
+}
+
+/// #2451 review: a block folder that could not be listed is listed again
+/// on the next save, so one failed read does not refuse every save until
+/// Signex restarts.
+#[test]
+fn a_failed_block_folder_read_is_retried_on_the_next_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    let not_a_folder = dir.path().join("reuse-blocks");
+    std::fs::write(&not_a_folder, b"x").unwrap();
+    let document = format!("document={}", board.display());
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=amp", "ids=U1"],
+    );
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        "{outcome:?}"
+    );
+
+    std::fs::remove_file(&not_a_folder).unwrap();
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=amp", "ids=U1"],
+    );
+
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+/// #2451 review: a board menu that opens after a failed folder listing
+/// lists the folder again.
+#[test]
+fn a_failed_block_folder_read_is_retried_on_the_next_menu_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    let not_a_folder = dir.path().join("reuse-blocks");
+    std::fs::write(&not_a_folder, b"x").unwrap();
+    right_click(&mut app);
+    let blocks = &app.document_state.reuse_blocks;
+    assert!(blocks.read_failure(dir.path()).is_some(), "the read failed");
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::Close));
+
+    std::fs::remove_file(&not_a_folder).unwrap();
+    right_click(&mut app);
+
+    let blocks = &app.document_state.reuse_blocks;
+    assert_eq!(blocks.read_failure(dir.path()), None);
+}

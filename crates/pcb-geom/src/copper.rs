@@ -179,7 +179,7 @@ pub fn pad_pieces(footprint: &Footprint, pad: &Pad) -> Result<Vec<(u32, Shape)>,
 
 /// The copper of `pieces` (from [`pad_pieces`] or [`via_pieces`]) on any
 /// layer of the [`layer_bit`] mask `layers`.
-pub(crate) fn pieces_on(pieces: Vec<(u32, Shape)>, layers: u32) -> impl Iterator<Item = Shape> {
+pub fn pieces_on(pieces: Vec<(u32, Shape)>, layers: u32) -> impl Iterator<Item = Shape> {
     pieces
         .into_iter()
         .filter(move |(mask, _)| mask & layers != 0)

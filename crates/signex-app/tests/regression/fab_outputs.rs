@@ -243,21 +243,14 @@ fn with_no_board_in_view_the_command_does_not_open_the_dialog() {
     assert!(app.ui_state.fab_outputs.is_none());
 }
 
-#[test]
-fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
-    let mut with_zone = board(true);
-    // A pour wholly off the 20 x 10 mm board fills nothing, so the images
-    // hold no copper for it.
-    with_zone.zones.push(Zone {
+/// A top copper pour on `net` named `net_name` with the corners `outline`.
+fn top_pour(net: u32, net_name: &str, outline: &[(f64, f64)]) -> Zone {
+    Zone {
         uuid: Uuid::from_u128(0x80),
-        net: 0,
-        net_name: String::new(),
+        net,
+        net_name: net_name.into(),
         layer: "TopCopper".into(),
-        outline: vec![
-            Point::new(25.0, 1.0),
-            Point::new(30.0, 1.0),
-            Point::new(30.0, 5.0),
-        ],
+        outline: outline.iter().map(|&(x, y)| Point::new(x, y)).collect(),
         holes: Vec::new(),
         priority: 0,
         fill_type: signex_types::zone_pour::POUR_FILL.into(),
@@ -269,7 +262,17 @@ fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
         min_island_area: 0.0,
         remove_dead_islands: false,
         unknown: Default::default(),
-    });
+    }
+}
+
+#[test]
+fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
+    let mut with_zone = board(true);
+    // A pour wholly off the 20 x 10 mm board fills nothing, so the images
+    // hold no copper for it.
+    with_zone
+        .zones
+        .push(top_pour(0, "", &[(25.0, 1.0), (30.0, 1.0), (30.0, 5.0)]));
     let mut f = open(with_zone);
     menu_row(&mut f.app);
     let out = f.tmp.path().join("zoned-out");
@@ -292,4 +295,32 @@ fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
         .unwrap_or_else(|| panic!("a Messages line for {folder}: {logged:?}"));
     assert_eq!(line.level, diagnostics::DiagnosticLevel::Warning);
     assert!(line.message.contains("copper zone"), "{}", line.message);
+}
+
+/// #2451 review: Generate fills the board's pours, so a pour inside the
+/// board is a region in the top copper image and no note says it was not
+/// filled.
+#[test]
+fn a_pour_inside_the_board_is_a_region_in_the_top_copper_image() {
+    let mut with_zone = board(true);
+    with_zone.zones.push(top_pour(
+        1,
+        "GND",
+        &[(1.0, 1.0), (19.0, 1.0), (19.0, 9.0), (1.0, 9.0)],
+    ));
+    let mut f = open(with_zone);
+    menu_row(&mut f.app);
+    let out = f.tmp.path().join("poured-out");
+    send(
+        &mut f.app,
+        fab(FabOutputsMsg::FolderPicked(Some(out.clone()))),
+    );
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+    assert!(state.notes().is_empty(), "{:?}", state.notes());
+    let copper = std::fs::read_to_string(out.join("board-copper-l1-top.gbr")).unwrap();
+    assert!(
+        copper.contains("%TO.N,GND*%\nG36*"),
+        "the pour's fill: {copper}"
+    );
 }
