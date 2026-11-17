@@ -306,3 +306,65 @@ fn a_name_that_differs_from_a_block_only_in_case_is_refused() {
     );
     assert_eq!(app.reuse_block_names_in_window(None), ["amp"]);
 }
+
+/// #2451: an agent's save before anything read the project's blocks reads
+/// them first, so `r1-u1` is checked against `R1-U1` of an earlier session
+/// and refused, and the earlier block's file is left as it was.
+#[test]
+fn an_agent_save_before_the_blocks_are_read_cannot_overwrite_a_block_named_in_another_case() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let (mut first, _) = app_with_board(dir.path());
+        save_channel_a(&mut first);
+    }
+    let file = dir.path().join("reuse-blocks").join("R1-U1.snxpcb");
+    let before = std::fs::read(&file).expect("the earlier block's file");
+    let (mut app, board) = app_with_board(dir.path());
+    let document = format!("document={}", board.display());
+
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=r1-u1", "ids=U2"],
+    );
+
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named R1-U1")),
+        "{outcome:?}"
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), before, "the file is untouched");
+    assert!(
+        !dir.path().join("reuse-blocks").join("r1-u1.snxpcb").exists(),
+        "no second file beside it"
+    );
+}
+
+/// #2451: two saves of one block whose writes finish out of order: the
+/// second write waits for the first, so the file holds the second save.
+#[test]
+fn a_second_save_of_a_block_is_written_after_the_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    right_click(&mut app);
+    let document = format!("document={}", board.display());
+    let save = |app: &mut Signex, ids: &str| {
+        let command = AppCommandId::new("save_board_reuse_block").unwrap();
+        let operands = [document.as_str(), "name=amp", ids];
+        let args = CommandArgs::parse_operands(&command, &operands).expect("operands parse");
+        let (outcome, task) = app.run_headless_command_in_test(&command, args);
+        assert!(matches!(outcome, CommandOutcome::Answered(_)), "{outcome:?}");
+        task
+    };
+    let first = save(&mut app, "ids=U1");
+    let second = save(&mut app, "ids=U1,R1");
+    let file = dir.path().join("reuse-blocks").join("amp.snxpcb");
+
+    // The second write lands first: it only waits.
+    settle(&mut app, second);
+    assert!(!file.exists(), "nothing written before the first write");
+    settle(&mut app, first);
+
+    let text = std::fs::read_to_string(&file).expect("the block file");
+    let written = signex_types::format::SnxPcb::parse(&text).unwrap().board;
+    assert_eq!(written.footprints.len(), 2, "the second save is the file");
+}

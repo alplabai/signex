@@ -109,7 +109,8 @@ impl Signex {
             }
             ReuseBlockMsg::Written { saved, result } => {
                 self.report_block_written(&saved, result);
-                Task::none()
+                let next = self.document_state.reuse_blocks.end_write(&saved.file);
+                next.map_or_else(Task::none, write_block_task)
             }
             ReuseBlockMsg::Read {
                 folder,
@@ -179,11 +180,20 @@ impl Signex {
         // selection with no footprint has no designator to name it by.
         let block = reuse_block::capture(pcb, items).map_err(|refusal| refusal.to_string())?;
         let name = store::checked_name(name)?;
+        // The case check below needs the folder's listing: without it a
+        // block of an earlier session is not seen.
+        let blocks = &self.document_state.reuse_blocks;
+        if blocks.needs_read(&folder) {
+            return Err("the project's reuse blocks are not read yet".to_string());
+        }
+        if let Some(why) = blocks.read_failure(&folder) {
+            return Err(format!(
+                "the project's reuse blocks could not be read: {why}"
+            ));
+        }
         // A case-blind file system keeps one file for names that differ only
         // in case, so such a name would overwrite the other block's file.
-        if let Some(other) = self
-            .document_state
-            .reuse_blocks
+        if let Some(other) = blocks
             .names(&folder)
             .into_iter()
             .find(|other| *other != name && other.eq_ignore_ascii_case(&name))
@@ -205,10 +215,11 @@ impl Signex {
             vias: block.vias.len(),
             name,
         };
-        self.document_state
-            .reuse_blocks
-            .put(&folder, &saved.name, block);
-        let task = write_block_task(saved.clone(), text);
+        let blocks = &mut self.document_state.reuse_blocks;
+        blocks.put(&folder, &saved.name, block);
+        let task = blocks
+            .begin_write((saved.clone(), text))
+            .map_or_else(Task::none, write_block_task);
         Ok((saved, task))
     }
 
@@ -282,11 +293,18 @@ impl Signex {
     }
 
     /// `save_board_reuse_block` from the board menu: the selection, named
-    /// after its designators.
+    /// after its designators. Before the project's blocks are read, they
+    /// are read first and the save is asked again once they land.
     fn save_selection_as_block(&mut self) -> Task<Message> {
         let Some(board) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return Task::none();
         };
+        if let Ok(folder) = self.reuse_block_folder(&board)
+            && self.document_state.reuse_blocks.needs_read(&folder)
+        {
+            let again = Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested));
+            return read_blocks_task(folder, None).chain(Task::done(again));
+        }
         let items = self
             .with_pcb_selection(|state, _| {
                 crate::app::handlers::pcb_placement::deletable_items(state.selection())
@@ -427,8 +445,9 @@ pub(crate) fn read_blocks_task(folder: PathBuf, rerun: Option<Box<ReuseRerun>>) 
     )
 }
 
-/// Write a saved block's file off the update thread.
-fn write_block_task(saved: SavedBlock, text: String) -> Task<Message> {
+/// Write a saved block's file off the update thread. One file's writes are
+/// started one at a time ([`ReuseBlockStore::begin_write`]).
+fn write_block_task((saved, text): store::BlockWrite) -> Task<Message> {
     let file = saved.file.clone();
     Task::perform(
         async move {

@@ -3,6 +3,8 @@
 //! (`ids`) or where to place it (`designator`, `degrees`), and gets what was
 //! saved or placed as JSON. The same `Signex` calls as the board menu.
 
+use std::path::Path;
+
 use iced::Task;
 use serde_json::json;
 use signex_engine::pcb::{BoardItemId, placement};
@@ -54,12 +56,46 @@ fn board_items(board: &PcbBoard, ids: &str) -> Result<Vec<BoardItemId>, String> 
     Ok(items)
 }
 
-/// `save_board_reuse_block document=<board> name=<name> ids=<list>`.
+/// The project's blocks of `board`, read first when they are not read yet:
+/// then the command `id` runs again, as the caller that sent it, when they
+/// land (`Deferred`). `None` when they are read.
+fn read_first(app: &mut Signex, board: &Path, id: &str, args: &CommandArgs) -> Option<Ran> {
+    let folder = match app.reuse_block_folder(board) {
+        Ok(folder) => folder,
+        Err(reason) => return Some(refused(reason)),
+    };
+    if !app.document_state.reuse_blocks.needs_read(&folder) {
+        return None;
+    }
+    let Ok(command) = AppCommandId::new(id) else {
+        return Some(refused("the command id is not valid"));
+    };
+    let edits = &mut app.document_state.agent_edits;
+    edits.tickets += 1;
+    let ticket = edits.tickets;
+    let rerun = ReuseRerun {
+        ticket,
+        command,
+        args: args.clone(),
+        board: board.to_path_buf(),
+        origin: app.agent.origin.clone(),
+        serving: app.agent.serving,
+    };
+    let task = read_blocks_task(folder, Some(Box::new(rerun)));
+    Some((CommandOutcome::Deferred { ticket }, task))
+}
+
+/// `save_board_reuse_block document=<board> name=<name> ids=<list>`. The
+/// name is checked against the blocks on disk, so they are read first
+/// when they are not read yet (`Deferred`).
 pub(crate) fn save_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> Ran {
     let board = match app.named_output_board(args) {
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
+    if let Some(waiting) = read_first(app, &board, "save_board_reuse_block", args) {
+        return waiting;
+    }
     let items = match app.document_state.pcb_board(&board) {
         Some(pcb) => board_items(pcb, text(args, "ids")),
         None => Err("the board is not open".to_string()),
@@ -86,27 +122,8 @@ pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> R
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
-    let folder = match app.reuse_block_folder(&board) {
-        Ok(folder) => folder,
-        Err(reason) => return refused(reason),
-    };
-    if app.document_state.reuse_blocks.needs_read(&folder) {
-        let Ok(command) = AppCommandId::new("place_board_reuse_block") else {
-            return refused("the command id is not valid");
-        };
-        let edits = &mut app.document_state.agent_edits;
-        edits.tickets += 1;
-        let ticket = edits.tickets;
-        let rerun = ReuseRerun {
-            ticket,
-            command,
-            args: args.clone(),
-            board,
-            origin: app.agent.origin.clone(),
-            serving: app.agent.serving,
-        };
-        let task = read_blocks_task(folder, Some(Box::new(rerun)));
-        return (CommandOutcome::Deferred { ticket }, task);
+    if let Some(waiting) = read_first(app, &board, "place_board_reuse_block", args) {
+        return waiting;
     }
     let anchor = match app
         .document_state
