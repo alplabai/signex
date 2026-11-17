@@ -50,6 +50,14 @@ define_ids! {
     PANELS_MULTI_NOTHING_SHARED = "panels-multi-nothing-shared";
     PANELS_PROJECTS_NONE_OPEN = "panels-projects-none-open";
     PANELS_PROJECTS_OPEN_HINT = "panels-projects-open-hint";
+    PANELS_PROJECTS_GROUP_SCHEMATICS = "panels-projects-group-schematics";
+    PANELS_PROJECTS_GROUP_PCB = "panels-projects-group-pcb";
+    PANELS_PROJECTS_GROUP_BOM = "panels-projects-group-bom";
+    PANELS_PROJECTS_GROUP_OUTPUTS = "panels-projects-group-outputs";
+    PANELS_PROJECTS_GROUP_LIBRARIES = "panels-projects-group-libraries";
+    PANELS_PROJECTS_GROUP_SETTINGS = "panels-projects-group-settings";
+    PANELS_PROJECTS_FILE_MISSING = "panels-projects-file-missing";
+    PANELS_PROJECTS_FILE_UNREADABLE = "panels-projects-file-unreadable";
     PANELS_NAVIGATOR_SHEETS = "panels-navigator-sheets";
     PANELS_NAVIGATOR_NO_PROJECT = "panels-navigator-no-project";
     PANELS_COMPONENTS_DETAILS_SELECT = "panels-components-details-select";

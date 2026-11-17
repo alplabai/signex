@@ -74,12 +74,19 @@ pub(super) fn push_label_sections<'a>(
         // The picker works on the net the project netlist puts this
         // label on (a child sheet's local `LOCAL` is `/LOCAL`), in the
         // table of the project the label's sheet belongs to.
+        let named = |choice: crate::panels::NetClassChoice| crate::choice::Choice {
+            label: choice.label(i18n),
+            value: choice,
+        };
         let net_class_picker = ctx.net_classes.label.as_ref().map(|pick| {
             (
                 pick.project,
                 pick.net.clone(),
-                crate::panels::net_class_choices(&pick.classes),
-                crate::panels::net_class_choice(&pick.classes, &pick.net),
+                crate::panels::net_class_choices(&pick.classes)
+                    .into_iter()
+                    .map(named)
+                    .collect::<Vec<_>>(),
+                named(crate::panels::net_class_choice(&pick.classes, &pick.net)),
             )
         });
         col = col.push(
@@ -96,11 +103,11 @@ pub(super) fn push_label_sections<'a>(
                         move |s| PanelMsg::EditLabelText(id, s),
                     ));
                     if let Some((project, net, choices, current)) = net_class_picker {
-                        c = c.push(form_pick_row(
+                        c = c.push(form_choice_row(
                             t!(i18n, ids::PROPERTIES_NET_CLASS),
                             choices,
                             current,
-                            move |choice| {
+                            move |choice: crate::panels::NetClassChoice| {
                                 PanelMsg::NetClass(NetClassMsg::AssignNet {
                                     project,
                                     net: net.clone(),

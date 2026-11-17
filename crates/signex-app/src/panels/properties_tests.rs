@@ -95,7 +95,6 @@ const PLAIN: &[(MessageId, &str)] = &[
         ids::PROPERTIES_BODY_NO_ALTERNATE_TIP,
         "This library symbol has no alternate (De Morgan) body",
     ),
-    (ids::PROPERTIES_FOOTPRINT_ONE_PAD, "1 pad"),
     (ids::PROPERTIES_FOOTPRINT_3D_BODY, "3D body attached"),
     (
         ids::PROPERTIES_FOOTPRINT_READING,
@@ -226,10 +225,16 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
         with(ids::PROPERTIES_PINS_TITLE, &[("count", "1200".into())]),
         "Pins (1200)"
     );
-    assert_eq!(
-        with(ids::PROPERTIES_FOOTPRINT_PADS, &[("count", "1000".into())]),
-        "1000 pads"
-    );
+    let pads = |n: usize| {
+        with(
+            ids::PROPERTIES_FOOTPRINT_PADS,
+            &[("n", n.into()), ("count", n.to_string().into())],
+        )
+    };
+    assert_eq!(pads(1), "1 pad");
+    assert_eq!(pads(0), "0 pads");
+    assert_eq!(pads(2), "2 pads");
+    assert_eq!(pads(1156), "1156 pads");
     assert_eq!(
         with(
             ids::PROPERTIES_FOOTPRINT_PITCH_PADS,
@@ -419,9 +424,10 @@ fn beside<'t>(shown: &'t [LaidOutText], label: &str) -> &'t str {
         .iter()
         .find(|t| t.text == label)
         .unwrap_or_else(|| panic!("{label:?} missing from {shown:#?}"));
+    let middle = |t: &LaidOutText| t.bounds.y + t.bounds.height / 2.0;
     shown
         .iter()
-        .filter(|t| (t.bounds.y - at.bounds.y).abs() < 4.0 && t.bounds.x > at.bounds.x)
+        .filter(|t| (middle(t) - middle(at)).abs() < 4.0 && t.bounds.x > at.bounds.x)
         .min_by(|a, b| a.bounds.x.total_cmp(&b.bounds.x))
         .map_or("", |t| t.text.as_str())
 }
@@ -454,6 +460,37 @@ fn the_field_row_names_the_selected_field() {
     assert_eq!(beside(&texts(&reference), "Field"), "Reference");
     let value = one_selected(SelectedKindForTest::SymbolValField, &info);
     assert_eq!(beside(&texts(&value), "Field"), "Value");
+}
+
+/// The engine's Yes / No values of a field read in the panel's language;
+/// other engine words pass through.
+#[test]
+fn a_fields_yes_and_no_values_follow_the_language() {
+    let info = [
+        ("Type", "Symbol Field"),
+        ("Visible", "No"),
+        ("Fields Autoplaced", "Yes"),
+        (signex_engine::info_keys::JUSTIFY_H, "Left"),
+    ];
+    let mut ctx = one_selected(SelectedKindForTest::SymbolRefField, &info);
+    let shown = texts(&ctx);
+    assert_eq!(beside(&shown, "Visible"), "No");
+    assert_eq!(beside(&shown, "Fields Autoplaced"), "Yes");
+    ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
+        "en-XA".into(),
+    )));
+    let xa = &ctx.i18n;
+    let shown = texts(&ctx);
+    let label = |id| xa.message_plain(id, &[]);
+    assert_eq!(
+        beside(&shown, &label(ids::PROPERTIES_VISIBLE)),
+        label(ids::PROPERTIES_NO)
+    );
+    assert_eq!(
+        beside(&shown, &label(ids::PROPERTIES_FIELDS_AUTOPLACED)),
+        label(ids::PROPERTIES_YES)
+    );
+    assert_eq!(beside(&shown, &label(ids::PROPERTIES_JUSTIFY_H)), "Left");
 }
 
 /// The Border Colour row opens the border picker and the Fill Colour row
@@ -505,4 +542,150 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
             .any(|m| matches!(m, PanelMsg::ToggleChildSheetFillPicker(i) if *i == id)),
         "Fill Colour opens the fill picker"
     );
+}
+
+/// Document Options with nothing selected.
+fn document_options() -> PanelContext {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.has_schematic = true;
+    ctx.selection_count = 0;
+    ctx.pre_placement = None;
+    ctx
+}
+
+/// Each typed pick list shows the entry of the stored value, not its first
+/// entry: a non-first value per list, read from the closed list.
+#[test]
+fn each_pick_list_shows_the_stored_entry() {
+    use signex_types::schematic::{PageOrigin, SheetOrientation, SheetSize, WireWidthPreset};
+    let mut ctx = document_options();
+    ctx.sheet_color = SchematicSheetColor::Preset(SheetColor::Cream);
+    ctx.paper_size = SheetSize::parse("A4").0.token(SheetOrientation::Portrait);
+    ctx.page_origin = PageOrigin::LowerLeft;
+    ctx.net_classes.available = true;
+    ctx.net_classes.classes = vec![signex_types::net_class::NetClass {
+        name: "Power".into(),
+        style: signex_types::net_class::NetClassStyle {
+            line: Some(signex_types::net_class::NetLineStyle::Dashed),
+            ..Default::default()
+        },
+        ..Default::default()
+    }];
+    // Every row is checked before the test fails, so a report names each
+    // list that shows the wrong entry.
+    let mut wrong: Vec<String> = Vec::new();
+    let mut check = |row: &str, got: &str, want: &str| {
+        if got != want {
+            wrong.push(format!("{row}: shows {got:?}, wants {want:?}"));
+        }
+    };
+    let shown = texts(&ctx);
+    check("Sheet Color", beside(&shown, "Sheet Color"), "Cream");
+    check("Orientation", beside(&shown, "Orientation"), "Portrait");
+    check("Origin", beside(&shown, "Origin"), "Lower Left");
+    check("Line", beside(&shown, "Line"), "Dashed");
+
+    let mut wire = one_selected(SelectedKindForTest::Wire, &[("Type", "Wire")]);
+    wire.selected_wire_style = Some((WireWidthPreset::Medium, None));
+    check("Width", beside(&texts(&wire), "Width"), "Medium");
+
+    let body = one_selected(
+        SelectedKindForTest::Symbol,
+        &[("Type", "Symbol"), ("Body Style", "Alternate")],
+    );
+    check(
+        "Body",
+        beside(&texts(&body), "Body"),
+        "Alternate (De Morgan)",
+    );
+
+    let port = one_selected(
+        SelectedKindForTest::Symbol,
+        &[("Type", "Power Port"), ("Library ID", "power:Earth")],
+    );
+    check("Style", beside(&texts(&port), "Style"), "Earth");
+
+    let note = one_selected(
+        SelectedKindForTest::TextNote,
+        &[("Type", "Text"), ("Font Family", "Signex Probe Sans")],
+    );
+    check("Font", beside(&texts(&note), "Font"), "Signex Probe Sans");
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Picking the next power-port style asks for that style's library id.
+#[test]
+fn picking_a_power_port_style_asks_for_its_library_id() {
+    let ctx = one_selected(
+        SelectedKindForTest::Symbol,
+        &[("Type", "Power Port"), ("Library ID", "power:bar")],
+    );
+    let shown = texts(&ctx);
+    let label = shown.iter().find(|t| t.text == "Style").expect("Style row");
+    let over_list = iced::Point::new(WINDOW.width - 60.0, label.bounds.center_y());
+    let events = [
+        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+            iced::keyboard::Modifiers::COMMAND,
+        )),
+        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
+        }),
+    ];
+    let asked: Vec<String> = messages_for_events(
+        view_panel(PanelKind::Properties, &ctx),
+        WINDOW,
+        over_list,
+        &events,
+    )
+    .into_iter()
+    .filter_map(|m| match m {
+        PanelMsg::EditPowerPortStyle { new_lib_id, .. } => Some(new_lib_id),
+        _ => None,
+    })
+    .collect();
+    assert_eq!(asked, ["power:arrow"]);
+}
+
+/// A title-block field the sheet leaves empty names the project's value; one
+/// the sheet fills says it overrides it.
+#[test]
+fn a_title_block_label_says_where_its_value_comes_from() {
+    let mut ctx = document_options();
+    ctx.project_parameters
+        .insert("drawn_by".into(), "Ann".into());
+    let shown = texts(&ctx);
+    assert!(
+        shown.iter().any(|t| t.text == "Drawn By (project)"),
+        "{shown:#?}"
+    );
+    ctx.title_block.insert("drawn_by".into(), "Bob".into());
+    let shown = texts(&ctx);
+    assert!(
+        shown
+            .iter()
+            .any(|t| t.text == "Drawn By (overrides project)"),
+        "{shown:#?}"
+    );
+}
+
+/// The Tab form of a global port names its text Port Name.
+#[test]
+fn the_global_port_form_asks_for_a_port_name() {
+    let mut ctx = net_label_form(0.0);
+    if let Some(pp) = ctx.pre_placement.as_mut() {
+        pp.kind = PrePlacementKind::GlobalPort;
+    }
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "Port Name"), "{shown:#?}");
+    assert!(!shown.iter().any(|t| t.text == "Sheet Name"), "{shown:#?}");
+}
+
+/// A selected part shows its Graphical section.
+#[test]
+fn a_selected_part_shows_its_graphical_section() {
+    let ctx = one_selected(SelectedKindForTest::Symbol, &[("Type", "Symbol")]);
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "GRAPHICAL"), "{shown:#?}");
+    assert!(!shown.iter().any(|t| t.text == "STATE"), "{shown:#?}");
 }

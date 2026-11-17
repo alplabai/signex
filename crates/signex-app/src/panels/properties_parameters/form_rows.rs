@@ -78,7 +78,9 @@ pub fn form_input_row<'a, M: 'a>(
             property_label(label, label_c),
             container(
                 container(
-                    // raw: the value is design data or a reading, not language.
+                    // raw: the value as the caller gives it; each caller marks
+                    // what it is (design data, a reading, catalog text or an
+                    // engine word with its own issue).
                     text(raw(value.to_string()))
                         .size(TS.body)
                         .color(text_on(input_bg))

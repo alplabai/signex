@@ -35,6 +35,7 @@ define_ids! {
     PANELS_NET_CLASSES_WIDTH = "panels-net-classes-width";
     PANELS_NET_CLASSES_LINE = "panels-net-classes-line";
     PANELS_NET_CLASSES_LINE_DEFAULT = "panels-net-classes-line-default";
+    PANELS_NET_CLASSES_NO_CLASS = "panels-net-classes-no-class";
     PANELS_NET_CLASSES_LINE_SOLID = "panels-net-classes-line-solid";
     PANELS_NET_CLASSES_LINE_DASHED = "panels-net-classes-line-dashed";
     PANELS_NET_CLASSES_LINE_DOTTED = "panels-net-classes-line-dotted";

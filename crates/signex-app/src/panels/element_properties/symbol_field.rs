@@ -2,7 +2,7 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
-use super::rows::{PanelStyle, info_row, justify_h_row, justify_v_row};
+use super::rows::{PanelStyle, info_row, justify_h_row, justify_v_row, yes_no_shown};
 use iced::Widget;
 use signex_i18n::{ids, t};
 
@@ -23,8 +23,8 @@ pub(super) fn push_symbol_field_sections<'a>(
     let text_size = get("Text Size");
     let justify_h = justify_h_row(&ctx.selection_info);
     let justify_v = justify_v_row(&ctx.selection_info);
-    let visible = get("Visible");
-    let fields_autoplaced = get("Fields Autoplaced");
+    let visible = yes_no_shown(i18n, get("Visible"));
+    let fields_autoplaced = yes_no_shown(i18n, get("Fields Autoplaced"));
     let font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
     let is_reference = matches!(
         selected_kind,
@@ -133,6 +133,7 @@ pub(super) fn push_text_rows<'a>(
         ids::PROPERTIES_JUSTIFY_V,
         ids::PROPERTIES_TEXT_SIZE,
     ];
+    // raw: engine values; the Justify H / V words come from the engine (#2060).
     for (label, value) in labels.into_iter().zip(values) {
         c = c.push(form_input_row(t!(i18n, label), value, muted, input_bg));
     }

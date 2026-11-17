@@ -155,17 +155,27 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 /// having to double-click and read an error.
 fn missing_label(filename: &str, is_missing: bool) -> String {
     if is_missing {
-        format!("{filename}  (missing)")
+        format!("{filename}{MISSING_MARK}")
     } else {
         filename.to_string()
     }
 }
 
+/// The mark the cached tree appends to a missing file's row. Navigation
+/// strips it to find the file; the view shows it from the catalog.
+pub(super) const MISSING_MARK: &str = "  (missing)";
+/// The mark of a sheet the walk could not read.
+pub(super) const UNREADABLE_MARK: &str = "  (unreadable)";
+/// Keys (and cached labels) of the Libraries and Settings branches; the
+/// view names them from the catalog.
+pub(super) const LIBRARIES_KEY: &str = "Libraries";
+pub(super) const SETTINGS_KEY: &str = "Settings";
+
 /// [`missing_label`], plus the `(unreadable)` mark of a sheet the walk could
 /// not read.
 fn sheet_label(sheet: &SheetInfo) -> String {
     if sheet.unreadable {
-        format!("{}  (unreadable)", sheet.filename)
+        format!("{}{UNREADABLE_MARK}", sheet.filename)
     } else {
         missing_label(&sheet.filename, sheet.missing)
     }
@@ -262,11 +272,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
                 .and_then(|s| s.to_str())
                 .map(str::to_string)
                 .unwrap_or_else(|| format!("{}.snxlib", lib.display_name));
-            let display = if lib.missing {
-                format!("{filename}  (missing)")
-            } else {
-                filename.clone()
-            };
+            let display = missing_label(&filename, lib.missing);
             let icon = TreeIcon::for_path(&filename);
             // v0.13 — surface the white open-dot / red dirty-dot
             // indicators on `.snxlib` leaves so library files match
@@ -297,14 +303,14 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     }
     if !lib_children.is_empty() {
         children.push(TreeNode::branch(
-            "Libraries".to_string(),
+            LIBRARIES_KEY.to_string(),
             TreeIcon::Library,
             lib_children,
         ));
     }
     if !settings_children.is_empty() {
         let mut settings =
-            TreeNode::branch("Settings".to_string(), TreeIcon::File, settings_children);
+            TreeNode::branch(SETTINGS_KEY.to_string(), TreeIcon::File, settings_children);
         settings.expanded = false;
         children.push(settings);
     }

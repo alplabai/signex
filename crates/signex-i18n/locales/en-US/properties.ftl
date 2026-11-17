@@ -131,9 +131,13 @@ properties-body-no-alternate-tip = This library symbol has no alternate (De Morg
 
 ## Footprint card
 
-properties-footprint-one-pad = 1 pad
-# $count is a number of pads, more than one.
-properties-footprint-pads = { $count } pads
+# $n is the number of pads, for the plural form; $count is the same number
+# as text, written without grouping.
+properties-footprint-pads =
+    { $n ->
+        [one] { $count } pad
+       *[other] { $count } pads
+    }
 # $pitch is the pad pitch in mm; $pads is the pad count line above.
 properties-footprint-pitch-pads = { $pitch } mm pitch, { $pads }
 properties-footprint-3d-body = 3D body attached

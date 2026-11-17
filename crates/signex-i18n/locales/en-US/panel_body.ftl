@@ -79,6 +79,17 @@ panels-multi-nothing-shared = Nothing in this selection has fields shared for ed
 panels-projects-none-open = No project open
 # The menu path that opens a project.
 panels-projects-open-hint = File > Open to begin
+# Branches of a project in the Projects tree.
+panels-projects-group-schematics = Schematics
+panels-projects-group-pcb = PCB
+panels-projects-group-bom = Bill of Materials
+panels-projects-group-outputs = Output Jobs
+panels-projects-group-libraries = Libraries
+panels-projects-group-settings = Settings
+# A tree row whose file is gone from disk. $name is the file name.
+panels-projects-file-missing = { $name }  (missing)
+# A tree row whose sheet could not be read. $name is the file name.
+panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
 

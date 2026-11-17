@@ -80,7 +80,6 @@ define_ids! {
     PROPERTIES_BODY_ALTERNATE = "properties-body-alternate";
     PROPERTIES_BODY_ALTERNATE_MISSING = "properties-body-alternate-missing";
     PROPERTIES_BODY_NO_ALTERNATE_TIP = "properties-body-no-alternate-tip";
-    PROPERTIES_FOOTPRINT_ONE_PAD = "properties-footprint-one-pad";
     PROPERTIES_FOOTPRINT_PADS = "properties-footprint-pads";
     PROPERTIES_FOOTPRINT_PITCH_PADS = "properties-footprint-pitch-pads";
     PROPERTIES_FOOTPRINT_3D_BODY = "properties-footprint-3d-body";

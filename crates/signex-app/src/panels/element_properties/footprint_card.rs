@@ -52,13 +52,15 @@ impl FootprintCardFacts {
     /// can be derived. Numbers go in as `format!` wrote them.
     pub fn summary(&self, i18n: &signex_i18n::I18n) -> String {
         use signex_i18n::ids;
-        let pads = match self.pad_count {
-            1 => i18n.message_plain(ids::PROPERTIES_FOOTPRINT_ONE_PAD, &[]),
-            n => i18n.message_plain(
-                ids::PROPERTIES_FOOTPRINT_PADS,
-                &[("count", n.to_string().into())],
-            ),
-        };
+        // `n` picks the plural form; `count` is the number as `format!`
+        // writes it, so a large count is not grouped.
+        let pads = i18n.message_plain(
+            ids::PROPERTIES_FOOTPRINT_PADS,
+            &[
+                ("n", self.pad_count.into()),
+                ("count", self.pad_count.to_string().into()),
+            ],
+        );
         match self.pitch_mm {
             Some(pitch) => i18n.message_plain(
                 ids::PROPERTIES_FOOTPRINT_PITCH_PADS,

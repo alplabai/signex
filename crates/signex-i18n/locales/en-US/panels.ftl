@@ -541,6 +541,8 @@ panels-net-classes-width = Width (mm)
 panels-net-classes-line = Line
 # Line pick-list entries. Default follows the project's line style.
 panels-net-classes-line-default = Default
+# Net Class pick-list entry of a net label: in no class.
+panels-net-classes-no-class = (none)
 panels-net-classes-line-solid = Solid
 panels-net-classes-line-dashed = Dashed
 panels-net-classes-line-dotted = Dotted

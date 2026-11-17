@@ -19,6 +19,16 @@ pub(super) fn rotation_degrees(text: &str) -> f64 {
     signex_types::numeric::parse_finite_f64(text.trim_end_matches('°')).unwrap_or(0.0)
 }
 
+/// An engine `Yes` / `No` value in `i18n`'s language. Any other value is
+/// engine text with no catalog message yet and passes through (#2060).
+pub(super) fn yes_no_shown(i18n: &signex_i18n::I18n, value: String) -> String {
+    match value.as_str() {
+        "Yes" => i18n.message_plain(signex_i18n::ids::PROPERTIES_YES, &[]),
+        "No" => i18n.message_plain(signex_i18n::ids::PROPERTIES_NO, &[]),
+        _ => value,
+    }
+}
+
 /// The row `key` of a selection's info, empty when the selection has none.
 pub(super) fn info_row(info: &[(String, String)], key: &str) -> String {
     info.iter()

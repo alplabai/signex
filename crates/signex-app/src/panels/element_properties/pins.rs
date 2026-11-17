@@ -102,6 +102,7 @@ pub(super) fn push_focused_pin_section<'a>(
                 let rows = [
                     (ids::PROPERTIES_DESIGNATOR, pin.designator.as_str()),
                     (ids::PROPERTIES_NAME, pin.name.as_str()),
+                    // raw: engine value (#2060).
                     (
                         ids::PROPERTIES_ELECTRICAL_TYPE,
                         pin.electrical_type.as_str(),
@@ -175,6 +176,7 @@ pub(super) fn push_pins_section<'a>(
                     let cells = [
                         pin.designator,
                         pin.name,
+                        // raw: engine value (#2060).
                         pin.electrical_type,
                         pin.net.unwrap_or_default(),
                         if pin.hidden {

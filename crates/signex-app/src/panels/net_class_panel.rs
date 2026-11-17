@@ -138,6 +138,18 @@ impl NetClassChoice {
             Self::Class(name) => Some(name),
         }
     }
+
+    /// The entry as the picker shows it in `i18n`'s language: the no-class
+    /// entry from the catalog, a class by its name, quoted when it reads
+    /// like the no-class entry.
+    pub fn label(&self, i18n: &I18n) -> String {
+        let none = i18n.message_plain(ids::PANELS_NET_CLASSES_NO_CLASS, &[]);
+        match self {
+            Self::NoClass => none,
+            Self::Class(name) if *name == none => format!("\"{name}\""),
+            Self::Class(name) => name.clone(),
+        }
+    }
 }
 
 impl std::fmt::Display for NetClassChoice {
@@ -452,6 +464,26 @@ fn commit_row<'a>(
 #[cfg(test)]
 mod tests {
     use super::NetClassChoice;
+
+    /// #2059: the picker names each entry as `Display` did in en-US; the
+    /// no-class entry comes from the catalog and follows the language.
+    #[test]
+    fn each_net_class_entry_keeps_its_english_name() {
+        use super::I18n;
+        let en = I18n::en_us();
+        for choice in [
+            NetClassChoice::NoClass,
+            NetClassChoice::Class(signex_types::net_class::NO_CLASS_ENTRY.into()),
+            NetClassChoice::Class("Power".into()),
+        ] {
+            assert_eq!(choice.label(&en), choice.to_string(), "{choice:?}");
+        }
+        let xa = I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        assert_ne!(
+            NetClassChoice::NoClass.label(&xa),
+            signex_types::net_class::NO_CLASS_ENTRY
+        );
+    }
 
     /// #2059: each Line entry reads as the `Display` text it had, and a
     /// choice is found by its value.
