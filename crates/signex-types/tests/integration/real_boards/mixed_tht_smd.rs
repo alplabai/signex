@@ -3,12 +3,13 @@
 //! slots, an SOD-123 reverse-polarity diode, a TO-220 7805, radial
 //! electrolytics, bottom-side 0805 decoupling under the regulator, a 45-degree
 //! LED indicator and a screw-terminal output. A board sketch (#2234) carries
-//! four M3 mounting holes (two plated to GND) and a copper keepout.
+//! four M3 mounting holes (two plated to GND), a copper keepout and a
+//! routed cable-tie slot through the board.
 
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
-use signex_types::pcb_sketch::{BoardSketch, PcbHole, PcbKeepout};
+use signex_types::pcb_sketch::{BoardSketch, PcbCutout, PcbHole, PcbKeepout};
 use signex_types::sketch::SketchData;
-use signex_types::sketch::attr::{KeepoutAttr, KeepoutKinds, MountingHoleAttr};
+use signex_types::sketch::attr::{BoardCutoutAttr, KeepoutAttr, KeepoutKinds, MountingHoleAttr};
 use signex_types::sketch::constraint::{Constraint, ConstraintKind};
 use signex_types::sketch::entity::{Entity, EntityKind};
 use signex_types::sketch::id::{ConstraintId, SketchEntityId};
@@ -30,6 +31,11 @@ const HOLES: [(f64, f64, bool); 4] = [
 
 /// The copper keepout: no copper under the front-panel standoff.
 const KEEPOUT: (f64, f64, f64, f64) = (28.0, 2.0, 36.0, 8.0);
+
+/// The cable-tie slot that holds the input lead: an 8 x 3 mm opening, its
+/// corners routed to a 1 mm radius, clear of every part, track and text.
+const SLOT: (f64, f64, f64, f64) = (12.0, 32.0, 20.0, 35.0);
+const SLOT_EDGE_RADIUS: f64 = 1.0;
 
 pub fn build() -> Builder {
     let mut b = Builder::new(
@@ -243,7 +249,8 @@ fn outline(b: &mut Builder) {
 }
 
 /// The board sketch and what it bakes to: the four hole circles, each
-/// centre fixed, and a fixed keepout rectangle tagged on its first edge.
+/// centre fixed, a fixed keepout rectangle and a fixed cutout rectangle,
+/// each tagged on its first edge.
 fn board_sketch(b: &mut Builder) -> BoardSketch {
     let plane = PlaneId(b.uuid());
     let mut sketch = SketchData::default();
@@ -284,7 +291,64 @@ fn board_sketch(b: &mut Builder) -> BoardSketch {
             unknown_columns: Default::default(),
         });
     }
+    let kinds = KeepoutKinds {
+        no_routing: true,
+        no_copper: true,
+        no_vias: true,
+        ..KeepoutKinds::default()
+    };
+    let keepout_seed = fixed_rect(b, &mut sketch, plane, &mut fixed, KEEPOUT, |edge| {
+        edge.keepout = Some(KeepoutAttr {
+            layer: PcbLayer::Copper(CopperLayer::Top),
+            kinds,
+        });
+    });
+    let slot_seed = fixed_rect(b, &mut sketch, plane, &mut fixed, SLOT, |edge| {
+        edge.board_cutout = Some(BoardCutoutAttr {
+            edge_radius_expr: Some(format!("{SLOT_EDGE_RADIUS}mm")),
+            through: true,
+        });
+    });
+    for point in fixed {
+        sketch.constraints.push(Constraint {
+            id: ConstraintId(b.uuid()),
+            kind: ConstraintKind::Fixed { point },
+        });
+    }
     let (x0, y0, x1, y1) = KEEPOUT;
+    let keepout = PcbKeepout {
+        uuid: keepout_seed.0,
+        boundary: rect(x0, y0, x1, y1),
+        layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+        forbids: kinds,
+    };
+    let (x0, y0, x1, y1) = SLOT;
+    let slot = PcbCutout {
+        uuid: slot_seed.0,
+        boundary: rect(x0, y0, x1, y1),
+        edge_radius: SLOT_EDGE_RADIUS,
+        through: true,
+    };
+    BoardSketch {
+        sketch,
+        keepouts: vec![keepout],
+        cutouts: vec![slot],
+        holes,
+        v_scores: Vec::new(),
+    }
+}
+
+/// Four fixed corner points of `(x0, y0, x1, y1)` and the four lines round
+/// them; `tag` sets the bake attribute on the first line, whose id (the
+/// baked item's id) is returned.
+fn fixed_rect(
+    b: &mut Builder,
+    sketch: &mut SketchData,
+    plane: PlaneId,
+    fixed: &mut Vec<SketchEntityId>,
+    (x0, y0, x1, y1): (f64, f64, f64, f64),
+    tag: impl FnOnce(&mut Entity),
+) -> SketchEntityId {
     let corners: Vec<SketchEntityId> = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
         .into_iter()
         .map(|(x, y)| {
@@ -296,12 +360,7 @@ fn board_sketch(b: &mut Builder) -> BoardSketch {
             id
         })
         .collect();
-    let kinds = KeepoutKinds {
-        no_routing: true,
-        no_copper: true,
-        no_vias: true,
-        ..KeepoutKinds::default()
-    };
+    let mut tag = Some(tag);
     let mut seed = None;
     for i in 0..4 {
         let id = SketchEntityId(b.uuid());
@@ -313,32 +372,11 @@ fn board_sketch(b: &mut Builder) -> BoardSketch {
                 end: corners[(i + 1) % 4],
             },
         );
-        if i == 0 {
-            edge.keepout = Some(KeepoutAttr {
-                layer: PcbLayer::Copper(CopperLayer::Top),
-                kinds,
-            });
+        if let Some(tag) = tag.take() {
+            tag(&mut edge);
             seed = Some(id);
         }
         sketch.entities.push(edge);
     }
-    for point in fixed {
-        sketch.constraints.push(Constraint {
-            id: ConstraintId(b.uuid()),
-            kind: ConstraintKind::Fixed { point },
-        });
-    }
-    let keepout = PcbKeepout {
-        uuid: seed.expect("tagged edge").0,
-        boundary: rect(x0, y0, x1, y1),
-        layers: vec![PcbLayer::Copper(CopperLayer::Top)],
-        forbids: kinds,
-    };
-    BoardSketch {
-        sketch,
-        keepouts: vec![keepout],
-        cutouts: Vec::new(),
-        holes,
-        v_scores: Vec::new(),
-    }
+    seed.expect("four edges")
 }
