@@ -132,7 +132,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_line",
-                    ids::PROPERTIES_SECTION_PROPERTIES,
+                    ids::PANELS_PLACED_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -184,7 +184,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_rect",
-                    ids::PROPERTIES_SECTION_PROPERTIES,
+                    ids::PANELS_PLACED_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -238,7 +238,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_circle",
-                    ids::PROPERTIES_SECTION_PROPERTIES,
+                    ids::PANELS_PLACED_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -287,7 +287,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_arc",
-                    ids::PROPERTIES_SECTION_PROPERTIES,
+                    ids::PANELS_PLACED_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -344,7 +344,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             col = col.push(
                 ctx.collapsible(
                     "draw_poly",
-                    ids::PROPERTIES_SECTION_PROPERTIES,
+                    ids::PANELS_PLACED_PROPERTIES,
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);

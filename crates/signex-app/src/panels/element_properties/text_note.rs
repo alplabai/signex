@@ -56,7 +56,7 @@ pub(super) fn push_text_note_sections<'a>(
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     // The engine's values; Position moved to the Location section.
                     let rows = [
-                        (ids::PROPERTIES_ROTATION, &rotation),
+                        (ids::PANELS_PLACED_ROTATION, &rotation),
                         (ids::PROPERTIES_JUSTIFY_H, &justify_h),
                         (ids::PROPERTIES_JUSTIFY_V, &justify_v),
                         (ids::PROPERTIES_TEXT_SIZE, &text_size),

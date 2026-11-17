@@ -82,6 +82,15 @@ fn the_tree_reads_as_before_in_en_us() {
     .filter(|label| !shown.iter().any(|t| t == label))
     .collect();
     assert!(missing.is_empty(), "{missing:?} not in {shown:#?}");
+    // Each group's own row heads its file: name, count, badge, then the file.
+    for (group, file) in [
+        ("PCB", "board.snxpcb"),
+        ("Bill of Materials", "parts.snxbom"),
+        ("Output Jobs", "fab.snxout"),
+    ] {
+        let at = shown.iter().position(|t| t == file).expect("the file row");
+        assert_eq!(shown[at - 3], group, "{shown:#?}");
+    }
 }
 
 /// A language switch renames the branches and the marks, never the files.

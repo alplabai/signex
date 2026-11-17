@@ -128,7 +128,7 @@ pub(super) fn push_text_rows<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let labels = [
         ids::PROPERTIES_POSITION,
-        ids::PROPERTIES_ROTATION,
+        ids::PANELS_PLACED_ROTATION,
         ids::PROPERTIES_JUSTIFY_H,
         ids::PROPERTIES_JUSTIFY_V,
         ids::PROPERTIES_TEXT_SIZE,

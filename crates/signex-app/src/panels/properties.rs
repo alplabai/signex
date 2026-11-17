@@ -447,7 +447,7 @@ fn view_pre_placement<'a>(
     col = col.push(
         ctx.collapsible(
             "preplace_location",
-            ids::PROPERTIES_SECTION_LOCATION,
+            ids::PANELS_PLACED_LOCATION,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -496,7 +496,7 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_props",
-                ids::PROPERTIES_SECTION_PROPERTIES,
+                ids::PANELS_PLACED_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -576,7 +576,7 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_shape",
-                ids::PROPERTIES_SECTION_PROPERTIES,
+                ids::PANELS_PLACED_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -600,7 +600,7 @@ fn view_pre_placement<'a>(
         col = col.push(
             ctx.collapsible(
                 "preplace_wire",
-                ids::PROPERTIES_SECTION_PROPERTIES,
+                ids::PANELS_PLACED_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     Column::new()

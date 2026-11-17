@@ -89,7 +89,7 @@ pub(super) fn push_directive_sections<'a>(
                     let rule_id = signex_erc::RuleId::builtin(kind).as_str().to_string();
                     let on = excluded.contains(&rule_id);
                     rows = rows.push(form_check_row(
-                        // raw: the rule's name comes from signex-erc (#2060).
+                        // raw: the rule's name comes from signex-erc (#2062).
                         raw(kind.label()),
                         on,
                         PanelMsg::EditBlanket(

@@ -3,8 +3,6 @@
 
 define_ids! {
     PROPERTIES;
-    PROPERTIES_SECTION_LOCATION = "properties-section-location";
-    PROPERTIES_SECTION_PROPERTIES = "properties-section-properties";
     PROPERTIES_SECTION_GENERAL = "properties-section-general";
     PROPERTIES_SECTION_GRAPHICAL = "properties-section-graphical";
     PROPERTIES_SECTION_STYLE = "properties-section-style";
@@ -20,8 +18,6 @@ define_ids! {
     PROPERTIES_SECTION_TITLE_BLOCK = "properties-section-title-block";
     PROPERTIES_SECTION_SELECTION_FILTERS = "properties-section-selection-filters";
     PROPERTIES_XY = "properties-xy";
-    PROPERTIES_ROTATION = "properties-rotation";
-    PROPERTIES_ROTATION_DEGREES = "properties-rotation-degrees";
     PROPERTIES_POSITION = "properties-position";
     PROPERTIES_SIZE = "properties-size";
     PROPERTIES_NAME = "properties-name";

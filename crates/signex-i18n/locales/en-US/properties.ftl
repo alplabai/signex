@@ -30,8 +30,6 @@ properties-library-update-tip = Updates every instance of this part on the sheet
 
 ## Section titles (shown upper-cased) (#2059)
 
-properties-section-location = Location
-properties-section-properties = Properties
 properties-section-general = General
 properties-section-graphical = Graphical
 properties-section-style = Style
@@ -52,9 +50,6 @@ properties-section-selection-filters = Custom Selection Filters
 
 # The X and Y of a position.
 properties-xy = (X/Y)
-properties-rotation = Rotation
-# A rotation pick-list entry. $degrees is a whole number of degrees.
-properties-rotation-degrees = { $degrees } Degrees
 properties-position = Position
 properties-size = Size
 properties-name = Name

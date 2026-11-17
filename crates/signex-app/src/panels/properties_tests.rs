@@ -10,8 +10,8 @@ const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
 /// Every message this part added with no argument, and the literal the
 /// panel showed before it.
 const PLAIN: &[(MessageId, &str)] = &[
-    (ids::PROPERTIES_SECTION_LOCATION, "Location"),
-    (ids::PROPERTIES_SECTION_PROPERTIES, "Properties"),
+    (ids::PANELS_PLACED_LOCATION, "Location"),
+    (ids::PANELS_PLACED_PROPERTIES, "Properties"),
     (ids::PROPERTIES_SECTION_GENERAL, "General"),
     (ids::PROPERTIES_SECTION_GRAPHICAL, "Graphical"),
     (ids::PROPERTIES_SECTION_STYLE, "Style"),
@@ -30,7 +30,7 @@ const PLAIN: &[(MessageId, &str)] = &[
         "Custom Selection Filters",
     ),
     (ids::PROPERTIES_XY, "(X/Y)"),
-    (ids::PROPERTIES_ROTATION, "Rotation"),
+    (ids::PANELS_PLACED_ROTATION, "Rotation"),
     (ids::PROPERTIES_POSITION, "Position"),
     (ids::PROPERTIES_SIZE, "Size"),
     (ids::PROPERTIES_NAME, "Name"),
@@ -202,10 +202,7 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
     let with = |id: MessageId, args: &[(&str, Arg)]| en.message_plain(id, args);
     // Numbers go in as `format!` wrote them, so 1000 is not grouped.
     assert_eq!(
-        with(
-            ids::PROPERTIES_ROTATION_DEGREES,
-            &[("degrees", "270".into())]
-        ),
+        with(ids::PANELS_PLACED_DEGREES, &[("degrees", "270".into())]),
         "270 Degrees"
     );
     assert_eq!(
@@ -798,4 +795,41 @@ fn a_text_notes_justify_rows_pair_with_their_values() {
     let shown = texts(&ctx);
     assert_eq!(beside(&shown, "Justify H"), "Left");
     assert_eq!(beside(&shown, "Justify V"), "Top");
+}
+
+/// The words `ctx` draws the same in en-US and en-XA: text a call site
+/// rendered in `I18n::en_us()` instead of the panel's language.
+fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
+    let english: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
+    ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
+        "en-XA".into(),
+    )));
+    let xa: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
+    let is_words = |t: &str| {
+        t.chars().any(char::is_alphabetic)
+            && t.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '…')
+    };
+    english
+        .into_iter()
+        .filter(|t| is_words(t) && xa.contains(t))
+        .collect()
+}
+
+/// #2059: Document Options and a selected part with its footprint card
+/// draw no catalog text in English under en-XA; only the design's own
+/// words (the part's footprint name) stay.
+#[test]
+fn the_properties_panel_draws_no_english_under_en_xa() {
+    assert_eq!(same_in_en_xa(document_options()), Vec::<String>::new());
+    let mut part = one_selected(
+        SelectedKindForTest::Symbol,
+        &[("Type", "Symbol"), ("Footprint", "Probe")],
+    );
+    part.footprint_card = Some(crate::panels::FootprintCardView {
+        name: "Probe".into(),
+        key: None,
+        version: 0,
+        status: crate::panels::FootprintCardStatus::Loading,
+    });
+    assert_eq!(same_in_en_xa(part), ["Probe"]);
 }

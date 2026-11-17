@@ -243,7 +243,7 @@ pub(crate) fn rotation_choice(
     crate::choice::Choice {
         value: degrees,
         label: i18n.message_plain(
-            ids::PROPERTIES_ROTATION_DEGREES,
+            ids::PANELS_PLACED_DEGREES,
             &[("degrees", format!("{degrees:.0}").into())],
         ),
     }
@@ -272,7 +272,7 @@ pub fn form_rotation_row<'a>(
         .map(|&degrees| rotation_choice(i18n, degrees))
         .collect();
     form_choice_row(
-        t!(i18n, ids::PROPERTIES_ROTATION),
+        t!(i18n, ids::PANELS_PLACED_ROTATION),
         choices,
         rotation_choice(i18n, shown_rotation_step(current)),
         on_change,

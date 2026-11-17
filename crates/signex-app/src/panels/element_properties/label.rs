@@ -67,7 +67,7 @@ pub(super) fn push_label_sections<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_props",
-                ids::PROPERTIES_SECTION_PROPERTIES,
+                ids::PANELS_PLACED_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);

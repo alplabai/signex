@@ -24,8 +24,8 @@ pub(super) fn push_symbol_choice_row<'a>(
     if choices.len() < 2 {
         return c;
     }
-    // raw: drawing names, plus "Default" and "(no longer offered)" worded in
-    // English by the handler that builds the list (#2061).
+    // Drawing names, plus "Default" and "(no longer offered)".
+    // raw: (#2061: handler-worded state text)
     let labels: Vec<String> = choices.iter().map(|i| i.label.clone()).collect();
     let items = choices.to_vec();
     c.push(form_pick_row(
@@ -82,8 +82,8 @@ pub(super) fn push_footprint_row<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let current = choices.iter().position(|i| i.selected);
     if let Some(current) = current {
-        // raw: footprint names, plus "(no longer offered)" and "(edited)"
-        // worded in English by the handler that builds the list (#2061).
+        // Footprint names, plus "(no longer offered)" and "(edited)".
+        // raw: (#2061: handler-worded state text)
         let entry = |index: usize| FootprintEntry {
             index,
             label: choices[index].label.clone(),

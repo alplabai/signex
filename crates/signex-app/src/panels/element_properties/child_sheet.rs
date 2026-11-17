@@ -48,7 +48,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_props",
-            signex_i18n::ids::PROPERTIES_SECTION_PROPERTIES,
+            signex_i18n::ids::PANELS_PLACED_PROPERTIES,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
