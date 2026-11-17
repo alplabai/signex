@@ -159,6 +159,9 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
+    /// The pan/zoom frame bench (#2472), a dev/QA mode. Routed to
+    /// `dispatch_pan_zoom_bench_message`.
+    PanZoomBench(crate::pan_zoom_bench::BenchMsg),
 }
 
 impl Message {

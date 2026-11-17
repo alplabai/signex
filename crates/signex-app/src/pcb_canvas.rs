@@ -360,6 +360,20 @@ impl PcbCanvas {
             .zoom_at(centre, notch, step, bounds)
     }
 
+    /// Scale the view by `factor` about its centre, as a pinch does. Returns
+    /// whether the camera changed (false at the zoom limits).
+    pub fn zoom_by_factor_about_centre(&self, factor: f32) -> bool {
+        let bounds = self.viewport.get();
+        let centre = iced::Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        self.camera.borrow_mut().zoom_by_factor(centre, factor)
+    }
+
+    /// Move the board on screen by `(dx, dy)` canvas pixels, as a
+    /// right-button drag does.
+    pub fn pan_by(&self, dx: f32, dy: f32) {
+        self.camera.borrow_mut().pan(dx, dy);
+    }
+
     /// Recentre the view on world point `(x, y)` without changing zoom or
     /// turn (#525).
     pub fn center_on_world(&self, x: f32, y: f32) {

@@ -97,6 +97,9 @@ pub struct Signex {
     /// The local agent listener's runtime state (#1924); inert while the
     /// "Allow agent connections" preference is off.
     pub(crate) agent: crate::app::agent::AgentState,
+    /// The pan/zoom frame bench (#2472); `None` unless the process was
+    /// started with `SIGNEX_BENCH_PAN_ZOOM` set.
+    pub(crate) pan_zoom_bench: Option<crate::pan_zoom_bench::PanZoomBench>,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
