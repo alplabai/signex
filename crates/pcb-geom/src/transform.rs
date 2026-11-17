@@ -229,6 +229,7 @@ mod tests {
             net: None,
             roundrect_ratio: 0.0,
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),

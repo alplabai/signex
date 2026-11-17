@@ -17,18 +17,24 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
-    /// Export-error modal — plain "something went wrong, here's the
-    /// message" dialog with an OK button. Sits on top of the print-preview
-    /// overlay when both would otherwise render; dismiss_layer handles
-    /// click-outside-to-close.
+    /// The export-error dialog in its own OS window: the card filling the
+    /// window surface.
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
+        match self.error_notice_card() {
+            Some(card) => self.fill_dialog_window(card),
+            None => iced::widget::Space::new().boxed(),
+        }
+    }
+
+    /// Export-error card — plain "something went wrong, here's the message"
+    /// dialog with an OK button. The in-window overlay hands it, unpositioned,
+    /// to the dismiss helper so only a press outside the card closes it
+    /// (#2377).
+    pub(super) fn error_notice_card(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container};
-        let Some(notice) = self.document_state.error_notice.as_ref() else {
-            return iced::widget::Space::new().boxed();
-        };
+        let notice = self.document_state.error_notice.as_ref()?;
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
         let i18n = self.ui_state.i18n.as_ref();
 
         let mut buttons = notice_choice_buttons(i18n, notice, tokens);
@@ -82,7 +88,13 @@ impl Signex {
                 },
             ))
             .style(graphite_card);
+        Some(card.boxed())
+    }
 
+    /// `card` centred in a dialog's own OS window, on the panel surface.
+    fn fill_dialog_window<'a>(&self, card: Element<'a, Message>) -> Element<'a, Message> {
+        use iced::widget::container;
+        let panel_bg = crate::styles::ti(self.document_state.panel_ctx.tokens.panel_bg);
         container(card)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -102,6 +114,14 @@ impl Signex {
             .boxed()
     }
 
+    /// The netlist-incomplete prompt in its own OS window.
+    pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
+        match self.netlist_incomplete_prompt_card() {
+            Some(card) => self.fill_dialog_window(card),
+            None => iced::widget::Space::new().boxed(),
+        }
+    }
+
     /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
     ///
     /// Same card idiom as [`Self::view_error_notice`] (theme-token panel /
@@ -110,15 +130,12 @@ impl Signex {
     /// — and offers TWO actions: write the partial `.net` anyway (with the
     /// omission recorded in its header comment) or cancel and write nothing.
     /// The refusal stays the default; "Export anyway" is an explicit choice.
-    pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
+    pub(super) fn netlist_incomplete_prompt_card(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container};
         use signex_widgets::{raw, text};
-        let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
-            return iced::widget::Space::new().boxed();
-        };
+        let prompt = self.document_state.netlist_incomplete_prompt.as_ref()?;
 
         let tokens = &self.document_state.panel_ctx.tokens;
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
         let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
         // The sibling export-error modal's severity cue — reused verbatim so
@@ -130,7 +147,7 @@ impl Signex {
 
         let lead: Element<'_, Message> = crate::styles::dialog_intro(
             crate::styles::DialogIcon::Warn,
-            "Netlist is incomplete",
+            t!(i18n, ids::DIALOG_NETLIST_INCOMPLETE_TITLE).into_string(),
             None,
             tokens,
         );
@@ -138,15 +155,10 @@ impl Signex {
             dialog_body(
                 column![
                     lead,
-                    dialog_message(
-                        "The project netlist does not cover the whole project. Exporting it \
-                         would produce a file missing components and carrying the wrong net \
-                         names wherever nets merge through a page that is not in it — and a \
-                         PCB import cannot tell. You can export it anyway: the file stays \
-                         a valid netlist, and the omitted pages are reported in the Messages panel.",
-                        tokens,
-                    ),
+                    dialog_message(t!(i18n, ids::DIALOG_NETLIST_INCOMPLETE_BODY), tokens),
                     container(iced::widget::scrollable(
+                        // raw: one line per omitted page, worded by the netlist
+                        // check in English (#2061).
                         text(raw(detail)).size(TS.body).color(text_muted)
                     ))
                     .height(Length::Fit.max(120.0)),
@@ -181,24 +193,7 @@ impl Signex {
                 },
             ))
             .style(graphite_card);
-
-        container(card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .style(move |theme: &iced::Theme| {
-                // In its own window the dialog fills the window surface.
-                if crate::styles::is_dialog_window(theme) {
-                    container::Style {
-                        background: Some(panel_bg.into()),
-                        ..container::Style::default()
-                    }
-                } else {
-                    container::Style::default()
-                }
-            })
-            .boxed()
+        Some(card.boxed())
     }
 
     /// Print Preview overlay. Shows thumbnails of every rendered page on
@@ -273,18 +268,20 @@ impl Signex {
         };
 
         // Footer — page count + Export PDF.
-        let footer_caption = match (&preview.export_status, preview.pages.is_empty()) {
-            (Some(status), _) => status.clone(),
-            (None, true) => "No files selected for export".to_string(),
-            (None, false) => format!("{} page(s)", preview.pages.len()),
-        };
+        let footer_caption: signex_widgets::Label<'_> =
+            match (&preview.export_status, preview.pages.is_empty()) {
+                // raw: the export status is worded by the export handler (#2061).
+                (Some(status), _) => raw(status.clone()),
+                (None, true) => t!(i18n, ids::DIALOG_PRINT_PREVIEW_NO_FILES).into(),
+                (None, false) => t!(
+                    i18n,
+                    ids::DIALOG_PRINT_PREVIEW_PAGE_COUNT,
+                    "count" => preview.pages.len().to_string()
+                )
+                .into(),
+            };
         let footer = dialog_footer_split(
-            vec![
-                text(raw(footer_caption))
-                    .size(TS.body)
-                    .color(text_muted)
-                    .boxed(),
-            ],
+            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
             vec![dialog_button(
                 t!(i18n, ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF),
                 DialogButtonKind::Primary,

@@ -31,7 +31,7 @@ pub(crate) struct Readout<'r> {
     pub unit: Unit,
     pub tool: String,
     pub grid_size_mm: f32,
-    pub selection: Option<String>,
+    pub selection: Option<Localized>,
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
@@ -78,7 +78,8 @@ impl Activity {
 
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
-fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
+fn selection_summary(selected: &[SelectedItem], i18n: &signex_i18n::I18n) -> Option<Localized> {
+    use signex_i18n::ids;
     if selected.is_empty() {
         return None;
     }
@@ -96,23 +97,28 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
             _ => other += 1,
         }
     }
-    let mut parts: Vec<String> = Vec::new();
-    let push = |parts: &mut Vec<String>, n: usize, singular: &str, plural: &str| {
-        if n > 0 {
-            parts.push(format!("{n} {}", if n == 1 { singular } else { plural }));
+    let parts: Vec<String> = [
+        (components, ids::PANELS_STATUS_BAR_SELECTED_COMPONENTS),
+        (wires, ids::PANELS_STATUS_BAR_SELECTED_WIRES),
+        (labels, ids::PANELS_STATUS_BAR_SELECTED_LABELS),
+        (shapes, ids::PANELS_STATUS_BAR_SELECTED_SHAPES),
+        (other, ids::PANELS_STATUS_BAR_SELECTED_OTHER),
+    ]
+    .into_iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, id)| i18n.message_plain(id, &[("count", n.into())]))
+    .collect();
+    Some(match parts.as_slice() {
+        [kind] => {
+            signex_i18n::t!(i18n, ids::PANELS_STATUS_BAR_SELECTION_ONE_KIND, "kind" => kind.as_str())
         }
-    };
-    push(&mut parts, components, "component", "components");
-    push(&mut parts, wires, "wire", "wires");
-    push(&mut parts, labels, "label", "labels");
-    push(&mut parts, shapes, "shape", "shapes");
-    push(&mut parts, other, "other", "other");
-    let total = selected.len();
-    if parts.len() == 1 {
-        Some(format!("Sel: {}", parts.remove(0)))
-    } else {
-        Some(format!("Sel: {total} ({})", parts.join(", ")))
-    }
+        _ => signex_i18n::t!(
+            i18n,
+            ids::PANELS_STATUS_BAR_SELECTION_KINDS,
+            "count" => selected.len(),
+            "kinds" => parts.join(", ")
+        ),
+    })
 }
 
 #[expect(
@@ -146,7 +152,7 @@ pub(crate) fn view<'a>(
             unit,
             tool,
             grid_size_mm,
-            selection: selection_summary(selected),
+            selection: selection_summary(selected, i18n),
             pending_git_commits,
             altium_import,
             activity,
@@ -155,4 +161,43 @@ pub(crate) fn view<'a>(
         tokens,
         i18n,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(kinds: &[SelectedKind]) -> Option<String> {
+        let selected: Vec<SelectedItem> = kinds
+            .iter()
+            .map(|kind| SelectedItem::new(uuid::Uuid::now_v7(), *kind))
+            .collect();
+        selection_summary(&selected, &signex_i18n::I18n::en_us())
+            .map(|text| text.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+    }
+
+    /// The selection segment reads as it did before the catalog (#2059).
+    #[test]
+    fn the_selection_summary_counts_each_kind() {
+        assert_eq!(summary(&[]), None);
+        assert_eq!(
+            summary(&[SelectedKind::Symbol]).as_deref(),
+            Some("Sel: 1 component")
+        );
+        assert_eq!(
+            summary(&[SelectedKind::Wire, SelectedKind::Bus]).as_deref(),
+            Some("Sel: 2 wires")
+        );
+        assert_eq!(
+            summary(&[
+                SelectedKind::Symbol,
+                SelectedKind::Symbol,
+                SelectedKind::Label,
+                SelectedKind::Drawing,
+                SelectedKind::Junction,
+            ])
+            .as_deref(),
+            Some("Sel: 5 (2 components, 1 label, 1 shape, 1 other)")
+        );
+    }
 }

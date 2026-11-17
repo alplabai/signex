@@ -256,6 +256,68 @@ impl Shape {
         }
     }
 
+    /// The shape grown by `by` nm on every side (a negative `by` counts as
+    /// 0): every point within `by` of it. A rectangle grows into a rounded
+    /// rectangle with corner radius `by`.
+    pub fn inflated(self, by: i64) -> Shape {
+        let by = by.max(0);
+        match self {
+            Shape::Disc { center, radius } => Shape::Disc {
+                center,
+                radius: radius + by,
+            },
+            Shape::Capsule { a, b, radius } => Shape::Capsule {
+                a,
+                b,
+                radius: radius + by,
+            },
+            Shape::Rect { .. } if by == 0 => self,
+            Shape::Rect {
+                center,
+                half_w,
+                half_h,
+                rotation_deg,
+            } => Shape::RoundRect {
+                center,
+                half_w: half_w + by,
+                half_h: half_h + by,
+                radius: by,
+                rotation_deg,
+            },
+            Shape::RoundRect {
+                center,
+                half_w,
+                half_h,
+                radius,
+                rotation_deg,
+            } => Shape::RoundRect {
+                center,
+                half_w: half_w + by,
+                half_h: half_h + by,
+                radius: radius + by,
+                rotation_deg,
+            },
+        }
+    }
+
+    /// A closed counter-clockwise ring holding the whole shape: the
+    /// [`ring`](Self::ring) of the shape grown by how far its chords fall
+    /// inside a round part, plus 2 nm for vertex rounding. A clearance cut
+    /// with it never comes closer than the true shape allows.
+    pub fn covering_ring(&self, steps: usize) -> Vec<PointNm> {
+        let steps = steps.max(2);
+        let radius = match *self {
+            Shape::Disc { radius, .. }
+            | Shape::Capsule { radius, .. }
+            | Shape::RoundRect { radius, .. } => radius.max(0),
+            Shape::Rect { .. } => return self.ring(steps),
+        };
+        // `ring` puts 4 * steps points on a full turn of a round part.
+        let half_step = std::f64::consts::PI / (4 * steps) as f64;
+        let sag = (radius as f64 * (1.0 / half_step.cos() - 1.0)).ceil() as i64;
+        self.inflated(sag + 2).ring(steps)
+    }
+
     /// The corners of a rectangle or of a rounded rectangle's frame box,
     /// counter-clockwise; for other shapes, of the bounding box.
     fn box_corners(&self) -> [PointNm; 4] {

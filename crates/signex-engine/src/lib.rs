@@ -7,11 +7,15 @@ mod annotation_placements;
 mod clipboard_text;
 mod history;
 mod history_snapshot;
+mod id_collision;
 mod lock;
 mod multi_edit;
 mod net_class_table;
+pub mod part_swap;
 mod paste_edit;
+mod placed_edit;
 mod placement;
+mod placement_sources;
 mod power_port;
 mod project_general;
 mod selection;
@@ -24,9 +28,11 @@ pub mod pcb;
 mod sheet_placement;
 mod transform;
 
+mod dxf_plane;
 mod exec;
 mod find;
 mod find_similar;
+mod graphics_import;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -71,6 +77,8 @@ mod save_point_tests;
 mod symbol_drag_local_tests;
 
 #[cfg(test)]
+mod id_source_tests;
+#[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;
@@ -96,6 +104,9 @@ pub use find::{
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
 };
+pub use graphics_import::{
+    GraphicsImportError, ImportedGraphics, MAX_IMPORTED_DRAWINGS, drawings_from_dxf,
+};
 use history::HistoryStep;
 pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
@@ -107,10 +118,15 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use placed_edit::{
+    PlacedGeometry, move_to_command, placed_geometry, placed_item, rotate_to_command,
+};
 pub use placement::PlacementPayload;
+pub use placement_sources::DesignBlock;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
+    ProjectSectionCommand,
 };
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
@@ -170,6 +186,8 @@ pub struct Engine {
     /// The open transaction, if any (`exec/transaction.rs`, #2178): history
     /// stays suppressed while it is open.
     transaction: Option<exec::transaction::Transaction>,
+    /// Object ids of the sheet while a batch runs (`id_collision.rs`).
+    batch_ids: id_collision::BatchIds,
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
@@ -383,6 +401,7 @@ impl Engine {
             history: History::unknown(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -424,6 +443,7 @@ impl Engine {
             history: History::at_start(DEFAULT_UNDO_DEPTH),
             history_suppressed: false,
             transaction: None,
+            batch_ids: Default::default(),
             field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
@@ -637,7 +657,8 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_item_refusal(&cmd) {
+        let refusal = self.locked_item_refusal(&cmd);
+        if let Some(refusal) = refusal.or_else(|| self.id_in_use_refusal(&cmd)) {
             return Err(refusal);
         }
         let mark = self.revision_mark();
@@ -706,6 +727,13 @@ impl Engine {
             | Command::SetNetColors { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
+            }
+            Command::ResizeChildSheet { .. } => self.exec_resize_child_sheet(before, cmd),
+            Command::PlaceDirective { .. } | Command::UpdateDirective { .. } => {
+                self.exec_directives(before, cmd)
+            }
+            Command::AutoplaceFields { symbol_ids } => {
+                Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }
         };
         self.note_command_result(&result);

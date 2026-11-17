@@ -6,7 +6,10 @@ use signex_types::pcb::{PcbBoard, Segment, Via, ViaType};
 use signex_types::pcb_layer::CopperLayer;
 
 use crate::copper::layer_mask;
-use crate::index::ItemRef;
+use crate::index::{ItemRef, track_shape, via_shape};
+use crate::pick_filter::PickKind;
+use crate::shape::Shape;
+use crate::transform::pad_shape;
 use crate::units::{PointNm, nm_to_mm};
 
 /// The centre-line length of a track in nm; `None` for an end the geometry
@@ -32,16 +35,28 @@ pub fn tracks_length_mm<'a>(segments: impl IntoIterator<Item = &'a Segment>) -> 
         .map(nm_to_mm)
 }
 
-/// The routed length of net `net` in mm: every track on it. `None` for net 0
-/// (no net) or a track the geometry cannot hold.
+/// The routed length of net `net` in mm: every track and copper arc on it
+/// (#2373). `None` for net 0 (no net) or an item the geometry cannot hold.
 pub fn net_routed_length_mm(board: &PcbBoard, net: u32) -> Option<f64> {
     if net == 0 {
         return None;
     }
-    tracks_length_mm(board.segments.iter().filter(|s| s.net == net))
+    let tracks = board
+        .segments
+        .iter()
+        .filter(|s| s.net == net)
+        .map(track_length_nm);
+    let arcs = board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| a.net == net && crate::free::arc_is_copper(a))
+        .map(|a| crate::units::mm_to_nm(a.length_mm(), "arc length").ok());
+    tracks.chain(arcs).sum::<Option<i64>>().map(nm_to_mm)
 }
 
-/// The tracks, vias and pads on net `net`, in board order. Empty for net 0.
+/// The tracks, vias, pads, copper arcs and free pads on net `net`, in board
+/// order. Empty for net 0.
 pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     if net == 0 {
         return Vec::new();
@@ -65,11 +80,76 @@ pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
                 pad: p.uuid,
             })
     });
-    tracks.chain(vias).chain(pads).collect()
+    tracks
+        .chain(vias)
+        .chain(pads)
+        .chain(crate::free::free_copper_on(board, net))
+        .collect()
 }
 
-/// The net of a track, via or pad; `None` for a footprint body, an item
-/// not on the board, or one on no net.
+/// Every track, via, pad, copper arc and free pad of `net`, then its
+/// selectable drawn areas: what Select Net puts in the selection (#2403,
+/// #2440). An arc is one item. Empty for net 0.
+pub fn net_members(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
+    let mut items = net_items(board, net);
+    if net == 0 {
+        return items;
+    }
+    items.extend(board.zones.iter().filter(|z| z.net == net).filter_map(|z| {
+        Some(ItemRef::Zone {
+            zone: z.uuid,
+            kind: PickKind::of_zone(z)?,
+        })
+    }));
+    items
+}
+
+/// The copper of the tracks, vias, pads, copper arcs and free pads of
+/// `net`: what Highlight Net draws bright (#2403, #2440). An arc is all its
+/// chords. Items the geometry cannot hold are left out.
+pub fn net_copper(board: &PcbBoard, net: u32) -> Vec<Shape> {
+    if net == 0 {
+        return Vec::new();
+    }
+    let tracks = board
+        .segments
+        .iter()
+        .filter(|s| s.net == net)
+        .filter_map(|s| track_shape(s).ok());
+    let vias = board
+        .vias
+        .iter()
+        .filter(|v| v.net == net)
+        .filter_map(|v| via_shape(v).ok());
+    let pads = board.footprints.iter().flat_map(|fp| {
+        fp.pads
+            .iter()
+            .filter(|p| p.net.as_ref().is_some_and(|n| n.number == net))
+            .filter_map(move |p| pad_shape(fp, p).ok())
+    });
+    let arcs = board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| a.net == net && crate::free::arc_is_copper(a))
+        .flat_map(|a| crate::free::arc_shapes(a).unwrap_or_default());
+    let free_pads = board
+        .free
+        .pads
+        .iter()
+        .filter(|p| p.net.as_ref().is_some_and(|n| n.number == net))
+        .filter_map(|p| crate::free::free_pad_shape(p).ok());
+    tracks
+        .chain(vias)
+        .chain(pads)
+        .chain(arcs)
+        .chain(free_pads)
+        .collect()
+}
+
+/// The net of a track, via, pad, copper arc, free pad or drawn area; `None`
+/// for a footprint body, a string, a dimension, an item not on the board, or
+/// one on no net.
 pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
     let net = match item {
         ItemRef::Track(id) => board.segments.iter().find(|s| s.uuid == id)?.net,
@@ -86,7 +166,24 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
                 .as_ref()?
                 .number
         }
-        ItemRef::Footprint(_) => return None,
+        ItemRef::Zone { zone, .. } => board.zones.iter().find(|z| z.uuid == zone)?.net,
+        ItemRef::Arc(id) => board.free.arcs.iter().find(|a| a.uuid == id)?.net,
+        ItemRef::FreePad(id) => {
+            board
+                .free
+                .pads
+                .iter()
+                .find(|p| p.uuid == id)?
+                .net
+                .as_ref()?
+                .number
+        }
+        ItemRef::Footprint(_)
+        | ItemRef::Text(_)
+        | ItemRef::Dimension(_)
+        | ItemRef::Graphic { .. } => {
+            return None;
+        }
     };
     (net != 0).then_some(net)
 }

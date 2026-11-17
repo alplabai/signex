@@ -25,10 +25,17 @@ define_ids! {
     DIALOG_VERSION_CONTROL_ENABLING = "dialog-version-control-enabling";
     DIALOG_NET_COLOR_USE = "dialog-net-color-use";
     DIALOG_PARAMETER_MANAGER_ADD_COLUMN = "dialog-parameter-manager-add-column";
+    DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE = "dialog-parameter-manager-column-reference";
+    DIALOG_PARAMETER_MANAGER_COLUMN_VALUE = "dialog-parameter-manager-column-value";
+    DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT = "dialog-parameter-manager-column-footprint";
     DIALOG_DISK_CONFLICT_RELOAD = "dialog-disk-conflict-reload";
     DIALOG_DISK_CONFLICT_RECREATE = "dialog-disk-conflict-recreate";
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
     DIALOG_PRINT_PREVIEW_EXPORT_PDF = "dialog-print-preview-export-pdf";
+    DIALOG_PRINT_PREVIEW_NO_FILES = "dialog-print-preview-no-files";
+    DIALOG_PRINT_PREVIEW_PAGE_COUNT = "dialog-print-preview-page-count";
+    DIALOG_NETLIST_INCOMPLETE_TITLE = "dialog-netlist-incomplete-title";
+    DIALOG_NETLIST_INCOMPLETE_BODY = "dialog-netlist-incomplete-body";
     DIALOG_BUTTON_CANCEL = "dialog-button-cancel";
     DIALOG_BUTTON_OK = "dialog-button-ok";
     DIALOG_BUTTON_APPLY = "dialog-button-apply";

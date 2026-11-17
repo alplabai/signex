@@ -171,7 +171,9 @@ fn open_canvas_menu(app: &mut Signex, at: (f32, f32)) {
 #[test]
 fn a_canvas_right_click_opens_the_menu_at_the_cursor() {
     let (mut app, main) = graphite_app();
-    let window = iced::Size::new(1400.0, 1000.0);
+    // The sheet menu follows each command (#2419) and is taller than it was:
+    // the window leaves room for all of it below the click.
+    let window = iced::Size::new(1400.0, 1200.0);
     let at = (600.0, 450.0);
     open_canvas_menu(&mut app, at);
     let metrics = MenuMetrics::GRAPHITE;
@@ -220,7 +222,8 @@ fn the_canvas_menu_has_28_px_rows_and_a_fitted_width() {
 
 /// The click lands on the row that is drawn there: a press in the gap
 /// between a label and its shortcut, one pixel inside the row's top edge,
-/// runs that row and does not close the menu.
+/// runs that row and does not close the menu. Find Similar is live on any
+/// sheet; Paste is greyed with an empty clipboard (#2419).
 #[test]
 fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let (mut app, main) = graphite_app();
@@ -230,10 +233,10 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
     let label = find(
         &texts,
-        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "paste"),
+        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find_similar_objects"),
     )
     .bounds;
-    let hint = app.keymap_shortcut_label("paste");
+    let hint = app.keymap_shortcut_label("find_similar_objects");
     let gap_x = if hint.is_empty() {
         label.x + label.width + 20.0
     } else {
@@ -247,7 +250,7 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
         messages.iter().any(|m| matches!(
             m,
             Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, .. }))
-                if id.as_str() == "paste"
+                if id.as_str() == "find_similar_objects"
         )),
         "a press at {point:?} sent {messages:?}"
     );

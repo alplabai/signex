@@ -120,10 +120,12 @@ runs in its `lint · repo gates` job are plain scripts you can run locally:
 
 ```bash
 bash scripts/check_arch_guard.sh        # crate dependency edges vs scripts/arch-edges.txt
+bash scripts/check_core_guard.sh        # app/core/ free of UI, runtimes, IO and the rest of the app (ADR-0006)
 bash scripts/check_file_size.sh         # god-file ratchet
 bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
+bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
 
@@ -409,6 +411,10 @@ them, so the rest is on the author.
   state changes, and IO is returned as a `Task`, never run inline (the
   bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
   process-global app state. Message routers are exhaustive, with no `_` arm.
+  Inside the application core
+  ([ADR-0006](docs/architecture/adr-0006-application-core.md), accepted
+  2026-11-16), IO is an `Effect` that the host
+  behind the calling front end runs; the GUI runs it as a `Task`.
 - **Messages:** contributors do not add `Message` variants. If a change needs
   a new message, open an issue that describes the event and the maintainers
   add it. The message tree is shared by every surface, so its shape is decided

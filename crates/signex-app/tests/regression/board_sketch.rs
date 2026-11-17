@@ -37,6 +37,7 @@ fn layer(id: u8, name: &str) -> LayerDef {
 pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(0xB0A2D),
         version: 1,
@@ -51,6 +52,8 @@ pub(crate) fn board() -> PcbBoard {
         }],
         footprints: Vec::new(),
         segments: vec![Segment {
+            locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(10),
             start: Point::new(5.0, 15.0),
             end: Point::new(25.0, 15.0),
@@ -63,6 +66,7 @@ pub(crate) fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -217,17 +221,19 @@ fn the_palette_enters() {
     assert!(in_sketch(&f));
 }
 
-/// No profile binds `board_sketch`; a key the user binds to it runs it.
+/// Both profiles bind `1` to `board_sketch` on a board (#2406); a key the
+/// user binds to it runs it too.
 #[test]
 fn a_key_bound_by_the_user_enters() {
     let mut f = open_board();
-    assert!(
+    assert_eq!(
         f.app
             .ui_state
             .active_keymap
             .shortcut_label(&command("board_sketch"))
-            .is_none(),
-        "no default key"
+            .as_deref(),
+        Some("1"),
+        "the default board key"
     );
     let profiles = &mut f.app.ui_state.keymap_profiles;
     let mut mine = profiles
@@ -457,9 +463,14 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
     );
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
     assert_eq!(
-        session.refusal.as_deref(),
-        Some(notice.detail.render_en_us().as_str())
+        session
+            .refusal
+            .as_ref()
+            .map(RenderTranslatable::render_en_us),
+        Some(notice.detail.render_en_us())
     );
+    // The bar holds the message itself, so a language switch re-renders it.
+    assert_eq!(session.refusal.as_ref(), Some(&notice.detail));
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()

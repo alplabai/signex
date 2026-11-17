@@ -114,6 +114,11 @@ mod pcb_view;
 #[path = "regression/pcb_view_rotation.rs"]
 mod pcb_view_rotation;
 
+// #2390 - the board 3D view: the View row, the palette, the bar, pointer
+// gestures and a click that selects in the flat view.
+#[path = "regression/pcb_board_3d.rs"]
+mod pcb_board_3d;
+
 // #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
 #[path = "regression/pcb_board_menu_view.rs"]
 mod pcb_board_menu_view;
@@ -166,12 +171,18 @@ mod pcb_placement;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
+// #2379: tracks and the ratsnest follow a dragged footprint's pads.
+#[path = "regression/pcb_drag_follow.rs"]
+mod pcb_drag_follow;
 // #2364: a component placed from the Components panel onto a board.
 #[path = "regression/board_part_place.rs"]
 mod board_part_place;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;
+// #2388: File ▸ Fabrication Outputs and its dialog.
+#[path = "regression/fab_outputs.rs"]
+mod fab_outputs;
 // #2354: the board Component Properties view.
 #[path = "regression/pcb_component_properties.rs"]
 mod pcb_component_properties;
@@ -187,6 +198,9 @@ mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;
+// #2373, #2393: free arcs, pads, strings and dimensions on a board.
+#[path = "regression/board_free_primitives.rs"]
+mod board_free_primitives;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
@@ -454,6 +468,9 @@ mod symbol_body_style;
 mod text_extents_save;
 #[path = "regression/window_tile_rows.rs"]
 mod window_tile_rows;
+// #2249: Window ▸ Tile shows the documents in panes; Untile.
+#[path = "regression/document_tiling.rs"]
+mod document_tiling;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
@@ -501,6 +518,9 @@ mod library_symbol_missing;
 mod library_symbol_versions;
 #[path = "regression/pin_text_on_sheet.rs"]
 mod pin_text_on_sheet;
+// #1667 — Autoplace Fields, Copy Attributes, Place Design Block, Import Graphics.
+#[path = "regression/placement_extras.rs"]
+mod placement_extras;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.
@@ -556,6 +576,10 @@ mod components_row_in_window;
 mod canvas_editing_correctness;
 #[path = "regression/schematic_field_drag.rs"]
 mod schematic_field_drag;
+
+// #2420 — Blanket, Compile Mask and Differential Pair directives.
+#[path = "regression/schematic_directives.rs"]
+mod schematic_directives;
 
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;

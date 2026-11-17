@@ -15,7 +15,9 @@ use signex_widgets::tree_view::TreeIcon;
 
 mod board_view_rows;
 mod new_project_row;
+mod placement_extras_rows;
 mod row_effects;
+mod sheet_rules;
 mod update_pcb_rows;
 
 const TID: ThemeId = ThemeId::GraphiteDark;
@@ -61,9 +63,16 @@ fn disabled_of(entries: &[DropdownEntry<Message>], label: &str) -> bool {
         .unwrap_or_else(|| panic!("missing row {label:?}"))
 }
 
+/// Something selected on an open sheet, with the command facts that go
+/// with it (#2419).
 fn selected() -> CanvasSelection {
     CanvasSelection {
         has_selection: true,
+        commands: crate::app::command::CommandContext {
+            has_schematic: true,
+            has_selection: true,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -85,6 +94,19 @@ fn shortcuts() -> CanvasShortcuts {
         }
         .to_string()
     })
+}
+
+/// The command context of a board in view whose selection `board`
+/// describes, for the board menu's builder (#2405).
+fn board_ctx(
+    board: crate::app::handlers::pcb_placement::PcbTargets,
+) -> crate::app::command::CommandContext {
+    crate::app::command::CommandContext {
+        has_pcb: true,
+        has_document: true,
+        pcb: board,
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -215,6 +237,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
             child_sheet_selected: false,
             drawing_selected: false,
             placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
@@ -228,6 +251,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
             child_sheet_selected: false,
             drawing_selected: false,
             placed_part_selected: false,
+            ..CanvasSelection::default()
         },
         None,
         None,
@@ -242,9 +266,10 @@ fn canvas_menu_grows_and_gates_on_selection() {
     assert!(!has_row(&without, "Rotate"));
     assert!(has_row(&with, "Rotate"));
     assert!(has_row(&with, "Properties..."));
-    // Place launcher always; Align launcher joins it on selection.
-    assert_eq!(launchers(&without), 1);
-    assert_eq!(launchers(&with), 2);
+    // Place, Part Actions and Sheet Actions launchers always (#2419); the
+    // Align launcher joins them on selection.
+    assert_eq!(launchers(&without), 3);
+    assert_eq!(launchers(&with), 4);
 }
 
 fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Message> {
@@ -289,6 +314,7 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
             child_sheet_selected: false,
             drawing_selected: false,
             placed_part_selected: false,
+            ..CanvasSelection::default()
         },
         None,
         None,
@@ -300,39 +326,39 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
     assert!(row.tooltip.is_none());
 }
 
+/// #2419: the child-sheet rows moved into the Sheet Actions flyout, live
+/// with a sheet symbol selected and greyed without one.
 #[test]
-fn canvas_child_sheet_adds_open_row() {
-    let sc = shortcuts();
-    let plain = canvas_menu_entries(
+fn sheet_actions_open_child_sheet_needs_a_sheet_symbol() {
+    let hint = |_: &str| String::new();
+    let entries = |child_sheet_selected| {
+        super::submenu::sheet_actions_entries(
+            signex_i18n::I18n::en_us_ref(),
+            TID,
+            CanvasSelection {
+                child_sheet_selected,
+                ..selected()
+            },
+            &hint,
+        )
+    };
+    let (plain, child) = (entries(false), entries(true));
+    for label in ["Open Child Sheet", "Sync Sheet Pins"] {
+        assert!(disabled_of(&plain, label), "{label} without a sheet symbol");
+        assert!(!disabled_of(&child, label), "{label} with a sheet symbol");
+    }
+    let top = canvas_menu_entries(
         signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
-            has_selection: false,
-            child_sheet_selected: false,
-            drawing_selected: false,
-            placed_part_selected: false,
-        },
-        None,
-        None,
-        &sc,
-    );
-    let child = canvas_menu_entries(
-        signex_i18n::I18n::en_us_ref(),
-        TID,
-        CanvasSelection {
-            has_selection: false,
             child_sheet_selected: true,
-            drawing_selected: false,
-            placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
-        &sc,
+        &shortcuts(),
     );
-    assert!(!has_row(&plain, "Open Child Sheet"));
-    assert!(has_row(&child, "Open Child Sheet"));
-    assert!(!has_row(&plain, "Sync Sheet Pins"));
-    assert!(has_row(&child, "Sync Sheet Pins"));
+    assert!(!has_row(&top, "Open Child Sheet"), "left at the top level");
 }
 
 #[test]
@@ -414,9 +440,7 @@ fn place_menu_greys_only_the_planned_tools() {
         if let DropdownEntry::Item(it) = entry {
             let planned = matches!(
                 it.label.as_str(),
-                "Differential Pair"
-                    | "Parameter Set"
-                    | "Blanket"
+                "Parameter Set"
                     | "Signal Harness"
                     | "Harness Connector"
                     | "Harness Entry"
@@ -425,7 +449,7 @@ fn place_menu_greys_only_the_planned_tools() {
             assert_eq!(it.disabled, planned, "{}", it.label);
             assert_eq!(
                 it.tooltip.as_deref(),
-                planned.then_some(crate::active_bar::PLANNED_TOOLTIP),
+                planned.then_some("Planned — not available yet"),
                 "{}",
                 it.label
             );
@@ -535,6 +559,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "Generic No ERC",
             "Differential Pair",
             "Blanket",
+            "Compile Mask",
             "Signal Harness",
             "Harness Connector",
             "Harness Entry",
@@ -578,6 +603,7 @@ fn canvas_row_text_is_byte_identical_to_the_old_literals() {
             child_sheet_selected: true,
             drawing_selected: false,
             placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
@@ -619,6 +645,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
             child_sheet_selected: true,
             drawing_selected: false,
             placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
@@ -705,6 +732,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
             child_sheet_selected: false,
             drawing_selected: true,
             placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
@@ -718,6 +746,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
             child_sheet_selected: false,
             drawing_selected: false,
             placed_part_selected: false,
+            ..selected()
         },
         None,
         None,
@@ -736,32 +765,29 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     }
 }
 
-/// The placed-part actions (#1301, #1262, #1260) show for one selected
-/// non-power symbol only, under exactly these labels, and each row carries
-/// its own action.
+/// The placed-part actions (#1301, #1262, #1260) sit in the Part Actions
+/// flyout (#2419): live for one selected non-power symbol only, under
+/// exactly these labels, and each row carries its own action.
 #[test]
-fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
-    let sc = shortcuts();
+fn part_actions_are_live_for_a_placed_part_only() {
+    let hint = |_: &str| String::new();
     let part = CanvasSelection {
         placed_part_selected: true,
         ..selected()
     };
-    let with = canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, part, None, None, &sc);
-    let without = canvas_menu_entries(
-        signex_i18n::I18n::en_us_ref(),
-        TID,
-        selected(),
-        None,
-        None,
-        &sc,
-    );
+    let with = super::submenu::part_actions_entries(signex_i18n::I18n::en_us_ref(), part, &hint);
+    let without =
+        super::submenu::part_actions_entries(signex_i18n::I18n::en_us_ref(), selected(), &hint);
 
     for (label, command) in [
         ("Open Datasheet", "open_datasheet"),
         ("Edit Symbol", "edit_selected_symbol_in_symbol_editor"),
         ("Change Component\u{2026}", "change_component"),
     ] {
-        assert!(!has_row(&without, label), "{label} without a placed part");
+        assert!(
+            disabled_of(&without, label),
+            "{label} without a placed part"
+        );
         let message = with
             .iter()
             .find_map(|e| match e {
@@ -777,8 +803,16 @@ fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
             "{label} sent the wrong message"
         );
     }
-    // Nothing else moved: the rest of the menu is identical.
-    assert_eq!(labels(&with).len(), labels(&without).len() + 3);
+    // The top-level menu no longer repeats them.
+    let top = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        part,
+        None,
+        None,
+        &shortcuts(),
+    );
+    assert!(!has_row(&top, "Open Datasheet"));
 }
 
 /// The message the row labelled `label` sends, `None` when greyed.
@@ -836,15 +870,25 @@ fn board_cross_probe_row_runs_the_command_with_a_selection() {
         any: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, picked, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(picked),
+        None,
+        &sc,
+    );
     assert!(runs_cross_probe(row_message(&rows, "Cross Probe")));
     let empty = PcbTargets {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(empty),
+        None,
+        &sc,
+    );
     assert!(row_message(&rows, "Cross Probe").is_none());
 }
 
@@ -858,8 +902,13 @@ fn board_sketch_row_runs_the_command() {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows =
-        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
+    let rows = super::menus::pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(empty),
+        None,
+        &sc,
+    );
     assert!(matches!(
         row_message(&rows, "Board Sketch"),
         Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))

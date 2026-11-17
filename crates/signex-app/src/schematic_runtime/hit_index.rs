@@ -16,6 +16,9 @@ enum Shape {
     Box,
     /// Hit within `tolerance` of the segment.
     Segment { a: Point, b: Point, tolerance: f64 },
+    /// Hit inside the extent but not inside `hole` (a directive region,
+    /// #2420).
+    Frame { hole: Option<Aabb> },
 }
 
 #[derive(Clone, Copy)]
@@ -31,6 +34,10 @@ impl Entry {
             Shape::Box => self.extent.contains(point.x, point.y),
             Shape::Segment { a, b, tolerance } => {
                 point_to_segment_distance(point, a, b) <= tolerance
+            }
+            Shape::Frame { hole } => {
+                self.extent.contains(point.x, point.y)
+                    && !hole.is_some_and(|h| h.contains(point.x, point.y))
             }
         }
     }
@@ -73,6 +80,20 @@ impl HitIndex {
                         .bus_mm()
                         .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
                     segment_entry(item.item, bus.start, bus.end, tolerance)
+                }
+                SelectedKind::Directive => {
+                    match super::directives::pick_area(snapshot, item.item.uuid) {
+                        Some((extent, hole)) => Entry {
+                            item: item.item,
+                            extent,
+                            shape: Shape::Frame { hole },
+                        },
+                        None => Entry {
+                            item: item.item,
+                            extent: item.bbox.expand(0.25),
+                            shape: Shape::Box,
+                        },
+                    }
                 }
                 _ => Entry {
                     item: item.item,

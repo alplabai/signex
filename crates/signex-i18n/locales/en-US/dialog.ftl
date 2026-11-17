@@ -165,11 +165,22 @@ dialog-version-control-enable = Enable
 dialog-version-control-enabling = Enabling…
 dialog-net-color-use = Use Color
 dialog-parameter-manager-add-column = Add column
+# Column headings of the Parameter Manager table.
+dialog-parameter-manager-column-reference = Reference
+dialog-parameter-manager-column-value = Value
+dialog-parameter-manager-column-footprint = Footprint
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
 dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
+# Footer of Print Preview when no file is ticked for export.
+dialog-print-preview-no-files = No files selected for export
+# Footer of Print Preview: $count is how many pages, a whole number. The
+# English keeps "page(s)" for every count.
+dialog-print-preview-page-count = { $count } page(s)
+dialog-netlist-incomplete-title = Netlist is incomplete
+dialog-netlist-incomplete-body = The project netlist does not cover the whole project. Exporting it would produce a file missing components and carrying the wrong net names wherever nets merge through a page that is not in it — and a PCB import cannot tell. You can export it anyway: the file stays a valid netlist, and the omitted pages are reported in the Messages panel.
 
 ## Shared by dialog footer buttons (#2225): one id per common action, so
 ## every dialog's Cancel, OK, Save … translates the same way.

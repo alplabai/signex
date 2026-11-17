@@ -38,6 +38,7 @@ fn pad(uuid: Uuid, net: Option<u32>) -> Pad {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -70,6 +71,7 @@ fn footprint(uuid: Uuid, link: Option<SymbolLink>, pads: Vec<Pad>) -> Footprint 
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 0,
@@ -106,6 +108,8 @@ fn board() -> PcbBoard {
             footprint(FP_LOOSE, None, vec![pad(Uuid::from_u128(0x102), Some(1))]),
         ],
         segments: vec![Segment {
+            locked: false,
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x200),
             start: Point::new(0.0, 0.0),
             end: Point::new(1.0, 0.0),
@@ -115,18 +119,22 @@ fn board() -> PcbBoard {
             unknown_columns: Default::default(),
         }],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(0x300),
             position: Point::new(0.0, 0.0),
             diameter: 0.6,
             drill: 0.3,
             layers: Vec::new(),
             net: 2,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         }],
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

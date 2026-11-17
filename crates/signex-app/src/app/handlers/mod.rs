@@ -5,6 +5,8 @@ pub mod autosave_primitives;
 pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
+mod board_3d;
+pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
@@ -24,6 +26,7 @@ pub mod dock;
 pub mod document_files;
 mod document_identity;
 pub mod document_tabs;
+mod document_tiling;
 pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
@@ -45,6 +48,10 @@ pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
 mod pcb_drc_check;
+mod pcb_drc_results;
+#[cfg(test)]
+mod pcb_drc_results_tests;
+pub(crate) mod pcb_dxf_import;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 mod pcb_align;
@@ -59,7 +66,13 @@ mod pcb_drc_tests;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
+mod pcb_filter_presets;
 pub(crate) mod pcb_footprint_text;
+pub(crate) mod pcb_item_edits;
+pub(crate) mod pcb_layer_stack;
+pub(crate) mod pcb_layer_strip;
+#[cfg(test)]
+mod pcb_origin_tests;
 mod pcb_parking;
 mod pcb_part_place;
 pub(crate) mod pcb_placement;
@@ -67,12 +80,20 @@ pub(crate) mod pcb_placement;
 mod pcb_placement_tests;
 #[cfg(test)]
 mod pcb_placement_window_tests;
+pub(crate) mod pcb_pour;
 pub(crate) mod pcb_primitive;
+pub(crate) mod pcb_query;
 pub mod pcb_select;
+#[cfg(test)]
+mod pcb_select_tests;
 pub(crate) mod pcb_tool;
+pub(crate) mod pcb_tune;
+#[cfg(test)]
+mod pcb_tune_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;
+pub(crate) mod placement_extras;
 pub mod placement_session;
 pub mod preferences;
 pub mod project_case;

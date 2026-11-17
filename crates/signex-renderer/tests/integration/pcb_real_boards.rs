@@ -254,8 +254,9 @@ fn each_copper_layer_of_the_real_boards_renders_as_the_active_layer() {
     }
 }
 
-/// The overlay also carries the board outline, openings and keepouts, so the
-/// drawn overlay must be exactly what the board features alone draw.
+/// The overlay also carries the board outline, openings and keepouts and the
+/// footprint and board drawings (#2387), so the drawn overlay must be
+/// exactly what those alone draw.
 #[test]
 fn the_real_boards_draw_no_ratsnest_because_every_net_is_routed() {
     let theme = ResolvedTheme::builtin_default();
@@ -270,6 +271,7 @@ fn the_real_boards_draw_no_ratsnest_because_every_net_is_routed() {
 
         let features_only = PcbSnapshot {
             board_features: BoardFeaturesInput::from_board(&board),
+            graphics: snapshot.graphics.clone(),
             ..PcbSnapshot::default()
         };
         let mut expected = Scene::default();

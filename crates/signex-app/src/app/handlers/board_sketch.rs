@@ -176,12 +176,14 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
         crate::diagnostics::log_warning(held.render_en_us());
+        // shortcut: the card renders the refusal now, so it keeps the language
+        // the card opened in until Translatable args can nest (#2059).
         let refusal = self
             .interaction_state
             .board_sketch
             .as_ref()
-            .and_then(|session| session.refusal.clone());
-        // The refusal line was rendered when the board refused the sketch.
+            .and_then(|session| session.refusal.as_ref())
+            .map(|refusal| refusal.render(&self.ui_state.i18n));
         let detail = match refusal {
             Some(refusal) => Translatable::new(ids::NOTICE_BOARD_SKETCH_HELD_WHY)
                 .arg("board", name)
@@ -300,14 +302,11 @@ impl Signex {
     fn refuse_board_sketch(&mut self, reason: String) {
         let detail = Translatable::new(ids::BOARD_SKETCH_REFUSED).arg("reason", reason);
         crate::diagnostics::log_warning(detail.render_en_us());
-        // shortcut: the bar's refusal line (and `$refusal` on the held card)
-        // keeps the language it was rendered in until Translatable args can
-        // nest; store the message instead then (#2059).
-        let shown = detail.render(&self.ui_state.i18n);
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+        // The bar keeps the message, so it follows a language switch.
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.refusal = Some(shown);
+            session.refusal = Some(detail.clone());
         }
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
     }
 
     /// Whether a sketch editor message for `path` is the board sketch's: it

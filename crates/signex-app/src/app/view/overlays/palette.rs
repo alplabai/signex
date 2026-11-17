@@ -54,6 +54,7 @@ pub(super) fn group_header<'a, M: 'a>(
                     .boxed(),
             )
             .push(
+                // raw: the count is already formatted for the locale by `I18n::count`.
                 text(raw(i18n.count(count as i64)))
                     .size(TS.section)
                     .font(mono())
@@ -84,13 +85,15 @@ pub(super) fn search_row<'a, M: 'a>(
             .color(r.ink4)
             .width(Length::Fill)
             .boxed(),
-        None => text(raw(query.to_string()))
+        // What the user typed.
+        None => text(signex_i18n::UserText::new(query))
             .size(TS.body)
             .color(ink)
             .width(Length::Fill)
             .boxed(),
     };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
+    // raw: a search glyph, not language.
     line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
     line = line.push(body);
     line = line.push(cap(theme_tokens, t!(i18n, shortcut_ids::PALETTE_KEY_ESC)));
@@ -231,6 +234,7 @@ pub(super) fn cap<'a, M: 'a>(
 
 /// A key cap showing a key as the keymap writes it, or an arrow glyph.
 fn glyph_cap<'a, M: 'a>(theme_tokens: &ThemeTokens, key: &str) -> Element<'a, M> {
+    // raw: a key as the keymap writes it, or an arrow glyph.
     cap(theme_tokens, raw(key.to_string()))
 }
 
@@ -249,6 +253,7 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     let spans: Vec<_> = label_runs_in(i18n, &shown_label, query)
         .into_iter()
         .map(|(run, hit)| {
+            // raw: runs of the row's label, already rendered, split at the matches.
             let s = span::<()>(raw(run)).color(if hit { accent } else { ink });
             if hit { s.font(bold()) } else { s }
         })
@@ -271,6 +276,8 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
         );
     } else if !is_command && !entry.detail.is_empty() {
         label_col = label_col.push(
+            // raw: the detail is design data or worded by the palette index in
+            // English (a net's terminal count, #2061).
             text(raw(entry.detail.clone()))
                 .size(TS.caption)
                 .font(mono())

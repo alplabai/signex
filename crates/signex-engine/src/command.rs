@@ -102,6 +102,7 @@ pub enum CommandKind {
     RenameChildSheetFile,
     ModifyChildSheet,
     SetChildSheetInstances,
+    ResizeChildSheet,
     SetPaperSize,
     SetSheetFrame,
     SetSheetColor,
@@ -113,6 +114,9 @@ pub enum CommandKind {
     SetNetColors,
     ArrangeDrawings,
     SetDrawingPlacement,
+    PlaceDirective,
+    UpdateDirective,
+    AutoplaceFields,
 }
 
 #[derive(Debug, Clone)]
@@ -291,7 +295,8 @@ pub enum Command {
         wire: Wire,
     },
     /// Split one wire in two at `at`, which must lie strictly inside it; the
-    /// first half keeps the wire's id, the second gets a new one. A point
+    /// first half keeps the wire's id, the second takes `new_wire`, minted by
+    /// the caller (an id already in the sheet is refused). A point
     /// off the wire, or at one of its ends, changes nothing; a spot holding a
     /// pin, bus end, bus entry or another wire's end is refused
     /// (`EngineError::BreakWireBlocked`), since the new end would join it. Connectivity is
@@ -299,6 +304,7 @@ pub enum Command {
     BreakWire {
         wire: Uuid,
         at: signex_types::schematic::Point,
+        new_wire: Uuid,
     },
     PlaceWireSegment {
         wire: Wire,
@@ -457,6 +463,15 @@ pub enum Command {
         sheet_id: Uuid,
         instances: Vec<signex_types::schematic::SheetInstance>,
     },
+    /// Set one placed sheet symbol's `(width, height)` in mm, by `sheet_id`
+    /// (#2418). The top-left corner stays; entries on the right and bottom
+    /// edges travel with them. Refused whole on a too-small edge, an entry
+    /// left past its edge, or a moving entry that is connected
+    /// (`exec/child_sheet_size.rs`). Undoable like any other edit.
+    ResizeChildSheet {
+        sheet_id: Uuid,
+        size: (f64, f64),
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -527,6 +542,25 @@ pub enum Command {
     SetDrawingPlacement {
         ids: Vec<Uuid>,
         placement: signex_types::schematic::DrawingPlacement,
+    },
+    /// Place a Blanket, Compile Mask or Differential Pair directive (#2420).
+    PlaceDirective {
+        directive: signex_types::schematic::SchDirective,
+    },
+    /// Replace the directive with `directive`'s uuid by `directive`: its
+    /// region and parameters. Refused when no directive of that uuid and kind
+    /// exists; unchanged when equal. Consecutive edits of one directive share
+    /// one undo step, like typing a field (`Engine::end_field_edit_run`).
+    UpdateDirective {
+        directive: signex_types::schematic::SchDirective,
+    },
+    /// Put the reference and value fields of the parts `symbol_ids` where the
+    /// autoplacer puts them, as one undo step (#1667). Asked for by name, so a
+    /// field the user moved is placed too and the part's fields count as
+    /// autoplaced again. Unchanged when no field moves; an id that names no
+    /// part is ignored.
+    AutoplaceFields {
+        symbol_ids: Vec<Uuid>,
     },
 }
 
@@ -651,6 +685,7 @@ impl Command {
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
             Command::SetChildSheetInstances { .. } => CommandKind::SetChildSheetInstances,
+            Command::ResizeChildSheet { .. } => CommandKind::ResizeChildSheet,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
             Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetSheetColor { .. } => CommandKind::SetSheetColor,
@@ -662,6 +697,9 @@ impl Command {
             Command::SetNetColors { .. } => CommandKind::SetNetColors,
             Command::ArrangeDrawings { .. } => CommandKind::ArrangeDrawings,
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
+            Command::PlaceDirective { .. } => CommandKind::PlaceDirective,
+            Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
+            Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
         }
     }
 }

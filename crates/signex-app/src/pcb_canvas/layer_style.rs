@@ -5,11 +5,14 @@
 use iced::Color;
 use signex_gfx::style::ColorSlot;
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
-use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow, copper_slot};
+use signex_renderer::pcb::LayerRow;
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
-use signex_types::theme::{CanvasColors, Color as ThemeColor, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::Label;
+
+use crate::layer_strip_prefs::LayerNameStyle;
 
 /// The catalog name of `layer`.
 pub fn layer_name(i18n: &I18n, layer: PcbLayer) -> Localized {
@@ -30,6 +33,37 @@ pub fn copper_name(i18n: &I18n, layer: CopperLayer) -> Localized {
         CopperLayer::Inner(n) => {
             t!(i18n, ids::PCB_LAYER_INNER_COPPER, "index" => u32::from(n.index()))
         }
+    }
+}
+
+/// The name of `layer` in `style` (#2394): the short and medium names come
+/// from the catalog; a technical layer has no medium name and keeps its
+/// long one.
+pub fn styled_layer_name(i18n: &I18n, layer: PcbLayer, style: LayerNameStyle) -> Localized {
+    match (style, layer) {
+        (LayerNameStyle::Long, _) => layer_name(i18n, layer),
+        (LayerNameStyle::Short, PcbLayer::Copper(CopperLayer::Inner(n))) => {
+            t!(i18n, ids::PCB_LAYER_SHORT_INNER, "index" => u32::from(n.index()))
+        }
+        (LayerNameStyle::Short, PcbLayer::Mechanical(m)) => {
+            t!(i18n, ids::PCB_LAYER_SHORT_MECHANICAL, "index" => u32::from(m.index()))
+        }
+        (LayerNameStyle::Short, _) => {
+            t!(i18n, ids::PCB_LAYER_SHORT, "layer" => pcb_layer_token(layer))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Top)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_TOP)
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Bottom)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_BOTTOM)
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Inner(n))) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_INNER, "index" => u32::from(n.index()))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Mechanical(m)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_MECHANICAL, "index" => u32::from(m.index()))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Technical(_)) => layer_name(i18n, layer),
     }
 }
 
@@ -83,26 +117,12 @@ pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
     board_layer_colour(layer)
 }
 
-/// The colour of `layer` in the board palette the canvas draws with.
-/// Copper, Board Outline and the keep-out layers take the slots their
-/// geometry is drawn in.
+/// The colour of `layer` in the board palette the canvas draws it in:
+/// `ResolvedTheme::board_layer_color`, the one lookup for both.
 pub fn board_layer_colour(layer: PcbLayer) -> Color {
-    let canvas = crate::styles::board_canvas_colors();
-    let slot_colour = |slot: ColorSlot| {
-        let [r, g, b, a] = ResolvedTheme::from_canvas_colors(canvas).color(slot);
-        Color { r, g, b, a }
-    };
-    if let Some(slot) = drawn_slot(layer) {
-        return slot_colour(slot);
-    }
-    let colors = canvas.board_layer_colors();
-    let cycle = |n: u8| colors.layer_cycle[usize::from(n) % colors.layer_cycle.len()];
-    let c = match layer {
-        PcbLayer::Copper(copper) => return slot_colour(copper_slot(copper)),
-        PcbLayer::Mechanical(n) => cycle(n.index()),
-        PcbLayer::Technical(t) => technical_colour(&canvas, t),
-    };
-    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
+    let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+        .board_layer_color(layer);
+    Color { r, g, b, a }
 }
 
 /// The colour the Multi-Layer row is listed with: the slot vias and
@@ -113,54 +133,57 @@ pub fn multi_layer_colour() -> Color {
     Color { r, g, b, a }
 }
 
-/// The canvas slot `layer`'s geometry is drawn in, for the layers whose
-/// swatch is that slot.
-fn drawn_slot(layer: PcbLayer) -> Option<ColorSlot> {
-    match layer {
-        _ if layer == BOARD_OUTLINE => Some(ColorSlot::BoardEdge),
-        PcbLayer::Technical(TechnicalLayer::KeepoutTop | TechnicalLayer::KeepoutBottom) => {
-            Some(ColorSlot::Keepout)
-        }
-        _ => None,
+/// How much darker the board's edge is than its mask in 3D.
+const BOARD_3D_EDGE_SHADE: f32 = 0.55;
+/// How strongly a selected part is washed in the selection colour in 3D.
+const BOARD_3D_HIGHLIGHT_ALPHA: f32 = 0.45;
+
+/// The colours of the board 3D view (#2390), from this palette: the solder
+/// mask over the faces (opaque), its darker shade on the edge, the copper
+/// and Multi-Layer colours, and the 3D Body layer for a part with no colour
+/// of its own.
+pub fn board_3d_colors() -> signex_renderer::board3d::Board3dColors {
+    let rgba = |c: Color| [c.r, c.g, c.b, c.a];
+    let mask = Color {
+        a: 1.0,
+        ..board_layer_colour(PcbLayer::Technical(TechnicalLayer::SolderMaskTop))
+    };
+    let edge = Color {
+        r: mask.r * BOARD_3D_EDGE_SHADE,
+        g: mask.g * BOARD_3D_EDGE_SHADE,
+        b: mask.b * BOARD_3D_EDGE_SHADE,
+        a: 1.0,
+    };
+    signex_renderer::board3d::Board3dColors {
+        mask: rgba(mask),
+        edge: rgba(edge),
+        top_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Top))),
+        bottom_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Bottom))),
+        multi_layer: rgba(multi_layer_colour()),
+        body: rgba(board_layer_colour(PcbLayer::Technical(
+            TechnicalLayer::Body3dTop,
+        ))),
     }
 }
 
-fn technical_colour(canvas: &CanvasColors, layer: TechnicalLayer) -> ThemeColor {
-    use TechnicalLayer as T;
-    let colors = canvas.board_layer_colors();
-    let t = &colors.technical;
-    match layer {
-        T::Margin => colors.margin,
-        T::SilkscreenTop | T::SilkscreenBottom => colors.silkscreen,
-        T::SolderMaskTop | T::SolderMaskBottom => colors.solder_mask,
-        T::PasteTop | T::PasteBottom => colors.paste,
-        T::AdhesiveTop => t.adhesive.top,
-        T::AdhesiveBottom => t.adhesive.bottom,
-        T::FabTop => t.fab.top,
-        T::FabBottom => t.fab.bottom,
-        T::AssemblyTop => t.assembly.top,
-        T::AssemblyBottom => t.assembly.bottom,
-        T::CourtyardTop => t.courtyard.top,
-        T::CourtyardBottom => t.courtyard.bottom,
-        T::Body3dTop => t.body_3d.top,
-        T::Body3dBottom => t.body_3d.bottom,
-        T::FiducialTop => t.fiducial.top,
-        T::FiducialBottom => t.fiducial.bottom,
-        T::DesignatorTop => t.designator.top,
-        T::DesignatorBottom => t.designator.bottom,
-        T::Dimensions => t.dimensions,
-        T::Notes => t.notes,
-        T::DrillDrawing => t.drill_drawing,
-        T::Eco1 => t.eco_1,
-        T::Eco2 => t.eco_2,
-        T::EdgeCuts => canvas.board_edge_color(),
-        T::KeepoutTop | T::KeepoutBottom => canvas.keepout_color(),
-    }
+/// The wash over a selected part in the board 3D view: the selection slot.
+pub fn board_3d_highlight() -> [f32; 4] {
+    let [r, g, b, _] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+        .color(ColorSlot::Selection);
+    [r, g, b, BOARD_3D_HIGHLIGHT_ALPHA]
+}
+
+/// The board 3D view's background: the board canvas's.
+pub fn board_3d_background() -> Color {
+    let c = crate::styles::board_canvas_colors().background;
+    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_renderer::pcb::{BOARD_OUTLINE, copper_slot};
+    use signex_types::theme::Color as ThemeColor;
 
     /// Every layer has a catalog name: none falls back to its message id.
     #[test]

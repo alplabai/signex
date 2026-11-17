@@ -10,6 +10,7 @@ use iced::Task;
 use signex_drc::{DrcRules, ViolationKind, findings};
 use signex_types::project::DrcRuleSet;
 
+use crate::app::state::DrcInput;
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
 
 /// Violations written to the Messages log after the summary line; the panel
@@ -27,6 +28,16 @@ impl Signex {
             crate::diagnostics::log_info("DRC: the active document is not a PCB");
             return Task::none();
         };
+        self.start_pcb_drc(path, board)
+    }
+
+    /// Check `board`, the board at `path`, whether or not its tab is in
+    /// view (the Rules tab runs its project's board, #2398).
+    pub(crate) fn start_pcb_drc(
+        &mut self,
+        path: std::path::PathBuf,
+        board: signex_types::pcb::PcbBoard,
+    ) -> Task<Message> {
         let revision = self
             .document_state
             .pcb_revisions
@@ -38,22 +49,12 @@ impl Signex {
             crate::diagnostics::log_info("DRC: a check of this board is already running");
             return Task::none();
         }
-        // The board's own project, as `check_drc` takes it (#2332): a loose
-        // board gets this machine's layer and no net classes, and says so.
-        let project = self.document_state.board_project(&path, None);
-        let loose = project.is_none();
-        let classes = project
-            .map(|p| p.data.net_classes.clone())
-            .unwrap_or_default();
-        let (profile, project_layer) = drc_layers(
-            project.and_then(|p| p.data.rules.as_ref()),
-            &self.ui_state.machine_drc_rules,
-        );
-        let layers = Layers {
-            profile: profile.cloned(),
-            project: project_layer.cloned(),
-        };
-        let generation = self.interaction_state.pcb_drc.begin(path, revision);
+        let (loose, classes, layers) = self.drc_inputs(&path);
+        let generation = self.interaction_state.pcb_drc.begin(DrcInput {
+            path,
+            revision,
+            net_classes: classes.clone(),
+        });
         self.refresh_panel_ctx();
         Task::perform(
             async move {
@@ -69,6 +70,41 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// What a check of the board at `path` reads: whether the board is in
+    /// no open project, its net classes and its rule layers. The board's
+    /// own project, as `check_drc` takes it (#2332): a loose board gets this
+    /// machine's layer and no net classes, and says so.
+    fn drc_inputs(
+        &self,
+        path: &std::path::Path,
+    ) -> (bool, Vec<signex_types::net_class::NetClass>, Layers) {
+        let project = self.document_state.board_project(path, None);
+        let classes = project
+            .map(|p| p.data.net_classes.clone())
+            .unwrap_or_default();
+        let (profile, project_layer) = drc_layers(
+            project.and_then(|p| p.data.rules.as_ref()),
+            &self.ui_state.machine_drc_rules,
+        );
+        let layers = Layers {
+            profile: profile.cloned(),
+            project: project_layer.cloned(),
+        };
+        (project.is_none(), classes, layers)
+    }
+
+    /// The rules a check of `board` (the board at `path`) applies, and its
+    /// project's net classes: what Interactive Routing keeps (#2389).
+    pub(crate) fn board_design_rules(
+        &self,
+        path: &std::path::Path,
+        board: &signex_types::pcb::PcbBoard,
+    ) -> Result<(DrcRules, Vec<signex_types::net_class::NetClass>), String> {
+        let (_, classes, layers) = self.drc_inputs(path);
+        let rules = compile_rules(board, &classes, &layers)?;
+        Ok((rules, classes))
     }
 
     /// Apply a finished run, unless a newer one superseded it. A `loose`
@@ -102,14 +138,16 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// What the Messages panel shows of the active board's check; `None`
-    /// with no PCB in view.
+    /// What the Messages panel and the DRC results panel (#2399) show of the
+    /// active board's check; `None` with no PCB in view.
     pub(crate) fn pcb_drc_panel(&self) -> Option<crate::panels::DrcPanel> {
         let path = self.active_tab_path()?;
-        self.active_pcb()?;
+        let waivers = &self.active_pcb()?.options.drc_waivers;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
+            filter: drc.filter.clone(),
+            waive_draft: drc.waive_draft.clone(),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {
@@ -123,7 +161,7 @@ impl Signex {
             .unwrap_or(0);
         let report = &done.report;
         panel.ran = true;
-        panel.stale = done.revision != revision;
+        panel.stale = done.is_stale(revision, self.board_net_classes(&path));
         if report.rules.from_default {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
@@ -153,17 +191,27 @@ impl Signex {
             .iter()
             .enumerate()
             .take(crate::panels::DRC_MAX_ROWS)
-            .map(|(index, v)| crate::panels::DrcRow {
-                index,
-                kind: v.kind,
-                a: name(v.nets.0),
-                b: name(v.nets.1),
-                measured_mm: mm(v.measured_nm),
-                required_mm: mm(v.required_nm),
-                over_maximum: v.kind == ViolationKind::TrackWidth && v.measured_nm > v.required_nm,
-                x_mm: mm(v.at.x),
-                y_mm: mm(v.at.y),
-                layer: pcb_geom::copper_layers(v.layers).first().copied(),
+            .map(|(index, v)| {
+                let layers = pcb_geom::copper_layers(v.layers);
+                crate::panels::DrcRow {
+                    index,
+                    kind: v.kind,
+                    a: name(v.nets.0),
+                    b: name(v.nets.1),
+                    measured_mm: mm(v.measured_nm),
+                    required_mm: mm(v.required_nm),
+                    over_maximum: v.kind == ViolationKind::TrackWidth
+                        && v.measured_nm > v.required_nm,
+                    x_mm: mm(v.at.x),
+                    y_mm: mm(v.at.y),
+                    layer: layers.first().copied(),
+                    layers,
+                    key: signex_drc::waiver_key(v),
+                    rule: signex_drc::rule_id(v).to_string(),
+                    severity: report.severity_of(v),
+                    objects: v.items.len(),
+                    waiver: signex_drc::waiver_of(waivers, v).map(|w| w.note.clone()),
+                }
             })
             .collect();
         Some(panel)
@@ -223,6 +271,24 @@ pub(super) fn run_check(
     classes: &[signex_types::net_class::NetClass],
     layers: &Layers,
 ) -> DrcRunResult {
+    let rules = compile_rules(board, classes, layers)?;
+    let report = signex_drc::run(board, &rules);
+    let names = board
+        .nets
+        .iter()
+        .map(|n| (n.number, n.name.clone()))
+        .collect();
+    Ok((report, names))
+}
+
+/// The rules a check of `board` applies, the rule text compiled: shared
+/// by the check and Interactive Routing (#2389), so a route keeps exactly
+/// the clearances the check asks.
+pub(super) fn compile_rules(
+    board: &signex_types::pcb::PcbBoard,
+    classes: &[signex_types::net_class::NetClass],
+    layers: &Layers,
+) -> Result<DrcRules, String> {
     let (profile, project) = (layers.profile.as_ref(), layers.project.as_ref());
     let written = signex_drc_dsl::compile_layers(profile, project);
     let mut rules = DrcRules::for_board(board, classes)
@@ -235,13 +301,7 @@ pub(super) fn run_check(
     rules.notes.extend(lowered);
     rules.rules_not_applied = written.not_applied;
     rules.texts_not_applied = written.unparsed;
-    let report = signex_drc::run(board, &rules);
-    let names = board
-        .nets
-        .iter()
-        .map(|n| (n.number, n.name.clone()))
-        .collect();
-    Ok((report, names))
+    Ok(rules)
 }
 
 /// The summary line. Its wording changes only when the run has written

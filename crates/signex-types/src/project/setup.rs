@@ -134,7 +134,8 @@ impl PcbDefaults {
     }
 
     /// A blank board with these rules: the copper stack-up, the fixed
-    /// technical layers and the rules in the board setup.
+    /// technical layers, the rules in the board setup and the origin at the
+    /// bottom-left of the board area.
     pub fn new_board(&self) -> PcbBoard {
         let copper = copper_layers(self.copper_layers);
         let technical = [
@@ -162,7 +163,12 @@ impl PcbDefaults {
             .collect();
         PcbBoard {
             sketch: None,
-            options: Default::default(),
+            stackup: None,
+            // No outline yet: the origin is the empty area's bottom-left (#2384).
+            options: crate::pcb_options::BoardOptions {
+                origin: crate::pcb_options::BoardOrigin::of_new_board(&[]),
+                ..Default::default()
+            },
             uuid: uuid::Uuid::now_v7(),
             version: 1,
             generator: "signex".into(),
@@ -186,6 +192,7 @@ impl PcbDefaults {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }

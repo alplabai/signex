@@ -5,12 +5,8 @@
 //! justify it in the PR. A panel that became real must be removed too.
 
 const EXPECTED: &[&str] = &[
-    "PanelKind::Drc",
-    "PanelKind::LayerStack",
-    "PanelKind::NetClasses",
     "PanelKind::Variants",
     "PanelKind::OutputJobs",
-    "PanelKind::SchFilter",
     "PanelKind::SchList",
     "PanelKind::BomStudio",
     "PanelKind::Favorites",

@@ -353,6 +353,7 @@ fn sample_operands(id: &str) -> Vec<String> {
                 OperandKind::Path => std::env::temp_dir().join("x.snxsch").display().to_string(),
                 OperandKind::Bool => "true".to_string(),
                 OperandKind::Color => "#336699".to_string(),
+                OperandKind::Length => "1.5".to_string(),
                 OperandKind::Document => {
                     std::env::temp_dir().join("x.snxsch").display().to_string()
                 }

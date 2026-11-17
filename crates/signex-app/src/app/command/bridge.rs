@@ -7,7 +7,7 @@
 //! their way to `update`.
 
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, CatalogTextExt};
 
 use super::CommandArgs;
 #[cfg(test)]
@@ -68,6 +68,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
+    let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
+    let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
+    let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
+    let extras = |msg| Message::Edit(EditMsg::Extras(msg));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -180,6 +184,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             None => Message::Menu(MenuMessage::OpenProjectOptions),
         },
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
+        "toggle_search_panel" | "toggle_floating_panels" => {
+            Message::Overlay(OverlayMsg::FindToggled)
+        }
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Normal))
@@ -272,14 +279,25 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "tile_windows_vertically" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
         }
+        // Window ▸ Untile (#2249).
+        "untile_documents" => Message::Window(WindowMsg::UntileRequested),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
-        // Tools ▸ Assign Footprints (#2248) and Tools ▸ Net Inspector (#1269).
+        // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::NetInspector,
         )),
+        // #2416: View ▸ Selection Filter opens the Active Bar's filter.
+        "open_selection_filter" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::ToggleMenu(
+            crate::active_bar::ActiveBarMenu::Filter,
+        )),
+        // Design ▸ Net Classes (#2416) and its alias Tools ▸ Net Classes
+        // (#2400): one route to the panel of the project's net-class table.
+        "open_net_classes" | "open_net_classes_panel" => {
+            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
+        }
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
         // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
@@ -288,7 +306,26 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
+        // Design ▸ Rules (#2398): the active document's project.
+        "open_rules" => {
+            Message::Project(ProjectMsg::Rules(crate::app::RulesTabMsg::OpenRequested {
+                project: None,
+            }))
+        }
+        // #2399: the board's DRC results panel.
+        "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
+        "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
+        // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.
+        "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),
+        "board_report_netlist" => board_report(signex_output::BoardReportKind::Netlist),
+        "board_report_net_length" => board_report(signex_output::BoardReportKind::NetLength),
+        "board_report_components" => board_report(signex_output::BoardReportKind::Components),
+        "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
+        "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
+        "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
+        "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
@@ -307,20 +344,83 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "view_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::Toggled)),
         "place_board_via" => board_tool(BoardPlaceTool::Via),
         "place_board_track" => board_tool(BoardPlaceTool::Track),
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
         "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
+        "place_board_polygon_pour" => board_tool(BoardPlaceTool::PolygonPour),
+        "place_board_pour_cutout" => board_tool(BoardPlaceTool::PourCutout),
+        "place_board_slice_pour" => board_tool(BoardPlaceTool::SlicePour),
+        // #2216: fill the pours of the board in view again and say what
+        // their copper came to.
+        "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
+        "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
+        // #2424: the Graphics tools.
+        "place_board_line" => board_tool(BoardPlaceTool::Line),
+        "place_board_graphic_arc" => board_tool(BoardPlaceTool::GraphicArc),
+        "place_board_circle" => board_tool(BoardPlaceTool::FullCircle),
+        "place_board_rectangle" => board_tool(BoardPlaceTool::Rectangle),
+        "place_board_text_frame" => board_tool(BoardPlaceTool::TextFrame),
+        "place_board_diff_pair" => board_tool(BoardPlaceTool::DiffPairRouting),
+        "place_board_quick_route" => board_tool(BoardPlaceTool::QuickRoute),
+        "place_board_multi_route" => board_tool(BoardPlaceTool::MultiRoute),
+        "tune_net_length" => Message::Pcb(PcbMsg::Tune(TuneMsg::NetLengthRequested)),
+        "tune_diff_pair" => Message::Pcb(PcbMsg::Tune(TuneMsg::DiffPairRequested)),
+        "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
+        "import_dxf" => crate::app::handlers::pcb_dxf_import::requested(false),
+        "import_dxf_outline" => crate::app::handlers::pcb_dxf_import::requested(true),
+        "place_board_pad" => board_tool(BoardPlaceTool::Pad),
+        "place_board_arc" => board_tool(BoardPlaceTool::Arc),
+        "place_board_string" => board_tool(BoardPlaceTool::TextString),
+        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension),
+        "cycle_arc_mode" => Message::Pcb(PcbMsg::ArcModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),
+        // #2401 / #2407: the layer stack manager and the selection's lock.
+        "board_layer_stack" => {
+            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::LayerStack))
+        }
+        "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
+        "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
+        // #2403: the net `net` names, else that of the board selection or
+        // of what is under the cursor.
+        "select_board_net" => Message::Pcb(PcbMsg::Net(crate::app::BoardNetMsg::SelectRequested(
+            super::operand_handlers::board_net_operand(args),
+        ))),
+        "highlight_board_net" => {
+            Message::Pcb(PcbMsg::Net(crate::app::BoardNetMsg::HighlightRequested(
+                super::operand_handlers::board_net_operand(args),
+            )))
+        }
+        // #2408, #2409: the board Tools edits on the board in view.
+        "stitch_vias" => board_tools(BoardToolsMsg::StitchRequested),
+        "add_teardrops" => board_tools(BoardToolsMsg::TeardropsAddRequested),
+        "remove_teardrops" => board_tools(BoardToolsMsg::TeardropsRemoveRequested),
+        "gloss_selected_routes" => board_tools(BoardToolsMsg::GlossRequested),
+        "board_shape_from_selection" => board_tools(BoardToolsMsg::BoardShapeRequested),
+        "keepout_from_selection" => board_tools(BoardToolsMsg::KeepoutRequested),
+        "arrange_in_box" => board_tools(BoardToolsMsg::ArrangeRequested),
+        // #2410: the two pads selected on the board name the pins or gates.
+        "swap_pins" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Pins),
+        "swap_gates" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Gates),
+        "save_board_reuse_block" => {
+            Message::Pcb(PcbMsg::ReuseBlock(crate::app::ReuseBlockMsg::SaveRequested))
+        }
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),
         "toggle_single_layer_mode" => pcb_view(PcbViewMsg::SingleLayerModeToggled),
         "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
+        // #2394: the board seen from below, and the layer tabs' numbers.
+        "flip_board_view" => pcb_view(PcbViewMsg::BoardFlipToggled),
+        "toggle_layer_numbers" => Message::Pcb(PcbMsg::LayerStrip(
+            crate::app::LayerStripMsg::LayerNumbersToggled,
+        )),
         // #2316: the board view's turn; `view_rotate` takes `degrees`.
         "view_rotate" => view_turn(ViewRotationMsg::TurnedBy(
             super::operand_handlers::view_turn_degrees(args),
@@ -359,7 +459,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "sheet_navigation_back" => net_nav(NetNavMsg::SheetBackRequested),
         "sheet_navigation_forward" => net_nav(NetNavMsg::SheetForwardRequested),
         "go_to_net_partner" => net_nav(NetNavMsg::PartnerJumpRequested),
-        "highlight_net_under_cursor" => net_nav(NetNavMsg::NetHighlightRequested),
+        // From a context menu: the net where the menu was opened (#2419).
+        "highlight_net_under_cursor" => match args.context.origin {
+            Some(at) => net_nav(NetNavMsg::NetHighlightAtRequested { at }),
+            None => net_nav(NetNavMsg::NetHighlightRequested),
+        },
         "highlight_related_net_objects" => net_nav(NetNavMsg::RelatedNetHighlightRequested),
         "next_highlighted_net_item" => net_nav(NetNavMsg::HighlightStepRequested { forward: true }),
         "previous_highlighted_net_item" => {
@@ -372,6 +476,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "edit_reference_designator" => text_edit(TextEditTarget::Designator),
         "edit_footprint_field" => text_edit(TextEditTarget::FootprintField),
         "edit_text_in_place" => text_edit(TextEditTarget::Text),
+        // Placement extras (#1667). Copy attributes takes the object where a
+        // context menu was opened, else the one under the cursor.
+        "autoplace_fields" => extras(PlacementExtrasMsg::AutoplaceFieldsRequested),
+        "copy_attributes_or_add_vertex" => extras(PlacementExtrasMsg::CopyAttributesRequested {
+            at: args.context.origin,
+        }),
+        "place_design_block" => extras(PlacementExtrasMsg::DesignBlockRequested),
+        "import_graphics" => extras(PlacementExtrasMsg::ImportGraphicsRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -540,7 +652,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "core_to_message maps command ids with no CommandMetadata \
-             entry (add them to keymap/catalog): {orphans:?}"
+             entry (add them to signex-commands/src/catalog): {orphans:?}"
         );
     }
 
@@ -585,14 +697,8 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields",
-        "copy_attributes_or_add_vertex",
         "cycle_wiring_mode",
-        "import_graphics",
-        "place_design_block",
         "reset_local_coordinates",
-        "toggle_floating_panels",
-        "toggle_search_panel",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -1171,15 +1277,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("autoplace_fields").unwrap();
+        let command = AppCommandId::new("reset_local_coordinates").unwrap();
 
         assert!(core_to_message(&command, &CommandArgs::none()).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'autoplace_fields'")
+            entry.message.contains("command 'reset_local_coordinates'")
                 && entry
                     .message
-                    .contains("Autoplace fields is not available yet")
+                    .contains("Reset local coordinates is not available yet")
         }));
     }
 
@@ -1227,6 +1333,19 @@ mod tests {
                     at: Some((5.0, 20.0))
                 }
             ))
+        ));
+        // #2419: Highlight Net from a context menu names the opening point.
+        assert!(matches!(
+            resolve_with(
+                "highlight_net_under_cursor",
+                &CommandArgs::in_context(InvocationContext {
+                    origin: Some((5.0, 20.0)),
+                    project: None
+                })
+            ),
+            Message::Ui(UiMsg::NetNav(NetNavMsg::NetHighlightAtRequested {
+                at: (5.0, 20.0)
+            }))
         ));
         assert!(matches!(
             resolve_with("open_project_options", &CommandArgs::none()),

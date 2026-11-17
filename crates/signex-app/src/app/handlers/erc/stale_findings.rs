@@ -33,6 +33,7 @@ impl SheetObjects {
         ids.extend(sheet.junctions.iter().map(|o| o.uuid));
         ids.extend(sheet.no_connects.iter().map(|o| o.uuid));
         ids.extend(sheet.no_erc_directives.iter().map(|o| o.uuid));
+        ids.extend(sheet.directives.iter().map(|o| o.uuid()));
         ids.extend(sheet.text_notes.iter().map(|o| o.uuid));
         ids.extend(sheet.child_sheets.iter().map(|o| o.uuid));
         let line_ends = sheet
@@ -51,7 +52,9 @@ impl SheetObjects {
         use SelectedKind::*;
         match item.kind {
             Symbol | SymbolRefField | SymbolValField | BusEntry | Junction | NoConnect
-            | NoErcDirective | Label | TextNote | ChildSheet => self.ids.contains(&item.uuid),
+            | NoErcDirective | Directive | Label | TextNote | ChildSheet => {
+                self.ids.contains(&item.uuid)
+            }
             Wire | Bus => {
                 self.ids.contains(&item.uuid)
                     || self

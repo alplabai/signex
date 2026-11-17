@@ -45,6 +45,24 @@ pub enum EngineError {
     EmptySheetEntryName,
     #[error("this sheet symbol already has an entry named '{0}'")]
     DuplicateSheetEntryName(String),
+    #[error(
+        "a sheet symbol's width and height must each be a finite number of at least {min_mm} mm, got {width} x {height}"
+    )]
+    InvalidChildSheetSize {
+        width: f64,
+        height: f64,
+        min_mm: f64,
+    },
+    #[error(
+        "sheet symbol '{sheet}' cannot take that size, these entries would fall off its border: {}; move them first or choose a larger size",
+        entries.join(", ")
+    )]
+    ChildSheetEntriesOffBorder { sheet: String, entries: Vec<String> },
+    #[error(
+        "sheet symbol '{sheet}' cannot take that size, these entries are connected or would land on a connection: {}; remove those wires first",
+        entries.join(", ")
+    )]
+    ChildSheetEntriesConnected { sheet: String, entries: Vec<String> },
     #[error("failed to open schematic: {0}")]
     OpenFailed(#[source] anyhow::Error),
     #[error("designator counter for prefix {prefix:?} would pass u32::MAX; annotate refused")]
@@ -65,6 +83,8 @@ pub enum EngineError {
         "the wire cannot be broken there: a pin, bus end or another wire's end sits on that spot, and a new wire end would join it"
     )]
     BreakWireBlocked,
+    #[error("an object with id {0} is already in the sheet; the new object needs a fresh id")]
+    IdInUse(uuid::Uuid),
     #[error("{}", locked_message(references, action))]
     ItemLocked {
         references: Vec<String>,
@@ -82,6 +102,10 @@ pub enum EngineError {
     TransactionFailed,
     #[error("the clipboard fragment could not be converted: {0}")]
     ClipboardFragment(String),
+    #[error("no {kind} directive {id} is on this sheet")]
+    DirectiveNotFound { kind: &'static str, id: uuid::Uuid },
+    #[error("a directive region needs two different corners with finite coordinates")]
+    InvalidDirectiveRegion,
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

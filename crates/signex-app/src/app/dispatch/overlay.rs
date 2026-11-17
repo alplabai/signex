@@ -27,6 +27,12 @@ impl Signex {
             }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
+            // Find shows in its own OS window whichever sheet it searches,
+            // so a press in any window closes it (docs/DETACHED_MODALS.md).
+            OverlayMsg::FindToggled if self.ui_state.find_replace.open => {
+                self.handle_find_replace_message(crate::find_replace::FindReplaceMsg::Close)
+            }
+            OverlayMsg::FindToggled => self.handle_find_replace_open_requested(false),
             OverlayMsg::CloseKeyboardShortcuts => {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
@@ -140,6 +146,7 @@ impl Signex {
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
+            ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
             ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
                 self.handle_add_existing_file_picked(project_id, paths)
@@ -293,7 +300,7 @@ impl Signex {
                 window,
             });
         }
-        Task::none()
+        self.read_reuse_blocks_in_view()
     }
 
     /// Context-menu subsystem handler (canvas / project-tree / tab menus +
@@ -481,6 +488,7 @@ impl Signex {
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::ReuseBlock(event) => self.handle_reuse_block(event),
                 }
             }
         }
@@ -810,13 +818,16 @@ impl Signex {
     }
 
     /// Close every right-click menu (canvas, document tab, project tree,
-    /// dock tab, Components row, Start screen row) and their submenu state. Each menu's open
-    /// handler calls this first, so exactly one is ever open.
+    /// dock tab, Components row, Start screen row, board layer tab) and
+    /// their submenu state. Each menu's open handler calls this first, so
+    /// exactly one is ever open.
     pub(crate) fn close_all_context_menus(&mut self) {
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
         interaction.start_row_menu = None;
+        interaction.pcb_layer_tab_menu = None;
+        interaction.pcb_layer_set_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.context_submenu = None;
         interaction.pending_submenu = None;

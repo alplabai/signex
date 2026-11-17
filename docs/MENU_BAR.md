@@ -29,8 +29,13 @@ the window cannot act on to the Messages panel ("Menu: <id> did nothing:
 No button without a function: `menu_bar/tests/walk.rs` also presses every live
 row in each window state (no document, a project alone, a schematic with and
 without selection, a dirty one, a symbol editor, a footprint editor, a PCB tab,
-an undocked window) and fails if a click moves nothing and starts no job.
-`KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
+an undocked window) and fails if a click moves nothing, starts no job and says
+nothing. A row whose click posts a Messages line on the clicking thread
+(`diagnostics::said_on_this_thread`) counts as live: a board tool with nothing
+to act on says so (Repour on a board with no pour, #2216) instead of changing
+the board. Any `info` or `warn` line counts, so the check does not tell a
+real answer from a "not implemented" line; a handler that only says that is
+still a dead row and a review finding. `KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
 shrink.
 
 A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
@@ -69,12 +74,25 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 - Netlist (Protel .NET)...
 - ERC Report...
 
+Then, after a separator, the board's reports (#2404), greyed without a board
+in view: Board Bill of Materials..., Board Netlist..., Net Lengths...,
+Component Report... (each opens Board Reports on its table) and Export Report
+as CSV... (the table in view, or the BOM). The Board panel's Reports button
+opens the same dialog. Rules: `BOARD_OUTPUT.md`.
+
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
-[Design ▸ Board Sketch](#design-board-sketch)), a separator, then
-Parameter Manager.... **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+[Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
+[Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
+Parameter Manager..., Net Classes (see
+[below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
+greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
+Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
+Outline... (`import_dxf_outline`), greyed without a board in view; each asks
+for the file and imports it as one undo step (#2410, see
+[BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
@@ -97,6 +115,37 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
+
+## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+
+Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
+and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
+DRC results panel and the Net Classes panel. DRC Results is greyed while no
+PCB is open. Net Classes is an alias of Design ▸ Net Classes
+(`open_net_classes`), live on a sheet or a board: see
+[Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset
+binds them.
+
+The DRC results panel lists the last run's violations grouped by rule, each
+group with its count. A row shows the severity, what broke, the nets, the
+objects involved and the location; a click selects its objects and centres
+the view on it at the zoom in use (`show_drc_violation`). The filters (rule, layer, severity,
+Show waived) are `filter_drc_results`. Waive opens a note field; its Waive
+stores the waiver with the note in the board (`waive_drc_violation`, one
+board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
+waived violation is hidden until Show waived is on. The results are marked
+stale when the board or its project's net classes change after the run (a
+waiver alone, or its Undo or Redo, does not). The
+Rule link of a group stays greyed until boards have a Rules table.
+
+The Net Classes panel is a table of the board's project net classes (the
+same table the schematic's net classes and DRC read): name, colour, track
+width, clearance, via diameter and drill, diff-pair gap and width, and the
+member nets as chips. Add Class, Delete, a typed cell (Enter) and a net
+picked into or removed from a class are each one step of the project's
+net-class history, with the panel's Undo and Redo. The commands are
+`add_net_class`, `rename_net_class`, `delete_net_class`,
+`set_net_class_rules` and `assign_board_net_class`.
 
 ## Tools ▸ Re-Annotate Board {#tools-reannotate-board}
 
@@ -133,6 +182,27 @@ a rename back to the schematic's designator, ticked like every other row,
 because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
 [Back Annotate](#back-annotate) to keep them. The dialog and the Properties
 section say so under their fields.
+
+## Tools ▸ Repour Selected, Repour All {#tools-repour}
+
+Right after Re-Annotate Board, Tools ▸ Repour Selected and Repour All run
+`repour_selected` and `repour_all` (#2216) on the board in view, greyed while
+no PCB is open. Both fill the board's polygon pours again and say in Messages
+how many pours, pieces of copper and removed islands they came to; Repour
+Selected reports the selected pours and says so when none is selected.
+Rules in `docs/PCB_TOOLS.md`, "Repour".
+
+## Tools ▸ Panelize Board and Remove Panel {#tools-panelize-board}
+
+Tools ▸ Panelize Board runs `panelize_board` (#2410) and Tools ▸ Remove
+Panel runs `remove_board_panel`, after Arrange in Box; both are greyed
+while no PCB is open. Panelize Board gives the board in view the default
+panel (two by two, rails top and bottom, mouse bites) as one undo step; on a
+board that already has a panel it changes nothing and says so in Messages.
+Remove Panel makes the board single again as one undo step, and says in
+Messages when there is no panel to remove. The panel's settings are edited in
+the Panel section of the board's Properties. Rules:
+[PANELISATION.md](PANELISATION.md).
 
 ## Back Annotate {#back-annotate}
 
@@ -244,6 +314,15 @@ The same command is the PCB Active Bar's Board Sketch button, a row of the
 board canvas menu and a palette row; no keymap preset binds it. The mode:
 [PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
+## Design ▸ Layer Stack Manager {#design-layer-stack}
+
+Design ▸ Layer Stack Manager... runs `board_layer_stack` (#2401): it opens the
+Layer Stack panel for the board in view, a table of its physical stack where
+each edit is one undo step. It is greyed while no PCB is open. The same
+command is a palette row and the layer tab menu's "Layer stack..." row; no
+keymap preset binds it. The table and its rules:
+[PCB_LAYER_STACK.md](PCB_LAYER_STACK.md#stack).
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active
@@ -260,9 +339,23 @@ goes through the keymap command bridge in `app/command/bridge.rs`; Export ▸ PD
 runs as `print` in an undocked window, so both preview that window's document). Only
 File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
 
+On a board (#2402) both rows are live and open Board Print / PDF instead: the
+layer sets, one page per set or one composite page, the bottom side mirrored,
+1:1 or fitted, colour or black, the outline, drill holes and the title block.
+The palette names it `export_board_pdf`. Rules: `BOARD_OUTPUT.md`.
+
 Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu
 row always works.
+
+## File ▸ Fabrication Outputs {#file-fab-outputs}
+
+File ▸ Fabrication Outputs… runs `fabrication_outputs` (#2388), after the
+Export submenu: it opens the Fabrication Outputs dialog on the board in view,
+greyed while no PCB is in view. The same command is the PCB Active Bar's
+Fabrication Outputs button (after Board Sketch) and a palette row; no keymap
+preset binds it. Nothing is written until the dialog's Generate. Files,
+formats and frame: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).
 
 ## File: close, save all {#file-close-save-all}
 
@@ -304,14 +397,60 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Place on a sheet {#place-sheet}
+
+Place on a sheet lists every schematic placement tool the Active Bar has
+(#2415). The top rows are the wiring, part and text tools: Wire, Bus, Bus
+Entry, Net Label, Component, Power Port, Junction, Text, Text Frame, Note, No
+Connect and Sheet Entry. Design Block... (`place_design_block`) and Import
+Graphics... (`import_graphics`) follow (#1667): each asks for a file and puts
+its content on the cursor. Three submenus follow, grouped like the bar's
+buttons (`menu_bar/model/sheet_place.rs`):
+
+- **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
+  Sheet Symbol, Reuse Block; Signal Harness, Harness Connector, Harness Entry.
+- **Directives**: Parameter Set, Generic No ERC, Differential Pair, Blanket,
+  Compile Mask.
+- **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
+  Round Rectangle, Polygon, Bezier; Graphic.
+
+A live row runs its catalog command, the one the Active Bar's row names, and
+is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
+the command's key in the active profile. A tool that is a planned placeholder
+(`active_bar::PLANNED_TOOLS`) is an `ItemState::Placeholder` with the planned
+tooltip, read from the same list the bar greys its rows by, so the two never
+disagree (`items::tool_item`). Global and hierarchical labels have no rows of
+their own: `place_global_label` and `place_hierarchical_label` arm the same
+Port and Off Sheet Connector tools. No Connect runs `place_no_connect`, so it
+shows that command's key (`P X` in the default profile, `Q` in Classic); Text
+still sends its own message (`MenuMessage::PlaceText`) and shows no key.
+
+## Edit ▸ Find Similar Objects, View ▸ Selection Filter, Design ▸ Net Classes {#find-similar-filter-net-classes}
+
+Rows added by #2416, each a catalog command greyed without a sheet:
+
+- **Edit ▸ Find Similar Objects** runs `find_similar_objects`, the canvas
+  menu's Find Similar: the object under the cursor, else the one selected,
+  seeds the dialog.
+- **View ▸ Selection Filter** runs `open_selection_filter`, which opens the
+  Active Bar's Filter dropdown of the sheet in view.
+- **Design ▸ Net Classes** runs `open_net_classes`, which opens the Net
+  Classes panel: the project's net-class table, the same section the sheet's
+  Properties shows. It is live on a sheet or a board (`Needs::NetClassTable`),
+  and Tools ▸ Net Classes (`open_net_classes_panel`) is its alias: one route,
+  one gate, and in the catalog both are `General` commands whose keys work on
+  a sheet or a board tab.
+
 ## Place on a board {#place-board}
 
 Place follows the document in view (#2360). While the window shows a board
 (`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
-String, Dimension and Keepout, then Board Sketch (`board_sketch`, the same
-command as Design ▸ Board Sketch and the PCB Active Bar's button). Every other
-tab keeps the sheet's Place rows.
+String, Dimension and Keepout, the Graphics submenu (Line, Arc, Full Circle,
+Rectangle and Text Frame on non-copper layers, #2424, the PCB Active Bar's
+Graphics group), then Board Sketch (`board_sketch`, the same command as
+Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
+the sheet's Place rows.
 
 The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
 which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
@@ -319,7 +458,7 @@ run and grey the same set. A live tool (#2373) is a command row that runs the
 same command as its Active Bar button and arms the tool on the board in view;
 see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
 cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
-("Place Pad: not available on boards yet").
+("Place Component: not available on boards yet").
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
 variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`
@@ -365,11 +504,13 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
-## Tools ▸ Net Inspector {#tools-net-inspector}
+## View ▸ Net Inspector {#view-net-inspector}
 
 Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
 panel, docked on the right by default. Always available; with no schematic of
-a project in view the panel says so.
+a project in view the panel says so. The row sits under the panel rows of
+View since #2416 (it was in Tools); the key is `V N` in the default profile and
+`Shift+I` in Classic.
 
 - The list is every net of the active document's project, read from the
   cached stitched project net index (`signex_net::NetIndex`, the one net
@@ -384,6 +525,31 @@ a project in view the panel says so.
   each with its sheet. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
+- With a board in view (#2403) the panel lists the board's nets instead,
+  from `pcb_geom::net_reports`: routed length, vias, pads and whether the
+  net is routed (or how many connections are still open). Each row's Select
+  and Highlight run what Select Net and Highlight Net run, for that net.
+
+## Tools: board edits {#tools-board-edits}
+
+Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
+as one undo step: Via Stitching (`stitch_vias`), Add Teardrops
+(`add_teardrops`), Remove Teardrops (`remove_teardrops`), Gloss Selected
+Routes (`gloss_selected_routes`), Board Shape from Selection
+(`board_shape_from_selection`), Keepout from Selection
+(`keepout_from_selection`) and Arrange in Box (`arrange_in_box`).
+
+- Via Stitching and the two teardrop rows are live with a board open; with
+  nothing selected they act on every pour or every net.
+- Gloss, Board Shape and Keepout need something selected on the board in
+  view; Arrange in Box needs unlocked components selected. Otherwise the
+  rows are greyed with the reason.
+- Gloss, Add Teardrops, Board Shape, Keepout and Arrange in Box are also on
+  the board's right-click menu, above Cross Probe.
+- Each command takes operands (`document` and the items by uuid) on the
+  agent channel and the CLI; no keymap preset binds them.
+
+What each one does: [PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools".
 
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
@@ -421,22 +587,89 @@ with its file and its number.
   sheet changes; if a sheet still fails part-way, every sheet already changed
   is put back and the sheets it loaded are dropped.
 
-## Window ▸ Tile Horizontally / Tile Vertically {#window-tile}
+## Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
 
-Run `tile_windows_horizontally` and `tile_windows_vertically` (#2247). They
-arrange the main window and every undocked document window (main window
-first, then the undocked ones by file path) on the main window's monitor: Tile
-Horizontally stacks them in equal rows, one above the other, and Tile
-Vertically puts them side by side in equal columns (the Windows MDI
-convention, Caner 2026-11-10). Each window is un-maximized, resized and moved with `iced::window`
-tasks. Greyed while no document is undocked, and until the main window's
-monitor has been read (the settled geometry reading, shortly after start-up).
-iced reports the monitor's full size, not its work area, so the tiles cover
-the whole monitor. The Messages panel names how many windows were arranged.
+Run `tile_windows_horizontally`, `tile_windows_vertically` (#2247, #2249) and
+`untile_documents` (#2249). Tile Horizontally stacks in equal rows, one above
+the other, and Tile Vertically puts side by side in equal columns (Caner
+2026-11-10).
+
+In the main window, with two documents or more docked, Tile shows every docked
+document (the tabs not in a window of their own, in tab-strip order) in a pane
+of its own. The focused pane is the active tab, a full editor with the accent
+ring; every other pane draws its document (sheet, board, symbol, footprint,
+library browser, Project or Rules tab) with a hairline edge, and a press on it
+makes that document the active one, as a tab click does. Untile shows the
+active document alone again; closing or undocking down to one docked document
+does the same, and a document opened later is not tiled again. Untile is
+greyed unless the documents are tiled.
+
+With undocked document windows, Tile also arranges the main window and every
+undocked window (main window first, then the undocked ones by file path) on
+the main window's monitor. Each window is un-maximized, resized and moved with
+`iced::window` tasks; this part waits until the main window's monitor has been
+read (the settled geometry reading, shortly after start-up). iced reports the
+monitor's full size, not its work area, so the tiles cover the whole monitor.
+Tile is greyed when it has neither to do. The Messages panel names how many
+documents or windows were arranged.
+
+## Sheet right-click menu {#sheet-context-menu}
+
+The schematic canvas menu (#2419, `app/view/context_menu/menus.rs`) shows rows
+by what was right-clicked and makes each command row live by the command's own
+enablement rule (`app/command/needs.rs`), the rule the menu bar greys the same
+row by and a keystroke is dropped by. Rows, top to bottom: Find Similar
+Objects, Find, Clear Filter (`clear_net_highlighting`); the Place, Part Actions
+and Sheet Actions submenus; with a selection, References, Align, Arrange (a
+drawing selected), Unions and Snippets; Cross Probe; Undo, Redo; Cut, Copy,
+Paste, Paste Special, Duplicate, Select All; with a selection, Rotate, Mirror
+X, Mirror Y, Delete; Highlight Net (`highlight_net_under_cursor`), Net Color...
+(`open_net_color_palette`), Assign Net Class...; Comment, Pin Mapping, Project
+Options, Preferences; with a selection, Supplier Links and Properties.
+
+Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
+Autoplace Fields and Copy Attributes (#1667), live with one placed part
+selected. Copy Attributes copies the object at the point the menu was opened
+over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
+From Sheet Symbol and Sync Sheet Pins, live with a sheet symbol selected, and
+Number Schematic Sheets.
+
+Assign Net Class... is greyed: `assign_net_class` takes the net and the class
+as operands, which the menu cannot supply yet; its tooltip points at the Net
+Class row of Properties. Planned rows, greyed with a tooltip saying what each
+will do:
+
+- **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
+- **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
+- **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.
+- **Supplier Links**: link the selected part to supplier part numbers and prices through the library's distributor adapter.
 
 ## Rows still planned {#rows-still-planned}
 
-None: every menu row runs a command (#2247).
+Every other menu row runs a command (#2247). The only greyed tool rows are the
+planned tools of Place on a sheet and on a board, each with its reason.
+
+Place on a sheet has eleven planned commands (#2415), greyed with the planned
+tooltip in every state until their tools are built
+(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
+
+| Submenu | Row | Command |
+|---|---|---|
+| Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
+| Ports & Connectors | Reuse Block... | `place_reuse_block` |
+| Ports & Connectors | Signal Harness | `place_signal_harness` |
+| Ports & Connectors | Harness Connector | `place_harness_connector` |
+| Ports & Connectors | Harness Entry | `place_harness_entry` |
+| Directives | Parameter Set | `place_parameter_set` |
+| Graphics | Elliptical Arc | `draw_elliptical_arc` |
+| Graphics | Ellipse | `draw_ellipse` |
+| Graphics | Round Rectangle | `draw_round_rectangle` |
+| Graphics | Bezier | `draw_bezier` |
+| Graphics | Graphic... | `place_graphic` |
+
+Each one is the row of a planned Active Bar tool. It is not a
+`stub()` row: it names its catalog command and goes live when that tool is
+built, with no menu change.
 
 ## Save and Save As {#file-save}
 
@@ -453,8 +686,11 @@ and Mirror Y (`mirror_x` / `mirror_y`) and Flip Selection (`flip_selection`).
 They run the same ids as the keys, the palette and the canvas menus, on a sheet
 and on a board alike.
 
-On a sheet a row is live when there is something to act on: a selection, or
-for Rotate and Mirror a part on the cursor or the Bus Entry tool. Move needs an
+On a sheet a row is live when there is something to act on: a selection that
+is not all locked, or for Rotate and Mirror a part on the cursor or the Bus
+Entry tool. A selection of locked objects only greys Move Selection, Rotate,
+Mirror, Cut and Delete (#2419); their keys still reach the handler, which skips
+the locked objects and names them in the Messages panel. Move needs an
 open sheet or board. On a PCB tab the rows act on the selected footprints (a
 selected pad stands for its footprint). They are greyed with nothing selected
 and when a selected footprint is locked; the key for a greyed row on a locked
@@ -463,8 +699,29 @@ Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
 to the other board side, like Flip Selection; Mirror Y flips it and turns it
 half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
 and vias that end on a moved, rotated, flipped or deleted footprint stay
-where they are. Flip Selection has no default key and
-is greyed outside a board.
+where they are. Flip Selection is `L` on a board in both built-in profiles
+(#2406), which also flips a part on the cursor, and is greyed outside a board.
+
+Edit ▸ Arrange orders schematic drawings, so it is not in the Edit menu while
+a board is in view (#2405); the golden fixture marks its rows `-` in the
+`pcb` column.
+
+## The board's right-click menu {#board-context-menu}
+
+The board canvas menu (#2240, #2405) lists, in order: Find Similar Objects
+and Find; the Place ▸ flyout (the board's tools as Place on a board lists
+them, then Board Sketch) and, with a selection, Align ▸ (the Align rows of
+the PCB Active Bar, live for unlocked footprints); Undo and Redo; Cut, Copy,
+Paste, Paste Special, Duplicate and Select All; Move Selection; Rotate,
+Rotate Clockwise, Flip Selection, Mirror X, Mirror Y and Change Footprint;
+Delete; Board Sketch; Select Net (`select_board_net`) and Highlight Net
+(`highlight_board_net`), which act on the net of the selection or of what is
+under the cursor; Cross Probe and Properties; then Toggle Ratsnest. Each row
+runs its catalog command and is live exactly when that command is enabled in
+the window's `CommandContext`, so the menu greys what the keys and the menu
+bar grey. A board written by a newer Signex is read-only
+(`PcbTargets::read_only`): every row that edits it, the Place tools and
+Board Sketch included, is greyed, and the rows that only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 
@@ -520,6 +777,22 @@ no undo step and does not mark the board dirty; a board opened into a tab
 starts at 0°. In an undocked PCB window the rows, the palette, the keys and
 its own status bar act on that window's board and leave the main window's as
 it is. See `docs/DECISIONS.md` (2026-11-12).
+
+Two View rows come from the layer tab menu (#2394): Show Layer Numbers
+(`toggle_layer_numbers`) under Show All Layers, a per-user setting of the
+layer tabs, and Flip Board View (`flip_board_view`) under Reset View
+Rotation, which shows the board from below. Both are greyed without a board
+and have no default key; the flip is board view state like the turn. The
+other rows of that menu take a layer, a kind or a set name and are run from
+the menu, the layer set button or a command with operands
+(`docs/PCB_TOOLS.md`, "Layer sets").
+
+3D View (`view_board_3d`, #2390) follows Flip Board View: it shows the board
+in view in 3D in the main window, or flat again. It is greyed without a board
+and bound to `3` on a board in both built-in profiles. In 3D a bar at the foot
+of the view holds 2D, the viewpoints (Top, Bottom, Front, Left, Right, Angled)
+and Fit; View ▸ Fit All frames the 3D view too. See `docs/RENDERING_RULES.md`,
+"board-3d".
 
 ## Native macOS menu {#native-macos-menu}
 

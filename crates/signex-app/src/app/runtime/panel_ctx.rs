@@ -169,107 +169,6 @@ impl Signex {
         request
     }
 
-    /// The Layers panel: the active board's rows, hidden layers and active layer.
-    fn pcb_layers_panel_state(&self) -> crate::panels::PcbLayersPanel {
-        let Some(board) = self.active_pcb() else {
-            return crate::panels::PcbLayersPanel {
-                i18n: self.ui_state.i18n.clone(),
-                ..Default::default()
-            };
-        };
-        let view = self
-            .active_tab_path()
-            .map(|path| self.pcb_layer_view(&path))
-            .unwrap_or_default();
-        crate::panels::PcbLayersPanel::new(&board.layers, &view, self.ui_state.i18n.clone())
-    }
-
-    /// The Properties panel's board summary for the active tab. The selection
-    /// counts only once it is aligned with that tab: right after a tab
-    /// switch it may still hold another board's items.
-    fn pcb_board_summary(&self) -> Option<crate::panels::PcbBoardSummary> {
-        let board = self.active_pcb_snapshot()?;
-        let tab = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)?;
-        let selection = &self.interaction_state.pcb_selection;
-        let selected = if selection.document() == Some(tab.path.as_path()) {
-            selection.selection().len()
-        } else {
-            0
-        };
-        let footprint = self.pcb_footprint_facts(&tab.path, board);
-        // The totals are counted once per board revision (#2353).
-        let revision = self
-            .document_state
-            .pcb_revisions
-            .get(&tab.path)
-            .copied()
-            .unwrap_or(0);
-        let key = (tab.path.clone(), revision);
-        let stats = self
-            .document_state
-            .panel_ctx
-            .pcb_board
-            .as_ref()
-            .filter(|s| s.stats_key.as_ref() == Some(&key))
-            .map_or_else(|| pcb_geom::BoardStats::of(board), |s| s.stats.clone());
-        let ratsnest = &self.interaction_state.pcb_ratsnest;
-        let summary = crate::panels::PcbBoardSummary {
-            unrouted_nets: ratsnest.unrouted_nets(&key),
-            hidden_nets: ratsnest.hidden_net_count(&tab.path),
-            filter: self.ui_state.pcb_pick_filter.clone(),
-            snap: self.ui_state.pcb_snap.clone(),
-            fast_grids_mm: self.ui_state.fast_grids_mm,
-            view: self.ui_state.pcb_board_panel.clone(),
-            stats_key: Some(key),
-            ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
-        };
-        let component = self.pcb_component_facts(&tab.path, board);
-        let primitive = self.pcb_primitive_facts(&tab.path, board);
-        Some(
-            summary
-                .with_footprint(footprint)
-                .with_component(component)
-                .with_primitive(primitive),
-        )
-    }
-
-    /// Bring the board summary in step with a selection change, without a
-    /// full rebuild. Inside an undocked window's event the window's context
-    /// and selection are the ones in the main slots (`run_in_window`).
-    pub(crate) fn sync_pcb_board_summary(&mut self) {
-        let summary = self.pcb_board_summary();
-        // A draft belongs to the footprint Properties shows on its board; once
-        // another selection on THAT board replaces it, the unapplied text is
-        // dropped. A selection on another board (another window) leaves it.
-        let in_view = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .map(|tab| tab.path.clone());
-        let shown = summary
-            .as_ref()
-            .and_then(|s| s.footprint.as_ref())
-            .map(|f| f.uuid);
-        let draft = self.interaction_state.pcb_footprint_draft.as_ref();
-        if draft.is_some_and(|d| {
-            in_view.as_deref() == Some(d.board.as_path()) && shown != Some(d.footprint)
-        }) {
-            self.interaction_state.pcb_footprint_draft = None;
-        }
-        self.drop_moved_pcb_component_draft(summary.as_ref().and_then(|s| s.component.as_ref()));
-        if let Some(board) = in_view.as_deref() {
-            let shown = summary.as_ref().and_then(|s| s.primitive.as_ref());
-            let target = shown.map(|p| &p.common().target);
-            self.interaction_state
-                .pcb_primitive
-                .keep_only(board, target);
-        }
-        self.document_state.panel_ctx.pcb_board = summary;
-    }
-
     /// The Net Classes section's state: the panel's own selection and drafts
     /// carried over, the table and history flags read from the active project.
     fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
@@ -632,6 +531,7 @@ impl Signex {
         let selected_kind = self.document_state.panel_ctx.selected_kind;
         let selection_info = self.document_state.panel_ctx.selection_info.clone();
         let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
+        let placed = self.document_state.panel_ctx.placed.clone();
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
@@ -703,7 +603,7 @@ impl Signex {
         let erc_waivers = self.erc_waiver_entries();
         let erc_violation_waivers = self.erc_violation_waiver_entries();
 
-        let net_classes = self.net_class_panel_state();
+        let net_classes = self.with_board_net_classes(self.net_class_panel_state());
         let pcb_layers = self.pcb_layers_panel_state();
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();
@@ -785,11 +685,13 @@ impl Signex {
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
             pcb_board: self.pcb_board_summary(),
+            layer_stack: self.layer_stack_facts(),
             selection_count,
             selected_uuid,
             selected_kind,
             selection_info,
             multi_groups,
+            placed,
             multi_draft,
             symbol_choices,
             footprint_choices,
@@ -857,173 +759,5 @@ impl Signex {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::{Path, PathBuf};
-
-    use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
-
-    use crate::app::Signex;
-    use crate::app::state::LoadedProject;
-    use crate::app::state::project_fs::git_marker;
-
-    /// #1383: an unchanged engine keeps the symbol lists (no per-edit
-    /// O(symbols) re-clone); an edit rebuilds them.
-    #[test]
-    fn symbol_lists_are_reused_until_the_engine_revision_moves() {
-        let (mut app, _task) = Signex::new();
-        app.open_schematic_tab(
-            PathBuf::from("snx-1383.snxsch"),
-            "snx-1383".to_string(),
-            signex_types::schematic::SchematicSheet::default(),
-        );
-        app.refresh_panel_ctx();
-        let key = app.document_state.panel_ctx.symbol_lists_key;
-        assert!(key.is_some(), "schematic engine must key the lists");
-
-        let sentinel = (
-            "Z1".to_string(),
-            String::new(),
-            String::new(),
-            String::new(),
-        );
-        app.document_state.panel_ctx.placed_symbols = vec![sentinel.clone()];
-        app.refresh_panel_ctx();
-        assert_eq!(app.document_state.panel_ctx.placed_symbols, vec![sentinel]);
-
-        app.document_state.panel_ctx.symbol_lists_key = Some((0, 0));
-        app.refresh_panel_ctx();
-        assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
-        assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
-    }
-
-    /// #2262: a component editor tab, active in a fresh layout, folds the
-    /// left dock to its rail on the next panel refresh.
-    #[test]
-    fn an_active_component_tab_folds_the_fresh_left_dock() {
-        use crate::app::{ComponentEditorTab, TabInfo, TabKind};
-        use crate::dock::PanelPosition;
-        use crate::library::state::EditorAddress;
-
-        let (mut app, _task) = Signex::new();
-        app.document_state.dock = crate::dock::graphite_first_run();
-        app.refresh_panel_ctx();
-        assert!(!app.document_state.dock.is_collapsed(PanelPosition::Left));
-
-        let row = crate::library::component_preview::test_row();
-        let library_path = PathBuf::from("/tmp/dock-seed/Lib.snxlib");
-        let address = EditorAddress::new(
-            library_path.clone(),
-            "R".into(),
-            signex_library::RowId::from_uuid(row.row_id),
-        );
-        app.document_state.tabs.push(TabInfo {
-            title: "R1".into(),
-            path: address.synthetic_tab_path(),
-            cached_document: None,
-            project_id: None,
-            kind: TabKind::ComponentEditor(ComponentEditorTab {
-                library_path,
-                table: "R".into(),
-                row_id: address.row_id,
-            }),
-        });
-        app.document_state.active_tab = app.document_state.tabs.len() - 1;
-        app.refresh_panel_ctx();
-        assert!(app.document_state.dock.is_collapsed(PanelPosition::Left));
-    }
-
-    /// #1383: the project tree is rebuilt only when what it shows changes,
-    /// and a changed sheet state does rebuild it.
-    #[test]
-    fn project_tree_is_reused_until_the_projects_change() {
-        let (mut app, _task) = Signex::new();
-        let id = app.document_state.mint_project_id();
-        app.document_state.projects.push(LoadedProject {
-            id,
-            path: PathBuf::from("snx-1383-tree/p.snxprj"),
-            data: ProjectData {
-                document_id: None,
-                name: "p".to_string(),
-                description: None,
-                dir: "snx-1383-tree".to_string(),
-                schematic_root: Some("a.snxsch".to_string()),
-                pcb_file: None,
-                sheets: Vec::new(),
-                variant_definitions: Vec::new(),
-                active_variant: None,
-                libraries: Vec::new(),
-                enable_git: false,
-                net_classes: Vec::new(),
-                rules: None,
-                annotation: None,
-                schematic_defaults: Default::default(),
-                project_defaults: Default::default(),
-                agent_journal: Default::default(),
-                parameters: Default::default(),
-                unknown: Default::default(),
-            },
-            pending_libraries: Default::default(),
-            case_fold: Default::default(),
-            case_probed: false,
-            case_decided: false,
-        });
-        app.refresh_panel_ctx();
-        let builds = app.document_state.panel_ctx.project_tree_builds;
-        assert!(builds > 0 && !app.document_state.panel_ctx.project_tree.is_empty());
-
-        app.refresh_panel_ctx();
-        app.refresh_panel_ctx();
-        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds);
-
-        app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
-        app.refresh_panel_ctx();
-        assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
-    }
-
-    /// #1098: the probe request must name `<dir>/.git` for the project dir
-    /// and each library dir, or the Enable Version Control row never appears.
-    #[test]
-    fn fs_request_names_the_git_marker_of_project_and_library_dirs() {
-        let dir = Path::new("snx-1098-proj");
-        let (mut app, _task) = Signex::new();
-        let id = app.document_state.mint_project_id();
-        app.document_state.projects.push(LoadedProject {
-            id,
-            path: dir.join("P.snxprj"),
-            data: ProjectData {
-                document_id: None,
-                description: None,
-                name: "P".to_string(),
-                dir: dir.to_string_lossy().into_owned(),
-                schematic_root: None,
-                pcb_file: None,
-                sheets: Vec::new(),
-                variant_definitions: Vec::new(),
-                active_variant: None,
-                libraries: vec![LibraryEntry {
-                    path: PathBuf::from("lib/L.snxlib"),
-                    kind: LibraryEntryKind::ProjectLocal,
-                    library_id: None,
-                    unknown: Default::default(),
-                }],
-                enable_git: false,
-                net_classes: Vec::new(),
-                rules: None,
-                annotation: None,
-                schematic_defaults: Default::default(),
-                project_defaults: Default::default(),
-                agent_journal: Default::default(),
-                parameters: Default::default(),
-                unknown: Default::default(),
-            },
-            pending_libraries: Default::default(),
-            case_fold: Default::default(),
-            case_probed: false,
-            case_decided: false,
-        });
-
-        let request = app.project_fs_request();
-        assert!(request.exists.contains(&git_marker(dir)));
-        assert!(request.exists.contains(&git_marker(&dir.join("lib"))));
-    }
-}
+#[path = "panel_ctx_tests.rs"]
+mod tests;

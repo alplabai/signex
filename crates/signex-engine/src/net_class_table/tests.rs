@@ -405,3 +405,109 @@ fn depth_one_and_a_thousand_are_honoured() {
         assert_eq!(steps, depth);
     }
 }
+
+/// #2400: a class's board rules are set as one undo step; a negative or
+/// non-finite value is refused and leaves the table as it was.
+#[test]
+fn board_rules_are_one_step_and_checked() {
+    use signex_types::net_class::NetClassBoardRules;
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::default();
+    history.apply(&mut classes, add("Power")).unwrap();
+    let rules = NetClassBoardRules {
+        clearance: 0.3,
+        trace_width: 0.5,
+        via_diameter: 0.8,
+        via_drill: 0.4,
+        diff_pair_gap: 0.0,
+        diff_pair_width: 0.0,
+    };
+    let set = |rules| NetClassCommand::SetBoardRules {
+        name: "Power".into(),
+        rules,
+    };
+    history.apply(&mut classes, set(rules)).unwrap();
+    assert_eq!(classes[0].board_rules(), rules);
+    assert_eq!((classes[0].clearance, classes[0].trace_width), (0.3, 0.5));
+    assert!(history.undo(&mut classes));
+    assert_eq!(classes[0].board_rules(), NetClassBoardRules::default());
+    assert!(history.redo(&mut classes));
+
+    let bad = NetClassBoardRules {
+        via_drill: -0.1,
+        ..rules
+    };
+    assert_eq!(
+        history.apply(&mut classes, set(bad)),
+        Err(NetClassError::InvalidBoardRule("via_drill"))
+    );
+    let nan = NetClassBoardRules {
+        clearance: f64::NAN,
+        ..rules
+    };
+    assert!(history.apply(&mut classes, set(nan)).is_err());
+    assert_eq!(classes[0].board_rules(), rules);
+    let unknown = NetClassCommand::SetBoardRules {
+        name: "Clock".into(),
+        rules,
+    };
+    assert_eq!(
+        history.apply(&mut classes, unknown),
+        Err(NetClassError::Unknown("Clock".into()))
+    );
+}
+
+/// #2400: a batch is one undo step, and one refused edit refuses it all.
+#[test]
+fn a_batch_is_one_step_and_all_or_nothing() {
+    use signex_types::net_class::NetClassBoardRules;
+    let mut classes = Vec::new();
+    let mut history = NetClassHistory::default();
+    history.apply(&mut classes, add("Power")).unwrap();
+    let rules = NetClassBoardRules {
+        trace_width: 0.5,
+        ..NetClassBoardRules::default()
+    };
+    let style = NetClassStyle {
+        color: Some(Color::new(0x12, 0x34, 0x56, 0xFF)),
+        ..NetClassStyle::default()
+    };
+    let batch = NetClassCommand::Batch {
+        commands: vec![
+            NetClassCommand::SetStyle {
+                name: "Power".into(),
+                style,
+            },
+            NetClassCommand::SetBoardRules {
+                name: "Power".into(),
+                rules,
+            },
+        ],
+    };
+    history.apply(&mut classes, batch).unwrap();
+    assert_eq!((classes[0].style, classes[0].trace_width), (style, 0.5));
+    assert!(history.undo(&mut classes));
+    assert_eq!(
+        classes[0],
+        NetClass::named("Power"),
+        "one undo takes both back"
+    );
+
+    let refused = NetClassCommand::Batch {
+        commands: vec![
+            NetClassCommand::SetBoardRules {
+                name: "Power".into(),
+                rules,
+            },
+            NetClassCommand::Remove {
+                name: "Clock".into(),
+            },
+        ],
+    };
+    assert!(apply_net_class_command(&mut classes, refused).is_err());
+    assert_eq!(
+        classes[0],
+        NetClass::named("Power"),
+        "nothing of a refused batch lands"
+    );
+}

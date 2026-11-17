@@ -223,6 +223,7 @@ fn reopening_an_already_open_schematic_tab_activates_it_instead_of_duplicating()
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -239,6 +240,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 
@@ -373,6 +375,8 @@ fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
     let warnings = || {

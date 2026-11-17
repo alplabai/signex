@@ -27,6 +27,8 @@ pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod move_pick;
+mod place_directive;
+pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
 mod place_drawing;
 mod place_label;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};
@@ -270,6 +272,10 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitAll => {
+                // The board in 3D frames itself (#2390).
+                if self.fit_board_3d() {
+                    return Task::none();
+                }
                 if self.has_active_schematic() {
                     self.interaction_state.active_canvas_mut().fit_to_content();
                 } else if self.has_active_pcb() {

@@ -21,6 +21,7 @@ fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: f64) -> Pad
         }),
         roundrect_ratio: 0.25,
         rotation,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -229,6 +230,7 @@ fn hit_testing_reads_the_rotated_rect_not_its_axis_aligned_box() {
 fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -244,6 +246,7 @@ fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

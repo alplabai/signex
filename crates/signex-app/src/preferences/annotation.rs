@@ -1,7 +1,8 @@
 //! Annotation section — the "Annotate undo" scope of an annotate run.
 
 use super::*;
-use crate::annotate_undo::AnnotateUndo;
+use crate::annotate_undo::{AnnotateUndo, annotate_undo_label};
+use crate::choice::{Choice, chosen};
 use iced::widget::{Space, Widget, column, pick_list, row};
 use iced::{Element, Length};
 use signex_i18n::{I18n, ids, t};
@@ -21,6 +22,7 @@ fn annotate_undo_help(i18n: &I18n) -> signex_i18n::Localized {
 }
 
 pub(super) fn content_annotation<'a>(draft: AnnotateUndo, i18n: &I18n) -> Element<'a, PrefMsg> {
+    let scopes = Choice::named(AnnotateUndo::ALL, annotate_undo_label, i18n);
     let setting = row![
         column![
             text(t!(i18n, ids::PREFERENCES_ANNOTATE_UNDO))
@@ -33,11 +35,13 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo, i18n: &I18n) -> Elemen
         .spacing(3)
         .width(320),
         Space::new().width(Length::Fill),
-        // The scope names come from `AnnotateUndo`'s Display (#2059).
-        pick_list(Some(draft), AnnotateUndo::ALL, |v: &AnnotateUndo| v
-            .to_string())
+        pick_list(
+            chosen(&scopes, &draft),
+            scopes,
+            |v: &Choice<AnnotateUndo>| v.label.clone()
+        )
         .graphite()
-        .on_select(PrefMsg::DraftAnnotateUndo),
+        .on_select(|v: Choice<AnnotateUndo>| PrefMsg::DraftAnnotateUndo(v.value)),
     ]
     .align_y(iced::Alignment::Center);
 

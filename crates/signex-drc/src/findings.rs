@@ -73,7 +73,7 @@ fn finding(
     })
 }
 
-fn rule_of(v: &Violation) -> &str {
+pub(crate) fn rule_of(v: &Violation) -> &str {
     v.rule.as_deref().unwrap_or(v.kind.rule_id())
 }
 
@@ -183,19 +183,32 @@ fn rule_source(rules: &DrcRules, v: &Violation) -> Option<&'static str> {
 
 /// An item's id: its uuid, or `<footprint>/<pad>` for a pad (a pad's own
 /// uuid repeats across placements of one footprint).
-fn item_id(item: &ItemRef) -> String {
+pub fn item_id(item: &ItemRef) -> String {
     match item {
         ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
-        ItemRef::Track(id) | ItemRef::Via(id) | ItemRef::Footprint(id) => id.to_string(),
+        ItemRef::Track(id)
+        | ItemRef::Via(id)
+        | ItemRef::Footprint(id)
+        | ItemRef::Zone { zone: id, .. }
+        | ItemRef::Text(id)
+        | ItemRef::Arc(id)
+        | ItemRef::FreePad(id)
+        | ItemRef::Dimension(id)
+        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
     }
 }
 
-fn item_label(item: &ItemRef) -> String {
+pub(crate) fn item_label(item: &ItemRef) -> String {
     let kind = match item {
-        ItemRef::Pad { .. } => "pad",
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => "pad",
         ItemRef::Track(_) => "track",
         ItemRef::Via(_) => "via",
         ItemRef::Footprint(_) => "footprint",
+        ItemRef::Zone { .. } => "area",
+        ItemRef::Text(_) => "string",
+        ItemRef::Arc(_) => "arc",
+        ItemRef::Dimension(_) => "dimension",
+        ItemRef::Graphic { .. } => "drawing",
     };
     format!("{kind} {}", item_id(item))
 }

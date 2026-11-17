@@ -202,6 +202,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(TS.caption)
                 .color(theme_ext::accent(&ctx.tokens)),
             Space::new().width(Length::Fill).height(Length::Shrink),
+            // raw: previous / next arrows and the "3/12" position, not language.
             signex_widgets::button(text(raw("<")).size(TS.body))
                 .padding([1, 6])
                 .on_press(PanelMsg::FocusPrevErcDiagnostic)
@@ -256,11 +257,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     row![
                         erc_severity_pill(&ctx.tokens, v.severity, t!(ctx.i18n, sev_label)),
                         Space::new().width(4).height(Length::Shrink),
+                        // raw: the rule name and message are worded by
+                        // signex-erc (#2062).
                         text(raw(v.rule_label.clone())).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
                         text(raw(v.message.clone())).size(TS.body).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         signex_widgets::tooltip(
+                            // raw: the sheet's name and the coordinates, not language.
                             text(raw(location_label(&v.sheet_name, v.world_x, v.shown_y)))
                                 .size(TS.body)
                                 .wrapping(iced::widget::text::Wrapping::None)
@@ -302,7 +306,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .on_press(PanelMsg::ErcQuickFix(v.global_index))
                 .style(crate::styles::menu_item(&ctx.tokens)),
                 waive_chip(v, &ctx.tokens, &ctx.i18n),
-                super::erc_waivers::waive_chip(v, &ctx.tokens),
+                super::erc_waivers::waive_chip(v, &ctx.tokens, &ctx.i18n),
             ]
             .align_y(iced::Alignment::Center)
             .width(Length::Fill)

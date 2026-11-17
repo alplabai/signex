@@ -82,19 +82,33 @@ impl Signex {
     /// Step the active project's rule set back. False when there is nothing
     /// to undo.
     pub(crate) fn undo_project_rules(&mut self) -> bool {
-        self.step_project_rules(RulesHistory::undo)
+        self.step_project_rules(true)
     }
 
     /// Step the active project's rule set forward again.
     pub(crate) fn redo_project_rules(&mut self) -> bool {
-        self.step_project_rules(RulesHistory::redo)
+        self.step_project_rules(false)
     }
 
-    fn step_project_rules(&mut self, step: HistoryStep) -> bool {
-        let Some((id, current)) = self
+    fn step_project_rules(&mut self, undo: bool) -> bool {
+        match self.document_state.active_document_project().map(|p| p.id) {
+            Some(id) => self.step_rules_of(id, undo),
+            None => false,
+        }
+    }
+
+    /// Step `id`'s rule history (the ERC dialog's and the Rules tab's) back
+    /// (`undo`) or forward. Whether a step moved.
+    pub(crate) fn step_rules_of(&mut self, id: ProjectId, undo: bool) -> bool {
+        let step: HistoryStep = if undo {
+            RulesHistory::undo
+        } else {
+            RulesHistory::redo
+        };
+        let Some(current) = self
             .document_state
-            .active_document_project()
-            .map(|p| (p.id, p.data.rules.clone()))
+            .project_by_id(id)
+            .map(|p| p.data.rules.clone())
         else {
             return false;
         };
@@ -106,28 +120,39 @@ impl Signex {
         else {
             return false;
         };
-        self.replace_project_rules(restored, false);
+        self.replace_rules_of(id, restored, false);
         true
     }
 
-    /// Swap the active project's rule set, flip it dirty (the explicit save
-    /// writes it) and, for a fresh edit, remember the prior state for undo.
+    /// [`Self::replace_rules_of`] the active document's project.
     pub(super) fn replace_project_rules(&mut self, rules: Option<ProjectRules>, record: bool) {
+        match self.document_state.active_document_project().map(|p| p.id) {
+            Some(id) => self.replace_rules_of(id, rules, record),
+            None => self.invalidate_pending_profile_update(),
+        }
+    }
+
+    /// Swap `id`'s rule set, flip it dirty (the explicit save writes it)
+    /// and, for a fresh edit, remember the prior state for undo.
+    pub(crate) fn replace_rules_of(
+        &mut self,
+        id: ProjectId,
+        rules: Option<ProjectRules>,
+        record: bool,
+    ) {
         // Any change to the rules (edit, undo, redo, store) outdates a diff
         // computed against the old ones.
         self.invalidate_pending_profile_update();
         let ds = &mut self.document_state;
-        let Some((id, before)) = ds
-            .active_document_project()
-            .map(|p| (p.id, p.data.rules.clone()))
-        else {
+        let Some(before) = ds.project_by_id(id).map(|p| p.data.rules.clone()) else {
             return;
         };
         if record {
             ds.note_project_clean_state(id);
             ds.rules_history.entry(id).or_default().record(before);
+            ds.project_tabs.entry(id).or_default().rules_step_newest = true;
         }
-        if let Some(loaded) = ds.projects.iter_mut().find(|p| p.id == id) {
+        if let Some(loaded) = ds.project_by_id_mut(id) {
             loaded.data.rules = rules;
         }
         ds.sync_project_history_dirty(id, true);

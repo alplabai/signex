@@ -171,6 +171,12 @@ impl Signex {
     /// The object the cursor rests on, on the focused sheet.
     pub(super) fn target_under_cursor(&self) -> Option<NetTarget> {
         let (x, y) = self.cursor_world_now()?;
+        self.target_at(x, y)
+    }
+
+    /// The object on a net at the world point (`x`, `y`) of the focused
+    /// sheet.
+    pub(super) fn target_at(&self, x: f64, y: f64) -> Option<NetTarget> {
         let item = self.item_hit_at(x, y).filter(|i| is_net_kind(i.kind))?;
         let sheet = self.document_state.active_path.clone()?;
         Some(NetTarget {

@@ -90,3 +90,68 @@ fn a_pad_of_a_footprint_that_locks_its_primitives_is_refused() {
             .is_some()
     );
 }
+
+/// #2384: the location is the corner at the bottom left of the screen, the
+/// greatest model y, so it reads as the lower-left once Y is shown upward.
+#[test]
+fn the_location_is_the_lower_left_corner_as_shown() {
+    let mut b = board();
+    b.segments[0].end = Point::new(1.0, 4.0);
+    let corner = track_location(b.segments.iter().take(1)).unwrap();
+    assert_eq!(corner, Point::new(0.0, 4.0));
+    let command = track_edit_command(&b, &[id(SEG_1)], TrackEdit::LocationY(10.0)).unwrap();
+    run(&mut b, command);
+    assert_eq!((b.segments[0].start.y, b.segments[0].end.y), (6.0, 10.0));
+}
+
+/// #2378: a locked track takes only its unlock; a mask edit is one replace
+/// whose inverse puts the old setting back.
+#[test]
+fn a_locked_track_refuses_edits_but_its_unlock() {
+    use signex_types::pcb::MaskExpansion;
+    let mut b = board();
+    let track = [id(SEG_1)];
+    let lock = track_edit_command(&b, &track, TrackEdit::Locked(true)).unwrap();
+    run(&mut b, lock);
+    assert!(b.segments[0].locked);
+    assert_eq!(
+        track_edit_command(&b, &track, TrackEdit::Width(1.0)),
+        Err(PrimitiveEditRefusal::ItemLocked)
+    );
+    let unlock = track_edit_command(&b, &track, TrackEdit::Locked(false)).unwrap();
+    run(&mut b, unlock);
+    let mask = MaskExpansion::Manual { mm: 0.05 };
+    let command = track_edit_command(&b, &track, TrackEdit::SolderMask(mask))
+        .unwrap()
+        .expect("a change");
+    let applied = command.apply(&mut b).expect("applies");
+    assert_eq!(b.segments[0].attributes.solder_mask, mask);
+    applied.inverse.apply(&mut b).expect("undo applies");
+    assert_eq!(b.segments[0].attributes.solder_mask, MaskExpansion::Rule);
+}
+
+#[test]
+fn via_tenting_and_masks_are_stored_and_a_nan_mask_is_refused() {
+    use signex_types::pcb::MaskExpansion;
+    let mut b = board();
+    let via = [id(VIA_1)];
+    let tent = via_edit_command(&b, &via, ViaEdit::TentedBottom(true)).unwrap();
+    run(&mut b, tent);
+    let top = MaskExpansion::Manual { mm: 0.1 };
+    let mask = via_edit_command(&b, &via, ViaEdit::SolderMaskTop(top)).unwrap();
+    run(&mut b, mask);
+    let a = b.vias[0].attributes;
+    assert!(a.bottom.tented && !a.top.tented);
+    assert_eq!(a.top.expansion, top);
+    let nan = MaskExpansion::Manual { mm: f64::NAN };
+    assert_eq!(
+        via_edit_command(&b, &via, ViaEdit::SolderMaskBottom(nan)),
+        Err(PrimitiveEditRefusal::NonFinite)
+    );
+    let lock = via_edit_command(&b, &via, ViaEdit::Locked(true)).unwrap();
+    run(&mut b, lock);
+    assert_eq!(
+        via_edit_command(&b, &via, ViaEdit::X(3.0)),
+        Err(PrimitiveEditRefusal::ItemLocked)
+    );
+}

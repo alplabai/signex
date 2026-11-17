@@ -45,6 +45,16 @@ impl Signex {
         self.highlight_target(target, PendingNetAction::HighlightUnderCursor, false)
     }
 
+    /// Highlight the net of what lies at the world point `at` on every sheet
+    /// (else the selection's): a context menu's row, aimed at where the menu
+    /// was opened, not where the pointer went to pick the row (#2419).
+    pub(crate) fn highlight_net_at(&mut self, at: (f64, f64)) -> Task<Message> {
+        let target = self
+            .target_at(at.0, at.1)
+            .or_else(|| self.target_from_selection());
+        self.highlight_target(target, PendingNetAction::HighlightAtPoint, false)
+    }
+
     /// Highlight the selection's net (else the cursor's), and select what is
     /// on it on this sheet.
     pub(crate) fn highlight_related_net_objects(&mut self) -> Task<Message> {
@@ -74,7 +84,17 @@ impl Signex {
                 self.highlight_with(project, &data, &target, select_here);
                 Task::none()
             }
-            IndexLookup::Building(build) => self.wait_for_net_index(project, action, build),
+            IndexLookup::Building(build) => {
+                let task = self.wait_for_net_index(project, action, build);
+                // A request aimed at a point is about that point, wherever
+                // the pointer goes while the index builds.
+                if action == PendingNetAction::HighlightAtPoint
+                    && let Some(pending) = self.document_state.net_nav.pending.as_mut()
+                {
+                    pending.cursor = Some((target.at.x, target.at.y));
+                }
+                task
+            }
             IndexLookup::Unavailable => {
                 crate::diagnostics::log_warning(messages::index_unavailable());
                 Task::none()

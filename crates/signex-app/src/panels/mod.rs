@@ -15,7 +15,9 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+pub mod layer_stack;
 mod pcb_layers;
+mod placed_edit;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -24,13 +26,19 @@ mod symbol_editor_properties;
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod board_sketch_attr;
 pub use board_sketch_attr::BoardSketchAttrMsg;
+mod board_net_classes;
 mod color_field;
 mod context;
 mod drafts;
 mod drc;
+mod drc_results;
 pub use drafts::PanelDrafts;
 mod empty_state;
+pub use board_net_classes::{
+    BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
+};
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
 pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
@@ -42,6 +50,7 @@ mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
+mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
 mod palette;
@@ -53,6 +62,8 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
+mod sch_filter;
+pub use sch_filter::SchFilterMsg;
 pub mod signal;
 mod status;
 mod symbol_context;
@@ -68,7 +79,8 @@ pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
 pub use element_properties::{
-    FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
+    BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
+    FootprintCards,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -108,6 +120,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{
     view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
@@ -126,7 +139,7 @@ pub use paper::{
     paper_size_options,
 };
 pub use pcb_board_properties::{
-    BoardField, BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
+    BoardField, BoardTab, ComponentSide, GridCard, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
 };
 pub use pcb_component::{
     ComponentField, ComponentSettingFacts, FootprintEditability, FootprintLibrary, ParameterFacts,
@@ -136,6 +149,7 @@ pub use pcb_component::{
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
+pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
@@ -259,7 +273,6 @@ impl PanelKind {
                 | PanelKind::SchFilter
                 | PanelKind::SchList
                 | PanelKind::SignexAi
-                | PanelKind::Drc
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -267,9 +280,11 @@ impl PanelKind {
         )
     }
 
-    /// Whether this panel requires a PCB document to be open.
+    /// Whether this panel requires a PCB document to be open. Net Classes
+    /// edits the project's table, so it needs a project, not a board (#2416,
+    /// #2417).
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
+        matches!(self, PanelKind::Drc | PanelKind::LayerStack)
     }
 
     /// The catalog message of [`Self::label`] (dock tabs and titles).
@@ -346,6 +361,7 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    use signex_i18n::ids;
     let content = match kind {
         // The Components panel is drawn by `components_panel::view` (the dock and the
         // detached window both route it there); nothing to show here.
@@ -364,29 +380,39 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::SignexAi => {
             return signal::view(ctx);
         }
-        PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
-        PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
+        PanelKind::Drc => drc_results::view(ctx),
+        PanelKind::LayerStack => layer_stack::view(ctx),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {
             crate::library::editor::footprint::layers_panel::view(ctx)
         }
         PanelKind::Layers => pcb_layers::view(ctx),
-        PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
-        PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
-        PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
-        PanelKind::SchFilter => view_stub("SCH Filter", "Schematic object filter", ctx),
-        PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
-        PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
-        PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
-        PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
-        PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
-        PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
-        PanelKind::Library => view_stub(
-            "Library",
-            "Open a library from the Projects panel to browse it.",
+        // On a board, its per-class rules (#2400); elsewhere the project's
+        // net-class table, the editor Properties shows for the sheet without
+        // its section frame (#2416, #2417).
+        PanelKind::NetClasses if ctx.net_classes.board.is_some() => board_net_classes::view(ctx),
+        PanelKind::NetClasses => net_class_panel::view_panel(ctx),
+        PanelKind::Variants => view_stub(ids::PANELS_KIND_VARIANTS, ids::PANELS_STUB_VARIANTS, ctx),
+        PanelKind::OutputJobs => view_stub(
+            ids::PANELS_KIND_OUTPUT_JOBS,
+            ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
+        PanelKind::SchFilter => sch_filter::view(ctx),
+        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::BomStudio => view_stub(
+            ids::PANELS_KIND_BOM_STUDIO,
+            ids::PANELS_STUB_BOM_STUDIO,
+            ctx,
+        ),
+        PanelKind::Favorites => {
+            view_stub(ids::PANELS_KIND_FAVORITES, ids::PANELS_STUB_FAVORITES, ctx)
+        }
+        PanelKind::Snippets => view_stub(ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS, ctx),
+        PanelKind::Todo => view_stub(ids::PANELS_KIND_TODO, ids::PANELS_STUB_TODO, ctx),
+        PanelKind::Wiki => view_stub(ids::PANELS_KIND_WIKI, ids::PANELS_STUB_WIKI, ctx),
+        PanelKind::Library => view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),

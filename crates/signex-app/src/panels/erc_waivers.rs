@@ -75,6 +75,7 @@ pub struct ErcViolationWaiverEntry {
 pub(super) fn waive_chip<'a>(
     entry: &ErcDiagnosticEntry,
     tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let Some(key) = entry.waiver_key.clone() else {
         return Space::new().width(0).height(0).boxed();
@@ -82,7 +83,7 @@ pub(super) fn waive_chip<'a>(
     row![
         Space::new().width(6).height(Length::Shrink),
         signex_widgets::button(
-            text(raw("Waive"))
+            text(signex_i18n::t!(i18n, signex_i18n::ids::PANELS_ERC_WAIVE))
                 .size(TS.caption)
                 .color(theme_ext::text_primary(tokens))
         )
@@ -107,17 +108,17 @@ pub(super) fn waive_editor<'a>(
         return None;
     }
     let wrap = PanelMsg::ErcWaiver;
-    let input = |hint: &'a str, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
-        signex_widgets::text_input(signex_widgets::raw(hint), value)
+    let input = |hint: signex_i18n::MessageId, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
+        signex_widgets::text_input(signex_i18n::t!(ctx.i18n, hint), value)
             .on_input(move |s| wrap(on(s)))
             .on_submit(wrap(ErcWaiverMsg::Confirmed))
             .size(TS.body)
             .padding(SP.s)
             .width(Length::Fill)
     };
-    let button = |label: &'a str, msg: ErcWaiverMsg| {
+    let button = |label: signex_i18n::MessageId, msg: ErcWaiverMsg| {
         signex_widgets::button(
-            text(raw(label))
+            text(signex_i18n::t!(ctx.i18n, label))
                 .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
         )
@@ -131,7 +132,7 @@ pub(super) fn waive_editor<'a>(
         .width(Length::Fill);
     col = col.push(
         input(
-            "Reason (required)",
+            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_REASON,
             &draft.reason,
             ErcWaiverMsg::ReasonChanged,
         )
@@ -139,7 +140,7 @@ pub(super) fn waive_editor<'a>(
     );
     col = col.push(
         input(
-            "Author (required)",
+            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_AUTHOR,
             &draft.author,
             ErcWaiverMsg::AuthorChanged,
         )
@@ -147,6 +148,7 @@ pub(super) fn waive_editor<'a>(
     );
     if let Some(error) = &draft.error {
         col = col.push(
+            // raw: the refusal is worded by the waiver handler in English (#2061).
             text(raw(error.clone()))
                 .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens))
@@ -155,9 +157,12 @@ pub(super) fn waive_editor<'a>(
     }
     col = col.push(
         row![
-            button("Waive", ErcWaiverMsg::Confirmed),
+            button(signex_i18n::ids::PANELS_ERC_WAIVE, ErcWaiverMsg::Confirmed),
             Space::new().width(6).height(Length::Shrink),
-            button("Cancel", ErcWaiverMsg::Cancelled),
+            button(
+                signex_i18n::ids::PANELS_ERC_WAIVER_CANCEL,
+                ErcWaiverMsg::Cancelled
+            ),
         ]
         .boxed(),
     );
@@ -167,47 +172,39 @@ pub(super) fn waive_editor<'a>(
 /// The project's per-finding waivers, dimmed, each with its reason, author,
 /// status and a Restore button. Shown even when every finding is waived.
 pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
     let muted = theme_ext::text_secondary(&ctx.tokens);
+    let i18n = &ctx.i18n;
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).width(Length::Fill);
     if ctx.erc_violation_waivers.is_empty() {
         return col.boxed();
     }
     col = col.push(separator(&ctx.tokens).boxed());
     col = col.push(
-        text(raw(format!(
-            "{} findings waived",
-            ctx.erc_violation_waivers.len()
-        )))
+        text(t!(
+            i18n,
+            ids::PANELS_ERC_FINDINGS_WAIVED,
+            "count" => ctx.erc_violation_waivers.len().to_string()
+        ))
         .size(TS.caption)
         .color(muted)
         .boxed(),
     );
     for w in &ctx.erc_violation_waivers {
-        let status = match w.status {
-            ErcWaiverStatus::Waiving(1) => "waived".to_string(),
-            ErcWaiverStatus::Waiving(n) => format!("waives {n} findings"),
-            ErcWaiverStatus::Lapsed => "LAPSED: an involved object changed".to_string(),
-            ErcWaiverStatus::Unmatched => "matches no finding".to_string(),
-            ErcWaiverStatus::Incomplete => "ignored: no reason or author".to_string(),
-        };
         let color = match w.status {
             ErcWaiverStatus::Lapsed | ErcWaiverStatus::Incomplete => {
                 theme_ext::warning_color(&ctx.tokens)
             }
             _ => muted,
         };
-        let detail = format!(
-            "{}  {}  ({status})\n  Reason: {}  by {} {}",
-            w.rule_id, w.message, w.reason, w.author, w.date
-        );
         col = col.push(
             row![
-                text(raw(detail))
+                text(violation_waiver_detail(w, i18n))
                     .size(TS.caption)
                     .color(color)
                     .width(Length::Fill),
                 signex_widgets::button(
-                    text(raw("Restore"))
+                    text(t!(i18n, ids::PANELS_ERC_RESTORE))
                         .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
@@ -224,4 +221,118 @@ pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a
         );
     }
     col.boxed()
+}
+
+/// A stored waiver's two lines: rule, finding and status, then why and who.
+/// The rule id, message, reason, author and date are stored text, shown as
+/// they are.
+fn violation_waiver_detail(
+    w: &ErcViolationWaiverEntry,
+    i18n: &signex_i18n::I18n,
+) -> signex_i18n::Localized {
+    use signex_i18n::ids;
+    let status = match w.status {
+        ErcWaiverStatus::Waiving(1) => i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_ONE, &[]),
+        ErcWaiverStatus::Waiving(n) => i18n.message_plain(
+            ids::PANELS_ERC_WAIVER_STATUS_MANY,
+            &[("count", n.to_string().into())],
+        ),
+        ErcWaiverStatus::Lapsed => i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_LAPSED, &[]),
+        ErcWaiverStatus::Unmatched => {
+            i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_UNMATCHED, &[])
+        }
+        ErcWaiverStatus::Incomplete => {
+            i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_INCOMPLETE, &[])
+        }
+    };
+    signex_i18n::t!(
+        i18n,
+        ids::PANELS_ERC_VIOLATION_WAIVER_ROW,
+        "rule" => w.rule_id.as_str(),
+        "message" => w.message.as_str(),
+        "status" => status,
+        "reason" => w.reason.as_str(),
+        "author" => w.author.as_str(),
+        "date" => w.date.as_str()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn waiver(status: ErcWaiverStatus) -> ErcViolationWaiverEntry {
+        ErcViolationWaiverEntry {
+            rule_id: "unused-pin".into(),
+            objects: vec![],
+            message: "Pin 3 of U1 is unconnected".into(),
+            reason: "spare gate".into(),
+            author: "hg".into(),
+            date: "2026-11-16".into(),
+            status,
+            severity: None,
+        }
+    }
+
+    /// The rendered section heads the list with the count as `format!` wrote
+    /// it, no grouping, and shows each waiver's line (#2059).
+    #[test]
+    fn the_view_counts_the_stored_waivers() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.erc_violation_waivers = vec![waiver(ErcWaiverStatus::Lapsed); 1200];
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            violation_waivers_section(&ctx),
+            iced::Size::new(600.0, 100_000.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        assert!(
+            texts.iter().any(|t| t == "1200 findings waived"),
+            "{:?}",
+            &texts[..texts.len().min(4)]
+        );
+        assert!(texts.iter().any(|t| t
+            == "unused-pin  Pin 3 of U1 is unconnected  (LAPSED: an involved object changed)\n  Reason: spare gate  by hg 2026-11-16"));
+    }
+
+    /// The stored-waiver line reads as the `format!` it replaced (#2059).
+    #[test]
+    fn a_stored_waiver_reads_as_before() {
+        let i18n = signex_i18n::I18n::en_us();
+        let mut w = ErcViolationWaiverEntry {
+            rule_id: "unused-pin".into(),
+            objects: vec![],
+            message: "Pin 3 of U1 is unconnected".into(),
+            reason: "spare gate".into(),
+            author: "hg".into(),
+            date: "2026-11-16".into(),
+            status: ErcWaiverStatus::Waiving(1),
+            severity: None,
+        };
+        let shown = |w: &ErcViolationWaiverEntry| {
+            violation_waiver_detail(w, &i18n)
+                .into_string()
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        let expected = |status: &str| {
+            format!(
+                "unused-pin  Pin 3 of U1 is unconnected  ({status})\n  Reason: spare gate  by hg 2026-11-16"
+            )
+        };
+        assert_eq!(shown(&w), expected("waived"));
+        for (status, text) in [
+            (ErcWaiverStatus::Waiving(1200), "waives 1200 findings"),
+            (
+                ErcWaiverStatus::Lapsed,
+                "LAPSED: an involved object changed",
+            ),
+            (ErcWaiverStatus::Unmatched, "matches no finding"),
+            (ErcWaiverStatus::Incomplete, "ignored: no reason or author"),
+        ] {
+            w.status = status;
+            assert_eq!(shown(&w), expected(text));
+        }
+    }
 }

@@ -19,9 +19,10 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         use iced::widget::{Widget as _, row};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
 
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
 
@@ -34,7 +35,7 @@ impl Signex {
         );
         if let Some(class) = &card.class {
             rows.push(
-                text(raw(format!("Class: {class}")))
+                text(signex_i18n::t!(i18n, signex_i18n::ids::OVERLAY_NET_CARD_CLASS, "class" => class.as_str()))
                     .size(TS.caption)
                     .color(muted_c)
                     .boxed(),
@@ -43,7 +44,10 @@ impl Signex {
         for pin in &card.pins {
             rows.push(
                 row![
-                    text(raw(pin.pin.clone())).size(TS.caption).color(text_c),
+                    // The pin as the design names it (designator and number).
+                    text(signex_i18n::UserText::new(pin.pin.clone()))
+                        .size(TS.caption)
+                        .color(text_c),
                     text(signex_i18n::UserText::new(pin.sheet.clone()))
                         .size(TS.caption)
                         .color(muted_c),
@@ -54,14 +58,18 @@ impl Signex {
         }
         if card.hidden > 0 {
             rows.push(
-                text(raw(format!("+{} more", card.hidden)))
-                    .size(TS.caption)
-                    .color(muted_c)
-                    .boxed(),
+                text(signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::OVERLAY_NET_CARD_MORE,
+                    "count" => card.hidden.to_string()
+                ))
+                .size(TS.caption)
+                .color(muted_c)
+                .boxed(),
             );
         }
         let height = CARD_PAD_H + ROW_H * rows.len() as f32;
-        let width = card_width_estimate(card, &self.panel_ctx_for(window_id).ui_font_name);
+        let width = card_width_estimate(card, &self.panel_ctx_for(window_id).ui_font_name, i18n);
 
         // Shrink to the text; the estimate only places the card. At the cap
         // the card stops growing.
@@ -88,16 +96,56 @@ impl Signex {
 /// The room the card needs, for keeping it inside the window: the widest of
 /// its lines measured in `ui_family`, plus the padding, at most
 /// [`CARD_MAX_W`].
-fn card_width_estimate(card: &HoverCard, ui_family: &str) -> f32 {
+fn card_width_estimate(card: &HoverCard, ui_family: &str, i18n: &signex_i18n::I18n) -> f32 {
     let family = signex_types::font::nonblank_family(ui_family);
     let line =
         |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let mut widest = line(&card.name, TS.label);
     if let Some(class) = &card.class {
-        widest = widest.max(line(&format!("Class: {class}"), TS.caption));
+        let shown = i18n.message_plain(
+            signex_i18n::ids::OVERLAY_NET_CARD_CLASS,
+            &[("class", class.as_str().into())],
+        );
+        widest = widest.max(line(&shown, TS.caption));
     }
     for pin in &card.pins {
         widest = widest.max(line(&format!("{}{}", pin.pin, pin.sheet), TS.caption) + SP.s);
     }
     (widest + CARD_PAD_W + 2.0).min(CARD_MAX_W)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::state::net_nav::HoverCard;
+    use crate::app::state::net_nav::hover::HoverCardPin;
+
+    /// The rendered card reads as the `format!` lines it replaced (#2059):
+    /// the class line, and the hidden-pin count without grouping.
+    #[test]
+    fn the_card_names_the_class_and_the_hidden_pins() {
+        let (app, _boot) = crate::app::Signex::new();
+        let card = HoverCard {
+            name: "VCC".into(),
+            class: Some("Power".into()),
+            pins: vec![HoverCardPin {
+                pin: "R1.2".into(),
+                sheet: "Main".into(),
+            }],
+            hidden: 1200,
+            screen: (0, 0),
+        };
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            app.view_net_hover_card(&card, iced::window::Id::unique()),
+            iced::Size::new(800.0, 600.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        for expected in ["Class: Power", "R1.2", "+1200 more"] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "{expected:?} not in {texts:?}"
+            );
+        }
+    }
 }

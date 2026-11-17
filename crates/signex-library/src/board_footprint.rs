@@ -206,6 +206,7 @@ fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
         net: None,
         roundrect_ratio,
         rotation: pad.rotation,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),

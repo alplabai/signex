@@ -124,9 +124,15 @@ pub enum WindowMsg {
     /// The monitor size was read after a resize; together with the mode it
     /// tells a real fullscreen window from winit's stale flag mid-exit.
     MainWindowMonitorSizeRead(Option<iced::Size>),
-    /// Window ▸ Tile Horizontally / Tile Vertically (#2247): arrange the main
-    /// window and the undocked document windows.
+    /// Window ▸ Tile Horizontally / Tile Vertically (#2247, #2249): show the
+    /// main window's documents in tile panes and arrange the main window
+    /// with the undocked document windows.
     TileRequested(crate::app::TileLayout),
+    /// Window ▸ Untile (#2249): back to one document in the main window.
+    UntileRequested,
+    /// A press on an unfocused tile pane, carrying the index of the tab it
+    /// shows: that document becomes the active one (#2249).
+    TilePanePressed(usize),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under
@@ -214,6 +220,8 @@ pub enum OverlayMsg {
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
     OpenReplace,
+    /// A search-panel shortcut: close Find when it is open, else open it.
+    FindToggled,
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,

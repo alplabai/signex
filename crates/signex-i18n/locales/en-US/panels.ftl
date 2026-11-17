@@ -453,6 +453,42 @@ panels-status-bar-snap-on = Snap on
 panels-status-bar-snap-off = Snap off
 panels-status-bar-tool = Tool: { $tool }
 panels-status-bar-importing = Importing { $name }… ✕
+# The cursor position. $value is the coordinate as a number; $unit is the
+# unit symbol (mm, mil, in, µm).
+panels-status-bar-x = X { $value } { $unit }
+panels-status-bar-y = Y { $value } { $unit }
+# The zoom level; $percent is a whole number, already written out.
+panels-status-bar-zoom = { $percent }%
+# Shown while saved documents are being committed to the project history;
+# $count is how many commits are still running.
+panels-status-bar-saving = { $count ->
+        [one] Saving…
+       *[other] Saving { $count }…
+    }
+# The canvas selection when it holds one kind of object; $kind is one of the
+# panels-status-bar-selected-* texts below.
+panels-status-bar-selection-one-kind = Sel: { $kind }
+# The canvas selection when it holds several kinds; $count is the total and
+# $kinds the panels-status-bar-selected-* texts, separated by commas.
+panels-status-bar-selection-kinds = Sel: { $count } ({ $kinds })
+panels-status-bar-selected-components = { $count ->
+        [one] { $count } component
+       *[other] { $count } components
+    }
+panels-status-bar-selected-wires = { $count ->
+        [one] { $count } wire
+       *[other] { $count } wires
+    }
+panels-status-bar-selected-labels = { $count ->
+        [one] { $count } label
+       *[other] { $count } labels
+    }
+panels-status-bar-selected-shapes = { $count ->
+        [one] { $count } shape
+       *[other] { $count } shapes
+    }
+# Selected objects that are none of the kinds above.
+panels-status-bar-selected-other = { $count } other
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…
@@ -583,3 +619,52 @@ panels-drawing-start-angle = Start Angle
 panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
+
+## Net Classes table (#2417): column titles and cells.
+
+panels-net-classes-column-name = Name
+panels-net-classes-column-color = Colour
+panels-net-classes-column-width = Width
+panels-net-classes-column-members = Members
+# Colour cell of a class with no colour of its own: the theme's wire colour.
+panels-net-classes-theme-color = Theme
+# Width cell of a class with a width; $width is in millimetres.
+panels-net-classes-width-cell = { $width } mm
+# Width cell of a class with no width: each wire keeps its own.
+panels-net-classes-wire-width = Wire's own
+panels-net-classes-no-members = None
+# SCH Filter panel (#2417), over the chip grid.
+panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.
+
+# Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
+panels-placed-location = Location
+panels-placed-properties = Properties
+panels-placed-x = X ({ $unit })
+panels-placed-y = Y ({ $unit })
+panels-placed-start-x = Start X ({ $unit })
+panels-placed-start-y = Start Y ({ $unit })
+panels-placed-width = Width ({ $unit })
+panels-placed-height = Height ({ $unit })
+panels-placed-rotation = Rotation
+# A rotation choice; $degrees is 0, 90, 180 or 270.
+panels-placed-degrees = { $degrees } Degrees
+# Shown above the disabled rows of a locked object; $reason is the lock's own words.
+panels-placed-locked = Locked: { $reason }
+panels-placed-parameters = Parameters ({ $count })
+panels-placed-parameters-none = Parameters (none)
+panels-placed-no-parameters = No custom parameters
+# Read-only facts of a wire, bus or sheet entry in Properties (#2418).
+panels-placed-end = End
+panels-placed-length = Length
+panels-placed-name = Name
+panels-placed-direction = Direction
+panels-placed-sheet = Sheet
+panels-placed-sheet-file = Sheet File
+# Properties section of a selected Blanket directive: a drawn region whose
+# parameters apply to every net inside it.
+panels-directive-blanket = Blanket
+panels-directive-net-class = Net Class
+# Section title: the ERC rules a Blanket does not report inside its region.
+panels-directive-erc-exclusions = ERC Exclusions
+# Checkbox: the Blanket reports no ERC rule at all inside its region.
+panels-directive-all-rules = All Rules

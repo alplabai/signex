@@ -22,6 +22,8 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 
 mod bars;
+#[cfg(test)]
+mod dismiss_tests;
 mod modals;
 mod net_hover;
 mod palette;
@@ -41,8 +43,26 @@ impl Signex {
     }
 
     /// [`Self::canvas_bounds`] in the undocked window `window`, laid out at
-    /// that window's own size (`None`: the main window).
+    /// that window's own size (`None`: the main window). In a tiled main
+    /// window it is the focused pane (#2249).
     pub(in crate::app) fn canvas_bounds_in(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> iced::Rectangle {
+        let area = self.document_area_in(window);
+        match (window, self.tiled_panes()) {
+            (None, Some((layout, panes))) => {
+                let active = self.document_state.active_tab;
+                let index = panes.iter().position(|tab| *tab == active).unwrap_or(0);
+                canvas_region::pane_bounds(area, panes.len(), index, layout)
+            }
+            _ => area,
+        }
+    }
+
+    /// The region between the docks, chrome and status bar where the
+    /// documents show, in `window` (`None`: the main window).
+    pub(in crate::app) fn document_area_in(
         &self,
         window: Option<iced::window::Id>,
     ) -> iced::Rectangle {
@@ -85,7 +105,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
         use signex_i18n::{Localized, ids, t};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
 
         if self.interaction_state.editing_text.is_some() {
             return None;
@@ -161,7 +181,8 @@ impl Signex {
                     .size(TS.body)
                     .color(muted_c)
                     .width(label_w),
-                text(raw(value))
+                // The symbol's own field value (design data).
+                text(signex_i18n::UserText::new(value))
                     .font(canvas_font)
                     .size(TS.label)
                     .color(text_c)
@@ -451,10 +472,12 @@ impl Signex {
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (ctx_menu.x, ctx_menu.y));
         if let (Some(kind), Some(offset)) = (interaction.context_submenu, card.flyout_offset) {
-            let submenu = self.view_context_submenu(
-                kind,
-                interaction.canvas_for_window(window_id).selected.len(),
-            );
+            // A board's menu opens the board's flyouts (#2405).
+            let submenu = if self.pcb_targets(Some(window_id)).shown {
+                self.view_board_context_submenu(kind, window_id)
+            } else {
+                self.view_context_submenu(kind, window_id)
+            };
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::Close), menu)
@@ -516,10 +539,7 @@ impl Signex {
         if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
             (interaction.context_submenu, card.flyout_offset)
         {
-            let submenu = self.view_context_submenu(
-                ContextSubmenu::AddNewToProject,
-                interaction.canvas.selected.len(),
-            );
+            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id);
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)

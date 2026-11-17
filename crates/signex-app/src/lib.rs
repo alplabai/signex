@@ -30,7 +30,9 @@ pub mod altium_import;
 pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
+pub mod board_3d_shader;
 pub mod canvas;
+pub(crate) mod choice;
 pub mod chrome;
 pub mod config_root;
 pub mod diagnostics;
@@ -52,6 +54,7 @@ pub mod paste_prefs;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+pub mod layer_strip_prefs;
 #[cfg(test)]
 pub(crate) mod layout_probe;
 pub mod library;

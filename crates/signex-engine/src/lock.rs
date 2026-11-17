@@ -151,6 +151,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         // A locked symbol's designator is part of what the lock freezes, on
         // a sheet placed once or many times alike.
         Command::SetSymbolDesignatorIn { symbol, .. } => (vec![*symbol], "edited"),
+        // Fields that move are part of a locked part's look.
+        Command::AutoplaceFields { symbol_ids } => (symbol_ids.clone(), "edited"),
         Command::SetWireWidth { wire_id, .. } | Command::SetWireColor { wire_id, .. } => {
             (vec![*wire_id], "edited")
         }
@@ -185,6 +187,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::RenameChildSheetFile { .. }
         | Command::ModifyChildSheet { .. }
         | Command::SetChildSheetInstances { .. }
+        | Command::ResizeChildSheet { .. }
         | Command::SetPaperSize { .. }
         | Command::SetSheetFrame { .. }
         | Command::SetSheetColor { .. }
@@ -192,6 +195,8 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetTitleBlockField { .. }
         | Command::ArrangeDrawings { .. }
         | Command::SetDrawingPlacement { .. }
+        | Command::PlaceDirective { .. }
+        | Command::UpdateDirective { .. }
         | Command::SetDocumentFontFamily { .. }
         | Command::SetNetColors { .. } => return None,
     };
@@ -396,6 +401,25 @@ impl Engine {
     #[must_use]
     pub fn names_locked_item(&self, cmd: &Command) -> bool {
         self.locked_item_refusal(cmd).is_some()
+    }
+
+    /// Why `execute` would refuse `cmd` for a lock, or `None`: the text a
+    /// caller shows before it sends an edit the gateway would skip (#2418).
+    #[must_use]
+    pub fn lock_refusal(&self, cmd: &Command) -> Option<String> {
+        self.locked_item_refusal(cmd).map(|e| e.to_string())
+    }
+
+    /// Whether every one of `items` is a locked object, so a move, turn,
+    /// mirror or delete of them would leave the sheet as it is (#2419).
+    /// False for no items.
+    #[must_use]
+    pub fn all_locked(&self, items: &[SelectedItem]) -> bool {
+        if items.is_empty() {
+            return false;
+        }
+        let locked = self.locked_objects();
+        items.iter().all(|item| locked.contains_key(&item.uuid))
     }
 
     /// `cmd` with every locked symbol left out, for a caller that would

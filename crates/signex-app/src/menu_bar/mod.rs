@@ -9,7 +9,7 @@ use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
-use crate::keymap::{AppCommandId, CompiledKeymap};
+use crate::keymap::{AppCommandId, CatalogTextExt, CompiledKeymap};
 use crate::styles;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -117,8 +117,6 @@ pub enum MenuMessage {
     OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
-    /// Place ▸ No Connect — the no-connect tool.
-    PlaceNoConnect,
     // Project ▸ Annotation
     Annotate,
     AnnotateReset,

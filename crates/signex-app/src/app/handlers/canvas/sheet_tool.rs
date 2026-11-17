@@ -116,7 +116,12 @@ impl Signex {
 
     fn place_sheet(&mut self, anchor: Point, corner: Point, on_disk: Vec<String>) {
         let stem = self.unused_child_sheet_stem(on_disk);
-        match signex_engine::child_sheet_from_corners(anchor, corner, &stem) {
+        match signex_engine::child_sheet_from_corners(
+            anchor,
+            corner,
+            &stem,
+            &mut signex_types::object_id::UuidV7Ids,
+        ) {
             Some(child_sheet) => {
                 let symbol = child_sheet.uuid;
                 let placed = self.apply_engine_command(
@@ -159,6 +164,7 @@ impl Signex {
             cursor,
             &signex_engine::unused_entry_name(symbol),
             None,
+            &mut signex_types::object_id::UuidV7Ids,
         );
         let command = signex_engine::Command::PlaceSheetPin {
             sheet_id: symbol.uuid,

@@ -17,3 +17,7 @@
 /deny.toml                                       @hkngln
 /docs/LICENSING.md                               @hkngln
 /CONTRIBUTING.md                                 @hkngln
+
+# The accepted command ids (#2447): removing a line removes a command, so
+# both maintainers own it, whatever overrides are added above.
+/scripts/catalog-ids.txt                         @hkngln @alpCaner

@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use signex_types::object_id::IdSource;
 use signex_types::schematic::{ChildSheet, FillType, Point};
 
 /// Shortest edge, in millimetres, a placed sheet symbol may have. A stray
@@ -42,18 +43,23 @@ pub fn unused_sheet_stem<'a>(taken: impl IntoIterator<Item = &'a str>) -> String
 }
 
 /// Build a sheet symbol spanning the two dragged corners, named `stem` with
-/// file `stem.snxsch`. Returns `None` when either edge is shorter than
-/// [`MIN_CHILD_SHEET_EDGE_MM`].
+/// file `stem.snxsch` and an id from `ids`. Returns `None` when either edge
+/// is shorter than [`MIN_CHILD_SHEET_EDGE_MM`].
 ///
 /// The name is the file stem so qualified net names never start with `/`.
 /// The child file is not created here; a missing child renders as missing.
-pub fn child_sheet_from_corners(a: Point, b: Point, stem: &str) -> Option<ChildSheet> {
+pub fn child_sheet_from_corners(
+    a: Point,
+    b: Point,
+    stem: &str,
+    ids: &mut dyn IdSource,
+) -> Option<ChildSheet> {
     let (width, height) = ((a.x - b.x).abs(), (a.y - b.y).abs());
     if width < MIN_CHILD_SHEET_EDGE_MM || height < MIN_CHILD_SHEET_EDGE_MM {
         return None;
     }
     Some(ChildSheet {
-        uuid: uuid::Uuid::now_v7(),
+        uuid: ids.next_id(),
         name: stem.to_string(),
         filename: format!("{stem}.{SHEET_EXTENSION}"),
         position: Point::new(a.x.min(b.x), a.y.min(b.y)),
@@ -71,6 +77,7 @@ pub fn child_sheet_from_corners(a: Point, b: Point, stem: &str) -> Option<ChildS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_types::object_id::SequentialIds;
 
     #[test]
     fn stem_skips_names_and_file_stems_in_use() {
@@ -81,8 +88,13 @@ mod tests {
 
     #[test]
     fn corners_normalise_and_default_to_the_stem() {
-        let s = child_sheet_from_corners(Point::new(30.0, 40.0), Point::new(10.0, 20.0), "sheet1")
-            .expect("big enough");
+        let s = child_sheet_from_corners(
+            Point::new(30.0, 40.0),
+            Point::new(10.0, 20.0),
+            "sheet1",
+            &mut SequentialIds::default(),
+        )
+        .expect("big enough");
         assert_eq!((s.position.x, s.position.y), (10.0, 20.0));
         assert_eq!(s.size, (20.0, 20.0));
         assert_eq!(s.name, "sheet1");
@@ -93,8 +105,9 @@ mod tests {
     #[test]
     fn sub_minimum_or_zero_area_drags_are_rejected() {
         let o = Point::new(0.0, 0.0);
-        assert!(child_sheet_from_corners(o, o, "sheet1").is_none());
-        assert!(child_sheet_from_corners(o, Point::new(50.0, 1.0), "sheet1").is_none());
-        assert!(child_sheet_from_corners(o, Point::new(1.0, 50.0), "sheet1").is_none());
+        let ids = &mut SequentialIds::default();
+        assert!(child_sheet_from_corners(o, o, "sheet1", ids).is_none());
+        assert!(child_sheet_from_corners(o, Point::new(50.0, 1.0), "sheet1", ids).is_none());
+        assert!(child_sheet_from_corners(o, Point::new(1.0, 50.0), "sheet1", ids).is_none());
     }
 }

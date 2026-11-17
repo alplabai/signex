@@ -1,6 +1,7 @@
 # ADR-0001 — App structure, MVU, and domain boundaries
 
-- **Status:** Proposed
+- **Status:** Accepted 2026-11-17 (Hakan; applied since it was written, and amended by ADR-0006)
+- **Amended:** 2026-11-16 by [ADR-0006](adr-0006-application-core.md), epic #2326: one iced-free application core shared by every front end. The amended parts carry a short *Amended (#2326)* note: A1 (Model, side effects), A2 (the application layer), A3.2, A4 (a pointer), D1, D5, D8, and three Part C bullets.
 - **Scope:** `crates/signex-app` internals, the MVU contract, message design, the domain model, and crate-boundary discipline
 - **Framing:** This records *what we do* (target decisions) and the *principles they rest on*. It was written after auditing the workspace against a reference "Cargo workspace + Clean Architecture + Modular Monolith + MVU" layout. That reference is CRUD/database-shaped and only partially transfers; the decisions below keep what fits a single-process, Iced/MVU, canvas-heavy EDA tool and drop what does not.
 
@@ -18,6 +19,11 @@ signex is an [Iced](https://iced.rs) `0.14` application. Iced implements **The E
 - **View** — a *pure function* of the Model: `view(&Model) -> Element<Message>`. It produces a description of the UI; it does not mutate state and it does not perform IO.
 - **Update** — the *only* place state changes: `update(&mut Model, Message) -> Task<Message>`. It reacts to a `Message`, mutates the Model, and returns a `Task` describing any side effects (async IO, file dialogs) to run next.
 - **The hard rule — single source of truth.** State lives in the Model and nowhere else. The view is derived from it every frame; nothing keeps a private shadow copy of state.
+
+*Amended (#2326).* The GUI Model holds the application core as a field (`core: AppCore`, [ADR-0006](adr-0006-application-core.md)), so there is still one source of truth.
+- `view` and every decision, close-confirm included, read document data, dirty state and results from `&self.core`.
+- The projector only updates GUI-only state: render-cache invalidation, canvas slots, selection pruning and panel context. It never keeps a copy of core state.
+- Each process has one `AppCore`, owned by its front end. The GUI builds it on the heap (`Box`), never moving it by value through boot frames.
 
 signex already runs exactly this loop: `iced::daemon(Signex::new, Signex::update, Signex::view)` (`main.rs:23`), with `update(&mut self, Message) -> Task<Message>`, `subscription() -> Subscription<Message>`, and `view(&self, window) -> Element<Message>`.
 
@@ -42,6 +48,8 @@ So when this document says **"widget"** it means a **stateless, reusable view fu
 
 **Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates are Iced-free: the pure-computation crates (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-erc`, `signex-bom`) are synchronous, while IO-adapter code (e.g. `signex-library`'s distributor/database adapters) is async but still UI-agnostic — the app drives it through `Task` (see D8). Because an effect is simply the `Task` an `update` returns, there is no separate "handlers" layer between the update and its effects — a message's state change and its effect belong together (see D1).
 
+*Amended (#2326).* The application core (ADR-0006) follows the same rule one level down. A core command handler changes core state and returns a *description* of its effects (`Effect` values) in the same call, so the mutation and its effect still live together. The core never runs IO itself: the host behind it does. The GUI runs the host as a `Task` and keeps its MVU loop exactly as above.
+
 ### A2. The domain model
 
 The **domain model** is the set of types and rules that model the EDA problem — schematics, nets, PCBs, footprints, parametric sketches — independent of any UI or IO. In this workspace it is not one crate but a layer of them: the data lives in `signex-types`, and the behavior lives in the engines that operate on it (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-erc`, `signex-output`, `signex-bom`).
@@ -49,9 +57,15 @@ The **domain model** is the set of types and rules that model the EDA problem �
 **Data-oriented model + command engine (signex's deliberate style).** Classic DDD favors *rich* aggregates — entities that carry their own behavior as methods — and warns against the *anemic* model (plain data with logic elsewhere). ([Xebia — Functional Domain Modeling in Rust](https://xebia.com/blog/functional-domain-modeling-in-rust-part-1/), [rust-cqrs DDD theory](https://doc.rust-cqrs.org/theory_ddd.html)). signex deliberately splits the two:
 
 - `signex-types` holds the model **data** as plain, serializable structs (`Schematic`, `Pcb`, `Net`, `Project`, `coord`, `anchor2d`, `rotation2d`, `layer`, …).
-- The **behavior** is applied by engines — most importantly `signex-engine` applying `Command::*` variants (a command/use-case layer), the `signex-sketch` constraint solver, `signex-bake` geometry baking, and the `signex-erc` rule engine.
+- The **behavior** is applied by engines — most importantly `signex-engine` applying `Command::*` variants (the document's commands), the `signex-sketch` constraint solver, `signex-bake` geometry baking, and the `signex-erc` rule engine.
 
-This is a considered trade-off, not laziness: plain-data models serialize cleanly, diff well, and make **command-based undo/redo** and atomic file IO natural — which matter more for an interactive editor than method-carrying aggregates do. The command engine *is* our "application layer"; we do not need a separate `application` crate to have one.
+This is a considered trade-off, not laziness: plain-data models serialize cleanly, diff well, and make **command-based undo/redo** and atomic file IO natural — which matter more for an interactive editor than method-carrying aggregates do. The command engine is the document's mutation interface: the aggregate's commands.
+
+*Amended (#2326).* This used to read "the command engine *is* our application layer". The engines stay the only place where documents change; the consistency boundary below is unchanged. The application layer above them is **one** application core, `AppCore` (ADR-0006), not a set of per-layer crates.
+- It owns the open documents and projects.
+- It runs catalog commands against the engines, coordinates documents, and returns events and effects.
+- It is shared by the GUI, `signex-cli` and the agent socket.
+- It holds no domain algorithm. The authoritative-model rule below applies to it exactly as it applies to the app crate.
 
 **Value objects — where we do carry behavior.** Small immutable, validated types with intrinsic behavior are proper value objects and keep their behavior with them: `coord`, `rotation2d` (with the `Rotatable2d` trait), `anchor2d`. New geometry/units primitives follow this shape — validate on construction, stay immutable, own their operations.
 
@@ -59,7 +73,7 @@ This is a considered trade-off, not laziness: plain-data models serialize cleanl
 
 **The authoritative-model rule (the one that governs the app crate).** The domain model is the single source of truth for *domain algorithms*. Any computation over domain types — connectivity, geometry topology, netlist building, DRC/ERC, BOM math, parsing — belongs with the model, in a domain crate. The presentation crate may *call* these; it must not *re-implement* them. Re-implementing domain logic in the UI is the anemic-model failure in reverse: behavior that drifts away from the model it belongs to (see the two known leaks in the appendix).
 
-**Document identity (#661).** A document's path is a property that Save As and rename change, not its identity. Until documents carry a `DocumentId` (it lands with the `Document` slice of #661, together with its first reader), per-document records are keyed by path, and a path-keyed record must move through one re-key gate, `Signex::rekey_document`, used by file, folder and library renames. It moves the tab, engine, drafts, dirty marker, disk baselines, autosave and the undo history of net colours and net-class picks; ERC results (`erc_violations_by_path`) do not move yet. Save As shares its history step (`rekey_path_keyed_records`) and keeps its own flow-specific steps; the project-file rename still re-keys on its own. A new path-keyed record joins that gate in the same change, or it is orphaned by the next rename.
+**Document identity (#661).** A document's path is a property that Save As and rename change, not its identity. Until documents carry a `DocumentId` (it lands with the `Document` slice of #661, together with its first reader), per-document records are keyed by path, and a path-keyed record must move through one re-key gate, `Signex::rekey_document`, used by file, folder and library renames. It moves the tab, engine, drafts, dirty marker, disk baselines, autosave and the undo history of net colours and net-class picks; ERC results (`erc_violations_by_path`) do not move yet. Save As shares its history step (`rekey_path_keyed_records`) and keeps its own flow-specific steps; the project-file rename still re-keys on its own. A new path-keyed record joins that gate in the same change, or it is orphaned by the next rename. *Under ADR-0006 (#2326):* the re-key gate and the per-document histories move into `AppCore`. The undo-target resolution below stays a GUI router over the core's per-history undo commands.
 
 **One undo target (#661).** Ctrl+Z resolves its history once per window, `Signex::undo_target(window)` (`app/document/undo_target.rs`): `Document(DocumentKey)` for the tab the window shows (a document window resolves by its own tab's path, the main window and detached panels by the main window's active tab), `ProjectRules` for the ERC dialog, `None` for a window whose tab is gone. Menu enablement, keyboard dispatch and the ERC dialog's buttons all read `undo_availability(&target)`, and stepping goes through `step_undo_target`, so what is lit is what runs. A Component row is undoable while it has a step or half-typed text; Undo drops the text, Redo never touches it. A project's rule set keeps its steps in the shared `History<S>`; project dirty stays the byte comparison in `state/dirty/project_history.rs` and never reads that history. A sheet still reads the net-colour and net-class stacks until the slice that moves them.
 
@@ -79,6 +93,12 @@ Decision: define **one** authoritative `Netlist` type in `signex-types` — the 
 
 **A3.2 — External tools are ports with adapters.** When signex integrates an external engine, the boundary is a **trait (port) in a domain crate** plus a **concrete adapter** behind it, driven from the app through a `Task` (D8). The workspace already exposes its pluggable seams this way (`Exporter`, `LibraryAdapter`, `ViewRenderer`). Worked example for a future SPICE integration: `pub trait Simulator` in a `signex-sim` crate with an `NgSpiceSimulator` adapter running NGSPICE asynchronously; the app depends on the trait, never on NGSPICE directly. (Today's `Sim*` code is only component SPICE-model *metadata*, not a running simulator — this is guidance for when simulation lands.) No formal `infrastructure/` layer: the adapter is just a crate/module behind the port.
 
+*Amended (#2326).* The core reaches a tool port only through an `Effect`. The host (ADR-0006) holds the adapter and calls the trait; the core never calls a tool trait directly. Adapter implementations that live in a domain crate (`signex-library`'s distributors, database and git) sit behind a Cargo feature that the core does not enable. Only the host enables it.
+
+### A4. One application core, many front ends (moved to ADR-0006)
+
+*Amended (#2326).* The application layer above the engines is one iced-free application core shared by the GUI, `signex-cli` and later front ends. It is recorded in [ADR-0006](adr-0006-application-core.md): the measured problem, the ports, the effect and event rules, the alternatives, the slices and the diagrams. The notes marked *Amended (#2326)* in this record are the parts of ADR-0001 that ADR-0006 changes.
+
 ---
 
 ## Part B — Decisions (what we do)
@@ -91,6 +111,8 @@ A surface that owns its state and views owns its message-handling too. Handling 
 - **Model to copy:** `library/editor/footprint/` — the best-decomposed area in the tree.
 
 **Side effects, and the `handlers/` question.** A message's full response — mutating the slice Model *and* returning any `Task` for IO — lives together in `updates/<concern>.rs`. There is **no separate `handlers/` folder** inside a slice. The current horizontal `app/handlers/` (e.g. `dock/sch_library.rs` 3,088 lines, `dock/project_navigation.rs` 2,016 lines) dissolves in two directions: the domain work moves down into domain crates (D4), and the thin `Task`-returning orchestration folds into each slice's `updates/`. *Escape hatch:* a slice with genuinely heavy async orchestration may add a slice-local `effects/` module (named for effects, not "handlers") that `updates/` calls — kept thin, because the real work lives in the domain crates.
+
+*Amended (#2326).* Work that a command does to documents moves from the GUI slices into `AppCore` (ADR-0006). A GUI slice keeps its view state, its views and the `updates/` that translate its messages into core commands and project the returned events. The vertical-slice rule applies inside `AppCore` too: its handlers are grouped by the area they serve (documents, placement, hierarchy, files, agent edits), never as one central dispatcher. Of today's horizontal `app/handlers/`, the document orchestration moves to `AppCore`, and the GUI-only handling folds into the slices' `updates/`.
 
 ### D2. Canonical slice layout
 
@@ -144,8 +166,9 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 Cargo blocks the big violations (a domain crate physically cannot import Iced — verified: zero `iced` imports in domain crates). Everything *inside* `signex-app` needs explicit discipline.
 
 - Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
-- Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
+- Add a CI arch-guard (same mechanism as the existing clean-room guard, `.github/workflows/license-guard.yml`) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
 - The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. `scripts/check_layer_ratchet.sh` (#664) adds a ratchet on the in-crate side: a count of `SymbolTransform` / union-find copies outside their owning crate and of `library::editor::<slice>::{state,canvas,updates,views}` imports from outside `library/` may not grow (baseline in `scripts/layer-ratchet-baseline.txt`). A full cross-slice import guard between `library/<a>/` and `library/<b>/` is still to do.
+- *Amended (#2326).* The application core and the crates it uses get the same treatment, using allowlists rather than denylists; [ADR-0006](adr-0006-application-core.md), "Enforcement", has the detail. `signex-i18n-ids` and `signex-commands` join `DOMAIN` at slice 1, `signex-workspace` at slice 9. While the core grows inside `signex-app`, a guard keeps `app/core/` from importing the rest of the crate, iced, tokio or native IO. After the lift, Clippy `disallowed-methods` / `disallowed-types` do that job.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need
 
@@ -174,6 +197,8 @@ signex already runs on tokio (`iced` is built with the `tokio` feature; `tokio` 
 
 **The event-bus question.** A bus is only ever justified as that **channel → `Subscription`** bridge, for an external async producer that must push into the loop. It is **not** for inter-slice communication: if slice A must notify slice B, A's `update` returns a `Message` the root delegates to B (A1 composition). A shared in-process bus between slices/crates hides the data flow, defeats the single `Message` enum, and breaks traceability — so we do not add one.
 
+*Amended (#2326).* Inside `AppCore` there is no `Task` and no tokio. Async work is an `Effect` that the host behind the calling front end runs, and the result comes back through `complete`. Agent requests in a running window enter through the channel → `Subscription` bridge above (ADR-0006). The GUI adapter runs effects with the two mechanisms above, so this section still governs the GUI. The core's events are returned to the caller, so they are not a bus either.
+
 ---
 
 ## Part C — Anti-patterns to avoid (scenarios we stay away from)
@@ -182,12 +207,12 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 
 - **No stateful widgets (the deprecated `Component`).** No self-contained widget with its own private mutable state. It breaks the single source of truth (A1). Reusable pieces are stateless view functions; state lives in the slice Model.
 - **No domain logic in the app crate.** No connectivity/geometry/netlist/DRC/BOM algorithm implemented inline in `signex-app` (A2, D4). That is behavior drifting away from the model it belongs to.
-- **No ad-hoc event bus for inter-slice/cross-crate messaging.** Iced's `update` loop is already the message bus (one `Message` enum). Slice-to-slice notification goes through Message routing; the only sanctioned bus-like bridge is a channel surfaced as a `Subscription` for an external async producer (D8). A second in-memory bus between slices hides data flow and is redundant indirection for a single-process app.
-- **No per-layer crates** (`*_domain`, `*_application`, `*_infrastructure`). Layer *inside* a crate with folders; the command/engine pattern already gives us an application layer.
+- **No ad-hoc event bus for inter-slice/cross-crate messaging.** Iced's `update` loop is already the message bus (one `Message` enum). Slice-to-slice notification goes through Message routing; the only sanctioned bus-like bridge is a channel surfaced as a `Subscription` for an external async producer (D8). A second in-memory bus between slices hides data flow and is redundant indirection for a single-process app. The application core's events (A4) are not an exception: they are returned to the caller, never published to subscribers.
+- **No per-layer crates** (`*_domain`, `*_application`, `*_infrastructure`). Layer *inside* a crate with folders. *Amended (#2326):* the one exception is the application core of ADR-0006, a single iced-free crate shared by every front end. It is not a horizontal three-way split: the domain stays in the domain crates, and the IO implementations stay in the hosts.
 - **No repository / DB-per-module ceremony.** signex is not CRUD; persistence is atomic file IO + git.
 - **No flat mega-enums.** A message enum with hundreds of sibling leaf variants is the message-shaped monolith (D3).
 - **No hoisting `update` out of its slice.** Centralizing a surface's handling is what produced the 10,861-line god-file (D1).
-- **No separate `handlers/` effect layer inside a slice.** Splitting state transitions from the `Task`s they return re-creates the horizontal dispatch-vs-handlers seam behind the `app/handlers/` god-files. A message's mutation and its effect belong together in `updates/` (D1).
+- **No separate `handlers/` effect layer inside a slice.** Splitting state transitions from the `Task`s they return re-creates the horizontal dispatch-vs-handlers seam behind the `app/handlers/` god-files. A message's mutation and its effect belong together in `updates/` (D1). *Amended (#2326):* a core handler returning `Effect` values that its caller runs keeps this rule. The mutation and its effect description are produced together, and only the IO runs elsewhere, in the host.
 
 ---
 

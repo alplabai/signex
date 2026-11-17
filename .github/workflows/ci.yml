@@ -388,6 +388,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_arch_guard.sh
 
+      # ADR-0006 (#2326): app/core/ names no crate:: path outside the core,
+      # no iced, tokio, blocking helpers or std::fs/thread/process. Rules
+      # and blind spots live in the script.
+      - name: Core guard
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_core_guard.sh
+
+      - name: Core guard controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_core_guard.sh
+
       # Layering ratchet (#664): SymbolTransform / union-find copies outside
       # their crate and app imports of library-editor internals may not grow,
       # and the baseline is regenerated when they shrink. Rules live in
@@ -454,6 +465,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_io_ports.sh
 
+      # The engine takes new object ids from the caller (#2429, ADR-0006);
+      # Uuid::now_v7 / new_v4 in signex-engine production code only at the
+      # sites in scripts/engine-ids-allowlist.txt, which may only shrink. Hard gate.
+      - name: Engine id gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_engine_ids.sh
+
+      - name: Engine id gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_engine_ids.sh
+
       # Structural lint rules (sgconfig.yml, ast-grep/rules): shapes a text
       # grep cannot see, e.g. a discarded Task wrapped over several lines.
       # Hard gate. Run it locally with
@@ -475,6 +497,17 @@ jobs:
         run: |
           ast-grep test --skip-snapshot-tests
           ast-grep scan --error
+
+      # Command ids may be added, never silently removed (#2447): every id in
+      # scripts/catalog-ids.txt must still be a CommandMetadata row in the
+      # catalog, and every catalog id must be listed. Hard gate.
+      - name: Command-id gate
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_catalog_ids.sh
+
+      - name: Command-id gate controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_catalog_ids.sh
 
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its

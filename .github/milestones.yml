@@ -132,6 +132,10 @@
   state: open
   aliases: ["v1.0.0 — Community Preview"]
 
+- title: "Application Core"
+  description: "One iced-free application core shared by the GUI and the CLI; the CLI stops building the GUI."
+  state: open
+
 - title: "Advanced Schematic"
   description: "Variants, multi-channel, harness, parameter manager."
   state: open

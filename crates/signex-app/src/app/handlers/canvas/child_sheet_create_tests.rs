@@ -20,6 +20,7 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
         Point::new(100.0, 50.0),
         Point::new(130.0, 80.0),
         "sheet1",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .expect("big enough");
     let clone = symbol.clone();
@@ -28,12 +29,14 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
         Point::new(98.0, 60.0),
         "CLK",
         Some("input"),
+        &mut signex_types::object_id::UuidV7Ids,
     ));
     symbol.pins.push(signex_engine::new_sheet_entry(
         &clone,
         Point::new(133.0, 60.0),
         "DATA",
         Some("output"),
+        &mut signex_types::object_id::UuidV7Ids,
     ));
     let id = symbol.uuid;
     let sheet = SchematicSheet {
@@ -439,6 +442,7 @@ fn a_file_another_symbol_uses_is_not_offered_to_open_and_says_who_has_it() {
         Point::new(200.0, 50.0),
         Point::new(230.0, 80.0),
         "taken",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .expect("big enough");
     other.filename = "taken.snxsch".into();

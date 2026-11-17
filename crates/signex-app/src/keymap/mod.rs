@@ -7,12 +7,10 @@
 mod backup;
 mod binding;
 mod catalog;
-mod command;
 mod display;
 mod editor;
 mod mod_migration;
 mod physical;
-mod platform;
 mod profile;
 
 pub use backup::{
@@ -20,7 +18,7 @@ pub use backup::{
     existing_backup_profiles_path, restore_profiles_at,
 };
 pub use binding::{
-    KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
+    KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ModifiersExt, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutTrigger, mac_stroke_caps,
 };
 /// A hard-coded shortcut spelling as this OS shows it: `Mod+S` is `⌘S` on
@@ -40,11 +38,10 @@ pub fn shown_in(spelling: &str, i18n: &signex_i18n::I18n) -> String {
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
-    CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind, all_command_ids,
-    category_title, command_menu_message, command_menu_text, fallback_label, metadata_for,
-    metadata_for_str, offered_in,
+    CatalogTextExt, CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind,
+    all_command_ids, category_title, command_menu_message, command_menu_text, fallback_label,
+    metadata_for, metadata_for_str, offered_in,
 };
-pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
@@ -53,7 +50,6 @@ pub use mod_migration::{
     with_standard_set_on_mod,
 };
 pub use physical::shortcut_char;
-pub use platform::Platform;
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
     ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, config_path,
@@ -61,6 +57,7 @@ pub use profile::{
     load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
     save_profile_set_at,
 };
+pub use signex_commands::{AppCommandId, Platform};
 
 #[cfg(test)]
 mod binding_tests;
@@ -80,3 +77,5 @@ mod mod_migration_tests;
 mod mod_token_tests;
 #[cfg(test)]
 mod profile_tests;
+#[cfg(test)]
+mod schematic_binding_tests;

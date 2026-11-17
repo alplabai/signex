@@ -367,7 +367,10 @@ impl Signex {
         if active > 0 && (idx < active || active >= self.document_state.tabs.len()) {
             self.document_state.active_tab -= 1;
         }
-        if !keep_session {
+        if keep_session {
+            // `sync_active_tab` settles the tiling on the other path.
+            self.settle_document_tiling();
+        } else {
             self.sync_active_tab();
         }
         // Refresh so the open-dot drops immediately on tab close. The

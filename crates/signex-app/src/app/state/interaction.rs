@@ -28,6 +28,8 @@ pub struct InteractionState {
     /// its own camera, viewport and caches (#494). Populated and drained
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
     pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
+    /// Canvases of the main window's unfocused tile panes (#2249).
+    pub tile_panes: TilePaneCanvases,
     /// Hover, selection and the cached spatial index of the board in view
     /// (#2191). Like `pcb_canvas`, an undocked window's own state is
     /// swapped in from `pcb_selections` while it handles an event.
@@ -39,18 +41,31 @@ pub struct InteractionState {
     pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
     /// The board placement tool armed and the shape it is drawing (#2373).
     pub pcb_tool: Option<crate::app::handlers::pcb_tool::BoardToolSession>,
+    /// The values the board placement tools place with, set in Properties
+    /// while one is armed (#2393); kept for the session.
+    pub pcb_tool_defaults: crate::app::handlers::pcb_tool::BoardToolDefaults,
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// The board Measure tool and the highlighted board net (#2403).
+    pub pcb_query: super::pcb_query::PcbQueryState,
+    /// Arrange in Box armed on a board (#2409): the components it moves
+    /// and the first corner once clicked.
+    pub pcb_arrange_box: Option<crate::app::board_tools::ArrangeBox>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).
     pub pcb_drc: super::pcb_drc::PcbDrc,
+    /// The board Net Classes panel's draft and notice (#2400).
+    pub board_net_classes: super::BoardNetClassPanelState,
     /// Cross Select Mode, what it last saw and a pending Cross Probe (#1312).
     pub cross_select: super::cross_select::CrossSelectState,
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// The board shown in 3D in the main window (#2390); `None` when the
+    /// main window shows boards flat.
+    pub board_3d: Option<super::Board3dSession>,
     /// Text typed into the selected board footprint's Designator or Value
     /// field and not yet applied with Enter (#1312).
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,
@@ -59,6 +74,8 @@ pub struct InteractionState {
     /// The track, via and pad panel's drafts, search, Show More and net
     /// pick (#2355).
     pub pcb_primitive: crate::app::handlers::pcb_primitive::PcbPrimitivePanel,
+    /// The Layer Stack manager's selected row and unapplied cells (#2401).
+    pub pcb_layer_stack: crate::app::handlers::pcb_layer_stack::LayerStackPanel,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
@@ -88,6 +105,9 @@ pub struct InteractionState {
     /// How a wire or bus run bends at its corner. Kept across segments and
     /// tools until the user flips it or changes the mode (#2372).
     pub corner_rule: signex_types::corner::CornerRule,
+    /// How Interactive Routing treats other nets in its way (#2389): walk
+    /// around them or push their tracks aside. Kept across routes.
+    pub route_mode: signex_engine::pcb::route::RouteMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
     /// Projects-panel tree-view right-click menu state. Separate from
@@ -147,6 +167,10 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// The open right-click menu of a layer tab under a board canvas (#2379).
+    pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
+    /// The open menu of the layer set button under a board canvas (#2394).
+    pub pcb_layer_set_menu: Option<crate::app::LayerSetMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.
@@ -240,13 +264,17 @@ impl InteractionState {
     /// The main schematic canvas plus every undocked window's own slot, so
     /// an app-wide appearance change cannot leave a detached window stale.
     pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
-        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
+        std::iter::once(&mut self.canvas)
+            .chain(self.canvases.values_mut())
+            .chain(self.tile_panes.schematic.values_mut())
     }
 
     /// Every PCB canvas, main window first. App-wide settings (theme, grid,
     /// the GPU-render flag) go to all of them.
     pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
-        std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
+        std::iter::once(&mut self.pcb_canvas)
+            .chain(self.pcb_canvases.values_mut())
+            .chain(self.tile_panes.board.values_mut())
     }
 
     pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut CanvasSlot {
@@ -269,4 +297,13 @@ pub struct ClickedPin {
     pub placement: Option<signex_types::schematic::InstancePath>,
     pub symbol: uuid::Uuid,
     pub pin: String,
+}
+
+/// Canvases of the documents in the main window's unfocused tile panes
+/// (#2249), by tab path. The focused pane is the active tab and draws on the
+/// main canvases; see `handlers::document_tiling`.
+#[derive(Default)]
+pub struct TilePaneCanvases {
+    pub schematic: std::collections::HashMap<std::path::PathBuf, CanvasSlot>,
+    pub board: std::collections::HashMap<std::path::PathBuf, PcbCanvas>,
 }

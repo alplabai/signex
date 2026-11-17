@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use signex_app::keymap::{AppCommandId, CommandMetadata, OperandKind, metadata_for};
+use signex_app::keymap::{
+    AppCommandId, CatalogTextExt, CommandMetadata, OperandKind, metadata_for,
+};
 
 use crate::capability::{Capability, capability_of};
 

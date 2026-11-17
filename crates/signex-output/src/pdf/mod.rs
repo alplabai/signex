@@ -24,6 +24,7 @@ use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_va
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
 
+pub mod board;
 mod bookmarks;
 mod colour;
 mod embed;

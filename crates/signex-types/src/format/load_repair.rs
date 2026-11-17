@@ -23,12 +23,17 @@ pub(in crate::format) mod kind {
     pub const BUS_ENTRY: &str = "bus entry";
     pub const DRAWING: &str = "drawing";
     pub const NO_ERC_DIRECTIVE: &str = "no-ERC directive";
+    pub const DIRECTIVE: &str = "directive";
     pub const FOOTPRINT: &str = "footprint";
     pub const PAD: &str = "pad";
     pub const TRACK: &str = "track";
     pub const VIA: &str = "via";
     pub const ZONE: &str = "zone";
     pub const BOARD_TEXT: &str = "board text";
+    pub const ARC: &str = "arc";
+    pub const FREE_PAD: &str = "free pad";
+    pub const DIMENSION: &str = "dimension";
+    pub const BOARD_GRAPHIC: &str = "board drawing";
     /// The document's own id (sheet or board), which no object may take.
     pub const SHEET: &str = "sheet";
 }

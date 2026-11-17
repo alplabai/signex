@@ -17,6 +17,8 @@ pub(super) fn id(n: u128) -> Uuid {
 
 pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: id(2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -29,12 +31,15 @@ pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str
 
 pub(super) fn via(n: u128, at: (f64, f64), net: u32) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: id(3000 + n),
         position: Point::new(at.0, at.1),
         diameter: 0.6,
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -56,6 +61,7 @@ pub(super) fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -90,6 +96,7 @@ pub(super) fn board(
 ) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -105,6 +112,7 @@ pub(super) fn board(
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -346,7 +354,10 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
 
 fn blind_via(n: u128, at: (f64, f64), net: u32, bottom: &str, via_type: ViaType) -> Via {
     Via {
+        attributes: Default::default(),
         layers: vec!["TopCopper".into(), bottom.into()],
+        locked: false,
+        layer_sizes: None,
         via_type,
         ..via(n, at, net)
     }
@@ -373,6 +384,55 @@ fn a_blind_or_micro_via_reaches_only_the_layers_it_spans() {
         let at_end = board(vec![], vec![track_on("Inner2Copper")], vec![via]);
         assert_eq!(kinds(&run(&at_end, &rules)), [ViolationKind::Clearance]);
     }
+}
+
+#[test]
+fn a_via_is_checked_with_its_size_on_each_layer() {
+    // 0.6 mm outside, 0.2 mm on the inner layers (#2401). A track at 0.5 mm
+    // has copper from 0.375 mm: 0.075 mm from the outer ring, 0.275 mm
+    // from the inner one.
+    let rules = DrcRules::new(RULE);
+    let mut small_inside = via(1, (5.0, 0.0), 1);
+    small_inside.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.6,
+        middle: 0.2,
+        bottom: 0.6,
+    });
+    let track_on = |layer: &str| track(1, (0.0, 0.5), (10.0, 0.5), 2, layer);
+    let inner = board(
+        vec![],
+        vec![track_on("Inner1Copper")],
+        vec![small_inside.clone()],
+    );
+    assert!(run(&inner, &rules).is_clean(), "the inner ring is clear");
+    let top = board(vec![], vec![track_on("TopCopper")], vec![small_inside]);
+    let report = run(&top, &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    assert_eq!(report.violations[0].layers, 1, "on the top layer only");
+}
+
+#[test]
+fn a_pad_is_checked_with_its_size_on_each_layer() {
+    // A through pad at (5, 0): 1 mm outside, 1.6 mm on the inner layers
+    // (#2401). A track at y = 1 mm has copper from 0.875 mm: 0.375 mm from
+    // the outer copper's edge, 0.075 mm from the inner one's.
+    let rules = DrcRules::new(RULE);
+    let mut big_inside = pad(1, (5.0, 0.0), 1, PadType::Thru, "TopCopper");
+    big_inside.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: Point::new(1.0, 1.0),
+        middle: Point::new(1.6, 1.6),
+        bottom: Point::new(1.0, 1.0),
+    });
+    let part = footprint(1, vec![big_inside]);
+    let track_on = |layer: &str| track(1, (0.0, 1.0), (10.0, 1.0), 2, layer);
+    let top = board(vec![part.clone()], vec![track_on("TopCopper")], vec![]);
+    assert!(run(&top, &rules).is_clean(), "the base size is clear");
+    let inner = board(vec![part], vec![track_on("Inner1Copper")], vec![]);
+    let report = run(&inner, &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    let v = &report.violations[0];
+    assert_eq!(v.layers, 1 << 1, "on the inner layer only");
+    assert!((74_000..=76_000).contains(&v.measured_nm), "{v:?}");
 }
 
 fn pad_sized(size: (f64, f64), shape: PadShape) -> Footprint {
@@ -460,5 +520,54 @@ fn an_oval_pad_is_measured_to_its_tip_exactly_and_off_axis_by_a_32_gon() {
     assert_eq!(
         kinds(&run(&oval(6.324_999), &rules)),
         [ViolationKind::Clearance]
+    );
+}
+
+/// #2389: the router asks a pair's clearance as the check measures it: the
+/// stricter net's class, and nothing between items on no shared layer.
+#[test]
+fn the_clearance_between_two_items_is_what_the_check_asks_of_them() {
+    let mut rules = DrcRules::new(RULE);
+    rules.net_clearance.insert(2, 350_000);
+    let item = |net: u32, layers: u32| pcb_geom::CopperItem {
+        item: pcb_geom::ItemRef::Track(id(net.into())),
+        net,
+        layers,
+        shape: pcb_geom::Shape::Disc {
+            center: pcb_geom::PointNm::ORIGIN,
+            radius: 0,
+        },
+        pad_center: None,
+    };
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(3, 1)), RULE);
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 1)), 350_000);
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 2)), 0);
+    assert_eq!(rules.track_width_limits(1, 1), (None, None));
+}
+
+/// #2373: a copper arc is checked along every chord, and a track beside it
+/// is one finding, not one per chord it comes near.
+#[test]
+fn a_track_beside_the_middle_of_an_arc_is_one_clearance_finding() {
+    let mut b = board(
+        vec![],
+        vec![track(1, (4.0, 5.5), (6.0, 5.5), 2, "TopCopper")],
+        vec![],
+    );
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: id(4000),
+        start: Point::new(0.0, 0.0),
+        mid: Point::new(5.0, 5.0),
+        end: Point::new(10.0, 0.0),
+        width: 0.5,
+        layer: "TopCopper".into(),
+        net: 1,
+    });
+    let report = run(&b, &DrcRules::new(RULE));
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    assert!(
+        report.violations[0]
+            .items
+            .contains(&pcb_geom::ItemRef::Arc(id(4000)))
     );
 }

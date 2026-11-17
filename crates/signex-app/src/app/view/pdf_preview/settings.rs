@@ -3,8 +3,45 @@
 //! `view/pdf_preview.rs` as pure code motion.
 
 use super::super::*;
-use signex_i18n::{MessageId, ids, t};
+use crate::choice::Choice;
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+
+/// A variant pick-list option: `None` prints the base design.
+type VariantChoice = Choice<Option<String>>;
+
+/// The variant options, Base first, and the one `current` names. A saved
+/// variant the project no longer lists still shows as chosen. A variant
+/// named "Base" (any case) is Base itself, as it always was: no row of its
+/// own, and choosing it prints the base design.
+fn variant_choices(
+    variants: &[String],
+    current: Option<&str>,
+    i18n: &I18n,
+) -> (Vec<VariantChoice>, VariantChoice) {
+    let base = Choice {
+        value: None,
+        label: i18n.message_plain(ids::PDF_VARIANT_BASE, &[]),
+    };
+    let is_base = |name: &str| name.eq_ignore_ascii_case("Base");
+    let named = |name: &str| Choice {
+        value: Some(name.to_owned()),
+        label: name.to_owned(),
+    };
+    let chosen = match current {
+        Some(name) if !is_base(name) => named(name),
+        _ => base.clone(),
+    };
+    let mut options = vec![base];
+    options.extend(
+        variants
+            .iter()
+            .filter(|name| !is_base(name))
+            .map(|name| named(name)),
+    );
+    options.dedup();
+    (options, chosen)
+}
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -187,23 +224,16 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
 
-        // shortcut: the pick list compares the option "Base" as text, so it
-        // stays English until the list holds typed options (#2059).
-        let variant_label = opts.variant.clone().unwrap_or_else(|| "Base".to_string());
-        let mut variant_options: Vec<String> = vec!["Base".to_string()];
-        variant_options.extend(preview.variants.clone());
-        variant_options.dedup();
-        let variant_picker =
-            iced::widget::pick_list(Some(variant_label), variant_options, |s: &String| s.clone())
-                .graphite()
-                .on_select(|s: String| {
-                    if s.eq_ignore_ascii_case("Base") {
-                        Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
-                    } else {
-                        Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
-                    }
-                })
-                .width(220);
+        let (variant_options, variant_chosen) =
+            variant_choices(&preview.variants, opts.variant.as_deref(), i18n);
+        let variant_picker = iced::widget::pick_list(
+            Some(variant_chosen),
+            variant_options,
+            |c: &VariantChoice| c.label.clone(),
+        )
+        .graphite()
+        .on_select(|c: VariantChoice| Message::PrintPreview(PrintPreviewMsg::SetVariant(c.value)))
+        .width(220);
 
         let labelled_check = |label: MessageId,
                               value: bool,
@@ -294,6 +324,16 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
+        let qualities = Choice::named(
+            &[
+                PdfQuality::Draft72,
+                PdfQuality::Medium300,
+                PdfQuality::High600,
+            ],
+            PdfQuality::label,
+            i18n,
+        );
+        let quality_chosen = crate::choice::chosen(&qualities, &preview.quality);
 
         let lbl_check = move |label: MessageId, value: bool, on: fn(bool) -> Message| {
             row![
@@ -405,18 +445,13 @@ impl Signex {
             ],
             Space::new().height(8),
             text(t!(i18n, ids::PDF_QUALITY)).size(TS.body).color(text_c),
-            // The quality names come from `PdfQuality`'s Display (#2059).
-            iced::widget::pick_list(
-                Some(preview.quality),
-                vec![
-                    PdfQuality::Draft72,
-                    PdfQuality::Medium300,
-                    PdfQuality::High600
-                ],
-                |q: &PdfQuality| q.to_string(),
-            )
+            iced::widget::pick_list(quality_chosen, qualities, |q: &Choice<PdfQuality>| q
+                .label
+                .clone())
             .graphite()
-            .on_select(|v: PdfQuality| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)))
+            .on_select(|q: Choice<PdfQuality>| {
+                Message::PrintPreview(PrintPreviewMsg::SetQuality(q.value))
+            })
             .width(180),
         ]
         .spacing(SP.xs);
@@ -496,5 +531,50 @@ impl Signex {
         ]
         .spacing(0)
         .boxed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Base is the first option and means no variant (#2059). A variant
+    /// named "Base" in any case is Base itself, as on trunk: no row of its
+    /// own, and choosing it prints the base design.
+    #[test]
+    fn the_variant_list_holds_base_as_no_variant() {
+        let i18n = I18n::en_us();
+        for base in ["Base", "base"] {
+            let variants = [base.to_owned(), "Lite".to_owned()];
+            let (options, chosen) = variant_choices(&variants, None, &i18n);
+            let values: Vec<_> = options.iter().map(|c| c.value.as_deref()).collect();
+            assert_eq!(values, [None, Some("Lite")], "{base}");
+            assert_eq!(options[0].label, "Base");
+            assert_eq!(chosen.value, None);
+            let (_, chosen) = variant_choices(&variants, Some(base), &i18n);
+            assert_eq!(chosen.value, None, "{base}");
+            let (_, chosen) = variant_choices(&variants, Some("Lite"), &i18n);
+            assert_eq!(chosen.value.as_deref(), Some("Lite"));
+        }
+    }
+
+    /// The quality names read as they did when they came from `Display`.
+    #[test]
+    fn the_quality_names_come_from_the_catalog() {
+        use crate::app::state::PdfQuality;
+        let i18n = I18n::en_us();
+        let all = [
+            PdfQuality::Draft72,
+            PdfQuality::Medium300,
+            PdfQuality::High600,
+        ];
+        let labels: Vec<String> = Choice::named(&all, PdfQuality::label, &i18n)
+            .into_iter()
+            .map(|c| c.label)
+            .collect();
+        assert_eq!(
+            labels,
+            ["Draft (72 dpi)", "Medium (300 dpi)", "High (600 dpi)"]
+        );
     }
 }

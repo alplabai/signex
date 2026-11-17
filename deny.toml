@@ -55,6 +55,7 @@ exceptions = [
     { crate = "signex-bake", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-bom", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-cli", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-commands", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-drc", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-drc-dsl", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-engine", allow = ["FSL-1.1-ALv2"] },

@@ -18,6 +18,9 @@ pub use parts::{DesignPart, PartAnchor, design_parts};
 
 pub mod cross_probe;
 
+mod directives;
+pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+
 mod net_class;
 pub use net_class::{
     assign_net_classes, element_class_styles, element_net_names, placement_class_styles,
