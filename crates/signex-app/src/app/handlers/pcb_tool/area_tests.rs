@@ -121,3 +121,45 @@ fn a_keepout_is_drawn_on_a_keep_out_layer_and_read_as_one() {
     undo(&mut app);
     assert_eq!(live(&app, &path), before);
 }
+
+#[test]
+fn a_polygon_pour_fills_clear_of_other_nets_and_is_drawn_as_its_fill() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = live(&app, &path);
+    run(&mut app, "place_board_polygon_pour");
+    assert!(
+        app.interaction_state.pcb_tool.is_some(),
+        "Polygon Pour is armed"
+    );
+    // The first corner lands on the net-3 track.
+    for (x, y) in [(1.0, 0.0), (1.0, -4.0), (9.0, -4.0), (9.0, 4.0), (1.0, 4.0)] {
+        click(&mut app, x, y);
+    }
+    right_click(&mut app);
+    let zones = &board_of(&app, &path).zones;
+    assert_eq!(zones.len(), 1);
+    assert!(zones[0].is_pour());
+    assert_eq!((zones[0].layer.as_str(), zones[0].net), ("TopCopper", 3));
+
+    // A via of another net on the pour: the fill keeps clear of it.
+    run(&mut app, "place_board_via");
+    click(&mut app, 5.0, 2.0);
+    escape(&mut app);
+    let fills = app.interaction_state.pcb_ratsnest.zone_fills();
+    let fill = fills.of(0).expect("the pour is filled");
+    assert_eq!(fill.pieces.len(), 1);
+    assert_eq!(fill.pieces[0].holes.len(), 1, "cut around the via");
+    let snapshot = app
+        .interaction_state
+        .pcb_canvas
+        .active_renderer_snapshot()
+        .expect("the board is drawn");
+    let drawn = snapshot.zones[0].fill.as_ref().expect("drawn as a pour");
+    assert_eq!(drawn.len(), 1);
+    assert_eq!(drawn[0].holes.len(), 1);
+
+    undo(&mut app);
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before);
+}

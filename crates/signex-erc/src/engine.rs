@@ -64,13 +64,35 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
 /// Drop every diagnostic located on a No-ERC directive. Positional only: the
 /// directive silences all rules at its point. Diagnostics whose location is a
 /// placeholder or lives in another sheet's coordinates are never matched.
+/// Then drop what [`directive_suppressed`] drops (#2420).
 fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
-    if ctx.no_erc_directives.is_empty() {
-        return;
+    if !ctx.no_erc_directives.is_empty() {
+        diagnostics.retain(|d| {
+            d.location_space != LocationSpace::ThisSheet
+                || !ctx.has_no_erc_directive_at(&d.location)
+        });
     }
-    diagnostics.retain(|d| {
-        d.location_space != LocationSpace::ThisSheet || !ctx.has_no_erc_directive_at(&d.location)
-    });
+    if !ctx.directives.is_empty() {
+        diagnostics.retain(|d| !directive_suppressed(ctx, d));
+    }
+}
+
+/// Whether a finding located on this sheet (a point, or a net's anchor pin)
+/// sits inside a Compile Mask, or inside a Blanket that excludes its rule.
+fn directive_suppressed(ctx: &ErcContext, d: &Diagnostic) -> bool {
+    if !matches!(
+        d.location_space,
+        LocationSpace::ThisSheet | LocationSpace::Net
+    ) {
+        return false;
+    }
+    ctx.directives.iter().any(|directive| {
+        directive.region_contains(d.location)
+            && (matches!(
+                directive,
+                signex_types::schematic::SchDirective::CompileMask { .. }
+            ) || directive.excludes_rule(d.rule_id.as_str()))
+    })
 }
 
 /// Run built-in rules **and** any DSL-compiled rules in a single pass.

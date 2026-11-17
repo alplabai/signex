@@ -189,15 +189,15 @@ fn waive_where(
     entry
 }
 
-/// The top sheet with a lone wire at y = 3.81 mm, which reads back from its
-/// stored nm as 3.8099999999999996.
+/// The top sheet with a lone wire at y = 3.8100004 mm, finer than the file's
+/// whole nm, so it reads back from its stored nm as 3.81.
 fn top_with_drifting_wire(top: &SchematicSheet) -> (SchematicSheet, Uuid) {
     let mut sheet = top.clone();
     let id = Uuid::now_v7();
     sheet.wires.push(signex_types::schematic::Wire {
         uuid: id,
-        start: signex_types::schematic::Point::new(25.4, 3.81),
-        end: signex_types::schematic::Point::new(38.1, 3.81),
+        start: signex_types::schematic::Point::new(25.4, 3.810_000_4),
+        end: signex_types::schematic::Point::new(38.1, 3.810_000_4),
         ..Default::default()
     });
     (sheet, id)

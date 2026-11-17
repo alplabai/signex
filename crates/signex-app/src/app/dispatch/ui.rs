@@ -124,7 +124,9 @@ impl Signex {
                 let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
                 self.interaction_state.pointer_window = None;
-                Task::batch([dropped, self.finish_update()])
+                // A dock drag changed a preferred width the layout saves.
+                let persist = self.persist_dock_layout_soon();
+                Task::batch([dropped, persist, self.finish_update()])
             }
             UiMsg::GridCycle => {
                 let cycled = self.cycle_grid_size(true);
@@ -583,14 +585,15 @@ impl Signex {
         // A PCB window swaps its PCB canvas in the same way, and retargets
         // `active_tab` too: the PCB handlers resolve the board through the
         // active tab, not `active_path` (#494). The main window's tab is
-        // remembered by path, so it is found again even if the handler
-        // closed or reordered tabs.
+        // remembered by path and kind (a project's Project and Rules tabs
+        // share the `.snxprj` path), so it is found again even if the
+        // handler closed or reordered tabs.
         let saved_active_tab = self.document_state.active_tab;
-        let saved_active_tab_path = self
+        let saved_active_tab_key = self
             .document_state
             .tabs
             .get(saved_active_tab)
-            .map(|tab| tab.path.clone());
+            .map(|tab| (tab.path.clone(), std::mem::discriminant(&tab.kind)));
         let mut swapped_pcb =
             pcb_tab.and_then(|_| self.interaction_state.pcb_canvases.remove(&window_id));
         if let Some(pcb) = swapped_pcb.as_mut() {
@@ -692,8 +695,12 @@ impl Signex {
         }
         if retargeted_tab.is_some() {
             let tabs = &self.document_state.tabs;
-            self.document_state.active_tab = saved_active_tab_path
-                .and_then(|path| tabs.iter().position(|tab| tab.path == path))
+            self.document_state.active_tab = saved_active_tab_key
+                .and_then(|(path, kind)| {
+                    tabs.iter().position(|tab| {
+                        tab.path == path && std::mem::discriminant(&tab.kind) == kind
+                    })
+                })
                 // The main window's tab itself was closed: stay at its
                 // position, as closing a tab does.
                 .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));

@@ -23,7 +23,6 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_SECTION_NET_GENERAL, "General (Net)"),
     (ids::PROPERTIES_SECTION_NET_PARAMETERS, "Parameters (Net)"),
     (ids::PROPERTIES_SECTION_PARAMETERS, "Parameters"),
-    (ids::PROPERTIES_SECTION_PARAMETERS_NONE, "Parameters (none)"),
     (ids::PROPERTIES_SECTION_PAGE_OPTIONS, "Page Options"),
     (ids::PROPERTIES_SECTION_TITLE_BLOCK, "Title Block"),
     (
@@ -72,7 +71,6 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_PINS_COLUMN_TYPE, "Type"),
     (ids::PROPERTIES_PINS_COLUMN_NET, "Net"),
     (ids::PROPERTIES_PINS_COLUMN_HIDDEN, "Hidden"),
-    (ids::PROPERTIES_NO_CUSTOM_PARAMETERS, "No custom parameters"),
     (ids::PROPERTIES_SYMBOL, "Symbol"),
     (ids::PROPERTIES_FOOTPRINT, "Footprint"),
     (ids::PROPERTIES_FOOTPRINT_OVERRIDE, "Footprint override"),
@@ -209,13 +207,6 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
             &[("degrees", "270".into())]
         ),
         "270 Degrees"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_SECTION_PARAMETERS_COUNT,
-            &[("count", "1000".into())]
-        ),
-        "Parameters (1000)"
     );
     assert_eq!(
         with(ids::PROPERTIES_PIN_TITLE, &[("pin", "A1".into())]),

@@ -59,8 +59,11 @@ pcb-prim-delay-unknown = The delay needs the dielectric of the board's stackup, 
 pcb-prim-x = X
 pcb-prim-y = Y
 pcb-prim-lock = Lock
-pcb-prim-lock-unsupported = Tracks and vias cannot be locked yet; the board does not store a lock for them.
+pcb-prim-lock-tip = A locked track or via stays where it is: move, delete and edits are refused until it is unlocked.
+pcb-prim-item-locked = This track or via is locked, so it cannot be changed. Clear Lock to edit it.
+pcb-prim-lock-nothing = Select a track or via to lock or unlock; a footprint is locked in its Component properties.
 pcb-prim-pad-lock-tip = A pad is locked with its footprint.
+pcb-prim-area-lock-unsupported = Fills, regions, pours and keepouts cannot be locked yet; the board does not store a lock for them.
 pcb-prim-layer = Layer
 pcb-prim-width = Width
 pcb-prim-start = Start (X/Y)
@@ -70,7 +73,7 @@ pcb-prim-picking-net = Click copper on the board to take its net. Esc cancels.
 pcb-prim-rule = Rule
 pcb-prim-manual = Manual
 pcb-prim-expansion = Expansion
-pcb-prim-mask-unsupported = The board does not store a mask expansion per item or a mask rule yet.
+pcb-prim-mask-unsupported = The board does not store a mask expansion per pad yet.
 pcb-prim-top = Top
 pcb-prim-bottom = Bottom
 pcb-prim-fabrication = Fabrication
@@ -81,7 +84,8 @@ pcb-prim-preview-unsupported = A stack preview is not available yet.
 pcb-prim-stack-simple = Simple
 pcb-prim-stack-top-middle-bottom = Top-Middle-Bottom
 pcb-prim-stack-full = Full Stack
-pcb-prim-stack-unsupported = The board stores one size for every layer; per-layer stacks are not supported yet.
+pcb-prim-stack-tip = Simple is one size on every layer; Top-Middle-Bottom and Full Stack size each copper layer.
+pcb-prim-middle = Middle
 pcb-prim-template = Template
 pcb-prim-library = Library
 pcb-prim-library-local = <Local>
@@ -96,7 +100,8 @@ pcb-prim-via-name = Name
 pcb-prim-via-span-through = Thru { $from }:{ $to }
 pcb-prim-via-span-blind = Blind { $from }:{ $to }
 pcb-prim-via-span-micro = Micro { $from }:{ $to }
-pcb-prim-via-span-unsupported = Changing a via's span is not supported here yet.
+pcb-prim-span-from = From
+pcb-prim-span-to = To
 pcb-prim-diameter = Diameter
 pcb-prim-thermal-relief = Thermal Relief
 pcb-prim-direct = Direct
@@ -138,6 +143,8 @@ pcb-prim-shape-roundrect = Rounded Rectangle
 pcb-prim-shape-oval = Oval
 pcb-prim-no-hole = No hole
 pcb-prim-pad-locked = The footprint of this pad is locked, so the pad cannot be changed.
+pcb-prim-tented-tip = Mask covers the via on this side: no opening.
+pcb-prim-from-hole-edge-tip = Measure the expansion from the hole edge instead of the via copper.
 
 ## Messages panel notices.
 # $what is the field's name; $why the reason.
@@ -145,3 +152,76 @@ pcb-prim-refused = { $what } was not changed: { $why }
 pcb-prim-not-a-number = "{ $text }" is not a length or angle.
 pcb-prim-board-gone = The board is no longer open, so { $what } was not changed.
 pcb-prim-no-net-there = There is no netted copper there; the net was not changed.
+# Length tuning (#2389): the track field that takes a target length for the
+# track's net, and why it refuses a selection of more than one track.
+pcb-prim-tune-length = Tune Net To
+pcb-prim-tune-one-track = select one track to tune
+pcb-prim-not-positive = the value must be above zero
+
+## While a placement tool is armed (#2393): the object about to be placed.
+pcb-prim-placing = Next to place
+pcb-prim-placing-hint = Press Tab to pause placing and change these values for the next placements.
+pcb-prim-placing-paused = Placing is paused. Enter or Tab goes on placing with these values; Esc puts the previous values back.
+
+## Areas (#2393): fills, solid regions, polygon pours and keepouts.
+pcb-prim-fill-title = Fill
+pcb-prim-region-title = Solid Region
+pcb-prim-pour-title = Polygon Pour
+pcb-prim-keepout-title = Keepout
+pcb-prim-area-title = Areas
+pcb-prim-area-count = { $count ->
+    [one] 1 Area
+   *[other] { $count } Areas
+}
+pcb-prim-pour-settings = Pour
+# Clearance 0 follows the board's clearance.
+pcb-prim-clearance = Clearance
+pcb-prim-min-thickness = Minimum Width
+pcb-prim-keepout-kinds = Keeps Out
+pcb-prim-keepout-all-copper = All copper
+pcb-prim-keepout-kinds-unsupported = A board keepout keeps out all copper; other kinds are not stored yet.
+# A pour's fill rules (#2216): a higher priority fills first and the others
+# keep clear of it; islands below the area (mm²) are dropped, and with Remove
+# Dead Copper those touching no copper of the pour's net.
+pcb-prim-priority = Priority
+pcb-prim-min-island-area = Remove Islands Below (mm²)
+pcb-prim-remove-dead-islands = Remove Dead Copper
+# What the pour's fill came to: its copper area and pieces.
+pcb-prim-pour-copper = Copper
+pcb-prim-pour-copper-value = { $area } mm² in { $pieces ->
+    [one] 1 piece
+   *[other] { $pieces } pieces
+}
+pcb-prim-pour-copper-tip = Computed from the board; Repour fills it again.
+
+## Free arcs, strings and dimensions (#2373). A free pad uses the pad rows.
+pcb-prim-arc-title = Arc
+pcb-prim-arc-count = { $count ->
+    [one] 1 Arc
+   *[other] { $count } Arcs
+}
+pcb-prim-text-title = String
+pcb-prim-text-count = { $count ->
+    [one] 1 String
+   *[other] { $count } Strings
+}
+pcb-prim-dimension-title = Dimension
+pcb-prim-dimension-count = { $count ->
+    [one] 1 Dimension
+   *[other] { $count } Dimensions
+}
+pcb-prim-center = Centre (X/Y)
+pcb-prim-radius = Radius
+# Angles are read from the board origin with Y up; the arc runs
+# counter-clockwise from the start angle to the end angle.
+pcb-prim-start-angle = Start Angle
+pcb-prim-end-angle = End Angle
+pcb-prim-arc-mode = Placement
+pcb-prim-arc-mode-tip = Cycle Arc Mode (the command palette) switches how the next arc is drawn.
+pcb-prim-text = Text
+pcb-prim-text-height = Text Height
+pcb-prim-line-width = Line Width
+pcb-prim-offset = Offset
+pcb-prim-precision = Precision
+pcb-prim-value = Value
+pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6

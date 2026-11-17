@@ -300,6 +300,21 @@ impl SchematicCanvas<'_> {
                             }
                         }
                     }
+                    SelectedKind::Directive => {
+                        if let Some(d) = snapshot.directives.iter().find(|d| d.uuid() == item.uuid)
+                        {
+                            match d.region() {
+                                Some(r) => {
+                                    push_pt(r.min_x, r.min_y, 1.0);
+                                    push_pt(r.max_x, r.max_y, 1.0);
+                                }
+                                None => {
+                                    let at = d.anchor();
+                                    push_pt(at.x, at.y, 1.0);
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }

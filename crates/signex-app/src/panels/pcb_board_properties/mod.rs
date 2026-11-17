@@ -11,6 +11,7 @@
 //! What the board model cannot store, or the editor cannot act on, yet is
 //! drawn disabled with a tooltip saying why.
 
+mod cards;
 mod chrome;
 mod fields;
 mod filter;
@@ -20,10 +21,12 @@ mod header;
 mod health;
 mod info;
 mod other;
+mod panel;
 mod snap;
 
 // The PCB Active Bar's Selection Filter names the kinds as the chips do.
 pub(crate) use filter::kind_label as pick_kind_label;
+use panel::PanelFacts;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -36,6 +39,7 @@ use signex_i18n::{ids, t};
 use signex_types::coord::Unit;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_options::{BoardOptions, DesignatorDisplay, GuideKind, PolygonNaming};
+use signex_types::pcb_panel::{PanelField, PanelSeparation};
 use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
@@ -60,18 +64,28 @@ pub struct PcbBoardPanelView {
     pub tab: BoardTab,
     /// Text in the search field; rows whose label holds it stay.
     pub search: String,
-    /// The header's Selection Filter menu is open.
-    pub filter_menu_open: bool,
     /// The snap grid step being typed, until Enter applies it.
     pub grid_draft: Option<String>,
     /// Other fields being typed, until Enter applies them (#2374).
     pub drafts: BTreeMap<BoardField, String>,
-    /// The Guide Manager row Delete acts on.
-    pub selected_guide: Option<Uuid>,
-    /// The Grid Manager row Properties and Delete act on.
-    pub selected_grid: Option<Uuid>,
-    /// The selected grid's fields are shown under the table.
-    pub grid_editor_open: bool,
+    /// The grid card whose ⋯ menu is open (#2386).
+    pub grid_menu: Option<GridCard>,
+    /// The grid card whose fields are shown under it.
+    pub grid_editing: Option<GridCard>,
+    /// The guide card whose ⋯ menu is open.
+    pub guide_menu: Option<Uuid>,
+    /// The Add Guide dropdown is open.
+    pub guide_add_open: bool,
+    /// The Add Guide dropdown places the guide with a click on the board
+    /// instead of adding it through the origin.
+    pub guide_place: bool,
+}
+
+/// One card of the Grid Manager: the board's own grid, or an extra grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GridCard {
+    Global,
+    Extra(Uuid),
 }
 
 /// A text field of the panel whose draft is kept until Enter (#2374).
@@ -88,6 +102,8 @@ pub enum BoardField {
     SheetY,
     SheetWidth,
     SheetHeight,
+    /// A setting of the board's panel (#2410).
+    Panel(PanelField),
 }
 
 /// Which of the board's components a Board Information count selects.
@@ -103,11 +119,24 @@ pub enum ComponentSide {
 pub enum PcbBoardMsg {
     TabPicked(BoardTab),
     SearchChanged(String),
+    /// The header's filter button: open or close the Active Bar's Selection
+    /// Filter dropdown.
     FilterMenuToggled,
     /// A Selection Filter chip.
     FilterKindToggled(PickKind),
     /// The `All - On` chip: every kind on, or off when all are on.
     FilterAllToggled,
+    /// The filter dropdown's All (`true`) or None (`false`) cell.
+    FilterAllSet(bool),
+    /// Save the chips that are on as a new preset (#2383).
+    FilterPresetAdded,
+    /// A preset was clicked: its kinds become the filter, and it is the one
+    /// the panel edits.
+    FilterPresetApplied(usize),
+    FilterPresetRenamed(usize, String),
+    /// Save the chips that are on into this preset.
+    FilterPresetUpdated(usize),
+    FilterPresetRemoved(usize),
     SnapToGridsToggled,
     SnapScopePicked(SnapScope),
     SnapObjectToggled(SnapObject),
@@ -116,6 +145,8 @@ pub enum PcbBoardMsg {
     ComponentsSelected(ComponentSide),
     /// The DRC violations count was clicked.
     DrcResultsOpened,
+    /// The Reports button: Board Reports opens on the BOM (#2404).
+    ReportsOpened,
     GridStepTyped(String),
     /// Enter in the grid step field: apply the typed step.
     GridStepSubmitted,
@@ -130,19 +161,28 @@ pub enum PcbBoardMsg {
     /// The Guide Manager's Place: the next click on the board sets a guide
     /// of this kind there.
     GuidePlaceArmed(GuideKind),
-    GuideSelected(Uuid),
     GuideEnabledToggled(Uuid),
     /// The guide's swatch was clicked: its next colour.
     GuideColorStepped(Uuid),
-    /// Delete the selected guide.
-    GuideDeleted,
+    /// The guide card's ⋯ menu Delete.
+    GuideDeleted(Uuid),
+    /// Open or close a guide card's ⋯ menu.
+    GuideMenuToggled(Uuid),
+    /// Open or close the Add Guide dropdown.
+    GuideAddMenuToggled,
+    /// The Add Guide dropdown's Place on Board row.
+    GuidePlaceModeToggled,
     /// The Grid Manager's Add: a new grid at the top priority.
     GridAdded,
-    GridSelected(Uuid),
-    /// Show or hide the selected grid's fields.
-    GridPropertiesToggled,
-    /// Delete the selected grid.
-    GridDeleted,
+    /// Open or close a grid card's ⋯ menu.
+    GridMenuToggled(GridCard),
+    /// The ⋯ menu's Edit: show or hide the card's fields.
+    GridEditToggled(GridCard),
+    /// The ⋯ menu's Move Up or Move Down: one place in priority
+    /// (`true`: up).
+    GridMoved(Uuid, bool),
+    /// The ⋯ menu's Delete.
+    GridDeleted(Uuid),
     GridComponentsToggled(Uuid),
     GridNonComponentsToggled(Uuid),
     GridColorStepped(Uuid),
@@ -152,6 +192,12 @@ pub enum PcbBoardMsg {
     FastGridApplied(usize),
     /// Get Size From Sheet Layer.
     SheetFromBoardToggled,
+    /// The Panel section's Panelize Board (#2410): runs `panelize_board`.
+    PanelizeClicked,
+    /// Its Remove Panel: runs `remove_board_panel`.
+    PanelRemoveClicked,
+    /// Its Mouse Bites | V-Score control.
+    PanelSeparationPicked(PanelSeparation),
 }
 
 /// The board facts and editor settings the panel shows.
@@ -180,9 +226,15 @@ pub struct PcbBoardSummary {
     pub grid_mm: Option<f64>,
     /// The board's guides, extra grids, sheet and naming options (#2374).
     pub options: BoardOptions,
+    /// What the board's panel comes to (#2410); `None` without a panel,
+    /// the reason when it does not lay out.
+    pub panel: Option<Result<PanelFacts, String>>,
     /// The board opened read-only (a newer format).
     pub read_only: bool,
     pub filter: PickFilter,
+    /// The filter's saved presets and the one the panel edits (#2383).
+    pub presets: Vec<crate::active_bar::CustomFilterPreset<PickKind>>,
+    pub preset_tab: usize,
     pub snap: PcbSnapOptions,
     /// The fast grid preferences (#1672) the Grid Manager offers.
     pub fast_grids_mm: [f32; 2],
@@ -225,6 +277,7 @@ impl PcbBoardSummary {
                 .as_ref()
                 .map(|_| signex_engine::pcb::placement::grid_step_mm(board)),
             options: board.options.clone(),
+            panel: PanelFacts::of(board),
             read_only: board.unknown.newer_minor_source.is_some(),
             selected,
             ..Self::default()
@@ -292,6 +345,7 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
         info::section(&form, board),
         grids::grid_section(&form, board),
         guides::section(&form, board),
+        panel::section(&form, board),
         other::section(&form, board),
     ];
     let mut shown = 0;

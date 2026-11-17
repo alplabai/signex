@@ -1,7 +1,7 @@
 //! Properties surface for a single selected schematic element.
 //!
 //! Draws the header, dispatches to the per-kind builder (`symbol`,
-//! `symbol_field`, `label`, `text_note`, `power_port`, `generic`, plus the
+//! `symbol_field`, `label`, `text_note`, `power_port`, `placed_kinds`, plus the
 //! `drawing` and `child_sheet` surfaces), then the shared wire Style and
 //! Lock sections and the status bar.
 
@@ -93,8 +93,20 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
-        _ => {
-            col = super::generic::push_generic_sections(col, ctx, st);
+        Some(
+            signex_types::schematic::SelectedKind::Wire
+            | signex_types::schematic::SelectedKind::Bus
+            | signex_types::schematic::SelectedKind::BusEntry
+            | signex_types::schematic::SelectedKind::Junction
+            | signex_types::schematic::SelectedKind::NoConnect
+            | signex_types::schematic::SelectedKind::NoErcDirective
+            | signex_types::schematic::SelectedKind::SheetPin,
+        )
+        | None => {
+            col = super::placed_kinds::push_placed_kind_sections(col, ctx, st);
+        }
+        Some(signex_types::schematic::SelectedKind::Directive) => {
+            col = super::directive::push_directive_sections(col, ctx, uuid, st);
         }
     }
 

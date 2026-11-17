@@ -39,7 +39,6 @@ pub(super) fn push_power_port_sections<'a>(
     } = palette;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let value = get("Value");
-    let position = get("Position");
     let rotation_str = get("Rotation");
     let lib_id = get("Library ID");
     let library_name = get("Library");
@@ -59,33 +58,10 @@ pub(super) fn push_power_port_sections<'a>(
     let current_style = chosen(&style_choices, &PowerPortStyle::of(&lib_id))
         .unwrap_or_else(|| style_choices[0].clone());
 
-    // ── Location ──
-    let pos_loc = position.clone();
+    // ── Location ── (#2418): Position and Rotation through the shared rows.
     let rot_current = rotation_deg;
-    col = col.push(
-        ctx.collapsible(
-            "sel_location",
-            ids::PROPERTIES_SECTION_LOCATION,
-            &ctx.collapsed_sections,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    t!(i18n, ids::PROPERTIES_XY),
-                    &pos_loc,
-                    muted,
-                    input_bg,
-                ));
-                c = c.push(form_rotation_row(
-                    i18n,
-                    rot_current,
-                    move |deg| PanelMsg::EditSymbolRotation(id, deg),
-                    muted,
-                ));
-                c
-            },
-        )
-        .boxed(),
-    );
+    let look = super::placed_rows::RowLook { muted, input_bg };
+    col = super::placed_rows::push_location_section(col, ctx, look);
 
     // ── Properties (Name, Style) ──
     let name_val = value.clone();

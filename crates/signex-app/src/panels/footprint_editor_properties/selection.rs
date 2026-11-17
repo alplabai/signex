@@ -65,13 +65,7 @@ pub(super) fn view_selection<'a>(
                 i18n,
             );
             // Position is the one read-only field (use drag to move).
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                "Position",
-                format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
-            );
+            col = super::pad_position_rows(col, muted, input_bg, pad.position_mm, i18n);
             col = render_pad_form_pad_stack(
                 col,
                 &values,

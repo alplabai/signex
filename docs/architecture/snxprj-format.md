@@ -165,7 +165,9 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   `builtin::via_diameter`, `builtin::via_drill`, or a written rule's
   `user::<name>`) to `error` / `warning` / `info` / `off`, and `dsl` is the
   text of the DRC rule language ([`DRC_RULES.md`](../DRC_RULES.md)), read by
-  each DRC run of the project and written back exactly as stored. Keys this build does not know stay in its
+  each DRC run of the project and written back exactly as stored; `sets`
+  holds the Rules tab's named rule sets (#2398; shape in the `drc` row of
+  [`snxrules-format.md`](snxrules-format.md)), omitted when empty. Keys this build does not know stay in its
   own unknown-key bag, so a `drc` object written before the section was typed
   re-saves unchanged. It is added without a `schema` bump: an older build
   keeps the whole object in the section's unknown-key bag, and a file without

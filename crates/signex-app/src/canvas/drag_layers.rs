@@ -96,6 +96,11 @@ fn filtered(snap: &SchematicSheet, keep: &dyn Fn(Uuid) -> bool) -> SchematicShee
         bus_entries: keep_where(&snap.bus_entries, |b| b.uuid, keep),
         drawings: keep_where(&snap.drawings, SchDrawing::uuid, keep),
         no_erc_directives: keep_where(&snap.no_erc_directives, |d| d.uuid, keep),
+        directives: keep_where(
+            &snap.directives,
+            signex_types::schematic::SchDirective::uuid,
+            keep,
+        ),
         ..SchematicSheet::default()
     }
 }
@@ -176,6 +181,7 @@ pub(super) fn split_ghost(
     kind!(buses, |b: &signex_types::schematic::Bus| b.uuid);
     kind!(bus_entries, |b: &signex_types::schematic::BusEntry| b.uuid);
     kind!(drawings, SchDrawing::uuid);
+    kind!(directives, signex_types::schematic::SchDirective::uuid);
     kind!(
         no_erc_directives,
         |d: &signex_types::schematic::NoConnect| d.uuid

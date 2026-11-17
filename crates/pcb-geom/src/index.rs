@@ -1,18 +1,22 @@
 //! An R-tree of a board's pads, tracks and vias (and, for selection, the
-//! footprint bodies), and the hit-tests on it.
+//! footprint bodies, the drawn areas and the board drawings), and the
+//! hit-tests on it.
 //!
 //! Envelopes are `i128` so every area rstar computes while it builds the
 //! tree fits, at any coordinate [`MAX_ABS_NM`](crate::MAX_ABS_NM) allows.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use rstar::{AABB, RTree, RTreeObject};
-use signex_types::pcb::{PcbBoard, Point, Segment, Via};
+use signex_types::pcb::{PcbBoard, Point, Segment, Via, Zone};
 use uuid::Uuid;
 
 use crate::body::footprint_body;
+use crate::free::{arc_is_copper, arc_shapes, dimension_shapes, free_pad_shape, text_shape};
+use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
 use crate::shape::Shape;
+use crate::shape_overlap::point_in_polygon;
 use crate::transform::pad_shape;
 use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
 
@@ -29,6 +33,44 @@ pub enum ItemRef {
     /// ([`footprint_body`](crate::footprint_body)). Only the selection index
     /// ([`BoardIndex::build_selectable`]) holds it.
     Footprint(Uuid),
+    /// A keepout, solid region, fill (#2383) or polygon pour (#2216), as
+    /// [`PickKind::of_zone`] names it. Only the selection index holds it:
+    /// one zero-width capsule per outline edge, plus its area for a click
+    /// or a box inside it.
+    Zone {
+        zone: Uuid,
+        kind: PickKind,
+    },
+    /// A board string (#2373). Only the selection index holds it.
+    Text(Uuid),
+    /// A free arc (#2373): one capsule per chord. The copper index holds
+    /// it on a copper layer; the selection index on any layer.
+    Arc(Uuid),
+    /// A pad with no footprint (#2373).
+    FreePad(Uuid),
+    /// A board dimension (#2373): its strokes and the box of its value.
+    /// Only the selection index holds it.
+    Dimension(Uuid),
+    /// A board drawing (#2424): a line, arc, circle, rectangle or text
+    /// frame, as [`PickKind::of_graphic`] names it. Only the selection index
+    /// holds it: one capsule of its stroke per piece of its outline, and a
+    /// text frame's box for a click inside it.
+    Graphic {
+        graphic: Uuid,
+        kind: PickKind,
+    },
+}
+
+impl ItemRef {
+    /// Whether the index holds the item as several entries that share its
+    /// identity: a drawn area's or drawing's edges, an arc's chords, a
+    /// dimension's strokes.
+    pub fn is_multi_part(self) -> bool {
+        matches!(
+            self,
+            Self::Zone { .. } | Self::Graphic { .. } | Self::Arc(_) | Self::Dimension(_)
+        )
+    }
 }
 
 /// An item and its copper, as stored in the tree.
@@ -80,6 +122,27 @@ pub enum RectSelect {
 pub struct BoardIndex {
     tree: RTree<IndexedItem>,
     rejected: Vec<Rejected>,
+    /// The drawn areas, for the hits inside them.
+    areas: Vec<Area>,
+    /// How many entries each arc and dimension has: a box takes one only
+    /// when it holds them all.
+    parts: BTreeMap<ItemRef, usize>,
+}
+
+/// A drawn area's or board drawing's outline: its edges are in the tree,
+/// one entry each.
+#[derive(Debug, Clone)]
+pub(crate) struct Area {
+    pub(crate) item: ItemRef,
+    pub(crate) ring: Vec<PointNm>,
+    pub(crate) bounds: RectNm,
+    /// How many tree entries the item has: a box holds the item wholly
+    /// when it holds every one.
+    pub(crate) edges: usize,
+    /// A click or box inside `ring`, clear of its edges, takes the item:
+    /// an area, a text frame's box. An outline drawing is taken on its
+    /// stroke only.
+    pub(crate) inside: bool,
 }
 
 impl BoardIndex {
@@ -91,7 +154,8 @@ impl BoardIndex {
     }
 
     /// [`build`](Self::build) plus each footprint's body as an
-    /// [`ItemRef::Footprint`], for hover and selection. Connectivity reads
+    /// [`ItemRef::Footprint`] and each drawn area as an [`ItemRef::Zone`],
+    /// for hover and selection. Connectivity reads
     /// [`build`](Self::build), which holds copper only.
     pub fn build_selectable(board: &PcbBoard) -> Self {
         Self::build_with(board, true)
@@ -100,6 +164,7 @@ impl BoardIndex {
     fn build_with(board: &PcbBoard, bodies: bool) -> Self {
         let mut items = Vec::new();
         let mut rejected = Vec::new();
+        let mut areas = Vec::new();
         let mut keep = |item: ItemRef, shape: Result<Shape, GeomError>| match shape {
             Ok(shape) => match IndexedItem::new(item, shape) {
                 Ok(indexed) => items.push(indexed),
@@ -122,16 +187,64 @@ impl BoardIndex {
         for via in &board.vias {
             keep(ItemRef::Via(via.uuid), via_shape(via));
         }
+        for pad in &board.free.pads {
+            keep(ItemRef::FreePad(pad.uuid), free_pad_shape(pad));
+        }
+        let mut parts = |item: ItemRef, shapes: Result<Vec<Shape>, GeomError>| {
+            for shape in shapes.unwrap_or_else(|error| {
+                rejected.push(Rejected { item, error });
+                Vec::new()
+            }) {
+                match IndexedItem::new(item, shape) {
+                    Ok(indexed) => items.push(indexed),
+                    Err(error) => rejected.push(Rejected { item, error }),
+                }
+            }
+        };
+        for arc in &board.free.arcs {
+            if bodies || arc_is_copper(arc) {
+                parts(ItemRef::Arc(arc.uuid), arc_shapes(arc));
+            }
+        }
         if bodies {
-            for footprint in &board.footprints {
-                keep(
-                    ItemRef::Footprint(footprint.uuid),
-                    footprint_body(footprint),
+            for dimension in &board.free.dimensions {
+                parts(
+                    ItemRef::Dimension(dimension.uuid),
+                    dimension_shapes(dimension),
                 );
+            }
+            for text in &board.texts {
+                let shape =
+                    text_shape(text).and_then(|s| IndexedItem::new(ItemRef::Text(text.uuid), s));
+                match shape {
+                    Ok(indexed) => items.push(indexed),
+                    Err(error) => rejected.push(Rejected {
+                        item: ItemRef::Text(text.uuid),
+                        error,
+                    }),
+                }
+            }
+            for footprint in &board.footprints {
+                let item = ItemRef::Footprint(footprint.uuid);
+                match footprint_body(footprint).and_then(|s| IndexedItem::new(item, s)) {
+                    Ok(indexed) => items.push(indexed),
+                    Err(error) => rejected.push(Rejected { item, error }),
+                }
+            }
+            for zone in &board.zones {
+                add_area(zone, &mut areas, &mut items, &mut rejected);
+            }
+            for graphic in &board.graphics {
+                crate::graphic_index::add_graphic(graphic, &mut areas, &mut items, &mut rejected);
             }
         }
         let mut seen = HashSet::new();
         items.retain(|indexed| {
+            // An area's or drawing's edges, an arc's chords and a dimension's
+            // strokes share its identity.
+            if indexed.item.is_multi_part() {
+                return true;
+            }
             let first = seen.insert(indexed.item);
             if !first {
                 rejected.push(Rejected {
@@ -142,8 +255,10 @@ impl BoardIndex {
             first
         });
         BoardIndex {
+            parts: count_parts(&items),
             tree: RTree::bulk_load(items),
             rejected,
+            areas,
         }
     }
 
@@ -151,8 +266,27 @@ impl BoardIndex {
     /// to keep unique: two items with one [`ItemRef`] answer as one hit.
     pub fn from_items(items: Vec<IndexedItem>) -> Self {
         BoardIndex {
+            parts: count_parts(&items),
             tree: RTree::bulk_load(items),
             rejected: Vec::new(),
+            areas: Vec::new(),
+        }
+    }
+
+    /// This index without the items `drop` names, its areas kept for the
+    /// rest (the selection index on a view that hides layers, #2223).
+    pub fn without(self, drop: impl Fn(ItemRef) -> bool) -> Self {
+        let items: Vec<IndexedItem> = self
+            .tree
+            .iter()
+            .filter(|i| !drop(i.item))
+            .cloned()
+            .collect();
+        BoardIndex {
+            parts: count_parts(&items),
+            tree: RTree::bulk_load(items),
+            rejected: self.rejected,
+            areas: self.areas.into_iter().filter(|a| !drop(a.item)).collect(),
         }
     }
 
@@ -189,10 +323,28 @@ impl BoardIndex {
         let far = 4 * MAX_ABS_NM;
         let p = PointNm::new(p.x.clamp(-far, far), p.y.clamp(-far, far));
         let query = envelope_of(&RectNm::point(p).inflate(tolerance));
-        self.tree
+        let mut hits: Vec<&IndexedItem> = self
+            .tree
             .locate_in_envelope_intersecting(&query)
             .filter(|entry| entry.shape.contains(p, tolerance))
-            .collect()
+            .collect();
+        // Inside an area, off its edges: one of its edges answers for it.
+        for area in &self.areas {
+            if !area.inside
+                || hits.iter().any(|h| h.item == area.item)
+                || !area.bounds.contains_point(p)
+                || !point_in_polygon(&area.ring, p)
+            {
+                continue;
+            }
+            let mut edges = self
+                .tree
+                .locate_in_envelope_intersecting(&envelope_of(&area.bounds));
+            if let Some(edge) = edges.find(|e| e.item == area.item) {
+                hits.push(edge);
+            }
+        }
+        hits
     }
 
     /// [`hit_point`](Self::hit_point) for a model point and tolerance in mm.
@@ -218,16 +370,15 @@ impl BoardIndex {
         let candidates = self
             .tree
             .locate_in_envelope_intersecting(&envelope_of(rect));
-        sorted(
-            candidates
-                .filter(|entry| match mode {
-                    // A convex outline is inside an axis-aligned rectangle
-                    // exactly when its bounding box is.
-                    RectSelect::Inside => rect.contains_rect(&entry.shape.aabb()),
-                    RectSelect::Touching => entry.shape.touches_rect(rect),
-                })
-                .map(|entry| entry.item),
-        )
+        let hits = candidates
+            .filter(|entry| match mode {
+                // A convex outline is inside an axis-aligned rectangle
+                // exactly when its bounding box is.
+                RectSelect::Inside => rect.contains_rect(&entry.shape.aabb()),
+                RectSelect::Touching => entry.shape.touches_rect(rect),
+            })
+            .map(|entry| entry.item);
+        self.with_areas(hits, mode, rect.min)
     }
 
     /// The items a convex polygon `poly` selects: those wholly inside it, or
@@ -253,15 +404,139 @@ impl BoardIndex {
         let candidates = self
             .tree
             .locate_in_envelope_intersecting(&envelope_of(&bounds));
-        sorted(
-            candidates
-                .filter(|entry| match mode {
-                    RectSelect::Inside => entry.shape.is_inside_convex(poly),
-                    RectSelect::Touching => entry.shape.overlaps_polygon(poly),
-                })
-                .map(|entry| entry.item),
-        )
+        let hits = candidates
+            .filter(|entry| match mode {
+                RectSelect::Inside => entry.shape.is_inside_convex(poly),
+                RectSelect::Touching => entry.shape.overlaps_polygon(poly),
+            })
+            .map(|entry| entry.item);
+        self.with_areas(hits, mode, *first)
     }
+
+    /// The items a box selects, from its hits on the tree: an area is inside
+    /// only when every edge of it is, and touched too when the box (one of
+    /// whose points is `probe`) lies inside it, clear of its edges.
+    fn with_areas(
+        &self,
+        hits: impl Iterator<Item = ItemRef>,
+        mode: RectSelect,
+        probe: PointNm,
+    ) -> Vec<ItemRef> {
+        let mut edges: BTreeMap<ItemRef, usize> = BTreeMap::new();
+        let mut items = Vec::new();
+        for item in hits {
+            if item.is_multi_part() {
+                *edges.entry(item).or_default() += 1;
+            } else {
+                items.push(item);
+            }
+        }
+        // An arc or dimension is inside when every part of it is.
+        for (&item, &hit) in &edges {
+            let Some(&all) = self.parts.get(&item) else {
+                continue;
+            };
+            let selected = match mode {
+                RectSelect::Inside => hit == all,
+                RectSelect::Touching => hit > 0,
+            };
+            if selected {
+                items.push(item);
+            }
+        }
+        for area in &self.areas {
+            let hit = edges.get(&area.item).copied().unwrap_or(0);
+            let selected = match mode {
+                RectSelect::Inside => hit == area.edges,
+                RectSelect::Touching => {
+                    hit > 0 || (area.inside && point_in_polygon(&area.ring, probe))
+                }
+            };
+            if selected {
+                items.push(area.item);
+            }
+        }
+        sorted(items.into_iter())
+    }
+}
+
+/// Index `zone` as an area when it is a kind the board editor picks: one
+/// zero-width capsule per edge and its ring. A zone whose identity another
+/// area already has, or whose outline cannot convert, is listed as refused.
+fn add_area(
+    zone: &Zone,
+    areas: &mut Vec<Area>,
+    items: &mut Vec<IndexedItem>,
+    rejected: &mut Vec<Rejected>,
+) {
+    let Some(kind) = PickKind::of_zone(zone).filter(|k| k.is_pickable()) else {
+        return;
+    };
+    if zone.outline.len() < 3 {
+        return;
+    }
+    let item = ItemRef::Zone {
+        zone: zone.uuid,
+        kind,
+    };
+    if areas
+        .iter()
+        .any(|a: &Area| matches!(a.item, ItemRef::Zone { zone: id, .. } if id == zone.uuid))
+    {
+        rejected.push(Rejected {
+            item,
+            error: GeomError::DuplicateItem,
+        });
+        return;
+    }
+    let ring: Result<Vec<PointNm>, GeomError> = zone
+        .outline
+        .iter()
+        .map(|p| PointNm::from_mm(*p, "zone.outline"))
+        .collect();
+    let edges = ring.and_then(|ring| {
+        let edges = (0..ring.len())
+            .map(|i| {
+                let shape = Shape::Capsule {
+                    a: ring[i],
+                    b: ring[(i + 1) % ring.len()],
+                    radius: 0,
+                };
+                IndexedItem::new(item, shape)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((ring, edges))
+    });
+    match edges {
+        Ok((ring, edges)) => {
+            let Some(bounds) = RectNm::bounding(ring.iter().copied()) else {
+                return;
+            };
+            let count = edges.len();
+            items.extend(edges);
+            areas.push(Area {
+                item,
+                ring,
+                bounds,
+                edges: count,
+                inside: true,
+            });
+        }
+        Err(error) => rejected.push(Rejected { item, error }),
+    }
+}
+
+/// How many entries each multi-part item other than a drawn area has.
+fn count_parts(items: &[IndexedItem]) -> BTreeMap<ItemRef, usize> {
+    let mut parts = BTreeMap::new();
+    for indexed in items {
+        if indexed.item.is_multi_part()
+            && !matches!(indexed.item, ItemRef::Zone { .. } | ItemRef::Graphic { .. })
+        {
+            *parts.entry(indexed.item).or_default() += 1;
+        }
+    }
+    parts
 }
 
 fn sorted(items: impl Iterator<Item = ItemRef>) -> Vec<ItemRef> {
@@ -271,11 +546,47 @@ fn sorted(items: impl Iterator<Item = ItemRef>) -> Vec<ItemRef> {
     items
 }
 
-fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
+pub(crate) fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
     AABB::from_corners(
         [i128::from(rect.min.x), i128::from(rect.min.y)],
         [i128::from(rect.max.x), i128::from(rect.max.y)],
     )
+}
+
+/// The item of `board` whose uuid is `id`: a footprint, pad, track, via or
+/// selectable drawn area. `None` when nothing has it, or for a pour.
+pub fn item_by_uuid(board: &PcbBoard, id: Uuid) -> Option<ItemRef> {
+    let footprint = board.footprints.iter().find_map(|fp| {
+        if fp.uuid == id {
+            return Some(ItemRef::Footprint(id));
+        }
+        fp.pads.iter().find(|p| p.uuid == id).map(|_| ItemRef::Pad {
+            footprint: fp.uuid,
+            pad: id,
+        })
+    });
+    footprint
+        .or_else(|| {
+            board
+                .segments
+                .iter()
+                .any(|s| s.uuid == id)
+                .then_some(ItemRef::Track(id))
+        })
+        .or_else(|| {
+            board
+                .vias
+                .iter()
+                .any(|v| v.uuid == id)
+                .then_some(ItemRef::Via(id))
+        })
+        .or_else(|| {
+            let zone = board.zones.iter().find(|z| z.uuid == id)?;
+            Some(ItemRef::Zone {
+                zone: id,
+                kind: PickKind::of_zone(zone)?,
+            })
+        })
 }
 
 /// A track's copper; a negative width counts as its magnitude.

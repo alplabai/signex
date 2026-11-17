@@ -3,7 +3,6 @@
 use super::super::*;
 use super::font_row::font_family_row;
 use super::rows::{PanelStyle, info_row, justify_h_row, justify_v_row};
-use super::symbol_field::push_text_rows;
 use iced::Widget;
 use signex_i18n::{ids, t};
 
@@ -18,7 +17,6 @@ pub(super) fn push_text_note_sections<'a>(
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let note_text = get("Text");
-    let position = get("Position");
     let rotation = get("Rotation");
     let text_size = get("Text Size");
     let justify_h = justify_h_row(&ctx.selection_info);
@@ -26,6 +24,10 @@ pub(super) fn push_text_note_sections<'a>(
     let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
     if let Some(id) = uuid {
+        // ── Location ── (#2418): an editable Position through the shared rows.
+        let look = super::placed_rows::RowLook { muted, input_bg };
+        col = super::placed_rows::push_location_section(col, ctx, look);
+
         col = col.push(
             ctx.collapsible(
                 "sel_basic",
@@ -52,13 +54,16 @@ pub(super) fn push_text_note_sections<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = push_text_rows(
-                        c,
-                        i18n,
-                        [&position, &rotation, &justify_h, &justify_v, &text_size],
-                        muted,
-                        input_bg,
-                    );
+                    // The engine's values; Position moved to the Location section.
+                    let rows = [
+                        (ids::PROPERTIES_ROTATION, &rotation),
+                        (ids::PROPERTIES_JUSTIFY_H, &justify_h),
+                        (ids::PROPERTIES_JUSTIFY_V, &justify_v),
+                        (ids::PROPERTIES_TEXT_SIZE, &text_size),
+                    ];
+                    for (label, value) in rows {
+                        c = c.push(form_input_row(t!(i18n, label), value, muted, input_bg));
+                    }
                     c = c.push(font_family_row(
                         t!(i18n, ids::PROPERTIES_FONT),
                         note_font_family.as_deref(),

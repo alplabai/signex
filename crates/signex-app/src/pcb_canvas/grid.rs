@@ -25,10 +25,13 @@ const MAX_LEVELS: u32 = 12;
 /// Most lines one axis draws; a guard, the pitch floor keeps it far lower.
 const MAX_LINES_PER_AXIS: i64 = 4096;
 
-/// The dark board region of a board with no outline yet, in board mm from
-/// the origin.
-pub(super) const EMPTY_BOARD_AREA: [[f32; 2]; 4] =
-    [[0.0, 0.0], [100.0, 0.0], [100.0, 80.0], [0.0, 80.0]];
+/// The dark board region of a board with no outline yet, in board mm: the
+/// model's empty board area (`signex_types::pcb_origin::EMPTY_BOARD_AREA`).
+pub(super) const EMPTY_BOARD_AREA: [[f32; 2]; 4] = {
+    let (lo, hi) = signex_types::pcb_origin::EMPTY_BOARD_AREA;
+    let (x0, y0, x1, y1) = (lo.x as f32, lo.y as f32, hi.x as f32, hi.y as f32);
+    [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+};
 
 const GRID_LINE_PX: f32 = 1.0;
 /// Radius of the origin marker's circle; the X spans the same radius.
@@ -136,35 +139,50 @@ pub(super) fn draw_board_area(
     );
 }
 
-/// Stroke the grid at `level` inside `region` (board mm): one path for the
-/// fine lines and one for the major lines.
+/// Stroke the grid at `level` inside `region` (board mm), counted from the
+/// board origin `origin` (#2384): one path for the fine lines and one for
+/// the major lines.
 pub(super) fn draw_grid(
     frame: &mut Frame,
     camera: &BoardCamera,
     size: Size,
     region: &[[f32; 2]],
+    origin: [f32; 2],
     level: GridLevel,
     paint: GridPaint,
 ) {
     let Some(view) = camera.visible_world_bounds(size) else {
         return;
     };
+    let [ox, oy] = origin;
+    let region: Vec<[f32; 2]> = region.iter().map(|p| [p[0] - ox, p[1] - oy]).collect();
+    let view = (
+        [view.0[0] - ox, view.0[1] - oy],
+        [view.1[0] - ox, view.1[1] - oy],
+    );
+    let at = |p: Point| camera.world_to_screen(Point::new(p.x + ox, p.y + oy));
     // One pass over the lines feeds both paths.
     let draw_fine = paint.fine.a > 0.0;
     let mut fine = Builder::new();
     let mut major = Builder::new();
     let mut scratch = Vec::with_capacity(8);
-    each_segment(region, view, level.pitch_mm, &mut scratch, |i, from, to| {
-        let path = if i.rem_euclid(MAJOR_EVERY) == 0 {
-            &mut major
-        } else if draw_fine {
-            &mut fine
-        } else {
-            return;
-        };
-        path.move_to(camera.world_to_screen(from));
-        path.line_to(camera.world_to_screen(to));
-    });
+    each_segment(
+        &region,
+        view,
+        level.pitch_mm,
+        &mut scratch,
+        |i, from, to| {
+            let path = if i.rem_euclid(MAJOR_EVERY) == 0 {
+                &mut major
+            } else if draw_fine {
+                &mut fine
+            } else {
+                return;
+            };
+            path.move_to(at(from));
+            path.line_to(at(to));
+        },
+    );
     let stroke = |color: Color| Stroke::default().with_color(color).with_width(GRID_LINE_PX);
     if draw_fine {
         frame.stroke(&fine.build(), stroke(paint.fine));
@@ -172,9 +190,15 @@ pub(super) fn draw_grid(
     frame.stroke(&major.build(), stroke(paint.major));
 }
 
-/// Mark the board origin with a circle and an X through it.
-pub(super) fn draw_origin(frame: &mut Frame, camera: &BoardCamera, size: Size, color: Color) {
-    let at = camera.world_to_screen(Point::ORIGIN);
+/// Mark the board origin `origin` (board mm) with a circle and an X through it.
+pub(super) fn draw_origin(
+    frame: &mut Frame,
+    camera: &BoardCamera,
+    size: Size,
+    origin: [f32; 2],
+    color: Color,
+) {
+    let at = camera.world_to_screen(Point::new(origin[0], origin[1]));
     let reach = ORIGIN_RADIUS_PX + GRID_LINE_PX;
     if at.x < -reach || at.y < -reach || at.x > size.width + reach || at.y > size.height + reach {
         return;

@@ -381,8 +381,13 @@ panels-summary-erc = ERC
 panels-summary-drc = DRC
 # Caption: how long ago the last git commit was made.
 panels-summary-last-commit = Last commit
-# A value that is not known yet.
-panels-summary-no-value = —
+# The check has not run on this project yet.
+panels-summary-not-run = Not run
+# DRC result: violations in the last run. $count is a whole number.
+panels-summary-drc-violations = { $count ->
+        [one] { $count } violation
+       *[other] { $count } violations
+    }
 # ERC result counts. Both are whole numbers.
 panels-summary-erc-counts =
     { $errors ->
@@ -587,8 +592,14 @@ panels-sch-library-empty = Open a `.snxsym` to see its symbols here. Right-click
 # Stands in for the file name of a symbol file not saved yet.
 panels-sch-library-untitled-file = <untitled>
 # $library is the library name, $file the symbol file; $count is a whole number.
-panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count } symbols)
-panels-sch-library-breadcrumb = { $file }  ({ $count } symbols)
+panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
+panels-sch-library-breadcrumb = { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
 panels-sch-library-column-design-item-id = Design Item ID
 panels-sch-library-column-description = Description
 panels-sch-library-part-shared = Part 0 (shared)
@@ -610,8 +621,9 @@ panels-footprint-library-breadcrumb = { $file }  ({ $count ->
         [one] { $count } footprint
        *[other] { $count } footprints
     })
-panels-footprint-library-column-name = Name
-panels-footprint-library-column-pads = Pads
+# Column headings of the Footprint Library list, in the section-label case.
+panels-footprint-library-column-name = FOOTPRINT
+panels-footprint-library-column-pads = PADS
 
 ## Library Browser row in the Properties panel
 panels-library-row-title = Library Row
@@ -649,3 +661,52 @@ panels-drawing-start-angle = Start Angle
 panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
+
+## Net Classes table (#2417): column titles and cells.
+
+panels-net-classes-column-name = Name
+panels-net-classes-column-color = Colour
+panels-net-classes-column-width = Width
+panels-net-classes-column-members = Members
+# Colour cell of a class with no colour of its own: the theme's wire colour.
+panels-net-classes-theme-color = Theme
+# Width cell of a class with a width; $width is in millimetres.
+panels-net-classes-width-cell = { $width } mm
+# Width cell of a class with no width: each wire keeps its own.
+panels-net-classes-wire-width = Wire's own
+panels-net-classes-no-members = None
+# SCH Filter panel (#2417), over the chip grid.
+panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.
+
+# Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
+panels-placed-location = Location
+panels-placed-properties = Properties
+panels-placed-x = X ({ $unit })
+panels-placed-y = Y ({ $unit })
+panels-placed-start-x = Start X ({ $unit })
+panels-placed-start-y = Start Y ({ $unit })
+panels-placed-width = Width ({ $unit })
+panels-placed-height = Height ({ $unit })
+panels-placed-rotation = Rotation
+# A rotation choice; $degrees is 0, 90, 180 or 270.
+panels-placed-degrees = { $degrees } Degrees
+# Shown above the disabled rows of a locked object; $reason is the lock's own words.
+panels-placed-locked = Locked: { $reason }
+panels-placed-parameters = Parameters ({ $count })
+panels-placed-parameters-none = Parameters (none)
+panels-placed-no-parameters = No custom parameters
+# Read-only facts of a wire, bus or sheet entry in Properties (#2418).
+panels-placed-end = End
+panels-placed-length = Length
+panels-placed-name = Name
+panels-placed-direction = Direction
+panels-placed-sheet = Sheet
+panels-placed-sheet-file = Sheet File
+# Properties section of a selected Blanket directive: a drawn region whose
+# parameters apply to every net inside it.
+panels-directive-blanket = Blanket
+panels-directive-net-class = Net Class
+# Section title: the ERC rules a Blanket does not report inside its region.
+panels-directive-erc-exclusions = ERC Exclusions
+# Checkbox: the Blanket reports no ERC rule at all inside its region.
+panels-directive-all-rules = All Rules

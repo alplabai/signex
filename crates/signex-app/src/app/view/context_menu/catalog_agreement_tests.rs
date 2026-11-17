@@ -14,7 +14,9 @@
 //! `bridge::resolve(id)`, or `ContextAction::Command` for that id. A live
 //! row must also be one `is_enabled` allows in the context the app really
 //! has in that selection state (`Signex::command_context`), or the click
-//! would be dropped silently. Any other row fails here, naming the row.
+//! would be dropped silently; a command whose handler explains why it did
+//! nothing (`explains_when_unavailable`) is never dropped. Any other row
+//! fails here, naming the row.
 //!
 //! This does not run a row's handler: what each row does is pinned by
 //! `tests/row_effects.rs`.
@@ -26,7 +28,9 @@ use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
-use super::submenu::{align_entries, arrange_entries, place_entries};
+use super::submenu::{
+    align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
+};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
@@ -57,10 +61,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
-    // Canvas: planned stubs that run nothing yet.
-    ("Clear Filter", "planned, no behaviour"),
-    ("Part Actions", "planned submenu stub"),
-    ("Sheet Actions", "planned submenu stub"),
+    // Canvas: planned rows that run nothing yet (docs/MENU_BAR.md,
+    // "Sheet right-click menu").
     ("References", "planned submenu stub"),
     ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
@@ -255,7 +257,11 @@ fn check_live_row(
     walk: &mut Walk,
 ) {
     let command = AppCommandId::new(id).expect("catalog id is well formed");
-    if !is_enabled(&command, ctx) {
+    // Find Similar (#2416) seeds from the object under the cursor with
+    // nothing selected; its handler runs and says so when there is none.
+    if !is_enabled(&command, ctx)
+        && !crate::app::command::enablement::explains_when_unavailable(&command)
+    {
         walk.dropped.insert(format!("{origin}: {id}"));
     }
     let dispatches_the_id = match pressed {
@@ -306,6 +312,25 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                 );
                 check_rows(
                     &format!("canvas {profile} {selection:?}"),
+                    &rows,
+                    &app,
+                    &ctx,
+                    &mut walk,
+                );
+            }
+            // The Part Actions and Sheet Actions flyouts (#2419).
+            let i18n = signex_i18n::I18n::en_us_ref();
+            let hint = |id: &str| app.keymap_shortcut_label(id);
+            let flyouts = [
+                ("part actions", part_actions_entries(i18n, selection, &hint)),
+                (
+                    "sheet actions",
+                    sheet_actions_entries(i18n, TID, selection, &hint),
+                ),
+            ];
+            for (name, rows) in flyouts {
+                check_rows(
+                    &format!("{name} {profile} {selection:?}"),
                     &rows,
                     &app,
                     &ctx,

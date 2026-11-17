@@ -52,6 +52,8 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
             return Err(BoardCommandError::DuplicateOption(grid.uuid));
         }
     }
+    finite(options.origin.at.x, "origin x")?;
+    finite(options.origin.at.y, "origin y")?;
     let sheet = &options.sheet;
     finite(sheet.origin.x, "sheet x")?;
     finite(sheet.origin.y, "sheet y")?;
@@ -66,6 +68,10 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
         return Err(BoardCommandError::NotPositive {
             field: "sheet height",
         });
+    }
+    // The panel rides along whole; it keeps its own rules (#2410).
+    if let Some(panel) = &options.panel {
+        panel.check().map_err(BoardCommandError::Panel)?;
     }
     Ok(())
 }

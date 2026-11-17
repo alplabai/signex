@@ -44,10 +44,6 @@ properties-section-footprint = Footprint
 properties-section-net-general = General (Net)
 properties-section-net-parameters = Parameters (Net)
 properties-section-parameters = Parameters
-# A placed part with no custom parameters.
-properties-section-parameters-none = Parameters (none)
-# $count is how many custom parameters the part carries.
-properties-section-parameters-count = Parameters ({ $count })
 properties-section-page-options = Page Options
 properties-section-title-block = Title Block
 properties-section-selection-filters = Custom Selection Filters
@@ -109,7 +105,6 @@ properties-pins-column-name = Name
 properties-pins-column-type = Type
 properties-pins-column-net = Net
 properties-pins-column-hidden = Hidden
-properties-no-custom-parameters = No custom parameters
 
 ## Library rows of a placed part
 

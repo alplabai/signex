@@ -133,7 +133,7 @@ fn working_rows_are_wired() {
         "cmd_item_gated(ctx,cmd(\"zoom_out_at_cursor\",\"Ctrl+-\"))",
         "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"P\"))",
         "item_if(ctx,menu_ids::MENU_PLACE_TEXT,MenuMessage::PlaceText,",
-        "item_if(ctx,menu_ids::MENU_PLACE_NO_CONNECT,MenuMessage::PlaceNoConnect,",
+        "cmd_item_gated_as(ctx,cmd(\"place_no_connect\",\"\"),",
         "item_if(ctx,menu_ids::MENU_REPORTS_BOM,MenuMessage::ExportBom,",
     ] {
         assert!(source.contains(call), "the row is not wired as `{call}`");

@@ -19,6 +19,8 @@ use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document::{DocumentKey, UndoTarget};
 use crate::app::document_ids::DocumentEntry;
 use crate::app::handlers::canvas::net_color_click::net_elements_in;
+use crate::app::rules_tab::TEXT_UNAPPLIED;
+use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
 /// What running one command from its operands did, and any follow-up task.
@@ -154,6 +156,9 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             entry.name
         ));
     }
+    if let DocumentKey::Project(id) = &key {
+        return step_project(app, *id, undo);
+    }
     let (can_undo, can_redo) = app.undo_availability(&UndoTarget::Document(key.clone()));
     if !(if undo { can_undo } else { can_redo }) {
         return refused(if undo {
@@ -197,6 +202,39 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             entry.kind.as_str()
         )),
     }
+}
+
+/// A project's step: its rule history (the Rules tab, `rules_*`, the ERC
+/// dialog) or its Project tab's, whichever holds its newest edit; the
+/// other when that one has nothing to step.
+fn step_project(app: &mut Signex, id: ProjectId, undo: bool) -> Ran {
+    let can = |app: &Signex, target: &UndoTarget| {
+        let (can_undo, can_redo) = app.undo_availability(target);
+        if undo { can_undo } else { can_redo }
+    };
+    let rules = UndoTarget::RulesTab(id);
+    let general = UndoTarget::Document(DocumentKey::Project(id));
+    let order = if app.rules_step_is_newest(id) {
+        [rules, general]
+    } else {
+        [general, rules]
+    };
+    let Some(target) = order.into_iter().find(|target| can(app, target)) else {
+        return refused(if undo {
+            "Nothing to undo"
+        } else {
+            "Nothing to redo"
+        });
+    };
+    if target != UndoTarget::RulesTab(id) {
+        app.step_undo_target(&target, undo);
+        return ran(Task::none());
+    }
+    // The step would replace what the person typed in the text view.
+    if app.rules_text_unapplied(id) {
+        return refused(TEXT_UNAPPLIED);
+    }
+    ran(app.step_rules_tab(id, undo))
 }
 
 pub(super) fn undo(app: &mut Signex, args: &CommandArgs) -> Ran {

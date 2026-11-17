@@ -16,8 +16,6 @@ define_ids! {
     PROPERTIES_SECTION_NET_GENERAL = "properties-section-net-general";
     PROPERTIES_SECTION_NET_PARAMETERS = "properties-section-net-parameters";
     PROPERTIES_SECTION_PARAMETERS = "properties-section-parameters";
-    PROPERTIES_SECTION_PARAMETERS_NONE = "properties-section-parameters-none";
-    PROPERTIES_SECTION_PARAMETERS_COUNT = "properties-section-parameters-count";
     PROPERTIES_SECTION_PAGE_OPTIONS = "properties-section-page-options";
     PROPERTIES_SECTION_TITLE_BLOCK = "properties-section-title-block";
     PROPERTIES_SECTION_SELECTION_FILTERS = "properties-section-selection-filters";
@@ -66,7 +64,6 @@ define_ids! {
     PROPERTIES_PINS_COLUMN_TYPE = "properties-pins-column-type";
     PROPERTIES_PINS_COLUMN_NET = "properties-pins-column-net";
     PROPERTIES_PINS_COLUMN_HIDDEN = "properties-pins-column-hidden";
-    PROPERTIES_NO_CUSTOM_PARAMETERS = "properties-no-custom-parameters";
     PROPERTIES_SYMBOL = "properties-symbol";
     PROPERTIES_FOOTPRINT = "properties-footprint";
     PROPERTIES_FOOTPRINT_OVERRIDE = "properties-footprint-override";

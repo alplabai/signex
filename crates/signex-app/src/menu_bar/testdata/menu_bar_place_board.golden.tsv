@@ -1,16 +1,27 @@
 # Place on a board (#2360): the `pcb` variant's Place rows.
 # path	kind	label	command_id	shortcut	action	enabled
 Place/Component	stub	Component	-	-	-	0
-Place/Pad	stub	Pad	-	-	-	0
+Place/Pad	item	Pad	-	-	PlaceBoardPad	1
 Place/Via	item	Via	-	-	PlaceBoardVia	1
-Place/Interactive Routing	stub	Interactive Routing	-	-	-	0
+Place/Interactive Routing	item	Interactive Routing	-	-	PlaceBoardRoute	1
+Place/Differential Pair Routing	item	Differential Pair Routing	-	-	PlaceBoardDiffPair	1
+Place/Quick Route	item	Quick Route	-	-	PlaceBoardQuickRoute	1
+Place/Multi-Route	item	Multi-Route	-	-	PlaceBoardMultiRoute	1
 Place/Track	item	Track	-	-	PlaceBoardTrack	1
-Place/Arc	stub	Arc	-	-	-	0
+Place/Arc	item	Arc	-	-	PlaceBoardArc	1
 Place/Fill	item	Fill	-	-	PlaceBoardFill	1
 Place/Solid Region	item	Solid Region	-	-	PlaceBoardRegion	1
-Place/Polygon Pour	stub	Polygon Pour	-	-	-	0
-Place/String	stub	String	-	-	-	0
-Place/Dimension	stub	Dimension	-	-	-	0
+Place/Polygon Pour	item	Polygon Pour	-	-	PlaceBoardPolygonPour	1
+Place/Pour Cutout	item	Pour Cutout	-	-	PlaceBoardPourCutout	1
+Place/Slice Pour	item	Slice Pour	-	-	PlaceBoardSlicePour	1
+Place/String	item	String	-	-	PlaceBoardString	1
+Place/Dimension	item	Dimension	-	-	PlaceBoardDimension	1
 Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1
+Place/Graphics	submenu	Graphics	-	-	-	-
+Place/Graphics/Line	item	Line	-	-	PlaceBoardLine	1
+Place/Graphics/Arc	item	Arc	-	-	PlaceBoardGraphicArc	1
+Place/Graphics/Full Circle	item	Full Circle	-	-	PlaceBoardCircle	1
+Place/Graphics/Rectangle	item	Rectangle	-	-	PlaceBoardRectangle	1
+Place/Graphics/Text Frame	item	Text Frame	-	-	PlaceBoardTextFrame	1
 Place/---	separator	-	-	-	-	-
 Place/Board Sketch	item	Board Sketch	-	-	BoardSketch	1

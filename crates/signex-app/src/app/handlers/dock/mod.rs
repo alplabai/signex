@@ -13,6 +13,7 @@ mod navigator;
 mod net_classes;
 mod panel_controls;
 mod panel_open;
+mod placed_edit;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
@@ -82,6 +83,14 @@ impl Signex {
                 let task = self.handle_pcb_board_panel(msg);
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::Drc(msg) = panel_msg {
+                let task = self.handle_drc_panel(msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::BoardNetClass(msg) = panel_msg {
+                self.handle_board_net_class(msg.clone());
+                return self.finish_update();
+            }
             if let crate::panels::PanelMsg::PcbComponent(msg) = panel_msg {
                 let task = self.handle_pcb_component(msg);
                 return Task::batch([task, self.finish_update()]);
@@ -90,8 +99,13 @@ impl Signex {
                 self.handle_pcb_primitive(msg);
                 return self.finish_update();
             }
+            if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
+                self.handle_layer_stack(msg);
+                return self.finish_update();
+            }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)
+                || self.handle_dock_placed_edit_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)
             {
                 return self.finish_update();

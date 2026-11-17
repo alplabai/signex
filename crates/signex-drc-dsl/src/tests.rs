@@ -204,7 +204,7 @@ rule ok on via require drill >= 0.2mm then error
         [
             "unknown target 'silk' (clearance, track or via)",
             "unknown field 'gap' for this target (width)",
-            "unknown condition 'colour' (net, class or layer)",
+            "unknown condition 'colour' (net, class, other_class or layer)",
             "'drill' takes only '>=' (a minimum)",
         ]
     );

@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ProjectData, UnknownJson};
+use super::{AnnotateUndo, ProjectData, UnknownJson};
 use crate::designator::DesignatorStandard;
 
 /// The `.snxprj` key of the annotation settings.
@@ -19,9 +19,22 @@ pub struct AnnotationSettings {
     /// Absent = the library symbol's own designator letter decides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub designator_standard: Option<DesignatorStandard>,
+    /// How many undo steps one annotate run is (#1692). Absent = this
+    /// machine's Preferences value decides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotate_undo: Option<AnnotateUndo>,
     /// Keys a newer build wrote inside the section; kept for re-save.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
+}
+
+impl AnnotationSettings {
+    /// Nothing chosen and nothing kept: the section is dropped on save.
+    pub fn is_empty(&self) -> bool {
+        self.designator_standard.is_none()
+            && self.annotate_undo.is_none()
+            && self.unknown.is_empty()
+    }
 }
 
 /// A project's annotation state taken for undo: the readable settings and
@@ -88,11 +101,27 @@ impl ProjectData {
     /// Settings left empty are dropped, so clearing the choice on a project
     /// that never had one saves byte-identical to before.
     pub fn set_designator_standard(&mut self, standard: Option<DesignatorStandard>) {
+        self.edit_annotation(|settings| settings.designator_standard = standard);
+    }
+
+    /// The project's own annotate undo choice; `None` follows Preferences.
+    pub fn annotate_undo(&self) -> Option<AnnotateUndo> {
+        self.annotation.as_ref()?.annotate_undo
+    }
+
+    /// Set (or, with `None`, remove) the annotate undo choice (#1692), on
+    /// the same terms as [`Self::set_designator_standard`].
+    pub fn set_annotate_undo(&mut self, choice: Option<AnnotateUndo>) {
+        self.edit_annotation(|settings| settings.annotate_undo = choice);
+    }
+
+    /// Edit the settings; an unreadable section is replaced and empty
+    /// settings are dropped.
+    fn edit_annotation(&mut self, edit: impl FnOnce(&mut AnnotationSettings)) {
         self.unknown.remove(ANNOTATION_KEY);
         let mut settings = self.annotation.take().unwrap_or_default();
-        settings.designator_standard = standard;
-        let empty = settings.designator_standard.is_none() && settings.unknown.is_empty();
-        self.annotation = (!empty).then_some(settings);
+        edit(&mut settings);
+        self.annotation = (!settings.is_empty()).then_some(settings);
     }
 }
 

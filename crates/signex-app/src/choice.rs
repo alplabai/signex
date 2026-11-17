@@ -35,7 +35,7 @@ pub(crate) fn chosen<T: Clone + PartialEq>(choices: &[Choice<T>], value: &T) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::annotate_undo::AnnotateUndo;
+    use crate::annotate_undo::{AnnotateUndo, annotate_undo_label};
     use crate::paste_prefs::PasteDesignators;
 
     fn labels<T>(choices: Vec<Choice<T>>) -> Vec<String> {
@@ -61,7 +61,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            labels(Choice::named(AnnotateUndo::ALL, AnnotateUndo::label, &i18n)),
+            labels(Choice::named(AnnotateUndo::ALL, annotate_undo_label, &i18n)),
             ["One step for the whole project", "Per sheet"]
         );
     }

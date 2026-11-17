@@ -236,13 +236,14 @@ fn stub_rows_are_not_live() {
 }
 
 /// #2248 / #1269: the two former stubs are live rows now. Assign Footprints
-/// needs a schematic; Net Inspector opens a panel and needs nothing.
+/// needs a schematic; Net Inspector opens a panel and needs nothing (in View
+/// since #2416).
 #[test]
 fn assign_footprints_and_net_inspector_are_live() {
     let app = one_symbol_selected();
     assert!(row_is_live(&app, "Tools/Assign Footprints"));
-    assert!(row_is_live(&app, "Tools/Net Inspector"));
+    assert!(row_is_live(&app, "View/Net Inspector"));
     let (bare, _) = crate::app::Signex::new();
     assert!(!row_is_live(&bare, "Tools/Assign Footprints"));
-    assert!(row_is_live(&bare, "Tools/Net Inspector"));
+    assert!(row_is_live(&bare, "View/Net Inspector"));
 }

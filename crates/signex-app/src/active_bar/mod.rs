@@ -19,9 +19,14 @@ mod glyph_tests;
 mod glyphs;
 mod layout;
 mod planned;
+pub mod presets;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
+pub(crate) use dropdown::{
+    ChipLayout, FilterChip, FilterMenu, filter_menu_entry, filter_menu_view, preset_label,
+    schematic_filter_menu,
+};
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
@@ -187,40 +192,7 @@ pub enum ActiveBarMsg {
     ScopedToWindow(iced::window::Id, Box<ActiveBarMsg>),
 }
 
-/// Maximum number of user-defined custom filter presets exposed in the
-/// Active Bar's filter dropdown and managed in the Properties panel.
-pub const CUSTOM_FILTER_PRESET_LIMIT: usize = 4;
-
-/// A user-defined named selection-filter preset. Persisted to
-/// `~/.config/signex/prefs.json` under `custom_filter_presets` and
-/// surfaced as a shortcut button in the Active Bar's filter dropdown.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CustomFilterPreset {
-    pub name: String,
-    /// Stored as `Vec` (not `HashSet`) so the on-disk representation
-    /// has a stable order and a sensible JSON shape.
-    pub filters: Vec<SelectionFilter>,
-}
-
-impl CustomFilterPreset {
-    /// Snapshot the active filter set into a new preset with a default name.
-    pub fn capture(name: String, filters: &std::collections::HashSet<SelectionFilter>) -> Self {
-        // Keep the canonical order of `SelectionFilter::ALL` so two
-        // captures of the same set are byte-identical on disk.
-        let filters: Vec<SelectionFilter> = SelectionFilter::ALL
-            .iter()
-            .copied()
-            .filter(|f| filters.contains(f))
-            .collect();
-        Self { name, filters }
-    }
-
-    /// Realize the preset's `Vec` into a `HashSet` for assignment back
-    /// into `InteractionState::selection_filters`.
-    pub fn as_set(&self) -> std::collections::HashSet<SelectionFilter> {
-        self.filters.iter().copied().collect()
-    }
-}
+pub use presets::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, PresetKind};
 
 /// A footprint-editor selection-filter preset. Parallel to
 /// `CustomFilterPreset` but keyed on `SelectionFilterKind` (footprint
@@ -299,6 +271,29 @@ impl SelectionFilter {
             Self::DrawingObjects => "Drawing Objects",
             Self::Other => "Other",
         }
+    }
+
+    /// The category as a command operand spells it (`sheet_symbols`).
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Components => "components",
+            Self::Wires => "wires",
+            Self::Buses => "buses",
+            Self::SheetSymbols => "sheet_symbols",
+            Self::SheetEntries => "sheet_entries",
+            Self::NetLabels => "net_labels",
+            Self::Parameters => "parameters",
+            Self::Ports => "ports",
+            Self::PowerPorts => "power_ports",
+            Self::Texts => "texts",
+            Self::DrawingObjects => "drawing_objects",
+            Self::Other => "other",
+        }
+    }
+
+    /// The category an operand names, by [`Self::token`].
+    pub fn from_token(token: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|f| f.token() == token)
     }
 }
 

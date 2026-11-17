@@ -51,6 +51,9 @@ pub struct TreeStyle {
     pub inset: f32,
     /// Pill colours per badge tone; `None` keeps every badge neutral.
     pub tones: Option<BadgeTones>,
+    /// Draw a leaf row's badge as a leading kind tag ("SCH") in place of
+    /// its file icon, and no icon on branch rows.
+    pub kind_tags: bool,
 }
 
 impl TreeStyle {
@@ -63,12 +66,19 @@ impl TreeStyle {
             selected_ink,
             inset: ROW_INSET,
             tones: None,
+            kind_tags: false,
         }
     }
 
     /// Colour the badge pills by [`BadgeTone`].
     pub fn badge_tones(mut self, tones: BadgeTones) -> Self {
         self.tones = Some(tones);
+        self
+    }
+
+    /// Leaf badges lead the row as kind tags; branches draw no icon.
+    pub fn kind_tags(mut self) -> Self {
+        self.kind_tags = true;
         self
     }
 

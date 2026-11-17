@@ -20,6 +20,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         net: None,
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -49,6 +50,8 @@ fn footprint(uuid: Uuid, x: f64, y: f64, rotation: f64, layer: &str, pads: Vec<P
 
 fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid,
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -61,12 +64,15 @@ fn segment(uuid: Uuid, a: (f64, f64), b: (f64, f64), width: f64) -> Segment {
 
 fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
     Via {
+        attributes: Default::default(),
         uuid,
         position: Point::new(x, y),
         diameter,
         drill: diameter / 2.0,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -75,6 +81,7 @@ fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -90,6 +97,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> 
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -353,4 +361,118 @@ fn a_repeated_item_identity_is_rejected() {
             error: GeomError::DuplicateItem
         }]
     );
+}
+
+fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
+    Zone {
+        uuid,
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: outline.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: fill.into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
+        unknown: Default::default(),
+    }
+}
+
+/// #2383: a keepout is picked on its edge and inside it, a box selects it
+/// whole only when it holds every edge; #2216: a pour is picked inside its
+/// outline as a polygon.
+#[test]
+fn drawn_areas_are_picked_on_their_edges_and_inside() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let triangle = [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)];
+    b.zones = vec![
+        area(id(7), "keepout", &triangle),
+        area(id(8), "pour", &[(20.0, 0.0), (30.0, 0.0), (30.0, 10.0)]),
+    ];
+    let index = BoardIndex::build_selectable(&b);
+    let keepout = ItemRef::Zone {
+        zone: id(7),
+        kind: PickKind::Keepouts,
+    };
+    assert_eq!(
+        index.hit_point(PointNm::new(2 * MM, 2 * MM), 0),
+        vec![keepout]
+    );
+    assert_eq!(index.hit_point(PointNm::new(5 * MM, 0), 0), vec![keepout]);
+    assert!(index.hit_point(PointNm::new(8 * MM, 8 * MM), 0).is_empty());
+    let pour = ItemRef::Zone {
+        zone: id(8),
+        kind: PickKind::Polygons,
+    };
+    assert_eq!(
+        index.hit_point(PointNm::new(25 * MM, 2 * MM), 0),
+        vec![pour]
+    );
+    assert!(index.hit_point(PointNm::new(21 * MM, 8 * MM), 0).is_empty());
+    let whole = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(11 * MM, 11 * MM));
+    let half = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(5 * MM, 11 * MM));
+    let within = RectNm::new(PointNm::new(MM, MM), PointNm::new(2 * MM, 2 * MM));
+    assert_eq!(index.hit_rect(&whole, RectSelect::Inside), vec![keepout]);
+    assert!(index.hit_rect(&half, RectSelect::Inside).is_empty());
+    assert_eq!(index.hit_rect(&half, RectSelect::Touching), vec![keepout]);
+    assert_eq!(index.hit_rect(&within, RectSelect::Touching), vec![keepout]);
+    assert!(
+        BoardIndex::build(&b).is_empty(),
+        "connectivity holds no areas"
+    );
+}
+
+/// #2403: every kind of item is found by its uuid; a pour and an unknown
+/// uuid are not.
+#[test]
+fn an_item_is_found_by_its_uuid() {
+    let fp = footprint(
+        id(1),
+        0.0,
+        0.0,
+        0.0,
+        "TopCopper",
+        vec![pad(id(2), 0.0, 0.0, 1.0, 1.0)],
+    );
+    let mut b = board(
+        vec![fp],
+        vec![segment(id(3), (0.0, 0.0), (1.0, 0.0), 0.2)],
+        vec![via(id(4), 0.0, 0.0, 0.6)],
+    );
+    b.zones = vec![
+        area(id(5), "keepout", &[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]),
+        area(id(6), "pour", &[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]),
+    ];
+    assert_eq!(item_by_uuid(&b, id(1)), Some(ItemRef::Footprint(id(1))));
+    assert_eq!(
+        item_by_uuid(&b, id(2)),
+        Some(ItemRef::Pad {
+            footprint: id(1),
+            pad: id(2)
+        })
+    );
+    assert_eq!(item_by_uuid(&b, id(3)), Some(ItemRef::Track(id(3))));
+    assert_eq!(item_by_uuid(&b, id(4)), Some(ItemRef::Via(id(4))));
+    assert_eq!(
+        item_by_uuid(&b, id(5)),
+        Some(ItemRef::Zone {
+            zone: id(5),
+            kind: PickKind::Keepouts
+        })
+    );
+    // A pour is pickable since #2216.
+    assert_eq!(
+        item_by_uuid(&b, id(6)),
+        Some(ItemRef::Zone {
+            zone: id(6),
+            kind: PickKind::Polygons
+        })
+    );
+    assert_eq!(item_by_uuid(&b, id(9)), None);
 }

@@ -29,6 +29,8 @@ impl Signex {
             tab.path = new_path.to_path_buf();
             if tab.kind.as_project().is_some() {
                 tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if tab.kind.as_rules().is_some() {
+                // A Rules tab keeps its own title (#2398).
             } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }
@@ -94,6 +96,7 @@ impl Signex {
         self.document_state
             .rekey_parked_pcb_board(old_path, new_path);
         self.rekey_board_sketch(old_path, new_path);
+        self.rekey_board_3d(old_path, new_path);
         self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the

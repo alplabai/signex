@@ -31,11 +31,11 @@ pub(super) fn text_primary(theme: &Theme) -> text::Style {
     }
 }
 
-/// Muted / secondary text — the theme's secondary accent, still legible on
-/// the base and weak background surfaces used across the modal.
+/// Muted / secondary text — a neutral grey between the text and the page,
+/// legible on the base and weak surfaces used across the modal.
 pub(super) fn text_muted(theme: &Theme) -> text::Style {
     text::Style {
-        color: Some(theme.palette().secondary.base.color),
+        color: Some(muted_color(theme)),
         selection: None,
     }
 }
@@ -89,18 +89,18 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
     }
 }
 
+/// A section heading: semibold title, no rule under it (the Graphite pages
+/// separate sections with space and one neutral hairline, #2262).
 pub(super) fn section_title<'a>(title: signex_i18n::Localized) -> Element<'a, PrefMsg> {
     column![
-        text(title).size(TS.title).style(text_primary),
-        container(Space::new())
-            .width(Length::Fill)
-            .height(1)
-            .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.palette().background.strong.color)),
-                ..container::Style::default()
-            }),
+        text(title)
+            .size(TS.title)
+            .font(iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..iced::Font::DEFAULT
+            })
+            .style(text_primary),
     ]
-    .spacing(6)
     .boxed()
 }
 
@@ -109,11 +109,45 @@ pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
         .width(Length::Fill)
         .height(1)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.palette().background.strong.color)),
+            background: Some(Background::Color(rule_color(theme))),
             ..container::Style::default()
         })
         .boxed()
 }
+
+/// `a` moved `t` of the way to `b`, channel by channel.
+fn toward(a: iced::Color, b: iced::Color, t: f32) -> iced::Color {
+    iced::Color::from_rgb(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+    )
+}
+
+/// The neutral hint ink: the text colour toward the page, so it stays grey
+/// rather than the palette's warm secondary hue.
+pub(super) fn muted_color(theme: &Theme) -> iced::Color {
+    let palette = theme.palette();
+    toward(
+        palette.background.base.text,
+        palette.background.base.color,
+        MUTED_TOWARD_PAGE,
+    )
+}
+
+/// The neutral hairline between sections, mixed the same way.
+pub(super) fn rule_color(theme: &Theme) -> iced::Color {
+    let palette = theme.palette();
+    toward(
+        palette.background.base.text,
+        palette.background.base.color,
+        RULE_TOWARD_PAGE,
+    )
+}
+
+/// How far the hint ink and the hairline sit from the text toward the page.
+const MUTED_TOWARD_PAGE: f32 = 0.45;
+const RULE_TOWARD_PAGE: f32 = 0.88;
 
 /// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
 /// theme-derived so it reads on both light and dark palettes.
@@ -133,5 +167,32 @@ pub(super) fn secondary_button_style(theme: &Theme, status: button::Status) -> b
             ..Border::default()
         },
         ..button::Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::ThemeId;
+
+    /// Spread between the strongest and weakest channel: 0 is a pure grey.
+    fn tint(c: iced::Color) -> f32 {
+        c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b)
+    }
+
+    /// #2262: hint text and section rules are neutral greys, not the warm
+    /// secondary (brown) and strong background (tan) of the iced palette.
+    #[test]
+    fn hint_ink_and_rules_are_neutral_in_both_graphite_themes() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let theme = crate::app::Signex::id_to_iced_theme(id);
+            let palette = theme.palette();
+            for (what, c) in [("hint", muted_color(&theme)), ("rule", rule_color(&theme))] {
+                assert!(tint(c) < 0.03, "{id:?} {what} is tinted: {c:?}");
+            }
+            assert_ne!(muted_color(&theme), palette.secondary.base.color);
+            assert_ne!(rule_color(&theme), palette.background.strong.color);
+            assert_eq!(text_muted(&theme).color, Some(muted_color(&theme)));
+        }
     }
 }

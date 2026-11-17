@@ -33,37 +33,44 @@ crate would be the "kept in step" pair ADR-0005 bans.
   when their capsules (centre segment plus half the width) overlap, so a
   cross mid-segment counts with no end on the other. Parallel tracks join
   only when the edges touch; a 1 nm gap does not.
-- Zones: a same-net zone is copper on its one layer. A pad, track or via
-  joins it when its shape overlaps the zone polygon (touching counts), and
-  everything that joins one zone is one island. The polygon is the zone's
-  OUTLINE, because the model stores no filled polygon (the fill is not
-  computed or saved); it may be concave. The test is integer nm
-  (`Shape::overlaps_polygon`); the only float is the round-rect
-  corner-arc outline above. A via joins a zone on any copper layer of its span that
-  the zone is on; a through pad or via reaches every layer.
-- Zone to zone: two same-net zones on a shared copper layer whose
-  outlines meet (an edge crossing or touching, or one wholly inside the
-  other) are one copper, found through an R-tree of outline boxes. Zones 1 nm
-  apart do not join.
+- Zones: a same-net zone is copper on its one layer, and a pad, track or via
+  joins it when its shape meets the zone's copper (touching counts). A
+  zone's copper (#2216):
+  - a polygon pour (`fill_type = "pour"`): its fill, from
+    `pcb_geom::zone_fills` (see `docs/PCB_TOOLS.md`, "Polygon Pour"), with
+    its holes and the clearance from other nets cut out. Each separate piece
+    of the fill is its own copper, so pads on two pieces of one pour stay
+    apart; a pour with nothing left to fill is no copper.
+  - any other zone (a Fill or Solid Region): its outline less its usable
+    holes (`Zone::usable_holes`); it may be concave.
+
+  An area's holes are open: copper wholly inside a hole, touching none of
+  its edges, does not meet the area, so a pad in a hole gets a ratsnest
+  line. The tests are integer nm (`Shape::overlaps_polygon` and
+  `area_touch`); the only float is the round-rect corner-arc outline above.
+  A via joins a zone on any copper layer of its span that the zone is on; a
+  through pad or via reaches every layer. `ratsnest` computes the fills
+  itself; a caller that holds them passes them to `ratsnest_with_fills`.
+- Zone to zone: two same-net zone areas on a shared copper layer that meet
+  (an edge crossing or touching, or one wholly inside the other and not
+  inside one of its holes) are one copper, found through an R-tree of
+  outline boxes. Areas 1 nm apart do not join.
 - A zone outline with no area (fewer than 3 distinct points, all collinear,
   or one point repeated) is a zero-width segment or a point, like a
   zero-width pad: it joins only what touches that segment or point, and
   never the plane around it. It never "holds" a corner of another zone or
-  is held by one. An empty outline is no copper.
-- Not modelled: the zone fill itself (#2216 tracks using the filled polygon,
-  holes and clearance, once fills are computed). Until then zone holes and
-  the clearance the fill keeps from other nets are ignored: a pad inside a
-  zone hole counts as joined and gets no ratsnest line (a false negative),
-  as does one the real fill would leave isolated; drill holes (a
-  through-hole pad is solid copper, so a track through its hole counts as
-  touching); and the clearance a track needs to a pad of another net (that
-  is DRC).
+  is held by one. An empty outline is no copper. A pour with such an
+  outline has no fill.
+- Not modelled: drill holes (a through-hole pad is solid copper, so a track
+  through its hole counts as touching), and the clearance a track needs to a
+  pad of another net (that is DRC).
 
 ## Cost
 
-The app computes the lines in `sync_pcb_canvas_from_visible_board`, keyed
+The app computes the pour fills and then the lines in
+`sync_pcb_canvas_from_visible_board` (`PcbRatsnest::refresh`), keyed
 by `(tab path, pcb revision)`, so a camera move or a net toggle does not
-recompute. `crates/pcb-geom/tests/ratsnest_corpus.rs` times a 10,000-track,
+recompute; the canvas draws the same fills. `crates/pcb-geom/tests/ratsnest_corpus.rs` times a 10,000-track,
 100-net board and asserts a loose bound (5 s in debug CI); release runs
 print the figure with `--nocapture`.
 

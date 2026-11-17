@@ -27,6 +27,11 @@ impl Signex {
                         },
                     ));
                 }
+                // A board placement tool pauses for the values Properties
+                // shows, or goes on placing (#2393).
+                if let Some(task) = self.toggle_board_tool_pause() {
+                    return Task::batch([task, self.finish_update()]);
+                }
                 // Pasted content has no pre-placement properties: the Tab form
                 // belongs to a part on the cursor and the legacy tools.
                 if self
@@ -265,6 +270,9 @@ impl Signex {
                 // values the user just edited — only un-pause the canvas and
                 // close any transient selection the dock picked up.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
+                if self.is_board_tool_paused() {
+                    self.resume_board_tool();
+                }
                 self.interaction_state.active_canvas_mut().selected.clear();
                 // The overlay layer draws the selection highlight and now
                 // also the ERC markers; without a rebuild the old highlight
@@ -334,6 +342,11 @@ impl Signex {
                 }
                 self.finish_update()
             }
+            // Measure on a board is the board's own tool (#2403).
+            ToolMessage::SelectTool(Tool::Measure) if self.has_active_pcb() => {
+                self.arm_board_measure();
+                self.finish_update()
+            }
             ToolMessage::SelectTool(tool) => {
                 // Any tool pick ends a part on the cursor and cancels a
                 // library read still in flight.
@@ -368,6 +381,9 @@ impl Signex {
                     Tool::SheetEntry => Some("Sheet Entry".to_string()),
                     Tool::Measure => Some("Measure".to_string()),
                     Tool::BreakWire => Some("Break Wire".to_string()),
+                    Tool::Blanket => Some("Blanket".to_string()),
+                    Tool::CompileMask => Some("Compile Mask".to_string()),
+                    Tool::DiffPair => Some("Differential Pair".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

@@ -14,6 +14,12 @@ pub enum NetNavMsg {
     SheetForwardRequested,
     /// Highlight the net under the cursor on every sheet.
     NetHighlightRequested,
+    /// Highlight the net at the world point `at` on every sheet, such as where
+    /// a context menu was opened (#2419); the selection's net when nothing on
+    /// a net is there.
+    NetHighlightAtRequested {
+        at: (f64, f64),
+    },
     /// Highlight the net of the selection and select what is on it here.
     RelatedNetHighlightRequested,
     HighlightStepRequested {

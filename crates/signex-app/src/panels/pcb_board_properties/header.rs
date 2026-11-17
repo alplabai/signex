@@ -1,8 +1,8 @@
 //! The panel header (#2353): the board's name, the search field, the
-//! Selection Filter menu and the General / Parameters / Health Check tabs.
+//! Selection Filter button and the General / Parameters / Health Check tabs.
 
 use iced::widget::text::{Ellipsis, Wrapping};
-use iced::widget::{Column, Row, container, row};
+use iced::widget::{Column, Row, container, row, svg};
 use iced::{Alignment, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, UserText, ids, t};
 use signex_widgets::{button, text, text_input};
@@ -10,6 +10,7 @@ use signex_widgets::{button, text, text_input};
 use super::super::form_look;
 use super::chrome::Form;
 use super::{BoardTab, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, filter, info};
+use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, TypeScale, pill};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -43,24 +44,8 @@ pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'
         .size(TS.body)
         .padding([SP.xs, SP.s])
         .style(form_look::text_input_style)
-        .width(Length::FillPortion(3));
-    let summary = filter::summary(form.i18n, &board.filter);
-    let menu = button(
-        row![
-            text(summary)
-                .size(TS.body)
-                .wrapping(Wrapping::None)
-                .ellipsis(Ellipsis::End)
-                .width(Length::Fill),
-            signex_widgets::chevron::chevron(board.view.filter_menu_open, TS.section, form.muted()),
-        ]
-        .spacing(SP.s)
-        .align_y(Alignment::Center),
-    )
-    .padding([SP.xs, SP.s])
-    .width(Length::FillPortion(2))
-    .on_press(msg(PcbBoardMsg::FilterMenuToggled))
-    .style(form_look::value_field_button);
+        .width(Length::Fill);
+    let menu = filter_button(form, board);
     let tools = row![search, menu].spacing(SP.s).align_y(Alignment::Center);
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new()
@@ -68,9 +53,6 @@ pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'
         .width(Length::Fill)
         .push(title.boxed())
         .push(tools.boxed());
-    if board.view.filter_menu_open {
-        col = col.push(filter::chips(form, &board.filter));
-    }
     col = col.push(tabs(form, board.view.tab));
     container(col)
         .padding([SP.m, SP.l])
@@ -143,4 +125,52 @@ fn tab<'a>(
             style
         })
         .boxed()
+}
+
+/// The Selection Filter button (#2383): the Active Bar's filter icon and how
+/// many kinds are on, accent when any is off, the off kinds on hover. A click
+/// opens the Active Bar's Selection Filter dropdown; the chips themselves
+/// live in the Selection Filter section only.
+fn filter_button<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
+    let filter = &board.filter;
+    let total = pcb_geom::PickKind::ALL.len();
+    let on = filter.on_kinds().count();
+    let accent = resolve(form.tokens()).accent_text;
+    let ink = if on < total { accent } else { form.muted() };
+    let glyph = svg(crate::icons::icon_filter(form.ctx.theme_id))
+        .width(TS.body)
+        .height(TS.body);
+    let glyph = if on < total {
+        glyph.style(move |_: &Theme, _| svg::Style {
+            color: Some(accent),
+            ..Default::default()
+        })
+    } else {
+        glyph
+    };
+    let count = t!(form.i18n, ids::PCB_BOARD_FILTER_COUNT, "on" => on, "total" => total);
+    let content = row![
+        glyph,
+        text(count)
+            .size(TS.body)
+            .color(ink)
+            .wrapping(Wrapping::None)
+    ]
+    .spacing(SP.xs)
+    .align_y(Alignment::Center);
+    let shown = button(content)
+        .padding([SP.xs, SP.s])
+        .on_press(msg(PcbBoardMsg::FilterMenuToggled))
+        .style(form_look::value_field_button);
+    let off: Vec<String> = pcb_geom::PickKind::ALL
+        .into_iter()
+        .filter(|kind| !filter.is_on(*kind))
+        .map(|kind| t!(form.i18n, filter::kind_label(kind)).into_string())
+        .collect();
+    let tip = if off.is_empty() {
+        form.t(ids::PCB_BOARD_FILTER_TIP_ALL)
+    } else {
+        t!(form.i18n, ids::PCB_BOARD_FILTER_TIP_OFF, "off" => off.join(", "))
+    };
+    form.tip(shown.boxed(), tip)
 }

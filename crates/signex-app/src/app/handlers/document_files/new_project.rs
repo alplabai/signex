@@ -292,6 +292,9 @@ pub(crate) struct RuleSeed {
     /// them before it reads the library, so an edit made a moment ago is in
     /// the profile the new project copies.
     pub pending: Vec<crate::app::rule_profile_ui::Dispatch>,
+    /// This machine's Annotate undo preference, stored in the new project as
+    /// its own choice (#1692); `None` stores none.
+    pub annotate_undo: Option<crate::annotate_undo::AnnotateUndo>,
 }
 
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
@@ -313,6 +316,9 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
     }
     let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
         data.rules = Some(rules);
+        if let Some(choice) = seed.annotate_undo {
+            data.set_annotate_undo(Some(choice));
+        }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
         signex_types::project::write_project(project_path, &data)
@@ -445,6 +451,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Company".into()),
             pending: Vec::new(),
+            annotate_undo: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
@@ -482,6 +489,7 @@ mod tests {
             dir: Some(tmp.path().join("no-library-yet")),
             selected: None,
             pending: Vec::new(),
+            annotate_undo: None,
         };
         let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -508,6 +516,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Missing".into()),
             pending: Vec::new(),
+            annotate_undo: None,
         };
         let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -545,6 +554,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: None,
             pending: queue.pending(),
+            annotate_undo: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Queued.snxprj"), &seed).unwrap();
@@ -680,5 +690,24 @@ mod tests {
             NewProjectLayout::Picked,
         );
         assert!(err.is_err_and(|e| e.to_string().contains("inside the project")));
+    }
+
+    /// #1692: this machine's Annotate undo preference seeds a new project as
+    /// the project's own choice.
+    #[test]
+    fn a_new_project_stores_the_annotate_undo_preference() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            selected: None,
+            pending: Vec::new(),
+            annotate_undo: Some(crate::annotate_undo::AnnotateUndo::PerSheet),
+        };
+        let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(
+            data.annotate_undo(),
+            Some(crate::annotate_undo::AnnotateUndo::PerSheet)
+        );
     }
 }

@@ -5,7 +5,10 @@
 //! and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
+mod checklist;
+mod explain;
 pub mod findings;
+mod flags;
 mod keepout;
 mod limits;
 mod profile;
@@ -13,6 +16,7 @@ mod rule_notes;
 mod rules;
 mod severity;
 mod user_rules;
+mod waiver;
 
 use uuid::Uuid;
 
@@ -20,11 +24,18 @@ use pcb_geom::{GeomError, ItemRef, PointNm, Rejected};
 use signex_types::violation::Severity;
 
 pub use check::run;
+pub use checklist::RuleResult;
+pub use explain::{Candidate, Effective, Explanation, Source, Verdict};
+pub use flags::{FlaggedRule, RuleFlag};
 pub use profile::{DrcRuleChange, DrcRuleSection, adopt_profile_drc, diff_drc_against_profile};
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
-pub use severity::{DrcSeverities, resolve_severities, resolve_severities_with};
+pub use severity::{
+    DrcSeverities, WrittenRuleEdit, follow_written_rule_edit, resolve_severities,
+    resolve_severities_with, written_rule_override,
+};
 use user_rules::USER_RULE_ID_PREFIX;
-pub use user_rules::{CopperObject, Limit, NetScope, UserRule};
+pub use user_rules::{CopperObject, Limit, LimitKind, NetScope, UserRule};
+pub use waiver::{rule_id, waiver_key, waiver_of};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
 /// kind, so a capped list of rows keeps the shorts. A new kind goes after
@@ -120,6 +131,10 @@ impl DrcReport {
     }
 }
 
+#[cfg(test)]
+mod class_pair_tests;
+#[cfg(test)]
+mod explain_tests;
 #[cfg(test)]
 mod findings_tests;
 #[cfg(test)]

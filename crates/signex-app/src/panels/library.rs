@@ -65,18 +65,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let border_c = theme_ext::border_color(&ctx.tokens);
     let i18n = &*ctx.i18n;
 
+    // The dock tab already reads "SCH Library": no title row repeats it.
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(
-        container(
-            text(t!(i18n, PanelKind::SchLibrary.message()))
-                .size(TS.body)
-                .color(primary),
-        )
-        .padding([6.0, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
 
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         col = col.push(
@@ -448,11 +438,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         container(
             row![
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_NAME))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted)
                     .width(Length::Fill),
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_PADS))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted),
             ]
             .spacing(SP.m)
@@ -811,3 +801,7 @@ pub fn view_component_sheet<'a>(
         .style(super::form_look::scrollbar_style)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "sch_library_tests.rs"]
+mod sch_library_tests;

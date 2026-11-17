@@ -59,7 +59,9 @@ pub(super) fn section<'a>(
             msg: msg(PcbBoardMsg::SnapScopePicked(scope)),
         })
         .collect();
-    let scopes = form.field(&snapping, form.segmented(scopes));
+    // Three two-word labels do not fit the field column: they would wrap
+    // into each other. The choice gets the whole form width (#2262).
+    let scopes = form.stacked(&snapping, form.segmented(scopes));
     rows.push(form.row(&[&snapping], scopes));
 
     let objects = form.t(ids::PCB_BOARD_SNAP_OBJECTS);

@@ -251,6 +251,7 @@ pub(in crate::canvas) mod tests {
             bus_entries: Vec::new(),
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
+            directives: Vec::new(),
             title_block: Default::default(),
             text_widths: Default::default(),
             text_extents: Default::default(),

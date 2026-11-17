@@ -8,10 +8,18 @@ changed only through `BoardCommand::SetBoardOptions`, one undo step per edit.
 | Setting | What it does |
 |---|---|
 | Guides | Endless lines through a point: vertical, horizontal, +45° (rising to the right) or -45°. Each has an enabled flag and a colour. Enabled guides are drawn across the view and are snap targets while Snap Options ▸ Guides is on. |
-| Extra grids | Snap grids above the board's own step (`PcbSetup::grid_size`), in priority order (first = priority 1). Each has a name, step, origin, colour, and applies to components, non-components or both. The Global Board Snap Grid (priority 50) is the board's own step at the origin and applies to everything no extra grid claims. Extra grids are drawn over the board area in their colour. |
-| Sheet | The rectangle drawn behind the board area. With Get Size From Sheet Layer on (the default) it is the box around the board shape: a board has no separate sheet layer. Turned off, the stored X, Y, Width and Height are used; turning it off keeps the current box, so nothing jumps. |
-| Polygon Naming Scheme | How a polygon pour is named: `NET NAME_LXX_PXXX` (default), `LXX_NET NAME_PXXX`, `Board Layer_NET NAME_PXXX` or `NET NAME_Board Layer_PXXX`. `PolygonNaming::name` builds the name; pours are named by the pour tool (#2373). |
-| Designator Display | Physical or Logical. Stored for multi-channel designs; boards have one designator per part today, so both show the same text. |
+| Extra grids | Snap grids above the board's own step (`PcbSetup::grid_size`), in priority order (first = priority 1). Each has a name, step, origin, colour, and applies to components, non-components or both. The Global Snap Grid (priority 50, the first card of the Grid Manager, which lists the extra grids under it highest priority first) is the board's own step counted from the board origin and applies to everything no extra grid claims. Extra grids are drawn over the board area in their colour. |
+| Sheet | The rectangle drawn behind the board area. With Size From Board on (the default) it is the box around the board shape: a board has no separate sheet layer. Turned off, the stored X, Y, Width and Height are used; turning it off keeps the current box, so nothing jumps. |
+| Pour Names | How a polygon pour is named: `NET NAME_LXX_PXXX` (default), `LXX_NET NAME_PXXX`, `Board Layer_NET NAME_PXXX` or `NET NAME_Board Layer_PXXX`. `PolygonNaming::name` builds the name; pours are named by the pour tool (#2373). |
+| Designators | Physical or Logical. Stored for multi-channel designs; boards have one designator per part today, so both show the same text. |
+
+## Origin
+
+The board origin (#2384), `BoardOptions::origin` (`signex_types::pcb_origin::BoardOrigin`), is the point a board shows as (0, 0). Shown coordinates run with X to the right and Y up the screen; the model's y grows down the screen, so `BoardOrigin::to_user` and `from_user` mirror Y about the origin. The status bar, the Component view's X and Y, the track, via and pad X/Y fields, and the Guide Manager, Grid Manager and Sheet coordinates read and type through it; the sheet's X and Y are its bottom-left corner.
+
+A new board (`PcbDefaults::new_board`, the New PCB setup dialog included) has no outline yet, so its board area is `EMPTY_BOARD_AREA` (100 × 80 mm) and its origin is that area's bottom-left corner (`board_area_bottom_left`). A board saved without an origin keeps counting from the model's zero. The origin marker is drawn at the origin, and the board's own grid (drawn and snapped) counts from it.
+
+Update PCB stages new parts to the right of the board; on a board with no outline and no parts it stages them inside the board area from its bottom-left corner, rows going up (`pcb_geom::stage_up`).
 
 ## Which grid snaps what
 
@@ -19,14 +27,14 @@ changed only through `BoardCommand::SetBoardOptions`, one undo step per edit.
 footprint, a placed library part and a paste holding a footprint use
 `GridUse::Components`; a paste of only tracks and vias, and a guide placed with
 Place, use `GridUse::NonComponents`. The first extra grid that applies wins;
-with none, the board's own step at the origin. Extra grids have no extents: a
+with none, the board's own step counted from the board origin. Extra grids have no extents: a
 grid that applies to components governs every component carry on the board.
 
 ## Snapping order while footprints are carried
 
 `pcb_canvas::carry_delta`, in order:
 
-1. An object point within the snap distance (Snap Distance × the board step)
+1. An object point within the snap distance (Distance × the board step)
    takes the grab point exactly onto it. Snapping Off skips this step and
    step 4.
 2. Otherwise the nearest footprint origin lands on the components grid (with
@@ -35,7 +43,7 @@ grid that applies to components governs every component carry on the board.
    takes the grab point onto it; a vertical guide fixes x, a horizontal one
    fixes y, a diagonal one takes the grab point onto its nearest point.
 4. With Axes on, an axis no guide fixed lines up with the nearest object point
-   that is within Axis Snap Range of the pointer and within the snap distance
+   that is within Axis Range of the pointer and within the snap distance
    on that axis.
 
 The object kinds are the Objects for snapping list. Track/Arc Lines snap to the
@@ -48,8 +56,8 @@ a board holds no 3D bodies.
 
 ## Settings kept for the session
 
-Grids / Guides / Axes, Snapping, the object list, Snap Distance and Axis Snap
-Range (default 10 mm) are editor settings in `UiState::pcb_snap`, as #2353
+Grids / Guides / Axes, Snapping, the object list, Distance and Axis Range
+(default 10 mm) are editor settings in `UiState::pcb_snap`, as #2353
 decided for the snap options. They are not written to the board.
 
 ## File format
@@ -88,6 +96,16 @@ color = "#e8c43aff"
 components = true
 non_components = false
 ```
+
+The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
+
+Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
+table per waiver with `key` (`signex_drc::waiver_key`), `rule` and `note`,
+written only when the board waives one. The DRC results panel and the
+`waive_drc_violation` and `unwaive_drc_violation` commands set them, each
+as one `SetBoardOptions` undo step.
+
+The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
 
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

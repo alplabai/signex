@@ -22,6 +22,22 @@ library-browser-summary =
 # Caption in front of the lifecycle filter pills.
 library-browser-show = Show
 
+# Count line right of the filter pills: rows the search and filters leave
+# in the active table, of all its rows. Both are whole numbers.
+library-browser-shown = { $shown } of { $total } shown
+# The same, with the column the grid is sorted by.
+library-browser-shown-sorted = { $shown } of { $total } shown · sorted by { $column }
+
+# Status bar on a Library Browser tab: the library file and its row count.
+library-status-summary = { $library } · { $components ->
+        [one] { $components } component
+       *[other] { $components } components
+    }
+# The same with a row selected: its Internal PN.
+library-status-selected = { $library } · 1 selected · { $pn }
+# Status bar on a component editor tab: the Internal PN and its lifecycle.
+library-status-component = { $pn } · { $lifecycle }
+
 # Lifecycle filter pill: Released, In Review and Draft rows.
 library-browser-filter-active = Active + Preferred
 

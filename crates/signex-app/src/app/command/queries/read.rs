@@ -29,6 +29,7 @@ const SHEET_ARRAYS: &[(&str, &str)] = &[
     ("sheet_entry", "child_sheets"),
     ("drawing", "drawings"),
     ("no_erc", "no_erc_directives"),
+    ("directive", "directives"),
 ];
 const BOARD_ARRAYS: &[(&str, &str)] = &[
     ("footprint", "footprints"),

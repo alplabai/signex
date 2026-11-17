@@ -100,13 +100,72 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
   (#2199), each answered once its run lands, like an edit waiting for its
   reads
-  ([CLI.md](CLI.md), "Checks on demand");
+  ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
+  `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
+  `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
+  the board queries `measure_board`,
+  `query_board_nets` and `find_similar_items` (#2403), and the board's panel
+  `board_panel` (#2410), and the Project tab's `project_settings`
+  (#1689-#1693);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
-  `clear_all_net_colors`, `assign_net_class`, `save_document` and
-  `close_active_document`. A test pins this set, so a catalog row that joins or
-  leaves it is a visible decision.
+  `clear_all_net_colors`, the read-only board reports `board_report_bom`,
+  `board_report_netlist`, `board_report_net_length` and
+  `board_report_components` (#2404, each answers with its table as JSON),
+  `repour_all` (#2216; fills the named board's pours again and answers with
+  each pour's pieces, copper area and removed islands; no undo step),
+  `assign_net_class`, `autoplace_fields` (#1667; one undo step on the named
+  sheet), `save_document`, `close_active_document`, the board
+  view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
+  `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
+  of the named board, no undo step; `save_layer_set` also keeps the set in the
+  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
+  `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
+  `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
+  `document` is the project or any document of it), the board's DRC
+  results and net classes
+  (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
+  `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
+  `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
+  `assign_board_net_class`, each answering with what it did, the board
+  edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
+  `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
+  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), and the board
+  Tools edits (#2408, #2409) `stitch_vias`, `add_teardrops`,
+  `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
+  `keepout_from_selection` and `arrange_in_box`, each one board undo step
+  answered with the uuids it added, removed and changed
+  ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
+  `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
+  each, answered with the drawing as JSON), and the length tuning commands
+  `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
+  board, answered with the tuned nets and their lengths as JSON), and the
+  panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
+  (#2410; one undo step on the named board each, answered with the panel as
+  JSON), and the board's `swap_pins`, `swap_gates`,
+  `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
+  one undo step across the board and its sheet, a save writes the block's
+  file in the project's `reuse-blocks` folder, and a place may wait for the
+  project's blocks to be read like an edit waiting for its reads), and the
+  Project tab edits `project_move_sheet`, `project_add_variant`,
+  `project_rename_variant`, `project_remove_variant`,
+  `project_set_active_variant`, `project_move_library`,
+  `project_set_annotate_undo` and `project_set_version_control`
+  (#1689-#1693; `document` is the project or any document of it). A test
+  pins this set, so a catalog row that joins or leaves it is a visible
+  decision.
+  The window-layout commands `tile_windows_horizontally`,
+  `tile_windows_vertically` and `untile_documents` (#2249) name no document:
+  they are open to agents by the maintainer's rule that everything is
+  AI-controllable, run the Window menu row's handler (refused with its reason
+  when the row is greyed) and answer with the layout they left:
+  `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
+  pane `{"focused", "document", "name"}` in pane order (`document` and
+  `name` are null for a pane outside an open project). They never change the
+  active tab.
+  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
+  `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 
@@ -129,6 +188,13 @@ The last three are open to agents by the maintainer's decision (#1924):
 - `assign_net_class` runs by document as in the headless run: the project's
   class table changes, and the pick is one step on that sheet's undo timeline
   (#2171), after the person's own steps.
+
+The board net-class commands (`add_net_class`, `rename_net_class`,
+`delete_net_class`, `set_net_class_rules`, `assign_board_net_class`) are
+flagged `mutates_doc,undoable` like `assign_net_class`, but their step is one
+of the project's net-class history, not the board's: Edit ▸ Undo and `revert`
+do not take it back, the board Net Classes panel's Undo and Redo do. An agent
+puts a class back with the inverse command.
 
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own

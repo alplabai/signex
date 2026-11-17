@@ -433,3 +433,104 @@ fn the_origin_marker_is_shown_by_default_and_toggles() {
     view.set_origin_marker_visible(false);
     assert!(!view.origin_marker_visible());
 }
+
+/// #2379: the layer tab menu's Hide this layer and Show only this layer.
+#[test]
+fn hide_and_show_only_act_on_one_layer() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.hide(BOTTOM);
+    view.hide(BOTTOM);
+    assert!(view.is_hidden(BOTTOM), "hiding twice keeps it hidden");
+
+    let mechanical = PcbLayer::Mechanical(MechanicalLayer::new(3).unwrap());
+    let layers: Vec<PcbLayer> = layer_rows(&board.layers)
+        .into_iter()
+        .map(|row| row.layer)
+        .collect();
+    view.show_only(&layers, BOTTOM);
+    assert_eq!(view.active(), BOTTOM, "the shown layer is the active one");
+    assert!(!view.is_hidden(BOTTOM));
+    assert!(view.is_hidden(TOP) && view.is_hidden(mechanical));
+    assert!(!view.is_hidden(BOARD_OUTLINE), "the outline stays drawn");
+    assert!(
+        view.multi_layer_visible(),
+        "the Multi-Layer row is untouched"
+    );
+
+    view.show_all();
+    assert!(!view.has_hidden());
+}
+
+/// #2394: a highlighted layer is drawn on top and every other layer dimmed,
+/// whatever the active layer; highlighting it again ends it.
+#[test]
+fn a_highlighted_layer_dims_every_other_layer() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.toggle_highlight(BOTTOM);
+    assert_eq!(view.highlighted(), Some(BOTTOM));
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    let nets: Vec<(u32, bool)> = snapshot.traces.iter().map(|t| (t.net, t.dimmed)).collect();
+    assert_eq!(nets, vec![(1, true), (3, true), (2, false)]);
+    view.toggle_highlight(BOTTOM);
+    assert_eq!(view.highlighted(), None);
+}
+
+/// #2394: seen from below, the bottom copper is drawn over the top copper.
+#[test]
+fn a_flipped_view_draws_the_bottom_copper_last() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    // A non-copper active layer: no copper is dimmed or raised.
+    view.set_active(PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+    let order = |view: &PcbLayerView| -> Vec<u32> {
+        PcbSnapshot::from_board_with_view(&board, view)
+            .traces
+            .iter()
+            .map(|t| t.net)
+            .collect()
+    };
+    assert_eq!(order(&view), vec![1, 2, 3], "source order from above");
+    view.toggle_flipped();
+    assert!(view.flipped());
+    assert_eq!(order(&view), vec![3, 1, 2], "bottom copper last from below");
+}
+
+/// #2394: a layer set shows its layers alone and the strip lists only them;
+/// Show all layers lists every layer again.
+#[test]
+fn a_layer_set_shows_its_layers_and_lists_them() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    let listed = crate::pcb::listed_layers(&board.layers);
+    let set = crate::pcb::ShownLayerSet {
+        id: crate::pcb::LayerSetId::Builtin(crate::pcb::BuiltinLayerSet::Signal),
+        layers: vec![TOP, BOTTOM],
+    };
+    view.show_set(&listed, set);
+    assert!(!view.is_hidden(TOP) && !view.is_hidden(BOTTOM));
+    let mechanical = PcbLayer::Mechanical(MechanicalLayer::new(3).unwrap());
+    assert!(view.is_hidden(mechanical));
+    assert!(!view.is_hidden(BOARD_OUTLINE), "the outline stays drawn");
+    assert!(view.lists_in_strip(TOP) && !view.lists_in_strip(mechanical));
+    view.show_all();
+    assert!(view.layer_set().is_none() && view.lists_in_strip(mechanical));
+}
+
+#[test]
+fn a_via_with_a_smaller_inner_size_draws_it_on_an_inner_layer() {
+    let mut board = board();
+    board.vias[0].layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.8,
+        middle: 0.5,
+        bottom: 0.8,
+    });
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Inner(InnerCopper::new(1).unwrap()));
+    let inner = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(inner.vias[0].diameter_mm, 0.5, "#2401: the inner ring");
+    view.set_active(TOP);
+    let top = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(top.vias[0].diameter_mm, 0.8, "the top ring");
+}

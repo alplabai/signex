@@ -90,7 +90,7 @@ impl Signex {
     /// machine's preferences and `User Default` DRC section, with the shipped
     /// profile named as provenance only when that rule set (ERC and DRC) is
     /// exactly that profile.
-    pub(super) fn seeded_project_rules(&self) -> ProjectRules {
+    pub(crate) fn seeded_project_rules(&self) -> ProjectRules {
         let erc = signex_erc::project_rules::seed_from_overrides(
             &self.ui_state.erc_severity_override,
             &self.ui_state.pin_matrix_overrides,

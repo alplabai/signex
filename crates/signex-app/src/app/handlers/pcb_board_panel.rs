@@ -23,7 +23,14 @@ impl Signex {
             PcbBoardMsg::TabPicked(BoardTab::Parameters) => {}
             PcbBoardMsg::TabPicked(tab) => view.tab = *tab,
             PcbBoardMsg::SearchChanged(text) => view.search = text.clone(),
-            PcbBoardMsg::FilterMenuToggled => view.filter_menu_open = !view.filter_menu_open,
+            // The header button opens the Active Bar's filter dropdown (#2383).
+            PcbBoardMsg::FilterMenuToggled => {
+                let open = &mut self.interaction_state.pcb_bar_menu;
+                *open = match *open {
+                    Some(crate::app::PcbBarMenu::Filter) => None,
+                    _ => Some(crate::app::PcbBarMenu::Filter),
+                };
+            }
             PcbBoardMsg::GridStepTyped(text) => view.grid_draft = Some(text.clone()),
             PcbBoardMsg::GridStepSubmitted => self.apply_pcb_grid_step(),
             PcbBoardMsg::FilterKindToggled(kind) => {
@@ -36,6 +43,17 @@ impl Signex {
                 filter.set_all(!all);
                 self.refresh_pcb_highlight();
             }
+            PcbBoardMsg::FilterAllSet(on) => {
+                self.ui_state.pcb_pick_filter.set_all(*on);
+                self.refresh_pcb_highlight();
+            }
+            PcbBoardMsg::FilterPresetAdded => task = self.add_pcb_filter_preset(),
+            PcbBoardMsg::FilterPresetApplied(idx) => self.apply_pcb_filter_preset(*idx),
+            PcbBoardMsg::FilterPresetRenamed(idx, name) => {
+                task = self.rename_pcb_filter_preset(*idx, name.clone());
+            }
+            PcbBoardMsg::FilterPresetUpdated(idx) => task = self.update_pcb_filter_preset(*idx),
+            PcbBoardMsg::FilterPresetRemoved(idx) => task = self.remove_pcb_filter_preset(*idx),
             PcbBoardMsg::SnapToGridsToggled => {
                 let snap = &mut self.ui_state.pcb_snap;
                 snap.to_grids = !snap.to_grids;
@@ -57,18 +75,32 @@ impl Signex {
                 view.drafts.insert(*field, text.clone());
             }
             PcbBoardMsg::FieldSubmitted(field) => self.submit_pcb_board_field(*field),
-            PcbBoardMsg::GuideAdded(kind) => self.add_pcb_guide(*kind),
-            PcbBoardMsg::GuidePlaceArmed(kind) => self.arm_pcb_guide_place(*kind),
-            PcbBoardMsg::GuideSelected(id) => view.selected_guide = Some(*id),
+            PcbBoardMsg::GuideAdded(kind) => {
+                view.guide_add_open = false;
+                self.add_pcb_guide(*kind);
+            }
+            PcbBoardMsg::GuidePlaceArmed(kind) => {
+                view.guide_add_open = false;
+                self.arm_pcb_guide_place(*kind);
+            }
             PcbBoardMsg::GuideEnabledToggled(id) => self.toggle_pcb_guide(*id),
             PcbBoardMsg::GuideColorStepped(id) => self.step_pcb_guide_color(*id),
-            PcbBoardMsg::GuideDeleted => self.delete_pcb_guide(),
-            PcbBoardMsg::GridAdded => self.add_pcb_grid(),
-            PcbBoardMsg::GridSelected(id) => view.selected_grid = Some(*id),
-            PcbBoardMsg::GridPropertiesToggled => {
-                view.grid_editor_open = !view.grid_editor_open && view.selected_grid.is_some();
+            PcbBoardMsg::GuideDeleted(id) => self.delete_pcb_guide(*id),
+            PcbBoardMsg::GuideMenuToggled(id) => {
+                view.guide_menu = (view.guide_menu != Some(*id)).then_some(*id);
             }
-            PcbBoardMsg::GridDeleted => self.delete_pcb_grid(),
+            PcbBoardMsg::GuideAddMenuToggled => view.guide_add_open = !view.guide_add_open,
+            PcbBoardMsg::GuidePlaceModeToggled => view.guide_place = !view.guide_place,
+            PcbBoardMsg::GridAdded => self.add_pcb_grid(),
+            PcbBoardMsg::GridMenuToggled(card) => {
+                view.grid_menu = (view.grid_menu != Some(*card)).then_some(*card);
+            }
+            PcbBoardMsg::GridEditToggled(card) => {
+                view.grid_menu = None;
+                view.grid_editing = (view.grid_editing != Some(*card)).then_some(*card);
+            }
+            PcbBoardMsg::GridMoved(id, up) => self.move_pcb_grid(*id, *up),
+            PcbBoardMsg::GridDeleted(id) => self.delete_pcb_grid(*id),
             PcbBoardMsg::GridComponentsToggled(id) => self.toggle_pcb_grid_use(*id, true),
             PcbBoardMsg::GridNonComponentsToggled(id) => self.toggle_pcb_grid_use(*id, false),
             PcbBoardMsg::GridColorStepped(id) => self.step_pcb_grid_color(*id),
@@ -85,12 +117,27 @@ impl Signex {
                 });
             }
             PcbBoardMsg::SheetFromBoardToggled => self.toggle_pcb_sheet_from_board(),
+            // #2410: the Panel section's buttons run the menu rows' commands.
+            PcbBoardMsg::PanelizeClicked => {
+                task = run_menu_command("panelize_board");
+            }
+            PcbBoardMsg::PanelRemoveClicked => {
+                task = run_menu_command("remove_board_panel");
+            }
+            PcbBoardMsg::PanelSeparationPicked(separation) => {
+                let separation = *separation;
+                self.edit_active_board_panel(|panel| {
+                    Ok(std::mem::replace(&mut panel.separation, separation) != separation)
+                });
+            }
             PcbBoardMsg::FastGridApplied(index) => self.apply_pcb_fast_grid(*index),
             PcbBoardMsg::ComponentsSelected(side) => self.select_pcb_components(*side),
             PcbBoardMsg::DrcResultsOpened => {
                 // The check's results are listed in the Messages panel.
                 task = Task::done(Message::Overlay(OverlayMsg::OpenPanel(PanelKind::Messages)));
             }
+            // The button runs the BOM report's command, as its menu row does.
+            PcbBoardMsg::ReportsOpened => task = run_menu_command("board_report_bom"),
         }
         self.sync_pcb_board_summary();
         task
@@ -170,6 +217,14 @@ impl Signex {
         if let Err(error) = self.execute_board_commands(&path, vec![command], Some(step)) {
             self.say_pcb_grid_refused(error);
         }
+    }
+}
+
+/// The task that runs catalog command `id` as its menu row does.
+fn run_menu_command(id: &str) -> Task<Message> {
+    match crate::keymap::AppCommandId::new(id) {
+        Ok(id) => Task::done(Message::Menu(crate::menu_bar::MenuMessage::Command(id))),
+        Err(_) => Task::none(),
     }
 }
 

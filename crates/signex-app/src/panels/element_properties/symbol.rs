@@ -2,13 +2,8 @@
 
 use super::super::*;
 use super::rows::{PanelStyle, info_row};
-use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_i18n::{Translatable, ids, t};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
+use signex_i18n::{ids, t};
 
 pub(super) fn push_symbol_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
@@ -44,8 +39,6 @@ pub(super) fn push_symbol_sections<'a>(
         missing: get("Library Status") == "Symbol missing",
     };
     let body = get("Body Style");
-    let position = get("Position");
-    let rotation = get("Rotation");
     let locked = get("Locked") == "Yes";
     let dnp = get("DNP") == "Yes";
     let has_mirror_x = ctx
@@ -158,31 +151,9 @@ pub(super) fn push_symbol_sections<'a>(
             .boxed(),
         );
 
-        // Location section — read-only for now
-        col = col.push(
-            ctx.collapsible(
-                "sel_location",
-                ids::PROPERTIES_SECTION_LOCATION,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row(
-                        t!(i18n, ids::PROPERTIES_POSITION),
-                        &position,
-                        muted,
-                        input_bg,
-                    ));
-                    c = c.push(form_input_row(
-                        t!(i18n, ids::PROPERTIES_ROTATION),
-                        &rotation,
-                        muted,
-                        input_bg,
-                    ));
-                    c
-                },
-            )
-            .boxed(),
-        );
+        // Location section: Position and Rotation, one undo step per edit.
+        let look = super::placed_rows::RowLook { muted, input_bg };
+        col = super::placed_rows::push_location_section(col, ctx, look);
 
         // Graphical section — checkboxes
         col = col.push(
@@ -226,45 +197,9 @@ pub(super) fn push_symbol_sections<'a>(
             .boxed(),
         );
 
-        // Parameters section — custom fields carried on the symbol
-        // instance. Read-only here; per-field editing belongs to the
-        // Parameter Manager dialog.
-        // The count goes in as `format!` wrote it, so English reads as before.
-        let header_label = if params.is_empty() {
-            Translatable::new(ids::PROPERTIES_SECTION_PARAMETERS_NONE)
-        } else {
-            Translatable::new(ids::PROPERTIES_SECTION_PARAMETERS_COUNT)
-                .arg("count", params.len().to_string())
-        };
-        let section_params = params.clone();
-        col = col.push(
-            ctx.collapsible(
-                "sel_parameters",
-                header_label,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    if section_params.is_empty() {
-                        c = c.push(
-                            container(
-                                text(t!(i18n, ids::PROPERTIES_NO_CUSTOM_PARAMETERS))
-                                    .size(TS.body)
-                                    .color(muted),
-                            )
-                            .padding([6.0, SP.m])
-                            .boxed(),
-                        );
-                    } else {
-                        for (name, value) in &section_params {
-                            // raw: a parameter name from the design, not language.
-                            c = c.push(form_input_row(raw(name.clone()), value, muted, input_bg));
-                        }
-                    }
-                    c
-                },
-            )
-            .boxed(),
-        );
+        // Parameters section: the custom fields of the instance, each edited
+        // in place and committed on Enter.
+        col = super::placed_rows::push_parameters_section(col, ctx, params, look);
 
         col = super::footprint_section::push_footprint_section(col, ctx);
         col = super::pins::push_pins_section(col, ctx, muted, primary, border_c);

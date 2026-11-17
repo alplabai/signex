@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{FormatError, UnknownFields};
 use crate::pcb::{LayerDef, PcbBoard, PcbSetup};
+use crate::pcb_stack::{LayerStack, StackLayer};
 
 #[derive(Serialize)]
 pub(super) struct StackBlock<'a> {
@@ -29,6 +30,9 @@ pub(super) struct StackBlock<'a> {
     display_names: BTreeMap<String, toml::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     setup: Option<&'a PcbSetup>,
+    /// The physical stack (#2401), top to bottom; absent until it is edited.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rows: Option<&'a [StackLayer]>,
     #[serde(flatten)]
     unknown: &'a UnknownFields,
 }
@@ -48,6 +52,9 @@ pub(super) struct StackRaw {
     display_names: BTreeMap<String, toml::Value>,
     #[serde(default)]
     setup: Option<PcbSetup>,
+    /// Absent in files saved before the stack manager (#2401).
+    #[serde(default)]
+    rows: Option<Vec<StackLayer>>,
     /// Foreign keys inside `[stackup]`.
     #[serde(flatten)]
     unknown: UnknownFields,
@@ -73,6 +80,7 @@ pub(super) fn block(board: &PcbBoard) -> StackBlock<'_> {
         },
         display_names: display_names(board),
         setup: board.setup.as_ref(),
+        rows: board.stackup.as_ref().map(|s| s.layers.as_slice()),
         unknown: &board.unknown.stackup,
     }
 }
@@ -98,6 +106,7 @@ fn display_names(board: &PcbBoard) -> BTreeMap<String, toml::Value> {
 pub(super) struct StackRead {
     pub layers: Vec<LayerDef>,
     pub setup: Option<PcbSetup>,
+    pub stackup: Option<LayerStack>,
     pub unknown: UnknownFields,
     /// `display_names` entries no layer owns, kept for the next save.
     pub display_names: UnknownFields,
@@ -147,6 +156,7 @@ pub(super) fn read(s: StackRaw) -> Result<StackRead, FormatError> {
     Ok(StackRead {
         layers,
         setup: s.setup,
+        stackup: s.rows.map(|layers| LayerStack { layers }),
         unknown: s.unknown,
         display_names: kept,
     })

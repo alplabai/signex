@@ -39,8 +39,15 @@ Two commands, both with capability `edit` in `signex-cli`:
   refused too: it writes the project's net classes, which no sheet's undo step
   covers (a decision for a follow-up, see Known limits).
   `update_pcb_from_schematic` is refused as well: it edits the project's
-  board, which no sheet's undo step covers; it runs as its own command. A
-  test pins the set.
+  board, which no sheet's undo step covers; it runs as its own command. So
+  are the board net-class edits (`add_net_class`, `rename_net_class`,
+  `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`), the
+  DRC waivers (`waive_drc_violation`, `unwaive_drc_violation`), #2399 and
+  #2400, and the length tuning commands `tune_net_length` and
+  `tune_diff_pair` (#2389): each is one step on the named board. A command
+  that takes a file path (`place_design_block`, `import_graphics`, #1667)
+  is refused: an edit list does not read a file it names. A test pins the
+  set.
 - An edit acts on the call's `document`, or on the sheet its own `document`
   names (an id or a path). Where a command takes a `document` operand
   (`color_net`, the placements), the call's is filled in when the edit names
