@@ -206,7 +206,12 @@ fn a_net_with_only_locked_tracks_is_left_and_named_while_the_others_are_tuned() 
         matches!(tuned.skipped[1], (7, TuneRefusal::LongEnough { .. })),
         "a locked net already long enough says so, not that it is locked"
     );
-    let locked: Vec<_> = board.segments.iter().filter(|s| s.locked).cloned().collect();
+    let locked: Vec<_> = board
+        .segments
+        .iter()
+        .filter(|s| s.locked)
+        .cloned()
+        .collect();
     let mut engine = BoardEngine::new(board, 1);
     engine.execute_batch(tuned.commands).unwrap();
     let length = net_routed_length_mm(engine.board(), 6).unwrap();
