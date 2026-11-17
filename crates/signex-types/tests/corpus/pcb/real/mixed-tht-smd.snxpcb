@@ -718,7 +718,7 @@ radius = 0.0
 points = []
 text = "D1"
 font_size = 1.0
-rotation = 0.0
+rotation = 180.0
 fill = ""
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000006.graphics.position]
@@ -1031,8 +1031,8 @@ rotation = 0.0
 fill = ""
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000010.graphics.position]
-x = 1.25
-y = -4.3
+x = 6.0
+y = 0.0
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000013]
 footprint_id = "C_0805"
@@ -1134,8 +1134,8 @@ rotation = 0.0
 fill = ""
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000013.graphics.position]
-x = 0.0
-y = -1.775
+x = 3.0
+y = 0.0
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000016]
 footprint_id = "C_0805"
@@ -1374,12 +1374,12 @@ radius = 0.0
 points = []
 text = "J2"
 font_size = 1.0
-rotation = 0.0
+rotation = 270.0
 fill = ""
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000019.graphics.position]
-x = 2.54
-y = -5.8
+x = -4.4
+y = 0.0
 
 [extras.footprints.5ca1ab1e-0005-4000-8000-00000000001c]
 footprint_id = "R_0805"
@@ -1811,7 +1811,7 @@ y = 34.5
 [[extras.board.texts]]
 uuid = "5ca1ab1e-0005-4000-8000-000000000054"
 text = "7805 SUPPLY rev B"
-layer = "BottomSilkscreen"
+layer = "TopSilkscreen"
 font_size = 1.0
 rotation = 0.0
 

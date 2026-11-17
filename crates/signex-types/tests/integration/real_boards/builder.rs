@@ -294,6 +294,21 @@ impl Builder {
         self.board.footprints[index].locked = true;
     }
 
+    /// Move the designator of footprint `index` to `at` (footprint-local)
+    /// and turn it by `rotation` against the footprint, so it clears the
+    /// parts around it and reads upright.
+    pub fn move_label(&mut self, index: usize, at: Point, rotation: f64) {
+        let fp = &mut self.board.footprints[index];
+        let reference = fp.reference.clone();
+        let label = fp
+            .graphics
+            .iter_mut()
+            .find(|g| g.graphic_type == "text" && g.text == reference)
+            .unwrap_or_else(|| panic!("{reference} has no designator"));
+        label.position = Some(at);
+        label.rotation = rotation;
+    }
+
     /// The board position of pad `pin` of footprint `index`.
     pub fn pad_at(&self, index: usize, pin: &str) -> Point {
         let fp = &self.board.footprints[index];
