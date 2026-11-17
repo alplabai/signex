@@ -340,6 +340,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if let Some(notice) = &panel.notice {
                 c = c.push(
                     container(
+                        // raw: (#2061: handler-worded state text)
                         text(raw(notice.clone()))
                             .size(TS.caption)
                             .color(theme_ext::warning_color(&ctx.tokens)),

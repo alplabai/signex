@@ -137,6 +137,7 @@ pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
+pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
 #[cfg(test)]

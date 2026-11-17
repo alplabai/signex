@@ -13,11 +13,16 @@ impl Signex {
             .canvas_for_window(window_id)
             .move_behaviour
             .get()?;
-        Some(if keeps {
-            format!("Dragging with wires ({FLIP_WIRES_MODIFIER}: plain move)")
+        let id = if keeps {
+            signex_i18n::ids::PANELS_STATUS_BAR_DRAG_WITH_WIRES
         } else {
-            format!("Moving without wires ({FLIP_WIRES_MODIFIER}: drag with wires)")
-        })
+            signex_i18n::ids::PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES
+        };
+        Some(
+            self.ui_state
+                .i18n
+                .message_plain(id, &[("key", FLIP_WIRES_MODIFIER.into())]),
+        )
     }
 
     /// The one activity segment the status bar shows.
@@ -135,5 +140,25 @@ mod tests {
             app.status_activity(window).map(|a| a.text).as_deref(),
             Some("Moving without wires (Alt: drag with wires)")
         );
+    }
+
+    /// #2059: the drag notes follow the interface language.
+    #[test]
+    fn the_drag_notes_follow_the_language() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &signex_i18n::LanguagePref::Locale("en-XA".into()),
+        ));
+        let window = iced::window::Id::unique();
+        let slot = app.interaction_state.canvas_for_window(window);
+        for (keeps, english) in [
+            (true, "Dragging with wires (Alt: plain move)"),
+            (false, "Moving without wires (Alt: drag with wires)"),
+        ] {
+            slot.move_behaviour.set(Some(keeps));
+            let shown = app.status_activity(window).map(|a| a.text).expect("a note");
+            assert_ne!(shown, english);
+            assert!(shown.contains("Alt"), "{shown}");
+        }
     }
 }

@@ -70,6 +70,8 @@ define_ids! {
     PANELS_COMPONENTS_DETAILS_NO_SYMBOL = "panels-components-details-no-symbol";
     PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE = "panels-components-details-footprint-unreadable";
     PANELS_COMPONENTS_DETAILS_NO_FOOTPRINT = "panels-components-details-no-footprint";
+    PANELS_COMPONENTS_DETAILS_FOOTPRINT_DEFAULT = "panels-components-details-footprint-default";
+    PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNNAMED = "panels-components-details-footprint-unnamed";
     PANELS_COMPONENTS_DETAILS_NO_PARAMETERS = "panels-components-details-no-parameters";
     PANELS_STUB_DRC = "panels-stub-drc";
     PANELS_STUB_LAYER_STACK = "panels-stub-layer-stack";

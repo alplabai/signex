@@ -15,6 +15,14 @@ impl SignalMode {
         (SignalMode::Generator, "Generator"),
     ];
 
+    /// The mode's name on the switch.
+    pub fn label(self) -> signex_i18n::MessageId {
+        match self {
+            SignalMode::Assistant => signex_i18n::ids::PANELS_SIGNAL_MODE_ASSISTANT,
+            SignalMode::Generator => signex_i18n::ids::PANELS_SIGNAL_MODE_GENERATOR,
+        }
+    }
+
     /// The mode after `msg`.
     pub fn after(self, msg: SignalMsg) -> Self {
         match msg {

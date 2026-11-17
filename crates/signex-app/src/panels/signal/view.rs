@@ -41,7 +41,15 @@ fn mode_switch<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
         ti(tokens.text),
     )
     .fill_width(true);
-    let switch = segmented(&SignalMode::ALL, ctx.signal_mode, style, |mode| {
+    let names: Vec<(SignalMode, String)> = SignalMode::ALL
+        .iter()
+        .map(|&(mode, _)| (mode, ctx.i18n.message_plain(mode.label(), &[])))
+        .collect();
+    let options: Vec<(SignalMode, &str)> = names
+        .iter()
+        .map(|(mode, name)| (*mode, name.as_str()))
+        .collect();
+    let switch = segmented(&options, ctx.signal_mode, style, |mode| {
         PanelMsg::Signal(SignalMsg::ModeSelected(mode))
     });
     container(switch)
@@ -136,4 +144,38 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn switch_texts(language: &str) -> (Vec<String>, std::sync::Arc<signex_i18n::I18n>) {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.i18n = std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
+            language.into(),
+        )));
+        let texts = crate::layout_probe::lay_out_texts(view(&ctx), iced::Size::new(360.0, 600.0))
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        (texts, ctx.i18n)
+    }
+
+    /// #2059: the mode switch reads Assistant / Generator in en-US and
+    /// follows the language.
+    #[test]
+    fn the_mode_switch_follows_the_language() {
+        let (en, _) = switch_texts("en-US");
+        for (_, english) in SignalMode::ALL {
+            assert!(en.iter().any(|t| t == english), "{english:?} in {en:#?}");
+        }
+        let (xa, i18n) = switch_texts("en-XA");
+        for (mode, english) in SignalMode::ALL {
+            assert!(!xa.iter().any(|t| t == english), "{english:?} in {xa:#?}");
+            let name = i18n.message_plain(mode.label(), &[]);
+            assert!(xa.contains(&name), "{name:?} in {xa:#?}");
+        }
+    }
 }

@@ -234,6 +234,9 @@ panels-coming-soon = Coming in AI Design
 
 # Signex AI panel, Assistant mode: empty-state title and line.
 panels-signal-assistant-title = Signex AI is not available yet
+# The two Signex AI modes on the panel's switch.
+panels-signal-mode-assistant = Assistant
+panels-signal-mode-generator = Generator
 panels-signal-assistant-body = Ask about this sheet and review proposed changes before anything is applied.
 # Signex AI panel, Generator mode: empty-state title and line.
 panels-signal-generator-title = The Generator is not available yet
@@ -492,6 +495,14 @@ panels-status-bar-selected-shapes = { $count ->
     }
 # Selected objects that are none of the kinds above.
 panels-status-bar-selected-other = { $count } other
+# A drag in progress that carries the wires along. $key is the modifier key
+# that flips it (Alt).
+panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
+# A drag in progress that leaves the wires. $key is the modifier key.
+panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
+# Measure tool prompts.
+panels-status-bar-measure-first = Click the first point
+panels-status-bar-measure-second = Click the second point
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…

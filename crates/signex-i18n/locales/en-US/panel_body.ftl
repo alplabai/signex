@@ -108,6 +108,10 @@ panels-components-details-loading = Loading…
 panels-components-details-no-symbol = No symbol.
 panels-components-details-footprint-unreadable = Footprint could not be read.
 panels-components-details-no-footprint = No footprint.
+# Footprint pick-list entry of the row's own footprint. $name is its name.
+panels-components-details-footprint-default = { $name } (default)
+# Name of the row's footprint when it could not be read.
+panels-components-details-footprint-unnamed = Default
 panels-components-details-no-parameters = No parameters.
 
 ## Planned panels: what each will do, under its name and the planned note

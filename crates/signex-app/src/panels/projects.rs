@@ -163,9 +163,9 @@ fn missing_label(filename: &str, is_missing: bool) -> String {
 
 /// The mark the cached tree appends to a missing file's row. Navigation
 /// strips it to find the file; the view shows it from the catalog.
-pub(super) const MISSING_MARK: &str = "  (missing)";
+pub(crate) const MISSING_MARK: &str = "  (missing)";
 /// The mark of a sheet the walk could not read.
-pub(super) const UNREADABLE_MARK: &str = "  (unreadable)";
+pub(crate) const UNREADABLE_MARK: &str = "  (unreadable)";
 /// Keys (and cached labels) of the Libraries and Settings branches; the
 /// view names them from the catalog.
 pub(super) const LIBRARIES_KEY: &str = "Libraries";

@@ -611,6 +611,13 @@ fn each_pick_list_shows_the_stored_entry() {
         &[("Type", "Text"), ("Font Family", "Signex Probe Sans")],
     );
     check("Font", beside(&texts(&note), "Font"), "Signex Probe Sans");
+
+    let turned = net_label_form(90.0);
+    check(
+        "Rotation",
+        beside(&texts(&turned), "Rotation"),
+        "90 Degrees",
+    );
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 

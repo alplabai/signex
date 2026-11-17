@@ -28,7 +28,17 @@ fn context(language: &str) -> PanelContext {
                         TreeNode::leaf("a.snxsch", TreeIcon::SnxSchematic).with_key("a.snxsch"),
                         TreeNode::leaf("gone.snxsch  (missing)", TreeIcon::SnxSchematic)
                             .with_key("gone.snxsch"),
+                        TreeNode::leaf("broken.snxsch  (unreadable)", TreeIcon::SnxSchematic)
+                            .with_key("broken.snxsch"),
+                        TreeNode::leaf("board.snxpcb", TreeIcon::SnxPcb).with_key("board.snxpcb"),
+                        TreeNode::leaf("parts.snxbom", TreeIcon::File).with_key("parts.snxbom"),
+                        TreeNode::leaf("fab.snxout", TreeIcon::File).with_key("fab.snxout"),
                     ],
+                ),
+                TreeNode::branch(
+                    super::super::projects::SETTINGS_KEY,
+                    TreeIcon::File,
+                    vec![TreeNode::leaf("prefs.json", TreeIcon::File).with_key("prefs.json")],
                 ),
                 TreeNode::branch(
                     super::super::projects::LIBRARIES_KEY,
@@ -56,15 +66,22 @@ fn texts(ctx: &PanelContext) -> Vec<String> {
 #[test]
 fn the_tree_reads_as_before_in_en_us() {
     let shown = texts(&context("en-US"));
-    for label in [
+    let missing: Vec<&str> = [
         "Schematics",
+        "PCB",
+        "Bill of Materials",
+        "Output Jobs",
         "Libraries",
+        "Settings",
         "a.snxsch",
         "gone.snxsch  (missing)",
+        "broken.snxsch  (unreadable)",
         "lib.snxlib  (missing)",
-    ] {
-        assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
-    }
+    ]
+    .into_iter()
+    .filter(|label| !shown.iter().any(|t| t == label))
+    .collect();
+    assert!(missing.is_empty(), "{missing:?} not in {shown:#?}");
 }
 
 /// A language switch renames the branches and the marks, never the files.
@@ -72,7 +89,15 @@ fn the_tree_reads_as_before_in_en_us() {
 fn the_tree_follows_a_language_switch() {
     let ctx = context("en-XA");
     let shown = texts(&ctx);
-    for english in ["Schematics", "Libraries", "gone.snxsch  (missing)"] {
+    for english in [
+        "Schematics",
+        "Bill of Materials",
+        "Output Jobs",
+        "Libraries",
+        "Settings",
+        "gone.snxsch  (missing)",
+        "broken.snxsch  (unreadable)",
+    ] {
         assert!(
             !shown.iter().any(|t| t == english),
             "{english:?} in {shown:#?}"
@@ -82,9 +107,17 @@ fn the_tree_follows_a_language_switch() {
     for label in [
         xa.message_plain(ids::PANELS_PROJECTS_GROUP_SCHEMATICS, &[]),
         xa.message_plain(ids::PANELS_PROJECTS_GROUP_LIBRARIES, &[]),
+        xa.message_plain(ids::PANELS_PROJECTS_GROUP_PCB, &[]),
+        xa.message_plain(ids::PANELS_PROJECTS_GROUP_BOM, &[]),
+        xa.message_plain(ids::PANELS_PROJECTS_GROUP_OUTPUTS, &[]),
+        xa.message_plain(ids::PANELS_PROJECTS_GROUP_SETTINGS, &[]),
         xa.message_plain(
             ids::PANELS_PROJECTS_FILE_MISSING,
             &[("name", "lib.snxlib".into())],
+        ),
+        xa.message_plain(
+            ids::PANELS_PROJECTS_FILE_UNREADABLE,
+            &[("name", "broken.snxsch".into())],
         ),
     ] {
         assert!(shown.contains(&label), "{label:?} in {shown:#?}");

@@ -29,6 +29,12 @@ define_ids! {
     PANELS_STATUS_BAR_SELECTED_LABELS = "panels-status-bar-selected-labels";
     PANELS_STATUS_BAR_SELECTED_SHAPES = "panels-status-bar-selected-shapes";
     PANELS_STATUS_BAR_SELECTED_OTHER = "panels-status-bar-selected-other";
+    PANELS_SIGNAL_MODE_ASSISTANT = "panels-signal-mode-assistant";
+    PANELS_SIGNAL_MODE_GENERATOR = "panels-signal-mode-generator";
+    PANELS_STATUS_BAR_DRAG_WITH_WIRES = "panels-status-bar-drag-with-wires";
+    PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES = "panels-status-bar-move-without-wires";
+    PANELS_STATUS_BAR_MEASURE_FIRST = "panels-status-bar-measure-first";
+    PANELS_STATUS_BAR_MEASURE_SECOND = "panels-status-bar-measure-second";
     PANELS_NET_CLASSES_SECTION = "panels-net-classes-section";
     PANELS_NET_CLASSES_NAME = "panels-net-classes-name";
     PANELS_NET_CLASSES_COLOR = "panels-net-classes-color";

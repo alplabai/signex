@@ -329,6 +329,7 @@ pub fn form_grid_row(
         .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
         .map(|(_, lbl)| *lbl);
 
+    // raw: grid pitches with their unit symbol (mm, mil), not language.
     let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
         .graphite()
         .on_select(move |lbl: &'static str| {
