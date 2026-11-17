@@ -725,3 +725,77 @@ fn a_selected_part_shows_its_graphical_section() {
     assert!(shown.iter().any(|t| t.text == "GRAPHICAL"), "{shown:#?}");
     assert!(!shown.iter().any(|t| t.text == "STATE"), "{shown:#?}");
 }
+
+/// The visible text of `shown`, in drawing order.
+fn plain(shown: &[LaidOutText]) -> Vec<&str> {
+    shown.iter().map(|t| t.text.as_str()).collect()
+}
+
+/// The net-class editor names each field row as before, in order.
+#[test]
+fn the_net_class_field_rows_keep_their_names_and_order() {
+    let mut ctx = document_options();
+    ctx.net_classes.available = true;
+    ctx.net_classes.classes = vec![signex_types::net_class::NetClass {
+        name: "Power".into(),
+        ..Default::default()
+    }];
+    let shown = texts(&ctx);
+    let fields = ["Name", "Colour", "Width (mm)", "Line", "Nets", "Patterns"];
+    let rows: Vec<&str> = plain(&shown)
+        .into_iter()
+        .filter(|t| fields.contains(t))
+        .collect();
+    assert!(rows.ends_with(&fields), "{rows:?}");
+}
+
+/// A wire's facts sit under a Properties section, its own title.
+#[test]
+fn a_wires_facts_sit_under_properties() {
+    let ctx = one_selected(
+        SelectedKindForTest::Wire,
+        &[("Type", "Wire"), ("End", "1, 2"), ("Length", "3")],
+    );
+    let shown = texts(&ctx);
+    let all = plain(&shown);
+    let title = all.iter().position(|t| *t == "PROPERTIES");
+    let end = all.iter().position(|t| *t == "End");
+    assert!(title.is_some() && title < end, "{all:?}");
+    assert_eq!(beside(&shown, "End"), "1, 2");
+}
+
+/// A Blanket's two sections keep their titles above their rows.
+#[test]
+fn a_blankets_sections_keep_their_titles() {
+    let ctx = one_selected(
+        SelectedKindForTest::Directive,
+        &[("Type", "Blanket"), ("Net Class", "PWR")],
+    );
+    let shown = texts(&ctx);
+    let all = plain(&shown);
+    let at = |text: &str| all.iter().position(|t| *t == text);
+    assert!(
+        at("BLANKET").is_some() && at("BLANKET") < at("Net Class"),
+        "{all:?}"
+    );
+    assert!(
+        at("ERC EXCLUSIONS").is_some() && at("ERC EXCLUSIONS") < at("All Rules"),
+        "{all:?}"
+    );
+}
+
+/// A text note pairs each justification row with its own value.
+#[test]
+fn a_text_notes_justify_rows_pair_with_their_values() {
+    let ctx = one_selected(
+        SelectedKindForTest::TextNote,
+        &[
+            ("Type", "Text"),
+            ("Horizontal Justification", "Left"),
+            ("Vertical Justification", "Top"),
+        ],
+    );
+    let shown = texts(&ctx);
+    assert_eq!(beside(&shown, "Justify H"), "Left");
+    assert_eq!(beside(&shown, "Justify V"), "Top");
+}
