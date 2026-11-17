@@ -688,7 +688,7 @@ panels-placed-start-y = Start Y ({ $unit })
 panels-placed-width = Width ({ $unit })
 panels-placed-height = Height ({ $unit })
 panels-placed-rotation = Rotation
-# A rotation choice; $degrees is 0, 90, 180 or 270.
+# A rotation choice; $degrees is a whole number of degrees (0, 90, 180 or 270 in a list, any value for the current one).
 panels-placed-degrees = { $degrees } Degrees
 # Shown above the disabled rows of a locked object; $reason is the lock's own words.
 panels-placed-locked = Locked: { $reason }

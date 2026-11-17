@@ -7,8 +7,8 @@ use signex_i18n::{Arg, I18n, MessageId, ids};
 
 const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
 
-/// Every message this part added with no argument, and the literal the
-/// panel showed before it.
+/// Every message the panel shows with no argument, and the literal it
+/// showed before #2059.
 const PLAIN: &[(MessageId, &str)] = &[
     (ids::PANELS_PLACED_LOCATION, "Location"),
     (ids::PANELS_PLACED_PROPERTIES, "Properties"),
@@ -788,17 +788,31 @@ fn a_text_notes_justify_rows_pair_with_their_values() {
         SelectedKindForTest::TextNote,
         &[
             ("Type", "Text"),
+            ("Rotation", "90"),
             ("Horizontal Justification", "Left"),
             ("Vertical Justification", "Top"),
         ],
     );
     let shown = texts(&ctx);
+    assert_eq!(beside(&shown, "Rotation"), "90");
     assert_eq!(beside(&shown, "Justify H"), "Left");
     assert_eq!(beside(&shown, "Justify V"), "Top");
 }
 
+/// A selected net label titles its section "Properties" (trunk's id).
+#[test]
+fn a_selected_label_titles_its_properties_section() {
+    let ctx = one_selected(SelectedKindForTest::Label, &[("Type", "Net Label")]);
+    let shown = texts(&ctx);
+    assert!(
+        shown.iter().any(|t| t.text == "PROPERTIES"),
+        "PROPERTIES missing from {shown:#?}"
+    );
+}
+
 /// The words `ctx` draws the same in en-US and en-XA: text a call site
-/// rendered in `I18n::en_us()` instead of the panel's language.
+/// rendered in `I18n::en_us()` instead of the panel's language. Only
+/// all-letter text is compared; digits and punctuation are skipped.
 fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
     let english: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
     ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
