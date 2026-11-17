@@ -147,7 +147,7 @@
   aliases: ["v1.2.0 — SCH Tables & Docs"]
 
 - title: "Enhanced Output"
-  description: "Smart PDF, variant BOM, watermark, output jobs."
+  description: "PDF Export, variant BOM, watermark, Export Jobs."
   state: open
   aliases: ["v1.3.0 — Enhanced Output"]
 
@@ -189,6 +189,10 @@
   description: "Board from the schematic (Update PCB with a reviewable change list), outline, placement, ratsnest, cross-probe, PCB rendering and layers."
   state: open
   aliases: ["v2.0.0 — PCB Viewer", "PCB Viewer"]
+
+- title: "Requirements & Verification"
+  description: "Project requirements (rules, net classes, rail budgets, board size, BOM cost, approved parts) run as deterministic checks with pass, fail and evidence."
+  state: open
 
 - title: "Chat & Context"
   description: "Signex Pro plan; planned in the private Pro roadmap."
