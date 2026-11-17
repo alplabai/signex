@@ -25,7 +25,7 @@ use signex_types::theme::ThemeTokens;
 use signex_library::primitive::footprint::Footprint;
 
 use crate::app::FootprintDocument;
-use crate::keymap::CompiledKeymap;
+use crate::keymap::{CatalogTextExt, CompiledKeymap};
 use crate::library::editor::footprint::state::silk_selection::is_sketch_owned_silk;
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,

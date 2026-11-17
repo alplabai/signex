@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
+use crate::keymap::CatalogTextExt;
+
 pub use crate::app::agent::{
     ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client,
     journal as agent_journal, messages_since, outcome_verdict,

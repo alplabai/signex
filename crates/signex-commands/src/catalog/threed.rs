@@ -1,8 +1,8 @@
-//! Footprint-editor and view-surface command metadata. Split from
-//! `keymap/catalog.rs`; entries verbatim.
+//! Footprint-editor and view-surface command metadata. One of the
+//! catalog's per-surface tables.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
-use signex_i18n::command_ids;
+use signex_i18n_ids::command_ids;
 
 pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {

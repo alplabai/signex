@@ -7,7 +7,7 @@
 //! their way to `update`.
 
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, CatalogTextExt};
 
 use super::CommandArgs;
 #[cfg(test)]
@@ -543,7 +543,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "core_to_message maps command ids with no CommandMetadata \
-             entry (add them to keymap/catalog): {orphans:?}"
+             entry (add them to signex-commands/src/catalog): {orphans:?}"
         );
     }
 

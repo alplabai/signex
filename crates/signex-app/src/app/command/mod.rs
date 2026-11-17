@@ -402,7 +402,7 @@ mod tests {
     }
 
     /// `reset_local_coordinates` is a real catalog entry
-    /// (`keymap/catalog`) with no arm in `core_to_message`
+    /// (`signex-commands/src/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {

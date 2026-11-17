@@ -5735,6 +5735,7 @@ version = "26.11.0-rc.1"
 dependencies = [
  "serde",
  "serde_json",
+ "signex-i18n-ids",
  "signex-types",
 ]
 

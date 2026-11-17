@@ -7,7 +7,6 @@
 mod backup;
 mod binding;
 mod catalog;
-mod command;
 mod display;
 mod editor;
 mod mod_migration;
@@ -39,11 +38,10 @@ pub fn shown_in(spelling: &str, i18n: &signex_i18n::I18n) -> String {
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
-    CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind, all_command_ids,
-    category_title, command_menu_message, command_menu_text, fallback_label, metadata_for,
-    metadata_for_str, offered_in,
+    CatalogTextExt, CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind,
+    all_command_ids, category_title, command_menu_message, command_menu_text, fallback_label,
+    metadata_for, metadata_for_str, offered_in,
 };
-pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
@@ -59,7 +57,7 @@ pub use profile::{
     load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
     save_profile_set_at,
 };
-pub use signex_commands::Platform;
+pub use signex_commands::{AppCommandId, Platform};
 
 #[cfg(test)]
 mod binding_tests;

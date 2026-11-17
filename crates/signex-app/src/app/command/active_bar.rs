@@ -40,6 +40,7 @@
 //! See `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
 use crate::active_bar::ActiveBarAction;
+use crate::keymap::CatalogTextExt;
 
 /// `(command id, action)` for every Active Bar action with a stable id.
 /// Sorted by id; the lookups are linear scans over ~59 entries, which
@@ -283,7 +284,7 @@ mod tests {
         assert!(
             orphans.is_empty(),
             "Active Bar command ids with no CommandMetadata entry — add them \
-             to keymap/catalog/active_bar.rs: {orphans:?}"
+             to signex-commands/src/catalog/active_bar.rs: {orphans:?}"
         );
     }
 
@@ -412,7 +413,7 @@ mod tests {
             "Active Bar label drift — the catalog and the view disagree on \
              what the user sees. Changing this text is menu content and needs \
              sign-off; if the change is intended, update `menu_label` in \
-             keymap/catalog/: {drift:#?}"
+             signex-commands/src/catalog/: {drift:#?}"
         );
     }
 
