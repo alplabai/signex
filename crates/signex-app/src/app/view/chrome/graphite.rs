@@ -202,6 +202,7 @@ impl Signex {
         );
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
         if !hint.is_empty() {
+            // raw: the key chord, already rendered for the locale by the keymap.
             let cap = container(text(raw(hint)).size(TS.caption).font(
                 crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
             ))

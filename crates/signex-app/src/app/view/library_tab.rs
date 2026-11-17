@@ -44,6 +44,8 @@ impl Signex {
             } else {
                 container(
                     column![
+                        // raw: a fallback of the component editor, which
+                        // moves with the editors (#2060).
                         signex_widgets::text(signex_widgets::raw(
                             "Component Editor — state not yet loaded"
                         ))
@@ -108,6 +110,8 @@ impl Signex {
             // The browser-state map out of step with the tabs: keep the tab
             // renderable rather than crashing.
             None => container(
+                // raw: a fallback of the Library Browser, which moves
+                // with the library views (#2060).
                 signex_widgets::text(signex_widgets::raw(
                     "Library Browser — state not yet loaded",
                 ))

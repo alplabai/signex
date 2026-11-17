@@ -12,7 +12,6 @@ mod display;
 mod editor;
 mod mod_migration;
 mod physical;
-mod platform;
 mod profile;
 
 pub use backup::{
@@ -20,7 +19,7 @@ pub use backup::{
     existing_backup_profiles_path, restore_profiles_at,
 };
 pub use binding::{
-    KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
+    KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ModifiersExt, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutTrigger, mac_stroke_caps,
 };
 /// A hard-coded shortcut spelling as this OS shows it: `Mod+S` is `⌘S` on
@@ -53,7 +52,6 @@ pub use mod_migration::{
     with_standard_set_on_mod,
 };
 pub use physical::shortcut_char;
-pub use platform::Platform;
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
     ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, config_path,
@@ -61,6 +59,7 @@ pub use profile::{
     load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
     save_profile_set_at,
 };
+pub use signex_commands::Platform;
 
 #[cfg(test)]
 mod binding_tests;

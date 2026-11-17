@@ -6,11 +6,11 @@
 //! Creating the child file from a symbol is [`child_document_for_symbol`]'s
 //! content plus the app's write; the write is not an edit and is not undone.
 
+use signex_types::object_id::IdSource;
 use signex_types::schematic::{
     ChildSheet, GRID_MM, HAlign, Label, LabelType, Point, SchematicSheet, SheetPin, VAlign,
     normalize_port_name,
 };
-use uuid::Uuid;
 
 use crate::EngineError;
 use crate::sheet::{lock_sheet_pin_to_child_edge, normalize_sheet_pin_direction};
@@ -54,15 +54,16 @@ pub fn sheet_symbol_at(sheet: &SchematicSheet, p: Point) -> Option<&ChildSheet> 
 /// A new, hand-placed entry on `symbol`: `cursor` snapped to the nearest
 /// edge (kept off the corners), with the rotation that edge needs. `None`
 /// takes the direction the edge suggests: input on the left, output on the
-/// right, bidirectional on top and bottom.
+/// right, bidirectional on top and bottom. Its id comes from `ids`.
 pub fn new_sheet_entry(
     symbol: &ChildSheet,
     cursor: Point,
     name: &str,
     direction: Option<&str>,
+    ids: &mut dyn IdSource,
 ) -> SheetPin {
     let mut pin = SheetPin {
-        uuid: Uuid::now_v7(),
+        uuid: ids.next_id(),
         name: name.trim().to_string(),
         direction: String::new(),
         position: cursor,
@@ -152,10 +153,16 @@ pub fn child_document_for_symbol(mut blank: SchematicSheet, symbol: &ChildSheet)
 mod tests {
     use super::*;
     use crate::{Command, Engine};
+    use signex_types::object_id::SequentialIds;
 
-    fn symbol() -> ChildSheet {
-        crate::child_sheet_from_corners(Point::new(100.0, 50.0), Point::new(130.0, 80.0), "sheet1")
-            .expect("big enough")
+    fn symbol(ids: &mut SequentialIds) -> ChildSheet {
+        crate::child_sheet_from_corners(
+            Point::new(100.0, 50.0),
+            Point::new(130.0, 80.0),
+            "sheet1",
+            ids,
+        )
+        .expect("big enough")
     }
 
     fn sheet_with(symbol: ChildSheet) -> SchematicSheet {
@@ -167,14 +174,15 @@ mod tests {
 
     #[test]
     fn an_entry_snaps_to_the_nearest_edge_with_that_edges_rotation() {
-        let s = symbol();
-        let left = new_sheet_entry(&s, Point::new(98.0, 60.0), "A", Some("input"));
+        let ids = &mut SequentialIds::default();
+        let s = symbol(ids);
+        let left = new_sheet_entry(&s, Point::new(98.0, 60.0), "A", Some("input"), ids);
         assert_eq!((left.position.x, left.rotation), (100.0, 0.0));
-        let right = new_sheet_entry(&s, Point::new(133.0, 60.0), "B", Some("output"));
+        let right = new_sheet_entry(&s, Point::new(133.0, 60.0), "B", Some("output"), ids);
         assert_eq!((right.position.x, right.rotation), (130.0, 180.0));
-        let top = new_sheet_entry(&s, Point::new(115.0, 48.0), "C", Some("passive"));
+        let top = new_sheet_entry(&s, Point::new(115.0, 48.0), "C", Some("passive"), ids);
         assert_eq!((top.position.y, top.rotation), (50.0, 270.0));
-        let bottom = new_sheet_entry(&s, Point::new(115.0, 83.0), "D", Some("bogus"));
+        let bottom = new_sheet_entry(&s, Point::new(115.0, 83.0), "D", Some("bogus"), ids);
         assert_eq!((bottom.position.y, bottom.rotation), (80.0, 90.0));
         assert_eq!(bottom.direction, "bidirectional", "unknown direction");
         assert!(!left.auto_generated);
@@ -182,17 +190,18 @@ mod tests {
 
     #[test]
     fn the_default_direction_follows_the_edge_and_names_are_unused() {
-        let mut s = symbol();
+        let ids = &mut SequentialIds::default();
+        let mut s = symbol(ids);
         assert_eq!(
-            new_sheet_entry(&s, Point::new(98.0, 60.0), "A", None).direction,
+            new_sheet_entry(&s, Point::new(98.0, 60.0), "A", None, ids).direction,
             "input"
         );
         assert_eq!(
-            new_sheet_entry(&s, Point::new(133.0, 60.0), "A", None).direction,
+            new_sheet_entry(&s, Point::new(133.0, 60.0), "A", None, ids).direction,
             "output"
         );
         assert_eq!(
-            new_sheet_entry(&s, Point::new(115.0, 48.0), "A", None).direction,
+            new_sheet_entry(&s, Point::new(115.0, 48.0), "A", None, ids).direction,
             "bidirectional"
         );
         assert_eq!(unused_entry_name(&s), "P1");
@@ -201,24 +210,28 @@ mod tests {
             Point::new(98.0, 60.0),
             "P1",
             None,
+            ids,
         ));
         assert_eq!(unused_entry_name(&s), "P2");
     }
 
     #[test]
     fn an_entry_stays_off_the_corners() {
-        let s = symbol();
-        let pin = new_sheet_entry(&s, Point::new(100.0, 50.0), "A", Some("input"));
+        let ids = &mut SequentialIds::default();
+        let s = symbol(ids);
+        let pin = new_sheet_entry(&s, Point::new(100.0, 50.0), "A", Some("input"), ids);
         assert!(pin.position.y >= 50.0 + GRID_MM);
     }
 
     #[test]
     fn the_symbol_under_the_cursor_is_the_nearest_one_in_reach() {
-        let near = symbol();
+        let ids = &mut SequentialIds::default();
+        let near = symbol(ids);
         let far = crate::child_sheet_from_corners(
             Point::new(200.0, 50.0),
             Point::new(230.0, 80.0),
             "sheet2",
+            ids,
         )
         .expect("big enough");
         let mut sheet = sheet_with(near.clone());
@@ -236,15 +249,16 @@ mod tests {
 
     #[test]
     fn placing_an_entry_is_one_undo_step_and_refuses_a_repeated_name() {
-        let s = symbol();
+        let ids = &mut SequentialIds::default();
+        let s = symbol(ids);
         let id = s.uuid;
         let mut engine = Engine::new(sheet_with(s.clone())).expect("engine");
-        let pin = new_sheet_entry(&s, Point::new(98.0, 60.0), "CLK", Some("input"));
+        let pin = new_sheet_entry(&s, Point::new(98.0, 60.0), "CLK", Some("input"), ids);
         engine
             .execute(Command::PlaceSheetPin { sheet_id: id, pin })
             .expect("placed");
         assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
-        let again = new_sheet_entry(&s, Point::new(98.0, 66.0), " CLK ", Some("input"));
+        let again = new_sheet_entry(&s, Point::new(98.0, 66.0), " CLK ", Some("input"), ids);
         let err = engine
             .execute(Command::PlaceSheetPin {
                 sheet_id: id,
@@ -252,7 +266,7 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, EngineError::DuplicateSheetEntryName(_)));
-        let blank = new_sheet_entry(&s, Point::new(98.0, 66.0), "  ", Some("input"));
+        let blank = new_sheet_entry(&s, Point::new(98.0, 66.0), "  ", Some("input"), ids);
         assert!(matches!(
             engine.execute(Command::PlaceSheetPin {
                 sheet_id: id,
@@ -266,18 +280,21 @@ mod tests {
 
     #[test]
     fn the_child_document_has_one_hierarchical_label_per_entry() {
-        let mut s = symbol();
+        let ids = &mut SequentialIds::default();
+        let mut s = symbol(ids);
         s.pins.push(new_sheet_entry(
             &s.clone(),
             Point::new(98.0, 60.0),
             "CLK",
             Some("input"),
+            ids,
         ));
         s.pins.push(new_sheet_entry(
             &s.clone(),
             Point::new(133.0, 60.0),
             "OUT",
             Some("output"),
+            ids,
         ));
         let child = child_document_for_symbol(SchematicSheet::default(), &s);
         let ports = crate::exposed_sheet_ports(&child);

@@ -101,9 +101,13 @@ impl Signex {
     ) -> Result<DesignBlock, String> {
         let sheet =
             sheet.map_err(|error| format!("{} could not be read ({error})", path.display()))?;
-        let block = DesignBlock::from_sheet(&sheet, self.fragment_grid_mm())
-            .map_err(|error| format!("{} could not be placed ({error})", path.display()))?
-            .ok_or_else(|| format!("{} holds nothing to place", path.display()))?;
+        let block = DesignBlock::from_sheet(
+            &sheet,
+            self.fragment_grid_mm(),
+            &mut signex_types::object_id::UuidV7Ids,
+        )
+        .map_err(|error| format!("{} could not be placed ({error})", path.display()))?
+        .ok_or_else(|| format!("{} holds nothing to place", path.display()))?;
         if block.skipped_sheet_symbols > 0 {
             crate::diagnostics::log_info(format!(
                 "{WHAT}: {} sheet symbol(s) in {} are not placed; a design block carries parts, wires, labels, text and drawings.",

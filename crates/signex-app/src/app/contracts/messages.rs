@@ -220,6 +220,8 @@ pub enum OverlayMsg {
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
     OpenReplace,
+    /// A search-panel shortcut: close Find when it is open, else open it.
+    FindToggled,
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,

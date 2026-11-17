@@ -25,8 +25,8 @@ pub struct BoardSketchSession {
     /// The sketch editor over the working copy.
     pub editor: Box<FootprintDocument>,
     /// Why the last commit was refused, shown in the mode's bar until the
-    /// next commit.
-    pub refusal: Option<String>,
+    /// next commit; rendered in the language of the moment it is shown.
+    pub refusal: Option<signex_i18n::Translatable>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
 }

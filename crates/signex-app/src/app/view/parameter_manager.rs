@@ -115,26 +115,37 @@ impl Signex {
 
         let header_row = {
             let mut r = row![
-                text(raw("Reference"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(iced::Length::Fixed(100.0)),
-                text(raw("Value"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(iced::Length::Fixed(160.0)),
-                text(raw("Footprint"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(iced::Length::Fixed(200.0)),
+                text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .width(iced::Length::Fixed(100.0)),
+                text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_PARAMETER_MANAGER_COLUMN_VALUE
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .width(iced::Length::Fixed(160.0)),
+                text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .width(iced::Length::Fixed(200.0)),
             ];
             for k in &keys {
                 r = r.push(
                     row![
-                        text(raw(k.clone()))
+                        // The parameter's name, as the user wrote it.
+                        text(signex_i18n::UserText::new(k.clone()))
                             .size(TS.caption)
                             .color(text_muted)
                             .width(iced::Length::Fill),
+                        // raw: a remove glyph, not language.
                         button(text(raw("×")).size(TS.caption).color(text_c))
                             .padding([0, 6])
                             .on_press(Message::ParameterManager(

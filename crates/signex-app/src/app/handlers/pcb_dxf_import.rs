@@ -166,8 +166,13 @@ impl Signex {
             return Err(t!(i18n, ids::PCB_PRIM_READ_ONLY).into_string());
         }
         let revision = engine.revision();
-        let (command, summary) =
-            dxf_import_command(engine.board(), &text, target).map_err(|e| e.to_string())?;
+        let (command, summary) = dxf_import_command(
+            engine.board(),
+            &text,
+            target,
+            &mut signex_types::object_id::UuidV7Ids,
+        )
+        .map_err(|e| e.to_string())?;
         let step = CheckedStep {
             label: &label,
             expected_revision: revision,

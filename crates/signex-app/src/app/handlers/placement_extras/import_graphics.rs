@@ -39,7 +39,7 @@ pub(crate) fn read_graphics_file(
     width_mm: f64,
 ) -> Result<Arc<ImportedGraphics>, String> {
     let text = read_import_text(path)?;
-    signex_engine::drawings_from_dxf(&text, width_mm)
+    signex_engine::drawings_from_dxf(&text, width_mm, &mut signex_types::object_id::UuidV7Ids)
         .map(Arc::new)
         .map_err(|error| format!("{}: {error}", path.display()))
 }
@@ -135,8 +135,12 @@ impl Signex {
                 path.display()
             ));
         }
-        CopiedSelection::from_drawings(graphics.drawings.clone(), self.fragment_grid_mm())
-            .map_err(|error| format!("{} could not be placed ({error})", path.display()))?
-            .ok_or_else(|| format!("{} holds nothing to place", path.display()))
+        CopiedSelection::from_drawings(
+            graphics.drawings.clone(),
+            self.fragment_grid_mm(),
+            &mut signex_types::object_id::UuidV7Ids,
+        )
+        .map_err(|error| format!("{} could not be placed ({error})", path.display()))?
+        .ok_or_else(|| format!("{} holds nothing to place", path.display()))
     }
 }

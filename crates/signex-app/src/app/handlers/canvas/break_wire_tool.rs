@@ -1,5 +1,6 @@
 //! Break Wire tool (#1254): one click on a wire splits it in two there.
 
+use signex_types::object_id::{IdSource, UuidV7Ids};
 use signex_types::schematic::Point;
 
 use super::super::super::*;
@@ -22,7 +23,15 @@ impl Signex {
         };
         // A locked wire is refused with its own notice by the gateway. The
         // engine paints the new half like the wire it was cut from.
-        self.apply_engine_command(signex_engine::Command::BreakWire { wire, at }, true, true);
+        self.apply_engine_command(
+            signex_engine::Command::BreakWire {
+                wire,
+                at,
+                new_wire: UuidV7Ids.next_id(),
+            },
+            true,
+            true,
+        );
     }
 }
 

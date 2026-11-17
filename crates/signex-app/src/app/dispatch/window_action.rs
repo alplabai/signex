@@ -192,7 +192,10 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
         // AutoFocus dims by the shown sheet's selection; Esc resets the tool;
         // Find opens bound to the window, so it searches the shown sheet.
         Message::Overlay(
-            OverlayMsg::ToggleAutoFocus | OverlayMsg::OpenFind | OverlayMsg::OpenReplace,
+            OverlayMsg::ToggleAutoFocus
+            | OverlayMsg::OpenFind
+            | OverlayMsg::OpenReplace
+            | OverlayMsg::FindToggled,
         ) => true,
         Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,

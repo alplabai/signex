@@ -184,6 +184,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             None => Message::Menu(MenuMessage::OpenProjectOptions),
         },
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
+        "toggle_search_panel" | "toggle_floating_panels" => {
+            Message::Overlay(OverlayMsg::FindToggled)
+        }
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {
             Message::Input(InputMsg::FootprintModeShortcut(EditorMode::Normal))
@@ -698,8 +701,6 @@ mod tests {
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "cycle_wiring_mode",
         "reset_local_coordinates",
-        "toggle_floating_panels",
-        "toggle_search_panel",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may

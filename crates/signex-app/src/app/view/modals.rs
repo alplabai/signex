@@ -23,19 +23,20 @@ impl Signex {
     /// OS window, whose native title bar carries the title and close.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
         use iced::widget::{Space, Widget, column, container, row};
-        use signex_widgets::{raw, text, text_input};
+        use signex_widgets::{text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let ms = &self.ui_state.move_selection;
         let selection_count = self.interaction_state.active_canvas().selected.len();
 
-        let field = |label: &'static str,
+        let field = |label: signex_i18n::MessageId,
                      value: &str,
                      msg: fn(String) -> Message|
          -> Element<'static, Message> {
             let value = value.to_owned();
             column![
-                text(raw(label)).size(TS.caption).color(text_muted),
+                text(t!(i18n, label)).size(TS.caption).color(text_muted),
                 text_input(t!(self.ui_state.i18n, ids::PLACEHOLDER_MOVE_OFFSET), value)
                     .style(crate::panels::form_look::text_input_style)
                     .on_input(msg)
@@ -48,13 +49,16 @@ impl Signex {
 
         let body = dialog_body(
             column![
-                dialog_message(format!("{} item(s) selected", selection_count), tokens),
+                dialog_message(
+                    t!(i18n, ids::DIALOG_MOVE_SELECTION_COUNT, "count" => selection_count.to_string()),
+                    tokens
+                ),
                 row![
-                    field("ΔX (mm)", &ms.dx, |s| {
+                    field(ids::DIALOG_MOVE_SELECTION_DX, &ms.dx, |s| {
                         Message::MoveSelection(MoveSelectionMsg::DxChanged(s))
                     }),
                     Space::new().width(SP.l),
-                    field("ΔY (mm)", &ms.dy, |s| {
+                    field(ids::DIALOG_MOVE_SELECTION_DY, &ms.dy, |s| {
                         Message::MoveSelection(MoveSelectionMsg::DyChanged(s))
                     }),
                 ]
@@ -92,14 +96,14 @@ impl Signex {
     /// close button, the empty slot once the dialog has its own OS window.
     fn net_color_custom_header(&self) -> Element<'_, Message> {
         use iced::widget::{Space, Widget, container, row};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
         let tokens = &self.document_state.panel_ctx.tokens;
         if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
             return super::dialogs::os_title_bar_slot();
         }
         container(
             row![
-                text(raw("Pick Net Color"))
+                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_PICK_TITLE))
                     .size(TS.title)
                     .color(crate::styles::ti(tokens.text)),
                 Space::new().width(iced::Length::Fill),
@@ -121,6 +125,7 @@ impl Signex {
         let border = crate::styles::ti(tokens.border);
         button(
             container(
+                // raw: a close glyph, not language.
                 text(raw("\u{00D7}".to_string()))
                     .size(TS.heading)
                     .color(text_c),
@@ -205,7 +210,7 @@ impl Signex {
         let mut rows_col = column![].spacing(SP.s);
         if nets.is_empty() {
             rows_col = rows_col.push(
-                text(raw("No net labels on the active sheet."))
+                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_NO_NETS))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -256,6 +261,7 @@ impl Signex {
                 let net_clear = net.clone();
                 swatches = swatches.push(
                     button(
+                        // raw: a clear glyph, not language.
                         container(text(raw("×")).size(TS.caption).color(text_c)).padding([0, 6]),
                     )
                     .on_press(Message::NetColor(NetColorMsg::Set {
@@ -280,7 +286,7 @@ impl Signex {
 
                 rows_col = rows_col.push(
                     row![
-                        text(raw(net))
+                        text(signex_i18n::UserText::new(net))
                             .size(TS.body)
                             .color(text_c)
                             .width(iced::Length::FillPortion(2)),
@@ -434,10 +440,10 @@ impl Signex {
         // `draft` colour as the current value so swatch clicks and
         // text edits stay in sync.
         let channel_row =
-            |label: &'static str, value: f32, chan: Channel| -> Element<'_, Message> {
+            |label: signex_i18n::MessageId, value: f32, chan: Channel| -> Element<'_, Message> {
                 let v255 = (value * 255.0).round() as i32;
                 row![
-                    text(raw(label))
+                    text(t!(self.ui_state.i18n, label))
                         .size(TS.body)
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
@@ -476,14 +482,17 @@ impl Signex {
         );
 
         let rgb_col = column![
-            text(raw("Custom RGB")).size(TS.body).color(text_c),
+            text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_CUSTOM_RGB))
+                .size(TS.body)
+                .color(text_c),
             Space::new().height(6),
-            channel_row("R", draft.r, Channel::R),
-            channel_row("G", draft.g, Channel::G),
-            channel_row("B", draft.b, Channel::B),
+            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_R, draft.r, Channel::R),
+            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_G, draft.g, Channel::G),
+            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_B, draft.b, Channel::B),
             Space::new().height(10),
             preview_box,
             Space::new().height(4),
+            // raw: a hex colour code, not language.
             text(raw(preview_hex)).size(TS.caption).color(text_muted),
         ]
         .spacing(SP.s)
@@ -491,7 +500,9 @@ impl Signex {
 
         let body = row![
             column![
-                text(raw("Quick Pick")).size(TS.body).color(text_c),
+                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_QUICK_PICK))
+                    .size(TS.body)
+                    .color(text_c),
                 Space::new().height(6),
                 palette_col,
             ]
@@ -538,5 +549,33 @@ impl Signex {
         let x = ((ww - NET_COLOR_CUSTOM_W) * 0.5).max(0.0);
         let y = super::canvas_region::chrome_top(&self.document_state.panel_ctx.tokens) + 80.0;
         (x, y)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    /// The rendered Move Selection dialog reads as the `format!` it
+    /// replaced (#2059): the count without grouping, and both field names.
+    #[test]
+    fn move_selection_names_the_count_and_the_offsets() {
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.interaction_state.active_canvas_mut().selected = (0..1200)
+            .map(|_| SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire))
+            .collect();
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            app.view_move_selection_body(),
+            iced::Size::new(600.0, 400.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        for expected in ["1200 item(s) selected", "ΔX (mm)", "ΔY (mm)"] {
+            assert!(
+                texts.iter().any(|t| t == expected),
+                "{expected:?} not in {texts:?}"
+            );
+        }
     }
 }

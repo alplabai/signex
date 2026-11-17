@@ -48,9 +48,10 @@ impl Signex {
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center);
-        if let Some(refusal) = session.refusal.as_deref() {
+        if let Some(refusal) = session.refusal.as_ref() {
+            use signex_i18n::RenderTranslatable as _;
             bar = bar.push(
-                text(signex_i18n::UserText::new(refusal))
+                text(refusal.localized(i18n))
                     .size(TS.caption)
                     .color(theme_ext::error_color(tokens))
                     .boxed(),

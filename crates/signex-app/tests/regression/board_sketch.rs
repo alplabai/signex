@@ -463,9 +463,14 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
     );
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
     assert_eq!(
-        session.refusal.as_deref(),
-        Some(notice.detail.render_en_us().as_str())
+        session
+            .refusal
+            .as_ref()
+            .map(RenderTranslatable::render_en_us),
+        Some(notice.detail.render_en_us())
     );
+    // The bar holds the message itself, so a language switch re-renders it.
+    assert_eq!(session.refusal.as_ref(), Some(&notice.detail));
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()

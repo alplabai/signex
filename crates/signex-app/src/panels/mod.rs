@@ -361,6 +361,7 @@ pub type CollapsedSections = std::collections::HashSet<String>;
 
 /// Render a panel's content.
 pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    use signex_i18n::ids;
     let content = match kind {
         // The Components panel is drawn by `components_panel::view` (the dock and the
         // detached window both route it there); nothing to show here.
@@ -392,20 +393,26 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // its section frame (#2416, #2417).
         PanelKind::NetClasses if ctx.net_classes.board.is_some() => board_net_classes::view(ctx),
         PanelKind::NetClasses => net_class_panel::view_panel(ctx),
-        PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
-        PanelKind::OutputJobs => view_stub("Output Jobs", "Manufacturing output config", ctx),
-        PanelKind::SchFilter => sch_filter::view(ctx),
-        PanelKind::SchList => view_stub("SCH List", "Schematic object list inspector", ctx),
-        PanelKind::BomStudio => view_stub("BOM Studio", "Bill of Materials management", ctx),
-        PanelKind::Favorites => view_stub("Favorites", "Favorite components and snippets", ctx),
-        PanelKind::Snippets => view_stub("Snippets", "Reusable schematic snippets", ctx),
-        PanelKind::Todo => view_stub("To-Do", "Task and issue tracking", ctx),
-        PanelKind::Wiki => view_stub("Wiki", "Project documentation wiki", ctx),
-        PanelKind::Library => view_stub(
-            "Library",
-            "Open a library from the Projects panel to browse it.",
+        PanelKind::Variants => view_stub(ids::PANELS_KIND_VARIANTS, ids::PANELS_STUB_VARIANTS, ctx),
+        PanelKind::OutputJobs => view_stub(
+            ids::PANELS_KIND_OUTPUT_JOBS,
+            ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
+        PanelKind::SchFilter => sch_filter::view(ctx),
+        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::BomStudio => view_stub(
+            ids::PANELS_KIND_BOM_STUDIO,
+            ids::PANELS_STUB_BOM_STUDIO,
+            ctx,
+        ),
+        PanelKind::Favorites => {
+            view_stub(ids::PANELS_KIND_FAVORITES, ids::PANELS_STUB_FAVORITES, ctx)
+        }
+        PanelKind::Snippets => view_stub(ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS, ctx),
+        PanelKind::Todo => view_stub(ids::PANELS_KIND_TODO, ids::PANELS_STUB_TODO, ctx),
+        PanelKind::Wiki => view_stub(ids::PANELS_KIND_WIKI, ids::PANELS_STUB_WIKI, ctx),
+        PanelKind::Library => view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),

@@ -186,6 +186,7 @@ fn a_sheet_symbol_naming_a_closed_ancestor_is_refused_with_no_window_hierarchy()
         Point::new(100.0, 100.0),
         Point::new(120.0, 120.0),
         "mid",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .expect("big enough");
     save(

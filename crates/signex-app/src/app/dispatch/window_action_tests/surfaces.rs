@@ -10,9 +10,7 @@ use crate::app::{ContextMenuMsg, ProjectMsg};
 use crate::find_replace::FindReplaceMsg;
 use crate::keymap::AppCommandId;
 
-const FIND_FOOTER: &str = "Targets: labels, notes, designators, values";
-
-fn command(
+pub(super) fn command(
     app: &mut Signex,
     id: &str,
     window: iced::window::Id,
@@ -22,72 +20,6 @@ fn command(
         CommandArgs::none(),
         Some(window),
     )
-}
-
-// ---- Find ----
-
-#[test]
-fn find_opened_in_a_window_searches_and_selects_in_that_windows_sheet() {
-    let mut f = fixture_with_a_labelled_a3_window();
-    f.app
-        .interaction_state
-        .canvases
-        .get_mut(&f.window)
-        .unwrap()
-        .selected
-        .clear();
-
-    let (_outcome, task) = command(&mut f.app, "find", f.window);
-    settle_task(&mut f.app, task);
-    assert_eq!(f.app.ui_state.find_replace.window, Some(f.window));
-    let task = f
-        .app
-        .update(Message::FindReplaceMsg(FindReplaceMsg::QueryChanged(
-            "WINDOW_NET".into(),
-        )));
-    settle_task(&mut f.app, task);
-
-    let find = &f.app.ui_state.find_replace;
-    assert_eq!(find.matches.len(), 1, "the window's label was not found");
-    assert_eq!(
-        find.matches[0].sheet.as_deref(),
-        Some(f.window_path.as_path())
-    );
-    let selected = &f.app.interaction_state.canvases[&f.window].selected;
-    assert_eq!(selected.len(), 1, "the hit was not selected in the window");
-    assert_eq!(selected[0].uuid, label_id());
-    assert!(
-        f.app.interaction_state.canvas.selected.is_empty(),
-        "the main window's selection changed"
-    );
-}
-
-#[test]
-fn the_find_dialog_paints_in_the_window_it_was_opened_in_only() {
-    let mut f = fixture();
-    let (_outcome, task) = command(&mut f.app, "find", f.window);
-    settle_task(&mut f.app, task);
-    assert!(has(&f.app, f.window, FIND_FOOTER));
-    assert!(!has(&f.app, f.main, FIND_FOOTER));
-
-    // Opened again from the main window, it moves there.
-    let (_outcome, task) = command(&mut f.app, "find", f.main);
-    settle_task(&mut f.app, task);
-    assert!(has(&f.app, f.main, FIND_FOOTER));
-    assert!(!has(&f.app, f.window, FIND_FOOTER));
-}
-
-#[test]
-fn closing_the_window_closes_the_find_dialog_it_opened() {
-    let mut f = fixture();
-    let (_outcome, task) = command(&mut f.app, "find", f.window);
-    settle_task(&mut f.app, task);
-    assert!(f.app.ui_state.find_replace.open);
-
-    f.app.close_overlays_owned_by(f.window);
-
-    assert!(!f.app.ui_state.find_replace.open);
-    assert_eq!(f.app.ui_state.find_replace.window, None);
 }
 
 // ---- Command palette ----

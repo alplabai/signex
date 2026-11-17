@@ -295,7 +295,8 @@ pub enum Command {
         wire: Wire,
     },
     /// Split one wire in two at `at`, which must lie strictly inside it; the
-    /// first half keeps the wire's id, the second gets a new one. A point
+    /// first half keeps the wire's id, the second takes `new_wire`, minted by
+    /// the caller (an id already in the sheet is refused). A point
     /// off the wire, or at one of its ends, changes nothing; a spot holding a
     /// pin, bus end, bus entry or another wire's end is refused
     /// (`EngineError::BreakWireBlocked`), since the new end would join it. Connectivity is
@@ -303,6 +304,7 @@ pub enum Command {
     BreakWire {
         wire: Uuid,
         at: signex_types::schematic::Point,
+        new_wire: Uuid,
     },
     PlaceWireSegment {
         wire: Wire,

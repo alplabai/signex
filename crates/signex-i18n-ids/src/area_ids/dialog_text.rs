@@ -66,4 +66,14 @@ define_ids! {
     DIALOG_GRID_INTRO = "dialog-grid-intro";
     DIALOG_SELECTION_FILTER_TITLE = "dialog-selection-filter-title";
     DIALOG_SELECTION_FILTER_INTRO = "dialog-selection-filter-intro";
+    DIALOG_MOVE_SELECTION_COUNT = "dialog-move-selection-count";
+    DIALOG_MOVE_SELECTION_DX = "dialog-move-selection-dx";
+    DIALOG_MOVE_SELECTION_DY = "dialog-move-selection-dy";
+    DIALOG_NET_COLOR_PICK_TITLE = "dialog-net-color-pick-title";
+    DIALOG_NET_COLOR_NO_NETS = "dialog-net-color-no-nets";
+    DIALOG_NET_COLOR_CUSTOM_RGB = "dialog-net-color-custom-rgb";
+    DIALOG_NET_COLOR_CHANNEL_R = "dialog-net-color-channel-r";
+    DIALOG_NET_COLOR_CHANNEL_G = "dialog-net-color-channel-g";
+    DIALOG_NET_COLOR_CHANNEL_B = "dialog-net-color-channel-b";
+    DIALOG_NET_COLOR_QUICK_PICK = "dialog-net-color-quick-pick";
 }

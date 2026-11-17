@@ -74,9 +74,13 @@ pub(super) fn import_graphics(app: &mut Signex, args: &CommandArgs) -> Ran {
         let path = path_operand(args)?;
         let at = app.grid_point(args, "at")?;
         let dxf = app.prefetched_text(&path)?;
-        let graphics = signex_engine::drawings_from_dxf(&dxf, app.imported_graphics_width_mm())
-            .map(Arc::new)
-            .map_err(|error| format!("{}: {error}", path.display()));
+        let graphics = signex_engine::drawings_from_dxf(
+            &dxf,
+            app.imported_graphics_width_mm(),
+            &mut signex_types::object_id::UuidV7Ids,
+        )
+        .map(Arc::new)
+        .map_err(|error| format!("{}: {error}", path.display()));
         let skipped = graphics.as_ref().map_or(0, |g| g.skipped);
         let copied = app.graphics_from(&path, graphics)?;
         let placed = copied.payload.item_count();

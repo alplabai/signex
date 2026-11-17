@@ -140,14 +140,23 @@ impl Engine {
         &mut self,
         commands: impl IntoIterator<Item = Command>,
     ) -> Result<Option<PatchPair>, EngineError> {
+        self.with_id_index(|engine| engine.run_batch_indexed(commands))
+    }
+
+    fn run_batch_indexed(
+        &mut self,
+        commands: impl IntoIterator<Item = Command>,
+    ) -> Result<Option<PatchPair>, EngineError> {
         let mut document = DocumentPatch::NONE;
         let mut semantic: Option<SemanticPatch> = None;
         let mut semantics_differ = false;
 
         for command in commands {
+            let added = crate::id_collision::index_update(&command);
             let Some(patch_pair) = self.execute(command)?.patch_pair else {
                 continue;
             };
+            self.note_applied(added);
 
             document |= patch_pair.document;
 

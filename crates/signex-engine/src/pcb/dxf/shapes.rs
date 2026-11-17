@@ -4,6 +4,7 @@
 //! flip turns a counter-clockwise arc of the file clockwise in the model,
 //! where a board arc runs the way of increasing angle: its ends swap.
 
+use signex_types::object_id::IdSource;
 use signex_types::pcb::{BoardGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM, Point};
 use signex_types::pcb_options::BoardOrigin;
 
@@ -14,11 +15,18 @@ const JOIN_MM: f64 = 1.0e-4;
 /// The largest turn one outline chord covers, as the board draws arcs.
 const CHORD_DEG: f64 = 6.0;
 
-/// Every entity of `drawing` as a drawing on `layer`.
-pub fn board_graphics(drawing: &DxfDrawing, origin: BoardOrigin, layer: &str) -> Vec<BoardGraphic> {
+/// Every entity of `drawing` as a drawing on `layer`, each under a new id
+/// from `ids`.
+pub fn board_graphics(
+    drawing: &DxfDrawing,
+    origin: BoardOrigin,
+    layer: &str,
+    ids: &mut dyn IdSource,
+) -> Vec<BoardGraphic> {
     let at = |p: Point| Point::new(origin.board_x(p.x), origin.board_y(p.y));
     let base = || BoardGraphic {
-        uuid: uuid::Uuid::now_v7(),
+        // The id is set once the drawing is made, below.
+        uuid: uuid::Uuid::nil(),
         graphic_type: String::new(),
         layer: layer.to_string(),
         width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
@@ -84,6 +92,9 @@ pub fn board_graphics(drawing: &DxfDrawing, origin: BoardOrigin, layer: &str) ->
                 }
             }
         }
+    }
+    for graphic in &mut out {
+        graphic.uuid = ids.next_id();
     }
     out
 }

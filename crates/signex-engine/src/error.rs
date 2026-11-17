@@ -83,6 +83,8 @@ pub enum EngineError {
         "the wire cannot be broken there: a pin, bus end or another wire's end sits on that spot, and a new wire end would join it"
     )]
     BreakWireBlocked,
+    #[error("an object with id {0} is already in the sheet; the new object needs a fresh id")]
+    IdInUse(uuid::Uuid),
     #[error("{}", locked_message(references, action))]
     ItemLocked {
         references: Vec<String>,

@@ -110,12 +110,9 @@ impl Signex {
         };
         let prefix = signex_types::designator::placement_prefix(&source.reference);
         let reference = self.next_designator_in_sheet(target, &prefix);
-        let Some(payload) = self
-            .document_state
-            .engines
-            .get(target)
-            .and_then(|engine| engine.part_copy_payload(id, reference))
-        else {
+        let Some(payload) = self.document_state.engines.get(target).and_then(|engine| {
+            engine.part_copy_payload(id, reference, &mut signex_types::object_id::UuidV7Ids)
+        }) else {
             return;
         };
         self.interaction_state.placement_epoch += 1;

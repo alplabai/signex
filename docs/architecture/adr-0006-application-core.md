@@ -1,8 +1,8 @@
 # ADR-0006 — One application core, many front ends (ports and adapters)
 
-- **Status:** Accepted 2026-11-16 (#2327, merged by Hakan; Caner's review decisions of 2026-11-15 applied).
+- **Status:** Accepted 2026-11-16 (#2327, merged by Hakan; Caner's review decisions of 2026-11-15 applied). Amended 2026-11-17 (#2443, Hakan): the contract grows with the slices, slice C is the safety net, slice 1b moves the catalog.
 - **Decides on merge:** epic #2326 decisions D0 (this record and the ADR-0001 notes), D1, D2, D3, D5, D7 and D11. Already decided: D10 (web, [maintainer decision 2026-11-15](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348)) and D12 (no event bus, 2026-11-13). The i18n placement below is Caner's decision of 2026-11-15 (`docs/DECISIONS.md`).
-- **Scope:** an iced-free application core shared by the GUI, `signex-cli` and later front ends; the crates `signex-commands`, `signex-i18n-ids` and `signex-workspace` (all planned)
+- **Scope:** an iced-free application core shared by the GUI, `signex-cli` and later front ends; the crates `signex-commands`, `signex-i18n-ids` and `signex-workspace` (`signex-workspace` planned)
 - **Amends:** [ADR-0001](adr-0001-app-structure-and-boundaries.md) A1, A2, A3.2, D1, D5, D8 and three Part C bullets, each of which carries a short note pointing here
 - **Builds on:** [ADR-0003](adr-0003-deferred-work-and-consistent-history.md) (owed work, the boundary flush, late results)
 - **Tracking:** epic #2326, milestone Application Core (`docs/ROADMAP.md`); the slices ship across releases. Sources and the full measurement commands: [the research note](research/hexagonal-ddd.md)
@@ -93,9 +93,9 @@ flowchart TB
     engine --- drc["signex-drc / signex-drc-dsl"]
     engine --- net["signex-net"]
     output["signex-output / signex-bom"] --- library["signex-library"]
-    history["signex-history"] --- ids["signex-i18n-ids (planned, slice 1)"]
+    history["signex-history"] --- ids["signex-i18n-ids"]
   end
-  commands["signex-commands (planned, slice 1)<br/>catalog · operands · outcome · wire types"]
+  commands["signex-commands<br/>catalog · operands · outcome · wire types"]
   core["AppCore (planned)<br/>app/core/ now, signex-workspace after slice 9<br/>execute · complete · query → events + effects"]
   domain --> core
   commands --> core
@@ -166,6 +166,8 @@ Arrows into the core are calls. The core returns events and effects to its calle
 - `query` for read-only answers, with a typed error.
 
 Every core command names its document and its targets in its arguments (epic D1). A front end fills in what a person leaves implicit before it calls `execute`: the active document, the selection, the pre-placement form. A front end that must protect a person's in-progress drag or text edit passes that as plain data in the arguments, never as a callback into the GUI.
+
+Commands that create objects carry the new ids as operands. Ids are minted outside the core by the caller through an `IdSource`, like the clock. The rule is that the engine mints no ids, so a command replays to the same result; the core refuses a command whose id already exists. The tracked exception is eight engine sites, in five areas, that still mint their own ids: the rubber band, junction autoplace, the component pin fan-out, automatic sheet entries and the copy fragment. They are on a shrink-only allowlist, `scripts/engine-ids-allowlist.txt`, checked by `scripts/check_engine_ids.sh` and tracked by #2429.
 
 `execute` routes by command id through a thin table, like the footprint editor's `crates/signex-app/src/library/editor/footprint/updates/mod.rs`. The handling lives in area modules (documents, placement, hierarchy, files, agent edits), never in the router.
 
@@ -252,7 +254,7 @@ Caner's decision of 2026-11-15 (`docs/DECISIONS.md`):
 - **`signex-i18n` does not move.** It keeps the Fluent bundles, ICU formatting and locale negotiation, and stays in `UI_STACK`. It re-exports the ids at their old paths, so existing call sites keep working. The one change for callers: `render_en_us()` and `localized()` become methods of the `signex_i18n::RenderTranslatable` trait, so a file calling them imports the trait. The 2026-11-07 row that no domain crate may depend on `signex-i18n` stays true.
 - **Who renders.** The core and `signex-commands` carry `Translatable` values (notices, refusal reasons, typed errors such as `QueryError`) and never render them. Front ends render them in `view()`, which keeps the `(MessageId, args)` label rule.
 
-Splitting this crate is the first step of slice 1, because the catalog that slice 1 moves imports `signex_i18n::{I18n, MessageId, command_ids, t}` today.
+Splitting this crate is the first step of slice 1, because the catalog that slice 1b moves imports `signex_i18n::{I18n, MessageId, command_ids, t}` today.
 
 ### How DDD (ADR-0001 A2) maps onto it
 
@@ -284,9 +286,10 @@ A rule about document content belongs in the engine or a domain crate, never in 
 The application core and the crates it uses get the treatment ADR-0001 D5 gives the domain crates, using allowlists rather than denylists.
 
 - **Arch guard.** Each crate's edges go in `scripts/arch-edges.txt`, and the crate joins `DOMAIN` in `scripts/check_arch_guard.sh` when it is created. `DOMAIN`, not the edges file, is what fails on a UI/GPU dependency.
-  - `signex-i18n-ids` and `signex-commands` join at slice 1.
+  - `signex-i18n-ids` and `signex-commands` join at slice 1. The scan of the `signex-commands` source for `std::fs`, `std::thread`, `std::process` and runtimes comes with the clippy lint after the lift; until then review keeps it free of IO.
   - `signex-workspace` joins at slice 9.
 - **While the core grows inside `signex-app`.** A guard fails when `app/core/` imports any `crate::` path outside `app/core/`, or names `iced`, `tokio`, `spawn_blocking` / `run_blocking`, `std::fs`, `std::thread` or `std::process`. It lands with slice 1.
+- **Core-bound state stays UI-free before its slice** (Hakan, 2026-11-17). The `app/core/` guard sees only code already moved; the defects that would surprise a slice sit in the state still waiting to move. A struct whose data the slice table moves into the core (documents, drafts, dirty state, histories, owed work, ledgers, check results, the agent journal) gains only fields whose types come from an allowlist: `std`, the domain crates in `DOMAIN`, `signex-commands`, `signex-i18n-ids`, `app/core/`, named third-party data crates (such as `uuid`), and the `signex-app` modules listed in the rule file as UI-free (the targets of the "move to a UI-free module" PRs). UI-free is closed: outside `#[cfg(test)]` items, a listed module imports only from `std`, `DOMAIN`, the named data crates, `app/core/` and other listed modules. No `signex-app` module meets that today (`state/dirty.rs` and `state/check_runs.rs` reach `state/mod.rs`, which imports iced, through `super`; `document_read` uses `persist::DiskRead`), so the list starts empty and fills as the pre-slice PRs land. The ratchet checks that definition for every listed module on each run, so a listed module that gains such an import fails. An addition to the list needs a maintainer's approval (Caner or Hakan), like the ratchet's baseline. Fields that exist when the ratchet lands are in its baseline; a field leaves the count when its type's module joins the list. A new field whose type is an unlisted `signex-app` type is counted, so the PR that adds it first moves that type to a listed module. Anything else (`iced`, a render or widget type, a GUI module of `signex-app` such as `canvas`, `panels`, `schematic_runtime`, `library::editor`) is counted. An ast-grep ratchet scans the structs named in its own rule file, records the count when it lands, and the count may only go down. A document rule may not read `UiState` or a canvas render snapshot: such a value reaches the rule as an operand or as `CoreSettings`, and review treats a new read as the ADR-0001 D4 leak. The ratchet lands before slice 2, with the pre-slice PRs listed under "Safety net before the high-risk slices".
 - **After the lift.** Clippy `disallowed-methods` / `disallowed-types` keep the same calls out of the core. They are modelled on the `io_ports` precedent in `clippy.toml`.
   - The lint reaches the domain crates only after slice S-IO, because `signex-types` and `signex-engine` still call `std::fs` today.
   - Clippy reads the nearest `clippy.toml` and does not merge it with the workspace file, so a per-crate file must repeat the workspace bans.
@@ -307,20 +310,23 @@ This record is (b) and (c) together, plus moving the handlers into the core; eac
 
 ## Slices
 
-Numbering follows epic #2326; one PR at a time, in the order 0, 1, C, 2, 3, 4, 5, 7, 6, 8, 9 (S-A after 1, S-L after 5, both before 9). Each is reverted by reverting its PR, so the revert column names only what a revert must also undo.
+Numbering follows epic #2326; one PR at a time, in the order 0, 1, 1b, C, 2, 3, 4, 5, 7, 6, 8, 9 (S-A after 1, S-L after 5, both before 9). Each is reverted by reverting its PR, so the revert column names only what a revert must also undo.
 
 Every slice has the same stop rule: stop and come back to the maintainers if its exit check fails, or if it needs a facade on `Signex` that outlives the slice. The stop-if column adds what is specific to the slice.
+
+**The contract grows with the slices** (Hakan, 2026-11-17). `CoreEvent`, `Effect`, `EffectResult` and `CoreContext` are not designed ahead of the code they describe: each variant is added by the slice that moves that behaviour, derived from the trunk type it replaces (for example `DocumentChanged` from `signex_engine::DocumentPatch`, the write effect from `DocumentSaveJob`), and the PR names that trunk type. Three drafts that froze the whole vocabulary in slice C each lost a trunk guarantee (the disk-changed check of #1826, the case-folded write order of #1112, the restore claim). What keeps a move pure is the safety net: the same test-adapter tests pass before and after it.
 
 | # | What ships | Exit check | Stop if | Revert path |
 |---|---|---|---|---|
 | 0 | #2325: box `Signex` / run the CLI session on a thread with an explicit stack (the first part of alternative (a)) | The debug `signex-cli run` passes on Windows CI. | — | revert the PR |
 | 1 | First, split `signex-i18n-ids` out of `signex-i18n`. Then extract `signex-commands`: `Modifiers` / `ShortcutContext` out of `binding.rs` (`from_iced` stays in the app), `DocumentTarget` and `PcbTargets`. The `app/core/` guard script lands. Low risk. | Both crates are in `DOMAIN` and `check_arch_guard.sh` passes. `cargo tree -p signex-commands` shows no `iced*`, `wgpu*`, `fluent*` or `icu*`. Catalog JSON and `catalog.golden.tsv` are byte-equal. | a golden file changes | revert; the golden files are byte-equal, so nothing else moves |
-| C | `CoreEvent` / `Effect` / `EffectResult`, `CoreContext`, the (id, form) parity skeleton and the test adapter | The parity skeleton lists every (id, form) pair on trunk, and the test adapter runs one command. | the contract cannot express an existing (id, form) | revert; no behaviour moved |
-| 2 | Event seam: edit tails split into a core half that returns events, plus a projector | Every removed inline call has a projector arm and a test. The safety-net tests below pass through the test adapter. | the event-granularity bench shows a drag-time regression beyond its noise band, or a safety-net test cannot be expressed through the test adapter | revert restores the inline tails; the removed-call list in the PR says what comes back |
+| 1b | The command catalog into `signex-commands`: `AppCommandId`, the catalog tables and their metadata; labels name `signex-i18n-ids` ids. `CommandOutcome` waits for slice 7 (see there). | Catalog JSON and `catalog.golden.tsv` are byte-equal; `check_arch_guard.sh` passes. | the catalog needs a UI-stack crate | revert; the golden files are byte-equal |
+| C | The safety net, not the vocabulary: the (id, form) parity table, the test adapter, the three safety-net tests below, the hostile-operand test (every catalog id with junk for each `OperandKind`, run through the adapter against today's dispatch; no panic, a panic it finds goes on a shrink-only `known_panics` list with an issue) and the drag benchmark baseline, all run against trunk behaviour. A form is each distinct route by which a command id reaches its handler or its implicit target, for example the window-routed commands, the in-window rewrites, the undo routers, the enablement and operand refusals, a bridge arm, the Active Bar table, an operand handler, a query and the headless path; each row records its owner and its implicit inputs. The parity golden has a one-command regenerate step, documented in CONTRIBUTING. The adapter's test-facing API is the frozen part. | The parity table lists every (id, form) pair on trunk; the three safety-net tests and the baseline pass on trunk through the adapter. | an (id, form) has implicit inputs (document, targets, window, a person's in-progress work) that cannot be named as operands | revert; no behaviour moved |
+| 2 | Event seam: the schematic edit tails split into a core half that returns events, plus a projector. PCB edit tails move later in the same pattern, with the schematic as the reference, once the PCB editor settles; the maintainers schedule that PR. | Every removed inline call has a projector arm and a test. The safety-net tests below pass through the test adapter. | the event-granularity bench shows a drag-time regression beyond its noise band, or a safety-net test cannot be expressed through the test adapter | revert restores the inline tails; the removed-call list in the PR says what comes back |
 | 3 | `load_gateway` split | Load and restore tests pass through the test adapter, and a test proves that a panicking install leaves no engine missing from the map. | any restore is dropped in a test | revert both PRs together |
 | 4 | State partition (4a documents, 4b ERC/DRC/profiles, 4c settings) | The moved field groups are private to the core; `rg 'ui_state\.(io\|erc_\|profile_)'` has 0 hits for the moved groups. | a group cannot move without a facade | the ast-grep renames are reversible by the inverse rule |
 | 5 | Effects as data and the native host: 5a save/journal, 5b load, 5c git, 5d export, 5e the rest | For each group, `app/core/` has 0 `spawn_blocking` / `run_blocking` / `std::fs` hits, and the save-order and quit-barrier tests pass. | the save-order or quit-barrier test fails | revert brings back the `Task` path for that group |
-| 7 | `Needs` split into Core and Ui | Enablement of every core command is computed without `UiState`. | — | revert |
+| 7 | `Needs` split into Core and Ui. `CommandOutcome` moves into `signex-commands` here, as `Disabled { reason }` becomes a `Translatable`, so the versioned crate never ships the `String` form (Hakan, 2026-11-17). | Enablement of every core command is computed without `UiState`. | — | revert |
 | 6 | Handler table into the core per area, the `Targets` operand, `gui_only` deleted. Updates the CONTRIBUTING "Commands" bullet and `docs/COMMANDS.md`, and records the supersession under "Superseded decisions". | Per area, the area's ids are no longer flagged `gui_only` and have no bridge arm. At the end, `git grep -c gui_only -- crates` gives 0. | an area needs a dual path past its slice | revert per area |
 | 8 | Queries on `core.query` | Every query answers through `core.query` in a test-adapter test. | — | revert |
 | S-A | Agent wire protocol and `OperandKind` in `signex-commands` | `signex-cli` has no `signex_app::headless::agent_client` import. | — | revert |
@@ -332,7 +338,8 @@ Every slice has the same stop rule: stop and come back to the maintainers if its
 flowchart LR
   S0["0 · CLI stack fix, issue 2325"]
   S1["1 · i18n-ids split, signex-commands extraction<br/>+ guard script"]
-  SC["C · contract slice<br/>CoreEvent · Effect · CoreContext"]
+  S1b["1b · command catalog<br/>into signex-commands"]
+  SC["C · safety net<br/>parity · adapter · tests · baseline"]
   S2["2 · event seam<br/>high risk"]
   S3["3 · load_gateway split<br/>high risk"]
   S4["4 · state partition<br/>4a · 4b · 4c"]
@@ -345,7 +352,7 @@ flowchart LR
   S9["9 · lift the crate<br/>CLI drops signex-app"]
   SIO["S-IO · domain IO out<br/>not scheduled"]
   SP["S-P · plugin host<br/>not scheduled"]
-  S0 --> S1 --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
+  S0 --> S1 --> S1b --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
   S1 --> SA --> S9
   S5 --> SL --> S9
   SC -.-> SIO
@@ -357,9 +364,21 @@ flowchart LR
 The epic rates slices 2, 3 and 5 (and S-L) high or medium-high. The research note (§10, item 1) names the reason: the persistence invariants become state machines across `complete`. Before slice 2 starts, these tests run against the test adapter, not only against the ledger:
 - **Per-path write order (#997):** an older write never lands after a newer one to the same path. Today it is pinned at the ledger level (`persist/document_save.rs`, `an_older_snapshot_scheduled_last_never_overwrites_a_newer_one`).
 - **The `SaveBarrier` wait:** a synchronous write or file move waits for every write in flight (`the_barrier_waits_for_an_unfinished_job`, same file).
-- **The `complete` generation check (ADR-0003 D4):** a result for a closed, reopened or re-keyed document is dropped. This one does not exist yet, because `complete` does not; it lands with slice C.
+- **The `complete` generation check (ADR-0003 D4):** a result for a closed, reopened or re-keyed document is dropped. Slice C pins it as a behaviour test on today's completions (the save revision check in `handlers/document_files/save_async.rs` and `finish_claim` in `app/document_read.rs`); the slice that adds `complete` keeps that test green.
 
 The event-granularity benchmark of the research note (§10, item 4) also lands before slice 2: a drag must not over-invalidate the projector.
+
+Also before slice 2, a behaviour-neutral PR moves "what changed" out of the rendering type. Today the schematic edit tails and the agent's owed refresh (`agent_edits.owed`) decide on `RenderInvalidation`, which lives in `schematic_runtime` beside iced and the renderer, although the fact is the engine's `DocumentPatch` and `RenderInvalidation` is only a lossy projection of it (`render_invalidation_for_patch`, `mutation_gateway.rs`). The tails and `owed` take `DocumentPatch`; the projection becomes `From<DocumentPatch> for RenderInvalidation` in `schematic_runtime`, applied once where the GUI refreshes; the "display-only" rule (today `== NET_COLORS`) becomes a named predicate on `DocumentPatch` in `signex-engine`. Slice 2's event is then `DocumentChanged { path, patch, cause }`, with `cause` an edit or a history step (the library drift check needs it).
+
+A structural sweep (2026-11-17) found more core facts held in UI types. Each gets a behaviour-neutral PR before the slice that moves it:
+- **Before 4a: the PCB board engine lives in its tab** (`TabInfo.cached_document`, parked only when a dirty tab closes). It becomes `DocumentState::boards` keyed by path, like `engines`; the #2149 tests (clean close drops, dirty close keeps, reopen restores) pass unchanged.
+- **Before 4a: the symbol draft** splits into a draft (file, baseline, dirty, history, `save_generation`, the owed `cascade_owed`, and the active part, body and index) and a GUI editor view (canvas cache, viewport, camera, tool, selection). The footprint draft waits for a decision, because its undo restores the selection today.
+- **Before 4a: the project General history** moves from `ProjectTabState` into `DocumentState`, next to `rules_history`.
+- **Before 5a and 6: in-progress edits** (`PanelDrafts`, title-block text a person has typed) are committed by one GUI step before every boundary command, which keeps each boundary's scope from the 2026-11-04 decision (#2027: Save and Save As commit that document's sheets, Close Project that project's drafts, an export its document's project; another project's drafts stay pending). The existing `title_block_persist_tests` pin the scopes and must pass unchanged.
+- **Before 4b:** `ErcRunOutcome`, `WaivedFinding` and `PageFrames` move to a UI-free module.
+- **Before slice C needs them:** `Origin`, `ResolvedPlacement`, `ProjectId`, `CaseFold`, `DocumentKey` and `NewLibraryDefaults` (which `persist::project_save` imports from `library::state`) move to UI-free modules, and the gateway's `CommandOutcome` is renamed so it no longer shares a name with the command one.
+
+Two items wait for a maintainer decision. One: component row drafts (unsaved rows, staged datasheet bytes) live in the GUI library state, so either 5a covers files only and rows stay a GUI-side gate until S-L, or the row draft moves in 4a. Two: Run ERC takes the active sheet from the canvas render cache, which the core does not have; it moves to the engine document only after a test proves the two are equal at rest.
 
 ## A web front end (epic D10)
 

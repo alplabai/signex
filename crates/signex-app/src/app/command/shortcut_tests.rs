@@ -96,6 +96,22 @@ fn every_panel_shortcut_toggles_its_own_panel() {
     }
 }
 
+#[test]
+fn both_search_panel_shortcuts_open_and_close_find() {
+    for id in ["toggle_search_panel", "toggle_floating_panels"] {
+        let (mut app, _task) = Signex::new();
+        assert!(!app.ui_state.find_replace.open);
+        run(&mut app, id);
+        assert!(app.ui_state.find_replace.open, "{id} opens Find");
+        assert!(
+            !app.ui_state.find_replace.replace_mode,
+            "{id} opens plain Find"
+        );
+        run(&mut app, id);
+        assert!(!app.ui_state.find_replace.open, "{id} closes Find");
+    }
+}
+
 fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
     let (mut app, _task) = Signex::new();
     for (i, kind) in kinds.into_iter().enumerate() {

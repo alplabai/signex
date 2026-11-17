@@ -7,8 +7,8 @@
 //! down, as the sheet's Y grows down the page. A circle, arc or polyline whose
 //! plane faces down the Z axis is mirrored back into the drawing's X.
 
+use signex_types::object_id::IdSource;
 use signex_types::schematic::{FillType, Point, SchDrawing};
-use uuid::Uuid;
 
 /// More drawings than this is not a schematic graphic; the import is refused.
 pub const MAX_IMPORTED_DRAWINGS: usize = 50_000;
@@ -41,13 +41,16 @@ pub struct ImportedGraphics {
 /// One group code and its value.
 type Pair<'a> = (i64, &'a str);
 
-/// The drawings of the DXF text `text`, drawn `width_mm` wide.
+/// The drawings of the DXF text `text`, drawn `width_mm` wide, each under a
+/// new id from `ids`.
 pub fn drawings_from_dxf(
     text: &str,
     width_mm: f64,
+    ids: &mut dyn IdSource,
 ) -> Result<ImportedGraphics, GraphicsImportError> {
     let pairs = pairs(text)?;
     let mut reader = EntityReader {
+        ids,
         scale: unit_scale(&pairs)?,
         width_mm,
         drawings: Vec::new(),
@@ -147,7 +150,8 @@ fn entities<'p, 'a>(pairs: &'p [Pair<'a>]) -> Vec<&'p [Pair<'a>]> {
     out
 }
 
-struct EntityReader {
+struct EntityReader<'i> {
+    ids: &'i mut dyn IdSource,
     scale: f64,
     width_mm: f64,
     drawings: Vec<SchDrawing>,
@@ -157,7 +161,7 @@ struct EntityReader {
     polyline: Option<(Vec<Point>, bool, f64)>,
 }
 
-impl EntityReader {
+impl EntityReader<'_> {
     fn read(&mut self, entity: &[Pair<'_>]) -> Result<(), GraphicsImportError> {
         let Some(&(0, kind)) = entity.first() else {
             return Ok(());
@@ -171,7 +175,7 @@ impl EntityReader {
                 let start = self.point(fields.number(10)?, fields.number(20)?);
                 let end = self.point(fields.number(11)?, fields.number(21)?);
                 self.drawings.push(SchDrawing::Line {
-                    uuid: Uuid::now_v7(),
+                    uuid: self.ids.next_id(),
                     start,
                     end,
                     width: self.width_mm,
@@ -242,7 +246,7 @@ impl EntityReader {
         let mid = on_arc(from + sweep / 2.0);
         let end = on_arc(from + sweep);
         self.drawings.push(SchDrawing::Arc {
-            uuid: Uuid::now_v7(),
+            uuid: self.ids.next_id(),
             start,
             mid,
             end,
@@ -260,7 +264,7 @@ impl EntityReader {
             return;
         }
         self.drawings.push(SchDrawing::Circle {
-            uuid: Uuid::now_v7(),
+            uuid: self.ids.next_id(),
             center,
             radius,
             width: self.width_mm,
@@ -279,7 +283,7 @@ impl EntityReader {
             points.push(points[0]);
         }
         self.drawings.push(SchDrawing::Polyline {
-            uuid: Uuid::now_v7(),
+            uuid: self.ids.next_id(),
             points,
             width: self.width_mm,
             fill: FillType::None,

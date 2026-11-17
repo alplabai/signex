@@ -1,3 +1,4 @@
+use signex_types::object_id::SequentialIds;
 use signex_types::pcb::Point;
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
@@ -68,7 +69,13 @@ fn drawings_land_from_the_board_origin_with_y_up_on_the_chosen_layer() {
     let mut b = board();
     b.options.origin.at = Point::new(10.0, 50.0);
     let text = dxf(4, &line(0.0, 2.0, 3.0, 2.0));
-    let (command, summary) = dxf_import_command(&b, &text, DxfTarget::Layer(SILK)).unwrap();
+    let (command, summary) = dxf_import_command(
+        &b,
+        &text,
+        DxfTarget::Layer(SILK),
+        &mut SequentialIds::default(),
+    )
+    .unwrap();
     assert_eq!(summary.graphics, 1);
     assert_eq!(summary.target, "TopSilkscreen");
     let BoardCommand::AddGraphics { graphics } = &command else {
@@ -86,7 +93,12 @@ fn drawings_land_from_the_board_origin_with_y_up_on_the_chosen_layer() {
 fn a_file_arc_keeps_its_side_after_the_flip() {
     let body = "0\nARC\n10\n0\n20\n0\n40\n1\n50\n0\n51\n90\n";
     let drawing = parse_dxf(&dxf(4, body)).unwrap();
-    let graphics = board_graphics(&drawing, Default::default(), "TopSilkscreen");
+    let graphics = board_graphics(
+        &drawing,
+        Default::default(),
+        "TopSilkscreen",
+        &mut SequentialIds::default(),
+    );
     let arc = &graphics[0];
     assert_eq!(arc.graphic_type, "arc");
     assert!(close(arc.start.unwrap(), Point::new(0.0, -1.0)));
@@ -99,7 +111,12 @@ fn a_bulged_polyline_segment_becomes_an_arc_and_a_closed_square_a_polygon() {
         "0\nLWPOLYLINE\n90\n4\n70\n1\n10\n0\n20\n0\n10\n4\n20\n0\n10\n4\n20\n4\n10\n0\n20\n4\n";
     let bulged = "0\nLWPOLYLINE\n90\n2\n70\n0\n10\n1\n20\n0\n42\n0.41421356237\n10\n0\n20\n1\n";
     let drawing = parse_dxf(&dxf(4, &format!("{square}{bulged}"))).unwrap();
-    let graphics = board_graphics(&drawing, Default::default(), "TopSilkscreen");
+    let graphics = board_graphics(
+        &drawing,
+        Default::default(),
+        "TopSilkscreen",
+        &mut SequentialIds::default(),
+    );
     assert_eq!(graphics.len(), 2);
     assert_eq!(graphics[0].graphic_type, "poly");
     assert_eq!(graphics[0].points.len(), 4);
@@ -121,7 +138,13 @@ fn four_joined_lines_become_the_outline_and_undo_restores_the_old_one() {
         line(50.0, 50.0, 51.0, 51.0),
     ]
     .concat();
-    let (command, summary) = dxf_import_command(&b, &dxf(4, &body), DxfTarget::Outline).unwrap();
+    let (command, summary) = dxf_import_command(
+        &b,
+        &dxf(4, &body),
+        DxfTarget::Outline,
+        &mut SequentialIds::default(),
+    )
+    .unwrap();
     assert_eq!(summary.outline_points, 4);
     let applied = command.apply(&mut b).unwrap();
     assert_eq!(b.outline.len(), 4);
@@ -135,7 +158,8 @@ fn an_outline_import_without_a_closed_shape_is_refused() {
     let b = board();
     let text = dxf(4, &line(0.0, 0.0, 5.0, 5.0));
     assert_eq!(
-        dxf_import_command(&b, &text, DxfTarget::Outline).map(|(_, s)| s),
+        dxf_import_command(&b, &text, DxfTarget::Outline, &mut SequentialIds::default())
+            .map(|(_, s)| s),
         Err(DxfError::NoClosedShape)
     );
 }
@@ -145,7 +169,13 @@ fn a_layer_import_is_one_step_that_undo_takes_back_whole() {
     let mut b = board();
     let before = b.graphics.len();
     let body = [line(0.0, 0.0, 1.0, 0.0), line(1.0, 0.0, 1.0, 1.0)].concat();
-    let (command, _) = dxf_import_command(&b, &dxf(4, &body), DxfTarget::Layer(SILK)).unwrap();
+    let (command, _) = dxf_import_command(
+        &b,
+        &dxf(4, &body),
+        DxfTarget::Layer(SILK),
+        &mut SequentialIds::default(),
+    )
+    .unwrap();
     let applied = command.apply(&mut b).unwrap();
     assert_eq!(b.graphics.len(), before + 2);
     assert_eq!(
@@ -167,7 +197,13 @@ fn a_layer_import_onto_copper_is_refused() {
     let top = PcbLayer::Copper(CopperLayer::Top);
     let text = dxf(4, &line(0.0, 0.0, 1.0, 0.0));
     assert_eq!(
-        dxf_import_command(&b, &text, DxfTarget::Layer(top)).map(|(_, s)| s),
+        dxf_import_command(
+            &b,
+            &text,
+            DxfTarget::Layer(top),
+            &mut SequentialIds::default()
+        )
+        .map(|(_, s)| s),
         Err(DxfError::CopperLayer("TopCopper".to_string()))
     );
     assert_eq!(check_dxf_target(DxfTarget::Layer(SILK)), Ok(()));
@@ -181,7 +217,13 @@ fn a_drawing_past_the_file_range_is_refused() {
     let b = board();
     let far = dxf(4, &line(0.0, 0.0, 1.0e20, 0.0));
     assert_eq!(
-        dxf_import_command(&b, &far, DxfTarget::Layer(SILK)).map(|(_, s)| s),
+        dxf_import_command(
+            &b,
+            &far,
+            DxfTarget::Layer(SILK),
+            &mut SequentialIds::default()
+        )
+        .map(|(_, s)| s),
         Err(DxfError::OutOfRange)
     );
     let square = [
@@ -192,7 +234,13 @@ fn a_drawing_past_the_file_range_is_refused() {
     ]
     .concat();
     assert_eq!(
-        dxf_import_command(&b, &dxf(4, &square), DxfTarget::Outline).map(|(_, s)| s),
+        dxf_import_command(
+            &b,
+            &dxf(4, &square),
+            DxfTarget::Outline,
+            &mut SequentialIds::default()
+        )
+        .map(|(_, s)| s),
         Err(DxfError::OutOfRange)
     );
 
@@ -202,6 +250,7 @@ fn a_drawing_past_the_file_range_is_refused() {
         &b,
         &dxf(4, &line(0.0, 0.0, 1.0, 0.0)),
         DxfTarget::Layer(SILK),
+        &mut SequentialIds::default(),
     )
     .unwrap();
     let BoardCommand::AddGraphics { graphics } = &command else {

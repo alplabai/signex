@@ -1,6 +1,7 @@
 use super::*;
 use crate::Command;
 use crate::test_support::test_sheet;
+use signex_types::object_id::SequentialIds;
 use signex_types::schematic::{ChildSheet, FillType, LibSymbol, Symbol, TextProp, Wire};
 
 fn line(x0: f64, y0: f64, x1: f64, y1: f64) -> SchDrawing {
@@ -68,7 +69,9 @@ fn a_design_block_carries_parts_wires_drawings_and_bodies() {
         pins: Vec::new(),
         instances: Vec::new(),
     });
-    let block = DesignBlock::from_sheet(&sheet, 1.27).unwrap().unwrap();
+    let block = DesignBlock::from_sheet(&sheet, 1.27, &mut SequentialIds::default())
+        .unwrap()
+        .unwrap();
     assert_eq!(block.skipped_sheet_symbols, 1);
     let fragment = block.copied.payload.fragment();
     assert_eq!(fragment.symbols.len(), 1);
@@ -81,7 +84,9 @@ fn a_design_block_carries_parts_wires_drawings_and_bodies() {
 #[test]
 fn a_placed_design_block_is_one_batch_with_fresh_ids() {
     let sheet = sheet_with_a_part();
-    let block = DesignBlock::from_sheet(&sheet, 1.27).unwrap().unwrap();
+    let block = DesignBlock::from_sheet(&sheet, 1.27, &mut SequentialIds::default())
+        .unwrap()
+        .unwrap();
     let commands = block
         .copied
         .payload
@@ -103,7 +108,7 @@ fn a_placed_design_block_is_one_batch_with_fresh_ids() {
 #[test]
 fn an_empty_sheet_is_no_design_block() {
     assert!(
-        DesignBlock::from_sheet(&test_sheet(), 1.27)
+        DesignBlock::from_sheet(&test_sheet(), 1.27, &mut SequentialIds::default())
             .unwrap()
             .is_none()
     );
@@ -111,9 +116,13 @@ fn an_empty_sheet_is_no_design_block() {
 
 #[test]
 fn imported_drawings_are_anchored_at_their_centre_and_turn() {
-    let copied = CopiedSelection::from_drawings(vec![line(0.0, 0.0, 10.16, 0.0)], 1.27)
-        .unwrap()
-        .unwrap();
+    let copied = CopiedSelection::from_drawings(
+        vec![line(0.0, 0.0, 10.16, 0.0)],
+        1.27,
+        &mut SequentialIds::default(),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(copied.payload.item_count(), 1);
     let SchDrawing::Line { start, end, .. } = &copied.payload.fragment().drawings[0] else {
         panic!();
@@ -130,7 +139,9 @@ fn imported_drawings_are_anchored_at_their_centre_and_turn() {
 fn a_part_copy_sits_on_the_origin_with_its_fields_alongside() {
     let engine = Engine::new(sheet_with_a_part()).unwrap();
     let id = engine.document().symbols[0].uuid;
-    let payload = engine.part_copy_payload(id, "R5".into()).unwrap();
+    let payload = engine
+        .part_copy_payload(id, "R5".into(), &mut SequentialIds::default())
+        .unwrap();
     let copy = payload.lone_symbol().unwrap();
     assert_eq!((copy.position.x, copy.position.y), (0.0, 0.0));
     assert_eq!(copy.reference, "R5");
@@ -153,7 +164,7 @@ fn no_part_copy_for_an_unknown_id() {
     let engine = Engine::new(sheet_with_a_part()).unwrap();
     assert!(
         engine
-            .part_copy_payload(Uuid::now_v7(), "R5".into())
+            .part_copy_payload(Uuid::now_v7(), "R5".into(), &mut SequentialIds::default())
             .is_none()
     );
 }

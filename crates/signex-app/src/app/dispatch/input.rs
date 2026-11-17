@@ -67,7 +67,7 @@
 //! this module rather than inventing a parallel one.
 
 use super::*;
-use crate::keymap::KeyStroke;
+use crate::keymap::{KeyStroke, ModifiersExt as _};
 use iced::keyboard;
 
 /// Where an input event landed, and therefore what the user can see

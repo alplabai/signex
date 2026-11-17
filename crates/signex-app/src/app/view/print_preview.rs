@@ -147,7 +147,7 @@ impl Signex {
 
         let lead: Element<'_, Message> = crate::styles::dialog_intro(
             crate::styles::DialogIcon::Warn,
-            "Netlist is incomplete",
+            t!(i18n, ids::DIALOG_NETLIST_INCOMPLETE_TITLE).into_string(),
             None,
             tokens,
         );
@@ -155,15 +155,10 @@ impl Signex {
             dialog_body(
                 column![
                     lead,
-                    dialog_message(
-                        "The project netlist does not cover the whole project. Exporting it \
-                         would produce a file missing components and carrying the wrong net \
-                         names wherever nets merge through a page that is not in it — and a \
-                         PCB import cannot tell. You can export it anyway: the file stays \
-                         a valid netlist, and the omitted pages are reported in the Messages panel.",
-                        tokens,
-                    ),
+                    dialog_message(t!(i18n, ids::DIALOG_NETLIST_INCOMPLETE_BODY), tokens),
                     container(iced::widget::scrollable(
+                        // raw: one line per omitted page, worded by the netlist
+                        // check in English (#2061).
                         text(raw(detail)).size(TS.body).color(text_muted)
                     ))
                     .height(Length::Fit.max(120.0)),
@@ -273,18 +268,20 @@ impl Signex {
         };
 
         // Footer — page count + Export PDF.
-        let footer_caption = match (&preview.export_status, preview.pages.is_empty()) {
-            (Some(status), _) => status.clone(),
-            (None, true) => "No files selected for export".to_string(),
-            (None, false) => format!("{} page(s)", preview.pages.len()),
-        };
+        let footer_caption: signex_widgets::Label<'_> =
+            match (&preview.export_status, preview.pages.is_empty()) {
+                // raw: the export status is worded by the export handler (#2061).
+                (Some(status), _) => raw(status.clone()),
+                (None, true) => t!(i18n, ids::DIALOG_PRINT_PREVIEW_NO_FILES).into(),
+                (None, false) => t!(
+                    i18n,
+                    ids::DIALOG_PRINT_PREVIEW_PAGE_COUNT,
+                    "count" => preview.pages.len().to_string()
+                )
+                .into(),
+            };
         let footer = dialog_footer_split(
-            vec![
-                text(raw(footer_caption))
-                    .size(TS.body)
-                    .color(text_muted)
-                    .boxed(),
-            ],
+            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
             vec![dialog_button(
                 t!(i18n, ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF),
                 DialogButtonKind::Primary,

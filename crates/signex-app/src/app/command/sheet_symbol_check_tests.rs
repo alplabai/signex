@@ -71,9 +71,13 @@ fn a_sheet_symbol_whose_file_places_this_sheet_is_a_loop() {
     let d = dir.path();
     save(d, "top.snxsch", sheet(Vec::new(), Vec::new()));
     save(d, "other.snxsch", sheet(Vec::new(), Vec::new()));
-    let up =
-        signex_engine::child_sheet_from_corners(Point::new(0.0, 0.0), Point::new(20.0, 20.0), "Up")
-            .unwrap();
+    let up = signex_engine::child_sheet_from_corners(
+        Point::new(0.0, 0.0),
+        Point::new(20.0, 20.0),
+        "Up",
+        &mut signex_types::object_id::UuidV7Ids,
+    )
+    .unwrap();
     save(
         d,
         "loop.snxsch",
@@ -228,9 +232,13 @@ fn a_loose_sheet_symbol_whose_closed_file_places_this_sheet_is_a_loop() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
     save(d, "a.snxsch", sheet(Vec::new(), Vec::new()));
-    let up =
-        signex_engine::child_sheet_from_corners(Point::new(0.0, 0.0), Point::new(20.0, 20.0), "Up")
-            .unwrap();
+    let up = signex_engine::child_sheet_from_corners(
+        Point::new(0.0, 0.0),
+        Point::new(20.0, 20.0),
+        "Up",
+        &mut signex_types::object_id::UuidV7Ids,
+    )
+    .unwrap();
     save(
         d,
         "b.snxsch",
@@ -258,6 +266,7 @@ fn incomplete_project(dir: &Path) {
         Point::new(0.0, 0.0),
         Point::new(20.0, 20.0),
         "New",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .unwrap();
     save(
@@ -321,6 +330,7 @@ fn placing(child: &str) -> SchematicSheet {
         Point::new(0.0, 0.0),
         Point::new(20.0, 20.0),
         "Placed",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .unwrap();
     SchematicSheet {

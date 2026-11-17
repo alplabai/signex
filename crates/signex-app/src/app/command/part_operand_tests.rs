@@ -450,6 +450,7 @@ fn project_with_u1_on_a_closed_sheet(lib: &Library, dir: &std::path::Path) -> Si
         Point::new(100.0, 100.0),
         Point::new(120.0, 120.0),
         "child",
+        &mut signex_types::object_id::UuidV7Ids,
     )
     .expect("big enough");
     let top = SchematicSheet {

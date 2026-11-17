@@ -15,6 +15,7 @@ pub use shapes::{board_graphics, board_outline};
 
 use serde::Serialize;
 use signex_types::format::pcb_layer_token;
+use signex_types::object_id::IdSource;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 
@@ -83,12 +84,14 @@ pub fn check_dxf_target(target: DxfTarget) -> Result<(), DxfError> {
     }
 }
 
-/// The command importing `text` onto `board` at `target`, and what it makes.
+/// The command importing `text` onto `board` at `target`, and what it makes;
+/// each new drawing takes its id from `ids`.
 /// Positions are read from the board origin with y up, as the file has them.
 pub fn dxf_import_command(
     board: &PcbBoard,
     text: &str,
     target: DxfTarget,
+    ids: &mut dyn IdSource,
 ) -> Result<(BoardCommand, DxfImportSummary), DxfError> {
     check_dxf_target(target)?;
     let drawing = parse_dxf(text)?;
@@ -99,7 +102,7 @@ pub fn dxf_import_command(
     match target {
         DxfTarget::Layer(layer) => {
             let token = pcb_layer_token(layer);
-            let graphics = board_graphics(&drawing, origin, &token);
+            let graphics = board_graphics(&drawing, origin, &token, ids);
             if !graphics.iter().all(super::graphics::is_storable) {
                 return Err(DxfError::OutOfRange);
             }
