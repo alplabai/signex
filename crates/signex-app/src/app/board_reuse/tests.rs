@@ -418,7 +418,7 @@ fn a_waiting_block_write_is_dropped_when_the_project_folder_moves() {
     let file = old.join("reuse-blocks").join("amp.snxpcb");
     assert_eq!(
         app.document_state.project_writes,
-        [file.clone()],
+        std::slice::from_ref(&file),
         "a folder rename waits for the running write"
     );
     settle(&mut app, second);
