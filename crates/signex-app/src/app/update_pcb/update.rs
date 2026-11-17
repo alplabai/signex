@@ -9,7 +9,7 @@ use signex_engine::pcb::eco::{EcoChangeList, refresh_nets};
 use signex_i18n::{MessageId, ids, t};
 
 use super::UpdatePcbMsg;
-use super::design::{self, DesignRequest, LibraryRows};
+use super::design::{self, DesignRequest};
 use super::state::{Phase, UpdatePcbState, file_name};
 use crate::app::project_sheets::{plan_project_sheets_for, project_root_sheet_path};
 use crate::app::state::{ErrorNotice, ProjectId};
@@ -266,19 +266,6 @@ impl Signex {
             },
             move |result| Message::from(UpdatePcbMsg::Computed { job, result }),
         )
-    }
-
-    /// Every open library's rows, for the worker to resolve footprints from.
-    pub(crate) fn library_rows(&self) -> Vec<LibraryRows> {
-        self.library
-            .open_libraries
-            .iter()
-            .map(|lib| LibraryRows {
-                id: lib.library_id,
-                root: lib.root.clone(),
-                rows: lib.tables.values().flatten().cloned().collect(),
-            })
-            .collect()
     }
 
     fn update_pcb_computed(

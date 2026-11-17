@@ -4,14 +4,6 @@
 use signex_types::schematic::{InstancePath, PartKey, SchematicSheet, group_into_parts};
 use uuid::Uuid;
 
-/// A part as the board sees it: the sheet occurrence and the smallest unit
-/// UUID, the same anchor a footprint's `SymbolLink` names.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PartAnchor {
-    pub sheet: InstancePath,
-    pub part: Uuid,
-}
-
 /// One physical part on one sheet occurrence.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DesignPart {
@@ -23,16 +15,6 @@ pub struct DesignPart {
     /// The designator is empty or still holds `?`: the part is not annotated
     /// and nothing may be matched or placed by it.
     pub needs_annotation: bool,
-}
-
-impl DesignPart {
-    /// `None` only for a part with no units, which grouping never makes.
-    pub fn anchor(&self) -> Option<PartAnchor> {
-        Some(PartAnchor {
-            sheet: self.sheet.clone(),
-            part: self.units.iter().min().copied()?,
-        })
-    }
 }
 
 /// Every non-power part of `sheets` (placed sheets with their occurrence

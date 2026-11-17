@@ -11,7 +11,7 @@ use signex_types::schematic::InstancePath;
 use super::change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow,
 };
-use super::{EcoInput, EcoPart, is_under, stable_uuid};
+use super::{EcoInput, EcoPart, duplicate_designators, is_under, stable_uuid};
 use crate::pcb::footprint_content::{carry_would_lose, unmatched_pads};
 
 const REFERENCE_KEY: &str = "Reference";
@@ -96,18 +96,6 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
     list
 }
 
-/// Designators carried by more than one annotated part.
-fn duplicate_designators(parts: &[EcoPart]) -> HashSet<String> {
-    let mut count: HashMap<&str, usize> = HashMap::new();
-    for p in parts.iter().filter(|p| !p.part.needs_annotation) {
-        *count.entry(p.part.designator.as_str()).or_default() += 1;
-    }
-    count
-        .into_iter()
-        .filter(|(_, n)| *n > 1)
-        .map(|(d, _)| d.to_string())
-        .collect()
-}
 
 struct Matched {
     /// Part index -> footprint index.

@@ -3,11 +3,49 @@
 //! wire it with.
 
 use signex_types::part::{FootprintResolveError, FootprintSourceRef, PinPadMap, ResolvedFootprint};
+use signex_types::schematic::{RowStamp, Symbol};
+use uuid::Uuid;
 
 use crate::board_footprint::board_footprint;
 use crate::component::{ComponentRow, PinPadOverride};
 use crate::primitive::PrimitiveRef;
 use crate::primitive::footprint::Footprint;
+
+/// The footprint binding `stamp` records; `None` for the row's default (or a
+/// binding that is not a `<library uuid>:<footprint uuid>` key).
+pub fn stamped_footprint(stamp: &RowStamp) -> Option<PrimitiveRef> {
+    PrimitiveRef::parse_key(stamp.footprint_ref.as_deref()?)
+}
+
+/// The alternate footprint the part whose unit is `symbol` is built with,
+/// from its valid stamp; `None` for the row's default.
+pub fn chosen_footprint(symbol: &Symbol) -> Option<PrimitiveRef> {
+    stamped_footprint(symbol.valid_stamp()?)
+}
+
+/// The board footprint of the part whose first unit is `symbol`: its library
+/// row (`find_row`, by library and row id) with the binding it was built
+/// with. A part with no row, or whose row gives no footprint, uses the
+/// library footprint its own footprint names as `<library uuid>:<footprint
+/// uuid>`, which Choose footprint sets (#2371).
+pub fn resolve_symbol_footprint<'r>(
+    symbol: &Symbol,
+    find_row: impl FnOnce(Uuid, Uuid) -> Option<&'r ComponentRow>,
+    lookup: impl Fn(&PrimitiveRef, &str) -> Option<Footprint>,
+) -> Result<ResolvedFootprint, FootprintResolveError> {
+    let from_row = match (symbol.library_id, symbol.row_id) {
+        (Some(library), Some(row)) => find_row(library, row)
+            .ok_or(FootprintResolveError::RowNotFound { library, row })
+            .and_then(|row| {
+                resolve_part_footprint(row, chosen_footprint(symbol).as_ref(), &lookup)
+            }),
+        _ => Err(FootprintResolveError::NoFootprint),
+    };
+    match (from_row, PrimitiveRef::parse_key(symbol.footprint.trim())) {
+        (Err(_), Some(named)) => resolve_named_footprint(&named, &lookup),
+        (resolved, _) => resolved,
+    }
+}
 
 /// Resolve the footprint of a part built from `row`.
 ///
