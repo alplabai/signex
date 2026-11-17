@@ -472,3 +472,166 @@ fn a_refused_show_is_logged_as_a_show() {
         "{said:?}"
     );
 }
+
+/// Waive the last run's clearance row with `note` through the panel.
+fn waive_clearance(app: &mut Signex, note: &str) -> String {
+    let clearance = key_of(app, "builtin::clearance");
+    panel(app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    panel(app, DrcPanelMsg::NoteEdited(note.into()));
+    panel(app, DrcPanelMsg::WaiveConfirmed);
+    clearance
+}
+
+/// The VCC track 0.05 mm closer to GND: still a clearance finding, of
+/// changed geometry.
+fn nudge_vcc(app: &mut Signex, path: &Path) {
+    let moved = track(VCC_TRACK, 2, (0.0, 0.30), (10.0, 0.30));
+    let command = signex_engine::pcb::BoardCommand::ReplaceItems {
+        items: vec![signex_engine::pcb::BoardItem::Segment(moved)],
+    };
+    app.execute_board_commands(path, vec![command], None)
+        .expect("the track moves");
+}
+
+fn board_waivers(app: &Signex, path: &Path) -> Vec<signex_types::pcb_options::DrcWaiver> {
+    app.document_state
+        .pcb_board(path)
+        .unwrap()
+        .options
+        .drc_waivers
+        .clone()
+}
+
+/// #2307: a waiver stores the fingerprint of its objects as they are.
+#[test]
+fn a_waiver_stores_the_fingerprint_of_its_objects() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "ok");
+    let board = app.document_state.pcb_board(&path).unwrap();
+    let violation = app
+        .interaction_state
+        .pcb_drc
+        .done_for(&path)
+        .unwrap()
+        .report
+        .violations
+        .iter()
+        .find(|v| signex_drc::waiver_key(v) == key)
+        .unwrap();
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(
+        waivers[0].fingerprint,
+        signex_drc::fingerprint(violation, board)
+    );
+    assert_eq!(waivers[0].fingerprint.len(), 32);
+}
+
+/// #2307: moving a waived object lapses the waiver: the row is open again
+/// and the run says so in Messages. Waiving it again replaces the old one.
+#[test]
+fn a_moved_object_lapses_its_waiver_and_a_new_waiver_replaces_it() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "first");
+    let first = board_waivers(&app, &path)[0].fingerprint.clone();
+    nudge_vcc(&mut app, &path);
+    run_drc(&mut app);
+    let row = rows(&app).into_iter().find(|r| r.key == key).unwrap();
+    assert_eq!(row.waiver, None, "a lapsed waiver leaves the row open");
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert!(
+        said.iter()
+            .any(|m| m.contains("1 waived finding(s) are back")),
+        "{said:?}"
+    );
+
+    waive_clearance(&mut app, "second");
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(waivers.len(), 1, "{waivers:?}");
+    assert_eq!(waivers[0].note, "second");
+    assert_ne!(waivers[0].fingerprint, first);
+    let row = rows(&app).into_iter().find(|r| r.key == key).unwrap();
+    assert_eq!(row.waiver.as_deref(), Some("second"));
+}
+
+/// #2307: a waiver on results the board has moved past is refused and
+/// nothing is written: it would fingerprint geometry the run never checked.
+/// Unwaiving stays allowed.
+#[test]
+fn a_waiver_on_stale_results_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "fresh");
+    assert_eq!(board_waivers(&app, &path).len(), 1);
+    nudge_vcc(&mut app, &path);
+    let refused = app.set_drc_waiver(&path, &key, Some("stale".into()));
+    let why = refused.expect_err("a stale waive is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(waivers.len(), 1);
+    assert_eq!(waivers[0].note, "fresh");
+    app.set_drc_waiver(&path, &key, None)
+        .expect("unwaive on stale results");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
+/// #2307: a change of the project's net classes after the run makes the
+/// results stale too, so Waive is refused until DRC runs again.
+#[test]
+fn a_waiver_after_a_net_class_change_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = key_of(&app, "builtin::clearance");
+    app.document_state.projects[0].data.net_classes =
+        vec![signex_types::net_class::NetClass::named("Power")];
+    let why = app
+        .set_drc_waiver(&path, &key, Some("after classes".into()))
+        .expect_err("a waive on stale results is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
+/// #2307: a run the board was edited during says nothing of lapsed
+/// waivers: its findings are not of the geometry now.
+#[test]
+fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    waive_clearance(&mut app, "ok");
+    let mark = "a_run_edited_during_its_check_logs_no_lapsed_waivers";
+    crate::diagnostics::log_info(mark);
+    let task = app.handle_pcb_drc_requested();
+    nudge_vcc(&mut app, &path);
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    assert!(app.pcb_drc_panel().unwrap().stale);
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .skip_while(|m| m != mark)
+        .collect();
+    assert!(!said.is_empty(), "the mark is logged");
+    assert!(
+        !said
+            .iter()
+            .any(|m| m.contains("waived finding(s) are back")),
+        "{said:?}"
+    );
+}
