@@ -346,12 +346,7 @@ fn a_layer_with_a_free_arc_or_pad_on_it_cannot_be_removed() {
 #[test]
 fn removing_an_inner_layer_drops_a_free_pads_sizes_and_undo_puts_them_back() {
     let mut b = board(4, "TopCopper");
-    let copper = [
-        "TopCopper",
-        "Inner1Copper",
-        "Inner2Copper",
-        "BottomCopper",
-    ];
+    let copper = ["TopCopper", "Inner1Copper", "Inner2Copper", "BottomCopper"];
     b.free
         .pads
         .push(free_pad(&["TopCopper", "BottomCopper"], &copper));
