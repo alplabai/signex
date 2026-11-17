@@ -129,6 +129,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
+| `open_net_classes` | Open the Net Classes panel | design | — | — |
+| `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
 | `open_net_inspector` | Open Net Inspector panel | panels | `V N` | `Shift+I` |
 | `open_preferences` | Open preferences | preferences | `Mod+,` | `Mod+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
@@ -255,7 +257,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |
-| `open_net_classes` | Open the Net Classes panel | design | — | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
@@ -358,7 +359,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `open_drc_panel` | Open the DRC results panel | pcb | — | — |
-| `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
 | `open_rules` | Open the design rules of the project | design | — | — |
 | `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
