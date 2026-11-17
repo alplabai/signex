@@ -4,6 +4,7 @@
 
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 #[cfg(unix)]
 mod client;
 mod deferred;

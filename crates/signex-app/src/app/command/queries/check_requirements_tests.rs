@@ -250,3 +250,20 @@ fn a_document_outside_every_project_is_refused() {
         "{reason}"
     );
 }
+
+#[test]
+fn drc_clean_runs_the_drc_of_the_projects_board() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let board = list_board(&mut app, &dir, 50.0, 40.0);
+    set_requirements(&mut app, json!([{"id": "drc", "kind": "drc_clean"}]));
+    let project = project_path(&app);
+    let value = report(&mut app, &project, &[]);
+    let passed = value["passed"] == json!(["req::drc"]);
+    let failed = value["findings"].as_array().unwrap().iter().any(|f| {
+        f["rule"] == "req::drc"
+            && f["evidence"]["check"] == "drc"
+            && f["sheet"] == board.display().to_string().as_str()
+    });
+    assert!(passed ^ failed, "{value}");
+}

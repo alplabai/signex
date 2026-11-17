@@ -46,7 +46,7 @@ impl Signex {
             (Some(path), true) => Some(Box::new(self.drc_check_job(path, Some(project)))),
             _ => None,
         };
-        let wants_board = needs.board || needs.parts || needs.bom;
+        let wants_board = needs.board || needs.drc || needs.parts || needs.bom;
         let open_board = board_path
             .as_deref()
             .filter(|_| wants_board)
