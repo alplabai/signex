@@ -22,6 +22,12 @@ library-browser-summary =
 # Caption in front of the lifecycle filter pills.
 library-browser-show = Show
 
+# Count line right of the filter pills: rows the search and filters leave
+# in the active table, of all its rows. Both are whole numbers.
+library-browser-shown = { $shown } of { $total } shown
+# The same, with the column the grid is sorted by.
+library-browser-shown-sorted = { $shown } of { $total } shown · sorted by { $column }
+
 # Lifecycle filter pill: Released, In Review and Draft rows.
 library-browser-filter-active = Active + Preferred
 

@@ -61,7 +61,7 @@ pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
         .filter(|c| !matches!(c.kind, ColumnKind::Rev | ColumnKind::Symbol))
         .map(|c| {
             let width = match &c.kind {
-                ColumnKind::InternalPn => 124.0,
+                ColumnKind::InternalPn => 140.0,
                 ColumnKind::Description => 150.0,
                 ColumnKind::Parameter(k) if k == "value" => 64.0,
                 ColumnKind::Footprint => 124.0,
@@ -199,5 +199,21 @@ mod tests {
         let room = 200.0 - 2.0 * CELL_PAD_X;
         assert!(cut.chars().count() as f32 * 12.0 * GLYPH_ADVANCE_EM <= room);
         assert_eq!(ellipsize("0.0.1".into(), 80.0, 12.0), "0.0.1");
+    }
+
+    /// #2262: an Internal PN of 17 mono characters ("STOCK-C_Polarized")
+    /// fits its editable cell (cell inset and input padding included), so it
+    /// is not cut mid-word.
+    #[test]
+    fn the_internal_pn_column_holds_a_seventeen_character_pn() {
+        const MONO_ADVANCE_EM: f32 = 0.6;
+        let sp = crate::styles::Spacing::DEFAULT;
+        let size = crate::styles::TypeScale::DEFAULT.body;
+        let pn = graphite_columns(&sample())
+            .into_iter()
+            .find(|c| matches!(c.kind, ColumnKind::InternalPn))
+            .expect("Internal PN column");
+        let need = 17.0 * MONO_ADVANCE_EM * size + 2.0 * (sp.xs + CELL_PAD_X);
+        assert!(pn.width >= need, "{} < {need}", pn.width);
     }
 }

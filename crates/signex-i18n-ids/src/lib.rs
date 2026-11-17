@@ -392,6 +392,8 @@ define_ids! {
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";
     LIBRARY_BROWSER_SHOW = "library-browser-show";
+    LIBRARY_BROWSER_SHOWN = "library-browser-shown";
+    LIBRARY_BROWSER_SHOWN_SORTED = "library-browser-shown-sorted";
     LIBRARY_BROWSER_FILTER_ACTIVE = "library-browser-filter-active";
     LIBRARY_BROWSER_FILTER_PREFERRED = "library-browser-filter-preferred";
     LIBRARY_BROWSER_FILTER_DEPRECATED = "library-browser-filter-deprecated";

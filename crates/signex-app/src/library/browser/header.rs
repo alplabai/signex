@@ -9,6 +9,37 @@ use iced::widget::column;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// What the count line right of the filter pills reads: the rows the search
+/// and filters leave, of all rows in the active table, and the sort column.
+pub(super) struct ShownCount {
+    pub(super) shown: usize,
+    pub(super) total: usize,
+    pub(super) sorted_by: Option<String>,
+}
+
+impl ShownCount {
+    /// "14 of 87 shown", with " · sorted by Internal PN" when sorted.
+    pub(super) fn label(&self, i18n: &I18n) -> signex_i18n::Localized {
+        match &self.sorted_by {
+            Some(column) => t!(
+                i18n,
+                ids::LIBRARY_BROWSER_SHOWN_SORTED,
+                "shown" => self.shown,
+                "total" => self.total,
+                "column" => column.as_str()
+            ),
+            None => t!(
+                i18n,
+                ids::LIBRARY_BROWSER_SHOWN,
+                "shown" => self.shown,
+                "total" => self.total
+            ),
+        }
+    }
+}
+
+/// Graphite header: library title, a flexible search field and the primary
+/// Add Component button, then the lifecycle filter as pills and the count.
 pub(super) fn view_header<'a>(
     library_path: &'a std::path::Path,
     lib: &'a OpenLibrary,
@@ -16,19 +47,7 @@ pub(super) fn view_header<'a>(
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    graphite_header(library_path, lib, browser, tokens, i18n, read_only)
-}
-
-/// Graphite header: library title, a flexible search field and the primary
-/// Add Component button, then the lifecycle filter as pills.
-fn graphite_header<'a>(
-    library_path: &'a std::path::Path,
-    lib: &'a OpenLibrary,
-    browser: &'a LibraryBrowserState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    read_only: bool,
+    count: &ShownCount,
 ) -> Element<'a, LibraryMessage> {
     let r = crate::styles::tokens::resolve(tokens);
     let radii = crate::styles::Radii::GRAPHITE;
@@ -45,7 +64,23 @@ fn graphite_header<'a>(
         .size(BROWSER_TEXT_SIZE)
         .style(super::look::bare_input(tokens))
         .width(Length::Fill);
-    let search_field = container(search)
+    let search_ink = r.ink4;
+    let search_icon = iced::widget::svg(crate::icons::icon_chrome_search(
+        signex_types::theme::ThemeId::GraphiteDark,
+    ))
+    .width(BROWSER_TEXT_SIZE)
+    .height(BROWSER_TEXT_SIZE)
+    .style(move |_: &Theme, _| iced::widget::svg::Style {
+        color: Some(search_ink),
+        ..Default::default()
+    });
+    let search_line = row![search_icon, search]
+        .align_y(iced::Alignment::Center)
+        .padding(iced::Padding {
+            left: SP.m,
+            ..iced::Padding::ZERO
+        });
+    let search_field = container(search_line)
         .width(Length::Fill)
         .height(Length::Fixed(metrics.button))
         .center_y(Length::Fixed(metrics.button))
@@ -98,7 +133,8 @@ fn graphite_header<'a>(
             .boxed()
     ]
     .spacing(SP.s)
-    .align_y(iced::Alignment::Center);
+    .align_y(iced::Alignment::Center)
+    .width(Length::Fill);
     for &filter in LifecycleFilter::ALL {
         let active = browser.lifecycle_filter == filter;
         let library_for_lc = lib_pb.clone();
@@ -129,9 +165,45 @@ fn graphite_header<'a>(
         );
     }
 
+    pills = pills.push(Space::new().width(Length::Fill).boxed());
+    pills = pills.push(
+        text(count.label(i18n))
+            .size(TS.caption)
+            .color(ink3)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    );
+
     container(column![top.boxed(), pills.boxed()].spacing(SP.s))
         .padding([SP.m, SP.l])
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shown(count: &ShownCount) -> String {
+        let i18n = signex_i18n::I18n::en_us_ref();
+        count
+            .label(i18n)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// #2262: the count line names the rows left after the search and
+    /// filters, of the table's rows, and the sort column when there is one.
+    #[test]
+    fn the_count_line_reads_shown_of_total_and_the_sort_column() {
+        let mut count = ShownCount {
+            shown: 14,
+            total: 87,
+            sorted_by: None,
+        };
+        assert_eq!(shown(&count), "14 of 87 shown");
+        count.sorted_by = Some("Internal PN".into());
+        assert_eq!(shown(&count), "14 of 87 shown · sorted by Internal PN");
+    }
 }
