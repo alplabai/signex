@@ -164,7 +164,7 @@ fn a_finding_is_matched_to_its_waiver_and_filed_under_its_rule() {
             note: String::new(),
             fingerprint: String::new(),
         },
-        waiver(v, "", "accepted"),
+        waiver(v, &fingerprint(v, &b), "accepted"),
     ];
     match waiver_state(&waivers, v, &b) {
         WaiverState::Waived(w) => assert_eq!(w.note, "accepted"),
@@ -284,6 +284,20 @@ fn a_footprint_fingerprint_follows_its_placement_and_body() {
         .expect("courtyard");
         b.footprints[0].graphics.push(courtyard);
     });
+}
+
+/// A footprint graphic DRC never checks (silkscreen) keeps the fingerprint.
+#[test]
+fn a_silkscreen_edit_keeps_the_footprint_fingerprint() {
+    let v = finding(vec![ItemRef::Footprint(id(1001))], None);
+    let before = fingerprint(&v, &everything());
+    let mut b = everything();
+    let silk: FpGraphic = serde_json::from_value(json!({"graphic_type": "line",
+        "layer": "TopSilkscreen", "width": 0.15,
+        "start": {"x": -1.0, "y": 0.0}, "end": {"x": 1.0, "y": 0.0}}))
+    .expect("silk");
+    b.footprints[0].graphics.push(silk);
+    assert_eq!(fingerprint(&v, &b), before);
 }
 
 /// The fingerprint reads the stored turn, not a body that went through
@@ -418,14 +432,39 @@ fn a_waiver_holds_while_the_geometry_matches_and_lapses_after_a_move() {
     );
 }
 
-/// A waiver saved before #2307 has no fingerprint and holds by key alone.
+/// A waiver made before #2307 has no fingerprint: it lapses once, even on
+/// unchanged objects, and is waived again.
 #[test]
-fn a_waiver_without_a_fingerprint_holds_after_a_move() {
+fn a_waiver_without_a_fingerprint_lapses() {
     let (b, v) = clearance();
     let waivers = vec![waiver(&v, "", "old")];
     assert_eq!(
-        waiver_state(&waivers, &v, &moved(&b)),
-        WaiverState::Waived(&waivers[0])
+        waiver_state(&waivers, &v, &b),
+        WaiverState::Lapsed(&waivers[0])
+    );
+}
+
+/// With a waiver without a fingerprint in the list, a current one still
+/// wins, and with none current the last same-key waiver lapses.
+#[test]
+fn a_waiver_without_a_fingerprint_never_wins_in_a_mixed_list() {
+    let (b, v) = clearance();
+    let after = moved(&b);
+    let stale = [
+        waiver(&v, "", "old"),
+        waiver(&v, &fingerprint(&v, &b), "before the move"),
+    ];
+    assert_eq!(
+        waiver_state(&stale, &v, &after),
+        WaiverState::Lapsed(&stale[1])
+    );
+    let current = [
+        waiver(&v, "", "old"),
+        waiver(&v, &fingerprint(&v, &after), "now"),
+    ];
+    assert_eq!(
+        waiver_state(&current, &v, &after),
+        WaiverState::Waived(&current[1])
     );
 }
 

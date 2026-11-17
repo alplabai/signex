@@ -5,11 +5,13 @@
 //! its inputs: `docs/architecture/pcb-drc.md`, "Waivers".
 
 use pcb_geom::{ItemRef, via_layers};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
+use signex_types::check::finding_waiver_json;
 // Every number, angles and ratios too, quantised as the file stores a length.
-use signex_types::format::mm_as_stored_nm;
-use signex_types::pcb::{Footprint, Pad, PcbBoard};
+use signex_types::format::{mm_as_stored_nm, parse_pcb_layer};
+use signex_types::pcb::{Footprint, FpGraphic, Pad, PcbBoard};
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::pcb_options::DrcWaiver;
 use uuid::Uuid;
 
@@ -77,8 +79,8 @@ pub enum WaiverState<'a> {
 }
 
 /// The state of `v` on `board` under `waivers`. Of the waivers with `v`'s
-/// key, one whose fingerprint matches wins, then one with no fingerprint (a
-/// waiver saved before #2307 holds by key alone); else the last is lapsed.
+/// key, one whose fingerprint matches wins; else the last is lapsed. A
+/// waiver without a fingerprint (made before #2307) never matches.
 pub fn waiver_state<'a>(
     waivers: &'a [DrcWaiver],
     v: &Violation,
@@ -89,28 +91,19 @@ pub fn waiver_state<'a>(
     let Some(&last) = same.last() else {
         return WaiverState::Open;
     };
-    if same.iter().any(|w| !w.fingerprint.is_empty()) {
-        let now = fingerprint(v, board);
-        if let Some(&w) = same.iter().find(|w| w.fingerprint == now) {
-            return WaiverState::Waived(w);
-        }
-    }
-    match same.iter().find(|w| w.fingerprint.is_empty()) {
-        Some(&legacy) => WaiverState::Waived(legacy),
+    let now = fingerprint(v, board);
+    match same.iter().find(|w| w.fingerprint == now) {
+        Some(&w) => WaiverState::Waived(w),
         None => WaiverState::Lapsed(last),
     }
 }
 
-/// A waiver as a waiver object of a check report; the fields it shares
-/// with ERC's (`signex_erc::check::finding_waiver`) are named the same.
+/// A waiver as a waiver object of a check report, in the shape every check
+/// shares, with its `key`.
 pub fn waiver_json(waiver: &DrcWaiver) -> Value {
-    json!({
-        "kind": "finding",
-        "rule_id": waiver.rule,
-        "key": waiver.key,
-        "fingerprint": waiver.fingerprint,
-        "reason": waiver.note,
-    })
+    let mut extra = Map::new();
+    extra.insert("key".into(), json!(waiver.key));
+    finding_waiver_json(&waiver.rule, &waiver.fingerprint, &waiver.note, extra)
 }
 
 fn short_hex(hasher: Sha256) -> String {
@@ -140,8 +133,9 @@ fn item_geometry(board: &PcbBoard, item: &ItemRef) -> Value {
             .map(|(fp, p)| json!({"placement": placement(fp), "pad": pad_geometry(p)})),
         ItemRef::Footprint(id) => board.footprints.iter().find(|f| f.uuid == id).map(|fp| {
             let pads: Vec<Value> = fp.pads.iter().map(pad_geometry).collect();
+            let graphics: Vec<&FpGraphic> = fp.graphics.iter().filter(|g| is_checked(g)).collect();
             json!({"placement": placement(fp), "footprint_id": fp.footprint_id,
-                "pads": pads, "graphics": fp.graphics})
+                "pads": pads, "graphics": graphics})
         }),
         ItemRef::FreePad(id) => board
             .free
@@ -183,6 +177,20 @@ fn pad_geometry(p: &Pad) -> Value {
         "size": p.size, "rotation": p.rotation, "roundrect_ratio": p.roundrect_ratio,
         "drill": p.drill, "layers": p.layers, "layer_sizes": p.layer_sizes,
         "net": p.net.as_ref().map(|n| n.name.as_str())})
+}
+
+/// Whether a footprint graphic is something DRC sees: copper or courtyard
+/// (the body `footprint_body` takes), not silkscreen or fabrication.
+fn is_checked(graphic: &FpGraphic) -> bool {
+    matches!(
+        parse_pcb_layer(&graphic.layer),
+        Some(
+            PcbLayer::Copper(_)
+                | PcbLayer::Technical(
+                    TechnicalLayer::CourtyardTop | TechnicalLayer::CourtyardBottom
+                )
+        )
+    )
 }
 
 /// Where a footprint sits: its id, position, turn and side.
