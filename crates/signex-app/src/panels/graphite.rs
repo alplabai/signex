@@ -20,7 +20,8 @@ pub const TABLE_ROW_HEIGHT: f32 = 28.0;
 /// Corner radius of a Properties field.
 pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 
-/// Row look of the Projects tree: the neutral selection, 24 px rows.
+/// Row look of the Projects tree: the neutral selection, 24 px rows, kind
+/// tags ahead of the file names and no folder icons (#2262).
 pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
     let tone = |t: PillTone| pill_colors(tokens, t);
     // The mock's violet has no token: a fixed pair per light / dark panel.
@@ -35,13 +36,15 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
             Color::from_rgb8(0x6B, 0x3F, 0xA0),
         )
     };
-    TreeStyle::new(selection_fill(tokens), ti(tokens.text)).badge_tones([
-        tone(PillTone::Neutral),
-        tone(PillTone::Info),
-        tone(PillTone::Ok),
-        violet,
-        tone(PillTone::Warn),
-    ])
+    TreeStyle::new(selection_fill(tokens), ti(tokens.text))
+        .kind_tags()
+        .badge_tones([
+            tone(PillTone::Neutral),
+            tone(PillTone::Info),
+            tone(PillTone::Ok),
+            violet,
+            tone(PillTone::Warn),
+        ])
 }
 
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
@@ -311,6 +314,31 @@ mod selection_tests {
             assert_eq!(style.selected_fill, neutral, "{id:?} tree row");
             assert_eq!(style.selected_ink, ti(t.text), "{id:?} tree ink");
         }
+    }
+
+    /// #2262: a document row leads with its kind tag ("SCH") where the old
+    /// tree drew a coloured file icon and a right-aligned tag.
+    #[test]
+    fn a_document_row_leads_with_its_kind_tag() {
+        let t = theme_tokens(ThemeId::GraphiteLight);
+        let group = TreeNode::branch(
+            "Schematics",
+            TreeIcon::Folder,
+            vec![TreeNode::leaf("power.snxsch", TreeIcon::SnxSchematic).with_key("p")],
+        )
+        .with_key("Schematics");
+        let mut root = TreeNode::branch("demo", TreeIcon::SnxProject, vec![group]).with_key("demo");
+        root.expanded = true;
+        root.children[0].expanded = true;
+        let decorated = decorate_tree(&[root]);
+        let tree = TreeView::new(&decorated, &t).style(tree_style(&t)).view();
+        let texts = crate::layout_probe::lay_out_texts(tree, iced::Size::new(240.0, 200.0));
+        let tag = crate::layout_probe::find(&texts, "SCH").bounds;
+        let name = crate::layout_probe::find(&texts, "power.snxsch").bounds;
+        assert!(
+            tag.x + tag.width <= name.x,
+            "tag {tag:?} is not ahead of {name:?}"
+        );
     }
 
     /// The selected Projects row is drawn in that grey.

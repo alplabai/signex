@@ -18,6 +18,7 @@ use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
+mod kind_tag;
 mod style;
 pub use style::{BadgeTone, BadgeTones, TreeStyle};
 
@@ -560,22 +561,39 @@ fn render_node(
     // relying solely on the bold-label cue. svg::Style.color flat-tints
     // the SVG, which is what we want at this size — the silhouette
     // stays readable, the colour signals "this is active".
-    let icon_w = svg(node.icon.svg()).width(m.icon).height(m.icon);
-    let icon_w = if node.accent && depth == 0 {
-        let accent = theme_ext::accent(tokens);
-        icon_w.style(move |_: &Theme, _| svg::Style {
-            color: Some(accent),
-            ..Default::default()
-        })
-    } else {
-        icon_w
-    };
-    r = r.push(icon_w.boxed());
-    // Dedicated icon → label gap. `ELEM_GAP` alone (2 px) leaves the
-    // label visually kerned into the icon; a wider spacer just after
-    // the icon opens the gap without affecting the chevron→icon
-    // alignment that's already tight-on-purpose.
-    r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
+    // Kind tags (a styled tree's option): a leaf's badge leads the row in
+    // place of its icon, and branches draw no icon.
+    let kind_tags = m.style.is_some_and(|s| s.kind_tags);
+    // The badge is data (a count or a file kind), not catalog text.
+    let badge_label = node.badge.as_ref().map(|badge| raw(badge.clone()));
+    let leading_tag = (kind_tags && !is_expandable)
+        .then(|| badge_label.clone())
+        .flatten();
+    if let Some(tag) = leading_tag.clone() {
+        let (fill, ink) = m
+            .style
+            .and_then(|s| s.tone_colors(node.badge_tone))
+            .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
+        r = r.push(kind_tag::kind_tag(tag, m.badge, fill, ink));
+        r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
+    } else if !(kind_tags && is_expandable) {
+        let icon_w = svg(node.icon.svg()).width(m.icon).height(m.icon);
+        let icon_w = if node.accent && depth == 0 {
+            let accent = theme_ext::accent(tokens);
+            icon_w.style(move |_: &Theme, _| svg::Style {
+                color: Some(accent),
+                ..Default::default()
+            })
+        } else {
+            icon_w
+        };
+        r = r.push(icon_w.boxed());
+        // Dedicated icon → label gap. `ELEM_GAP` alone (2 px) leaves the
+        // label visually kerned into the icon; a wider spacer just after
+        // the icon opens the gap without affecting the chevron→icon
+        // alignment that's already tight-on-purpose.
+        r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
+    }
 
     // Label (flex, no wrap — truncation handled by scrollable parent).
     // Accented root nodes (active project in a multi-project workspace)
@@ -609,12 +627,13 @@ fn render_node(
         r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
     }
 
-    // Badge (right-aligned, very muted, single line)
-    if let Some(badge) = &node.badge {
+    // Badge (right-aligned, very muted, single line); a leading kind tag
+    // already shows it.
+    if let Some(badge) = badge_label.filter(|_| leading_tag.is_none()) {
         if meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         }
-        let badge_text = text(raw(badge.clone()))
+        let badge_text = text(badge)
             .size(m.badge)
             .wrapping(iced::widget::text::Wrapping::None);
         if m.style.is_some() {
@@ -649,7 +668,7 @@ fn render_node(
     // dirty state already implies open and only one indicator's worth
     // of width fits comfortably in narrow Projects panels.
     if node.is_open || node.is_dirty {
-        if node.badge.is_none() && meta.is_none() {
+        if (node.badge.is_none() || leading_tag.is_some()) && meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         } else {
             r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
