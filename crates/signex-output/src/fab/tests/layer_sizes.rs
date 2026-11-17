@@ -42,3 +42,24 @@ fn a_pad_and_a_via_larger_or_smaller_inside_flash_their_inner_size_there() {
         assert!(!image.contains("C,0.4*%"), "{outer}: {image}");
     }
 }
+
+#[test]
+fn a_test_record_gives_the_size_on_its_probed_layer() {
+    let mut board = fixture_board();
+    // J1's through pin is probed from the top: 2 mm there, 1.6 mm below.
+    board.footprints[1].pads[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: p(2.0, 2.0),
+        middle: p(1.0, 1.0),
+        bottom: p(1.6, 1.6),
+    });
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 0.8,
+        middle: 0.4,
+        bottom: 0.6,
+    });
+    let set = generated(&board);
+    let ipc = file(&set, "fab-netlist.ipc").expect("test netlist");
+    assert!(ipc.contains("X2000Y2000"), "J1's top size: {ipc}");
+    assert!(!ipc.contains("X1600Y1600"), "not its base size: {ipc}");
+    assert!(ipc.contains("X0800Y0800"), "the via's top size: {ipc}");
+}

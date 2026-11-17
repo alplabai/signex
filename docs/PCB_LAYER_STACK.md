@@ -54,10 +54,12 @@ at least one copper layer, each once, and every size is at least 1 nm, so an
 edit the engine takes always saves. The Via and Pad panels' Simple /
 Top-Middle-Bottom / Full Stack tiles pick the form (each layer keeps its
 size) and show a size row per layer. The renderer draws a via or pad with its
-size on the active copper layer; DRC checks a via with its copper on each
-layer (`pcb_geom::via_pieces`) and its smallest ring against a minimum
-diameter rule (`Via::min_diameter`: the layers its span passes, the via's
-own diameter only where its sizes do not cover a layer). Fabrication outputs do not read the sizes yet.
+size on the active copper layer; DRC checks a via and a pad with their
+copper on each layer (`pcb_geom::via_pieces`, `pcb_geom::pad_pieces`), and a
+via's smallest ring against a minimum diameter rule (`Via::min_diameter`:
+the layers its span passes, the via's own diameter only where its sizes do
+not cover a layer). Pour fills, the board tools and the fabrication outputs
+read the size on each layer too (`docs/FABRICATION_OUTPUTS.md`).
 
 ## Locks and the via span {#locks}
 

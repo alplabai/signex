@@ -5,16 +5,18 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_free::free_pad_frame;
 
 use pcb_geom::{
-    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, ratsnest, via_pieces,
+    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, pad_pieces, ratsnest,
+    via_pieces,
 };
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 
 /// Check `board` against `rules`.
 pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
-    let items = per_layer_vias(board, collect_copper(board));
+    let items = per_layer_sizes(board, collect_copper(board));
     let index = BoardIndex::build(board);
     let mut violations = copper_pairs(&items, &index, rules);
     violations.extend(unconnected(board, &items));
@@ -32,26 +34,41 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     }
 }
 
-/// A via with per-layer sizes is checked with its copper on each layer
-/// (#2401): one item per group of layers that share a diameter. The
-/// ratsnest keeps one item per via, so only the check splits it.
-fn per_layer_vias(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> {
+/// A pad or via with per-layer sizes is checked with its copper on each
+/// layer (#2401): one item per group of layers that share a size. The
+/// ratsnest keeps one item per pad and via, so only the check splits them.
+fn per_layer_sizes(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> {
+    let free_frame = free_pad_frame();
     let mut out = Vec::with_capacity(items.len());
     for item in items {
-        let via = match item.item {
+        let pieces = match item.item {
             ItemRef::Via(id) => board
                 .vias
                 .iter()
-                .find(|v| v.uuid == id && v.layer_sizes.is_some()),
+                .find(|v| v.uuid == id && v.layer_sizes.is_some())
+                .and_then(|v| via_pieces(v).ok()),
+            ItemRef::Pad { footprint, pad } => board
+                .footprints
+                .iter()
+                .find(|f| f.uuid == footprint)
+                .and_then(|f| Some((f, f.pads.iter().find(|p| p.uuid == pad)?)))
+                .filter(|(_, p)| p.layer_sizes.is_some())
+                .and_then(|(f, p)| pad_pieces(f, p).ok()),
+            ItemRef::FreePad(id) => board
+                .free
+                .pads
+                .iter()
+                .find(|p| p.uuid == id && p.layer_sizes.is_some())
+                .and_then(|p| pad_pieces(&free_frame, p).ok()),
             _ => None,
         };
-        match via.and_then(|v| via_pieces(v).ok()) {
+        match pieces {
             Some(pieces) => out.extend(pieces.into_iter().map(|(layers, shape)| CopperItem {
                 item: item.item,
                 net: item.net,
                 layers,
                 shape,
-                pad_center: None,
+                pad_center: item.pad_center,
             })),
             None => out.push(item),
         }

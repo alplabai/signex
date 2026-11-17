@@ -150,7 +150,10 @@ IPC-D-356, fixed 80-column records, `UNITS CUST 1` (millimetres, coordinates
 and sizes in micrometres). Record 317 for a hole (pad or via, `VIA` for a
 via), 327 for a surface pad; access `A00` for a hole, `A01` top, `A<n>`
 bottom; `S0`–`S3` from the mask openings. A net name longer than 14
-characters gets an `NNAME<k>` alias header. An unconnected pad is `N/C`.
+characters gets an `NNAME<k>` alias header. An unconnected pad is `N/C`. A
+record's size is the pad's or via's size on the probed layer (#2401): the
+top copper for a hole (`A00`) or a top pad, the bottom copper for a bottom
+pad.
 
 ## Job file
 
