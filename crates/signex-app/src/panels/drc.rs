@@ -1,7 +1,7 @@
-//! The design-rule check results at the top of the Messages panel (#2222).
-//!
-//! Rows are data (`DrcRow`); the text is rendered here from the message
-//! catalog, so a language switch needs no new run.
+//! The design-rule check pieces the DRC panel draws (#2222, #2399): its
+//! header with Run DRC, the state lines and the row text. Rows are data
+//! (`DrcRow`); the text is rendered here from the message catalog, so a
+//! language switch needs no new run.
 
 use signex_drc::ViolationKind;
 use signex_i18n::{I18n, Localized, ids, t};
@@ -178,19 +178,6 @@ pub(super) fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -
     )
 }
 
-/// The hairline under the section, as between the Messages rows.
-fn rule<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
-    let line = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
-    container(Space::new())
-        .height(Length::Fixed(1.0))
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(line)),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
 /// The state line(s) above the rows: running, idle, or what the last run
 /// found. The default-clearance notice comes first among them.
 pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
@@ -253,64 +240,6 @@ pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a
     col
 }
 
-/// One clickable violation row.
-fn violation_row<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelMsg> {
-    let i18n = &*ctx.i18n;
-    let muted = theme_ext::text_secondary(&ctx.tokens);
-    let primary = theme_ext::text_primary(&ctx.tokens);
-    let (kind, detail, place) = row_text(i18n, violation);
-    let color = match violation.kind {
-        ViolationKind::Short => theme_ext::error_color(&ctx.tokens),
-        _ => theme_ext::warning_color(&ctx.tokens),
-    };
-    let mut line = row![
-        text(kind).size(TS.body).color(color),
-        Space::new().width(6).height(Length::Shrink),
-        text(detail).size(TS.body).color(primary),
-        Space::new().width(6).height(Length::Shrink),
-        text(place)
-            .size(TS.body)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .color(muted),
-    ]
-    .align_y(iced::Alignment::Center)
-    .width(Length::Fill);
-    if let Some(layer) = layer_label(i18n, violation.layer) {
-        line = line
-            .push(Space::new().width(6).height(Length::Shrink).boxed())
-            .push(text(layer).size(TS.body).color(muted).boxed());
-    }
-    signex_widgets::button(line)
-        .width(Length::Fill)
-        .padding([SP.xs, 6.0])
-        .on_press(PanelMsg::DrcViolationPicked(violation.index))
-        .style(crate::styles::menu_item(&ctx.tokens))
-        .boxed()
-}
-
-/// The section, or nothing when no PCB is in view.
-pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>> {
-    let drc = ctx.pcb_drc.as_ref()?;
-    let col: Rows<'a> = Column::new()
-        .spacing(SP.xs)
-        .padding([SP.xs, 12.0])
-        .width(Length::Fill);
-    let mut col = status(ctx, drc, header(ctx, drc, col));
-    if !drc.running {
-        for violation in &drc.rows {
-            col = col.push(violation_row(ctx, violation));
-        }
-    }
-    if drc.hidden > 0 && !drc.running {
-        let muted = theme_ext::text_secondary(&ctx.tokens);
-        col = col.push(note(
-            t!(&*ctx.i18n, ids::DRC_MORE, "count" => drc.hidden),
-            muted,
-        ));
-    }
-    Some(Column::new().push(col.boxed()).push(rule(ctx)).boxed())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,20 +255,26 @@ mod tests {
         ctx
     }
 
-    /// Round 9 of #2262: Run DRC is the section header's button; it runs the
+    /// Round 9 of #2262: Run DRC is the DRC panel header's button; it runs the
     /// check, and does nothing while a check is already running.
     #[test]
     fn run_drc_is_a_header_button_disabled_while_running() {
+        let messages = crate::layout_probe::lay_out_texts(
+            super::super::view_messages(&context(false)),
+            iced::Size::new(900.0, 300.0),
+        );
+        // #2262: the check lives in the DRC panel, not at the top of Messages.
+        assert!(messages.iter().all(|t| t.text != "Run DRC"), "{messages:?}");
         let window = iced::Size::new(900.0, 300.0);
         let idle = context(false);
-        let idle_section = section(&idle).expect("section");
+        let idle_section = super::super::drc_results::view(&idle);
         let pressed = messages_on_click(idle_section, window, "Run DRC");
         assert!(
             matches!(pressed.as_slice(), [PanelMsg::RunDrc]),
             "{pressed:?}"
         );
         let busy = context(true);
-        let busy_section = section(&busy).expect("section");
+        let busy_section = super::super::drc_results::view(&busy);
         assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
     }
 
@@ -355,7 +290,7 @@ mod tests {
                 written_clearance,
                 ..DrcPanel::default()
             });
-            let section = section(&ctx).expect("section");
+            let section = super::super::drc_results::view(&ctx);
             crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
                 .into_iter()
                 .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
@@ -434,7 +369,7 @@ mod tests {
         let texts = |panel: DrcPanel| {
             let mut ctx = context(false);
             ctx.pcb_drc = Some(panel);
-            let section = section(&ctx).expect("section");
+            let section = super::super::drc_results::view(&ctx);
             crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
                 .into_iter()
                 .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
