@@ -368,8 +368,8 @@ Decision: https://github.com/alplabai/signex/pull/2455#issuecomment-6955039336
   the last waiver with that key has lapsed: the finding is open again. So a
   newer waiver of the same finding is never shadowed by an older stale one,
   in either order. A waiver without a fingerprint (made before this change,
-  by #2451, which no release shipped) never matches: it lapses once and is
-  waived again. The fingerprint is only computed for a finding some waiver
+  by #2451, which 26.11.0 shipped) never matches: after the update it
+  lapses once and is waived again. The fingerprint is only computed for a finding some waiver
   names.
 - **Waiving needs current results.** Waive and `waive_drc_violation` are
   refused when the board or its net classes changed since the last run

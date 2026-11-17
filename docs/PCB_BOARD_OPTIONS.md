@@ -106,8 +106,8 @@ and the `waive_drc_violation` and `unwaive_drc_violation` commands set them,
 each as one `SetBoardOptions` undo step. `fingerprint` (#2307, 32 hex digits,
 `signex_drc::fingerprint`) is the geometry of the finding's objects when it
 was waived; when they change the waiver lapses. A waiver saved before #2307
-has no `fingerprint` key and loads with an empty one; it lapses once and is
-waived again. A board whose waivers all lack it is re-saved byte-identical.
+(26.11.0) has no `fingerprint` key and loads with an empty one; it lapses
+once and is waived again. A board whose waivers all lack it is re-saved byte-identical.
 See `docs/architecture/pcb-drc.md`, "Waivers".
 
 The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
