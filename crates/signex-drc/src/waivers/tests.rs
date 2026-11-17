@@ -433,12 +433,15 @@ fn two_findings_of_one_identity_cannot_be_waived_and_their_waiver_lapses() {
 
 #[test]
 fn without_a_complete_waiver_every_finding_is_kept_in_order() {
-    let b = pair();
-    let report = run(&b, &DrcRules::new(RULE));
     let incomplete = DrcWaiver {
         author: String::new(),
-        ..waived(&only_key(&b))
+        ..waived(&only_key(&pair()))
     };
+    let mut b = pair();
+    b.segments
+        .push(track(4, (0.0, 20.4), (10.0, 20.4), 2, "TopCopper"));
+    let report = run(&b, &DrcRules::new(RULE));
+    assert_eq!(report.violations.len(), 2, "{report:?}");
     let split = split_waived(&report.violations, &b, &[incomplete]);
     let kept: Vec<&Violation> = report.violations.iter().collect();
     assert_eq!(split.kept, kept);
