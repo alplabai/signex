@@ -1,7 +1,6 @@
 //! Graphite start screen: a navigation column and a main column with the
-//! "What are you building?" hero, the specification box (a shell: the AI
-//! backend is not built), the bundled sample project and the project lists
-//! (`projects.rs`). When the main column would be narrower than
+//! "What are you building?" hero, the bundled sample project and the project
+//! lists (`projects.rs`). When the main column would be narrower than
 //! [`MAIN_MIN_W`], the navigation collapses to the icon strip of
 //! `nav_strip.rs` (#2346).
 //! Every real control dispatches the same messages as the legacy screen.
@@ -12,11 +11,10 @@ use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text, text_input, tooltip};
+use signex_widgets::{button, text, tooltip};
 
 use super::{Action, nav_strip, project_sections};
 use crate::app::Message;
-use crate::panels::signal::coming_soon;
 use crate::pinned_projects::PinnedProjects;
 use crate::styles::{
     self, ChromeMetrics, LINE_HEIGHT, Radii, Spacing, TypeScale, ti,
@@ -290,6 +288,27 @@ pub(super) fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .boxed()
 }
 
+/// Wrap a navigation row that opens nothing yet in the "Coming in AI Design"
+/// tooltip.
+fn coming_soon<'a>(
+    content: Element<'a, Message>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+    position: tooltip::Position,
+) -> Element<'a, Message> {
+    let hint = container(
+        text(t!(i18n, ids::PANELS_COMING_SOON))
+            .size(TS.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([3, 8])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        ti(tokens.hover),
+        ti(tokens.border),
+    ));
+    tooltip(content, hint, position).gap(4).boxed()
+}
+
 /// A navigation row with the real count at the right (none when unavailable).
 /// Rows that open nothing yet are wrapped by the caller in the stub tooltip.
 fn nav_count_row<'a>(
@@ -373,111 +392,6 @@ pub(super) fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Elem
         .font(semibold())
         .style(styles::section_label(tokens))
         .boxed()
-}
-
-/// The specification box: a disabled shell, no sample text.
-fn spec_box<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
-    let r = resolve(tokens);
-    let (ink4, ink) = (r.ink4, ti(tokens.text));
-    let input: iced::widget::TextInput<'a, Message> =
-        text_input(t!(i18n, ids::START_SPEC_PLACEHOLDER), "")
-            .padding(iced::Padding::ZERO)
-            .size(TS.label)
-            .width(Length::Fill)
-            .style(move |_: &iced::Theme, _| text_input::Style {
-                background: Background::Color(Color::TRANSPARENT),
-                border: Border::default(),
-                placeholder: ink4,
-                value: ink,
-                selection: Color { a: 0.4, ..ink },
-            });
-    let stub = |label: MessageId, kind: u8| -> Element<'a, Message> {
-        let b = button(
-            text(t!(i18n, label))
-                .size(TS.dense)
-                .height(Length::Fill)
-                .align_y(iced::alignment::Vertical::Center),
-        )
-        .padding([0.0, 12.0])
-        .height(ChromeMetrics::DEFAULT.field + 2.0);
-        let b: Element<'a, Message> = if kind == 0 {
-            b.style(styles::accent_button_rounded(tokens)).boxed()
-        } else {
-            b.style(outline_button(tokens)).boxed()
-        };
-        coming_soon(b, tokens, i18n, tooltip::Position::Top)
-    };
-    let actions = row![
-        stub(ids::START_SPEC_ATTACH, 1),
-        stub(ids::START_SPEC_IMPORT, 1),
-        stub(ids::START_SPEC_CONSTRAINTS, 1),
-        Space::new().width(Length::Fill).boxed(),
-        stub(ids::START_SPEC_GENERATE, 0),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center);
-    let mode = |label: MessageId, on: bool| -> Element<'a, Message> {
-        let (raised, ink, ink3) = (
-            resolve(tokens).raised,
-            ti(tokens.text),
-            resolve(tokens).ink3,
-        );
-        let pill =
-            container(
-                text(t!(i18n, label))
-                    .size(TS.dense)
-                    .color(if on { ink } else { ink3 }),
-            )
-            .padding([4.0, 14.0])
-            .style(move |_: &iced::Theme| container::Style {
-                background: on.then_some(Background::Color(raised)),
-                border: Border {
-                    radius: Radii::GRAPHITE.control.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
-        coming_soon(pill.boxed(), tokens, i18n, tooltip::Position::Top)
-    };
-    let sunken = resolve(tokens).sunken;
-    let modes = container(
-        row![
-            mode(ids::START_SPEC_GENERATOR, true),
-            mode(ids::START_SPEC_ASSISTANT, false)
-        ]
-        .spacing(2),
-    )
-    .padding(2)
-    .style(move |_: &iced::Theme| container::Style {
-        background: Some(Background::Color(sunken)),
-        border: Border {
-            radius: Radii::GRAPHITE.control.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
-    let head = row![
-        modes,
-        Space::new().width(Length::Fill),
-        text(t!(i18n, ids::START_SPEC_LIBRARIES_FIRST))
-            .size(TS.dense)
-            .color(resolve(tokens).ink3),
-    ]
-    .align_y(Alignment::Center);
-    container(
-        column![
-            container(head).padding([10.0, 12.0]),
-            container(input).padding([6.0, 18.0]).height(96.0),
-            container(actions)
-                .padding([10.0, 12.0])
-                .width(Length::Fill)
-                .style(styles::resize_handle_edge(tokens, false)),
-        ]
-        .spacing(0),
-    )
-    .width(Length::Fill)
-    .style(styles::card(tokens))
-    .boxed()
 }
 
 /// The bundled sample project as a real card: it opens through File ▸ Open
@@ -569,8 +483,6 @@ fn view_sized<'a>(
         text(t!(i18n, ids::START_HERO_BODY))
             .size(HERO_BODY_SIZE)
             .color(ti(tokens.text_secondary)),
-        Space::new().height(8.0),
-        spec_box(tokens, i18n),
         Space::new().height(8.0),
         section_header(tokens, t!(i18n, ids::START_REFERENCE_DESIGN)),
         sample_card(tokens, i18n),

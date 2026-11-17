@@ -524,7 +524,6 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let signal_mode = self.document_state.panel_ctx.signal_mode;
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
@@ -669,7 +668,6 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
-            signal_mode,
             projects_view,
             net_classes,
             pcb_layers,

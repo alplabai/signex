@@ -816,7 +816,6 @@ define_ids! {
     PANELS_KIND_FILTER = "panels-kind-filter";
     PANELS_KIND_ERC = "panels-kind-erc";
     PANELS_KIND_MESSAGES = "panels-kind-messages";
-    PANELS_KIND_SIGNEX_AI = "panels-kind-signex-ai";
     PANELS_KIND_DRC = "panels-kind-drc";
     PANELS_KIND_LAYER_STACK = "panels-kind-layer-stack";
     PANELS_KIND_NET_CLASSES = "panels-kind-net-classes";
@@ -848,12 +847,6 @@ define_ids! {
     PANELS_SELECTION_FILTER_TITLE = "panels-selection-filter-title";
     PANELS_SELECTION_FILTER_BODY = "panels-selection-filter-body";
     PANELS_COMING_SOON = "panels-coming-soon";
-    PANELS_SIGNAL_ASSISTANT_TITLE = "panels-signal-assistant-title";
-    PANELS_SIGNAL_ASSISTANT_BODY = "panels-signal-assistant-body";
-    PANELS_SIGNAL_GENERATOR_TITLE = "panels-signal-generator-title";
-    PANELS_SIGNAL_GENERATOR_BODY = "panels-signal-generator-body";
-    PANELS_SIGNAL_ASK = "panels-signal-ask";
-    PANELS_SIGNAL_SEND = "panels-signal-send";
     START_NEW_PROJECT = "start-new-project";
     START_OPEN = "start-open";
     START_HOME = "start-home";
@@ -866,14 +859,6 @@ define_ids! {
     START_LIBRARIES_SUMMARY = "start-libraries-summary";
     START_HERO_TITLE = "start-hero-title";
     START_HERO_BODY = "start-hero-body";
-    START_SPEC_PLACEHOLDER = "start-spec-placeholder";
-    START_SPEC_ATTACH = "start-spec-attach";
-    START_SPEC_IMPORT = "start-spec-import";
-    START_SPEC_CONSTRAINTS = "start-spec-constraints";
-    START_SPEC_GENERATE = "start-spec-generate";
-    START_SPEC_GENERATOR = "start-spec-generator";
-    START_SPEC_ASSISTANT = "start-spec-assistant";
-    START_SPEC_LIBRARIES_FIRST = "start-spec-libraries-first";
     START_REFERENCE_DESIGN = "start-reference-design";
     START_RECENT_PROJECTS = "start-recent-projects";
     START_SAMPLE_TITLE = "start-sample-title";

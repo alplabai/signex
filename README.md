@@ -157,8 +157,8 @@ prompts. Pro is planned separately; this repository holds Community only.
   ([docs/CLI.md](docs/CLI.md), [docs/AGENT_SOCKET.md](docs/AGENT_SOCKET.md));
   each agent edit is one labelled undo step, recorded in the project's journal
 - ERC and DRC on demand for scripts and agents (`check_erc`, `check_drc`)
-- Signex AI (assistant, agent and generator) ships in Pro; in this build its
-  panel is a placeholder
+- Signex AI (assistant, agent and generator) ships in Pro; this build has no
+  Signex AI panel
 
 **Interface**
 

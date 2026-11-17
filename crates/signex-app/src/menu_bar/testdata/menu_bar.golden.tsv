@@ -90,7 +90,6 @@ View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
 View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
-View/Signex AI	item	Signex AI	-	-	OpenSignexAiPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
