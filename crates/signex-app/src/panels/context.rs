@@ -220,6 +220,8 @@ pub struct PanelContext {
     pub erc_running: bool,
     /// The document changed after the last ERC run (#1768).
     pub erc_results_stale: bool,
+    /// An ERC run has checked the project; with no findings it was clean.
+    pub erc_ran: bool,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.

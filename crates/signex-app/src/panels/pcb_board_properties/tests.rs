@@ -501,3 +501,33 @@ fn pour_names_read_as_examples_and_the_sheet_follows_the_board() {
     assert!(shown.iter().any(|t| t.starts_with("GND_")), "{shown:?}");
     assert!(!shown.iter().any(|t| t.contains("NET NAME")), "{shown:?}");
 }
+
+/// #2262: at a narrow dock width the three Snapping choices sit side by side
+/// without running into each other (they used to wrap over one another in
+/// the field column).
+#[test]
+fn the_snapping_choices_do_not_overlap_in_a_narrow_dock() {
+    let narrow = iced::Size::new(220.0, 4000.0);
+    let laid = lay_out_texts(
+        super::super::properties::view_properties(&context(0)),
+        narrow,
+    );
+    let bounds: Vec<iced::Rectangle> = ["All Layers", "Current Layer", "Off"]
+        .iter()
+        .map(|label| {
+            laid.iter()
+                .find(|t| t.text == *label)
+                .unwrap_or_else(|| panic!("{label:?} not laid out"))
+                .bounds
+        })
+        .collect();
+    for (i, a) in bounds.iter().enumerate() {
+        assert!(
+            a.x + a.width <= narrow.width + 0.5,
+            "{a:?} past the dock edge"
+        );
+        for b in &bounds[i + 1..] {
+            assert!(a.intersection(b).is_none(), "{a:?} overlaps {b:?}");
+        }
+    }
+}

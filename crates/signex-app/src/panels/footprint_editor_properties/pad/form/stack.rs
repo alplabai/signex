@@ -78,11 +78,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         return col;
     }
 
+    // ── Tab strip (Simple / Top-Middle-Bottom / Full Stack) ── first, as the
+    // mock: the mode reads before the preview it changes (#2262).
+    col = col.push(pad_stack_tab_strip(values, primary, muted));
+
     // ── Preview ──
     col = col.push(pad_stack_preview(values));
-
-    // ── Tab strip (Simple / Top-Middle-Bottom / Full Stack) ──
-    col = col.push(pad_stack_tab_strip(values, primary, muted));
 
     // ── Altium-parity table layout ── COPPER / HOLE / PASTE / SOLDER
     // each render as a header row + N data rows where every cell sits
@@ -332,6 +333,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         ));
     }
 
+    // Simple: paste and mask as label / value rows like the copper above.
+    if is_simple {
+        let sides = (show_top_side, show_bottom_side);
+        return push_simple_mask_rows(col, values, target, fw, palette, sides, i18n);
+    }
+
     // ── PASTE table ──
     if show_top_side || show_bottom_side {
         col = col.push(pad_table_header(
@@ -488,6 +495,106 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         ));
     }
 
+    col
+}
+
+/// The Simple pad stack's paste and solder mask as label / value rows (#2262):
+/// per side the expansion (empty follows the rule) and the paste-on / tented
+/// switch. The per-layer tabs keep the tables.
+fn push_simple_mask_rows<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    values: &PadFormValues,
+    target: PadEditTarget,
+    fw: (Length, Length),
+    palette: PanelPalette,
+    (top, bottom): (bool, bool),
+    i18n: &signex_i18n::I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    use crate::pcb_canvas::layer_style::layer_name;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+    let PanelPalette { muted, primary, .. } = palette;
+    let mm = |v: Option<f64>| v.map(|v| format!("{v:.3}")).unwrap_or_default();
+    let stack = &values.stack;
+    if top {
+        let layer = layer_name(i18n, PcbLayer::Technical(TechnicalLayer::PasteTop));
+        let on = t!(i18n, ids::EDITORS_PAD_PASTE_ENABLED, "layer" => layer.to_string());
+        col = col.push(pad_input_row_w(
+            fw,
+            layer,
+            "(rule)",
+            mm(stack.paste_margin_top),
+            move |v| pad_paste_top_msg(target, v),
+            muted,
+        ));
+        col = col.push(pad_check_row_w(
+            fw,
+            on,
+            stack.paste_enabled_top,
+            move |v| pad_paste_enabled_top_msg(target, v),
+            muted,
+            primary,
+        ));
+    }
+    if bottom {
+        let layer = layer_name(i18n, PcbLayer::Technical(TechnicalLayer::PasteBottom));
+        let on = t!(i18n, ids::EDITORS_PAD_PASTE_ENABLED, "layer" => layer.to_string());
+        col = col.push(pad_input_row_w(
+            fw,
+            layer,
+            "(rule)",
+            mm(stack.paste_margin_bottom),
+            move |v| pad_paste_bottom_msg(target, v),
+            muted,
+        ));
+        col = col.push(pad_check_row_w(
+            fw,
+            on,
+            stack.paste_enabled_bottom,
+            move |v| pad_paste_enabled_bottom_msg(target, v),
+            muted,
+            primary,
+        ));
+    }
+    if top {
+        let layer = layer_name(i18n, PcbLayer::Technical(TechnicalLayer::SolderMaskTop));
+        let tented = t!(i18n, ids::EDITORS_PAD_TENTED, "layer" => layer.to_string());
+        col = col.push(pad_input_row_w(
+            fw,
+            layer,
+            "(rule)",
+            mm(stack.mask_margin_top),
+            move |v| pad_mask_top_msg(target, v),
+            muted,
+        ));
+        col = col.push(pad_check_row_w(
+            fw,
+            tented,
+            stack.mask_tented_top,
+            move |v| pad_mask_tented_top_msg(target, v),
+            muted,
+            primary,
+        ));
+    }
+    if bottom {
+        let layer = layer_name(i18n, PcbLayer::Technical(TechnicalLayer::SolderMaskBottom));
+        let tented = t!(i18n, ids::EDITORS_PAD_TENTED, "layer" => layer.to_string());
+        col = col.push(pad_input_row_w(
+            fw,
+            layer,
+            "(rule)",
+            mm(stack.mask_margin_bottom),
+            move |v| pad_mask_bottom_msg(target, v),
+            muted,
+        ));
+        col = col.push(pad_check_row_w(
+            fw,
+            tented,
+            stack.mask_tented_bottom,
+            move |v| pad_mask_tented_bottom_msg(target, v),
+            muted,
+            primary,
+        ));
+    }
     col
 }
 

@@ -460,8 +460,9 @@ pub(super) fn pad_stack_tab_strip<'a>(
                 .color(if active { primary } else { muted })
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([SP.s, 10.0])
-        .width(Length::FillPortion(1))
+        .padding([SP.s, SP.xs])
+        // Width by label length, so the long label wraps no more than the mock.
+        .width(Length::FillPortion(u16::try_from(label.len()).unwrap_or(1)))
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
