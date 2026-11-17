@@ -261,6 +261,8 @@ pcb-route-bus-needs-nets = select copper of two or more nets first
 pcb-tune-needs-tracks = { $what }: select a track of each net to tune
 pcb-tune-refused = { $what }: { $why }
 pcb-tune-done = { $what }: { $count } net(s) brought to { $length } mm
+# A net a multi-net tuning left as it was; $net its name, $why the reason.
+pcb-tune-skipped = { $what }: { $net } left as it is: { $why }
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

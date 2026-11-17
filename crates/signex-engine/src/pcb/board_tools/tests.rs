@@ -304,16 +304,27 @@ fn gloss_leaves_locked_tracks_and_refuses_a_locked_only_selection() {
     assert_eq!(edit.report.skipped, 1, "the locked track is passed over");
     assert!(!edit.report.changed.contains(&id(21)));
 
+    // The SIG route led in by a bent track 32: its corner at (40, 0) is cut
+    // while the locked 31 holds (45, 0)..(45, 5).
     let mut corner = board.clone();
+    let lead: signex_types::pcb::Segment =
+        serde_json::from_value(track(32, (35.0, -5.0), (40.0, 0.0), 2)).unwrap();
+    corner.segments.push(lead);
     lock(&mut corner, 31);
-    let pair: BTreeSet<Uuid> = [id(30), id(31)].into();
-    if let Ok(edit) = gloss_tracks(&corner, &pair, gap) {
-        let mut touched = edit.report.removed.iter().chain(&edit.report.changed);
-        assert!(
-            touched.all(|t| *t != id(31)),
-            "a locked track is neither merged away nor moved: {edit:?}"
-        );
-    }
+    let locked = corner.segments.iter().find(|s| s.uuid == id(31)).cloned();
+    let route: BTreeSet<Uuid> = [id(30), id(31), id(32)].into();
+    let edit = gloss_tracks(&corner, &route, gap).expect("the free corner is cut");
+    assert_eq!(edit.report.skipped, 1, "31 is counted as skipped");
+    assert!(
+        !edit.report.removed.is_empty() || !edit.report.changed.is_empty(),
+        "{edit:?}"
+    );
+    let touched = edit.report.removed.iter().chain(&edit.report.changed);
+    assert!(touched.copied().all(|t| t != id(31)), "{edit:?}");
+    let mut engine = BoardEngine::new(corner, 1);
+    engine.execute_batch(edit.commands).unwrap();
+    let after = engine.board().segments.iter().find(|s| s.uuid == id(31));
+    assert_eq!(after, locked.as_ref(), "the locked track is as it was");
 
     let only: BTreeSet<Uuid> = [id(21)].into();
     assert_eq!(gloss_tracks(&board, &only, gap), Err(locked_refusal(&[21])));

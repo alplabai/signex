@@ -163,3 +163,34 @@ fn an_agent_tunes_a_named_net_and_reads_the_lengths_back() {
         "{refused:?}"
     );
 }
+
+#[test]
+fn an_agent_tuning_two_nets_tunes_one_and_names_the_locked_one() {
+    let (mut app, path, _dir) = app();
+    let lock = signex_engine::pcb::BoardCommand::SetItemsLocked {
+        items: vec![(
+            signex_engine::pcb::BoardItemId::Segment(Uuid::from_u128(13)),
+            true,
+        )],
+    };
+    app.execute_board_commands(&path, vec![lock], None)
+        .expect("GND's track locked");
+    let gnd = board(&app, &path).segments[2].clone();
+    select_tracks(&mut app, &[12, 13]);
+    let document = format!("document={}", path.display());
+    let outcome = headless(&mut app, "tune_net_length", &[&document, "value=35"]);
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(answer["nets"].as_array().map(Vec::len), Some(1), "{answer}");
+    assert_eq!(answer["nets"][0]["net"], "USB_N");
+    assert!((length(&app, &path, 2) - 35.0).abs() < 1.0e-3, "{answer}");
+    assert_eq!(answer["skipped"][0]["net"], "GND", "{answer}");
+    let reason = answer["skipped"][0]["reason"].as_str().unwrap_or_default();
+    assert!(reason.ends_with("is locked"), "{answer}");
+    assert!(
+        board(&app, &path).segments.contains(&gnd),
+        "the locked track stays as it was"
+    );
+    assert_legal(&app, &path);
+}

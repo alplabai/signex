@@ -27,7 +27,7 @@ use super::items::BoardItem;
 
 pub use bus::{BusMember, BusStyle, bus_start, bus_tracks, nearest_net_point, route_bus_leg};
 pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
-pub use tune::{Meander, TuneRefusal, tune_length, tune_net, tune_nets};
+pub use tune::{Meander, NetsTuned, TuneRefusal, tune_length, tune_net, tune_nets};
 
 /// Lattice points one clicked leg's search may expand.
 pub const SEARCH_BUDGET: usize = 12_000;

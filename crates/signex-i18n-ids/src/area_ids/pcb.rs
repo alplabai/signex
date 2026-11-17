@@ -104,6 +104,7 @@ define_ids! {
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";
     PCB_TUNE_REFUSED = "pcb-tune-refused";
     PCB_TUNE_DONE = "pcb-tune-done";
+    PCB_TUNE_SKIPPED = "pcb-tune-skipped";
     PCB_LAYER_TAB_HIGHLIGHT = "pcb-layer-tab-highlight";
     PCB_LAYER_TAB_HIDE_LAYERS = "pcb-layer-tab-hide-layers";
     PCB_LAYER_TAB_SHOW_LAYERS = "pcb-layer-tab-show-layers";

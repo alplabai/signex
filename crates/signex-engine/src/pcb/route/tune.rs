@@ -75,7 +75,8 @@ pub enum TuneRefusal {
 /// Lengthen `net` to `target_mm` on its longest straight track that takes
 /// the accordion ([`tune_length`]); a track too short for it, or with no
 /// clear side, hands over to the next longest. A locked track is passed
-/// over; a net whose only tracks are locked is refused as locked.
+/// over; a net short of the target whose only tracks are locked is refused
+/// as locked.
 pub fn tune_net(
     board: &PcbBoard,
     net: u32,
@@ -94,6 +95,7 @@ pub fn tune_net(
         .partition(|(_, s)| s.locked);
     tracks.sort_by(|a, b| b.0.total_cmp(&a.0));
     let mut refusal = if tracks.is_empty() && !locked.is_empty() {
+        shortfall_nm(board, net, target_mm)?;
         let names = locked.iter().map(|(_, s)| BoardItemId::Segment(s.uuid));
         TuneRefusal::Locked(locked_names(board, names))
     } else {
@@ -115,24 +117,39 @@ pub fn tune_net(
 
 /// Bring each of `nets` to `target_mm` ([`tune_net`]), each tuned on the
 /// board as the ones before it left it, so their accordions keep clear of
+/// What [`tune_nets`] did: the commands, one undo step, and each net it
+/// left as it was with the reason.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetsTuned {
+    pub commands: Vec<BoardCommand>,
+    pub skipped: Vec<(u32, TuneRefusal)>,
+}
+
+/// Bring each of `nets` to `target_mm` ([`tune_net`]), each tuned on the
+/// board as the ones before it left it, so their accordions keep clear of
 /// each other too: one set of commands, one undo step. A net at the target
-/// already, or short by less than one bump adds, is left as it is; when
-/// that leaves nothing to tune, the first such net says why.
+/// already, short by less than one bump adds, or with only locked tracks
+/// is left as it is and named in `skipped`; when that leaves nothing to
+/// tune, the first such net says why.
 pub fn tune_nets(
     board: &PcbBoard,
     nets: &[u32],
     target_mm: f64,
     meander: &Meander,
     mut ids: impl FnMut() -> Uuid,
-) -> Result<Vec<BoardCommand>, TuneRefusal> {
+) -> Result<NetsTuned, TuneRefusal> {
     let mut working = board.clone();
     let mut commands = Vec::new();
-    let mut skipped = None;
+    let mut skipped = Vec::new();
     for &net in nets {
         let step = match tune_net(&working, net, target_mm, meander, &mut ids) {
             Ok(step) => step,
-            Err(why @ (TuneRefusal::LongEnough { .. } | TuneRefusal::TooLittle { .. })) => {
-                skipped.get_or_insert(why);
+            Err(
+                why @ (TuneRefusal::LongEnough { .. }
+                | TuneRefusal::TooLittle { .. }
+                | TuneRefusal::Locked(_)),
+            ) => {
+                skipped.push((net, why));
                 continue;
             }
             Err(why) => return Err(why),
@@ -142,11 +159,24 @@ pub fn tune_nets(
         }
         commands.extend(step);
     }
-    match (commands.is_empty(), skipped) {
-        (true, Some(why)) => Err(why),
-        (true, None) => Err(TuneRefusal::NoTrack),
-        (false, _) => Ok(commands),
+    if commands.is_empty() {
+        let first = skipped.into_iter().next();
+        return Err(first.map_or(TuneRefusal::NoTrack, |(_, why)| why));
     }
+    Ok(NetsTuned { commands, skipped })
+}
+
+/// How far `net` falls short of `target_mm`, in nm; refused when it does
+/// not.
+fn shortfall_nm(board: &PcbBoard, net: u32, target_mm: f64) -> Result<i64, TuneRefusal> {
+    use TuneRefusal::Unrepresentable;
+    let current_mm = net_routed_length_mm(board, net).ok_or(Unrepresentable)?;
+    let nm = |mm: f64| mm_to_nm(mm, "length").map_err(|_| Unrepresentable);
+    let extra = nm(target_mm)? - nm(current_mm)?;
+    if extra <= 0 {
+        return Err(TuneRefusal::LongEnough { current_mm });
+    }
+    Ok(extra)
 }
 
 /// Lengthen `track`'s net to `target_mm`: the track replaced by an
@@ -174,12 +204,8 @@ pub fn tune_length(
     if segment.net == 0 {
         return Err(TuneRefusal::NoNet);
     }
-    let current_mm = net_routed_length_mm(board, segment.net).ok_or(Unrepresentable)?;
+    let extra = shortfall_nm(board, segment.net, target_mm)?;
     let nm = |mm: f64| mm_to_nm(mm, "length").map_err(|_| Unrepresentable);
-    let extra = nm(target_mm)? - nm(current_mm)?;
-    if extra <= 0 {
-        return Err(TuneRefusal::LongEnough { current_mm });
-    }
     let (pitch, amplitude) = (nm(meander.pitch_mm)?, nm(meander.amplitude_mm)?);
     if pitch <= 0 || amplitude <= 0 {
         return Err(Unrepresentable);
