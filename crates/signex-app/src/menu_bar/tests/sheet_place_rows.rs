@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::app::command::{CommandArgs, CommandOutcome};
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, CatalogTextExt};
 
 /// The live Place rows #2415 added, and the tool each one arms.
 const NEW_TOOL_ROWS: &[(&str, &str)] = &[
