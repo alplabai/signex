@@ -9,6 +9,10 @@ use super::super::super::super::*;
 
 impl Signex {
     pub(crate) fn handle_export_pdf_open_dialog(&mut self) -> iced::Task<Message> {
+        // A board exports through Board Print / PDF (#2402).
+        if self.has_active_pcb() {
+            return self.dispatch_board_output_message(crate::app::BoardOutputMsg::PrintRequested);
+        }
         let anchor = self.document_state.active_path.clone();
         self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {

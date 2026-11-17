@@ -58,15 +58,14 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::ToggleItemLocked(..)
                 | P::ToggleSymbolDnp(_)
                 | P::SymbolBodyStylePicked(..)
-                | P::EditSymbolRotation(..)
                 | P::EditSymbolValueFontSizePt(..)
                 | P::EditPowerPortStyle { .. }
                 | P::EditLabelText(..)
                 | P::EditLabelJustifyH(..)
                 | P::EditLabelDirection(..)
-                | P::EditLabelRotation(..)
                 | P::EditLabelFontSizePt(..)
                 | P::EditTextNoteText(..)
+                | P::EditBlanket(..)
                 | P::EditTextFontFamily(..)
                 | P::SetDocumentFontFamily(_)
                 | P::SetPageFormatMode(_)
@@ -84,6 +83,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::UpdateDrawingEdit(..)
                 | P::DrawingFieldTyping(..)
                 | P::MultiEdit(..)
+                | P::PlacedEdit(..)
                 | P::UpdateSymbolFromLibrary(_)
                 | P::UpdateSymbolFromLibraryOnly(_)
                 | P::PlacedPartAction(_)
@@ -159,6 +159,10 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | EditMsg::RubberStampCopy
                 | EditMsg::PasteArrayRequested
                 | EditMsg::ArrangeDrawings(_)
+                | EditMsg::Extras(
+                    crate::app::PlacementExtrasMsg::AutoplaceFieldsRequested
+                        | crate::app::PlacementExtrasMsg::CopyAttributesRequested { .. }
+                )
         ),
         Message::Selection(selection) => matches!(
             selection,

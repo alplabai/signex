@@ -191,14 +191,15 @@ impl Signex {
                 .is_ok()
         } else {
             let group = self.mint_undo_group();
-            let changed = self.run_linked_footprints(plan.sheets, group);
+            let changed = self.run_linked_footprints(plan.sheets, group, &what);
             match self.execute_board_commands_grouped(board, swap.commands, step, group) {
                 Ok(_) => {
-                    self.commit_linked_footprints(changed, group, board.to_path_buf());
+                    let kind = crate::app::UndoGroupKind::FootprintSwap;
+                    self.commit_linked_footprints(changed, group, board.to_path_buf(), kind);
                     true
                 }
                 Err(error) => {
-                    self.roll_back_linked_footprints(&changed, group);
+                    self.roll_back_linked_footprints(&changed, group, &what);
                     self.refuse_swap(&what, error.to_string());
                     false
                 }

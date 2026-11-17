@@ -111,6 +111,17 @@ impl PlacementPayload {
         for b in &f.buses {
             add(Aabb::new(b.start.x, b.start.y, b.end.x, b.end.y));
         }
+        for d in &f.drawings {
+            // A circle reaches its radius past the centre; an arc's three
+            // points are close enough for a ghost box and the anchor.
+            let pad = match d {
+                signex_types::schematic::SchDrawing::Circle { radius, .. } => *radius,
+                _ => 0.0,
+            };
+            for p in crate::placement::drawing_points(d) {
+                add(dot(&p, pad));
+            }
+        }
         for l in &f.labels {
             add(dot(&l.position, 1.27));
         }

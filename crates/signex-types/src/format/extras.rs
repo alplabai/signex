@@ -314,6 +314,10 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) drawings: Vec<crate::schematic::SchDrawing>,
     #[serde(default)]
     pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoConnect>,
+    /// Blankets, Compile Masks and Differential Pair directives (#2420);
+    /// omitted when empty so a sheet without any re-saves byte-identical.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) directives: Vec<crate::schematic::SchDirective>,
     #[serde(default)]
     pub(in crate::format) title_block: BTreeMap<String, String>,
     #[serde(default)]
@@ -382,6 +386,7 @@ impl SheetExtras {
             && self.bus_entries.is_empty()
             && self.drawings.is_empty()
             && self.no_erc_directives.is_empty()
+            && self.directives.is_empty()
             && self.title_block.is_empty()
             && self.lib_symbols.is_empty()
             && self.net_colors.is_empty()
@@ -421,6 +426,7 @@ impl SheetExtras {
                 })
                 .collect(),
             no_erc_directives: s.no_erc_directives.clone(),
+            directives: s.directives.clone(),
             title_block: s
                 .title_block
                 .iter()

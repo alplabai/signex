@@ -15,7 +15,6 @@ pub(super) fn push_text_note_sections<'a>(
     let PanelPalette { input_bg, .. } = palette;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let note_text = get("Text");
-    let position = get("Position");
     let rotation = get("Rotation");
     let text_size = get("Text Size");
     let justify_h = justify_h_row(&ctx.selection_info);
@@ -23,6 +22,10 @@ pub(super) fn push_text_note_sections<'a>(
     let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
     if let Some(id) = uuid {
+        // ── Location ── (#2418): an editable Position through the shared rows.
+        let look = super::placed_rows::RowLook { muted, input_bg };
+        col = super::placed_rows::push_location_section(col, ctx, look);
+
         col = col.push(
             ctx.collapsible(
                 "sel_basic",
@@ -46,7 +49,6 @@ pub(super) fn push_text_note_sections<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row("Position", &position, muted, input_bg));
                     c = c.push(form_input_row("Rotation", &rotation, muted, input_bg));
                     c = c.push(form_input_row("Justify H", &justify_h, muted, input_bg));
                     c = c.push(form_input_row("Justify V", &justify_v, muted, input_bg));

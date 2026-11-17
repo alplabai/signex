@@ -77,7 +77,7 @@ impl Signex {
         // A Project tab stays docked (#1202): commands typed in an undocked
         // window act on the main window's active tab, so Ctrl+Z / Ctrl+S
         // there would reach another document.
-        if tab.kind.as_project().is_some() {
+        if tab.kind.is_project_page() {
             // End the tab drag so the next move past the edge does not ask
             // (and log the refusal) again.
             self.ui_state.tab_dragging = None;

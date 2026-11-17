@@ -39,7 +39,10 @@ impl SchematicCanvas<'_> {
             | Tool::Sheet
             | Tool::SheetEntry
             | Tool::Measure
-            | Tool::BreakWire => true,
+            | Tool::BreakWire
+            | Tool::Blanket
+            | Tool::CompileMask
+            | Tool::DiffPair => true,
         }
     }
 

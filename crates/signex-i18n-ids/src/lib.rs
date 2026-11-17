@@ -392,6 +392,11 @@ define_ids! {
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";
     LIBRARY_BROWSER_SHOW = "library-browser-show";
+    LIBRARY_BROWSER_SHOWN = "library-browser-shown";
+    LIBRARY_BROWSER_SHOWN_SORTED = "library-browser-shown-sorted";
+    LIBRARY_STATUS_SUMMARY = "library-status-summary";
+    LIBRARY_STATUS_SELECTED = "library-status-selected";
+    LIBRARY_STATUS_COMPONENT = "library-status-component";
     LIBRARY_BROWSER_FILTER_ACTIVE = "library-browser-filter-active";
     LIBRARY_BROWSER_FILTER_PREFERRED = "library-browser-filter-preferred";
     LIBRARY_BROWSER_FILTER_DEPRECATED = "library-browser-filter-deprecated";
@@ -432,8 +437,6 @@ define_ids! {
     EDITORS_SYMBOL_STATUS_PART_PINS = "editors-symbol-status-part-pins";
     EDITORS_SYMBOL_STATUS_PIN_SELECTED = "editors-symbol-status-pin-selected";
     EDITORS_SYMBOL_STATUS_ITEMS_SELECTED = "editors-symbol-status-items-selected";
-    EDITORS_SYMBOL_STATUS_HINT_SELECTED = "editors-symbol-status-hint-selected";
-    EDITORS_SYMBOL_STATUS_HINT_IDLE = "editors-symbol-status-hint-idle";
     EDITORS_SYMBOL_COPY_AGAIN = "editors-symbol-copy-again";
     DIALOG_ANNOTATE_MATCHING_UNAVAILABLE = "dialog-annotate-matching-unavailable";
     DIALOG_ANNOTATE_SHEET_OPTIONS_UNAVAILABLE = "dialog-annotate-sheet-options-unavailable";
@@ -523,6 +526,7 @@ define_ids! {
     DIALOG_ANNOTATE_NOTHING_TO_NUMBER = "dialog-annotate-nothing-to-number";
     DIALOG_ANNOTATE_SUMMARY_NOTHING = "dialog-annotate-summary-nothing";
     DIALOG_ANNOTATE_SUMMARY_CHANGES = "dialog-annotate-summary-changes";
+    DIALOG_ANNOTATE_CHANGE_COUNT = "dialog-annotate-change-count";
     DIALOG_ANNOTATE_SUMMARY_HEADING = "dialog-annotate-summary-heading";
     DIALOG_ANNOTATE_REPREFIX_UNAVAILABLE = "dialog-annotate-reprefix-unavailable";
     DIALOG_ANNOTATE_REPREFIX_NOTE = "dialog-annotate-reprefix-note";
@@ -601,7 +605,7 @@ define_ids! {
     EDITORS_COMPONENT_HEADER_LOCATION = "editors-component-header-location";
     EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
     EDITORS_FOOTPRINT_STATUS_PAD_SELECTED = "editors-footprint-status-pad-selected";
-    EDITORS_FOOTPRINT_STATUS_HINT_IDLE = "editors-footprint-status-hint-idle";
+    EDITORS_FOOTPRINT_STATUS_PAD_COUNT = "editors-footprint-status-pad-count";
     EDITORS_PINS_NO_SYMBOL = "editors-pins-no-symbol";
     EDITORS_PINS_SUMMARY = "editors-pins-summary";
     EDITORS_PINS_COLUMN_NUMBER = "editors-pins-column-number";
@@ -910,7 +914,8 @@ define_ids! {
     PANELS_SUMMARY_ERC = "panels-summary-erc";
     PANELS_SUMMARY_DRC = "panels-summary-drc";
     PANELS_SUMMARY_LAST_COMMIT = "panels-summary-last-commit";
-    PANELS_SUMMARY_NO_VALUE = "panels-summary-no-value";
+    PANELS_SUMMARY_NOT_RUN = "panels-summary-not-run";
+    PANELS_SUMMARY_DRC_VIOLATIONS = "panels-summary-drc-violations";
     PANELS_SUMMARY_ERC_COUNTS = "panels-summary-erc-counts";
     PANELS_SUMMARY_AGE_NOW = "panels-summary-age-now";
     PANELS_SUMMARY_AGE_MINUTES = "panels-summary-age-minutes";

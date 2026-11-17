@@ -696,6 +696,9 @@ pub(crate) fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
 /// `1..=N` in sorted-root order and each net's terminals are sorted by
 /// `(reference, pin)`.
 pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
+    // A Compile Mask takes what it covers out of the netlist (#2420).
+    let compiled = crate::directives::compile_masked(sheet);
+    let sheet: &SchematicSheet = &compiled;
     let mut parent = merged_sheet_parent(sheet);
     let net_labels = collect_net_labels(sheet, &mut parent);
     // Power-port symbols carry their net's global name like a `Power` label, so
@@ -758,7 +761,9 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     // meeting a user label of that spelling). Rename the later one.
     dedup_net_names(&mut nets);
 
-    Netlist { nets }
+    let mut netlist = Netlist { nets };
+    crate::directives::apply_blanket_classes(sheet, &mut netlist);
+    netlist
 }
 
 #[cfg(test)]

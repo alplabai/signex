@@ -1,7 +1,7 @@
 //! Arrange commands: the stacking order of objects and drawings, and the
 //! align and distribute steps.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const ARRANGE: &[CommandMetadata] = &[
@@ -183,6 +183,17 @@ pub(super) const ARRANGE: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "arrange_in_box",
+        category: "modify",
+        label: command_ids::CMD_ARRANGE_IN_BOX,
+        menu_label: Some(command_ids::CMD_MENU_ARRANGE_IN_BOX),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::ARRANGE_BOX,
         ..CommandMetadata::DEFAULT
     },
 ];

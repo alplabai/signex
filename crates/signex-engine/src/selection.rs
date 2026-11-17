@@ -649,6 +649,7 @@ impl Engine {
                     .into(),
                 ));
             }
+            SelectedKind::Directive => info.extend(self.directive_info(item.uuid)?),
         }
 
         // A symbol lists its own `Locked` row above; the other lockable kinds
@@ -696,6 +697,7 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
         SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
         SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
         SelectedKind::NoErcDirective
+        | SelectedKind::Directive
         | SelectedKind::BusEntry
         | SelectedKind::SheetPin
         | SelectedKind::ChildSheet
@@ -744,6 +746,7 @@ mod tests {
             SelectedKind::TextNote,
             SelectedKind::ChildSheet,
             SelectedKind::Drawing,
+            SelectedKind::Directive,
             SelectedKind::SymbolRefField,
             SelectedKind::SymbolValField,
         ]

@@ -77,3 +77,5 @@ mod mod_migration_tests;
 mod mod_token_tests;
 #[cfg(test)]
 mod profile_tests;
+#[cfg(test)]
+mod schematic_binding_tests;

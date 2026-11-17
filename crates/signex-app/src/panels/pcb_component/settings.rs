@@ -16,7 +16,7 @@ use crate::styles::Spacing;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// The catalog label of a component type.
-pub(super) fn type_label(component_type: ComponentType) -> MessageId {
+pub(crate) fn type_label(component_type: ComponentType) -> MessageId {
     match component_type {
         ComponentType::Standard => ids::PCB_COMPONENT_TYPE_STANDARD,
         ComponentType::StandardNoBom => ids::PCB_COMPONENT_TYPE_STANDARD_NO_BOM,

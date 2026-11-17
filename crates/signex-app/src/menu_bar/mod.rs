@@ -117,8 +117,6 @@ pub enum MenuMessage {
     OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
-    /// Place ▸ No Connect — the no-connect tool.
-    PlaceNoConnect,
     // Project ▸ Annotation
     Annotate,
     AnnotateReset,

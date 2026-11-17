@@ -85,7 +85,7 @@ fn the_carried_texts_move_with_the_drag_preview() {
     let mut canvas = PcbCanvas::new();
     canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
     let carried: BTreeSet<Uuid> = [Uuid::from_u128(1)].into();
-    canvas.begin_drag_preview(carried, PcbSnapshot::default());
+    canvas.begin_drag_preview(carried, Vec::new(), PcbSnapshot::default());
     assert!(canvas.drag_preview_texts().is_empty());
     let moved = signex_types::pcb::Point::new(2.0, 0.0);
     canvas.move_drag_preview(moved, || PcbSnapshot {

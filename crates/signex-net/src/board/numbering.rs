@@ -130,6 +130,15 @@ fn copper_numbers(board: &PcbBoard) -> HashSet<u32> {
     let mut used: HashSet<u32> = board.segments.iter().map(|s| s.net).collect();
     used.extend(board.vias.iter().map(|v| v.net));
     used.extend(board.zones.iter().map(|z| z.net));
+    // Free arcs and pads (#2373) keep their nets: no schematic pin names them.
+    used.extend(board.free.arcs.iter().map(|a| a.net));
+    used.extend(
+        board
+            .free
+            .pads
+            .iter()
+            .filter_map(|p| p.net.as_ref().map(|n| n.number)),
+    );
     if let Some(sketch) = &board.sketch {
         used.extend(sketch.holes.iter().filter_map(|h| h.net));
     }

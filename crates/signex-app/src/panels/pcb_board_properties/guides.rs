@@ -1,41 +1,40 @@
-//! Guide Manager (#2374): the board's snap guides. A row's Enabled box,
-//! X / Y fields and swatch edit the guide at once; clicking the row selects
-//! it for Delete. Add puts a guide through the origin, Place arms one for
-//! the next click on the board.
+//! Guide Manager (#2374, #2386): one card per guide, as the Grid Manager's.
+//! A card shows the guide's swatch, direction glyph and name, its enable
+//! box and a ⋯ menu (Delete), and under them its position, typed in place:
+//! X for a vertical guide, Y for a horizontal one, both for a diagonal.
+//! "+ Add Guide" opens a dropdown of the four directions, which add a guide
+//! through the board origin, and Place on Board, which makes them arm one
+//! for the next click on the board instead.
 
-use iced::widget::{container, row};
-use iced::{Element, Widget as _};
+use iced::widget::{Column, container};
+use iced::{Element, Length, Widget as _};
 use signex_i18n::{MessageId, ids};
 use signex_types::pcb_options::{BoardGuide, GuideKind};
 
 use super::chrome::{Form, Shown};
-use super::fields::{self, Choice};
-use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP};
+use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, cards, fields};
+
+fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
+    Some(PanelMsg::PcbBoard(m))
+}
 
 pub(super) fn section<'a>(
     form: &Form<'a>,
     board: &'a PcbBoardSummary,
 ) -> Option<Element<'a, PanelMsg>> {
     let title = form.t(ids::PCB_BOARD_SECTION_GUIDES);
-    let headings = [
-        ids::PCB_BOARD_GUIDE_ENABLED,
-        ids::PCB_BOARD_GRID_NAME,
-        ids::PCB_BOARD_GUIDE_X,
-        ids::PCB_BOARD_GUIDE_Y,
-        ids::PCB_BOARD_GRID_COLOR,
-    ];
-    let header = form.table_row(headings.iter().map(|id| form.heading(*id)).collect(), true);
-    let mut rows: Vec<Shown<'a>> = vec![form.row(&[&title], header)];
-    let editable = !board.read_only;
+    let mut rows: Vec<Shown<'a>> = Vec::new();
     for guide in &board.options.guides {
-        rows.push(form.row(&[&title], guide_row(form, board, guide, editable)));
+        let name = form.t(kind_label(guide.kind));
+        rows.push(form.row(&[&title, &name], guide_card(form, board, guide)));
     }
     if board.options.guides.is_empty() {
         let empty = form.t(ids::PCB_BOARD_GUIDES_EMPTY);
-        rows.push(form.row(&[&empty], form.note(empty.clone())));
+        rows.push(form.row(&[&title, &empty], form.note(empty.clone())));
     }
-    if editable {
-        rows.push(form.row(&[&title], buttons(form, board)));
+    if !board.read_only {
+        let add = form.t(ids::PCB_BOARD_GUIDE_ADD);
+        rows.push(form.row(&[&title, &add], add_menu(form, board)));
     }
     form.section("pcb_board_guides", ids::PCB_BOARD_SECTION_GUIDES, rows)
 }
@@ -49,82 +48,128 @@ pub(super) fn kind_label(kind: GuideKind) -> MessageId {
     }
 }
 
-fn guide_row<'a>(
+/// The glyph drawn before a guide's name: the way its line runs.
+fn glyph(kind: GuideKind) -> MessageId {
+    match kind {
+        GuideKind::Vertical => ids::PCB_BOARD_GUIDE_GLYPH_VERTICAL,
+        GuideKind::Horizontal => ids::PCB_BOARD_GUIDE_GLYPH_HORIZONTAL,
+        GuideKind::Plus45 => ids::PCB_BOARD_GUIDE_GLYPH_PLUS45,
+        GuideKind::Minus45 => ids::PCB_BOARD_GUIDE_GLYPH_MINUS45,
+    }
+}
+
+fn guide_card<'a>(
     form: &Form<'a>,
     board: &PcbBoardSummary,
     guide: &BoardGuide,
-    editable: bool,
 ) -> Element<'a, PanelMsg> {
     let id = guide.uuid;
+    let editable = !board.read_only;
+    let live = |m: PcbBoardMsg| editable.then_some(m).and_then(msg);
     let mut enabled =
         signex_widgets::checkbox(guide.enabled).style(super::super::form_look::checkbox_style);
     if editable {
         enabled =
             enabled.on_toggle(move |_| PanelMsg::PcbBoard(PcbBoardMsg::GuideEnabledToggled(id)));
     }
-    let (x, y) = (
-        form.t(ids::PCB_BOARD_GUIDE_X),
-        form.t(ids::PCB_BOARD_GUIDE_Y),
-    );
-    let coord = |field: BoardField, label, mm: f64| {
-        if editable {
-            fields::length(form, board, field, label, mm)
+    let swatch = if editable {
+        fields::swatch(
+            form,
+            guide.color,
+            PcbBoardMsg::GuideColorStepped(id),
+            form.t(ids::PCB_BOARD_SWATCH_TIP),
+        )
+    } else {
+        cards::no_swatch()
+    };
+    let header = cards::line(vec![
+        swatch,
+        cards::muted(form, form.t(glyph(guide.kind))),
+        cards::name(form, form.t(kind_label(guide.kind))),
+        form.tip(enabled.boxed(), form.t(ids::PCB_BOARD_GUIDE_ENABLED)),
+        cards::more(form, live(PcbBoardMsg::GuideMenuToggled(id))),
+    ]);
+    // From the board origin, Y up (#2384).
+    let origin = board.options.origin;
+    let coord = |field: BoardField, label: MessageId, mm: f64| {
+        let label = form.t(label);
+        let value = if editable {
+            fields::length(form, board, field, label.clone(), mm)
         } else {
             form.value(fields::measure(form, mm))
-        }
+        };
+        cards::labelled(form, label, value)
     };
-    let swatch = fields::swatch(
-        form,
-        guide.color,
-        PcbBoardMsg::GuideColorStepped(id),
-        form.t(ids::PCB_BOARD_SWATCH_TIP),
-    );
-    let cells = vec![
-        enabled.boxed(),
-        form.value(form.t(kind_label(guide.kind))),
-        coord(BoardField::GuideX(id), x, guide.at.x),
-        coord(BoardField::GuideY(id), y, guide.at.y),
-        swatch,
-    ];
-    let line = form.table_row(cells, false);
-    let picked = board.view.selected_guide == Some(id);
-    fields::selectable(form, line, picked, PcbBoardMsg::GuideSelected(id))
+    let x = || {
+        coord(
+            BoardField::GuideX(id),
+            ids::PCB_BOARD_GUIDE_X,
+            origin.user_x(guide.at.x),
+        )
+    };
+    let y = || {
+        coord(
+            BoardField::GuideY(id),
+            ids::PCB_BOARD_GUIDE_Y,
+            origin.user_y(guide.at.y),
+        )
+    };
+    let position = match guide.kind {
+        GuideKind::Vertical => vec![x()],
+        GuideKind::Horizontal => vec![y()],
+        GuideKind::Plus45 | GuideKind::Minus45 => vec![x(), y()],
+    };
+    let mut body = Column::new()
+        .spacing(SP.xs)
+        .push(header)
+        .push(cards::line(position));
+    if board.view.guide_menu == Some(id) {
+        let delete = (
+            form.t(ids::PCB_BOARD_DELETE),
+            live(PcbBoardMsg::GuideDeleted(id)),
+        );
+        body = body.push(cards::menu(form, vec![delete]));
+    }
+    form.card(body.boxed())
 }
 
-/// Add and Place, each a dropdown of guide kinds, and Delete for the
-/// selected guide.
-fn buttons<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
-    let kinds = || {
-        GuideKind::ALL
-            .into_iter()
-            .map(|kind| Choice {
-                value: kind,
-                label: form.t(kind_label(kind)).into_string(),
-            })
-            .collect::<Vec<_>>()
-    };
-    let add = fields::dropdown(
-        kinds(),
+/// "+ Add Guide" and, while open, its dropdown: a row per direction, then
+/// Place on Board, which makes the rows arm a guide for the next click.
+fn add_menu<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
+    let view = &board.view;
+    let toggle = form.action(
+        form.t(ids::PCB_BOARD_GUIDE_ADD),
+        msg(PcbBoardMsg::GuideAddMenuToggled),
         None,
-        form.t(ids::PCB_BOARD_ADD),
-        PcbBoardMsg::GuideAdded,
     );
-    let place = fields::dropdown(
-        kinds(),
-        None,
-        form.t(ids::PCB_BOARD_PLACE),
-        PcbBoardMsg::GuidePlaceArmed,
-    );
-    let picked = board
-        .view
-        .selected_guide
-        .is_some_and(|id| board.options.guides.iter().any(|g| g.uuid == id));
-    let delete = form.action(
-        form.t(ids::PCB_BOARD_DELETE),
-        picked.then_some(PanelMsg::PcbBoard(PcbBoardMsg::GuideDeleted)),
-        (!picked).then(|| form.t(ids::PCB_BOARD_SELECT_ROW_FIRST)),
-    );
-    container(row![add, place, delete].spacing(SP.s))
+    let mut column = Column::new().spacing(SP.xs).push(toggle);
+    if view.guide_add_open {
+        let mut rows = Column::new().spacing(SP.xs);
+        for kind in GuideKind::ALL {
+            let pick = if view.guide_place {
+                PcbBoardMsg::GuidePlaceArmed(kind)
+            } else {
+                PcbBoardMsg::GuideAdded(kind)
+            };
+            let label = form.t(kind_label(kind));
+            let line = cards::line(vec![
+                cards::muted(form, form.t(glyph(kind))),
+                form.action(label, msg(pick), None),
+            ]);
+            rows = rows.push(line);
+        }
+        let place = form.t(ids::PCB_BOARD_GUIDE_PLACE_ON_BOARD);
+        rows = rows.push(cards::pill(
+            form,
+            place,
+            view.guide_place,
+            msg(PcbBoardMsg::GuidePlaceModeToggled),
+            Some(form.t(ids::PCB_BOARD_GUIDE_PLACE_HINT)),
+        ));
+        column = column.push(form.card(rows.boxed()));
+    }
+    container(column)
         .padding([SP.s, SP.l])
+        .width(Length::Fill)
         .boxed()
 }

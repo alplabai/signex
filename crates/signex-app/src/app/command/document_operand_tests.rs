@@ -95,6 +95,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let mut app = app_with(&[("a.snxsch", A)]);
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -111,6 +112,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     app.open_pcb_tab(path("board.snxpcb"), "board".into(), board);
     assert!(
@@ -308,6 +310,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     // A board is not a sheet.
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -324,6 +327,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     app.open_pcb_tab(path("board.snxpcb"), "board".into(), board);
     let pcb = refusal(
@@ -434,10 +438,20 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_line",
         "draw_graphic_line",
         "draw_rectangle",
+        "place_blanket",
+        "edit_blanket",
+        "place_compile_mask",
+        "place_diff_pair",
         "place_component",
         "place_sheet_symbol",
         "place_sheet_entry",
         "sync_sheet_pins",
+        "set_object_position",
+        "set_object_rotation",
+        "set_sheet_symbol_size",
+        "set_symbol_parameter",
+        "place_design_block",
+        "import_graphics",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
@@ -455,6 +469,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "color_net",
                     "clear_all_net_colors",
                     "assign_net_class",
+                    "autoplace_fields",
                     "undo",
                     "redo",
                     "save_document",
@@ -468,6 +483,92 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "find_items",
                     "apply_edits",
                     "revert",
+                    "rules_list",
+                    "rules_get",
+                    "rules_add",
+                    "rules_set",
+                    "rules_remove",
+                    "rules_enable",
+                    "rules_effective",
+                    "rules_explain",
+                    "rules_conflicts",
+                    // #2401, #2407: board edits an agent names its board for.
+                    "set_layer_stack",
+                    "lock_board_items",
+                    "unlock_board_items",
+                    "set_via_span",
+                    "set_layer_sizes",
+                    // The board queries (#2403).
+                    "measure_board",
+                    "query_board_nets",
+                    "find_similar_items",
+                    // #2408, #2409: the board Tools edits name their board.
+                    "stitch_vias",
+                    "add_teardrops",
+                    "remove_teardrops",
+                    "gloss_selected_routes",
+                    "board_shape_from_selection",
+                    "keepout_from_selection",
+                    "arrange_in_box",
+                    "rules_matrix_get",
+                    "rules_matrix_set",
+                    "rules_set_create",
+                    "rules_set_edit",
+                    "rules_set_apply",
+                    "rules_preset_diff",
+                    "rules_preset_apply",
+                    "add_board_graphic",
+                    "set_board_graphic",
+                    "panelize_board",
+                    "remove_board_panel",
+                    "set_board_panel",
+                    "board_panel",
+                    // #2410: they act on the board they name.
+                    "swap_pins",
+                    "swap_gates",
+                    "save_board_reuse_block",
+                    "place_board_reuse_block",
+                    "project_settings",
+                    "project_move_sheet",
+                    "project_add_variant",
+                    "project_rename_variant",
+                    "project_remove_variant",
+                    "project_set_active_variant",
+                    "project_move_library",
+                    "project_set_annotate_undo",
+                    "project_set_version_control",
+                    // #2394: the board view's layer commands.
+                    "hide_layer",
+                    "highlight_layer",
+                    "hide_layer_group",
+                    "show_layer_group",
+                    "show_layer_set",
+                    "save_layer_set",
+                    // #2399, #2400: DRC results and the board net classes.
+                    "show_drc_violation",
+                    "filter_drc_results",
+                    "waive_drc_violation",
+                    "unwaive_drc_violation",
+                    "add_net_class",
+                    "rename_net_class",
+                    "delete_net_class",
+                    "set_net_class_rules",
+                    "assign_board_net_class",
+                    // #2402, #2404: board reports and Board Print / PDF.
+                    "board_report_bom",
+                    "board_report_netlist",
+                    "board_report_net_length",
+                    "board_report_components",
+                    "export_board_report",
+                    "export_board_pdf",
+                    // #2410: DXF import onto a board.
+                    "import_dxf",
+                    "import_dxf_outline",
+                    // #2216: Repour All on the named board.
+                    "repour_all",
+                    // #2389: length tuning on the named board.
+                    "tune_net_length",
+                    "tune_diff_pair",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

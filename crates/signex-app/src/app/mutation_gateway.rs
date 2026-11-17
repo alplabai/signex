@@ -51,6 +51,9 @@ impl Signex {
         if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
             invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
         }
+        if patch.contains(signex_engine::DocumentPatch::DIRECTIVES) {
+            invalidation |= RenderInvalidation::DIRECTIVES;
+        }
         if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
             invalidation |= RenderInvalidation::CHILD_SHEETS;
         }

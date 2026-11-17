@@ -27,6 +27,8 @@ const PAD: Uuid = Uuid::from_u128(0x302);
 
 fn track(uuid: Uuid, (ax, ay): (f64, f64), (bx, by): (f64, f64), net: u32) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid,
         start: Point::new(ax, ay),
         end: Point::new(bx, by),
@@ -56,6 +58,7 @@ fn board() -> PcbBoard {
         net: None,
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -80,6 +83,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(1),
         version: 1,
@@ -105,18 +109,22 @@ fn board() -> PcbBoard {
             track(T3, (30.0, 30.0), (31.0, 30.0), 2),
         ],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: V1,
             position: Point::new(40.0, 10.0),
             diameter: 0.6,
             drill: 0.3,
             layers: vec!["TopCopper".into(), "BottomCopper".into()],
             net: 1,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         }],
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -264,7 +272,8 @@ fn the_net_length_readout_is_the_tracks_geometry() {
     assert_eq!(track.length_mm, Some(5.0));
     assert_eq!((info.tracks, info.vias, info.pads), (2, 1, 0));
     assert_eq!(track.width, Some(0.25));
-    assert_eq!(track.start, (Some(10.0), Some(10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!(track.start, (Some(10.0), Some(-10.0)));
     assert_eq!(track.layer.map(|l| l.layer), Some(CopperLayer::Top));
 }
 
@@ -392,7 +401,9 @@ fn a_mixed_selection_leaves_differing_values_blank() {
     assert_eq!(track.width, Some(0.25), "a shared value shows");
     assert_eq!(track.start, (None, None), "differing values are blank");
     assert_eq!(track.common.net_info.net, None);
-    assert_eq!(track.location, Some((10.0, 10.0)));
+    // The lowest X and Y of the selection, Y counting up from the board
+    // origin (#2384).
+    assert_eq!(track.location, Some((10.0, -30.0)));
 }
 
 #[test]
@@ -451,7 +462,8 @@ fn pad_size_shape_hole_and_net_are_one_undo_step_each() {
     let PcbPrimitiveFacts::Pad(pad) = facts(&f.app) else {
         panic!("the pad panel shows");
     };
-    assert_eq!((pad.x, pad.y), (Some(60.0), Some(10.0)));
+    // Y counts up from the board origin (#2384).
+    assert_eq!((pad.x, pad.y), (Some(60.0), Some(-10.0)));
     assert_eq!(pad.hole, Some(0.5));
     let pad_of = |b: &PcbBoard| b.footprints[0].pads[0].clone();
     let edited = assert_one_step(&mut f, |f| {
@@ -483,4 +495,108 @@ fn pad_size_shape_hole_and_net_are_one_undo_step_each() {
     });
     let net = pad_of(&edited).net.expect("a net");
     assert_eq!((net.number, net.name.as_str()), (1, "GND"));
+}
+
+// ─── #2378: lock and mask settings stored per track and via ─────────────
+
+/// The Lock box locks the track in one undo step; a locked track refuses
+/// its other fields and shows the locked note; unlocking is one step too.
+#[test]
+fn a_locked_track_takes_only_its_unlock() {
+    use signex_app::panels::pcb_primitive_properties::{Editability, PrimitiveFlag};
+    let mut f = open_board();
+    let t = select_t1(&mut f);
+    let toggle = |on: bool| {
+        panel(PcbPrimitiveMsg::FlagToggled {
+            target: t.clone(),
+            flag: PrimitiveFlag::Locked,
+            on,
+        })
+    };
+    let edited = assert_one_step(&mut f, |f| send(&mut f.app, toggle(true)));
+    assert!(segment(&edited, T1).locked);
+    send(&mut f.app, toggle(true));
+    let PcbPrimitiveFacts::Track(track) = facts(&f.app) else {
+        panic!("the track panel shows");
+    };
+    assert_eq!(track.locked, Some(true));
+    assert_eq!(track.common.editability, Editability::ItemLocked);
+    let before = snapshot(&f.app);
+    type_and_enter(&mut f, &t, PrimitiveField::Width, "0.5");
+    assert_eq!(snapshot(&f.app), before, "a locked track refuses the width");
+    send(&mut f.app, toggle(false));
+    assert!(!segment(&live(&f.app), T1).locked);
+}
+
+/// A typed solder mask expansion is a manual one, one undo step; Rule puts
+/// the rule back.
+#[test]
+fn a_track_mask_expansion_is_stored_and_rule_restores_it() {
+    use signex_types::pcb::MaskExpansion;
+    let mut f = open_board();
+    let t = select_t1(&mut f);
+    let edited = assert_one_step(&mut f, |f| {
+        type_and_enter(f, &t, PrimitiveField::SolderMask, "0.05");
+    });
+    assert_eq!(
+        segment(&edited, T1).attributes.solder_mask,
+        MaskExpansion::Manual { mm: 0.05 }
+    );
+    type_and_enter(&mut f, &t, PrimitiveField::PasteMask, "-0.02");
+    let PcbPrimitiveFacts::Track(track) = facts(&f.app) else {
+        panic!("the track panel shows");
+    };
+    assert_eq!(track.paste_mask, Some(MaskExpansion::Manual { mm: -0.02 }));
+    send(
+        &mut f.app,
+        panel(PcbPrimitiveMsg::MaskModePicked {
+            target: t.clone(),
+            field: PrimitiveField::PasteMask,
+            manual: false,
+        }),
+    );
+    assert_eq!(
+        segment(&live(&f.app), T1).attributes.paste_mask,
+        MaskExpansion::Rule
+    );
+}
+
+/// Tenting, a side's expansion and From Hole Edge are stored on the via,
+/// each one undo step, and survive a save and a reload of the file.
+#[test]
+fn via_tenting_and_masks_are_one_step_each_and_survive_the_file() {
+    use signex_app::panels::pcb_primitive_properties::PrimitiveFlag;
+    use signex_types::pcb::MaskExpansion;
+    let mut f = open_board();
+    click(&mut f.app, 40.0, 10.0);
+    let t = target(&f, vec![ItemRef::Via(V1)]);
+    let flag = |flag: PrimitiveFlag| {
+        panel(PcbPrimitiveMsg::FlagToggled {
+            target: t.clone(),
+            flag,
+            on: true,
+        })
+    };
+    let edited = assert_one_step(&mut f, |f| {
+        send(&mut f.app, flag(PrimitiveFlag::TentedBottom));
+    });
+    assert!(edited.vias[0].attributes.bottom.tented);
+    let edited = assert_one_step(&mut f, |f| {
+        type_and_enter(f, &t, PrimitiveField::SolderMaskTop, "0.1");
+    });
+    assert_eq!(
+        edited.vias[0].attributes.top.expansion,
+        MaskExpansion::Manual { mm: 0.1 }
+    );
+    send(&mut f.app, flag(PrimitiveFlag::TentedBottom));
+    type_and_enter(&mut f, &t, PrimitiveField::SolderMaskTop, "0.1");
+    send(&mut f.app, flag(PrimitiveFlag::FromHoleEdge));
+    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
+        panic!("the via panel shows");
+    };
+    assert_eq!(via.bottom.tented, Some(true));
+    assert_eq!(via.from_hole_edge, Some(true));
+    let saved = SnxPcb::new(live(&f.app)).write_string().unwrap();
+    let back = SnxPcb::parse(&saved).unwrap().board;
+    assert_eq!(back.vias[0].attributes, live(&f.app).vias[0].attributes);
 }

@@ -53,6 +53,10 @@ impl DocumentPatch {
     pub const FONT_FAMILY: Self = Self(1 << 13);
     /// The sheet's net colour overrides changed: wires and junctions repaint.
     pub const NET_COLORS: Self = Self(1 << 14);
+    /// Blankets, Compile Masks and Differential Pair directives (#2420). A
+    /// Compile Mask takes what it covers out of the netlist, so it is
+    /// electrical.
+    pub const DIRECTIVES: Self = Self(1 << 15);
     pub const FULL: Self = Self(u16::MAX);
     /// Every collection a net is derived from: pins (symbols and the library
     /// parts they instantiate), wires, labels, junctions, no-connects, buses
@@ -66,7 +70,8 @@ impl DocumentPatch {
             | Self::JUNCTIONS.0
             | Self::NO_CONNECTS.0
             | Self::CHILD_SHEETS.0
-            | Self::LIB_SYMBOLS.0,
+            | Self::LIB_SYMBOLS.0
+            | Self::DIRECTIVES.0,
     );
 
     pub fn contains(self, other: Self) -> bool {
@@ -93,6 +98,7 @@ impl DocumentPatch {
             SelectedKind::TextNote => Self::TEXT_NOTES,
             SelectedKind::ChildSheet => Self::CHILD_SHEETS,
             SelectedKind::Drawing => Self::DRAWINGS,
+            SelectedKind::Directive => Self::DIRECTIVES,
         }
     }
 

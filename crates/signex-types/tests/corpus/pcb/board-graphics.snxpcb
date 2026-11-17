@@ -30,6 +30,7 @@ outline = []
 texts = []
 
 [[extras.board.graphics]]
+uuid = "00000000-0000-4000-8000-0000000000a1"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.1
@@ -45,6 +46,7 @@ x = 50.0
 y = 0.0
 
 [[extras.board.graphics]]
+uuid = "00000000-0000-4000-8000-0000000000a2"
 graphic_type = "circle"
 layer = "TopSilkscreen"
 width = 0.12
@@ -56,6 +58,7 @@ x = 25.0
 y = 25.0
 
 [[extras.board.graphics]]
+uuid = "00000000-0000-4000-8000-0000000000a3"
 graphic_type = "polygon"
 layer = "TopFab"
 width = 0.1

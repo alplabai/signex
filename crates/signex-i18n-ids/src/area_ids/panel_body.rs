@@ -58,12 +58,8 @@ define_ids! {
     PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE = "panels-components-details-footprint-unreadable";
     PANELS_COMPONENTS_DETAILS_NO_FOOTPRINT = "panels-components-details-no-footprint";
     PANELS_COMPONENTS_DETAILS_NO_PARAMETERS = "panels-components-details-no-parameters";
-    PANELS_STUB_DRC = "panels-stub-drc";
-    PANELS_STUB_LAYER_STACK = "panels-stub-layer-stack";
-    PANELS_STUB_NET_CLASSES = "panels-stub-net-classes";
     PANELS_STUB_VARIANTS = "panels-stub-variants";
     PANELS_STUB_OUTPUT_JOBS = "panels-stub-output-jobs";
-    PANELS_STUB_SCH_FILTER = "panels-stub-sch-filter";
     PANELS_STUB_SCH_LIST = "panels-stub-sch-list";
     PANELS_STUB_BOM_STUDIO = "panels-stub-bom-studio";
     PANELS_STUB_FAVORITES = "panels-stub-favorites";

@@ -87,4 +87,145 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2394: the layer strip under the board. View state and per-user
+    // settings only: no undo step, no dirty mark. The rows with operands run
+    // from an agent or the CLI on the board `document` names (the per-user
+    // ones name none); a person uses the tab menu or the layer set button,
+    // so without operands they say so and do nothing.
+    CommandMetadata {
+        id: "show_layer_set",
+        category: "view",
+        label: command_ids::CMD_SHOW_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "save_layer_set",
+        category: "view",
+        label: command_ids::CMD_SAVE_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "delete_layer_set",
+        category: "view",
+        label: command_ids::CMD_DELETE_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_DELETE_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET_NAME,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "hide_layer",
+        category: "view",
+        label: command_ids::CMD_HIDE_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_HIDE_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "highlight_layer",
+        category: "view",
+        label: command_ids::CMD_HIGHLIGHT_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_HIGHLIGHT_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "hide_layer_group",
+        category: "view",
+        label: command_ids::CMD_HIDE_LAYER_GROUP,
+        menu_label: Some(command_ids::CMD_MENU_HIDE_LAYER_GROUP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "show_layer_group",
+        category: "view",
+        label: command_ids::CMD_SHOW_LAYER_GROUP,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_LAYER_GROUP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_layer_tab_names",
+        category: "view",
+        label: command_ids::CMD_SET_LAYER_TAB_NAMES,
+        menu_label: Some(command_ids::CMD_MENU_SET_LAYER_TAB_NAMES),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_TAB_NAMES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "toggle_layer_numbers",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_LAYER_NUMBERS,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_LAYER_NUMBERS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2401: open the board's layer stack manager (the Layers tab menu's
+    // "Layer stack..." row runs it too). No default key.
+    CommandMetadata {
+        id: "board_layer_stack",
+        category: "design",
+        label: command_ids::CMD_BOARD_LAYER_STACK,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_LAYER_STACK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2401: the manager's edit for an agent or the CLI: the whole stack
+    // as JSON rows, one undo step, answered with the stack it stored.
+    CommandMetadata {
+        id: "set_layer_stack",
+        category: "design",
+        label: command_ids::CMD_SET_LAYER_STACK,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_LAYER_STACK,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2401: per-layer copper sizes of vias or pads; the Via and Pad
+    // Stack rows are its surface. One undo step.
+    CommandMetadata {
+        id: "set_layer_sizes",
+        category: "modify",
+        label: command_ids::CMD_SET_LAYER_SIZES,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_LAYER_SIZES,
+        ..CommandMetadata::DEFAULT
+    },
 ];

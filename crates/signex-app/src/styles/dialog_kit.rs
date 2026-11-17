@@ -8,10 +8,8 @@ use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, text};
 
-use super::{
-    ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
-    outline_button, primary_button, ti, tokens,
-};
+use super::dialog_buttons::{dialog_border, dialog_button_style, dialog_label_color};
+use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -21,22 +19,25 @@ const BUTTON_HEIGHT_EM: f32 = 2.2;
 /// Average glyph advance, in body-size units, for sizing a button to its label.
 const GLYPH_ADVANCE_EM: f32 = 0.62;
 
-/// The role of a dialog button.
+/// The role of a dialog button. Every role has the same height, radius,
+/// border width and padding; they differ in fill and colour only (#2397,
+/// see `dialog_buttons`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogButtonKind {
     /// The affirmative action; one per dialog (accent fill).
     Primary,
-    /// Cancel, Close and other non-committal actions (outline).
+    /// Cancel, Close and other non-committal actions: a subtle fill and the
+    /// standard border.
     Secondary,
-    /// Destructive actions: outline and text in the `error` colour.
+    /// Destructive actions: a subtle `error` tint, border and label.
     Danger,
-    /// A copper accent fill, for a call to action beside a `Primary` (Graphite
-    /// look; the accent fill on every theme).
+    /// The accent fill, for a call to action beside a `Primary`.
     Accent,
-    /// A quiet action with no fill or border ("Decide later").
+    /// A quiet action with no fill or visible border at rest ("Decide
+    /// later").
     Ghost,
     /// The dismissing action of a footer (Cancel, Close, Later): drawn as
-    /// Ghost, it sits first in the right-aligned row.
+    /// Secondary, it sits first in the right-aligned row.
     Cancel,
 }
 
@@ -44,7 +45,7 @@ impl DialogButtonKind {
     /// The role `self` is drawn with.
     pub fn resolved(self) -> Self {
         match self {
-            Self::Cancel => Self::Ghost,
+            Self::Cancel => Self::Secondary,
             other => other,
         }
     }
@@ -126,7 +127,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
     let label: Label<'a> = label.into();
-    let (height, size, width) = button_metrics(label.as_str(), kind);
+    let (height, size, width) = button_metrics(label.as_str());
     let face = text(label)
         .size(size)
         .color(color)
@@ -140,53 +141,36 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         .width(Length::Fixed(width))
         .height(Length::Fixed(height))
         .on_press_maybe(on_press);
-    match kind {
-        _ if disabled && kind == DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
-        _ if disabled => btn.style(disabled_button(tokens)),
-        DialogButtonKind::Primary => btn.style(primary_button(tokens)),
-        DialogButtonKind::Accent => btn.style(accent_button_rounded(tokens)),
-        DialogButtonKind::Ghost => btn.style(ghost_button(tokens)),
-        DialogButtonKind::Secondary => btn.style(outline_button(tokens)),
-        DialogButtonKind::Danger => btn.style(danger_button(tokens)),
-        // `resolved` above never leaves `Cancel`.
-        DialogButtonKind::Cancel => btn.style(outline_button(tokens)),
+    if disabled {
+        btn.style(disabled_button(tokens)).boxed()
+    } else {
+        btn.style(dialog_button_style(kind, tokens)).boxed()
     }
-    .boxed()
 }
 
-/// Horizontal label padding of a dense button (14 px; Ghost 10 px).
+/// Horizontal label padding of a dialog button, the same for every role.
 const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
-const DENSE_GHOST_PAD: f32 = 10.0 * 12.0 / 11.0;
 
 /// `(height, label size, width)` of a dialog button. The buttons are dense:
-/// one height for every role, the width hugging the label. The isolation
-/// marks catalog text carries around its values are invisible and do not
-/// count.
-fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
+/// one height and padding for every role, the width hugging the label. The
+/// isolation marks catalog text carries around its values are invisible and
+/// do not count.
+fn button_metrics(label: &str) -> (f32, f32, f32) {
     let chars = label
         .chars()
         .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
         .count() as f32;
     let size = TS.label;
-    let pad = if kind == DialogButtonKind::Ghost {
-        DENSE_GHOST_PAD
-    } else {
-        DENSE_PAD
-    };
-    let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
+    let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * DENSE_PAD).ceil();
     (ChromeMetrics::DEFAULT.button, size, width)
 }
 
 /// Label colour of a dialog button: muted when it has no action, whatever its role.
 fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> iced::Color {
-    match kind.resolved() {
-        _ if disabled => ti(tokens.text_secondary),
-        DialogButtonKind::Primary => tokens::resolve(tokens).primary_ink,
-        DialogButtonKind::Accent => tokens::on_accent(tokens),
-        DialogButtonKind::Secondary | DialogButtonKind::Ghost | DialogButtonKind::Cancel => {
-            ti(tokens.text)
-        }
-        DialogButtonKind::Danger => tokens::danger(tokens),
+    if disabled {
+        ti(tokens.text_secondary)
+    } else {
+        dialog_label_color(kind, tokens)
     }
 }
 
@@ -204,12 +188,7 @@ fn disabled_button(
     move |_: &Theme, _: button::Status| button::Style {
         background: None,
         text_color: text,
-        border: Border {
-            width: 1.0,
-            radius: RADIUS.into(),
-            color: border,
-            ..Border::default()
-        },
+        border: dialog_border(border),
         ..button::Style::default()
     }
 }
@@ -285,10 +264,13 @@ mod tests {
         );
     }
 
-    /// Cancel is the quiet Ghost; no other role changes.
+    /// Cancel is drawn as a Secondary (#2397); no other role changes.
     #[test]
-    fn cancel_is_ghost() {
-        assert_eq!(DialogButtonKind::Cancel.resolved(), DialogButtonKind::Ghost);
+    fn cancel_is_secondary() {
+        assert_eq!(
+            DialogButtonKind::Cancel.resolved(),
+            DialogButtonKind::Secondary
+        );
         for kind in [
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
@@ -304,13 +286,10 @@ mod tests {
     /// toward a button's width; the catalog English is drawn unchanged.
     #[test]
     fn isolation_marks_do_not_widen_a_button() {
-        for kind in [DialogButtonKind::Primary, DialogButtonKind::Ghost] {
-            assert_eq!(
-                button_metrics("Save \u{2068}R1\u{2069}", kind),
-                button_metrics("Save R1", kind),
-                "{kind:?}"
-            );
-        }
+        assert_eq!(
+            button_metrics("Save \u{2068}R1\u{2069}"),
+            button_metrics("Save R1")
+        );
         let ok = signex_i18n::t!(
             signex_i18n::I18n::en_us_ref(),
             signex_i18n::ids::DIALOG_BUTTON_OK
@@ -319,27 +298,83 @@ mod tests {
         assert_eq!(ok.as_str(), "OK");
     }
 
-    /// Footer buttons are dense: every role has the same height and the
-    /// width hugs the label.
+    /// Footer buttons are dense: one height, the width hugging the label.
     #[test]
     fn graphite_buttons_share_one_height_and_hug_their_label() {
-        for kind in [
+        assert_eq!(button_metrics("Cancel").0, ChromeMetrics::DEFAULT.button);
+        let ok = button_metrics("OK").2;
+        let long = button_metrics("New Library\u{2026}").2;
+        assert!(ok < long, "{ok} < {long}");
+        assert!(ok < TS.label * 7.5, "{ok}");
+    }
+
+    /// #2397: the Exit dialog's footer laid out. Cancel, Discard All and
+    /// Save All are one family: the same height, and the same width for the
+    /// same label (so the same padding), whatever the role.
+    #[test]
+    fn footer_buttons_lay_out_as_one_family() {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
+        let i18n = signex_i18n::I18n::en_us_ref();
+        use signex_i18n::{ids, t};
+        let footer: Element<'_, ()> = dialog_footer(vec![
+            dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                Some(()),
+                &tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
+                DialogButtonKind::Danger,
+                Some(()),
+                &tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
+                DialogButtonKind::Primary,
+                Some(()),
+                &tokens,
+            ),
+        ]);
+        let texts = crate::layout_probe::lay_out_texts(footer, iced::Size::new(800.0, 200.0));
+        let heights: Vec<f32> = ["Cancel", "Discard All", "Save All"]
+            .iter()
+            .map(|label| crate::layout_probe::find(&texts, label).bounds.height)
+            .collect();
+        for height in &heights {
+            assert_eq!(*height, ChromeMetrics::DEFAULT.button, "{heights:?}");
+        }
+
+        let roles = [
             DialogButtonKind::Primary,
+            DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
-            DialogButtonKind::Secondary,
-        ] {
-            assert_eq!(
-                button_metrics("Cancel", kind).0,
-                ChromeMetrics::DEFAULT.button,
-                "{kind:?}"
-            );
-        }
-        let ok = button_metrics("OK", DialogButtonKind::Primary).2;
-        let long = button_metrics("New Library\u{2026}", DialogButtonKind::Primary).2;
-        assert!(ok < long, "{ok} < {long}");
-        assert!(ok < TS.label * 7.5, "{ok}");
+            DialogButtonKind::Cancel,
+        ];
+        let buttons: Element<'_, ()> = row(roles
+            .iter()
+            .enumerate()
+            .map(|(i, kind)| {
+                dialog_button(
+                    signex_i18n::UserText::new(format!("Save {i}")),
+                    *kind,
+                    Some(()),
+                    &tokens,
+                )
+            })
+            .collect::<Vec<_>>())
+        .boxed();
+        let texts = crate::layout_probe::lay_out_texts(buttons, iced::Size::new(2000.0, 200.0));
+        let widths: Vec<f32> = (0..roles.len())
+            .map(|i| {
+                crate::layout_probe::find(&texts, &format!("Save {i}"))
+                    .bounds
+                    .width
+            })
+            .collect();
+        assert!(widths.iter().all(|w| *w == widths[0]), "{widths:?}");
     }
 
     /// A button without an action never looks clickable: no fill, no hover

@@ -541,3 +541,15 @@ fn the_locked_part_units_are_every_unit_of_each_locked_part() {
         "{single:?}"
     );
 }
+
+#[test]
+fn a_selection_is_all_locked_only_when_every_item_is_locked() {
+    let engine = engine();
+    assert!(engine.all_locked(&[item(1)]), "the locked R1 alone");
+    assert!(
+        !engine.all_locked(&[item(1), item(2)]),
+        "R1 with the free R2"
+    );
+    assert!(!engine.all_locked(&[item(2)]), "the free R2 alone");
+    assert!(!engine.all_locked(&[]), "no selection");
+}

@@ -144,3 +144,34 @@ fn a_report_gives_each_violation_its_resolved_severity() {
         Some(Severity::Info)
     );
 }
+
+#[test]
+fn a_written_rule_entry_follows_severity_on_rename_and_remove_edits() {
+    let mut set = layer(&[
+        ("user::a", "off"),
+        ("user::b", "warning"),
+        ("user::c", "info"),
+    ]);
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SwitchedOn("b"));
+    assert_eq!(
+        written_rule_override(&set, "b"),
+        Some(Some(Severity::Warning))
+    );
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SwitchedOn("a"));
+    assert_eq!(written_rule_override(&set, "a"), None);
+    follow_written_rule_edit(
+        &mut set,
+        WrittenRuleEdit::Renamed {
+            from: "b",
+            to: "bb",
+        },
+    );
+    assert_eq!(written_rule_override(&set, "b"), None);
+    assert_eq!(
+        written_rule_override(&set, "bb"),
+        Some(Some(Severity::Warning))
+    );
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SeveritySet("bb"));
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::Dropped("c"));
+    assert!(set.severity.is_empty(), "{:?}", set.severity);
+}

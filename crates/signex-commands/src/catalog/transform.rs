@@ -1,6 +1,6 @@
 //! Transform commands: drag, move, rotate, flip and mirror the selection.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const TRANSFORM: &[CommandMetadata] = &[
@@ -154,6 +154,30 @@ pub(super) const TRANSFORM: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2418: the Properties rows of a placed object. Each runs from its
+    // operands only; the Properties row sends the same edit.
+    CommandMetadata {
+        id: "set_object_position",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_POSITION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_POSITION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_object_rotation",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_ROTATION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_ROTATION,
         ..CommandMetadata::DEFAULT
     },
 ];

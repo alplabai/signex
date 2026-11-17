@@ -67,6 +67,8 @@ pub(crate) enum OverlayId {
     ComponentsRowContextMenu,
     /// Right-click menu of a Start screen project row (#2305).
     StartRowContextMenu,
+    /// Right-click menu of a board layer tab (#2379).
+    LayerTabContextMenu,
     GridPicker,
     PanelList,
     DockDragZone,
@@ -99,6 +101,10 @@ pub(crate) enum OverlayId {
     SheetNumbering,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
+    /// File ▸ Fabrication Outputs (#2388).
+    FabOutputs,
+    /// Board Reports and Board Print / PDF (#2404, #2402).
+    BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
     AnnotateDialog,
@@ -142,7 +148,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -164,6 +170,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
     OverlayId::ProjectTreeContextMenu,
     OverlayId::ComponentsRowContextMenu,
     OverlayId::StartRowContextMenu,
+    OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::DockDragZone,
@@ -191,6 +198,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
     OverlayId::BoardReannotate,
+    OverlayId::FabOutputs,
+    OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
@@ -290,6 +299,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::ProjectTreeContextMenu
         | OverlayId::ComponentsRowContextMenu
         | OverlayId::StartRowContextMenu
+        | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
         | OverlayId::DockDragZone
@@ -315,6 +325,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
         | OverlayId::BoardReannotate
+        | OverlayId::FabOutputs
+        | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
@@ -351,6 +363,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::StartRowContextMenu
+            | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
     )
 }
@@ -503,6 +516,7 @@ impl Signex {
             OverlayId::StartRowContextMenu => {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
+            OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
@@ -535,6 +549,8 @@ impl Signex {
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
+            OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
+            OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),

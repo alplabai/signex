@@ -130,7 +130,14 @@ pub fn view<'a>(
         // Tab title. A document with unsaved changes also gets a dot
         // (the Projects tree row keeps its own), before the title; the
         // close × sits after it.
-        let label = ellipsize_title(&tab.title, MAX_TAB_TITLE_CHARS);
+        // A Rules tab's title is a catalog message, read in the current
+        // language rather than the one it was opened in.
+        let catalog_title = matches!(tab.kind, crate::app::TabKind::Rules(_))
+            .then(|| signex_i18n::t!(i18n, signex_i18n::ids::RULES_TAB_TITLE).into_string());
+        let label = ellipsize_title(
+            catalog_title.as_deref().unwrap_or(&tab.title),
+            MAX_TAB_TITLE_CHARS,
+        );
 
         let is_active = i == active;
         let is_dragging = dragging == Some(i);

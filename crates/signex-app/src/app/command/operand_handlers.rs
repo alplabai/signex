@@ -12,12 +12,25 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_edit_operands as board_edit;
+use super::board_graphic_operands as graphic;
+use super::board_operands as board;
+use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
+use super::layer_strip_operands as strip;
 use super::part_operands as part;
+use super::placed_operands as placed;
+use super::placement_extras_operands as extras;
 use super::placement_operands as place;
+use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
+use crate::app::board_output as output;
+use crate::app::board_reuse as reuse;
+use crate::app::board_tools as tools;
+use crate::app::handlers::pcb_component::part_swap_operands as swap;
+use crate::app::handlers::pcb_tune as tune;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -77,11 +90,134 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_line", place::line),
     ("draw_graphic_line", place::line),
     ("draw_rectangle", place::rectangle),
+    ("place_blanket", directive::blanket),
+    ("edit_blanket", directive::edit_blanket),
+    ("place_compile_mask", directive::compile_mask),
+    ("place_diff_pair", directive::diff_pair),
+    ("autoplace_fields", extras::autoplace_fields),
+    ("place_design_block", extras::place_design_block),
+    ("import_graphics", extras::import_graphics),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
+    ("set_object_position", placed::set_object_position),
+    ("set_object_rotation", placed::set_object_rotation),
+    ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
+    ("set_symbol_parameter", placed::set_symbol_parameter),
     ("view_rotate", view_rotate),
+    ("show_layer_set", strip::show_layer_set),
+    ("save_layer_set", strip::save_layer_set),
+    ("delete_layer_set", strip::delete_layer_set),
+    ("hide_layer", strip::hide_layer),
+    ("highlight_layer", strip::highlight_layer),
+    ("hide_layer_group", strip::hide_layer_group),
+    ("show_layer_group", strip::show_layer_group),
+    ("set_layer_tab_names", strip::set_layer_tab_names),
+    ("board_report_bom", output::board_report_bom),
+    ("board_report_netlist", output::board_report_netlist),
+    ("board_report_net_length", output::board_report_net_length),
+    ("board_report_components", output::board_report_components),
+    ("export_board_report", output::export_board_report),
+    ("export_board_pdf", output::export_board_pdf),
+    ("add_board_graphic", graphic::add_board_graphic),
+    ("set_board_graphic", graphic::set_board_graphic),
+    ("set_selection_filters", filter::set_selection_filters),
+    (
+        "apply_selection_filter_preset",
+        filter::apply_selection_filter_preset,
+    ),
+    ("rules_add", crate::app::rules_tab::rules_add),
+    ("rules_set", crate::app::rules_tab::rules_set),
+    ("rules_remove", crate::app::rules_tab::rules_remove),
+    ("rules_enable", crate::app::rules_tab::rules_enable),
+    ("show_drc_violation", board::show_drc_violation),
+    ("waive_drc_violation", board::waive_drc_violation),
+    ("unwaive_drc_violation", board::unwaive_drc_violation),
+    ("filter_drc_results", board::filter_drc_results),
+    ("add_net_class", board::add_net_class),
+    ("rename_net_class", board::rename_net_class),
+    ("delete_net_class", board::delete_net_class),
+    ("set_net_class_rules", board::set_net_class_rules),
+    ("assign_board_net_class", board::assign_board_net_class),
+    ("set_layer_stack", board_edit::set_layer_stack),
+    ("lock_board_items", board_edit::lock_board_items),
+    ("unlock_board_items", board_edit::unlock_board_items),
+    ("set_via_span", board_edit::set_via_span),
+    ("set_layer_sizes", board_edit::set_layer_sizes),
+    ("select_board_net", select_board_net),
+    ("highlight_board_net", highlight_board_net),
+    // #2408, #2409: the board Tools edits on the board `document` names.
+    ("stitch_vias", tools::stitch_by_operands),
+    ("add_teardrops", tools::add_teardrops_by_operands),
+    ("remove_teardrops", tools::remove_teardrops_by_operands),
+    ("gloss_selected_routes", tools::gloss_by_operands),
+    ("board_shape_from_selection", tools::board_shape_by_operands),
+    ("keepout_from_selection", tools::keepout_by_operands),
+    ("arrange_in_box", tools::arrange_in_box_by_operands),
+    (
+        "import_dxf",
+        crate::app::handlers::pcb_dxf_import::import_dxf,
+    ),
+    (
+        "import_dxf_outline",
+        crate::app::handlers::pcb_dxf_import::import_dxf_outline,
+    ),
+    ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
+    ("rules_set_create", crate::app::rules_tab::rules_set_create),
+    ("rules_set_edit", crate::app::rules_tab::rules_set_edit),
+    ("rules_set_apply", crate::app::rules_tab::rules_set_apply),
+    (
+        "rules_preset_apply",
+        crate::app::rules_tab::rules_preset_apply,
+    ),
+    ("repour_all", crate::app::handlers::pcb_pour::repour_all),
+    // #2389: length tuning on a named board.
+    ("tune_net_length", tune::tune_net_length),
+    ("tune_diff_pair", tune::tune_diff_pair),
+    ("panelize_board", crate::app::board_panel::panelize_board),
+    (
+        "remove_board_panel",
+        crate::app::board_panel::remove_board_panel,
+    ),
+    ("set_board_panel", crate::app::board_panel::set_board_panel),
+    ("swap_pins", swap::swap_pins),
+    ("swap_gates", swap::swap_gates),
+    ("save_board_reuse_block", reuse::save_board_reuse_block),
+    ("place_board_reuse_block", reuse::place_board_reuse_block),
+    // #1689-#1693: the Project tab's section edits.
+    (
+        "project_move_sheet",
+        crate::app::project_tab::project_move_sheet,
+    ),
+    (
+        "project_add_variant",
+        crate::app::project_tab::project_add_variant,
+    ),
+    (
+        "project_rename_variant",
+        crate::app::project_tab::project_rename_variant,
+    ),
+    (
+        "project_remove_variant",
+        crate::app::project_tab::project_remove_variant,
+    ),
+    (
+        "project_set_active_variant",
+        crate::app::project_tab::project_set_active_variant,
+    ),
+    (
+        "project_move_library",
+        crate::app::project_tab::project_move_library,
+    ),
+    (
+        "project_set_annotate_undo",
+        crate::app::project_tab::project_set_annotate_undo,
+    ),
+    (
+        "project_set_version_control",
+        crate::app::project_tab::project_set_version_control,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -98,6 +234,49 @@ pub(super) fn view_turn_degrees(args: &CommandArgs) -> f32 {
 fn view_rotate(app: &mut Signex, args: &CommandArgs) -> Ran {
     let turn = crate::app::ViewRotationMsg::TurnedBy(view_turn_degrees(args));
     let task = app.update(Message::Pcb(crate::app::PcbMsg::ViewRotation(turn)));
+    (CommandOutcome::Ran, task)
+}
+
+/// The board net `net` names, for Select Net and Highlight Net (#2403).
+pub(super) fn board_net_operand(args: &CommandArgs) -> Option<String> {
+    super::queries::text_operand(args, "net").map(str::to_owned)
+}
+
+/// The board net `net` names, refused when the board in view has no net of
+/// that name; `None` for the net of the selection.
+fn named_board_net(app: &Signex, args: &CommandArgs) -> Result<Option<String>, Ran> {
+    let Some(name) = board_net_operand(args) else {
+        return Ok(None);
+    };
+    match app.active_pcb() {
+        Some(board) if pcb_geom::net_named(board, &name).is_none() => {
+            Err(refused(format!("the board has no net named `{name}`")))
+        }
+        _ => Ok(Some(name)),
+    }
+}
+
+/// `select_board_net net=..` (#2403): what the Net Inspector row's Select
+/// sends.
+fn select_board_net(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = match named_board_net(app, args) {
+        Ok(name) => name,
+        Err(refusal) => return refusal,
+    };
+    let net = crate::app::BoardNetMsg::SelectRequested(name);
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::Net(net)));
+    (CommandOutcome::Ran, task)
+}
+
+/// `highlight_board_net net=..` (#2403): what the Net Inspector row's
+/// Highlight sends.
+fn highlight_board_net(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = match named_board_net(app, args) {
+        Ok(name) => name,
+        Err(refusal) => return refusal,
+    };
+    let net = crate::app::BoardNetMsg::HighlightRequested(name);
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::Net(net)));
     (CommandOutcome::Ran, task)
 }
 
@@ -132,6 +311,119 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        // #2394: a person picks these on the layer strip under the board.
+        "show_layer_set" | "save_layer_set" => Some(
+            "this command needs the operands `name` and `document` — \
+             use the layer set button under the board",
+        ),
+        "delete_layer_set" => Some(
+            "`delete_layer_set` needs the operand `name` — \
+             use Manage sets on the layer set button under the board",
+        ),
+        "hide_layer" | "highlight_layer" => Some(
+            "this command needs the operands `layer` and `document` — \
+             right-click a layer tab under the board",
+        ),
+        "hide_layer_group" | "show_layer_group" => Some(
+            "this command needs the operands `group` and `document` — \
+             right-click a layer tab under the board",
+        ),
+        "set_layer_tab_names" => Some(
+            "`set_layer_tab_names` needs the operand `style` — \
+             right-click a layer tab under the board",
+        ),
+        // #2410: a person edits the panel in the board's Properties.
+        "set_board_panel" => Some(
+            "`set_board_panel` needs the operands `document`, `field` and `value` — \
+             use the Panel section of the board's Properties",
+        ),
+        "set_selection_filters" => Some(
+            "`set_selection_filters` needs the operand `kinds` — \
+             use the SCH Filter panel or the Active Bar's filter",
+        ),
+        "apply_selection_filter_preset" => Some(
+            "`apply_selection_filter_preset` needs the operand `name` — \
+             click the preset in the SCH Filter panel",
+        ),
+        "set_object_position" => Some(
+            "`set_object_position` needs the operands `id` and `at` — \
+             use the Position row in Properties",
+        ),
+        "set_object_rotation" => Some(
+            "`set_object_rotation` needs the operands `id` and `rotation` — \
+             use the Rotation row in Properties",
+        ),
+        "set_sheet_symbol_size" => Some(
+            "`set_sheet_symbol_size` needs the operands `id` and `size` — \
+             use the Size row in Properties",
+        ),
+        "set_symbol_parameter" => Some(
+            "`set_symbol_parameter` needs the operands `id` and `name` — \
+             use the Parameters rows in Properties",
+        ),
+        // #2424: a person draws with the Graphics tools and edits in
+        // Properties.
+        "add_board_graphic" => Some(
+            "`add_board_graphic` needs the operands `document` and `kind` — \
+             use Place ▸ Graphics on a board",
+        ),
+        "set_board_graphic" => Some(
+            "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
+             select the drawing and use Properties",
+        ),
+        "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
+        | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(
+            "the `rules_*` edits need their operands — \
+             use the Rules tab (Design ▸ Rules)",
+        ),
+        "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
+            "this command needs the operands `document` and `id` — \
+             use the rows of the DRC Results panel",
+        ),
+        "filter_drc_results" => Some(
+            "`filter_drc_results` needs the operand `document` — \
+             use the filters of the DRC Results panel",
+        ),
+        "add_net_class"
+        | "rename_net_class"
+        | "delete_net_class"
+        | "set_net_class_rules"
+        | "assign_board_net_class" => Some(
+            "this command needs its operands, `document` first — \
+             use the board's Net Classes panel",
+        ),
+        "set_layer_stack" => Some(
+            "`set_layer_stack` needs the operands `document` and `stack` — \
+             use the Layer Stack manager",
+        ),
+        "set_via_span" => Some(
+            "`set_via_span` needs the operands `document`, `ids` and `layers` — \
+             use the From and To rows of the Via panel in Properties",
+        ),
+        "set_layer_sizes" => Some(
+            "`set_layer_sizes` needs the operands `document`, `ids` and `sizes` — \
+             use the stack rows of the Via or Pad panel in Properties",
+        ),
+        "edit_blanket" => Some(
+            "`edit_blanket` needs the operand `id` and the values to set — \
+             select the Blanket to read them in Properties",
+        ),
+        // #2410: a person picks the block on a component's board menu.
+        "place_board_reuse_block" => Some(
+            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+             right-click a component on the board and pick the block",
+        ),
+        "project_move_sheet"
+        | "project_add_variant"
+        | "project_rename_variant"
+        | "project_remove_variant"
+        | "project_set_active_variant"
+        | "project_move_library"
+        | "project_set_annotate_undo"
+        | "project_set_version_control" => Some(
+            "the `project_*` edits need their operands — \
+             use the Project tab (Project ▸ Project Options...)",
         ),
         _ => None,
     }

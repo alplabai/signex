@@ -480,11 +480,18 @@ fn place_on_a_board_lists_the_boards_tools() {
             "Pad",
             "Via",
             "Interactive Routing",
+            // #2389: the routing tools that follow it.
+            "Differential Pair Routing",
+            "Quick Route",
+            "Multi-Route",
             "Track",
             "Arc",
             "Fill",
             "Solid Region",
             "Polygon Pour",
+            // #2216
+            "Pour Cutout",
+            "Slice Pour",
             "String",
             "Dimension",
             "Keepout",
@@ -492,7 +499,7 @@ fn place_on_a_board_lists_the_boards_tools() {
         ]
     );
     let tools = crate::app::pcb_tools::BoardPlaceTool::PLACE_MENU;
-    for (row, tool) in rows[..12].iter().zip(tools) {
+    for (row, tool) in rows[..tools.len()].iter().zip(tools) {
         if let Some(command) = tool.command() {
             // #2373: a live tool runs the command its Active Bar button runs.
             assert!(row.is_enabled(), "{} is live", row.label);
@@ -523,6 +530,24 @@ fn place_on_a_board_lists_the_boards_tools() {
     ));
     let _ = click(&mut app, "Place/Board Sketch");
     assert!(app.board_sketch_in_view().is_some(), "sketch mode is on");
+}
+
+/// #2424: each row of Place ▸ Graphics on a board arms its Graphics tool.
+#[test]
+fn place_graphics_on_a_board_arms_each_graphics_tool() {
+    use crate::app::pcb_tools::BoardPlaceTool as T;
+    for (row, tool) in [
+        ("Place/Graphics/Line", T::Line),
+        ("Place/Graphics/Arc", T::GraphicArc),
+        ("Place/Graphics/Full Circle", T::FullCircle),
+        ("Place/Graphics/Rectangle", T::Rectangle),
+        ("Place/Graphics/Text Frame", T::TextFrame),
+    ] {
+        let mut app = loaded_board_app();
+        let _ = click(&mut app, row);
+        let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
+        assert_eq!(armed, Some(tool), "{row}");
+    }
 }
 
 /// #2360: a sheet keeps its Place menu.

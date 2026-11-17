@@ -3,7 +3,7 @@
 /// How a click selects/drags a pin in the symbol editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PinSelectionMode {
-    /// Altium parity — only the pin body/tip is grabbable.
+    /// Default: only the pin body/tip is grabbable.
     #[default]
     PinOnly,
     /// The pin is also grabbable by its name or number label, and a

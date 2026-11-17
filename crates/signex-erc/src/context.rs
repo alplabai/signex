@@ -321,6 +321,9 @@ pub struct ErcContext {
     pub junctions: Vec<ErcJunction>,
     pub no_connects: Vec<ErcNoConnect>,
     pub no_erc_directives: Vec<ErcNoErcDirective>,
+    /// The sheet's Blankets and Compile Masks (#2420): a finding inside a
+    /// mask, or inside a Blanket that excludes its rule, is dropped.
+    pub directives: Vec<signex_types::schematic::SchDirective>,
     pub bus_entries: Vec<ErcBusEntry>,
     pub child_sheets: Vec<ErcChildSheet>,
     /// Logical net summaries for the DSL, projected off the shared
@@ -373,6 +376,9 @@ impl ErcContext {
         snapshot: &SchematicSheet,
         children: HashMap<String, Arc<ErcContext>>,
     ) -> Self {
+        // A Compile Mask takes what it covers out of ERC (#2420).
+        let compiled = signex_net::compile_masked(snapshot);
+        let snapshot: &SchematicSheet = &compiled;
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -538,6 +544,12 @@ impl ErcContext {
             junctions,
             no_connects,
             no_erc_directives,
+            directives: snapshot
+                .directives
+                .iter()
+                .filter(|d| d.region().is_some())
+                .cloned()
+                .collect(),
             bus_entries,
             child_sheets,
             nets,

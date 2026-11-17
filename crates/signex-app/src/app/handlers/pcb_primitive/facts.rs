@@ -10,14 +10,16 @@ use signex_i18n::{I18n, ids, t};
 use signex_types::format::parse_pcb_layer;
 use signex_types::net_class::first_matching_class;
 use signex_types::pcb::{Pad, PadShape, PadType, PcbBoard, Segment, Via, ViaType};
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::Signex;
 use crate::panels::pcb_primitive_properties::{
-    Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
+    Editability, LayerChoice, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
 };
 use crate::pcb_canvas::layer_style;
+
+use super::stack_facts;
 
 impl Signex {
     /// The Properties panel's facts of the tracks, vias or pads selected on
@@ -55,7 +57,8 @@ impl Signex {
                         _ => None,
                     })
                     .collect();
-                let common = self.primitive_common(board, target, Editability::Editable)?;
+                let lock = item_lock(tracks.iter().any(|s| s.locked));
+                let common = self.primitive_common(board, target, lock)?;
                 PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
             }
             ItemRef::Via(_) => {
@@ -67,7 +70,8 @@ impl Signex {
                         _ => None,
                     })
                     .collect();
-                let common = self.primitive_common(board, target, Editability::Editable)?;
+                let lock = item_lock(vias.iter().any(|v| v.locked));
+                let common = self.primitive_common(board, target, lock)?;
                 PcbPrimitiveFacts::Via(via_facts(board, common, &vias, i18n))
             }
             ItemRef::Pad { .. } => {
@@ -92,26 +96,85 @@ impl Signex {
                     Editability::Editable
                 };
                 let common = self.primitive_common(board, target, locked)?;
-                PcbPrimitiveFacts::Pad(pad_facts(common, &pads, i18n))
+                let copper = signex_renderer::pcb::board_copper_layers(&board.layers);
+                PcbPrimitiveFacts::Pad(pad_facts(
+                    board.options.origin,
+                    common,
+                    &pads,
+                    &copper,
+                    i18n,
+                ))
+            }
+            ItemRef::Zone { .. } => {
+                let zones: Vec<&signex_types::pcb::Zone> = target
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        ItemRef::Zone { zone, .. } => board.zones.iter().find(|z| z.uuid == *zone),
+                        _ => None,
+                    })
+                    .collect();
+                if zones.len() != target.items.len() {
+                    return None;
+                }
+                let net = shared(zones.iter().map(|z| z.net));
+                let fills = self.current_pour_fills(&target.board);
+                let common = self.primitive_common_on(board, target, Editability::Editable, net);
+                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, fills, i18n))
+            }
+            ItemRef::Text(_) | ItemRef::Arc(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_) => {
+                return self.free_primitive_facts(board, target);
+            }
+            ItemRef::Graphic { .. } => {
+                let graphics: Vec<&signex_types::pcb::BoardGraphic> = target
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        ItemRef::Graphic { graphic, .. } => {
+                            board.graphics.iter().find(|g| g.uuid == *graphic)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if graphics.len() != target.items.len() {
+                    return None;
+                }
+                // A drawing has no net: Net Information stays empty.
+                let common = self.primitive_common_on(board, target, Editability::Editable, None);
+                PcbPrimitiveFacts::Graphic(super::graphic::graphic_facts(
+                    board, common, &graphics, i18n,
+                ))
             }
             ItemRef::Footprint(_) => return None,
         })
     }
 
     /// The facts every kind shares. `None` when a selected item is gone.
-    fn primitive_common(
+    pub(super) fn primitive_common(
         &self,
         board: &PcbBoard,
         target: PrimitiveTarget,
         editability: Editability,
     ) -> Option<PrimitiveCommon> {
-        let i18n = &*self.ui_state.i18n;
         let nets: Option<Vec<u32>> = target
             .items
             .iter()
             .map(|i| item_on_board(board, *i).then(|| pcb_geom::item_net(board, *i).unwrap_or(0)))
             .collect();
         let shared_net = shared(nets?.into_iter());
+        Some(self.primitive_common_on(board, target, editability, shared_net))
+    }
+
+    /// The facts every kind shares, for items on `shared_net` (`None`: they
+    /// differ).
+    pub(super) fn primitive_common_on(
+        &self,
+        board: &PcbBoard,
+        target: PrimitiveTarget,
+        editability: Editability,
+        shared_net: Option<u32>,
+    ) -> PrimitiveCommon {
+        let i18n = &*self.ui_state.i18n;
         let name_of = |n: u32| {
             board
                 .nets
@@ -177,13 +240,14 @@ impl Signex {
         } else {
             editability
         };
-        Some(PrimitiveCommon {
+        PrimitiveCommon {
             drafts: if panel.draft_target.as_ref() == Some(&target) {
                 panel.drafts.clone()
             } else {
                 Default::default()
             },
             picking_net: panel.net_pick.as_ref() == Some(&target),
+            placement_paused: false,
             show_more: panel.show_more,
             search: panel.search.clone(),
             target,
@@ -191,7 +255,7 @@ impl Signex {
             net_info,
             nets,
             net,
-        })
+        }
     }
 
     /// The active project's net classes, the table the schematic uses.
@@ -211,16 +275,22 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
             .footprints
             .iter()
             .any(|f| f.uuid == footprint && f.pads.iter().any(|p| p.uuid == pad)),
-        ItemRef::Footprint(_) => false,
+        ItemRef::Text(id) => board.texts.iter().any(|t| t.uuid == id),
+        ItemRef::Arc(id) => board.free.arcs.iter().any(|a| a.uuid == id),
+        ItemRef::FreePad(id) => board.free.pads.iter().any(|p| p.uuid == id),
+        ItemRef::Dimension(id) => board.free.dimensions.iter().any(|d| d.uuid == id),
+        ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => false,
     }
 }
 
-fn track_facts(
+pub(super) fn track_facts(
     board: &PcbBoard,
     common: PrimitiveCommon,
     tracks: &[&Segment],
     i18n: &I18n,
 ) -> TrackFacts {
+    // Coordinates are shown from the board origin, Y up (#2384).
+    let origin = board.options.origin;
     let layers: Vec<LayerChoice> = signex_renderer::pcb::board_copper_layers(&board.layers)
         .into_iter()
         .map(|layer| LayerChoice {
@@ -236,24 +306,36 @@ fn track_facts(
             label: layer_style::copper_name(i18n, layer).into_string(),
         });
     TrackFacts {
-        location: track_location(tracks.iter().copied()).map(|p| (p.x, p.y)),
+        location: track_location(tracks.iter().copied()).map(|p| {
+            let shown = origin.to_user(p);
+            (shown.x, shown.y)
+        }),
         layer,
         layers,
         width: shared(tracks.iter().map(|s| s.width)),
         start: (
-            shared(tracks.iter().map(|s| s.start.x)),
-            shared(tracks.iter().map(|s| s.start.y)),
+            shared(tracks.iter().map(|s| origin.user_x(s.start.x))),
+            shared(tracks.iter().map(|s| origin.user_y(s.start.y))),
         ),
         end: (
-            shared(tracks.iter().map(|s| s.end.x)),
-            shared(tracks.iter().map(|s| s.end.y)),
+            shared(tracks.iter().map(|s| origin.user_x(s.end.x))),
+            shared(tracks.iter().map(|s| origin.user_y(s.end.y))),
         ),
         length_mm: pcb_geom::tracks_length_mm(tracks.iter().copied()),
+        locked: shared(tracks.iter().map(|s| s.locked)),
+        paste_mask: shared(tracks.iter().map(|s| s.attributes.paste_mask)),
+        solder_mask: shared(tracks.iter().map(|s| s.attributes.solder_mask)),
         common,
     }
 }
 
-fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I18n) -> ViaFacts {
+pub(super) fn via_facts(
+    board: &PcbBoard,
+    common: PrimitiveCommon,
+    vias: &[&Via],
+    i18n: &I18n,
+) -> ViaFacts {
+    let origin = board.options.origin;
     let stack = signex_renderer::pcb::board_copper_layers(&board.layers);
     let span = shared(
         vias.iter()
@@ -268,21 +350,54 @@ fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I1
         };
         Some(t!(i18n, id, "from" => from, "to" => to).into_string())
     });
+    let ends = shared(vias.iter().map(|v| pcb_geom::via_span(&stack, v)))
+        .flatten()
+        .map(|(from, to)| (stack.get(from - 1).copied(), stack.get(to - 1).copied()));
+    let choice = |layer: Option<CopperLayer>| layer.map(|l| stack_facts::layer_choice(i18n, l));
+    let mode = shared(
+        vias.iter()
+            .map(|v| stack_facts::mode_of(v.layer_sizes.as_ref())),
+    );
     ViaFacts {
-        x: shared(vias.iter().map(|v| v.position.x)),
-        y: shared(vias.iter().map(|v| v.position.y)),
+        x: shared(vias.iter().map(|v| origin.user_x(v.position.x))),
+        y: shared(vias.iter().map(|v| origin.user_y(v.position.y))),
         diameter: shared(vias.iter().map(|v| v.diameter)),
         hole: shared(vias.iter().map(|v| v.drill)),
         span,
+        span_ends: ends.map_or((None, None), |(a, b)| (choice(a), choice(b))),
+        layers: stack
+            .iter()
+            .map(|&l| stack_facts::layer_choice(i18n, l))
+            .collect(),
+        locked: shared(vias.iter().map(|v| v.locked)),
+        layer_sizes: stack_facts::via_size_rows(i18n, mode, &stack, vias),
+        mode,
+        top: MaskSideFacts {
+            expansion: shared(vias.iter().map(|v| v.attributes.top.expansion)),
+            tented: shared(vias.iter().map(|v| v.attributes.top.tented)),
+        },
+        bottom: MaskSideFacts {
+            expansion: shared(vias.iter().map(|v| v.attributes.bottom.expansion)),
+            tented: shared(vias.iter().map(|v| v.attributes.bottom.tented)),
+        },
+        from_hole_edge: shared(vias.iter().map(|v| v.attributes.from_hole_edge)),
         common,
     }
 }
 
-fn pad_facts(
+pub(super) fn pad_facts(
+    origin: signex_types::pcb_options::BoardOrigin,
     common: PrimitiveCommon,
     pads: &[(&signex_types::pcb::Footprint, &Pad)],
+    copper: &[CopperLayer],
     i18n: &I18n,
 ) -> PadFacts {
+    let only_pads: Vec<&Pad> = pads.iter().map(|(_, p)| *p).collect();
+    let mode = shared(
+        only_pads
+            .iter()
+            .map(|p| stack_facts::mode_of(p.layer_sizes.as_ref())),
+    );
     let centres: Vec<Option<signex_types::pcb::Point>> = pads
         .iter()
         .map(|(fp, pad)| pcb_geom::pad_world_center(fp, pad).ok().map(|p| p.to_mm()))
@@ -309,8 +424,8 @@ fn pad_facts(
     PadFacts {
         designator: shared(pads.iter().map(|(_, p)| p.number.clone())),
         layer,
-        x: shared(centres.iter().map(|c| c.map(|p| p.x))).flatten(),
-        y: shared(centres.iter().map(|c| c.map(|p| p.y))).flatten(),
+        x: shared(centres.iter().map(|c| c.map(|p| origin.user_x(p.x)))).flatten(),
+        y: shared(centres.iter().map(|c| c.map(|p| origin.user_y(p.y)))).flatten(),
         rotation: shared(pads.iter().map(|(fp, pad)| {
             pcb_geom::pad_world_rotation_deg(fp, pad)
                 .ok()
@@ -335,6 +450,8 @@ fn pad_facts(
         .into_iter()
         .map(shape_label)
         .collect(),
+        layer_sizes: stack_facts::pad_size_rows(i18n, mode, copper, &only_pads),
+        mode,
         common,
     }
 }
@@ -349,4 +466,14 @@ fn pad_layer(fp: &signex_types::pcb::Footprint, pad: &Pad) -> Option<PcbLayer> {
     pcb_geom::copper_layers(mask)
         .first()
         .map(|c| PcbLayer::Copper(*c))
+}
+
+/// A selection with a locked track or via takes no edit but its unlock
+/// (#2378).
+fn item_lock(any_locked: bool) -> Editability {
+    if any_locked {
+        Editability::ItemLocked
+    } else {
+        Editability::Editable
+    }
 }

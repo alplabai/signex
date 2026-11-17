@@ -1,7 +1,9 @@
 //! What the board backdrop draws from the board options (#2374): the
 //! sheet behind the board area, the extra snap grids over it and the
-//! enabled guides across the view. Pure draw helpers; the canvas holds a
-//! [`BoardMarks`] copied from the board when it changes.
+//! enabled guides across the view, where the origin marker sits (#2384), and
+//! the panel preview (#2410, `panel_preview`).
+//! Pure draw helpers; the canvas holds a [`BoardMarks`] copied from the board
+//! when it changes.
 
 use iced::widget::canvas::path::Builder;
 use iced::widget::canvas::{Frame, Stroke};
@@ -40,6 +42,10 @@ pub struct BoardMarks {
     /// The stored sheet box (min, max) in board mm; `None` when the sheet
     /// is the box around the board shape.
     pub sheet: Option<([f32; 2], [f32; 2])>,
+    /// The board origin (#2384), board mm.
+    pub origin: [f32; 2],
+    /// The panel round the board (#2410); `None` without one.
+    pub panel: Option<super::panel_preview::PanelPreview>,
 }
 
 impl BoardMarks {
@@ -74,10 +80,13 @@ impl BoardMarks {
                 [lo[0] + s.width as f32, lo[1] + s.height as f32],
             )
         });
+        let origin = options.origin.at;
         Self {
             guides,
             grids,
             sheet,
+            origin: [origin.x as f32, origin.y as f32],
+            panel: super::panel_preview::PanelPreview::of(board),
         }
     }
 }
@@ -232,5 +241,9 @@ mod tests {
         };
         let marks = BoardMarks::of(&board);
         assert_eq!(marks.sheet, Some(([-5.0, -5.0], [15.0, 5.0])));
+        assert_eq!(marks.origin, [0.0, 0.0], "a board saved without one");
+        board.options.origin =
+            signex_types::pcb_options::BoardOrigin::new(BoardPoint::new(2.0, 80.0));
+        assert_eq!(BoardMarks::of(&board).origin, [2.0, 80.0]);
     }
 }

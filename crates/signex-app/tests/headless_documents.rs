@@ -169,6 +169,7 @@ fn write_sheet(path: &Path, id: &str) {
 fn write_board(path: &Path, id: &str) {
     let mut board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: id.parse().expect("uuid"),
@@ -185,6 +186,7 @@ fn write_board(path: &Path, id: &str) {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     board.uuid = id.parse().expect("uuid");
     let text = signex_types::format::SnxPcb::new(board)

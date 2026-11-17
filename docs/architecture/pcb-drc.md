@@ -146,7 +146,7 @@ not touched and a shared core can come later.
 
 ```text
 program  := rule*
-rule     := "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
+rule     := "disabled"? "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
 pair     := "between" OBJECT "and" OBJECT
 when     := "when" cond ("and" cond)*
 cond     := SUBJECT ("==" | "matches") (STRING | WORD)
@@ -168,6 +168,7 @@ severity := "error" | "warning" | "info"
 | `net matches "USB_*"` | a net-name glob (`*`, `?`, as net classes) | 1 |
 | none of the above | every net | 0 |
 | `layer == outer` / `inner` / `TopCopper` | copper layers; a narrowing condition | (adds 1) |
+| `class == "HV" and other_class == "LV"` | a clearance between a net of each class, either order, both sides (#2398, a class matrix cell); clearance rules only | 2 (adds 1) |
 
 A rule takes at most one net, class or pattern condition and one layer
 condition. Words the grammar keeps open on purpose: a region scope (v2) is one
@@ -325,10 +326,13 @@ moved after it.
 ## Zones
 
 `Unconnected` is the ratsnest, so it joins copper through zones the way the
-ratsnest does (#2215): a pad island joined only through a same-net pour is not
-reported open. The pour itself is not checked: a zone's clearance to other
-nets (#2216) and its fill are not modelled, so a zone is never a `Clearance`
-or `Short` party.
+ratsnest does (#2215): a pad island joined only through a same-net zone is not
+reported open. A polygon pour joins through its computed fill (#2216), so a
+pad in a pour's hole or inside its clearance from another net is reported
+open. The zones themselves are not checked: a zone is never a `Clearance` or
+`Short` party. A pour's fill keeps its clearance from pads, tracks, vias and
+solid zones by construction, but not from another pour; a solid zone's
+clearance to other nets is not checked yet.
 
 ## Keepouts
 

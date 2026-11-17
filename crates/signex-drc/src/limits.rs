@@ -4,6 +4,7 @@
 //! nothing here.
 
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_stack::board_copper_layers;
 
 use pcb_geom::{ItemRef, PointNm, layer_mask, mm_to_nm, via_layers};
 
@@ -42,9 +43,34 @@ fn track_widths(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) 
             object.check(rules, kind, width, found);
         }
     }
+    // A copper arc is a track of its net (#2373), checked at its middle.
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| pcb_geom::arc_is_copper(a))
+    {
+        let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+        let (Ok(width), Ok(at)) = (
+            mm_to_nm(arc.width, "arc width"),
+            PointNm::from_mm(arc.mid, "arc middle"),
+        ) else {
+            continue;
+        };
+        let object = Object {
+            item: ItemRef::Arc(arc.uuid),
+            net: arc.net,
+            layers,
+            at,
+        };
+        for kind in [LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth] {
+            object.check(rules, kind, width, found);
+        }
+    }
 }
 
 fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
+    let copper = board_copper_layers(&board.layers);
     for via in &board.vias {
         let Ok(at) = PointNm::from_mm(via.position, "via position") else {
             continue;
@@ -56,7 +82,12 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
             at,
         };
         let sizes = [
-            (LimitKind::MinViaDiameter, via.diameter, "via diameter"),
+            // Its smallest copper ring on a layer it passes (#2401).
+            (
+                LimitKind::MinViaDiameter,
+                via.min_diameter(&copper),
+                "via diameter",
+            ),
             (LimitKind::MinViaDrill, via.drill, "via drill"),
         ];
         for (kind, mm, field) in sizes {

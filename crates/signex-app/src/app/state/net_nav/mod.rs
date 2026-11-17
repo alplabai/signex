@@ -25,8 +25,13 @@ pub use reported::ReportedWarnings;
 pub enum PendingNetAction {
     JumpToPartner,
     HighlightUnderCursor,
+    /// Highlight the net at the point the request named, parked as
+    /// `Pending::cursor` (a context menu's opening point, #2419).
+    HighlightAtPoint,
     HighlightRelated,
-    StepHighlight { forward: bool },
+    StepHighlight {
+        forward: bool,
+    },
     HoverDwell,
 }
 

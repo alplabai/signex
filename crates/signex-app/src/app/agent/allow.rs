@@ -1,7 +1,8 @@
 //! Which commands the agent channel accepts (#1924), derived from the command
 //! catalog: the #2172 queries, and a command that names its document with the
 //! `document` operand and no file path (`apply_edits` and `revert` are two of
-//! them). Everything else is refused with the reason. See
+//! them), plus the window-layout commands (#2249). Everything else is refused
+//! with the reason. See
 //! `docs/AGENT_SOCKET.md`, "Allowlist".
 
 use crate::app::command::queries::is_query;
@@ -11,6 +12,20 @@ use crate::keymap::{AppCommandId, CatalogTextExt, OperandKind, metadata_for};
 /// stack is theirs, and an agent takes back its own step with `revert`.
 /// `consistency` in the tests keeps this list to ids the catalog has.
 pub(super) const PERSON_ONLY: &[&str] = &["undo", "redo"];
+
+/// The window-layout commands (#2249): they name no document and act on the
+/// main window's layout, open to agents by the maintainer's rule that
+/// everything is AI-controllable. Each answers with the layout it left.
+pub(super) const WINDOW_LAYOUT: &[&str] = &[
+    "tile_windows_horizontally",
+    "tile_windows_vertically",
+    "untile_documents",
+];
+
+/// Is `command` one of [`WINDOW_LAYOUT`]?
+pub(super) fn is_window_layout(command: &AppCommandId) -> bool {
+    WINDOW_LAYOUT.contains(&command.as_str())
+}
 
 /// Why `command` is not on the agent channel, or `None` when it is.
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
@@ -23,7 +38,7 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
             "`{id}` is the person's own; an agent takes back its step with `revert`"
         ));
     }
-    if is_query(command) {
+    if is_query(command) || is_window_layout(command) {
         return None;
     }
     if let Some(reason) = meta.headless_refusal() {
@@ -71,21 +86,105 @@ mod tests {
         assert_eq!(
             allowed(),
             [
+                // #2424: a drawing added to, or a field of one set on, the
+                // named board.
+                "add_board_graphic",
+                "add_net_class",
+                "add_teardrops",
                 "apply_edits",
+                "arrange_in_box",
+                "assign_board_net_class",
                 "assign_net_class",
+                "autoplace_fields",
+                "board_panel",
+                "board_report_bom",
+                "board_report_components",
+                "board_report_net_length",
+                "board_report_netlist",
+                "board_shape_from_selection",
                 "check_drc",
                 "check_erc",
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                "delete_net_class",
                 "document_info",
+                "filter_drc_results",
                 "find_items",
+                "find_similar_items",
+                "gloss_selected_routes",
+                // #2394: the board view's layers, on the named board.
+                "hide_layer",
+                "hide_layer_group",
+                "highlight_layer",
+                "keepout_from_selection",
                 "list_documents",
+                "lock_board_items",
+                "measure_board",
+                "panelize_board",
+                // #2410: pin and gate swap and design reuse, on the named board.
+                "place_board_reuse_block",
+                "project_add_variant",
+                "project_move_library",
+                "project_move_sheet",
+                "project_remove_variant",
+                "project_rename_variant",
+                "project_set_active_variant",
+                "project_set_annotate_undo",
+                "project_set_version_control",
+                "project_settings",
+                "query_board_nets",
                 "query_pins",
                 "read_document",
+                "remove_board_panel",
+                "remove_teardrops",
+                "rename_net_class",
+                // #2216: each pour's fill of the named board, as JSON.
+                "repour_all",
                 "resolve",
                 "revert",
+                "rules_add",
+                "rules_conflicts",
+                "rules_effective",
+                "rules_enable",
+                "rules_explain",
+                "rules_get",
+                "rules_list",
+                "rules_matrix_get",
+                "rules_matrix_set",
+                "rules_preset_apply",
+                "rules_preset_diff",
+                "rules_remove",
+                "rules_set",
+                "rules_set_apply",
+                "rules_set_create",
+                "rules_set_edit",
+                "save_board_reuse_block",
                 "save_document",
+                "save_layer_set",
+                "set_board_graphic",
+                "set_board_panel",
+                "set_layer_sizes",
+                "set_layer_stack",
+                "set_net_class_rules",
+                "set_via_span",
+                "show_drc_violation",
+                "show_layer_group",
+                "show_layer_set",
+                "stitch_vias",
+                "swap_gates",
+                "swap_pins",
+                // #2249: the window layout, by the maintainer's rule that
+                // everything is AI-controllable.
+                "tile_windows_horizontally",
+                "tile_windows_vertically",
+                // #2389: length tuning on the named board.
+                "tune_diff_pair",
+                "tune_net_length",
+                "unlock_board_items",
+                "untile_documents",
+                "unwaive_drc_violation",
+                "waive_drc_violation",
             ]
         );
     }

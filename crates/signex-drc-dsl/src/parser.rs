@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! program  := rule*
-//! rule     := "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
+//! rule     := "disabled"? "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
 //! pair     := "between" OBJECT "and" OBJECT
 //! when     := "when" cond ("and" cond)*
 //! cond     := SUBJECT ("==" | "matches") (STRING | WORD)
@@ -129,23 +129,30 @@ fn rule<'src>() -> impl Parser<'src, &'src str, RuleAst, Extra<'src>> {
         kw("warning").to(SeverityAst::Warning),
         kw("info").to(SeverityAst::Info),
     ));
-    kw("rule")
-        .ignore_then(word())
+    kw("disabled")
+        .or_not()
+        .map(|word| word.is_some())
+        .then_ignore(kw("rule"))
+        .then(word())
         .then(kw("on").ignore_then(word()))
         .then(pair.or_not())
         .then(when.or_not())
         .then(require)
         .then(kw("then").ignore_then(severity))
         .then(string().or_not())
-        .map(
-            |((((((name, target), pair), when), require), severity), message)| RuleAst {
-                name,
-                target,
-                pair,
-                when: when.unwrap_or_default(),
-                require,
-                severity,
-                message: message.map(|m| m.text),
+        .map_with(
+            |(((((((disabled, name), target), pair), when), require), severity), message), e| {
+                RuleAst {
+                    span: range(e.span()),
+                    disabled,
+                    name,
+                    target,
+                    pair,
+                    when: when.unwrap_or_default(),
+                    require,
+                    severity,
+                    message: message.map(|m| m.text),
+                }
             },
         )
 }

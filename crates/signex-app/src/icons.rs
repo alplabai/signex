@@ -177,6 +177,12 @@ bar_icon!(
     "active_bar/graphite/power_rail.svg"
 );
 bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
+// Fabrication Outputs (#2388): board layers going out; Graphite glyph only.
+bar_icon!(
+    icon_fab_outputs,
+    "active_bar/graphite/fab_outputs.svg",
+    "active_bar/graphite/fab_outputs.svg"
+);
 // The board view's quarter turn (#2316); Graphite has the only glyph.
 bar_icon!(
     icon_view_rotate,
@@ -313,6 +319,22 @@ canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
 
+// ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
+//
+// Same drawing rules as the dropdown set: 24×24, 2.5 stroke, the accent
+// sentinel on the copper and the neutral grey on drill holes and guides.
+
+canonical_icon!(icon_pcb_dimension, "pcb/dimension.svg");
+canonical_icon!(icon_pcb_keepout, "pcb/keepout.svg");
+canonical_icon!(icon_pcb_pad, "pcb/pad.svg");
+canonical_icon!(icon_pcb_via, "pcb/via.svg");
+// #2389: the routing and tuning rows of the PCB Active Bar.
+canonical_icon!(icon_pcb_diff_pair_route, "pcb/diff_pair_route.svg");
+canonical_icon!(icon_pcb_quick_route, "pcb/quick_route.svg");
+canonical_icon!(icon_pcb_multi_route, "pcb/multi_route.svg");
+canonical_icon!(icon_pcb_length_tune, "pcb/length_tune.svg");
+canonical_icon!(icon_pcb_diff_pair_tune, "pcb/diff_pair_tune.svg");
+
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
 // Fusion 360-style icon set: the geometry draws in the neutral
@@ -399,6 +421,35 @@ mod tests {
             tinted_handle("justify/tr.svg", BYTES, theme),
             build_tinted_handle(BYTES, theme)
         );
+    }
+
+    /// #2392: the board tool glyphs follow the dropdown set's rules (24×24,
+    /// 2.5 stroke, copper in the accent sentinel, so they tint per theme)
+    /// and are distinct drawings; #2389's routing and tuning glyphs too.
+    #[test]
+    fn board_tool_glyphs_follow_the_dropdown_rules() {
+        let glyphs: [&str; 9] = [
+            include_str!("../assets/icons/pcb/dimension.svg"),
+            include_str!("../assets/icons/pcb/keepout.svg"),
+            include_str!("../assets/icons/pcb/pad.svg"),
+            include_str!("../assets/icons/pcb/via.svg"),
+            include_str!("../assets/icons/pcb/diff_pair_route.svg"),
+            include_str!("../assets/icons/pcb/quick_route.svg"),
+            include_str!("../assets/icons/pcb/multi_route.svg"),
+            include_str!("../assets/icons/pcb/length_tune.svg"),
+            include_str!("../assets/icons/pcb/diff_pair_tune.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 24 24""#), "{svg}");
+            assert!(svg.contains(r#"stroke-width="2.5""#), "{svg}");
+            assert!(svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
+        let theme = ThemeId::GraphiteDark;
+        assert_ne!(icon_pcb_via(theme), icon_pcb_pad(theme));
     }
 
     /// Two paths with identical bytes (merged by the compiler) still get

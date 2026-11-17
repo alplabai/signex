@@ -235,3 +235,27 @@ fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
         &["Later", "Create"],
     );
 }
+
+/// #2262: the Proposed Change List heading counts the rows that change, of
+/// the rows listed, as the mock does.
+#[test]
+fn the_change_list_heading_counts_the_designators_that_change() {
+    use crate::app::handlers::erc::AnnotatePreviewEntry;
+    let mut app = app_at_small_window();
+    let entry = |current: &str, proposed: &str| AnnotatePreviewEntry {
+        sheet: "Power".into(),
+        current: current.into(),
+        proposed: proposed.into(),
+        uuid: uuid::Uuid::now_v7(),
+    };
+    app.ui_state.annotate_preview.entries =
+        vec![entry("C5", "C5"), entry("C?", "C9"), entry("R?", "R6")];
+    let texts: Vec<String> = lay_out_texts(app.view_annotate_dialog(), SMALL_WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    assert!(
+        texts.iter().any(|t| t == "2 of 3 designators will change"),
+        "{texts:#?}"
+    );
+}

@@ -1,7 +1,7 @@
 //! Selection commands: the select tools, select and unselect all, the
 //! selection modes, connection selection and cross-probing.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const SELECTION: &[CommandMetadata] = &[
@@ -106,8 +106,7 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // #1312: shows the selection's counterpart on the other side (sheet or
-    // board), opening it when needed. No default key in any preset.
+    // #1312: the selection's counterpart on the other side; keys since #2416.
     CommandMetadata {
         id: "cross_probe",
         category: "select",
@@ -125,6 +124,42 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_TOGGLE_CROSS_SELECT_MODE),
         group: CommandGroup::General,
         enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2417: the schematic Selection Filter (SCH Filter panel, Active Bar
+    // dropdown) from its operands; window state, so no document.
+    CommandMetadata {
+        id: "set_selection_filters",
+        category: "select",
+        label: command_ids::CMD_SET_SELECTION_FILTERS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::SELECTION_FILTER_KINDS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_selection_filter_preset",
+        category: "select",
+        label: command_ids::CMD_APPLY_SELECTION_FILTER_PRESET,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::SELECTION_FILTER_PRESET,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2416: View ▸ Selection Filter opens the Active Bar's filter of the
+    // sheet. No default key.
+    CommandMetadata {
+        id: "open_selection_filter",
+        category: "select",
+        label: command_ids::CMD_OPEN_SELECTION_FILTER,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_SELECTION_FILTER),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

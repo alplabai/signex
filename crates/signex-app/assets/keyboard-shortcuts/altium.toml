@@ -19,6 +19,14 @@ profile_name = "Altium"
 profile_kind = "built_in"
 description = "Altium-style keyboard shortcut defaults for Signex."
 
+# On a board `Q` toggles the unit (#2406). It loads first so the global
+# `Ctrl+Q` below stays the command's menu hint.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"Q" = "cycle_unit"
+
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -163,10 +171,42 @@ context = "global"
 "Shift+F3" = "find_previous"
 "Shift+G" = "cycle_snap_grid_backward"
 
+# #2416: Cross Probe and the Net Inspector, on a sheet or a board.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"T C" = "cross_probe"
+"V N" = "open_net_inspector"
+
+# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"W H" = "tile_windows_horizontally"
+"W U" = "untile_documents"
+"W V" = "tile_windows_vertically"
+
+# #2416: the sheet's placement tools with no key before (sheet tabs only).
+[[keyboard_shortcuts.sections]]
+context = "schematic"
+
+[keyboard_shortcuts.sections.bindings]
+"P C" = "place_off_sheet_connector"
+"P R" = "place_port"
+"P S" = "place_sheet_symbol"
+"P U" = "place_bus_entry"
+"P X" = "place_no_connect"
+
 # The board view (PCB tabs only): `+` steps to the next layer of the board,
 # `*` to the next signal layer,
-# `-` to the previous layer; Shift+S turns single-layer mode on or off. A
-# shifted `+` or `*` is its own stroke on a US layout.
+# `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
+# shows the board in 3D or flat again. A
+# shifted `+` or `*` is its own stroke on a US layout. #2406: `1` enters or
+# leaves the board sketch, `L` flips the selection or the part on the cursor
+# to the other side, `N` shows or hides the ratsnest, `F` changes the
+# footprint, `P K` draws a keepout and `T D` runs the design rule check.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -176,11 +216,19 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"1" = "board_sketch"
+"3" = "view_board_3d"
+"F" = "change_footprint"
+"L" = "flip_selection"
+"N" = "toggle_ratsnest"
 "P F" = "place_board_fill"
+"P G" = "place_board_polygon_pour"
+"P K" = "place_board_keepout"
 "P R" = "place_board_region"
 "P T" = "place_board_track"
 "P V" = "place_board_via"
 "Shift+S" = "toggle_single_layer_mode"
+"T D" = "run_drc"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

@@ -13,6 +13,7 @@ use signex_types::schematic::{
 use super::{Engine, autoplace_fields, normalize_degrees};
 use crate::command::{MirrorAxis, SelectionTransform};
 use crate::error::EngineError;
+use crate::placement::drawing_points;
 
 impl SelectionTransform {
     fn is_mirror(self) -> bool {
@@ -120,16 +121,13 @@ fn supported(kind: SelectedKind) -> bool {
     !matches!(kind, SelectedKind::ChildSheet | SelectedKind::SheetPin)
 }
 
-fn drawing_points(d: &SchDrawing) -> Vec<Point> {
+fn directive_points(d: &signex_types::schematic::SchDirective) -> Vec<Point> {
+    use signex_types::schematic::SchDirective;
     match d {
-        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
+        SchDirective::Blanket { start, end, .. } | SchDirective::CompileMask { start, end, .. } => {
             vec![*start, *end]
         }
-        SchDrawing::Circle { center, .. } => vec![*center],
-        SchDrawing::Arc {
-            start, mid, end, ..
-        } => vec![*start, *mid, *end],
-        SchDrawing::Polyline { points, .. } => points.clone(),
+        SchDirective::DiffPair { position, .. } => vec![*position],
     }
 }
 
@@ -230,6 +228,12 @@ impl Engine {
                 .iter()
                 .filter(|d| d.uuid() == id)
                 .flat_map(drawing_points)
+                .collect(),
+            SelectedKind::Directive => doc
+                .directives
+                .iter()
+                .filter(|d| d.uuid() == id)
+                .flat_map(directive_points)
                 .collect(),
             _ => Vec::new(),
         }
@@ -394,6 +398,13 @@ impl Engine {
                 }
                 SchDrawing::Polyline { points, .. } => points.iter_mut().for_each(at),
             }
+        }
+        for d in doc
+            .directives
+            .iter_mut()
+            .filter(|d| has(SelectedKind::Directive, d.uuid()))
+        {
+            d.map_points(|p| transform.point(centre, p));
         }
 
         self.autoplace_symbol_fields(&present_symbol_ids(items));

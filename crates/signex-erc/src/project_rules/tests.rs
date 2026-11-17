@@ -58,3 +58,28 @@ fn pin_matrix_key_matches_the_parser() {
     assert_eq!(pin_matrix_key(6, 0), None);
     assert_eq!(parse_pin_matrix_key("output/power_out"), Some((1, 4)));
 }
+
+/// #1692: every built-in rule is counted once, at its override or default.
+#[test]
+fn severity_counts_cover_every_rule_once() {
+    let none = severity_counts(&HashMap::new());
+    let total: usize = none.iter().map(|(_, n)| n).sum();
+    assert_eq!(total, RuleKind::ALL.len());
+    let mut overrides = HashMap::new();
+    for rule in RuleKind::ALL {
+        overrides.insert(rule, Severity::Off);
+    }
+    let off = severity_counts(&overrides);
+    assert_eq!(off[3], (Severity::Off, RuleKind::ALL.len()));
+    assert_eq!(off[0], (Severity::Error, 0));
+}
+
+/// #1692: an on/off-only rule set to another "on" level counts at its
+/// default, as the ERC run applies it.
+#[test]
+fn severity_counts_normalize_an_on_off_only_rule() {
+    let base = severity_counts(&HashMap::new());
+    let mut overrides = HashMap::new();
+    overrides.insert(RuleKind::PinTypeConflict, Severity::Info);
+    assert_eq!(severity_counts(&overrides), base);
+}

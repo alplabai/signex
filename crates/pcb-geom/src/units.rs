@@ -46,7 +46,7 @@ pub fn mm_to_nm(mm: f64, field: &'static str) -> Result<i64, GeomError> {
 
 /// `nm` as `f64` mm, with the same arithmetic the file loader uses.
 pub fn nm_to_mm(nm: i64) -> f64 {
-    (nm as f64) * 1.0e-6
+    (nm as f64) / 1.0e6
 }
 
 /// A board point in integer nanometres.

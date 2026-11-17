@@ -12,9 +12,10 @@
 use super::*;
 
 use super::items::{
-    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned, tag_command,
-    text,
+    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned, dd_ruled,
+    tag_command, text,
 };
+use super::menus::CanvasSelection;
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
 use signex_i18n::{I18n, MessageId, menu_ids};
@@ -117,6 +118,7 @@ pub(super) fn place_entries(
         ab(ic::icon_dd_no_erc(tid), None, A::PlaceNoERC),
         ab(ic::icon_dd_diff_pair(tid), None, A::PlaceDiffPair),
         ab(ic::icon_dd_blanket(tid), None, A::PlaceBlanket),
+        ab(ic::icon_dd_blanket(tid), None, A::PlaceCompileMask),
         DropdownEntry::Separator,
         // Harness
         ab(ic::icon_dd_harness(tid), None, A::PlaceSignalHarness),
@@ -144,6 +146,45 @@ pub(super) fn place_entries(
         ab(ic::icon_dd_text_frame(tid), None, A::PlaceTextFrame),
         ab(ic::icon_dd_note(tid), None, A::PlaceNote),
     ]
+}
+
+/// Place on a board (#2405): the board placement tools in the order of the
+/// menu bar's Place, each running its command and live when the command is
+/// enabled in `ctx` (greyed on a read-only board), or greyed with the reason
+/// the PCB Active Bar gives while the board editor cannot run it; then Board
+/// Sketch.
+pub(super) fn board_place_entries(
+    i18n: &I18n,
+    ctx: &crate::app::command::CommandContext,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+    let command = |id: &'static str| {
+        let live = crate::keymap::AppCommandId::new(id)
+            .is_ok_and(|command| crate::app::command::is_enabled(&command, ctx));
+        if live {
+            dd_command(i18n, None, id, &hint(id), None)
+        } else {
+            dd_cmd_disabled(i18n, None, id, &hint(id))
+        }
+    };
+    let mut v: Vec<DropdownEntry<Message>> = BoardPlaceTool::PLACE_MENU
+        .into_iter()
+        .map(|tool| match tool.state() {
+            ToolState::Live(id) => command(id),
+            ToolState::Unavailable(reason) => {
+                match dd_disabled(None, &text(i18n, tool.name()), None) {
+                    DropdownEntry::Item(item) => {
+                        DropdownEntry::Item(item.tooltip(text(i18n, reason)))
+                    }
+                    other => other,
+                }
+            }
+        })
+        .collect();
+    v.push(DropdownEntry::Separator);
+    v.push(command("board_sketch"));
+    v
 }
 
 /// Altium gating for the Align submenu: pairwise aligns
@@ -218,6 +259,60 @@ pub(super) fn arrange_entries(
     .into_iter()
     .map(|id| dd_command(i18n, None, id, &hint(id), None))
     .collect()
+}
+
+/// Part Actions submenu (#2419) — the placed part's library actions, then
+/// Autoplace Fields and Copy Attributes (#1667), live when one placed part is
+/// selected and the command's own rule allows it.
+pub(super) fn part_actions_entries(
+    i18n: &I18n,
+    selection: CanvasSelection,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |id: &'static str| {
+        dd_ruled(
+            i18n,
+            None,
+            id,
+            &hint(id),
+            &selection.commands,
+            selection.placed_part_selected,
+        )
+    };
+    vec![
+        row("open_datasheet"),
+        row("edit_selected_symbol_in_symbol_editor"),
+        row("change_component"),
+        DropdownEntry::Separator,
+        row("autoplace_fields"),
+        row("copy_attributes_or_add_vertex"),
+    ]
+}
+
+/// Sheet Actions submenu (#2419) — the selected sheet symbol's child-sheet
+/// actions (live with a sheet symbol selected), then the project's sheet
+/// numbering, each also gated by the command's own rule.
+pub(super) fn sheet_actions_entries(
+    i18n: &I18n,
+    tid: ThemeId,
+    selection: CanvasSelection,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |icon: Option<iced::widget::svg::Handle>, id: &'static str, applies: bool| {
+        dd_ruled(i18n, icon, id, &hint(id), &selection.commands, applies)
+    };
+    let child = selection.child_sheet_selected;
+    vec![
+        row(
+            Some(ic::icon_dd_open_child_sheet(tid)),
+            "open_child_sheet",
+            child,
+        ),
+        row(None, "create_sheet_from_sheet_symbol", child),
+        row(None, "sync_sheet_pins", child),
+        DropdownEntry::Separator,
+        row(None, "number_schematic_sheets", true),
+    ]
 }
 
 /// Add New to Project submenu — the master "Add New" picker for the
@@ -310,27 +405,36 @@ pub(super) fn add_new_entries(
 }
 
 impl Signex {
-    /// Build the secondary submenu (Place / Align / Add New to Project)
-    /// shown to the right of the parent context menu. Resolves the
-    /// `selected` is the shown sheet's selection count; the target project is
-    /// resolved from `self`. The pure entry builders do the rest and the
-    /// shared widget renders it.
+    /// Build the secondary submenu (Place / Align / Arrange / Part Actions /
+    /// Sheet Actions / Add New to Project) shown to the right of the parent
+    /// context menu. The selection is the one of the sheet `window_id` shows
+    /// (#1910); the target project is resolved from `self`. The pure entry
+    /// builders do the rest and the shared widget renders it.
     pub(in crate::app::view) fn view_context_submenu(
         &self,
         kind: ContextSubmenu,
-        selected: usize,
+        window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
+        let hint = |id: &str| self.keymap_shortcut_label(id);
         let entries = match kind {
-            ContextSubmenu::Place => place_entries(&self.ui_state.i18n, tid, &|id| {
-                self.keymap_shortcut_label(id)
-            }),
-            ContextSubmenu::Align => align_entries(&self.ui_state.i18n, tid, selected, &|id| {
-                self.keymap_shortcut_label(id)
-            }),
-            ContextSubmenu::Arrange => {
-                arrange_entries(&self.ui_state.i18n, &|id| self.keymap_shortcut_label(id))
+            ContextSubmenu::Place => place_entries(i18n, tid, &hint),
+            ContextSubmenu::Align => {
+                let selected = self
+                    .interaction_state
+                    .canvas_for_window(window_id)
+                    .selected
+                    .len();
+                align_entries(i18n, tid, selected, &hint)
+            }
+            ContextSubmenu::Arrange => arrange_entries(i18n, &hint),
+            ContextSubmenu::PartActions => {
+                part_actions_entries(i18n, self.canvas_menu_inputs(window_id).0, &hint)
+            }
+            ContextSubmenu::SheetActions => {
+                sheet_actions_entries(i18n, tid, self.canvas_menu_inputs(window_id).0, &hint)
             }
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
@@ -342,10 +446,37 @@ impl Signex {
                     .as_ref()
                     .and_then(|m| m.key.clone())
                     .unwrap_or_default();
-                add_new_entries(&self.ui_state.i18n, tid, target)
+                add_new_entries(i18n, tid, target)
             }
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
             .element
+    }
+
+    /// The flyout of the board menu opened in `window_id` (#2405): Place
+    /// lists the board's tools; Align lines up the selected footprints, live
+    /// for an unlocked selection on an editable board.
+    pub(in crate::app::view) fn view_board_context_submenu(
+        &self,
+        kind: ContextSubmenu,
+        window_id: iced::window::Id,
+    ) -> Element<'_, Message> {
+        let i18n = &self.ui_state.i18n;
+        let tid = self.ui_state.effective_theme_id();
+        let context = self.command_context(Some(window_id));
+        let hint = |id: &str| self.keymap_shortcut_label(id);
+        let entries = match kind {
+            ContextSubmenu::Align => {
+                let footprints = if context.pcb.placeable {
+                    context.pcb.footprints
+                } else {
+                    0
+                };
+                align_entries(i18n, tid, footprints, &hint)
+            }
+            _ => board_place_entries(i18n, &context, &hint),
+        };
+        let panel_ctx = &self.document_state.panel_ctx;
+        super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 }

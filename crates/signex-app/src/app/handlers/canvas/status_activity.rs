@@ -39,6 +39,11 @@ impl Signex {
                 &self.ui_state.i18n,
             ));
         }
+        // A Library Browser or component editor tab names its library or
+        // part (#2262).
+        if let Some(text) = self.library_status(window_id) {
+            return Some(Activity::note(text));
+        }
         self.move_status(window_id)
             .or_else(|| self.measure_status(window_id))
             .or_else(|| self.corner_status())

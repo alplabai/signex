@@ -28,8 +28,7 @@ pub(super) const GRID: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_snap_grid_forward",
         category: "view",
-        // The key opens the snap-grid picker (Altium's G popup, footprint
-        // editor only); it does not step through sizes (#525).
+        // The key opens the snap-grid picker (footprint editor); no size steps (#525).
         label: command_ids::CMD_CYCLE_SNAP_GRID_FORWARD,
         menu_label: None,
         group: CommandGroup::General,

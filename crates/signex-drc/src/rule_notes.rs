@@ -38,6 +38,20 @@ pub(crate) fn empty_scopes(
             NetScope::Pattern(glob) => infos.push(format!(
                 "DRC rule '{name}': no net of this board matches '{glob}'; {nothing}"
             )),
+            NetScope::ClassPair(a, b) => {
+                let missing = [a, b]
+                    .into_iter()
+                    .find(|class| !classes.iter().any(|c| &c.name == *class));
+                match missing {
+                    Some(class) => warnings.push(format!(
+                        "DRC rule '{name}': there is no net class '{class}'; {nothing}"
+                    )),
+                    None => infos.push(format!(
+                        "DRC rule '{name}': net class '{a}' or '{b}' has no net on this \
+                         board; {nothing}"
+                    )),
+                }
+            }
             NetScope::Board => {}
         }
     }
@@ -53,6 +67,40 @@ pub(crate) fn lowered_classes(
     board: &PcbBoard,
     classes: &[NetClass],
 ) -> Vec<String> {
+    lowered(rules, board, classes)
+        .into_iter()
+        .map(|l| {
+            // Name what the rule lowers: the class value, or the board
+            // setup's when that is the larger.
+            let what = if l.setup_is_larger {
+                format!("the board setup clearance for net class '{}'", l.class)
+            } else {
+                format!("net class '{}' clearance", l.class)
+            };
+            format!(
+                "DRC rule '{}' lowers {what} {} \u{2192} {} mm",
+                l.rule,
+                mm(l.from_nm),
+                mm(l.to_nm)
+            )
+        })
+        .collect()
+}
+
+/// A written rule that asks less than a net class's nets would need
+/// without it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Lowered {
+    pub(crate) rule: String,
+    pub(crate) class: String,
+    pub(crate) from_nm: i64,
+    pub(crate) to_nm: i64,
+    /// The board setup clearance, not the class's, is what is lowered.
+    pub(crate) setup_is_larger: bool,
+}
+
+/// Each rule and class [`lowered_classes`] says, once, first found first.
+pub(crate) fn lowered(rules: &DrcRules, board: &PcbBoard, classes: &[NetClass]) -> Vec<Lowered> {
     if !rules.sets_written_clearance() {
         return Vec::new();
     }
@@ -66,8 +114,14 @@ pub(crate) fn lowered_classes(
     pairs.sort_unstable();
     pairs.dedup();
     let bits = layer_kinds(&rules.user, rules.copper);
+    // A class-pair rule (#2398) applies only with a net across: try one
+    // net of each kind the rules tell apart.
+    let mut partners: Vec<Option<u32>> = vec![None];
+    if rules.user.iter().any(ScopedRule::is_pair_scope) {
+        partners.extend(rules.net_representatives(board).into_iter().map(Some));
+    }
     let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
-    let mut lines = Vec::new();
+    let mut found = Vec::new();
     for net in &board.nets {
         if !rules.net_clearance.contains_key(&net.number) {
             continue;
@@ -76,12 +130,16 @@ pub(crate) fn lowered_classes(
             continue;
         };
         let without = rules.required(net.number, net.number);
-        for &bit in &bits {
+        let tries = bits
+            .iter()
+            .flat_map(|&bit| partners.iter().map(move |&other| (bit, other)));
+        for (bit, other) in tries {
             for &objects in &pairs {
-                let picked = user_rules::pick(
+                let picked = user_rules::pick_between(
                     &rules.user,
                     LimitKind::MinClearance,
                     net.number,
+                    other,
                     1 << bit,
                     objects,
                 );
@@ -90,23 +148,18 @@ pub(crate) fn lowered_classes(
                 };
                 let name = &scoped.rule.name;
                 if seen.insert((name.clone(), class.name.clone())) {
-                    // Name what the rule lowers: the class value, or the
-                    // board setup's when that is the larger.
-                    let what = if without > rules.net_clearance[&net.number] {
-                        format!("the board setup clearance for net class '{}'", class.name)
-                    } else {
-                        format!("net class '{}' clearance", class.name)
-                    };
-                    lines.push(format!(
-                        "DRC rule '{name}' lowers {what} {} \u{2192} {} mm",
-                        mm(without),
-                        mm(nm)
-                    ));
+                    found.push(Lowered {
+                        rule: name.clone(),
+                        class: class.name.clone(),
+                        from_nm: without,
+                        to_nm: nm,
+                        setup_is_larger: without > rules.net_clearance[&net.number],
+                    });
                 }
             }
         }
     }
-    lines
+    found
 }
 
 /// `nm` in mm without float noise or trailing zeros (`0.55`, `1`).

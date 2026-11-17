@@ -645,9 +645,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         &[
             "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -657,9 +657,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         &[
             "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -669,9 +669,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         &[
             "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -681,9 +681,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         &[
             "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (

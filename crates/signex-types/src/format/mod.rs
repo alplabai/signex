@@ -32,14 +32,18 @@ use uuid::Uuid;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_free;
 mod board_options;
+mod board_panel;
 mod board_sketch;
 mod extras;
 mod finite_toml;
 mod header_id;
 mod load_repair;
 mod page_extras;
+mod pcb_cells;
 mod pcb_footprints;
+mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_uuid_repair;
 mod sch_rows;
@@ -55,6 +59,8 @@ mod version;
 mod wire_color_repair;
 
 #[cfg(test)]
+mod board_free_tests;
+#[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
 mod board_sketch_tests;
@@ -62,6 +68,8 @@ mod board_sketch_tests;
 mod body_style_tests;
 #[cfg(test)]
 mod bus_entry_tests;
+#[cfg(test)]
+mod directive_tests;
 #[cfg(test)]
 mod drawing_placement_tests;
 #[cfg(test)]
@@ -90,6 +98,10 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_route_attrs_tests;
+#[cfg(test)]
+mod pcb_stack_tests;
 #[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
@@ -130,7 +142,9 @@ use extras::{
     BoardExtras, FootprintExtras, JunctionExtras, PadExtras, PcbExtras, PcbExtrasRaw, SchExtrasRaw,
     SheetExtras, SymbolExtras,
 };
-use pcb_rows::{footprint_to_row, pad_to_row, row_to_track, row_to_via, track_to_row, via_to_row};
+use pcb_rows::{
+    footprint_to_row, pad_to_row, rows_to_tracks, rows_to_vias, track_to_row, via_to_row,
+};
 use sch_rows::{
     junction_to_row, label_to_row, row_to_junction, row_to_label, row_to_symbol, row_to_wire,
     symbol_to_row, wire_to_row,
@@ -625,6 +639,7 @@ impl SnxSchematic {
                 })
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
+            directives: sheet_extras.directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
@@ -794,6 +809,7 @@ impl SnxPcb {
         // known members empty, so those keys are not lost.
         let keep_stackup = !self.board.layers.is_empty()
             || self.board.setup.is_some()
+            || self.board.stackup.is_some()
             || !self.board.unknown.stackup.is_empty()
             || !self.board.unknown.stackup_display_names.is_empty();
         let keep_nets = !self.board.nets.is_empty() || !self.board.unknown.nets.is_empty();
@@ -864,6 +880,7 @@ impl SnxPcb {
         // The board sketch (#2234): absent for a board without one.
         board_sketch::write(&mut out, &self.board)?;
         board_options::write(&mut out, &self.board)?;
+        board_free::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -944,18 +961,20 @@ impl SnxPcb {
             &extras.pads,
         )?;
 
-        let segments = track_rows.into_iter().map(row_to_track).collect();
-        let vias = via_rows.into_iter().map(row_to_via).collect();
+        let segments = rows_to_tracks(track_rows)?;
+        let vias = rows_to_vias(via_rows)?;
 
         // Reconstitute zones from `[[zones]]` array.
         let zones = raw.zones.unwrap_or_default();
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
         let mut stackup_display_names = UnknownFields::default();
+        let mut stack = None;
         let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
                 let read = stackup::read(s)?;
                 stackup_display_names = read.display_names;
+                stack = read.stackup;
                 (read.layers, read.setup, read.unknown)
             }
             None => (Vec::new(), None, UnknownFields::default()),
@@ -983,7 +1002,9 @@ impl SnxPcb {
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
+            free: board_free::read(raw.free)?,
             sketch,
+            stackup: stack,
             options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
@@ -1052,6 +1073,8 @@ struct PcbRaw {
     board_sketch: Option<board_sketch::BoardSketchRaw>,
     #[serde(default)]
     board_options: Option<board_options::BoardOptionsRaw>,
+    #[serde(default)]
+    free: Option<board_free::FreeRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

@@ -94,14 +94,21 @@ impl Selection {
             .iter()
             .filter_map(|item| match *item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => Some(id),
-                ItemRef::Track(_) | ItemRef::Via(_) => None,
+                ItemRef::Track(_)
+                | ItemRef::Via(_)
+                | ItemRef::Zone { .. }
+                | ItemRef::Text(_)
+                | ItemRef::Arc(_)
+                | ItemRef::FreePad(_)
+                | ItemRef::Dimension(_)
+                | ItemRef::Graphic { .. } => None,
             })
             .collect()
     }
 }
 
-/// The item under `p`: a via over a pad over a track over a footprint
-/// body, then the lowest
+/// The item under `p`: a via over a pad over a track over a board drawing
+/// over a footprint body over a drawn area, then the lowest
 /// [`ItemRef`], so the answer does not depend on how the tree was built.
 pub fn pick(index: &BoardIndex, p: PointNm, tolerance: i64) -> Option<&IndexedItem> {
     pick_filtered(index, p, tolerance, &PickFilter::default())
@@ -125,10 +132,16 @@ pub fn pick_filtered<'a>(
 fn rank(item: ItemRef) -> u8 {
     match item {
         ItemRef::Via(_) => 0,
-        ItemRef::Pad { .. } => 1,
-        ItemRef::Track(_) => 2,
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => 1,
+        ItemRef::Track(_) | ItemRef::Arc(_) => 2,
+        // Board strings, dimensions and drawings sit over the copper they
+        // label (#2373), and a drawing's thin stroke over a part's body takes
+        // the click (#2424).
+        ItemRef::Text(_) | ItemRef::Dimension(_) | ItemRef::Graphic { .. } => 3,
         // The body is under its own pads: a click on copper takes the copper.
-        ItemRef::Footprint(_) => 3,
+        ItemRef::Footprint(_) => 4,
+        // A drawn area is under everything on it (#2383).
+        ItemRef::Zone { .. } => 5,
     }
 }
 

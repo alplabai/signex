@@ -1,7 +1,7 @@
 //! Properties of a selected power port.
 
 use super::super::*;
-use super::rows::{PanelStyle, info_row, pick_list_degrees, rotation_degrees};
+use super::rows::{PanelStyle, info_row, rotation_degrees};
 use iced::Widget;
 
 pub(super) fn push_power_port_sections<'a>(
@@ -23,7 +23,6 @@ pub(super) fn push_power_port_sections<'a>(
     } = palette;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let value = get("Value");
-    let position = get("Position");
     let rotation_str = get("Rotation");
     let lib_id = get("Library ID");
     let library_name = get("Library");
@@ -44,39 +43,10 @@ pub(super) fn push_power_port_sections<'a>(
         .map(|s| s.label().to_string())
         .collect();
 
-    // ── Location ──
-    let pos_loc = position.clone();
+    // ── Location ── (#2418): Position and Rotation through the shared rows.
     let rot_current = rotation_deg;
-    col = col.push(
-        ctx.collapsible(
-            "sel_location",
-            "Location",
-            &ctx.collapsed_sections,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row("(X/Y)", &pos_loc, muted, input_bg));
-                let rotation_opts: Vec<String> = vec![
-                    "0 Degrees".into(),
-                    "90 Degrees".into(),
-                    "180 Degrees".into(),
-                    "270 Degrees".into(),
-                ];
-                let rot_label = format!("{:.0} Degrees", rot_current);
-                c = c.push(form_pick_row(
-                    "Rotation",
-                    rotation_opts,
-                    rot_label,
-                    move |s| {
-                        let deg = pick_list_degrees(&s);
-                        PanelMsg::EditSymbolRotation(id, deg)
-                    },
-                    muted,
-                ));
-                c
-            },
-        )
-        .boxed(),
-    );
+    let look = super::placed_rows::RowLook { muted, input_bg };
+    col = super::placed_rows::push_location_section(col, ctx, look);
 
     // ── Properties (Name, Style) ──
     let name_val = value.clone();

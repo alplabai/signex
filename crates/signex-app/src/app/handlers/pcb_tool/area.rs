@@ -1,10 +1,13 @@
 //! The area tools (#2373), each added as one undo step:
 //! - Fill and Solid Region: solid copper on the active copper layer, on the
 //!   net of the copper under its first point;
+//! - Polygon Pour: an area on the active copper layer, on the net of the
+//!   copper under its first point, whose copper is computed clear of other
+//!   nets (#2216);
 //! - Keepout: an area on the active copper or keep-out layer that keeps all
 //!   copper off that copper layer (the design rule check reads it).
 //!
-//! A Fill is the rectangle between two clicks. A Solid Region or Keepout
+//! A Fill is the rectangle between two clicks. A Solid Region, Polygon Pour or Keepout
 //! takes a corner per click and is closed by a click on its first corner or
 //! a right-click once it has three; Esc drops it.
 
@@ -15,7 +18,7 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::keepout_copper;
 use uuid::Uuid;
 
-use super::BoardToolSession;
+use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 
@@ -28,19 +31,23 @@ fn outline_to(session: &BoardToolSession, at: Point) -> Vec<Point> {
     }
 }
 
-/// The area `tool` makes of `outline` on the active layer `active`; `None`
-/// for a layer the tool cannot draw on or an outline with no area.
+/// The area `tool` makes of `outline` on the active layer `active`, with
+/// the values set for the tool (#2393); `None` for a layer the tool cannot
+/// draw on or an outline with no area.
 fn area_zone(
     tool: BoardPlaceTool,
     board: &PcbBoard,
+    defaults: &BoardToolDefaults,
     id: Uuid,
     outline: Vec<Point>,
     active: PcbLayer,
 ) -> Option<Zone> {
-    match tool {
+    let zone = match tool {
         BoardPlaceTool::Keepout => draw::new_keepout(id, outline, active),
+        BoardPlaceTool::PolygonPour => draw::new_pour(board, id, outline, active.copper()?),
         _ => draw::new_copper_area(board, id, outline, active.copper()?),
-    }
+    }?;
+    Some(defaults.area(board, zone))
 }
 
 impl Signex {
@@ -89,21 +96,28 @@ impl Signex {
         }
     }
 
-    /// A right-click while a Solid Region or Keepout has three corners:
-    /// close it. Whether it did.
+    /// A right-click while a Solid Region, Polygon Pour, Keepout or Pour
+    /// Cutout has three corners: close it. Whether it did.
     pub(crate) fn close_board_region(&mut self) -> bool {
         let Some(session) = self.own_board_tool() else {
             return false;
         };
         let polygon = matches!(
             session.tool,
-            BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout
+            BoardPlaceTool::SolidRegion
+                | BoardPlaceTool::PolygonPour
+                | BoardPlaceTool::Keepout
+                | BoardPlaceTool::PourCutout
         );
         if !polygon || session.points.len() < 3 {
             return false;
         }
         let (tool, outline) = (session.tool, session.points.clone());
-        self.add_area(tool, outline);
+        if tool == BoardPlaceTool::PourCutout {
+            self.cut_pours_with(outline);
+        } else {
+            self.add_area(tool, outline);
+        }
         true
     }
 
@@ -118,7 +132,8 @@ impl Signex {
             return;
         };
         let name = t!(self.ui_state.i18n, tool.name()).into_string();
-        match area_zone(tool, board, Uuid::now_v7(), outline, active) {
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        match area_zone(tool, board, defaults, Uuid::now_v7(), outline, active) {
             Some(zone) => {
                 self.run_placement(&name, Ok(vec![draw::place_zone(zone)]));
             }
@@ -146,8 +161,36 @@ impl Signex {
         }
         let active = self.pcb_layer_view(&path).active();
         let outline = outline_to(session, cursor);
-        preview
-            .zones
-            .extend(area_zone(session.tool, board, Uuid::nil(), outline, active));
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        preview.zones.extend(area_zone(
+            session.tool,
+            board,
+            defaults,
+            Uuid::nil(),
+            outline,
+            active,
+        ));
+    }
+
+    /// The area the tool armed on the board in view places next, for its
+    /// Properties form: its settings over a stand-in outline at the pointer.
+    /// The layer is the active one, or the tool's nearest layer while the
+    /// active one cannot take it.
+    pub(crate) fn next_board_area(&self, board: &PcbBoard) -> Option<Zone> {
+        let session = self
+            .own_board_tool()
+            .filter(|s| super::form::is_area(s.tool))?;
+        let at = session.cursor.unwrap_or(Point::new(0.0, 0.0));
+        let outline = draw::rectangle(at, Point::new(at.x + 1.0, at.y + 1.0));
+        let active = self
+            .active_tab_path()
+            .map(|p| self.pcb_layer_view(&p).active())
+            .filter(|layer| match session.tool {
+                BoardPlaceTool::Keepout => keepout_copper(*layer).is_some(),
+                _ => layer.is_copper(),
+            })
+            .unwrap_or(PcbLayer::Copper(self.pcb_active_layer()));
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        area_zone(session.tool, board, defaults, Uuid::nil(), outline, active)
     }
 }

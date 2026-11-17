@@ -9,10 +9,13 @@
 pub struct ProjectId(u32);
 
 impl ProjectId {
-    /// The id for counter value `raw`. Only `DocumentState::mint_project_id`
-    /// calls it, so an id is never reused.
-    pub(in crate::app) const fn from_raw(raw: u32) -> Self {
-        Self(raw)
+    /// The next id from the workspace counter `next`, which it bumps, so an
+    /// id is never handed out twice. `DocumentState::mint_project_id` owns
+    /// the counter.
+    pub(crate) fn mint(next: &mut u32) -> Self {
+        let id = Self(*next);
+        *next = next.wrapping_add(1);
+        id
     }
 
     /// The id as an engine pick marker carries it.

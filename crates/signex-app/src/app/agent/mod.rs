@@ -23,6 +23,7 @@ mod reply;
 mod state;
 mod token;
 mod transport;
+mod window_layout;
 mod wire;
 
 #[cfg(test)]
@@ -34,6 +35,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use iced::futures::channel::oneshot;
 
 pub(crate) use crate::app::core::origin::Origin;
+pub(crate) use deferred::WaitingCommand;
 pub use reply::{
     ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
 };

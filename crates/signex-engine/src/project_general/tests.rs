@@ -65,13 +65,19 @@ fn undo_restores_only_the_general_fields() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
     history.apply(&mut data, set_description("mine"));
-    // Other writers change fields this history does not own.
+    // Other writers change fields this history does not own. Variants are
+    // its own since the Project tab's Variants section (#1690); the net
+    // classes have their own history.
     data.name = "Renamed".to_string();
-    data.variant_definitions.push("Lite".to_string());
+    data.net_classes.push(signex_types::net_class::NetClass {
+        name: "HV".to_string(),
+        ..Default::default()
+    });
     assert!(history.undo(&mut data));
     assert_eq!(data.description, None);
     assert_eq!(data.name, "Renamed");
-    assert_eq!(data.variant_definitions, ["Lite"]);
+    assert_eq!(data.net_classes.len(), 1);
+    assert_eq!(data.net_classes[0].name, "HV");
     assert!(history.redo(&mut data));
     assert_eq!(data.description.as_deref(), Some("mine"));
     assert_eq!(data.name, "Renamed");

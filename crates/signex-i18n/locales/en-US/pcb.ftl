@@ -6,6 +6,110 @@ pcb-layers-title = Layers
 pcb-layers-empty = Open a board or a footprint to see its layers.
 # Button that shows every hidden layer again.
 pcb-layers-show-all = Show all layers
+# Right-click menu of a layer tab under the board: hide that layer, or show
+# it and hide every other layer. $layer is the layer's name.
+pcb-layer-tab-hide = Hide { $layer }
+pcb-layer-tab-show-only = Show only this layer
+# Highlight one layer: every other layer is drawn dimmed. $layer is its name.
+pcb-layer-tab-highlight = Highlight { $layer }
+# Flyouts of the layer tab menu: one row per kind of layer.
+pcb-layer-tab-hide-layers = Hide layers
+pcb-layer-tab-show-layers = Show layers
+# A row of those flyouts. $kind is the kind's token.
+pcb-layer-kind = { $kind ->
+    [signal] Signal layers
+    [plane] Plane layers
+    [overlay] Overlay layers
+    [mask] Mask layers
+    [paste] Paste layers
+    [mechanical] Mechanical layers
+   *[all] All layers
+}
+# Rows that open board editors; greyed with the reason while the editor is
+# not built.
+# Opens the layer stack manager (#2401).
+pcb-layer-tab-layer-stack = Layer stack...
+pcb-layer-tab-drill-symbols = Drill symbols...
+pcb-layer-tab-drill-symbols-unavailable = Drill symbols cannot be set yet.
+pcb-layer-tab-drawing-order = Layer drawing order...
+pcb-layer-tab-drawing-order-unavailable = The layer drawing order cannot be changed yet.
+# How the layer tabs name their layers, and their numbers.
+pcb-layer-tab-names-short = Short tab names
+pcb-layer-tab-names-medium = Medium tab names
+pcb-layer-tab-names-long = Long tab names
+pcb-layer-tab-show-numbers = Show layer numbers
+# View the board from below: mirrored, bottom layers on top.
+pcb-layer-tab-flip = Flip board view
+# A layer tab with its number in front. $number is the layer's number,
+# $name its name.
+pcb-layer-tab-numbered = { $number } { $name }
+# Short layer tab names. $layer is the layer's name in the board file.
+pcb-layer-short = { $layer ->
+    [TopCopper] TL
+    [BottomCopper] BL
+    [EdgeCuts] OL
+    [Margin] MG
+    [TopSilkscreen] TO
+    [BottomSilkscreen] BO
+    [TopSolderMask] TS
+    [BottomSolderMask] BS
+    [TopPaste] TP
+    [BottomPaste] BP
+    [TopAdhesive] TA
+    [BottomAdhesive] BA
+    [TopFab] TF
+    [BottomFab] BF
+    [TopAssembly] TAS
+    [BottomAssembly] BAS
+    [TopCourtyard] TC
+    [BottomCourtyard] BC
+    [Top3DBody] T3D
+    [Bottom3DBody] B3D
+    [TopKeepout] TK
+    [BottomKeepout] BK
+    [TopFiducial] TFD
+    [BottomFiducial] BFD
+    [TopDesignator] TD
+    [BottomDesignator] BD
+    [Dimensions] DIM
+    [Notes] NT
+    [DrillDrawing] DD
+    [Eco1] E1
+    [Eco2] E2
+   *[other] { $layer }
+}
+pcb-layer-short-inner = M{ $index }
+pcb-layer-short-mechanical = Mech{ $index }
+# Medium layer tab names of copper and mechanical layers; every other layer
+# keeps its long name.
+pcb-layer-medium-top = Top
+pcb-layer-medium-bottom = Bottom
+pcb-layer-medium-inner = Mid { $index }
+pcb-layer-medium-mechanical = Mech { $index }
+# The layer set button at the left end of the layer tabs, and its menu.
+pcb-layer-set-tooltip = Layer set: show a set of layers
+# The button's label. $set is the set's token.
+pcb-layer-set-short = { $set ->
+    [signal] Signal
+    [plane] Plane
+    [non_signal] Non-signal
+    [mechanical] Mechanical
+   *[all] All
+}
+# A built-in set's row in the menu. $set is the set's token.
+pcb-layer-set = { $set ->
+    [signal] Signal Layers
+    [plane] Plane Layers
+    [non_signal] Non-signal Layers
+    [mechanical] Mechanical Layers
+   *[all] All Layers
+}
+pcb-layer-set-save = Save current as set...
+pcb-layer-set-manage = Manage sets...
+pcb-layer-set-none-saved = No saved sets yet.
+pcb-layer-set-name-placeholder = Set name
+pcb-layer-set-save-button = Save
+pcb-layer-set-delete = Delete
 # Group headers of the Layers panel.
 pcb-layers-signal = Signal
 pcb-layers-plane = Plane
@@ -40,12 +144,6 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 # Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
 # cannot run yet (#2352).
 pcb-bar-component-unavailable = Place Component: not available on boards yet
-pcb-bar-pad-unavailable = Place Pad: not available on boards yet
-pcb-bar-arc-unavailable = Place Arc: not available on boards yet
-pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
-pcb-bar-text-unavailable = Place String: not available on boards yet
-pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
-pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component
@@ -66,12 +164,18 @@ pcb-bar-track-tooltip = Place Track (Space flips the corner, Shift+Space changes
 pcb-bar-fill-tooltip = Place Fill
 pcb-bar-region-tooltip = Place Solid Region (right-click to close)
 pcb-bar-keepout-tooltip = Place Keepout (right-click to close)
+pcb-bar-pour-tooltip = Place Polygon Pour (right-click to close)
+pcb-bar-pad-tooltip = Place Pad
+pcb-bar-arc-tooltip = Place Arc (by centre, by edge or any angle: Cycle Arc Mode in the palette)
+pcb-bar-string-tooltip = Place String
+pcb-bar-dimension-tooltip = Place Dimension
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
 pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
 pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
 pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
+pcb-tool-hint-pour = Polygon Pour: click each corner, then the first corner or a right-click to close it. It fills with the net under the first corner and keeps clear of other nets' copper; Esc drops the shape, then ends the tool
 # A Track, Fill or Solid Region click while the active layer is not copper;
 # $tool is the tool's name.
 pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
@@ -79,6 +183,86 @@ pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
 pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 # A Keepout click while the active layer is neither copper nor a keep-out layer.
 pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer active to draw on it
+# The text a string placed with the String tool reads until it is edited.
+pcb-tool-string-text = String
+# A String click while the active layer takes no text.
+pcb-tool-string-needs-text-layer = String: make an overlay, mechanical or documentation layer active to place a string on it
+# The free pad, arc, string and dimension tools (#2373): what the Messages
+# panel says when one is armed, and when a click adds nothing.
+pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
+pcb-tool-hint-arc = Arc: { $mode }. Esc drops the arc being drawn, then ends the tool
+pcb-tool-hint-string = String: click to place a string on the active overlay, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
+pcb-tool-hint-dimension = Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-no-arc = Arc: those points make no arc, so nothing was added
+pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was added
+# How the Arc tool's clicks make an arc; `cycle_arc_mode` steps through them.
+pcb-arc-mode-centre = click the centre, the start, then where the arc ends (it runs counter-clockwise)
+pcb-arc-mode-edge = click the two ends of a quarter circle
+pcb-arc-mode-any = click the start, the end, then a point the arc bends through
+# The short name of each Arc mode, as Properties shows it while placing.
+pcb-arc-mode-centre-name = By Centre
+pcb-arc-mode-edge-name = By Edge
+pcb-arc-mode-any-name = Any Angle
+# Pour Cutout and Slice Pour (#2216): their Place rows, Active Bar tooltips,
+# Messages hints, and the line said when nothing was cut; $tool is the
+# tool's name.
+pcb-tool-pour-cutout = Pour Cutout
+pcb-tool-slice-pour = Slice Pour
+pcb-bar-pour-cutout-tooltip = Place Pour Cutout (right-click to close)
+pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner or a right-click to close it. The area is cut out of every polygon pour it overlaps on the active copper layer, as one step; Esc drops the shape, then ends the tool
+pcb-bar-slice-pour-tooltip = Slice Pour
+pcb-tool-hint-slice-pour = Slice Pour: click two points on a line across a polygon pour on the active copper layer; each pour the line meets is cut in two along it, as one step. Esc drops the first point, then ends the tool
+pcb-tool-pour-missed = { $tool }: no polygon pour on the active copper layer is cut there, so nothing changed
+# Repour Selected and Repour All (#2216): what the fill came to.
+pcb-pour-repoured = Repour: { $pours ->
+    [one] 1 polygon pour
+   *[other] { $pours } polygon pours
+} filled, { $pieces } areas of copper, { $islands } islands removed
+pcb-pour-none = Repour: the board has no polygon pour
+pcb-pour-none-selected = Repour Selected: select a polygon pour first
+# Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
+# lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
+pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
+pcb-tool-hint-route = Interactive Routing: click a pad or track end to start on the active copper layer, then click each point; each leg keeps the rule clearance from other nets. Change the layer to add a via. Click the route's end, Esc or a right-click to finish it as one step
+pcb-route-blocked = Interactive Routing: no way to that point keeps the clearance the rules ask, so nothing was added
+pcb-route-via-blocked = Interactive Routing: a via there would not keep the clearance the rules ask, so nothing was added
+pcb-route-unrepresentable = Interactive Routing: a point or the track width is outside what the board geometry can hold
+# $why says what is wrong with the rules (the setup clearance, a net class).
+pcb-route-no-rules = Interactive Routing: the board's rules are not usable: { $why }
+pcb-route-mode-walkaround = Interactive Routing: walk around other nets' copper
+pcb-route-mode-shove = Interactive Routing: push other nets' tracks aside, walk around the rest
+pcb-route-board-changed = Interactive Routing: a track the route pushed was changed or removed since, so nothing was added
+# The board changed under a route being drawn (an undo, an edit elsewhere)
+# and the route no longer fits it; $why says how.
+pcb-route-stale = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was added; Esc discards the route
+pcb-route-not-placed = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was placed; undo or redo back to place it, or press Esc again to discard it
+pcb-route-discarded = Interactive Routing: the route no longer fits the board ({ $why }) and was discarded; the board is unchanged
+pcb-route-too-sharp = Routing: a corner turns too sharply for the tracks to follow it side by side, so nothing was added
+# The routing tools that follow Interactive Routing (#2389): Place rows,
+# Active Bar tooltips and Messages hints.
+pcb-tool-diff-pair = Differential Pair Routing
+pcb-tool-quick-route = Quick Route
+pcb-tool-multi-route = Multi-Route
+pcb-bar-diff-pair-tooltip = Differential Pair Routing (Space flips the corner, Shift+Space changes the corner mode)
+pcb-bar-quick-route-tooltip = Quick Route (straight to the point, other nets are not avoided)
+pcb-bar-multi-route-tooltip = Multi-Route (select copper of the nets first)
+pcb-tool-hint-diff-pair = Differential Pair Routing: click copper of a pair's net to start both tracks there, then click each point; the pair keeps its coupled width and gap and walks around other nets. Click the route's end, Esc or a right-click to finish it as one step
+pcb-tool-hint-quick-route = Quick Route: click a pad or track end to start, then click the target; the track goes straight there at the rule width, without avoiding other nets, as one step
+pcb-tool-hint-multi-route = Multi-Route: select copper of the nets to route, click near their ends to start, then click each point; the nets run side by side around other nets. Click the route's end, Esc or a right-click to finish it as one step
+# Why a routing tool did nothing: $tool is its name, $why one of the
+# reasons below ($net is a net's name).
+pcb-route-refused = { $tool }: { $why }
+pcb-route-no-net = click on copper of a net to start
+pcb-route-no-pair = { $net } is in no differential pair; name its nets with _P and _N (or + and -), or give their net class a pair gap
+pcb-route-member-no-copper = { $net } has no copper on the active layer to start from
+pcb-route-bus-needs-nets = select copper of two or more nets first
+# Length tuning from the PCB Active Bar's Tune group, the palette or an
+# agent (#2389). $what is the command's name, $why the reason.
+pcb-tune-needs-tracks = { $what }: select a track of each net to tune
+pcb-tune-refused = { $what }: { $why }
+pcb-tune-done = { $what }: { $count } net(s) brought to { $length } mm
+# A net a multi-net tuning left as it was; $net its name, $why the reason.
+pcb-tune-skipped = { $what }: { $net } left as it is: { $why }
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.
@@ -220,3 +404,63 @@ pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Not
 # Messages line when the board was closed or switched away from while the
 # part was being read.
 pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.
+
+## The board 3D view (#2390).
+
+# The 3D view's bar: its name, how to move it, and its buttons.
+pcb-3d-title = 3D View
+pcb-3d-hint = Drag to turn, right-drag to slide, wheel to zoom, click to select
+# Back to the flat board.
+pcb-3d-flat = 2D
+pcb-3d-fit = Fit
+pcb-3d-top = Top
+pcb-3d-bottom = Bottom
+pcb-3d-front = Front
+pcb-3d-left = Left
+pcb-3d-right = Right
+# From above a front corner.
+pcb-3d-iso = Angled
+# Messages line when a part's model could not be read; the part is drawn as
+# a plain body. $source names the library footprint.
+pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.
+
+## The board Tools edits (#2408, #2409).
+
+# Messages line when a Tools edit ran; $tool is its menu name, the counts
+# are the items it added, removed and changed.
+pcb-board-tool-done = { $tool }: { $added } added, { $removed } removed, { $changed } changed
+# Messages line when a copper tool left places or locked tracks out; $count of them.
+pcb-board-tool-skipped = { $tool }: { $count } left out, locked or where the copper would break the clearance or a keepout
+# Messages line when a Tools edit did nothing; $reason says why.
+pcb-board-tool-refused = { $tool }: { $reason }; nothing changed
+# Messages line when Arrange in Box is waiting for its corners.
+pcb-arrange-box-hint = Arrange in Box: click two opposite corners of the box for the selected components; Esc ends it
+
+## DXF import (#2410).
+# The undo label of an import.
+pcb-dxf-import-step = Import DXF
+# Messages line. $count drawings, $file the file name, $layer the layer.
+pcb-dxf-imported-layer = Imported { $count } drawings from { $file } onto { $layer }.
+pcb-dxf-imported-outline = The board outline is now the { $count }-corner shape from { $file }.
+# $count entities of kinds the import does not read (text, blocks, hatches).
+pcb-dxf-skipped = { $count } entities of { $file } are not lines, arcs, circles or polylines and were skipped.
+pcb-dxf-refused = { $file } was not imported: { $why }
+# Before the file dialog opens; $why says the layer and why it cannot take a drawing.
+pcb-dxf-layer-refused = No DXF file was asked for: { $why }
+
+## Pin and gate swap (#2410). Messages lines; $why is the reason from the
+## board or the schematic, in English.
+pcb-part-swap-refused = { $what } did nothing: { $why }
+pcb-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the board and on its schematic
+pcb-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the board and on its schematic
+pcb-part-swap-nothing = { $designator }: pins { $a } and { $b } already share their nets; nothing changed
+pcb-gates-swap-nothing = { $designator }: gates { $a } and { $b } already share their nets; nothing changed
+
+## Design reuse blocks (#2410).
+pcb-reuse-block-saved = Reuse block { $name } saved to { $file }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-not-written = Reuse block { $name } could not be written to { $file }: { $why }. It can be placed until Signex closes.
+pcb-reuse-block-placed = Reuse block { $name } placed on the channel of { $anchor }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-refused = { $what } did nothing: { $why }
+pcb-reuse-blocks-unread = The project's reuse blocks could not be read: { $why }
+# A board menu row: place the block called $name around the selected part.
+pcb-reuse-block-place-row = Place Reuse Block "{ $name }"

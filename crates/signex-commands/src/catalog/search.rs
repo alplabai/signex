@@ -76,4 +76,15 @@ pub(super) const SEARCH: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "find_similar_items",
+        category: "search",
+        label: command_ids::CMD_FIND_SIMILAR_ITEMS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::FIND_SIMILAR_ITEMS,
+        ..CommandMetadata::DEFAULT
+    },
 ];
