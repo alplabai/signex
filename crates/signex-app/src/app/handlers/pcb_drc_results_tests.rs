@@ -562,3 +562,58 @@ fn a_moved_object_lapses_its_waiver_and_a_new_waiver_replaces_it() {
     let row = rows(&app).into_iter().find(|r| r.key == key).unwrap();
     assert_eq!(row.waiver.as_deref(), Some("second"));
 }
+
+/// #2307: a waiver on results the board has moved past is refused and
+/// nothing is written: it would fingerprint geometry the run never checked.
+/// Unwaiving stays allowed.
+#[test]
+fn a_waiver_on_stale_results_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "fresh");
+    assert_eq!(board_waivers(&app, &path).len(), 1);
+    nudge_vcc(&mut app, &path);
+    let refused = app.set_drc_waiver(&path, &key, Some("stale".into()));
+    let why = refused.expect_err("a stale waive is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(waivers.len(), 1);
+    assert_eq!(waivers[0].note, "fresh");
+    app.set_drc_waiver(&path, &key, None)
+        .expect("unwaive on stale results");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
+/// #2307: a run the board was edited during says nothing of lapsed
+/// waivers: its findings are not of the geometry now.
+#[test]
+fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    waive_clearance(&mut app, "ok");
+    let mark = "a_run_edited_during_its_check_logs_no_lapsed_waivers";
+    crate::diagnostics::log_info(mark);
+    let task = app.handle_pcb_drc_requested();
+    nudge_vcc(&mut app, &path);
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    assert!(app.pcb_drc_panel().unwrap().stale);
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .skip_while(|m| m != mark)
+        .collect();
+    assert!(!said.is_empty(), "the mark is logged");
+    assert!(
+        !said
+            .iter()
+            .any(|m| m.contains("waived finding(s) are back")),
+        "{said:?}"
+    );
+}

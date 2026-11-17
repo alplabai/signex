@@ -139,13 +139,31 @@ impl Signex {
 
     /// Waive the last run's violation `key` on `board` with `note`, or take
     /// its waiver back (`None`): one board undo step. The report stays
-    /// current, since a waiver changes nothing the check reads.
+    /// current, since a waiver changes nothing the check reads. A waiver is
+    /// refused on a stale run: it would fingerprint geometry the run never
+    /// checked (#2307).
     pub(crate) fn set_drc_waiver(
         &mut self,
         board: &Path,
         key: &str,
         note: Option<String>,
     ) -> Result<Value, String> {
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(board)
+            .copied()
+            .unwrap_or(0);
+        let stale = self
+            .interaction_state
+            .pcb_drc
+            .done_for(board)
+            .is_some_and(|done| done.is_stale(revision, self.board_net_classes(board)));
+        if note.is_some() && stale {
+            return Err(
+                "the board changed since the last DRC run; run DRC again before waiving".into(),
+            );
+        }
         let violation = self
             .interaction_state
             .pcb_drc

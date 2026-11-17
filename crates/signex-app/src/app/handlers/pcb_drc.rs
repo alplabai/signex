@@ -148,6 +148,16 @@ impl Signex {
         let Some(board) = self.document_state.pcb_board(&done.path) else {
             return;
         };
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&done.path)
+            .copied()
+            .unwrap_or(0);
+        if done.is_stale(revision, self.board_net_classes(&done.path)) {
+            // Edited during the run: the report is not of the geometry now.
+            return;
+        }
         let waivers = &board.options.drc_waivers;
         if waivers.is_empty() {
             return;
