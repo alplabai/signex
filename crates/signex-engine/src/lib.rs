@@ -28,10 +28,10 @@ pub mod pcb;
 mod sheet_placement;
 mod transform;
 
+mod dxf_plane;
 mod exec;
 mod find;
 mod find_similar;
-mod dxf_plane;
 mod graphics_import;
 
 #[cfg(test)]

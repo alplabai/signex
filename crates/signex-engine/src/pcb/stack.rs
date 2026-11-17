@@ -226,11 +226,7 @@ fn check_empty(board: &PcbBoard, layer: &str) -> Result<(), BoardCommandError> {
     }
     let free = &board.free;
     items += free.arcs.iter().filter(|a| on(&a.layer)).count();
-    items += free
-        .pads
-        .iter()
-        .filter(|p| p.layers.iter().any(on))
-        .count();
+    items += free.pads.iter().filter(|p| p.layers.iter().any(on)).count();
     items += free.dimensions.iter().filter(|d| on(&d.layer)).count();
     if keepout_names(board, layer) {
         return Err(BoardCommandError::KeepoutOnLayer(layer.to_string()));

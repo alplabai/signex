@@ -72,7 +72,9 @@ pub fn parse_dxf(text: &str) -> Result<DxfDrawing, DxfError> {
         match g.value {
             "LINE" => drawing.entities.push(line(fields, scale)?),
             "ARC" => drawing.entities.push(in_plane(arc(fields, scale)?, sign)),
-            "CIRCLE" => drawing.entities.push(in_plane(circle(fields, scale)?, sign)),
+            "CIRCLE" => drawing
+                .entities
+                .push(in_plane(circle(fields, scale)?, sign)),
             "LWPOLYLINE" => drawing
                 .entities
                 .push(in_plane(lw_polyline(fields, scale)?, sign)),

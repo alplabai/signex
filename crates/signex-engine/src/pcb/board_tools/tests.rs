@@ -316,10 +316,7 @@ fn gloss_leaves_locked_tracks_and_refuses_a_locked_only_selection() {
     }
 
     let only: BTreeSet<Uuid> = [id(21)].into();
-    assert_eq!(
-        gloss_tracks(&board, &only, gap),
-        Err(locked_refusal(&[21]))
-    );
+    assert_eq!(gloss_tracks(&board, &only, gap), Err(locked_refusal(&[21])));
 }
 
 #[test]

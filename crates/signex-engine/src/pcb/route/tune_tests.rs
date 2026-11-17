@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::tests::{board, track};
 use super::*;
-use crate::pcb::BoardEngine;
+use crate::pcb::{BoardEngine, BoardItemId};
 
 const TRACK: u128 = 11;
 
@@ -155,9 +155,11 @@ fn net_tuning_passes_over_a_locked_track_and_the_meander_is_unlocked() {
             BoardCommand::DeleteItems { items } => {
                 assert_eq!(items, &[BoardItemId::Segment(Uuid::from_u128(13))]);
             }
-            BoardCommand::AddItems { items } => assert!(items.iter().all(
-                |item| matches!(item, BoardItem::Segment(s) if !s.locked && s.net == 1)
-            )),
+            BoardCommand::AddItems { items } => assert!(
+                items
+                    .iter()
+                    .all(|item| matches!(item, BoardItem::Segment(s) if !s.locked && s.net == 1))
+            ),
             other => panic!("unexpected {other:?}"),
         }
     }
