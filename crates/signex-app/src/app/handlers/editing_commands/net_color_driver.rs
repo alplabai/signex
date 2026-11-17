@@ -71,7 +71,7 @@ pub(crate) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
     let (outcome, why) = app.commit_net_colors(ids, color);
     assert_eq!(
         outcome,
-        crate::app::mutation_gateway::CommandOutcome::Changed,
+        crate::app::mutation_gateway::MutationOutcome::Changed,
         "the sheet must take a colour: {why:?}"
     );
 }

@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use super::case_fold::CaseFold;
+use super::CaseFold;
 
 /// `path` as a key under `fold`: Unicode-normalised (NFC) where the volume
 /// ignores the NFC / NFD difference, case-folded where it ignores case,

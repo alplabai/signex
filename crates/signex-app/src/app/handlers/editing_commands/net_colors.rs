@@ -3,7 +3,7 @@
 //! the sheet's undo timeline, its depth limit and its save point.
 
 use super::super::super::*;
-use crate::app::mutation_gateway::CommandOutcome;
+use crate::app::mutation_gateway::MutationOutcome;
 use signex_types::theme::Color;
 
 /// What [`Signex::clear_net_colors`] did.
@@ -25,9 +25,9 @@ impl Signex {
         &mut self,
         elements: &[uuid::Uuid],
         color: Color,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         let Some(engine) = self.document_state.active_engine() else {
-            return (CommandOutcome::Failed, None);
+            return (MutationOutcome::Failed, None);
         };
         let mut colors = engine.document().net_colors.clone();
         for id in elements {

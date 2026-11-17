@@ -507,7 +507,7 @@ mod tests {
     /// a changed job walks only its own project.
     #[test]
     fn only_a_project_whose_job_changed_is_walked_again() {
-        let (a, b) = (ProjectId(1), ProjectId(2));
+        let (a, b) = (ProjectId::test_id(1), ProjectId::test_id(2));
         let mut cache = watching_jobs(&[a, b]);
         let (generation, request) = cache.begin_probe(false).unwrap();
         assert_eq!(request.hierarchy.jobs.len(), 2);
@@ -536,7 +536,7 @@ mod tests {
     /// the walk.
     #[test]
     fn a_change_during_a_running_probe_is_picked_up_by_the_next() {
-        let a = ProjectId(1);
+        let a = ProjectId::test_id(1);
         let mut cache = watching_jobs(&[a]);
         let (generation, request) = cache.begin_probe(false).unwrap();
         cache.invalidate();
@@ -548,7 +548,7 @@ mod tests {
     /// walk, so a missing child that was created stops reading as missing.
     #[test]
     fn a_placed_file_appearing_walks_its_project_again() {
-        let a = ProjectId(1);
+        let a = ProjectId::test_id(1);
         let mut cache = watching_jobs(&[a]);
         let (generation, request) = cache.begin_probe(false).unwrap();
         cache.finish_probe(generation, Ok(probe(&request)));
@@ -571,7 +571,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let sheet = tmp.path().join("root.snxsch");
         std::fs::write(&sheet, "x").expect("write");
-        let mut one = job(ProjectId(1));
+        let mut one = job(ProjectId::test_id(1));
         one.root = sheet.clone();
         one.pages = vec![sheet.clone()];
         let mut cache = ProjectFsCache::default();

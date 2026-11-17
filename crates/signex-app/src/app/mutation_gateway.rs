@@ -3,7 +3,7 @@ use super::*;
 
 /// What an engine command did to the active document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommandOutcome {
+pub(crate) enum MutationOutcome {
     /// The document changed.
     Changed,
     /// The command ran and found nothing to change.
@@ -125,7 +125,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_commands`] that says whether the batch changed
@@ -136,7 +136,7 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_commands_reporting(commands, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -149,21 +149,21 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+            return (MutationOutcome::Unchanged, None);
         }
 
         let engine = match self.prepare_active_engine() {
             Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
+            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
         };
 
         // A locked symbol is skipped, not allowed to cancel the batch.
         let (commands, skipped) = Self::without_locked_items(engine, commands);
         crate::diagnostics::log_locked_skips(&skipped);
         if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+            return (MutationOutcome::Unchanged, None);
         }
 
         // One engine history entry for the whole batch, with the patches
@@ -180,7 +180,7 @@ impl Signex {
                 let reason = error.to_string();
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return (CommandOutcome::Failed, Some(reason));
+                return (MutationOutcome::Failed, Some(reason));
             }
         };
 
@@ -190,9 +190,9 @@ impl Signex {
             update_selection_info,
         );
         if changed {
-            (CommandOutcome::Changed, None)
+            (MutationOutcome::Changed, None)
         } else {
-            (CommandOutcome::Unchanged, None)
+            (MutationOutcome::Unchanged, None)
         }
     }
 
@@ -203,7 +203,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_command`] that says whether the command changed
@@ -214,7 +214,7 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -227,7 +227,7 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         self.apply_engine_command_recording(
             command,
             true,
@@ -242,7 +242,7 @@ impl Signex {
     pub(crate) fn apply_engine_command_unrecorded(
         &mut self,
         command: signex_engine::Command,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         self.apply_engine_command_recording(command, false, true, true)
     }
 
@@ -252,10 +252,10 @@ impl Signex {
         record_history: bool,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         let engine = match self.prepare_active_engine() {
             Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
+            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
         };
         let mut failed = None;
 
@@ -276,7 +276,7 @@ impl Signex {
                 None if names_locked => command,
                 None => {
                     crate::diagnostics::log_locked_skips(&skipped);
-                    return (CommandOutcome::Unchanged, None);
+                    return (MutationOutcome::Unchanged, None);
                 }
             }
         } else {
@@ -314,11 +314,11 @@ impl Signex {
             update_selection_info,
         );
         let outcome = if failed.is_some() {
-            CommandOutcome::Failed
+            MutationOutcome::Failed
         } else if changed {
-            CommandOutcome::Changed
+            MutationOutcome::Changed
         } else {
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         };
         (outcome, failed)
     }
@@ -514,7 +514,7 @@ mod tests {
         let (mut bare, _task) = Signex::new();
         assert_eq!(
             bare.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Failed
+            MutationOutcome::Failed
         );
 
         let top = std::path::PathBuf::from("/w/gw/top.snxsch");
@@ -539,16 +539,16 @@ mod tests {
         // A file no sheet symbol references: nothing to reconcile.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("other.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Changed
+            MutationOutcome::Changed
         );
         // The same port again is already in place.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
     }
 
