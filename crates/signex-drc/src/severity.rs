@@ -160,6 +160,57 @@ pub fn resolve_severities_with(
     out
 }
 
+/// What an edit did to written rule `name`, so that the layer entry for its
+/// id (`user::<name>`), which outranks the rule's own `then` word, follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WrittenRuleEdit<'a> {
+    /// Its `then` severity was set: its own word governs again.
+    SeveritySet(&'a str),
+    /// Switched on: an `off` entry would keep it off.
+    SwitchedOn(&'a str),
+    Renamed {
+        from: &'a str,
+        to: &'a str,
+    },
+    /// Removed, or newly added: no entry speaks for it.
+    Dropped(&'a str),
+}
+
+fn written_id(name: &str) -> String {
+    format!("{}{name}", crate::USER_RULE_ID_PREFIX)
+}
+
+/// Make `layer`'s entry for the rule `edit` names follow the edit.
+pub fn follow_written_rule_edit(layer: &mut DrcRuleSet, edit: WrittenRuleEdit<'_>) {
+    let map = &mut layer.severity;
+    match edit {
+        WrittenRuleEdit::SeveritySet(name) | WrittenRuleEdit::Dropped(name) => {
+            map.remove(&written_id(name));
+        }
+        WrittenRuleEdit::SwitchedOn(name) => {
+            let id = written_id(name);
+            if map.get(&id).is_some_and(|word| word == "off") {
+                map.remove(&id);
+            }
+        }
+        WrittenRuleEdit::Renamed { from, to } if from != to => {
+            if let Some(word) = map.remove(&written_id(from)) {
+                map.insert(written_id(to), word);
+            }
+        }
+        WrittenRuleEdit::Renamed { .. } => {}
+    }
+}
+
+/// `layer`'s entry for written rule `name`: `Some(None)` for `off`, `None`
+/// with no entry or one this build cannot read.
+pub fn written_rule_override(layer: &DrcRuleSet, name: &str) -> Option<Option<Severity>> {
+    layer
+        .severity
+        .get(&written_id(name))
+        .and_then(|word| parse_severity(word))
+}
+
 /// `Some(None)` for `off`, `None` for a word this build does not know.
 fn parse_severity(word: &str) -> Option<Option<Severity>> {
     match word {

@@ -10,6 +10,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::button;
 
 mod buttons;
+mod dialog_buttons;
 mod dialog_kit;
 mod dialog_shell;
 mod graphite;

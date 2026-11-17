@@ -11,7 +11,8 @@ use crate::app::state::PcbRatsnest;
 use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
-    PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_without, carried_board,
+    PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
+    carried_board,
 };
 
 impl Signex {
@@ -31,6 +32,7 @@ impl Signex {
                 self.pcb_paste_followed(at);
                 self.pcb_place_followed(at);
                 self.board_tool_followed(at);
+                self.board_measure_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -43,7 +45,9 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_guide_place_clicked(at)
+                if self.board_measure_clicked(at, tolerance_mm)
+                    || self.pcb_arrange_box_clicked(at)
+                    || self.pcb_guide_place_clicked(at)
                     || self.board_tool_clicked(at)
                     || self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
@@ -102,20 +106,25 @@ impl Signex {
     /// Esc on a board: drop the selection, the hover, a box in progress and
     /// a drag or Move in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
-        // A placement tool steps back first: its shape, then the tool.
-        if self.step_back_board_tool() {
+        // A placement tool steps back first: its shape, then the tool; so
+        // does Measure: its first point, then the tool (#2403).
+        if self.step_back_board_tool() || self.step_back_board_measure() {
             return;
         }
+        // A highlighted net goes with the selection (#2403).
+        let unlit = self.clear_board_net_highlight();
         self.interaction_state.pcb_canvas.cancel_marquee();
         // Esc also ends a Properties net pick (#2355).
         self.interaction_state.pcb_primitive.net_pick = None;
         // And a guide armed by the panel's Place (#2374).
         self.interaction_state.pcb_guide_place = None;
+        // And Arrange in Box waiting for its corners (#2409).
+        self.interaction_state.pcb_arrange_box = None;
         let carried = self.has_own_pcb_carry();
         if carried {
             self.interaction_state.pcb_carry = None;
         }
-        if self.interaction_state.pcb_selection.clear() || carried {
+        if self.interaction_state.pcb_selection.clear() || carried || unlit {
             self.refresh_pcb_highlight();
         }
     }
@@ -180,18 +189,26 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
+        // The leg on the pointer is routed here, once per change, not per
+        // repaint (#2389).
+        self.update_router_preview();
         let carry = self
             .interaction_state
             .pcb_carry
             .clone()
             .filter(|_| self.has_own_pcb_carry());
         let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
-        let (highlight, grab) = painted.unwrap_or_default();
+        let (mut highlight, grab) = painted.unwrap_or_default();
+        // The highlighted net and the Measure ruler (#2403).
+        highlight.net = self.board_net_shapes();
+        highlight.measure = self.board_measure_line();
         let ghost = self
             .pcb_part_ghost(carry.as_ref())
             .or_else(|| self.board_tool_ghost());
-        // A tool waits for clicks: a press never starts a drag.
-        let tool_armed = self.own_board_tool().is_some();
+        // A tool, or a Move, paste or part waiting on the cursor, takes
+        // every press as a click: never a drag or a box (#2396).
+        let tool_armed = self.own_board_tool().is_some() || self.own_board_measure().is_some();
+        let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;
@@ -204,6 +221,7 @@ impl Signex {
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+        canvas.set_clicks_only(clicks_only);
         canvas.set_part_ghost(ghost.as_ref());
         let ratsnest = view
             .ratsnest_visible()
@@ -262,9 +280,15 @@ impl Signex {
             selection.sync(Some(path), revision);
             selection.set_view(&view);
             let (highlight, grab) = selection.paint(board, carry);
+            let tool_armed = interaction
+                .pcb_tool
+                .as_ref()
+                .is_some_and(|tool| tool.is_for(Some(path), Some(id)));
+            let clicks_only = tool_armed || carry.is_some_and(PcbCarry::waits_for_clicks);
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
-                canvas.set_grab(grab);
+                canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+                canvas.set_clicks_only(clicks_only);
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view
@@ -278,8 +302,11 @@ impl Signex {
 
 /// Bring `canvas`'s drag preview in line with `carry` on `board` (#2358):
 /// while the carry is anchored, the board is drawn without the carried
-/// footprints and they are drawn at its offset; otherwise the whole board.
-/// `ratsnest` is the cache and the board path when the view shows it.
+/// footprints and the tracks that follow their pads, and those are drawn at
+/// its offset; otherwise the whole board. `ratsnest` is the cache and the
+/// board path when the view shows it: during the carry the ratsnest is
+/// drawn with the carried footprints, read off the board as the drop would
+/// leave it, so its lines stay on the carried pads (#2379).
 fn sync_drag_preview(
     canvas: &mut PcbCanvas,
     board: &PcbBoard,
@@ -293,17 +320,25 @@ fn sync_drag_preview(
         return;
     };
     if !canvas.previews_drag_of(&carry.footprints) {
-        // Once per carry: the board without what it carries.
-        let rest = board_without(board, &carry.footprints);
-        let base = PcbSnapshot::from_board_with_view(&rest, view);
-        let base = match ratsnest {
-            Some((cache, path)) => cache.apply_uncached(path, &rest, base),
-            None => base,
-        };
-        canvas.begin_drag_preview(carry.footprints.clone(), base);
+        // Once per carry: the tracks that follow the carried pads, and the
+        // board without what it carries, with its pour fills.
+        let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
+        let rest = board_without(board, &carry.footprints, &following);
+        let fills = pcb_geom::zone_fills(&rest);
+        let base = PcbSnapshot::from_board_with_view(&rest, view).with_zone_fills(&fills);
+        canvas.begin_drag_preview(carry.footprints.clone(), following, base);
     }
+    let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carry.footprints, carry.delta);
-        PcbSnapshot::from_board_with_view(&moved, view)
+        let moved = carried_board(board, &carry.footprints, &following, carry.delta);
+        let snapshot = PcbSnapshot::from_board_with_view(&moved, view);
+        match ratsnest {
+            Some((cache, path)) => {
+                let after = board_after_move(board, &carry.footprints, &following, carry.delta);
+                let fills = pcb_geom::zone_fills(&after);
+                cache.apply_uncached(path, &after, &fills, snapshot)
+            }
+            None => snapshot,
+        }
     });
 }

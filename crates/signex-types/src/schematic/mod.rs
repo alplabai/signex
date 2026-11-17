@@ -819,6 +819,13 @@ pub use row_stamp::{
 mod pin_map;
 mod pin_token;
 pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
+mod directive;
+#[cfg(test)]
+mod directive_tests;
+pub use directive::{
+    ALL_ERC_RULES, DIFF_PAIR_SUFFIXES, DirectiveKind, SchDirective, diff_pair_base,
+    parse_erc_exclusions,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

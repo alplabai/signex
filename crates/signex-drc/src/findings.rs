@@ -9,13 +9,10 @@ use std::collections::BTreeMap;
 use pcb_geom::{ItemRef, NM_PER_MM, Rejected, copper_layers};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use signex_types::check::{CheckReport, Finding, WaivedFinding};
+use signex_types::check::{CheckReport, Finding};
 use signex_types::format::pcb_layer_token;
-use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
-use signex_types::project::DrcWaiver;
 
-use crate::waivers::{split_waived, waiver_json};
 use crate::{DrcReport, DrcRules, SkippedKeepout, Violation, ViolationKind};
 
 /// The id a report names its check by.
@@ -28,42 +25,19 @@ const KEY_HEX_DIGITS: usize = 32;
 /// `net_names` names the board's nets by number. The warnings are
 /// `warnings`, then what the rule text and the setup said, then one per item
 /// the run could not check (keepouts, then items). `rule_set` gets the clearance the run used.
-/// A finding of a rule switched off is not listed. `pcb` is the board the
-/// run checked; a finding one of `waivers` hides is in `waived`, and a
-/// waiver whose items changed since is in `lapsed` (`crate::waivers`).
+/// DRC has no waivers, so `waived` and `lapsed` are empty; a finding of a
+/// rule switched off is not listed.
 pub fn check_report(
     report: &DrcReport,
     net_names: &BTreeMap<u32, String>,
     board: &str,
     warnings: Vec<String>,
     rule_set: Map<String, Value>,
-    pcb: &PcbBoard,
-    waivers: &[DrcWaiver],
 ) -> CheckReport {
-    let listed = report
+    let findings = report
         .violations
         .iter()
-        .filter(|v| report.severity_of(v).is_some());
-    let split = split_waived(listed, pcb, waivers);
-    let findings = split
-        .kept
-        .iter()
         .filter_map(|v| finding(report, v, net_names, board))
-        .collect();
-    let waived = split
-        .waived
-        .iter()
-        .filter_map(|&(v, i)| {
-            Some(WaivedFinding {
-                finding: finding(report, v, net_names, board)?,
-                waiver: waiver_json(&waivers[i]),
-            })
-        })
-        .collect();
-    let lapsed = split
-        .lapsed
-        .iter()
-        .map(|&i| waiver_json(&waivers[i]))
         .collect();
     let warnings = warnings
         .into_iter()
@@ -74,7 +48,7 @@ pub fn check_report(
     let mut rule_set = rule_set;
     rule_set.insert("clearance_nm".into(), json!(report.rules.clearance));
     rule_set.insert("from_default".into(), json!(report.rules.from_default));
-    CheckReport::new(DRC_CHECK, findings, waived, lapsed, warnings)
+    CheckReport::new(DRC_CHECK, findings, Vec::new(), Vec::new(), warnings)
         .with_rule_set(Value::Object(rule_set))
 }
 
@@ -209,19 +183,32 @@ fn rule_source(rules: &DrcRules, v: &Violation) -> Option<&'static str> {
 
 /// An item's id: its uuid, or `<footprint>/<pad>` for a pad (a pad's own
 /// uuid repeats across placements of one footprint).
-pub(crate) fn item_id(item: &ItemRef) -> String {
+pub fn item_id(item: &ItemRef) -> String {
     match item {
         ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
-        ItemRef::Track(id) | ItemRef::Via(id) | ItemRef::Footprint(id) => id.to_string(),
+        ItemRef::Track(id)
+        | ItemRef::Via(id)
+        | ItemRef::Footprint(id)
+        | ItemRef::Zone { zone: id, .. }
+        | ItemRef::Text(id)
+        | ItemRef::Arc(id)
+        | ItemRef::FreePad(id)
+        | ItemRef::Dimension(id)
+        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
     }
 }
 
-fn item_label(item: &ItemRef) -> String {
+pub(crate) fn item_label(item: &ItemRef) -> String {
     let kind = match item {
-        ItemRef::Pad { .. } => "pad",
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => "pad",
         ItemRef::Track(_) => "track",
         ItemRef::Via(_) => "via",
         ItemRef::Footprint(_) => "footprint",
+        ItemRef::Zone { .. } => "area",
+        ItemRef::Text(_) => "string",
+        ItemRef::Arc(_) => "arc",
+        ItemRef::Dimension(_) => "dimension",
+        ItemRef::Graphic { .. } => "drawing",
     };
     format!("{kind} {}", item_id(item))
 }

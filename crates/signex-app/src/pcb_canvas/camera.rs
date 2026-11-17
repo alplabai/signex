@@ -124,6 +124,19 @@ impl BoardCamera {
         self.center_on(world.center(), viewport);
     }
 
+    /// The corners and clockwise turn a box dragged on screen from board
+    /// point `from` to `to` is judged with (window or crossing, and what it
+    /// covers). Seen from below (#2394) that box is the one dragged the
+    /// other way on a view turned the other way.
+    pub fn box_frame<T>(&self, from: T, to: T) -> (T, T, f32) {
+        let rotation = self.rotation;
+        if rotation.is_mirrored() {
+            (to, from, (360.0 - rotation.degrees()) % 360.0)
+        } else {
+            (from, to, rotation.degrees())
+        }
+    }
+
     /// Turn the view to `rotation`, keeping the board point at the centre of
     /// `viewport` where it is. Whether the angle changed.
     pub fn set_rotation(&mut self, rotation: ViewRotation, viewport: Rectangle) -> bool {
@@ -155,16 +168,32 @@ impl super::PcbCanvas {
     /// Turn the view to `degrees` about the centre of the canvas; the board
     /// is not touched. Whether the angle changed.
     pub fn set_view_rotation(&mut self, degrees: f32) -> bool {
+        let mirrored = self.camera.get_mut().rotation().is_mirrored();
+        let rotation = ViewRotation::from_degrees(degrees).with_mirror(mirrored);
+        self.set_camera_rotation(rotation)
+    }
+
+    /// Whether the view shows the board from below (#2394).
+    pub fn view_flipped(&self) -> bool {
+        self.camera.borrow().rotation().is_mirrored()
+    }
+
+    /// Show the board from below (mirrored left to right) or from above,
+    /// about the centre of the canvas; the board is not touched. Whether
+    /// the view changed.
+    pub fn set_view_flipped(&mut self, flipped: bool) -> bool {
+        let rotation = self.camera.get_mut().rotation().with_mirror(flipped);
+        self.set_camera_rotation(rotation)
+    }
+
+    fn set_camera_rotation(&mut self, rotation: ViewRotation) -> bool {
         let viewport = self.viewport.get();
-        let turned = self
-            .camera
-            .get_mut()
-            .set_rotation(ViewRotation::from_degrees(degrees), viewport);
-        if turned {
+        let changed = self.camera.get_mut().set_rotation(rotation, viewport);
+        if changed {
             self.bg_cache.clear();
             *self.content.get_mut() = None;
         }
-        turned
+        changed
     }
 
     /// Board mm to canvas pixels under the live camera.

@@ -11,8 +11,8 @@ use crate::library::editor::symbol::state::{self as sym_state, SymbolSelection};
 use crate::status_bar::Activity;
 
 /// The status bar segment for `editor`. An error the editor reported wins
-/// and is drawn as an error; otherwise "Part 1 / 2 · 8 pins" and the
-/// selection, or the key hints.
+/// and is drawn as an error; otherwise "Part 1 of 2 · 8 pins" and the
+/// selection. The bar names state only, no key hints (#2262).
 pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> Activity {
     if let Some(message) = &editor.status_message {
         return Activity {
@@ -23,7 +23,7 @@ pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> Activity {
     Activity::note(summary(editor, i18n))
 }
 
-/// "Part 1 / 2 · 8 pins" and the selection, or the key hints.
+/// "Part 1 of 2 · 8 pins", then the selection when there is one.
 fn summary(editor: &SymbolDocument, i18n: &I18n) -> String {
     let symbol = editor.primitive();
     let view = editor.view();
@@ -39,26 +39,10 @@ fn summary(editor: &SymbolDocument, i18n: &I18n) -> String {
         "parts" => u32::from(sym_state::max_part_number(symbol)),
         "pins" => pins
     );
-    let tail = match &editor.selected {
-        Some(selection) => format!(
-            "{} · {}",
-            selection_text(editor, selection, i18n),
-            t!(i18n, ids::EDITORS_SYMBOL_STATUS_HINT_SELECTED)
-        ),
-        None => idle_hint(i18n),
-    };
-    format!("{part} · {tail}")
-}
-
-/// The key hints with undo and redo as this OS writes the platform chord.
-fn idle_hint(i18n: &I18n) -> String {
-    t!(
-        i18n,
-        ids::EDITORS_SYMBOL_STATUS_HINT_IDLE,
-        "undo" => crate::keymap::shown_in("Mod+Z", i18n),
-        "redo" => crate::keymap::shown_in("Mod+Y", i18n)
-    )
-    .into_string()
+    match &editor.selected {
+        Some(selection) => format!("{part} · {}", selection_text(editor, selection, i18n)),
+        None => part.into_string(),
+    }
 }
 
 /// "Pin 8 VOUT selected" for one pin, "3 selected" for anything else.
@@ -107,13 +91,14 @@ mod tests {
         crate::app::Signex::new().0.ui_state.i18n.clone()
     }
 
+    /// #2262: with nothing selected the segment is the part and its pin
+    /// count only; the bar names state, not key hints.
     #[test]
-    fn the_segment_counts_the_active_parts_pins_and_hints_at_the_keys() {
+    fn the_segment_counts_the_active_parts_pins_without_key_hints() {
         let editor = editor_with_pins(&[("1", "VIN", 1), ("2", "GND", 2), ("3", "EN", 1)]);
         let i18n = i18n();
         let segment = segment(&editor, &i18n);
         assert!(!segment.is_error);
-        let segment = segment.text;
         let part = t!(
             i18n,
             ids::EDITORS_SYMBOL_STATUS_PART_PINS,
@@ -121,14 +106,8 @@ mod tests {
             "parts" => 2u32,
             "pins" => 2usize
         );
-        assert_eq!(segment, format!("{part} · {}", idle_hint(&i18n)));
-        // Fluent wraps each placeholder in bidi isolation marks.
-        let shown = idle_hint(&i18n).replace(['\u{2068}', '\u{2069}'], "");
-        assert!(
-            shown.starts_with(&format!("{} undo", crate::keymap::shown("Mod+Z")))
-                && shown.contains(&format!("{} redo", crate::keymap::shown("Mod+Y"))),
-            "{shown}"
-        );
+        assert_eq!(segment.text, part.into_string());
+        assert!(!segment.text.contains("undo"), "{}", segment.text);
     }
 
     #[test]
@@ -138,6 +117,7 @@ mod tests {
         let i18n = i18n();
         let shown = segment(&editor, &i18n).text;
         assert!(shown.contains("8") && shown.contains("VOUT"), "{shown}");
+        assert!(!shown.contains("Del removes"), "{shown}");
     }
 
     #[test]

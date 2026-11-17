@@ -316,6 +316,13 @@ fn moved_graphite_strings_of_the_second_wave_keep_their_english() {
     );
     assert_eq!(
         shown(
+            ids::PANELS_SCH_LIBRARY_BREADCRUMB,
+            &[("file", "R.snxsym".into()), ("count", 1usize.into())],
+        ),
+        "R.snxsym  (1 symbol)"
+    );
+    assert_eq!(
+        shown(
             ids::PANELS_LIBRARY_ROW_SUMMARY,
             &[
                 ("table", "Resistors".into()),

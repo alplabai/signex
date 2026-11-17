@@ -8,16 +8,20 @@
 
 mod body_row;
 mod child_sheet;
+mod directive;
 mod drawing;
 mod drawing_preview;
 mod font_row;
 mod footprint_card;
 mod footprint_section;
-mod generic;
 mod header;
 mod label;
 mod library_rows;
 mod pins;
+mod placed_kinds;
+mod placed_rows;
+#[cfg(test)]
+mod placed_rows_tests;
 mod power_port;
 mod rows;
 mod selected;
@@ -29,6 +33,7 @@ pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
 pub(super) use child_sheet::view_child_sheet_properties;
+pub use directive::BlanketEdit;
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
 pub use footprint_card::{

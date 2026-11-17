@@ -122,16 +122,6 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::EditSymbolRotation(uuid, deg) => {
-                self.apply_engine_command(
-                    signex_engine::Command::SetSymbolRotation {
-                        symbol_id: *uuid,
-                        rotation_degrees: *deg,
-                    },
-                    true,
-                    true,
-                );
-            }
             crate::panels::PanelMsg::EditPowerPortStyle {
                 symbol_id,
                 new_lib_id,
@@ -174,6 +164,9 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
+                self.edit_blanket_field(*uuid, edit);
+            }
             crate::panels::PanelMsg::EditTextFontFamily(target, family) => {
                 self.apply_engine_command(
                     signex_engine::Command::SetTextFontFamily {
@@ -213,18 +206,6 @@ impl Signex {
                         label_id: *uuid,
                         font_size_mm: None,
                         justify: Some(*h),
-                        rotation_degrees: Some(*deg),
-                    },
-                    true,
-                    true,
-                );
-            }
-            crate::panels::PanelMsg::EditLabelRotation(uuid, deg) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateLabelProps {
-                        label_id: *uuid,
-                        font_size_mm: None,
-                        justify: None,
                         rotation_degrees: Some(*deg),
                     },
                     true,

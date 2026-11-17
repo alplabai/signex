@@ -80,6 +80,10 @@ pub struct ZonePolygonInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// A pour's computed copper, drawn instead of filling the outline
+    /// (which is then only stroked); `None` for a zone whose copper is its
+    /// outline. Set by [`PcbSnapshot::with_zone_fills`].
+    pub fill: Option<Vec<ZoneFillPiece>>,
 }
 
 /// Whose colour copper is drawn in: the colour the Layers panel lists that
@@ -144,9 +148,12 @@ pub struct PcbSnapshot {
     pub drc_markers: Vec<DrcMarkerInput>,
     /// The outline, cutouts, mounting holes and keepouts (#2234).
     pub board_features: BoardFeaturesInput,
-    /// Footprint designator and comment texts (#2368). Not in the `Scene`:
+    /// Footprint and board texts (#2368, #2387). Not in the `Scene`:
     /// the app draws them on a canvas layer of their own on both mounts.
     pub texts: Vec<FootprintTextInput>,
+    /// Footprint silkscreen, fab, assembly and courtyard drawings and the
+    /// board's own drawings (#2387), drawn in the overlay buckets.
+    pub graphics: Vec<GraphicInput>,
 }
 
 impl PcbSnapshot {
@@ -168,18 +175,28 @@ impl PcbSnapshot {
 mod board_features;
 mod emit;
 mod footprint_text;
+mod graphics;
+mod layer_colour;
 mod layer_rows;
+mod layer_sets;
 mod layer_view;
 mod ratsnest;
+mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
+pub use graphics::{GraphicInput, GraphicShapeInput};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
     signal_layers,
 };
+pub use layer_sets::{
+    BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
+    listed_layers,
+};
 pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
 pub use ratsnest::ratsnest_inputs;
+pub use zone_fill::ZoneFillPiece;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {
@@ -190,6 +207,8 @@ pub enum PcbSliceFamily {
     RuleAreas,
     Ratsnest,
     Drc,
+    /// Footprint and board drawings (#2387).
+    Graphics,
     Theme,
     Camera,
 }
@@ -216,7 +235,11 @@ const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceF
 // the table feeds real `DirtyFlags` (Traces -> LINES), not just an
 // is-empty check. Pads alone would leave stale trace lines on screen.
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
-const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
+const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[
+    PcbSliceFamily::Pads,
+    PcbSliceFamily::Traces,
+    PcbSliceFamily::Graphics,
+];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];
 const FAMILIES_RULE_AREA_UPDATED: &[PcbSliceFamily] =
     &[PcbSliceFamily::RuleAreas, PcbSliceFamily::Drc];
@@ -250,7 +273,9 @@ pub fn dirty_flags_for_families(families: &[PcbSliceFamily]) -> DirtyFlags {
             PcbSliceFamily::Pads | PcbSliceFamily::Zones | PcbSliceFamily::RuleAreas => {
                 DirtyFlags::POLYGONS
             }
-            PcbSliceFamily::Ratsnest | PcbSliceFamily::Drc => DirtyFlags::OVERLAY,
+            PcbSliceFamily::Ratsnest | PcbSliceFamily::Drc | PcbSliceFamily::Graphics => {
+                DirtyFlags::OVERLAY
+            }
             PcbSliceFamily::Theme => DirtyFlags::THEME,
             PcbSliceFamily::Camera => DirtyFlags::empty(),
         };
@@ -681,6 +706,7 @@ mod tests {
                 source_order: 2,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -693,6 +719,7 @@ mod tests {
                 source_order: 1,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -705,6 +732,7 @@ mod tests {
                 source_order: 0,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
         ];
 

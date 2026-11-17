@@ -236,6 +236,16 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
             ItemRef::Via(id) => {
                 nets.extend(board.vias.iter().filter(|v| v.uuid == id).map(|v| v.net));
             }
+            // A copper arc or free pad stands for its net (#2373).
+            ItemRef::Arc(_) | ItemRef::FreePad(_) => {
+                nets.extend(pcb_geom::item_net(board, *item));
+            }
+            // A drawn area, a string, a dimension or a drawing stands for
+            // nothing on the schematic.
+            ItemRef::Zone { .. }
+            | ItemRef::Text(_)
+            | ItemRef::Dimension(_)
+            | ItemRef::Graphic { .. } => {}
         }
     }
     CrossSelection {

@@ -124,6 +124,19 @@ pub(crate) fn logged_count(needle: &str) -> usize {
         .count()
 }
 
+#[cfg(test)]
+thread_local! {
+    static SAID_ON_THREAD: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many lines this thread has logged, installing the logger first. Unlike
+/// the shared ring, other tests running at the same time do not move it.
+#[cfg(test)]
+pub(crate) fn said_on_this_thread() -> u64 {
+    let _ = init_logging();
+    SAID_ON_THREAD.with(std::cell::Cell::get)
+}
+
 /// Id of the most recent entry in the ring, without cloning it.
 pub fn newest_entry_id() -> Option<u64> {
     entries()
@@ -184,6 +197,8 @@ impl Log for SignexLogger {
             return;
         }
 
+        #[cfg(test)]
+        SAID_ON_THREAD.with(|said| said.set(said.get() + 1));
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
         let at = chrono::Utc::now();

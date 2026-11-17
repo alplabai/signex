@@ -473,6 +473,14 @@ uuid                                  pos_x     pos_y     drill    plated  net
 5ca1ab1e-0005-4000-8000-000000000040  46000000  36000000  3200000  true    2
 """
 
+[board_options]
+polygon_naming = "net_layer_pour"
+designator_display = "physical"
+
+[board_options.origin]
+x = 0
+y = 40000000
+
 [extras.footprints.5ca1ab1e-0005-4000-8000-000000000002]
 footprint_id = "DC_Jack_5.5x2.1mm"
 locked = true
@@ -1684,6 +1692,7 @@ x = 0.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000001"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1699,6 +1708,7 @@ x = 40.0
 y = 0.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000002"
 graphic_type = "arc"
 layer = "EdgeCuts"
 width = 0.05
@@ -1718,6 +1728,7 @@ x = 40.0
 y = 10.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000003"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1733,6 +1744,7 @@ x = 50.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000004"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05
@@ -1748,6 +1760,7 @@ x = 0.0
 y = 40.0
 
 [[extras.board.graphics]]
+uuid = "6a0d0000-0005-4000-8000-000000000005"
 graphic_type = "line"
 layer = "EdgeCuts"
 width = 0.05

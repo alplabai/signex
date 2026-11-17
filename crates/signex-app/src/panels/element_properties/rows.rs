@@ -19,11 +19,6 @@ pub(super) fn rotation_degrees(text: &str) -> f64 {
     signex_types::numeric::parse_finite_f64(text.trim_end_matches('°')).unwrap_or(0.0)
 }
 
-/// Rotation, in degrees, from a rotation pick-list label (`90 Degrees`).
-pub(super) fn pick_list_degrees(label: &str) -> f64 {
-    rotation_degrees(label.split_whitespace().next().unwrap_or(""))
-}
-
 /// The row `key` of a selection's info, empty when the selection has none.
 pub(super) fn info_row(info: &[(String, String)], key: &str) -> String {
     info.iter()

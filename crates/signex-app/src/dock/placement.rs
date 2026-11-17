@@ -174,6 +174,7 @@ impl PanelPosition {
 impl DockArea {
     /// Give a fresh Graphite layout the panels an editor tab needs: the
     /// footprint editor gets Footprint Library and Layers on the left, the
+    /// board editor its Nets on the left and a DRC tab on the right, the
     /// symbol editor SCH Library on the left and the Pins table at the
     /// bottom, the component editor folds the left dock to its rail.
     /// Runs once per context and
@@ -194,6 +195,9 @@ impl DockArea {
             EditorContext::Pcb if self.editor_seeds.pcb => {
                 self.editor_seeds.pcb = false;
                 self.show_panel_at(PanelPosition::Left, PanelKind::PcbNets);
+                // The DRC results get their own tab beside Properties (#2262),
+                // not a block at the top of Messages; Properties stays in front.
+                self.add_panel(PanelPosition::Right, PanelKind::Drc);
             }
             EditorContext::Component if self.editor_seeds.component => {
                 self.editor_seeds.component = false;
@@ -408,5 +412,24 @@ mod tests {
         assert!(dock.locate(PanelKind::Layers).is_none());
         assert!(dock.locate(PanelKind::SymbolPins).is_none());
         assert!(dock.locate(PanelKind::SchLibrary).is_none());
+    }
+
+    /// #2262: a fresh layout's first board tab docks the DRC results as a
+    /// right-hand tab, behind Properties; a saved layout gets none.
+    #[test]
+    fn a_fresh_layout_docks_a_drc_tab_for_the_board_editor() {
+        let mut dock = crate::dock::graphite_first_run();
+        let front = dock.is_frontmost(PanelKind::Properties);
+        dock.seed_for_editor(EditorContext::Pcb);
+        assert!(matches!(
+            dock.locate(PanelKind::Drc),
+            Some(crate::dock::PanelSite::Docked(PanelPosition::Right, _))
+        ));
+        assert_eq!(dock.is_frontmost(PanelKind::Properties), front);
+        assert!(!dock.is_frontmost(PanelKind::Drc));
+
+        let mut saved = DockArea::new();
+        saved.seed_for_editor(EditorContext::Pcb);
+        assert!(saved.locate(PanelKind::Drc).is_none());
     }
 }

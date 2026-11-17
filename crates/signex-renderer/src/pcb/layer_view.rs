@@ -13,11 +13,13 @@ use signex_types::pcb::{Footprint, LayerDef, Pad, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::emit::{
-    is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
-    via_from_board_via, zone_from_board_zone,
+    arc_traces, is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack,
+    trace_from_segment, via_from_board_via, zone_from_board_zone,
 };
 use super::footprint_text::footprint_texts;
+use super::graphics::{Drawings, board_drawings, footprint_drawings};
 use super::layer_rows::{LayerGroup, group_layers};
+use super::layer_sets::ShownLayerSet;
 use super::{CopperInk, PadInput, PcbSnapshot};
 
 /// Alpha factor for copper that is not on the active layer, and for a hidden
@@ -53,6 +55,13 @@ pub struct PcbLayerView {
     /// Single-layer mode: only the active layer is drawn and hit, with the
     /// board outline and the vias and through-hole pads that reach it.
     single_layer: bool,
+    /// The layer set the strip under the canvas lists (#2394); `None`:
+    /// every layer.
+    layer_set: Option<ShownLayerSet>,
+    /// The highlighted layer: every other layer is drawn dimmed (#2394).
+    highlighted: Option<PcbLayer>,
+    /// The board seen from below: mirrored, bottom layers on top (#2394).
+    flipped: bool,
 }
 
 impl Default for PcbLayerView {
@@ -64,6 +73,9 @@ impl Default for PcbLayerView {
             multi_layer_visible: true,
             origin_marker_visible: true,
             single_layer: false,
+            layer_set: None,
+            highlighted: None,
+            flipped: false,
         }
     }
 }
@@ -99,7 +111,7 @@ fn copper_span(names: &[String]) -> Option<CopperSpan> {
 /// through-hole pad (`through`), else its topmost copper layer.
 fn classify(view: Option<&PcbLayerView>, names: &[String], through: bool) -> (Emphasis, CopperInk) {
     let span = copper_span(names);
-    let emphasis = view.map_or(Emphasis::Normal, |v| v.span_emphasis(span));
+    let emphasis = view.map_or(Emphasis::Normal, |v| v.item_emphasis(names, span));
     let ink = match span {
         _ if through => CopperInk::MultiLayer,
         Some((top, _)) => CopperInk::Layer(top),
@@ -151,9 +163,92 @@ impl PcbLayerView {
         }
     }
 
+    /// Hide `layer`; a hidden one stays hidden.
+    pub fn hide(&mut self, layer: PcbLayer) {
+        self.hidden.insert(layer);
+    }
+
+    /// Show `layer` as the active one and hide every other layer of
+    /// `layers` (#2379). The board outline stays as it is, as single-layer
+    /// mode keeps it, and so does the Multi-Layer row.
+    pub fn show_only(&mut self, layers: &[PcbLayer], layer: PcbLayer) {
+        let others = layers
+            .iter()
+            .copied()
+            .filter(|&l| l != layer && l != BOARD_OUTLINE);
+        self.hidden.extend(others);
+        self.hidden.remove(&layer);
+        self.active = layer;
+    }
+
+    /// Show every layer again; the strip lists every layer (the All set).
     pub fn show_all(&mut self) {
         self.hidden.clear();
         self.multi_layer_visible = true;
+        self.layer_set = None;
+    }
+
+    /// Show every layer of `layers` (#2394), or hide every one.
+    pub fn set_layers_visible(&mut self, layers: &[PcbLayer], visible: bool) {
+        for &layer in layers {
+            if visible {
+                self.hidden.remove(&layer);
+            } else {
+                self.hidden.insert(layer);
+            }
+        }
+    }
+
+    /// Show the layers of `set` and hide every other layer of `listed`
+    /// (#2394); the strip then lists only the set. The board outline stays
+    /// as it is, as Show only this layer keeps it.
+    pub fn show_set(&mut self, listed: &[PcbLayer], set: ShownLayerSet) {
+        for &layer in listed {
+            if set.layers.contains(&layer) {
+                self.hidden.remove(&layer);
+            } else if layer != BOARD_OUTLINE {
+                self.hidden.insert(layer);
+            }
+        }
+        self.layer_set = Some(set);
+    }
+
+    /// The set the strip lists; `None` for every layer.
+    pub fn layer_set(&self) -> Option<&ShownLayerSet> {
+        self.layer_set.as_ref()
+    }
+
+    /// Stop listing a set: the strip lists every layer, the hidden ones
+    /// stay hidden.
+    pub fn forget_layer_set(&mut self) {
+        self.layer_set = None;
+    }
+
+    /// Whether the strip lists `layer`: every layer without a set.
+    pub fn lists_in_strip(&self, layer: PcbLayer) -> bool {
+        self.layer_set
+            .as_ref()
+            .is_none_or(|set| set.layers.contains(&layer))
+    }
+
+    /// The highlighted layer, if any (#2394).
+    pub fn highlighted(&self) -> Option<PcbLayer> {
+        self.highlighted
+    }
+
+    /// Highlight `layer`, dimming every other one; highlighting it again
+    /// ends the highlight.
+    pub fn toggle_highlight(&mut self, layer: PcbLayer) {
+        self.highlighted = (self.highlighted != Some(layer)).then_some(layer);
+    }
+
+    /// Whether the board is seen from below (#2394).
+    pub fn flipped(&self) -> bool {
+        self.flipped
+    }
+
+    pub fn toggle_flipped(&mut self) {
+        self.flipped = !self.flipped;
     }
 
     pub fn has_hidden(&self) -> bool {
@@ -265,7 +360,27 @@ impl PcbLayerView {
     /// layer (a through via listed as Top and Bottom while an inner layer is
     /// active) is on it.
     pub fn emphasis(&self, names: &[String]) -> Emphasis {
-        self.span_emphasis(copper_span(names))
+        self.item_emphasis(names, copper_span(names))
+    }
+
+    /// [`Self::emphasis`] of an item on `names` whose copper spans `span`.
+    /// A highlighted layer (#2394) decides alone: an item on it (spanning
+    /// it, for copper) is on top, every other item is dimmed.
+    fn item_emphasis(&self, names: &[String], span: Option<CopperSpan>) -> Emphasis {
+        let Some(highlighted) = self.highlighted else {
+            return self.span_emphasis(span);
+        };
+        let on = match (highlighted.copper(), span) {
+            (Some(copper), Some((top, bottom))) => (top..=bottom).contains(&copper),
+            _ => names
+                .iter()
+                .any(|name| parse_pcb_layer(name) == Some(highlighted)),
+        };
+        if on {
+            Emphasis::Active
+        } else {
+            Emphasis::Dimmed
+        }
     }
 
     fn span_emphasis(&self, span: Option<CopperSpan>) -> Emphasis {
@@ -312,9 +427,30 @@ impl PcbLayerView {
     }
 }
 
-fn active_last<T>(mut items: Vec<(Emphasis, T)>) -> Vec<(Emphasis, T)> {
-    items.sort_by_key(|(emphasis, _)| *emphasis);
+/// Items in draw order: by emphasis, so the active layer ends up on top.
+/// Seen from below (#2394), within one emphasis copper nearer the bottom is
+/// drawn later, so the bottom layer lies over the top one.
+fn in_draw_order<T>(
+    mut items: Vec<(Emphasis, T)>,
+    flipped: bool,
+    ink: impl Fn(&T) -> CopperInk,
+) -> Vec<(Emphasis, T)> {
+    if flipped {
+        items.sort_by_key(|(emphasis, item)| (*emphasis, stack_depth(ink(item))));
+    } else {
+        items.sort_by_key(|(emphasis, _)| *emphasis);
+    }
     items
+}
+
+/// Where an ink sits in the board-from-below stack: unknown copper first,
+/// then the copper layers top to bottom, then vias and through-hole pads.
+fn stack_depth(ink: CopperInk) -> (u8, Option<CopperLayer>) {
+    match ink {
+        CopperInk::Unknown => (0, None),
+        CopperInk::Layer(layer) => (1, Some(layer)),
+        CopperInk::MultiLayer => (2, None),
+    }
 }
 
 impl PcbSnapshot {
@@ -326,6 +462,7 @@ impl PcbSnapshot {
 
     pub(super) fn from_board_filtered(board: &PcbBoard, view: Option<&PcbLayerView>) -> Self {
         let shown = |names: &[String]| view.is_none_or(|v| v.shows_any(names));
+        let flipped = view.is_some_and(PcbLayerView::flipped);
 
         let mut traces = Vec::new();
         for segment in &board.segments {
@@ -338,26 +475,58 @@ impl PcbSnapshot {
                 traces.push((how, trace));
             }
         }
+        // A copper arc is drawn as copper along its chords (#2373).
+        for arc in board
+            .free
+            .arcs
+            .iter()
+            .filter(|a| pcb_geom::arc_is_copper(a))
+        {
+            let names = std::slice::from_ref(&arc.layer);
+            if shown(names) {
+                let (how, ink) = classify(view, names, false);
+                for mut trace in arc_traces(arc) {
+                    trace.dimmed = how == Emphasis::Dimmed;
+                    trace.ink = ink;
+                    traces.push((how, trace));
+                }
+            }
+        }
         let mut vias = Vec::new();
         for via in &board.vias {
             if view.is_none_or(|v| v.shows_via(&via.layers)) {
                 let (how, ink) = classify(view, &via.layers, true);
-                let mut input = via_from_board_via(via);
+                let mut input = via_from_board_via(via, view.and_then(PcbLayerView::active_copper));
                 input.dimmed = how == Emphasis::Dimmed;
                 input.ink = ink;
                 vias.push((how, input));
             }
         }
-        let pads: Vec<_> = board
+        let mut pads: Vec<_> = board
             .footprints
             .iter()
             .flat_map(|footprint| footprint_pads(footprint, view))
             .collect();
-        let texts = board
-            .footprints
-            .iter()
-            .flat_map(|footprint| footprint_texts(footprint, view))
-            .collect();
+        // Free pads are drawn as pads of the board's own frame (#2373).
+        if !board.free.pads.is_empty() {
+            let frame = Footprint {
+                pads: board.free.pads.clone(),
+                ..signex_types::pcb_free::free_pad_frame()
+            };
+            pads.extend(footprint_pads(&frame, view));
+        }
+        let mut drawings = Drawings {
+            texts: board
+                .footprints
+                .iter()
+                .flat_map(|footprint| footprint_texts(footprint, view))
+                .collect(),
+            ..Drawings::default()
+        };
+        board_drawings(board, view, &mut drawings);
+        for footprint in &board.footprints {
+            footprint_drawings(footprint, view, &mut drawings);
+        }
 
         let layer_ranks = layer_rank_index(board);
         let mut zones = Vec::new();
@@ -391,10 +560,10 @@ impl PcbSnapshot {
             .collect();
 
         Self {
-            traces: strip(active_last(traces)),
-            vias: strip(active_last(vias)),
-            pads: strip(active_last(pads)),
-            zones: strip(active_last(zones)),
+            traces: strip(in_draw_order(traces, flipped, |t| t.ink)),
+            vias: strip(in_draw_order(vias, flipped, |v| v.ink)),
+            pads: strip(in_draw_order(pads, flipped, |p| p.ink)),
+            zones: strip(in_draw_order(zones, flipped, |z| z.ink)),
             rule_areas,
             ratsnest_lines: Vec::new(),
             drc_markers: Vec::new(),
@@ -402,7 +571,8 @@ impl PcbSnapshot {
                 edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
                 ..super::BoardFeaturesInput::from_board(board)
             },
-            texts,
+            texts: drawings.texts,
+            graphics: drawings.graphics,
         }
     }
 }
@@ -410,7 +580,9 @@ impl PcbSnapshot {
 impl PcbSnapshot {
     /// The pads of `footprint` alone, drawn as the board draws them with
     /// every layer shown: a library preview (#2348) lowers the footprint
-    /// through here, so it cannot look different from the board.
+    /// through here, so it cannot look different from the board. Its
+    /// drawings are left out: the preview draws them itself, in the same
+    /// board palette colours (`ResolvedTheme::board_layer_color`).
     pub fn from_footprint(footprint: &Footprint) -> Self {
         Self {
             pads: strip(footprint_pads(footprint, None)),
@@ -427,7 +599,9 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
             continue;
         }
         let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-        if let Some(mut input) = pad_from_footprint(footprint, pad) {
+        if let Some(mut input) =
+            pad_from_footprint(footprint, pad, view.and_then(PcbLayerView::active_copper))
+        {
             input.dimmed = how == Emphasis::Dimmed;
             input.ink = ink;
             pads.push((how, input));

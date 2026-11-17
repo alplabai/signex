@@ -178,3 +178,107 @@ fn a_keepout_is_drawn_on_copper_or_a_keep_out_layer_only() {
     let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
     assert!(new_keepout(id, outline, overlay).is_none());
 }
+
+#[test]
+fn a_pour_is_a_pour_zone_on_the_net_under_its_first_point_in_one_step() {
+    use signex_types::pcb_layer::CopperLayer;
+
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let outline = rectangle(Point::new(1.0, 0.0), Point::new(4.0, 3.0));
+    let id = Uuid::from_u128(0x90);
+    let zone = new_pour(engine.board(), id, outline, CopperLayer::Top).unwrap();
+    assert!(zone.is_pour());
+    assert_eq!((zone.net, zone.layer.as_str()), (3, "TopCopper"));
+    assert_eq!(zone.clearance, 0.0, "follows the board's clearance");
+    assert_eq!(zone.pour_clearance_mm(engine.board()), 0.2);
+    engine.execute(place_zone(zone)).unwrap();
+    assert_eq!(engine.board().zones.len(), 1);
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+
+    let flat = rectangle(Point::new(1.0, 1.0), Point::new(4.0, 1.0));
+    assert!(new_pour(engine.board(), id, flat, CopperLayer::Top).is_none());
+}
+
+#[test]
+fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let id = Uuid::from_u128(0x90);
+    let text = new_text(id, Point::new(2.0, 3.0), overlay, "J1".into()).unwrap();
+    assert_eq!(
+        (text.layer.as_str(), text.text.as_str()),
+        ("TopSilkscreen", "J1")
+    );
+    assert_eq!(text.font_size, signex_types::pcb::PCB_DEFAULT_TEXT_SIZE_MM);
+    assert_eq!(text.rotation, 0.0);
+    engine.execute(place_text(text.clone())).unwrap();
+    assert_eq!(engine.board().texts, [text]);
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+}
+
+#[test]
+fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
+    use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
+
+    let at = Point::new(2.0, 3.0);
+    let id = Uuid::from_u128(0x91);
+    let bottom = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
+    let text = new_text(id, at, bottom, "J1".into()).unwrap();
+    assert_eq!(text.layer, "BottomSilkscreen");
+    let mech = PcbLayer::Mechanical(MechanicalLayer::new(2).unwrap());
+    assert_eq!(
+        new_text(id, at, mech, "J1".into()).unwrap().layer,
+        "Mechanical2"
+    );
+    let dims = PcbLayer::Technical(TechnicalLayer::Dimensions);
+    assert!(new_text(id, at, dims, "J1".into()).is_some(), "#2373");
+    for layer in [
+        PcbLayer::Copper(CopperLayer::Top),
+        PcbLayer::Copper(CopperLayer::Bottom),
+        PcbLayer::Technical(TechnicalLayer::EdgeCuts),
+        PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
+    ] {
+        assert!(new_text(id, at, layer, "J1".into()).is_none(), "{layer:?}");
+    }
+}
+
+/// #2400: a run on a net whose class sets a track width is drawn that wide;
+/// a net in no class, or a class without a width, keeps the board's.
+#[test]
+fn a_track_takes_the_width_of_its_net_class() {
+    use signex_types::net_class::NetClass;
+    use signex_types::pcb_layer::CopperLayer;
+
+    let board = board();
+    let start = Point::new(2.0, 0.0);
+    let style = |classes: &[NetClass]| {
+        TrackStyle::starting_at(&board, start, CopperLayer::Top).with_class_width(&board, classes)
+    };
+    let power = NetClass {
+        nets: vec!["GND".into()],
+        trace_width: 0.6,
+        ..NetClass::named("Power")
+    };
+    assert_eq!(style(std::slice::from_ref(&power)).width_mm, 0.6);
+    assert_eq!(
+        class_track_width(&board, 3, std::slice::from_ref(&power)),
+        Some(0.6)
+    );
+    let unset = NetClass {
+        trace_width: 0.0,
+        ..power.clone()
+    };
+    assert_eq!(style(&[unset]).width_mm, 0.3, "no width: the board's");
+    let other = NetClass {
+        nets: vec!["VCC".into()],
+        ..power.clone()
+    };
+    assert_eq!(style(&[other]).width_mm, 0.3, "GND is in no class");
+    assert_eq!(class_track_width(&board, 0, &[power]), None, "no net");
+}

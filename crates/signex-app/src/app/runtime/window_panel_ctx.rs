@@ -32,6 +32,7 @@ impl PanelContext {
         self.active_custom_filter_tab = main.active_custom_filter_tab;
         self.erc_running = main.erc_running;
         self.erc_results_stale = main.erc_results_stale;
+        self.erc_ran = main.erc_ran;
         self.project_tree_selected
             .clone_from(&main.project_tree_selected);
         if self.ui_font_name != main.ui_font_name {

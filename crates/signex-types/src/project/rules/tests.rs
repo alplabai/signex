@@ -329,4 +329,31 @@ fn a_malformed_drc_section_is_kept_and_marks_the_rules_unreadable() {
     }
 }
 
-mod drc_waivers;
+/// #2398: named rule sets ride in `drc.sets`, keep keys a newer build
+/// added, and leave a `drc` without sets byte-stable (no `sets` key).
+#[test]
+fn named_rule_sets_round_trip_and_stay_absent_when_empty() {
+    use crate::project::DrcRuleSet;
+    let text = r#"{"dsl":"rule a on via require drill >= 0.2mm then error",
+        "sets":{"HV_08":{"limits":{"min_clearance":"0.8mm"},"severity":"warning",
+        "uses":[{"scope":"class == \"HV\"","rules":["HV_08_HV_clearance"],"later":1}],
+        "future":true}}}"#;
+    let drc: DrcRuleSet = serde_json::from_str(text).unwrap();
+    let set = &drc.sets["HV_08"];
+    assert_eq!(set.limits["min_clearance"], "0.8mm");
+    assert_eq!(set.severity.as_deref(), Some("warning"));
+    assert_eq!(set.uses[0].rules, ["HV_08_HV_clearance"]);
+    let back: DrcRuleSet = serde_json::from_str(&serde_json::to_string(&drc).unwrap()).unwrap();
+    assert_eq!(back, drc);
+    assert!(
+        serde_json::to_string(&back)
+            .unwrap()
+            .contains("\"future\":true")
+    );
+    let plain = DrcRuleSet {
+        dsl: Some("x".into()),
+        ..DrcRuleSet::default()
+    };
+    assert!(!serde_json::to_string(&plain).unwrap().contains("sets"));
+    assert!(!drc.is_empty());
+}

@@ -5,12 +5,14 @@
 use pcb_geom::{PointNm, layer_bit, net_at};
 use signex_types::corner::CornerRule;
 use signex_types::format::pcb_layer_token;
+use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::{
     PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PcbBoard,
     PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
+use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -24,6 +26,12 @@ fn setup_or(board: &PcbBoard, field: impl Fn(&PcbSetup) -> f64, default: f64) ->
         .map(field)
         .filter(|v| v.is_finite() && *v > 0.0)
         .unwrap_or(default)
+}
+
+/// The board's track width: `PcbSetup::trace_width`, else the PCB default.
+/// A new arc takes it too (#2373).
+pub fn default_track_width(board: &PcbBoard) -> f64 {
+    setup_or(board, |s| s.trace_width, PCB_DEFAULT_TRACE_WIDTH_MM)
 }
 
 /// The net of the copper under `at` on the copper layers of `layers` (a
@@ -42,12 +50,15 @@ pub fn new_via(board: &PcbBoard, id: Uuid, at: Point) -> Via {
     let diameter = setup_or(board, |s| s.via_diameter, PCB_DEFAULT_VIA_DIAMETER_MM);
     let drill = setup_or(board, |s| s.via_drill, PCB_DEFAULT_VIA_DRILL_MM).min(diameter);
     Via {
+        attributes: Default::default(),
         uuid: id,
         position: at,
         diameter,
         drill,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: net_under(board, at, u32::MAX),
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -79,6 +90,29 @@ impl TrackStyle {
             net: net_under(board, at, 1 << layer_bit(layer)),
         }
     }
+
+    /// The style with the track width of its net's class (#2400), when the
+    /// class sets one; unchanged for no net or a class without a width.
+    #[must_use]
+    pub fn with_class_width(mut self, board: &PcbBoard, classes: &[NetClass]) -> Self {
+        if let Some(width) = class_track_width(board, self.net, classes) {
+            self.width_mm = width;
+        }
+        self
+    }
+}
+
+/// The track width the net class of net `net` sets: the first class of
+/// `classes` (table order) that holds the net's name, when its width is set
+/// (finite and above zero). `None` for net 0 or a net the board does not name.
+pub fn class_track_width(board: &PcbBoard, net: u32, classes: &[NetClass]) -> Option<f64> {
+    if net == 0 {
+        return None;
+    }
+    let name = &board.nets.iter().find(|n| n.number == net)?.name;
+    first_matching_class(classes, name)
+        .map(|class| class.trace_width)
+        .filter(|w| w.is_finite() && *w > 0.0)
 }
 
 /// The tracks of a run from `from` to `to`, bent by `rule` into one or two
@@ -95,6 +129,8 @@ pub fn track_run(
     rule.legs(from, to)
         .into_iter()
         .map(|(start, end)| Segment {
+            locked: false,
+            attributes: Default::default(),
             uuid: ids(),
             start,
             end,
@@ -149,13 +185,32 @@ pub fn new_copper_area(
         outline,
         holes: Vec::new(),
         priority: 0,
-        fill_type: "solid".into(),
+        fill_type: signex_types::pcb::SOLID_FILL.into(),
         thermal_relief: false,
         thermal_gap: 0.0,
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
+    })
+}
+
+/// A polygon pour over `outline` on `layer` (#2216): a zone with the pour
+/// fill, on the net of the copper under its first point, or no net. Its
+/// clearance is left at 0, which follows the board's clearance
+/// (`Zone::pour_clearance_mm`). `None` for an outline with no area or a
+/// point the geometry cannot hold.
+pub fn new_pour(
+    board: &PcbBoard,
+    id: Uuid,
+    outline: Vec<Point>,
+    layer: CopperLayer,
+) -> Option<Zone> {
+    new_copper_area(board, id, outline, layer).map(|zone| Zone {
+        fill_type: POUR_FILL.into(),
+        ..zone
     })
 }
 
@@ -182,6 +237,8 @@ pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zon
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     })
 }
@@ -192,6 +249,43 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
         items: vec![BoardItem::Zone(zone)],
     }
 }
+
+/// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
+/// default size and unturned. `None` on a layer that takes no text
+/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
+/// DRC and ratsnest never read.
+pub fn new_text(
+    id: Uuid,
+    at: Point,
+    layer: PcbLayer,
+    text: String,
+) -> Option<signex_types::pcb::BoardText> {
+    if !layer.takes_text() {
+        return None;
+    }
+    Some(signex_types::pcb::BoardText {
+        uuid: id,
+        text,
+        position: at,
+        layer: pcb_layer_token(layer),
+        font_size: signex_types::pcb::PCB_DEFAULT_TEXT_SIZE_MM,
+        rotation: 0.0,
+    })
+}
+
+/// Add a board string: one undo step.
+pub fn place_text(text: signex_types::pcb::BoardText) -> BoardCommand {
+    place_item(BoardItem::Text(text))
+}
+
+/// Add one item: one undo step.
+pub fn place_item(item: BoardItem) -> BoardCommand {
+    BoardCommand::AddItems { items: vec![item] }
+}
+
+pub use super::draw_free::{
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+};
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for
 /// fewer than three points, points on one line, or a point the geometry

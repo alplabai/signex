@@ -20,6 +20,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         bus_entries: Vec::new(),
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
+        directives: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),

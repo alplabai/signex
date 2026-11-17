@@ -61,12 +61,6 @@ pub struct ProjectRules {
     /// so a file without one re-saves without one.
     #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
     pub drc: DrcRuleSet,
-    /// Per-finding DRC waivers with a reason (#2307), the shape of
-    /// `erc_waivers`: rule id + the involved items' ids + a fingerprint of
-    /// their geometry. Beside `drc`, so a waiver never changes the rule set's
-    /// hash. Older builds keep the key verbatim in `unknown`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub drc_waivers: Vec<super::DrcWaiver>,
     /// Keys written by a newer build (`annotation`, ...); kept so a save
     /// does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -82,7 +76,6 @@ impl Default for ProjectRules {
             erc_net_waivers: BTreeMap::new(),
             erc_waivers: Vec::new(),
             drc: DrcRuleSet::default(),
-            drc_waivers: Vec::new(),
             unknown: UnknownJson::default(),
         }
     }
@@ -154,14 +147,51 @@ pub struct DrcRuleSet {
     /// `signex-drc-dsl` for each run. Stored and written back as is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsl: Option<String>,
+    /// Named rule sets (#2398), by name: limits written once and applied to
+    /// net classes or nets as rules in `dsl`. `signex-drc-dsl` keeps those
+    /// rules in step when a set changes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sets: BTreeMap<String, NamedRuleSet>,
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
+}
+
+/// One named rule set (#2398): its limits as written (`min_clearance` ->
+/// `0.8mm`), the severity its rules take, and where it is applied.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct NamedRuleSet {
+    /// Limit field id (`min_clearance`, `min_width`, ...) -> length as
+    /// written.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub limits: BTreeMap<String, String>,
+    /// `error` / `warning` / `info`; absent is `error`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+    /// Each scope the set is applied to and the rules written for it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uses: Vec<RuleSetUse>,
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
+}
+
+/// Where a named rule set is applied: a scope as the rule text writes it
+/// (`class == "HV"`), and the names of the rules written for it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RuleSetUse {
+    pub scope: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<String>,
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
 }
 
 impl DrcRuleSet {
-    /// No severities, no rule text and no foreign keys.
+    /// No severities, no rule text, no rule sets and no foreign keys.
     pub fn is_empty(&self) -> bool {
-        self.severity.is_empty() && self.dsl.is_none() && self.unknown.is_empty()
+        self.severity.is_empty()
+            && self.dsl.is_none()
+            && self.sets.is_empty()
+            && self.unknown.is_empty()
     }
 
     /// Lower-case hex SHA-256 of the section's canonical JSON alone. Profile

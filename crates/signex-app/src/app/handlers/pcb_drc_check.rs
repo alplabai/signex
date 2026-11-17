@@ -8,8 +8,7 @@
 //! from memory, in the GUI process, in headless runs and over the agent
 //! channel (#2331). A closed board is read off the UI thread. It changes no
 //! DRC state and says nothing in Messages; what it found comes back as a
-//! `signex_types::check` report, the project's `drc_waivers` applied
-//! (#2307). See `docs/CLI.md`, "Checks on demand".
+//! `signex_types::check` report. See `docs/CLI.md`, "Checks on demand".
 
 use std::path::Path;
 
@@ -43,7 +42,6 @@ impl Signex {
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default();
         let stored = project.and_then(|p| p.data.rules.as_ref());
-        let waivers = stored.map(|r| r.drc_waivers.clone()).unwrap_or_default();
         let (profile, project_layer) = drc_layers(stored, &self.ui_state.machine_drc_rules);
         let layers = Layers {
             profile: profile.cloned(),
@@ -66,7 +64,7 @@ impl Signex {
             let (report, names) = run_check(&board, &classes, &layers)?;
             let name = path.display().to_string();
             Ok(signex_drc::findings::check_report(
-                &report, &names, &name, warnings, rule_set, &board, &waivers,
+                &report, &names, &name, warnings, rule_set,
             ))
         }
     }

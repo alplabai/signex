@@ -12,13 +12,13 @@ use iced::Task;
 use crate::app::state::WindowKind;
 use crate::app::{Message, Signex};
 
-/// How Tile arranges the windows.
+/// How Tile arranges the windows and the main window's document panes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileLayout {
-    /// Tile Vertically: one column per window, left to right.
+    /// Tile Vertically: one column per window or pane, left to right.
     SideBySide,
-    /// Tile Horizontally: one row per window, top to bottom (the Windows
-    /// MDI convention, Caner 2026-11-10).
+    /// Tile Horizontally: one row per window or pane, top to bottom
+    /// (Caner 2026-11-10).
     Stacked,
 }
 

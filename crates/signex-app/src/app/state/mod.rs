@@ -7,6 +7,8 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_3d;
+mod board_net_classes;
 mod board_project;
 mod board_sketch;
 mod case_fold;
@@ -35,6 +37,7 @@ mod path_key;
 mod pcb_board;
 mod pcb_drc;
 pub(crate) mod pcb_edit;
+pub(crate) mod pcb_query;
 mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -59,12 +62,15 @@ mod window_sizes;
 mod window_tab;
 
 pub use agent_edits::AgentEdits;
+pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
+pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
@@ -518,6 +524,8 @@ pub struct DocumentState {
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
     pub(crate) check_runs: check_runs::CheckRuns,
+    /// Each open project's design reuse blocks, read or saved (#2410).
+    pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,

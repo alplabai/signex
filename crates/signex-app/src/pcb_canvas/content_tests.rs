@@ -196,6 +196,7 @@ fn built(offset: (f32, f32)) -> BuiltAt {
         offset,
         scale: 5.0,
         degrees: 0.0,
+        mirrored: false,
         device_px_per_logical_px: 1.0,
         viewport: VIEWPORT,
         scene_generation: 7,
@@ -248,6 +249,10 @@ fn the_plan_reuses_only_a_whole_pixel_pan_inside_the_cover() {
         },
         BuiltAt {
             degrees: 37.0,
+            ..built((10.0, 20.0))
+        },
+        BuiltAt {
+            mirrored: true,
             ..built((10.0, 20.0))
         },
         BuiltAt {

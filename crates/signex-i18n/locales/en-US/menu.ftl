@@ -46,6 +46,11 @@ menu-edit-arrange = Arrange
 # Rows of the Place menu that are not commands.
 menu-place-text = Text
 menu-place-no-connect = No Connect
+# Submenu titles of the Place menu on a sheet (#2415), grouped like the
+# Active Bar: ports, sheet symbols and harnesses; directives; drawing tools.
+menu-place-ports = Ports & Connectors
+menu-place-directives = Directives
+menu-place-graphics = Graphics
 
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.
@@ -90,8 +95,7 @@ menu-planned-tooltip = Planned — not available yet
 ## Context menus (#2057)
 # Rows of the right-click menus. A row that runs a command shows the command's
 # own catalog text, so only the rows with no command are here.
-# Canvas menu: rows for features that are planned, not built yet.
-ctx-clear-filter = Clear Filter
+# Canvas menu: submenu launchers, and rows for features that are planned, not built yet.
 ctx-part-actions = Part Actions
 ctx-sheet-actions = Sheet Actions
 ctx-references = References
@@ -101,6 +105,13 @@ ctx-snippets = Snippets
 ctx-comment = Comment...
 ctx-pin-mapping = Pin Mapping...
 ctx-supplier-links = Supplier Links...
+# Tooltips of those planned rows: what each will do, and that it is not built yet.
+ctx-references-planned = Planned: list where the selected objects are used across the project
+ctx-unions-planned = Planned: group the selected objects so they move and select as one
+ctx-pin-mapping-planned = Planned: map the selected part's symbol pins to its footprint pads
+ctx-supplier-links-planned = Planned: link the selected part to supplier part numbers and prices
+# Tooltip of the greyed Assign Net Class row: where a net is given a class today.
+ctx-assign-net-class-elsewhere = Pick the class in the Net Class row of the Properties panel
 # Document-tab menu. { $title } is the name of the document of the tab.
 ctx-tab-close = Close { $title }
 ctx-tab-close-others = Close All Other Documents

@@ -75,7 +75,13 @@ impl BoardClipboard {
                         .ok_or(missing)?
                         .clone(),
                 ),
-                BoardItemId::Zone(_) | BoardItemId::Text(_) => {}
+                // Copy and paste of these is not built yet (#2373).
+                BoardItemId::Zone(_)
+                | BoardItemId::Text(_)
+                | BoardItemId::Arc(_)
+                | BoardItemId::FreePad(_)
+                | BoardItemId::Dimension(_)
+                | BoardItemId::Graphic(_) => {}
             }
         }
         let Some(centre) = copy.anchor_centre() else {
@@ -147,7 +153,9 @@ impl BoardClipboard {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             sketch: None,
+            stackup: None,
             options: Default::default(),
             unknown: Default::default(),
         }

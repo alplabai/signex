@@ -35,6 +35,7 @@ fn pad(n: u128, x: f64) -> Pad {
         net: None,
         roundrect_ratio: 0.25,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -96,6 +97,8 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        stackup: None,
+        free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),
     }

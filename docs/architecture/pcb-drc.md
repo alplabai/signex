@@ -146,7 +146,7 @@ not touched and a shared core can come later.
 
 ```text
 program  := rule*
-rule     := "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
+rule     := "disabled"? "rule" NAME "on" TARGET pair? when? require "then" severity STRING?
 pair     := "between" OBJECT "and" OBJECT
 when     := "when" cond ("and" cond)*
 cond     := SUBJECT ("==" | "matches") (STRING | WORD)
@@ -168,6 +168,7 @@ severity := "error" | "warning" | "info"
 | `net matches "USB_*"` | a net-name glob (`*`, `?`, as net classes) | 1 |
 | none of the above | every net | 0 |
 | `layer == outer` / `inner` / `TopCopper` | copper layers; a narrowing condition | (adds 1) |
+| `class == "HV" and other_class == "LV"` | a clearance between a net of each class, either order, both sides (#2398, a class matrix cell); clearance rules only | 2 (adds 1) |
 
 A rule takes at most one net, class or pattern condition and one layer
 condition. Words the grammar keeps open on purpose: a region scope (v2) is one
@@ -325,10 +326,13 @@ moved after it.
 ## Zones
 
 `Unconnected` is the ratsnest, so it joins copper through zones the way the
-ratsnest does (#2215): a pad island joined only through a same-net pour is not
-reported open. The pour itself is not checked: a zone's clearance to other
-nets (#2216) and its fill are not modelled, so a zone is never a `Clearance`
-or `Short` party.
+ratsnest does (#2215): a pad island joined only through a same-net zone is not
+reported open. A polygon pour joins through its computed fill (#2216), so a
+pad in a pour's hole or inside its clearance from another net is reported
+open. The zones themselves are not checked: a zone is never a `Clearance` or
+`Short` party. A pour's fill keeps its clearance from pads, tracks, vias and
+solid zones by construction, but not from another pour; a solid zone's
+clearance to other nets is not checked yet.
 
 ## Keepouts
 
@@ -354,58 +358,6 @@ that does not convert where a `no_components` keepout needs it is in
 Messages say it (#2300). Each keepout is tested against every item,
 with a bounding-box test first; an index lookup is a follow-up if boards with
 many keepouts make it slow.
-
-## Waivers (#2307)
-
-A designer accepts one finding with a reason. The project stores it in
-`rules.drc_waivers` of the `.snxprj`, in the shape of `erc_waivers`
-(`signex_types::project::DrcWaiver`, the same type as `ErcWaiver`): rule id,
-sorted ids, fingerprint, reason, author, date, the finding's message, and
-any key a newer build wrote. The list sits beside `drc`, not inside it, so a
-waiver never changes the rule-set hash; an empty list is not written, and an
-older build keeps the key verbatim in `unknown`. A `drc_waivers` value of
-another shape makes the whole `rules` section unreadable, as a malformed
-`erc_waivers` does (#1180): the section is kept byte for byte and not
-applied.
-
-`signex_drc::waivers` owns what the ids and the fingerprint mean:
-
-- **Identity** is the rule id (`builtin::<kind>` or `user::<name>`) and the
-  ids of the items the finding names (a pad as `<footprint>/<pad>`, as the
-  check report names it), plus `keepout:<uuid>` for a keepout finding and,
-  for a written rule, `kind:<builtin id>` (one rule can set several limits).
-  Positions are never part of it. A finding that names nothing (an
-  unconnected link with no pad at either end) cannot be waived.
-- **The fingerprint** is SHA-256 over the rule id and, per involved item,
-  the geometry a rule sees of it: a track's layer, net, ends and width; a
-  via's copper span (`via_layers`: a through via reaches every layer,
-  whatever it lists), net, position, diameter and drill; a pad's footprint
-  placement (position, turn, side) with its own type, shape, position,
-  size, turn, corner ratio, drill, layers, number and net; a footprint's
-  placement, library id and body (`footprint_body`: the courtyard's extent,
-  else the pads'); a keepout's outline, layers and what it forbids. Lengths
-  and angles are quantised to stored nm, so a save and a load keep it. Nets are named, not numbered, so a renumbering keeps it. A
-  designator, value or any item the finding does not name never changes it.
-- **Matching**: a complete waiver (reason and author set) with the same rule
-  and ids hides the finding when the fingerprints agree. When they differ,
-  an involved item changed: the waiver lapses and the finding shows again.
-  The rule's limit is not in the fingerprint, so changing the clearance
-  keeps a waiver. An unconnected link names the pads at its ends; another
-  pad of the net moving can pick other ends, and then the waiver no longer
-  matches anything rather than lapsing.
-- **One waiver, one finding.** When two findings of a run share an
-  identity (two ratsnest links between stacked pads end on the same pads),
-  neither can be waived (`waiver_keys` gives them no key), and a waiver
-  with that identity hides neither and is listed as lapsed. A run without
-  a complete waiver skips the matching.
-
-`check_drc` applies the project's waivers: a hidden finding is in `waived`
-with its waiver, a lapsed waiver in `lapsed` and its finding back in
-`findings`; a rule switched off neither hides nor lapses anything. Board
-item ids do not embed the board's document id, so a Save As or a repaired
-document id leaves the waivers as they are (ERC re-keys its net waivers
-there; DRC has nothing to re-key). Run DRC and the DRC panel do not read
-waivers yet; making and showing one there is the next step.
 
 ## Not checked yet
 

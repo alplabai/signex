@@ -19,13 +19,24 @@ pub struct UiState {
     /// only: never written to the `.snxpcb`.
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// The board layer strip's tab names and saved layer sets (#2394), per
+    /// user in `prefs.json`.
+    pub layer_strip: crate::layer_strip_prefs::LayerStripPrefs,
     /// The status bar's view-angle field while it is open (#2316).
     pub pcb_view_angle_entry: Option<crate::app::ViewAngleEntry>,
     /// What a click or box may pick on a board: the PCB selection filter
     /// (#2353), one for the editor. Session only.
     pub pcb_pick_filter: pcb_geom::PickFilter,
+    /// The board filter's saved presets (#2383), the schematic's mechanism
+    /// keyed on board kinds; kept in `prefs.json`.
+    pub pcb_filter_presets: Vec<crate::active_bar::CustomFilterPreset<pcb_geom::PickKind>>,
+    /// The preset the board panel edits.
+    pub pcb_filter_preset_tab: usize,
     /// How carried board items snap (#2353), one for the editor. Session only.
     pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
+    /// The row each PCB Active Bar group last ran (#2392), kept in
+    /// `prefs.json`.
+    pub pcb_bar_last_tools: crate::app::pcb_bar_groups::PcbBarLastTools,
     /// The board Properties panel's tab, search text, filter menu and the
     /// grid step being typed (#2353).
     pub pcb_board_panel: crate::panels::PcbBoardPanelView,
@@ -467,6 +478,15 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
+    /// until Generate.
+    pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
+    /// Generation of the newest Fabrication Outputs write, outside the
+    /// dialog so a reopened dialog never takes an older answer.
+    pub fab_outputs_writes: u64,
+    /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
+    /// and the print options it was last used with.
+    pub board_output: crate::app::BoardOutputState,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
@@ -658,6 +678,9 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+    /// Window ▸ Tile: the main window shows its documents in panes in this
+    /// layout (#2249); `None` shows the active document alone.
+    pub document_tiling: Option<crate::app::TileLayout>,
     /// Calculator state, owned here so the modal view stays a pure
     /// function of the model (ADR-0001 A1).
     pub passive_calculator: signex_widgets::passive_calculator::CalculatorControl,
@@ -796,6 +819,11 @@ mod tests {
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),
+            ),
+            ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            (
+                "board_output.dialog",
+                field_size(|ui| &ui.board_output.dialog),
             ),
         ];
         for (name, size) in sizes {

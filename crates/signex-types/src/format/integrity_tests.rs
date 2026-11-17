@@ -81,6 +81,7 @@ fn all_ids(sheet: &SchematicSheet) -> Vec<Uuid> {
     ids.extend(sheet.bus_entries.iter().map(|b| b.uuid));
     ids.extend(sheet.drawings.iter().map(|d| d.uuid()));
     ids.extend(sheet.no_erc_directives.iter().map(|n| n.uuid));
+    ids.extend(sheet.directives.iter().map(|d| d.uuid()));
     ids
 }
 
@@ -408,6 +409,8 @@ fn a_coordinate_that_round_trips_still_opens() {
 fn a_pcb_coordinate_at_the_i64_end_is_refused() {
     let mut board = empty_board();
     board.segments.push(crate::pcb::Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: id(3),
         start: crate::pcb::Point { x: 1.0, y: 2.0 },
         end: crate::pcb::Point { x: 5.0, y: 2.0 },

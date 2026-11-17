@@ -192,6 +192,7 @@ workstream is active in every phase.
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
 | **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
 | **WS-3D** | 3D Viewer                   | `signex-model-import`, `signex-render-3d`    |
+| **WS-MC** | MCAD                        | `signex-mcad`                                |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
 | **WS-AI** | Signex AI (Pro)             | `signex-ai`                                  |
 | **WS-C**  | Collaboration (Team)        | `signex-collab`, Supabase backend            |
@@ -502,6 +503,7 @@ editor: design, validate, route, DRC, and export to fabrication.
 |------|-------|
 | **Community Release** | Gerber RS-274X + X2 export; Excellon drill export; ODB++ export |
 | **Assembly & 3D Export** | Pick-and-place CSV; IPC-2581 export; STEP 3D export (board body); assembly SVG |
+| **Scripted Demo Videos** | Scripts that run catalog commands through the existing agent socket (or the CLI), with no second control port; one story script per feature (schematic to board, rules, routing, Signex AI); screen capture with a drawn pointer, click ripples and captions; idle stretches cut; MP4 and GIF output for the README, the docs and the website, re-recorded on every release so the videos never go stale |
 
 **Exit criteria:** a complete project can be designed, validated, and
 exported to manufacturing files; a real PCB designed in Signex has been
@@ -569,7 +571,7 @@ orbitable 3D in place, no separate window. See `PCB_3D_RENDER_PLAN.md`.
 | **Partial & Embedded Heavy Copper** | Copper weight per region, not only per layer: heavy-copper areas (power, high current, heat spreading) beside standard-weight fine-pitch routing on the same layer, and heavy-copper inlays or bars embedded in the stackup. Region copper weight in the stack editor and the `.snxpcb` format; DRC clearance, width and spacing rules that follow the local copper weight (fab-house profiles); current capacity and temperature rise per trace and region; region thickness in the 3D view; fab outputs that carry the regions (separate region layer, stackup report and fab notes). Needs the Advanced PCB stack editor |
 | **Impedance & DRC Rules** | Impedance profile per layer pair + built-in calculator; impedance-controlled routing (Z0 display, width-from-impedance); additional DRC rules (silk-silk, acute angle, component clearance, height) |
 | **Routing Polish & Geometry** | Route completion (loop removal) and glossing; split planes (negative plane layers); via-in-pad, paste / mask expansion rules; per-layer keepout, board cutouts, castellated holes |
-| **Constraint Manager & HUD** | Constraint Manager (schematic-side spreadsheet rule editor); query-based rule scoping (InNet, InNetClass, OnLayer, boolean); Board Insight HUD (clearance, net name under cursor) |
+| **Constraint Manager & HUD** | Constraint Manager (schematic-side spreadsheet rule editor); query-based rule scoping (InNet, InNetClass, OnLayer, boolean); Board Insight HUD (clearance, net name under cursor). **Pulled forward by #2398:** the Rules manager (a table rule editor over the rule text, with net, class and pattern scopes in one Scope cell, "Why this value?", shadow and conflict flags, and Required / Actual / Margin from the last DRC) ships ahead of this band; the same issue later brings the net-class editor of PCB Routing, the DRC rule profiles of Advanced PCB, and rule rows as Requirements & Verification checks |
 
 ### High-Speed Design (P3)
 
@@ -611,6 +613,51 @@ they are planned and scoped, not because they are committed. They carry
 no exit criteria, they gate nothing, and of every band on this page they
 are the most likely to move — including past the Pro Release. Their only hard
 dependency is the 3D Viewer band.
+
+### MCAD (P3)
+
+Mechanical design inside Signex, so the board and the part it goes into are
+designed, checked and changed in one place, by the user or by Signex AI. Solid
+modelling uses an existing B-rep kernel crate, wrapped by a Signex crate. The
+kernel must be Apache-2.0 or MIT, pure Rust, wasm-compatible and an exact B-rep.
+`solidcore` is the current choice against these criteria; it is re-checked when
+MCAD Kernel starts, since the crate is still being ported. The kernel is a
+normal dependency, credited in the third-party licence list, with its NOTICE
+file carried in the distribution as Apache-2.0 §4(d) requires. Signex's own
+sketch solver (`signex-sketch`) drives every sketch, so the sketch mode users
+already know is the one they model with. Every operation is a command with an
+inverse (one undo step), a typed agent command with a JSON result, and reachable
+from menus, the Active Bar, context menus, keys and the palette. Board and
+enclosure stay linked: a board change (outline, mounting hole, connector move)
+is offered as a reviewable change to the mechanical design, never applied
+silently.
+
+`signex-mcad` does no IO and builds for `wasm32`, because a web front end is
+possible under the shared application core (#2326, ADR-0001 A4). STEP and the
+native mechanical document are read from and written to bytes (`&[u8]` in,
+`Vec<u8>` out); opening and saving files is the host's job (native, browser or
+test), reached through an `Effect`, never through `std::fs` inside the crate.
+The crate uses no `std::fs`, `std::net`, threads or tokio; long kernel work runs
+as a compute job the host schedules. The kernel dependency must also build for
+`wasm32`. `signex-mcad` joins the `DOMAIN` set in `scripts/check_arch_guard.sh`
+and the `wasm32` CI build when it is created.
+
+| Plan | Scope |
+|------|-------|
+| **MCAD Kernel** | `signex-mcad` crate wrapping the kernel: bodies, faces, edges, persistent face/edge names; a STEP AP214/AP242 B-rep translator (read and write) written in Signex on the kernel's topology, since the kernel provides no STEP support; tessellation for the 3D view; a native mechanical document type in the `.snx*` family; kernel calls guarded so a failed operation is a message, never a crash |
+| **Enclosure Fit Check** | Insert an enclosure or mechanical STEP next to the board in 3D; DRC rules for component-to-enclosure clearance, collisions, component height under a lid, keepouts and mounting-hole-to-standoff alignment; results in the DRC panel with cross-probe; a `mcad.fit_check` agent command |
+| **Part Modelling** | Sketch on a plane or a face, then extrude, revolve, cut, fillet, chamfer, shell, draft, holes, patterns and mirror; named parameters and an editable feature history that rebuilds; measure and section views |
+| **Board-Driven Enclosure** | An enclosure started from the board: outline offset, wall and lid, standoffs placed on the mounting holes, port cut-outs from connector bodies, vents; parameters follow board changes through a reviewable change list |
+| **Assemblies & Interference** | Components and occurrences, joints with limits, ground, interference between parts shown on the bodies, exploded views; the board is one component of the assembly |
+| **Sheet Metal & Plastic Parts** | Flanges, hems, bends, flat pattern with DXF export; bosses, ribs, lip/groove and snap fits for moulded enclosures |
+
+**MCAD is P3 and is not a gate.** It is published because it is planned and
+scoped. Unlike the other P3 bands, it does not wait for the Pro Release: work on
+it starts once the schematic and PCB editors are complete and the release that
+ships them, with its demo videos and website, is out. The goal is one tool for
+every electronic and mechanical design. Its hard dependencies are the 3D Viewer
+band and the STEP 3D export in Assembly & 3D Export. Enclosure Fit Check needs
+no modelling and comes first; the other plans follow in table order.
 
 ### Pro Release
 
@@ -840,6 +887,24 @@ What that promotion does and does not mean:
 - **Sub-version boundaries within a band are the softest thing on this
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
+
+### 2026-11-16 — MCAD and scripted demo videos
+
+Maintainer request (Caner): Signex should have full MCAD capabilities, so
+electronics and mechanics are designed in one place and Signex AI can work
+across both. Added as a new band, **MCAD (P3)**, with workstream WS-MC. The
+maintainer chose to build on an existing permissive (Apache-2.0 / MIT) Rust
+B-rep kernel crate rather than write a kernel; features are written in Signex,
+from published standards and Signex's own design, not copied from another
+application. Also added **Scripted Demo Videos** as its own plan in Community
+Release: every feature gets a scripted, re-recordable video for the README,
+the docs and the website. No scope was moved out of another plan. On
+2026-11-17 the maintainer set MCAD's start: once the schematic and PCB editors
+are complete and their release is out, not after the Pro Release as for the
+other P3 bands. The maintainer (Hakan) also required that `signex-mcad` does
+no IO and builds for `wasm32`: STEP and the native document go through bytes,
+file access goes through the host's `Effect`, and long kernel work is a
+host-scheduled compute job.
 
 ### 2026-11-13 — Partial and embedded heavy copper
 

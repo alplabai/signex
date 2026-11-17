@@ -59,7 +59,7 @@ const UUID_ZONE_BASE: u128 = 40_000;
 /// The same nm-to-mm step the `.snxpcb` reader takes, so a reopened board
 /// compares equal to the generated one.
 fn mm(nm: i64) -> f64 {
-    nm as f64 * 1.0e-6
+    nm as f64 / 1.0e6
 }
 
 fn point(x_nm: i64, y_nm: i64) -> Point {
@@ -96,6 +96,8 @@ pub fn board_10k_tracks() -> PcbBoard {
             let (x0, y0) = joint_nm(row, seg);
             let (x1, y1) = joint_nm(row, seg + 1);
             segments.push(Segment {
+                locked: false,
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(UUID_SEGMENT_BASE + segments.len() as u128),
                 start: point(x0, y0),
                 end: point(x1, y1),
@@ -109,12 +111,15 @@ pub fn board_10k_tracks() -> PcbBoard {
         for joint in (VIA_EVERY..=SEGMENTS_PER_ROW).step_by(VIA_EVERY) {
             let (x, y) = joint_nm(row, joint);
             vias.push(Via {
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(UUID_VIA_BASE + vias.len() as u128),
                 position: point(x, y),
                 diameter: mm(600_000),
                 drill: mm(300_000),
                 layers: vec![COPPER_LAYERS[0].to_string(), COPPER_LAYERS[3].to_string()],
                 net,
+                locked: false,
+                layer_sizes: None,
                 via_type: ViaType::Through,
                 unknown_columns: Default::default(),
             });
@@ -141,6 +146,7 @@ pub fn board_10k_tracks() -> PcbBoard {
 
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,
@@ -173,6 +179,7 @@ pub fn board_10k_tracks() -> PcbBoard {
         ],
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -228,6 +235,7 @@ fn two_pad_part(
             }),
             roundrect_ratio: 0.0,
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
@@ -275,6 +283,8 @@ fn ground_pour(index: u128, layer: &str) -> Zone {
         thermal_width: 0.5,
         clearance: 0.2,
         min_thickness: 0.2,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }

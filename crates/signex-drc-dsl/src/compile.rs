@@ -35,7 +35,7 @@ pub(crate) fn compile_rule(ast: &RuleAst) -> Outcome {
     };
     let target = c.target(&ast.target);
     let pair = ast.pair.as_ref().and_then(|p| c.pair(p, target));
-    let (nets, layers) = c.scope(&ast.when);
+    let (nets, layers) = c.scope(&ast.when, target);
     let limits = c.limits(&ast.require, target);
     let errors = c.found.iter().any(|d| d.level == Level::Error);
     let unchecked = matches!(pair, Some(Pair::NotMeasured));
@@ -143,9 +143,10 @@ impl Checker<'_> {
         }
     }
 
-    fn scope(&mut self, conds: &[CondAst]) -> (NetScope, Option<u32>) {
+    fn scope(&mut self, conds: &[CondAst], target: Option<Target>) -> (NetScope, Option<u32>) {
         let mut nets: Option<NetScope> = None;
         let mut layers: Option<u32> = None;
+        let mut other: Option<&CondAst> = None;
         for cond in conds {
             let subject = cond.subject.text.as_str();
             let value = cond.value.text.clone();
@@ -153,6 +154,14 @@ impl Checker<'_> {
                 ("net", CondOp::Is) => NetScope::Net(value),
                 ("net", CondOp::Matches) => NetScope::Pattern(value),
                 ("class", CondOp::Is) => NetScope::Class(value),
+                ("other_class", CondOp::Is) => {
+                    if other.is_some() {
+                        let msg = "a rule takes one other_class condition".to_string();
+                        self.error(&cond.subject.span, msg);
+                    }
+                    other = Some(cond);
+                    continue;
+                }
                 ("layer", CondOp::Is) => {
                     if layers.is_some() {
                         let msg = "a rule takes one layer condition".to_string();
@@ -161,7 +170,7 @@ impl Checker<'_> {
                     layers = self.layer(&cond.value).or(layers);
                     continue;
                 }
-                ("class" | "layer", CondOp::Matches) => {
+                ("class" | "other_class" | "layer", CondOp::Matches) => {
                     let msg = format!("'{subject}' takes '==', not 'matches'");
                     self.error(&cond.subject.span, msg);
                     continue;
@@ -172,7 +181,8 @@ impl Checker<'_> {
                     continue;
                 }
                 (other, _) => {
-                    let msg = format!("unknown condition '{other}' (net, class or layer)");
+                    let msg =
+                        format!("unknown condition '{other}' (net, class, other_class or layer)");
                     self.error(&cond.subject.span, msg);
                     continue;
                 }
@@ -183,7 +193,27 @@ impl Checker<'_> {
             }
             nets = Some(scope);
         }
-        (nets.unwrap_or(NetScope::Board), layers)
+        let nets = nets.unwrap_or(NetScope::Board);
+        let Some(other) = other else {
+            return (nets, layers);
+        };
+        // `class == "A" and other_class == "B"`: a clearance between the
+        // nets of two classes (#2398).
+        if target.is_some_and(|t| t != Target::Clearance) {
+            let msg = "'other_class' is for a clearance rule only".to_string();
+            self.error(&other.subject.span, msg);
+            return (nets, layers);
+        }
+        match nets {
+            NetScope::Class(class) => {
+                (NetScope::ClassPair(class, other.value.text.clone()), layers)
+            }
+            nets => {
+                let msg = "'other_class' needs a 'class' condition".to_string();
+                self.error(&other.subject.span, msg);
+                (nets, layers)
+            }
+        }
     }
 
     fn layer(&mut self, value: &Word) -> Option<u32> {

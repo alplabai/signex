@@ -121,7 +121,6 @@ fn a_guide_is_added_edited_and_deleted_as_undo_steps() {
     assert_eq!(guides.len(), 1);
     let id = guides[0].uuid;
     assert_eq!(guides[0].at, Point::ZERO);
-    assert_eq!(app.ui_state.pcb_board_panel.selected_guide, Some(id));
 
     type_in(&mut app, BoardField::GuideX(id), "15");
     assert_eq!(options(&app, &path).guides[0].at.x, 15.0);
@@ -147,8 +146,11 @@ fn a_guide_is_added_edited_and_deleted_as_undo_steps() {
         1
     );
 
-    panel(&mut app, PcbBoardMsg::GuideDeleted);
+    panel(&mut app, PcbBoardMsg::GuideMenuToggled(id));
+    assert_eq!(app.ui_state.pcb_board_panel.guide_menu, Some(id));
+    panel(&mut app, PcbBoardMsg::GuideDeleted(id));
     assert!(options(&app, &path).guides.is_empty());
+    assert_eq!(app.ui_state.pcb_board_panel.guide_menu, None);
     undo(&mut app);
     assert_eq!(options(&app, &path).guides[0].at.x, 15.0);
 }
@@ -225,7 +227,11 @@ fn an_extra_grid_governs_component_moves_until_it_stops_applying() {
     panel(&mut app, PcbBoardMsg::GridAdded);
     let grid = options(&app, &path).grids[0].clone();
     assert_eq!(grid.step_mm, 1.27, "a new grid starts on the board step");
-    assert!(app.ui_state.pcb_board_panel.grid_editor_open);
+    assert_eq!(
+        app.ui_state.pcb_board_panel.grid_editing,
+        Some(crate::panels::GridCard::Extra(grid.uuid)),
+        "a new grid opens its fields"
+    );
     type_in(&mut app, BoardField::GridStep(grid.uuid), "0.5");
     type_in(&mut app, BoardField::GridOriginX(grid.uuid), "0.1");
     type_in(&mut app, BoardField::GridName(grid.uuid), "Fine");
@@ -245,8 +251,7 @@ fn an_extra_grid_governs_component_moves_until_it_stops_applying() {
     let moved = move_u1_to(&mut app, &path, 20.6, 20.6);
     assert!(near(moved, 20.32, 20.32), "{moved:?}");
 
-    panel(&mut app, PcbBoardMsg::GridSelected(grid.uuid));
-    panel(&mut app, PcbBoardMsg::GridDeleted);
+    panel(&mut app, PcbBoardMsg::GridDeleted(grid.uuid));
     assert!(options(&app, &path).grids.is_empty());
     // A step that is not above zero is refused.
     undo(&mut app);
@@ -301,4 +306,82 @@ fn a_fast_grid_button_sets_the_board_step() {
     panel(&mut app, PcbBoardMsg::FastGridApplied(1));
     let board = app.document_state.pcb_board(&path).unwrap();
     assert_eq!(board.setup.as_ref().unwrap().grid_size, 2.5);
+}
+
+/// #2386: each direction of the Add Guide dropdown adds its guide through
+/// the origin as one undo step, and closes the dropdown.
+#[test]
+fn the_add_guide_dropdown_adds_each_direction_as_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    for (n, kind) in GuideKind::ALL.into_iter().enumerate() {
+        panel(&mut app, PcbBoardMsg::GuideAddMenuToggled);
+        assert!(app.ui_state.pcb_board_panel.guide_add_open);
+        panel(&mut app, PcbBoardMsg::GuideAdded(kind));
+        assert!(!app.ui_state.pcb_board_panel.guide_add_open);
+        let guides = options(&app, &path).guides;
+        assert_eq!(guides.len(), n + 1);
+        assert_eq!(guides[n].kind, kind);
+    }
+    undo(&mut app);
+    assert_eq!(options(&app, &path).guides.len(), 3, "one step per guide");
+}
+
+/// #2386: Place on Board turns the dropdown's directions into arming one.
+#[test]
+fn place_on_board_arms_the_picked_direction() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    panel(&mut app, PcbBoardMsg::GuideAddMenuToggled);
+    panel(&mut app, PcbBoardMsg::GuidePlaceModeToggled);
+    assert!(app.ui_state.pcb_board_panel.guide_place);
+    panel(&mut app, PcbBoardMsg::GuidePlaceArmed(GuideKind::Minus45));
+    assert!(options(&app, &path).guides.is_empty(), "nothing added yet");
+    assert_eq!(
+        app.interaction_state
+            .pcb_guide_place
+            .as_ref()
+            .map(|(_, k)| *k),
+        Some(GuideKind::Minus45)
+    );
+}
+
+/// #2386: a grid is added under the board's own grid (top priority), Move
+/// Up swaps it with the one above as one undo step, and its step field
+/// edits it as one undo step.
+#[test]
+fn grid_cards_add_move_and_edit_as_undo_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    panel(&mut app, PcbBoardMsg::GridAdded);
+    let first = options(&app, &path).grids[0].uuid;
+    panel(&mut app, PcbBoardMsg::GridAdded);
+    let second = options(&app, &path).grids[0].uuid;
+    assert_ne!(
+        first, second,
+        "the new grid is first, under the board's own"
+    );
+
+    // The top card cannot go up; the second can.
+    panel(&mut app, PcbBoardMsg::GridMoved(second, true));
+    assert_eq!(options(&app, &path).grids[0].uuid, second);
+    panel(&mut app, PcbBoardMsg::GridMoved(first, true));
+    let order: Vec<Uuid> = options(&app, &path).grids.iter().map(|g| g.uuid).collect();
+    assert_eq!(order, vec![first, second]);
+    undo(&mut app);
+    let order: Vec<Uuid> = options(&app, &path).grids.iter().map(|g| g.uuid).collect();
+    assert_eq!(order, vec![second, first], "one undo step");
+
+    type_in(&mut app, BoardField::GridStep(second), "0.25");
+    assert_eq!(options(&app, &path).grids[0].step_mm, 0.25);
+    undo(&mut app);
+    assert_eq!(options(&app, &path).grids[0].step_mm, 1.27);
+
+    panel(
+        &mut app,
+        PcbBoardMsg::GridMenuToggled(crate::panels::GridCard::Extra(first)),
+    );
+    panel(&mut app, PcbBoardMsg::GridDeleted(first));
+    assert_eq!(options(&app, &path).grids.len(), 1);
+    assert_eq!(app.ui_state.pcb_board_panel.grid_menu, None);
 }

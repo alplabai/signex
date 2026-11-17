@@ -19,6 +19,14 @@ profile_name = "Classic"
 profile_kind = "built_in"
 description = "Classic single-key keyboard shortcut defaults for Signex."
 
+# On a board `Q` toggles the unit (#2406). It loads first so the global
+# `Ctrl+Q` below stays the command's menu hint.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"Q" = "cycle_unit"
+
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -52,7 +60,7 @@ context = "global"
 "Ctrl+G" = "toggle_search_panel"
 "Ctrl+Home" = "zoom_to_all_objects"
 "Ctrl+K" = "open_command_palette"
-"Mod+L" = "place_global_label"
+"Mod+L" = "place_port"
 "Mod+N" = "new_document"
 "Mod+O" = "open_document"
 "Mod+P" = "print"
@@ -113,7 +121,7 @@ context = "global"
 "F8" = "run_erc"
 "F9" = "toggle_auto_focus"
 "G" = "drag_keep_connections"
-"H" = "place_hierarchical_label"
+"H" = "place_off_sheet_connector"
 "Home" = "zoom_to_fit"
 "I" = "draw_graphic_line"
 "Insert" = "repeat_last_item"
@@ -127,7 +135,7 @@ context = "global"
 "PageUp" = "previous_sheet"
 "Q" = "place_no_connect"
 "R" = "rotate_counterclockwise"
-"S" = "draw_hierarchical_sheet"
+"S" = "place_sheet_symbol"
 "Shift+Alt+A" = "force_annotate_all_schematics"
 "Shift+B" = "place_design_block"
 "Shift+F3" = "find_previous"
@@ -143,14 +151,39 @@ context = "global"
 "W" = "place_wire"
 "X" = "mirror_x"
 "Y" = "mirror_y"
-"Z" = "place_wire_to_bus_entry"
+"Z" = "place_bus_entry"
 "`" = "highlight_net_under_cursor"
 "~" = "clear_net_highlighting"
 
+# #2416: Cross Probe, Find Similar Objects and the Net Inspector. `Mod+L`,
+# `H`, `S` and `Z` above name the Port, Off Sheet Connector, Sheet Symbol and
+# Bus Entry tools the Place menu shows; they arm the same tools as before.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Shift+C" = "cross_probe"
+"Shift+F" = "find_similar_objects"
+"Shift+I" = "open_net_inspector"
+
+# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Shift+Alt+H" = "tile_windows_horizontally"
+"Shift+Alt+U" = "untile_documents"
+"Shift+Alt+V" = "tile_windows_vertically"
+
 # The board view (PCB tabs only): `+` steps to the next layer of the board,
 # `*` to the next signal layer,
-# `-` to the previous layer; Shift+S turns single-layer mode on or off. A
-# shifted `+` or `*` is its own stroke on a US layout.
+# `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
+# shows the board in 3D or flat again. A
+# shifted `+` or `*` is its own stroke on a US layout. #2406: `1` enters or
+# leaves the board sketch, `L` flips the selection or the part on the cursor
+# to the other side, `C` shows or hides the ratsnest, `F` changes the
+# footprint, `K` draws a keepout, `F7` runs the design rule check and
+# `Ctrl+M` measures.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -160,6 +193,14 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"1" = "board_sketch"
+"3" = "view_board_3d"
+"C" = "toggle_ratsnest"
+"Ctrl+M" = "measure_distance"
+"F" = "change_footprint"
+"F7" = "run_drc"
+"K" = "place_board_keepout"
+"L" = "flip_selection"
 "Shift+S" = "toggle_single_layer_mode"
 
 [[keyboard_shortcuts.sections]]

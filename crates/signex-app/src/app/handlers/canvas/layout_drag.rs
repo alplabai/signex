@@ -42,19 +42,24 @@ impl Signex {
         )
     }
 
-    /// Re-limit both side docks to the main window, so neither a smaller
-    /// window nor the other dock opening pushes the canvas under its minimum.
-    /// The wider dock gives way first. A minimised window reports a zero
-    /// size; the widths are kept for the restore.
+    /// Fit the shown side-dock widths to the main window from the widths the
+    /// user chose, so neither a smaller window nor the other dock opening
+    /// pushes the canvas under its minimum, and a larger window grows them
+    /// back (#2395). The wider dock gives way first. A minimised window
+    /// reports a zero size; the shown widths are kept for the restore.
     pub(crate) fn fit_side_docks_to_window(&mut self) {
         let (w, h) = self.ui_state.window_size;
         if w <= 0.0 || h <= 0.0 {
             return;
         }
+        let preferred = |side: PanelPosition| DockExtent {
+            size: self.document_state.dock.preferred_width(side),
+            ..self.side_dock_extent(side)
+        };
         let (left, right) = fit_side_docks(
             w,
-            self.side_dock_extent(PanelPosition::Left),
-            self.side_dock_extent(PanelPosition::Right),
+            preferred(PanelPosition::Left),
+            preferred(PanelPosition::Right),
         );
         self.ui_state.left_width = left;
         self.ui_state.right_width = right;
@@ -169,8 +174,19 @@ impl Signex {
                 if (current - new_val).abs() >= 1.0 {
                     let before = self.canvas_bounds();
                     match target {
-                        DragTarget::LeftPanel => self.ui_state.left_width = new_val,
-                        DragTarget::RightPanel => self.ui_state.right_width = new_val,
+                        // A dock drag is what sets the preferred width.
+                        DragTarget::LeftPanel => {
+                            self.ui_state.left_width = new_val;
+                            self.document_state
+                                .dock
+                                .set_preferred_width(PanelPosition::Left, new_val);
+                        }
+                        DragTarget::RightPanel => {
+                            self.ui_state.right_width = new_val;
+                            self.document_state
+                                .dock
+                                .set_preferred_width(PanelPosition::Right, new_val);
+                        }
                         DragTarget::BottomPanel => self.ui_state.bottom_height = new_val,
                         DragTarget::ComponentsSplit => {
                             self.library.components_panel.list_height = new_val

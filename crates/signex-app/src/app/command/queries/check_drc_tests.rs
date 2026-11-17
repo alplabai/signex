@@ -22,6 +22,8 @@ const BOARD: &str = "board.snxpcb";
 /// Track `n` (a fixed uuid, so a rewritten board keeps its items) of `net`.
 fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -135,10 +137,10 @@ fn warnings(report: &Value) -> Vec<String> {
 }
 
 /// Run DRC on the open board at `path`, to its end: what it reported.
-/// Held by every Run DRC here (the lib binary's only one) and across each
-/// read of the shared diagnostics ring, so a parallel run never logs its
-/// Messages lines between another test's mark and its read.
-fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+/// Held by every Run DRC of the lib binary (here and in the DRC results
+/// tests) and across each read of the shared diagnostics ring, so a parallel
+/// run never logs its Messages lines between another test's mark and its read.
+pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -172,7 +174,13 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
                     pcb_geom::ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
                     pcb_geom::ItemRef::Track(id)
                     | pcb_geom::ItemRef::Via(id)
-                    | pcb_geom::ItemRef::Footprint(id) => id.to_string(),
+                    | pcb_geom::ItemRef::Footprint(id)
+                    | pcb_geom::ItemRef::Zone { zone: id, .. }
+                    | pcb_geom::ItemRef::Text(id)
+                    | pcb_geom::ItemRef::Arc(id)
+                    | pcb_geom::ItemRef::FreePad(id)
+                    | pcb_geom::ItemRef::Dimension(id)
+                    | pcb_geom::ItemRef::Graphic { graphic: id, .. } => id.to_string(),
                 })
                 .collect();
             (rule, items)
@@ -552,64 +560,6 @@ fn an_agent_check_does_not_read_a_fifo() {
     assert!(made.success());
     let why = agent_job(&mut app, &path).unwrap_err();
     assert!(why.contains("not a regular file"), "{why}");
-}
-
-/// A waiver of `sample_board`'s clearance finding, keyed in memory: the
-/// board read back from disk must give the same fingerprint (#2307).
-fn clearance_waiver() -> signex_types::project::DrcWaiver {
-    let board = sample_board();
-    let rules = signex_drc::DrcRules::for_board(&board, &[]).unwrap();
-    let report = signex_drc::run(&board, &rules);
-    let v = report
-        .violations
-        .iter()
-        .find(|v| v.kind == signex_drc::ViolationKind::Clearance)
-        .expect("a clearance finding");
-    let key = signex_drc::waivers::waiver_key(v, &board).expect("waivable");
-    signex_types::project::DrcWaiver {
-        rule_id: key.rule_id,
-        objects: key.objects,
-        fingerprint: key.fingerprint,
-        reason: "approved".into(),
-        author: "A. Designer".into(),
-        ..Default::default()
-    }
-}
-
-#[test]
-fn the_projects_drc_waivers_fill_waived_and_lapsed() {
-    let dir = tempfile::tempdir().unwrap();
-    let (mut app, path) = board_app(&dir);
-    let plain = report(&mut app, &path, &[]);
-    let clearance = |r: &Value| {
-        findings(r)
-            .iter()
-            .filter(|f| f["rule"] == "builtin::clearance")
-            .count()
-    };
-    assert_eq!(clearance(&plain), 1, "{plain}");
-    set_rules(
-        &mut app,
-        ProjectRules {
-            drc_waivers: vec![clearance_waiver()],
-            ..ProjectRules::default()
-        },
-    );
-    let waived = report(&mut app, &path, &[]);
-    assert_eq!(clearance(&waived), 0, "{waived}");
-    assert_eq!(waived["waived"].as_array().unwrap().len(), 1, "{waived}");
-    assert_eq!(waived["waived"][0]["finding"]["rule"], "builtin::clearance");
-    assert_eq!(waived["waived"][0]["waiver"]["reason"], "approved");
-    assert!(waived["lapsed"].as_array().unwrap().is_empty());
-    // VCC 0.05 mm closer to GND: still a clearance, now of other geometry.
-    let mut moved = sample_board();
-    moved.segments[1] = track(2, 2, (0.0, 0.3), (10.0, 0.3));
-    write_board(&path, moved);
-    let lapsed = report(&mut app, &path, &[]);
-    assert_eq!(clearance(&lapsed), 1, "{lapsed}");
-    assert!(lapsed["waived"].as_array().unwrap().is_empty());
-    assert_eq!(lapsed["lapsed"].as_array().unwrap().len(), 1, "{lapsed}");
-    assert_eq!(lapsed["lapsed"][0]["rule_id"], "builtin::clearance");
 }
 
 #[test]

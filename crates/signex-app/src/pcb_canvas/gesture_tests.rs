@@ -120,15 +120,34 @@ fn the_threshold_is_four_pixels() {
     assert!(matches!(msg, PcbCanvasMsg::BoxSelected { .. }));
 }
 
+/// #2396: a Shift or Ctrl click toggles; a Shift box adds, a Ctrl box
+/// toggles.
 #[test]
-fn shift_adds_and_ctrl_toggles() {
+fn shift_or_ctrl_clicks_toggle_and_boxes_add_or_toggle() {
     let mut rig = rig();
+    for mods in [Modifiers::SHIFT, Modifiers::CTRL] {
+        rig.mods(mods);
+        rig.press(50.0, 50.0);
+        let msg = rig.release(50.0, 50.0).expect("a click");
+        assert!(
+            matches!(
+                msg,
+                PcbCanvasMsg::Clicked {
+                    mode: ClickMode::Toggle,
+                    ..
+                }
+            ),
+            "{mods:?}: {msg:?}"
+        );
+    }
+
     rig.mods(Modifiers::SHIFT);
     rig.press(50.0, 50.0);
-    let msg = rig.release(50.0, 50.0).expect("a click");
+    rig.move_to(120.0, 120.0);
+    let msg = rig.release(120.0, 120.0).expect("a box");
     assert!(matches!(
         msg,
-        PcbCanvasMsg::Clicked {
+        PcbCanvasMsg::BoxSelected {
             mode: ClickMode::Add,
             ..
         }
@@ -387,4 +406,80 @@ fn a_right_click_that_does_not_pan_opens_the_board_menu() {
     });
     run(moved, 90.0);
     assert!(run(right(false), 90.0).is_none());
+}
+
+/// #2396: while a tool or a carry waits for clicks, a jiggled press is a
+/// click at the press, never a box, and a press on a footprint never drags.
+#[test]
+fn clicks_only_turns_every_press_into_a_click() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.canvas.set_clicks_only(true);
+
+    rig.press(100.0, 80.0);
+    let moved = rig.move_to(160.0, 140.0);
+    assert!(
+        moved.is_some_and(|m| matches!(m, PcbCanvasMsg::PointerMoved { .. })),
+        "the pointer is still published for the tool to follow: {moved:?}"
+    );
+    assert!(!rig.canvas.is_carrying(), "no footprint drag");
+    assert!(rig.canvas.marquee.get().is_none(), "no box");
+    let msg = rig.release(160.0, 140.0).expect("a click");
+    let PcbCanvasMsg::Clicked { at, mode, .. } = msg else {
+        panic!("not a click: {msg:?}");
+    };
+    assert_eq!(at, rig.world(100.0, 80.0), "at the press");
+    assert_eq!(mode, ClickMode::Replace);
+
+    // Off every footprint the same: a dragged press is still a click.
+    rig.press(300.0, 200.0);
+    rig.move_to(340.0, 260.0);
+    assert!(rig.canvas.marquee.get().is_none());
+    let msg = rig.release(340.0, 260.0).expect("a click");
+    assert!(matches!(msg, PcbCanvasMsg::Clicked { .. }), "{msg:?}");
+
+    // Back to normal once nothing waits.
+    rig.canvas.set_clicks_only(false);
+    rig.press(300.0, 200.0);
+    rig.move_to(340.0, 260.0);
+    assert!(rig.canvas.marquee.get().is_some(), "a box again");
+}
+
+/// #2396: a Ctrl or Shift released while another window had the focus
+/// never arrives; losing the focus forgets it, so the next plain click
+/// replaces instead of toggling.
+#[test]
+fn losing_the_focus_forgets_held_modifiers() {
+    let mut rig = rig();
+    rig.mods(Modifiers::CTRL);
+    rig.send(
+        Event::Window(iced::window::Event::Unfocused),
+        at(50.0, 50.0),
+    );
+    rig.press(50.0, 50.0);
+    let msg = rig.release(50.0, 50.0).expect("a click");
+    assert!(
+        matches!(
+            msg,
+            PcbCanvasMsg::Clicked {
+                mode: ClickMode::Replace,
+                ..
+            }
+        ),
+        "{msg:?}"
+    );
+
+    // And a press on a footprint drags it again.
+    grabbing(&mut rig);
+    rig.mods(Modifiers::SHIFT);
+    rig.send(
+        Event::Window(iced::window::Event::Unfocused),
+        at(50.0, 50.0),
+    );
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(msg, Some(PcbCanvasMsg::FootprintDragged { .. })),
+        "{msg:?}"
+    );
 }

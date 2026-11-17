@@ -24,6 +24,7 @@ fn pad(n: u128, x: f64, y: f64, net: u32, layer: &str) -> Pad {
         }),
         roundrect_ratio: 0.0,
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -53,6 +54,8 @@ fn footprint(n: u128, layer: &str, pads: Vec<Pad>) -> Footprint {
 
 fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: id(2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -65,12 +68,15 @@ fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segmen
 
 fn via(n: u128, at: (f64, f64), net: u32) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: id(3000 + n),
         position: Point::new(at.0, at.1),
         diameter: 0.6,
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -79,6 +85,7 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -94,6 +101,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> 
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -452,6 +460,8 @@ fn zone(net: u32, layer: &str, rect: (f64, f64, f64, f64)) -> signex_types::pcb:
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }
@@ -751,3 +761,6 @@ fn a_zone_with_no_area_beside_a_real_zone_meets_it_only_by_touching() {
     assert!(ratsnest(&two_flat(0.0)).is_empty());
     assert_eq!(ratsnest(&two_flat(0.000_001)), apart());
 }
+
+#[path = "ratsnest_fill_tests.rs"]
+mod fill;

@@ -6,10 +6,13 @@
 
 mod anchored;
 mod backdrop;
+mod board_part_rows;
 mod components_row;
 mod dock_tab;
 mod grid_picker;
 mod items;
+mod layer_set;
+mod layer_tab;
 mod menus;
 mod placement;
 mod project_tree;

@@ -125,11 +125,19 @@ impl InputTarget {
 #[derive(Debug)]
 enum Claim {
     /// Mine — dispatch this message.
-    Consume(Message),
+    Consume(Box<Message>),
     /// Mine, and deliberately nothing happens. Must not fall through.
     Swallow,
     /// Not mine — ask the next consumer.
     Pass,
+}
+
+impl Claim {
+    /// [`Claim::Consume`] of `message`, boxed: a message is far larger than
+    /// the other answers.
+    fn consume(message: Message) -> Self {
+        Claim::Consume(Box::new(message))
+    }
 }
 
 /// The app-level keyboard consumers, as identities rather than as
@@ -304,7 +312,7 @@ impl Signex {
         }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
-                Claim::Consume(message) => return Some(message),
+                Claim::Consume(message) => return Some(*message),
                 Claim::Swallow => return None,
                 Claim::Pass => continue,
             }
@@ -369,14 +377,14 @@ impl Signex {
             return Claim::Pass;
         }
         match event {
-            keyboard::Event::ModifiersChanged(modifiers) => Claim::Consume(Message::Preferences(
+            keyboard::Event::ModifiersChanged(modifiers) => Claim::consume(Message::Preferences(
                 PreferencesMsg::Inner(crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
                     crate::keymap::Modifiers::from_iced(*modifiers).recorded_for(platform),
                 )),
             )),
             keyboard::Event::KeyPressed { key, modifiers, .. } => {
                 match KeyStroke::from_iced(key, *modifiers) {
-                    Some(stroke) => Claim::Consume(Message::Preferences(PreferencesMsg::Inner(
+                    Some(stroke) => Claim::consume(Message::Preferences(PreferencesMsg::Inner(
                         crate::preferences::PrefMsg::KeymapRecorderKeyPressed(
                             stroke.recorded_for(platform),
                         ),
@@ -435,17 +443,17 @@ impl Signex {
         let letter = crate::keymap::shortcut_char(key, *physical_key);
         match (key.as_ref(), *modifiers) {
             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
+                Claim::consume(Message::CommandPalette(CommandPaletteMsg::Close))
             }
             (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
-                Claim::Consume(Message::CommandPalette(CommandPaletteMsg::MoveSelection(1)))
+                Claim::consume(Message::CommandPalette(CommandPaletteMsg::MoveSelection(1)))
             }
-            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => Claim::Consume(
+            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => Claim::consume(
                 Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1)),
             ),
             // Toggle: Ctrl+Shift+P while open closes.
             (keyboard::Key::Character(_), m) if letter == Some('p') && m.command() && m.shift() => {
-                Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
+                Claim::consume(Message::CommandPalette(CommandPaletteMsg::Close))
             }
             _ => Claim::Swallow,
         }
@@ -464,7 +472,7 @@ impl Signex {
         if !ESCAPE_KEY.matches(key) {
             return Claim::Pass;
         }
-        Claim::Consume(Message::Input(InputMsg::EscapePressed {
+        Claim::consume(Message::Input(InputMsg::EscapePressed {
             window: Some(window),
         }))
     }
@@ -497,13 +505,13 @@ impl Signex {
             keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
-            } if state.save_profile_name.is_some() => Claim::Consume(Message::from(
+            } if state.save_profile_name.is_some() => Claim::consume(Message::from(
                 crate::app::NewProjectMsg::SaveProfileConfirmed,
             )),
             keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
-            } => Claim::Consume(Message::from(crate::app::NewProjectMsg::SubmitRequested)),
+            } => Claim::consume(Message::from(crate::app::NewProjectMsg::SubmitRequested)),
             _ => Claim::Pass,
         }
     }
@@ -523,10 +531,10 @@ impl Signex {
         }
         match key.as_ref() {
             keyboard::Key::Named(keyboard::key::Named::Space) => {
-                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::FocusedRowToggled))
+                Claim::consume(Message::from(crate::app::UpdatePcbMsg::FocusedRowToggled))
             }
             keyboard::Key::Named(keyboard::key::Named::Enter) => {
-                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::ExecuteRequested))
+                Claim::consume(Message::from(crate::app::UpdatePcbMsg::ExecuteRequested))
             }
             _ => Claim::Pass,
         }
@@ -552,9 +560,9 @@ impl Signex {
         if state.draft.dropdown_open {
             Claim::Swallow
         } else if state.draft.save_profile_name.is_some() {
-            Claim::Consume(Message::from(D::Setup(N::SaveProfileConfirmed)))
+            Claim::consume(Message::from(D::Setup(N::SaveProfileConfirmed)))
         } else {
-            Claim::Consume(Message::from(D::SubmitRequested))
+            Claim::consume(Message::from(D::SubmitRequested))
         }
     }
 
@@ -584,7 +592,7 @@ impl Signex {
         if !target.paints_overlay_stack() && !in_own_window {
             return Claim::Swallow;
         }
-        Claim::Consume(if self.ui_state.keyboard_shortcuts_open {
+        Claim::consume(if self.ui_state.keyboard_shortcuts_open {
             Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
         } else {
             Message::Menu(MenuMessage::OpenKeyboardShortcuts)
@@ -611,12 +619,12 @@ impl Signex {
         };
         let m = *modifiers;
         if m.command() && !m.alt() {
-            return Claim::Consume(Message::Selection(
+            return Claim::consume(Message::Selection(
                 crate::app::selection_request::SelectionRequest::StoreSlot { slot },
             ));
         }
         if m.alt() && !m.command() {
-            return Claim::Consume(Message::Selection(
+            return Claim::consume(Message::Selection(
                 crate::app::selection_request::SelectionRequest::RecallSlot { slot },
             ));
         }
@@ -651,7 +659,7 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
-        Claim::Consume(Message::Ui(UiMsg::KeymapStroke {
+        Claim::consume(Message::Ui(UiMsg::KeymapStroke {
             window: Some(window),
             stroke,
         }))

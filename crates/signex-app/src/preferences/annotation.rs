@@ -1,7 +1,7 @@
 //! Annotation section — the "Annotate undo" scope of an annotate run.
 
 use super::*;
-use crate::annotate_undo::AnnotateUndo;
+use crate::annotate_undo::{AnnotateUndo, annotate_undo_label};
 use crate::choice::{Choice, chosen};
 use iced::widget::{Space, Widget, column, pick_list, row};
 use iced::{Element, Length};
@@ -22,7 +22,7 @@ fn annotate_undo_help(i18n: &I18n) -> signex_i18n::Localized {
 }
 
 pub(super) fn content_annotation<'a>(draft: AnnotateUndo, i18n: &I18n) -> Element<'a, PrefMsg> {
-    let scopes = Choice::named(AnnotateUndo::ALL, AnnotateUndo::label, i18n);
+    let scopes = Choice::named(AnnotateUndo::ALL, annotate_undo_label, i18n);
     let setting = row![
         column![
             text(t!(i18n, ids::PREFERENCES_ANNOTATE_UNDO))

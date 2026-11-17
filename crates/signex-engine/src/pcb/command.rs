@@ -1,7 +1,11 @@
 use signex_net::board::BoardNetEdit;
-use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb::{
+    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
+};
 use signex_types::pcb_options::BoardOptions;
+use signex_types::pcb_panel::BoardPanel;
 use signex_types::pcb_sketch::BoardSketch;
+use signex_types::pcb_stack::LayerStack;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
@@ -10,9 +14,13 @@ use super::board_sketch;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
+use super::graphics;
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
+use super::lock;
 use super::options;
+use super::panel;
 use super::replace::{self, FootprintPad, Values};
+use super::stack::{self, StackSnapshot};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
 #[derive(Debug, Clone, PartialEq)]
@@ -169,6 +177,35 @@ pub enum BoardCommand {
     /// grid uuid named twice. The inverse is another one holding the old
     /// options.
     SetBoardOptions { options: Box<BoardOptions> },
+    /// Replace the layer stack (#2401) and with it the copper layers of the
+    /// layer list and the board thickness (the stack's total). Copper is
+    /// named by place; a copper row names the board layer it was, or none for
+    /// a new layer, and every item on a layer that moved place moves with it.
+    /// Refused for a bad number, a copper count outside 2..=32, an outer
+    /// copper row moved inward, and a copper layer left out with items or a
+    /// keepout on it. The inverse is a [`BoardCommand::RestoreLayerStack`].
+    SetLayerStack { stack: Box<LayerStack> },
+    /// Put back the stack, layer list, thickness and copper names a stack
+    /// edit replaced; the inverse of [`BoardCommand::SetLayerStack`] and of
+    /// itself. Nothing is checked: the values were on the board before.
+    RestoreLayerStack(Box<StackSnapshot>),
+    /// Lock or unlock tracks and vias (#2407). Refused for an id named twice,
+    /// gone, or not a track or via. The inverse sets the states it replaced.
+    SetItemsLocked { items: Vec<(BoardItemId, bool)> },
+    /// Append board drawings (#2410, a DXF import onto a layer). Refused for
+    /// a number that is not finite. The inverse is a
+    /// [`BoardCommand::RemoveGraphics`].
+    AddGraphics { graphics: Vec<BoardGraphic> },
+    /// Remove these drawings from the end of the board's drawings; the
+    /// inverse of [`BoardCommand::AddGraphics`]. Refused unless the list
+    /// still ends with exactly them.
+    RemoveGraphics { graphics: Vec<BoardGraphic> },
+    /// Set the board's panel (#2410), `None` to make the board on its own.
+    /// Refused for a panel that breaks a rule of `BoardPanel::check`.
+    /// Whether it lays out on the outline is the caller's check: the outline
+    /// may change later and an undo must restore what was there. The inverse
+    /// is another one holding the old panel.
+    SetBoardPanel { panel: Option<Box<BoardPanel>> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -211,6 +248,15 @@ pub enum BoardPatchKind {
     GridChanged,
     /// The board options. Names no items.
     OptionsChanged,
+    /// The layer stack, the copper of the layer list and any copper renamed
+    /// with it. Names no items.
+    LayerStackChanged,
+    /// The lock of tracks and vias.
+    ItemsLockSet,
+    /// Board drawings added or removed. Names no items.
+    GraphicsChanged,
+    /// The panel (#2410). Names no items.
+    PanelChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -291,6 +337,12 @@ impl BoardCommand {
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
+            Self::SetLayerStack { stack: new } => stack::set(board, *new),
+            Self::RestoreLayerStack(snapshot) => stack::restore(board, *snapshot),
+            Self::SetItemsLocked { items: locks } => lock::set_locked(board, locks),
+            Self::AddGraphics { graphics } => graphics::add(board, graphics),
+            Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
+            Self::SetBoardPanel { panel: new } => panel::set(board, new.map(|p| *p)),
         }
     }
 }

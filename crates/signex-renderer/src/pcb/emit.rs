@@ -13,11 +13,33 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
     }
 }
 
-pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
+/// A copper arc as traces along its chords, within the error the copper
+/// list reads it with (#2373).
+pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInput> {
+    let width_mm = mm_with_floor(arc.width, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_TRACK_MIN_MM);
+    arc.points(pcb_geom::ARC_CHORD_ERROR_MM)
+        .windows(2)
+        .map(|pair| TraceInput {
+            p0: point_to_xy(pair[0]),
+            p1: point_to_xy(pair[1]),
+            width_mm,
+            net: arc.net,
+            dimmed: false,
+            ink: CopperInk::Unknown,
+        })
+        .collect()
+}
+
+/// A via as drawn: its ring on `layer` when it has per-layer sizes (#2401),
+/// else its one diameter.
+pub(super) fn via_from_board_via(
+    via: &Via,
+    layer: Option<signex_types::pcb_layer::CopperLayer>,
+) -> ViaInput {
     ViaInput {
         center: point_to_xy(via.position),
         diameter_mm: mm_with_floor(
-            via.diameter,
+            layer.map_or(via.diameter, |layer| via.diameter_on(layer)),
             PCB_DEFAULT_VIA_DIAMETER_MM,
             PCB_VIA_MIN_DIAMETER_MM,
         ),
@@ -33,13 +55,20 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
 /// footprint is mirrored there, ADR-0005 §7), so a hit-test and a ratsnest end
 /// land on what is drawn. A pad `pcb-geom` refuses (non-finite or beyond
 /// 1 km) is not drawn; `BoardIndex::rejected` reports it.
-pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<PadInput> {
+/// `layer` is the active copper layer: a pad with per-layer sizes (#2401)
+/// shows its size there.
+pub(super) fn pad_from_footprint(
+    footprint: &Footprint,
+    pad: &Pad,
+    layer: Option<signex_types::pcb_layer::CopperLayer>,
+) -> Option<PadInput> {
     let center = pcb_geom::pad_world_center(footprint, pad).ok()?.to_mm();
+    let size = layer.map_or(pad.size, |layer| pad.size_on(layer));
 
     // Size floor is a renderer rule, not geometry (ADR-0005, "Drawn size").
     let size_mm = [
-        mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
-        mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+        mm_with_floor(size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+        mm_with_floor(size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
     ];
     let mut drawn = pad.clone();
     drawn.size = signex_types::pcb::Point::new(f64::from(size_mm[0]), f64::from(size_mm[1]));
@@ -93,7 +122,7 @@ pub(super) fn zone_from_board_zone(
     Some(ZonePolygonInput {
         vertices,
         holes,
-        rule_area: is_rule_area_zone(zone),
+        rule_area: zone.is_rule_area(),
         net: zone.net,
         priority: zone.priority,
         layer_rank,
@@ -101,6 +130,7 @@ pub(super) fn zone_from_board_zone(
         source_order,
         dimmed: false,
         ink: CopperInk::Unknown,
+        fill: zone.is_pour().then(Vec::new),
     })
 }
 
@@ -132,13 +162,6 @@ pub(super) fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8,
 
 pub(super) fn zone_connected_bucket(net: u32) -> u8 {
     if net == 0 { 0 } else { 1 }
-}
-
-pub(super) fn is_rule_area_zone(zone: &Zone) -> bool {
-    let fill = zone.fill_type.to_ascii_lowercase();
-    let layer = zone.layer.to_ascii_lowercase();
-
-    fill.contains("rule") || fill.contains("keepout") || layer.contains("rule")
 }
 
 pub(super) fn point_to_xy(point: Point) -> [f32; 2] {
@@ -351,13 +374,33 @@ pub(super) fn emit_static_polygons(
     }
 
     for zone in &snapshot.zones {
-        let fill = with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38);
-        let stroke = copper_color(theme, zone.ink, ColorSlot::Bus);
+        let fill = dim_if(
+            with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            zone.dimmed,
+        );
+        let stroke = Some(dim_if(
+            copper_color(theme, zone.ink, ColorSlot::Bus),
+            zone.dimmed,
+        ));
+        // A pour: its fill pieces as copper, then its outline stroked only.
+        for piece in zone.fill.iter().flatten() {
+            scene.polygons.push(GpuPolygon {
+                vertices: piece.vertices.clone(),
+                holes: piece.holes.clone(),
+                fill_color: fill,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+        }
+        let (fill_color, holes) = match zone.fill {
+            Some(_) => (with_alpha_mul(fill, 0.0), Vec::new()),
+            None => (fill, zone.holes.clone()),
+        };
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
-            holes: zone.holes.clone(),
-            fill_color: dim_if(fill, zone.dimmed),
-            stroke_color: Some(dim_if(stroke, zone.dimmed)),
+            holes,
+            fill_color,
+            stroke_color: stroke,
             stroke_width: 0.06,
         });
     }
@@ -505,6 +548,8 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
     // The board's openings and keepouts first, so the ratsnest and DRC
     // markers stay readable on top (#2234).
     super::board_features::emit(&snapshot.board_features, theme, scene);
+    // Footprint and board drawings over the copper, under the ratsnest.
+    super::graphics::emit(&snapshot.graphics, theme, scene);
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Ratsnest), 0.72);
 

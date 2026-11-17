@@ -36,15 +36,7 @@ fn pair(x: f64, pitch: f64) -> PcbBoard {
 }
 
 fn checked_with(b: &PcbBoard, rules: &DrcRules) -> CheckReport {
-    check_report(
-        &run(b, rules),
-        &names(),
-        BOARD,
-        Vec::new(),
-        Map::new(),
-        b,
-        &[],
-    )
+    check_report(&run(b, rules), &names(), BOARD, Vec::new(), Map::new())
 }
 
 fn checked(b: &PcbBoard) -> CheckReport {
@@ -215,8 +207,6 @@ fn a_finding_keeps_its_key_when_its_items_move() {
         "/p/other.snxpcb",
         Vec::new(),
         Map::new(),
-        &pair(0.0, 0.4),
-        &[],
     );
     assert_ne!(here.keys(), elsewhere.keys());
     // Another rule over the same items, another key.
@@ -336,16 +326,7 @@ fn findings_that_name_no_item_are_keyed_by_their_message() {
         skipped: Vec::new(),
         skipped_keepouts: Vec::new(),
     };
-    let empty = board(vec![], vec![], vec![]);
-    let checked = check_report(
-        &report,
-        &names(),
-        BOARD,
-        Vec::new(),
-        Map::new(),
-        &empty,
-        &[],
-    );
+    let checked = check_report(&report, &names(), BOARD, Vec::new(), Map::new());
     let keys = checked.keys();
     assert_eq!(keys.len(), 2, "{checked:?}");
     assert!(keys.iter().all(|k| is_own_key(k)), "{keys:?}");
@@ -356,15 +337,12 @@ fn findings_that_name_no_item_are_keyed_by_their_message() {
 fn an_item_that_could_not_be_checked_is_a_warning() {
     let mut bad = track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper");
     bad.start = Point::new(f64::NAN, 0.0);
-    let b = board(vec![], vec![bad], vec![]);
     let report = check_report(
-        &run(&b, &DrcRules::new(RULE)),
+        &run(&board(vec![], vec![bad], vec![]), &DrcRules::new(RULE)),
         &names(),
         BOARD,
         vec!["first".into()],
         Map::new(),
-        &b,
-        &[],
     );
     assert_eq!(report.warnings.len(), 2, "{:?}", report.warnings);
     assert_eq!(report.warnings[0], "first");
@@ -420,15 +398,7 @@ fn the_rule_set_says_the_clearance_the_run_used() {
     let rules = DrcRules::for_board(&b, &[]).unwrap();
     let mut given = Map::new();
     given.insert("source".into(), json!("machine"));
-    let report = check_report(
-        &run(&b, &rules),
-        &names(),
-        BOARD,
-        Vec::new(),
-        given,
-        &b,
-        &[],
-    );
+    let report = check_report(&run(&b, &rules), &names(), BOARD, Vec::new(), given);
     assert_eq!(
         report.rule_set,
         Some(json!({"source": "machine", "clearance_nm": 300_000, "from_default": false}))

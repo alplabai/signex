@@ -289,7 +289,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::command_dropped_pointer());
             return Task::none();
         }
-        self.run_pending_net_action(action)
+        self.run_pending_net_action(action, cursor)
     }
 
     /// Whether `project` still has open sheets, so an index can still come.

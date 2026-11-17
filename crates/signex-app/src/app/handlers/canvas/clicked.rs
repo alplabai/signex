@@ -201,6 +201,11 @@ impl Signex {
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
             Tool::BreakWire => self.break_wire_click(wx, wy),
+            tool @ (Tool::Blanket | Tool::CompileMask) => {
+                let p = signex_types::schematic::Point::new(wx, wy);
+                self.directive_region_point(tool, p, ClickKind::Click);
+            }
+            Tool::DiffPair => self.diff_pair_click(signex_types::schematic::Point::new(wx, wy)),
             Tool::Text => {
                 let note_text = self
                     .document_state

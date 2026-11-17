@@ -325,6 +325,10 @@ struct Stitched {
 }
 
 fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
+    let masked = crate::directives::masked_sheets(graph.sheets);
+    let graph = &masked
+        .as_ref()
+        .map_or(*graph, |sheets| ProjectGraph { sheets, ..*graph });
     let want_names = want == Want::Names;
     let want_members = want == Want::Members;
     let mut issues: Vec<StitchIssue> = Vec::new();

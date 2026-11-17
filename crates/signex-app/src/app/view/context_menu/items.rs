@@ -143,6 +143,45 @@ pub(super) fn dd_cmd_disabled(
     )
 }
 
+/// A row for the catalog command `command_id`, live when `applies` (the
+/// right-clicked selection is the kind it acts on) and the command's own
+/// enablement rule allows it in `ctx`, the rule the menu bar greys the same
+/// command by and a keystroke is dropped by (#2419). Greyed otherwise.
+pub(super) fn dd_ruled(
+    i18n: &I18n,
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+    ctx: &crate::app::command::CommandContext,
+    applies: bool,
+) -> DropdownEntry<Message> {
+    let allowed = crate::keymap::AppCommandId::new(command_id)
+        .is_ok_and(|id| crate::app::command::is_enabled(&id, ctx));
+    if applies && allowed {
+        dd_command(i18n, icon, command_id, shortcut, None)
+    } else {
+        dd_cmd_disabled(i18n, icon, command_id, shortcut)
+    }
+}
+
+/// A greyed row for a feature that is not built yet, with `reason` (what it
+/// will do) as its tooltip; `submenu` puts the chevron in the chevron column.
+pub(super) fn dd_planned_because(
+    i18n: &I18n,
+    icon: Option<Handle>,
+    label: MessageId,
+    reason: MessageId,
+    submenu: bool,
+) -> DropdownEntry<Message> {
+    match dd_disabled(icon, &text(i18n, label), None) {
+        DropdownEntry::Item(item) => {
+            let item = item.tooltip(text(i18n, reason));
+            DropdownEntry::Item(if submenu { item.submenu() } else { item })
+        }
+        other => other,
+    }
+}
+
 pub(super) fn tag_command(
     entry: DropdownEntry<Message>,
     command_id: &'static str,
