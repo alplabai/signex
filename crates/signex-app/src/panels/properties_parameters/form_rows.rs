@@ -71,7 +71,7 @@ pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<
     signex_widgets::tooltip(
         field,
         container(
-            text(raw(value.to_string()))
+            text(signex_i18n::UserText::new(value.to_string()))
                 .size(TS.body)
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         )
