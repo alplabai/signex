@@ -142,3 +142,80 @@ fn properties_show_the_board_not_footprint_fields() {
         assert!(shows(board_row), "{board_row:?} missing from {texts:?}");
     }
 }
+
+/// The main window's texts, isolation marks stripped.
+fn main_window_texts(app: &mut Signex) -> Vec<String> {
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window);
+    layout_probe::lay_out_texts(app.view(window), Size::new(1400.0, 900.0))
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+/// #2059: a save held by a refused bake shows the refusal on the notice
+/// card as a message, rendered when the card is drawn, so a language switch
+/// re-renders it with the card.
+#[test]
+fn the_held_save_card_renders_its_refusal_in_the_view() {
+    use crate::library::editor::footprint::SketchTool;
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use crate::panels::{BoardSketchAttrMsg, PanelMsg};
+
+    let (mut app, _tmp) = sketching();
+    let path = app.active_tab_path().expect("the board tab");
+    let edit = |app: &mut Signex, msg| {
+        let path = path.clone();
+        send(
+            app,
+            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEdit::Footprint(msg),
+            }),
+        );
+    };
+    edit(
+        &mut app,
+        FootprintEditorMsg::SketchSetTool(SketchTool::Line),
+    );
+    for x_mm in [60.0, 70.0] {
+        edit(
+            &mut app,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm,
+                y_mm: 60.0,
+                snap_id: None,
+            },
+        );
+    }
+    edit(&mut app, FootprintEditorMsg::ToolEscape);
+    let line = {
+        let session = app.interaction_state.board_sketch.as_ref().expect("on");
+        let sketch = session.working_sketch();
+        sketch.entities.last().expect("the line").id
+    };
+    send(
+        &mut app,
+        Message::Dock(crate::dock::DockMessage::Panel(PanelMsg::BoardSketch(
+            BoardSketchAttrMsg::OutlineToggled { id: line, on: true },
+        ))),
+    );
+    app.document_state.error_notice = None;
+    send(&mut app, Message::File(FileMsg::Save));
+
+    const REFUSED: &str = "The sketch was not applied to the board";
+    let en = main_window_texts(&mut app);
+    assert!(
+        en.iter()
+            .any(|t| t.contains("could not be applied") && t.contains(REFUSED)),
+        "the card names the hold and the refusal: {en:#?}"
+    );
+    app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+        &signex_i18n::LanguagePref::Locale("en-XA".into()),
+    ));
+    let xa = main_window_texts(&mut app);
+    assert!(
+        !xa.iter().any(|t| t.contains(REFUSED)),
+        "the refusal follows the language switch: {xa:#?}"
+    );
+}

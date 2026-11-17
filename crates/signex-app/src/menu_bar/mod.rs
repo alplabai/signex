@@ -342,13 +342,21 @@ pub(crate) fn cmd_label(i18n: &signex_i18n::I18n, command_id: &str, fallback: &s
 }
 
 /// Menu path of the Electrical Rules Check row, built from the label and menu
-/// the Project menu uses, so a message naming it cannot drift.
-pub(crate) fn erc_menu_path(i18n: &signex_i18n::I18n) -> String {
-    format!(
-        "{} ▸ {}",
-        i18n.message(signex_i18n::menu_ids::MENU_PROJECT, &[]),
-        cmd_label(i18n, "open_erc_dialog", "open_erc_dialog")
-    )
+/// the Project menu uses, so a message naming it cannot drift. It is a
+/// message, so a notice that names it renders it in the view's language.
+pub(crate) fn erc_menu_path() -> signex_i18n::Translatable {
+    use signex_i18n::{Translatable, UserText};
+    const COMMAND: &str = "open_erc_dialog";
+    let row = crate::keymap::metadata_for_str(COMMAND).map_or_else(
+        || Translatable::verbatim(UserText::new(COMMAND)),
+        |meta| Translatable::new(meta.menu_label_id()),
+    );
+    Translatable::new(signex_i18n::ids::NOTICE_MENU_PATH)
+        .arg(
+            "menu",
+            Translatable::new(signex_i18n::menu_ids::MENU_PROJECT),
+        )
+        .arg("row", row)
 }
 
 /// Whether the row for `command_id` is enabled: the same predicate the

@@ -189,11 +189,10 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        // shortcut: the menu path is rendered now, so it keeps the language
-        // the notice opened in; pass its ids once Translatable nests (#2059).
+        // The menu path nests as a message, so the card renders it in the view.
         self.refuse_export(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_ERC_REPORT_NOT_RUN)
-                .arg("menu", crate::menu_bar::erc_menu_path(&self.ui_state.i18n)),
+                .arg("menu", crate::menu_bar::erc_menu_path()),
         );
     }
 

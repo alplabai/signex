@@ -176,14 +176,12 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
         crate::diagnostics::log_warning(held.render_en_us());
-        // shortcut: the card renders the refusal now, so it keeps the language
-        // the card opened in until Translatable args can nest (#2059).
+        // The refusal nests as a message, so the card renders it in the view.
         let refusal = self
             .interaction_state
             .board_sketch
             .as_ref()
-            .and_then(|session| session.refusal.as_ref())
-            .map(|refusal| refusal.render(&self.ui_state.i18n));
+            .and_then(|session| session.refusal.clone());
         let detail = match refusal {
             Some(refusal) => Translatable::new(ids::NOTICE_BOARD_SKETCH_HELD_WHY)
                 .arg("board", name)

@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use crate::{MessageRenderer, Translatable};
+
 /// Identifies a catalog message. Ids are semantic and area-prefixed
 /// (`menu-file`); an id changes when its meaning changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -55,10 +57,12 @@ impl fmt::Display for UserText {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalNumber(pub f64);
 
-/// A message argument: text, or a number formatted for the locale. The
-/// variants are private: the only ways in are the text and integer `From`
-/// impls and `From<LocalNumber>`, so a bare float cannot reach the locale
-/// number formatter.
+/// A message argument: text, a number formatted for the locale, or another
+/// message (`From<Translatable>`) that [`Translatable::render`] renders with
+/// the same renderer before it fills this one. The variants are private: the
+/// only ways in are the text and integer `From` impls, `From<LocalNumber>`
+/// and `From<Translatable>`, so a bare float cannot reach the locale number
+/// formatter.
 ///
 /// `signex-i18n`'s `t!` carries the same guarantee and its own doctests.
 ///
@@ -84,6 +88,7 @@ pub struct Arg(ArgKind);
 enum ArgKind {
     Text(String),
     Number(f64),
+    Message(Box<Translatable>),
 }
 
 /// A borrowed read of an [`Arg`], for the formatter in `signex-i18n`. It
@@ -96,13 +101,30 @@ pub enum ArgValue<'a> {
 }
 
 impl Arg {
-    /// What the argument holds, for the formatter.
+    /// What the argument holds, for the formatter. A nested message gets here only when it skipped
+    /// [`Translatable::render`]; it then reads as its id, the way a message
+    /// missing from the catalog does.
     #[doc(hidden)]
     pub fn value(&self) -> ArgValue<'_> {
         match &self.0 {
             ArgKind::Text(text) => ArgValue::Text(text),
             ArgKind::Number(number) => ArgValue::Number(*number),
+            ArgKind::Message(message) => ArgValue::Text(message.unrendered()),
         }
+    }
+
+    /// `self`, with a nested message rendered by `renderer` into text.
+    pub(crate) fn rendered_with<R: MessageRenderer + ?Sized>(&self, renderer: &R) -> Self {
+        match &self.0 {
+            ArgKind::Message(message) => Self::from(message.render(renderer)),
+            _ => self.clone(),
+        }
+    }
+}
+
+impl From<Translatable> for Arg {
+    fn from(message: Translatable) -> Self {
+        Self(ArgKind::Message(Box::new(message)))
     }
 }
 

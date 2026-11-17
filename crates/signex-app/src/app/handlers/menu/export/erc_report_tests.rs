@@ -77,7 +77,7 @@ fn refusal_names_the_real_menu_path() {
         notice
             .detail
             .render_en_us()
-            .contains(&crate::menu_bar::erc_menu_path(&app.ui_state.i18n)),
+            .contains(&crate::menu_bar::erc_menu_path().render(&*app.ui_state.i18n)),
         "{}",
         notice.detail.render_en_us()
     );
@@ -96,6 +96,39 @@ fn refusal_names_the_real_menu_path() {
         !notice.detail.render_en_us().contains("Tools"),
         "{}",
         notice.detail.render_en_us()
+    );
+}
+
+/// #2059: the refusal reads as the `format!`-built English did, and the card
+/// renders the menu path when it is drawn, so a language switch re-renders
+/// the path with the rest of the card.
+#[test]
+fn the_refusal_card_renders_the_menu_path_in_the_view() {
+    const DETAIL: &str = "Cannot export the ERC report: ERC has not been run. \
+                          Run ERC (Project ▸ Electrical Rules Check) first, then export.";
+    let (mut app, _task) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert_eq!(notice.detail.render_en_us(), DETAIL);
+
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window);
+    let texts = |app: &Signex| -> Vec<String> {
+        crate::layout_probe::lay_out_texts(app.view(window), iced::Size::new(1400.0, 900.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    };
+    let en = texts(&app);
+    assert!(en.iter().any(|t| t == DETAIL), "{en:#?}");
+    app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+        &signex_i18n::LanguagePref::Locale("en-XA".into()),
+    ));
+    let xa = texts(&app);
+    assert!(
+        !xa.iter().any(|t| t.contains("Electrical Rules Check")),
+        "the menu path follows the language switch: {xa:#?}"
     );
 }
 
