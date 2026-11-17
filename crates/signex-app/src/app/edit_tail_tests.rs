@@ -357,8 +357,8 @@ fn an_agents_revert_sets_the_library_drift_check() {
 }
 
 /// Pins today's behaviour, not a wish: a grouped step (here an agent's step,
-/// undone by the person) does not set the drift check. See #2445, "Found
-/// while checking".
+/// undone by the person) does not set the drift check. Tracked in #2476; a
+/// fix flips this assertion rather than deleting the test.
 #[test]
 fn a_grouped_undo_does_not_set_the_library_drift_check_today() {
     let mut app = app_with(&[("a.snxsch", 100)]);
