@@ -200,17 +200,18 @@ fn placed(
     binding: Option<&PrimitiveRef>,
     stamp_version: &str,
 ) -> signex_types::schematic::Symbol {
-    let mut symbol = signex_types::schematic::Symbol::default();
-    symbol.library_id = Some(library);
-    symbol.row_id = Some(row.row_id);
-    symbol.library_version = "1.0.0".into();
-    symbol.library_stamp = Some(signex_types::schematic::RowStamp {
-        row_id: row.row_id,
-        version: Some(stamp_version.into()),
-        footprint_ref: binding.map(|b| format!("{}:{}", b.library_id, b.uuid)),
+    signex_types::schematic::Symbol {
+        library_id: Some(library),
+        row_id: Some(row.row_id),
+        library_version: "1.0.0".into(),
+        library_stamp: Some(signex_types::schematic::RowStamp {
+            row_id: row.row_id,
+            version: Some(stamp_version.into()),
+            footprint_ref: binding.map(|b| format!("{}:{}", b.library_id, b.uuid)),
+            ..Default::default()
+        }),
         ..Default::default()
-    });
-    symbol
+    }
 }
 
 #[test]
