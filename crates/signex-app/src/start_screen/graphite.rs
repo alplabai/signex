@@ -288,8 +288,7 @@ pub(super) fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .boxed()
 }
 
-/// Wrap a navigation row that opens nothing yet in the "Coming in AI Design"
-/// tooltip.
+/// Wrap a navigation row that opens nothing yet in the "Coming soon" tooltip.
 fn coming_soon<'a>(
     content: Element<'a, Message>,
     tokens: &ThemeTokens,

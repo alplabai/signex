@@ -219,16 +219,15 @@ panels-tab-kind-library = LIB
 panels-tab-kind-component = CMP
 panels-tab-kind-project = PRJ
 
-## Empty-state cards and the AI Design shell
+## Empty-state cards
 
 # Selection Filter panel: its title while the panel has no backend.
 panels-selection-filter-title = Selection Filter
 # Selection Filter panel: the line under the title.
 panels-selection-filter-body = All object types enabled
 
-# Tooltip of every Start screen control that has no backend yet. "AI
-# Design" is the name of the roadmap release that brings it.
-panels-coming-soon = Coming in AI Design
+# Tooltip of every Start screen control that has no backend yet.
+panels-coming-soon = Coming soon
 
 ## Start screen.
 
