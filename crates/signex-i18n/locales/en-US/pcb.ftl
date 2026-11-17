@@ -427,8 +427,8 @@ pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. I
 # Messages line when a Tools edit ran; $tool is its menu name, the counts
 # are the items it added, removed and changed.
 pcb-board-tool-done = { $tool }: { $added } added, { $removed } removed, { $changed } changed
-# Messages line when a copper tool left places out; $count of them.
-pcb-board-tool-skipped = { $tool }: { $count } left out where the copper would break the clearance or a keepout
+# Messages line when a copper tool left places or locked tracks out; $count of them.
+pcb-board-tool-skipped = { $tool }: { $count } left out, locked or where the copper would break the clearance or a keepout
 # Messages line when a Tools edit did nothing; $reason says why.
 pcb-board-tool-refused = { $tool }: { $reason }; nothing changed
 # Messages line when Arrange in Box is waiting for its corners.
