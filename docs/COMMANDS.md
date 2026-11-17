@@ -129,8 +129,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
-| `open_net_classes` | Open the Net Classes panel | design | — | — |
-| `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
+| `open_net_classes` | Open the project's Net Classes panel | design | — | — |
+| `open_net_classes_panel` | Open the Net Classes panel of the project | design | — | — |
 | `open_net_inspector` | Open Net Inspector panel | panels | `V N` | `Shift+I` |
 | `open_preferences` | Open preferences | preferences | `Mod+,` | `Mod+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
