@@ -2145,23 +2145,34 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
     assert_eq!(e.take_unkept_pins().len(), 5);
 }
 
-/// Diagnostic for seed 0x5eed0963 case 238 of
-/// `random_rubber_band_moves_never_change_the_netlist` (a SHORT the keep-wires
-/// run makes and the plain move does not). Prints the sheet, then what each
-/// run changed; run with `--ignored --nocapture`.
+/// Diagnostics for cases of `random_rubber_band_moves_never_change_the_netlist`
+/// (a SHORT the keep-wires run makes and the plain move does not); run with
+/// `--ignored --nocapture`.
 #[test]
 #[ignore = "diagnostic: prints one random case"]
 fn diagnose_seed_5eed0963_case_238() {
-    let mut rng = Lcg(0x5EED_0963);
+    diagnose_case(0x5EED_0963, 238);
+}
+
+#[test]
+#[ignore = "diagnostic: prints one random case"]
+fn diagnose_seed_5eed0963_case_364() {
+    diagnose_case(0x5EED_0963, 364);
+}
+
+/// Rebuild case `wanted` of `seed` as `property_run` does, run the plain and
+/// the keep-wires move, and print the sheet and what each run changed.
+fn diagnose_case(seed: u64, wanted: usize) {
+    let mut rng = Lcg(seed);
     let mut found = None;
-    for index in 0..=238 {
+    for index in 0..=wanted {
         let case = random_case(&mut rng);
-        if index == 238 {
+        if index == wanted {
             found = case;
         }
     }
     let Some(Case { sheet, moves, .. }) = found else {
-        eprintln!("case 238 is empty for this generator");
+        eprintln!("case {wanted} is empty for this generator");
         return;
     };
     eprintln!("moves: {moves:?}");
