@@ -41,6 +41,8 @@ BASE_FIELDS='    pub plain: HashMap<String, Option<u64>>,
     pub cam: Camera,'
 
 # make_tree <dir> <Doc fields> <extra production code of app/clean.rs>
+#           [extra code after `Doc` in app/state.rs]
+# `Doc` is scanned except its `skip_*` fields.
 make_tree() {
   local t="$1" src="$1/crates/signex-app/src"
   mkdir -p "$t/scripts" "$src/app/core"
@@ -48,7 +50,7 @@ make_tree() {
   printf '%s\n' '[package]' 'name = "signex-app"' '' '[dependencies]' \
     'signex-types = { workspace = true }' 'iced = { workspace = true }' 'uuid = "1"' \
     > "$t/crates/signex-app/Cargo.toml"
-  printf '%s\n' 'struct crates/signex-app/src/app/state.rs Doc' \
+  printf '%s\n' 'struct crates/signex-app/src/app/state.rs Doc *,!skip_*' \
     'module crates/signex-app/src/app/clean.rs  # listed UI-free' 'crate uuid' \
     > "$t/scripts/uifree-state.txt"
   printf '%s\n' 'pub mod app;' 'pub mod canvas;' > "$src/lib.rs"
@@ -56,7 +58,7 @@ make_tree() {
   printf '%s\n' 'pub struct CoreId;' > "$src/app/core/id.rs"
   printf '%s\n' 'pub struct Camera;' 'pub fn fit() {}' > "$src/canvas.rs"
   printf '%s\n' 'use std::collections::HashMap;' 'use iced::window;' \
-    'use crate::canvas::Camera;' '' 'pub struct Doc {' "$2" '}' > "$src/app/state.rs"
+    'use crate::canvas::Camera;' '' 'pub struct Doc {' "$2" '}' "${4:-}" > "$src/app/state.rs"
   printf '%s\n' 'use std::path::PathBuf;' 'use signex_types::schematic::Point;' \
     'use crate::app::core::id::CoreId;' '' \
     'pub struct Clean { pub at: PathBuf, pub p: Point, pub id: CoreId }' '' \
@@ -67,11 +69,11 @@ make_tree() {
 make_tree "$TMP/base" "$BASE_FIELDS" ''
 UIFREE_ROOT="$TMP/base" bash "$GATE" --generate >/dev/null
 
-# run_case <name> <pass|fail> <Doc fields> <clean.rs extra> [message]
+# run_case <name> <pass|fail> <Doc fields> <clean.rs extra> [message] [state.rs extra]
 # A fail case must print `message`; a pass case the OK line or `message`.
 run_case() {
   local name="$1" expect="$2" want="${5:-}" tree="$TMP/$1" status=0 out
-  make_tree "$tree" "$3" "$4"
+  make_tree "$tree" "$3" "$4" "${6:-}"
   cp "$TMP/base/scripts/uifree-state-baseline.txt" "$tree/scripts/"
   out="$(UIFREE_ROOT="$tree" bash "$GATE" 2>&1)" || status=$?
   [[ "$expect" == pass && -z "$want" ]] && want="UI-free state: OK"
@@ -101,6 +103,11 @@ run_case below_baseline_passes pass '    pub plain: u64,
 run_case listed_module_test_code_ignored pass "$BASE_FIELDS" '
 #[cfg(test)]
 fn helper() { let _ = crate::canvas::fit(); }'
+run_case excluded_field_glob pass "$BASE_FIELDS
+    pub skip_colour: iced::Color," ''
+run_case fn_scope_use_does_not_count pass "$BASE_FIELDS
+    pub at: Point," '' '' 'use signex_types::schematic::Point;
+fn to_screen() { use iced::Point; let _ = Point::ORIGIN; }'
 run_case listed_module_uses_core_and_std pass "$BASE_FIELDS" '
 pub fn f() -> std::path::PathBuf { let _ = crate::app::core::id::CoreId; PathBuf::new() }'
 
@@ -120,6 +127,25 @@ run_case super_path_resolves fail "$BASE_FIELDS
     pub cam3: super::super::canvas::Camera," '' '(crate::canvas)'
 run_case unresolved_ident_counts fail "$BASE_FIELDS
     pub thing: Mystery," '' 'Doc.thing: Mystery (unresolved)'
+run_case glob_scans_other_fields fail "$BASE_FIELDS
+    pub scan_colour: iced::Color," '' 'Doc.scan_colour: iced::Color (iced)'
+run_case fn_scope_use_does_not_rebind fail "$BASE_FIELDS
+    pub at: Point," '' 'Doc.at: Point (iced)' 'use iced::Point;
+fn to_doc() {
+    use signex_types::schematic::Point;
+    let _ = Point::default();
+}'
+run_case inline_mod_use_does_not_rebind fail "$BASE_FIELDS
+    pub c: Color," '' 'Doc.c: Color (iced)' 'use iced::Color;
+mod convert {
+    use std::string::String as Color;
+    pub fn f(_: Color) {}
+}'
+run_case name_bound_twice_is_unresolved fail "$BASE_FIELDS
+    pub c: Color," '' 'Doc.c: Color (unresolved)' '#[cfg(feature = "a")]
+use signex_types::Color;
+#[cfg(not(feature = "a"))]
+use iced::Color;'
 run_case swapped_field_fails fail '    pub plain: u64,
     pub ui: HashMap<window::Id, u8>,
     pub colour: iced::Color,' '' 'Doc.colour: iced::Color (iced)'
@@ -133,6 +159,9 @@ run_case listed_module_names_gui_inline fail "$BASE_FIELDS" 'pub fn f() { crate:
   'names crate::canvas::fit (crate::canvas)'
 run_case listed_module_names_iced_inline fail "$BASE_FIELDS" 'pub fn f() -> iced::Color { todo!() }' \
   'names iced::Color (iced)'
+run_case listed_module_const_does_not_shadow_crate fail "$BASE_FIELDS" '#[allow(non_upper_case_globals)]
+const iced: () = ();
+pub fn f() -> iced::Color { todo!() }' 'names iced::Color (iced)'
 run_case listed_module_imports_crate_root fail "$BASE_FIELDS" 'use crate as root;' \
   'imports crate (crate)'
 

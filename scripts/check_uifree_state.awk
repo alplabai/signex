@@ -94,8 +94,8 @@ function resolve(p,   h, r) {
   if (h == "self") return modpath r
   if (h == "super") return up(p)
   if (h == "Self") return "@self"
-  if (h in usemap) return usemap[h] r
-  if (h in local) return modpath "::" p
+  if (h in usemap) return usemap[h] == "@ambiguous" ? "" : usemap[h] r
+  if (h in local || (r == "" && h in localval)) return modpath "::" p
   if (r == "" && h in prim) return "@std"
   if (h in prelude) return "@std"
   if (h in std_root || h in dep) return p
@@ -121,11 +121,26 @@ function classify(full,   h, parent) {
   return h
 }
 
-# Every `use` (bindings) and local item / child module of the production code.
-function collect(   i, c, body, path, bind, k, t, name, is_mod) {
+# Bind `name` to `target` at module scope; a name bound to two different
+# paths (a `use` and a `mod` of the same name, say) is ambiguous.
+function bind_name(name, target) {
+  if (name in usemap && usemap[name] != target) usemap[name] = "@ambiguous"
+  else usemap[name] = target
+}
+
+# The `use` bindings, type-namespace items (and child modules) and
+# value-namespace items (`const` / `static`) at module scope of the production
+# code. A `use` or item inside a fn or inline `mod` body (brace depth > 0)
+# binds nothing at module scope, so it is not collected.
+function collect(   i, c, body, path, bind, k, t, name, kind, depth, opens, closes, at_top) {
+  depth = 0
   for (i = 1; i <= nl; i++) {
-    if (in_test(lno[i])) continue
     c = lcode[i]
+    at_top = depth == 0
+    t = c; opens = gsub(/\{/, "{", t); closes = gsub(/\}/, "}", t)
+    depth += opens - closes
+    if (depth < 0) depth = 0
+    if (!at_top || in_test(lno[i])) continue
     if (c ~ /^use /) {
       body = c; sub(/^use /, "", body); sub(/;[[:space:]]*$/, "", body)
       bind = ""
@@ -135,29 +150,36 @@ function collect(   i, c, body, path, bind, k, t, name, is_mod) {
       if (path ~ /(^|::)\*$/) continue
       sub(/::self$/, "", path)
       if (bind == "") bind = last_seg(path)
-      if (bind != "_") usemap[bind] = use_abs(path)
+      if (bind != "_") bind_name(bind, use_abs(path))
       continue
     }
     t = c
     while (match(t, /(^|[^A-Za-z0-9_])(struct|enum|union|trait|type|const|static|mod)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/)) {
       name = substr(t, RSTART, RLENGTH)
-      is_mod = name ~ /mod[[:space:]]+[A-Za-z_0-9]+$/
-      sub(/^.*[[:space:]]/, "", name)
-      local[name] = 1
-      if (is_mod) localmod[name] = 1
       t = substr(t, RSTART + RLENGTH)
+      kind = name; sub(/[[:space:]]+[A-Za-z_0-9]+$/, "", kind); sub(/^.*[^a-z]/, "", kind)
+      sub(/^.*[[:space:]]/, "", name)
+      # A `const` / `static` lives in the value namespace: it never shadows
+      # the first segment of a path such as `iced::Color`.
+      if (kind == "const" || kind == "static") { localval[name] = 1; continue }
+      local[name] = 1
+      if (kind == "mod") localmod[name] = 1
     }
   }
 }
 
-# Shell-style globs (`*` only) joined by commas; 1 when `name` matches one.
-function glob_match(name, list,   n, g, i, re) {
+# Shell-style globs (`*` only) joined by commas; 1 when `name` matches a glob
+# and no `!glob` exclusion.
+function glob_match(name, list,   n, g, i, re, neg, hit) {
   n = split(list, g, ",")
+  hit = 0
   for (i = 1; i <= n; i++) {
-    re = g[i]; gsub(/\*/, ".*", re)
-    if (name ~ ("^" re "$")) return 1
+    re = g[i]; neg = sub(/^!/, "", re); gsub(/\*/, ".*", re)
+    if (name !~ ("^" re "$")) continue
+    if (neg) return 0
+    hit = 1
   }
-  return 0
+  return hit
 }
 
 # The disallowed origins a type names, comma separated, each once.

@@ -1,11 +1,13 @@
 # UI-free state baseline (scripts/check_uifree_state.sh, ADR-0006). The count may only go down.
 # Regenerate with: bash scripts/check_uifree_state.sh --generate
-count=116
+count=124
 field=AgentEdits.finished
 field=AgentEdits.origins
 field=AgentEdits.reads
 field=CheckRuns.runs
 field=DirtyDocuments.project_saved
+field=Dispatch.gate
+field=Dispatch.write
 field=DocumentIds.headers
 field=DocumentIds.seen
 field=DocumentSaveJob._in_flight
@@ -90,6 +92,9 @@ field=PcbDrc.target
 field=PcbDrc.waive_draft
 field=PendingGitCommit.content
 field=PendingPathOps.ops
+field=ProfileWriteQueue.gate
+field=ProfileWriteQueue.running
+field=ProfileWriteQueue.waiting
 field=ProjectQueue.pending
 field=ProjectTabState.requirements
 field=ProjectTabState.rules
@@ -114,6 +119,9 @@ field=SymbolDocument.selection_filter
 field=SymbolDocument.tool
 field=SymbolDocument.viewport
 field=SymbolDocument.wheel_mode
+field=TabInfo.cached_document
 field=UiState.erc_page_frames
 field=UiState.erc_waived_findings
+field=UiState.io
+field=UiState.profile_writes
 field=UndoGroupSheets.kind

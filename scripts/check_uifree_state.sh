@@ -26,9 +26,12 @@
 #                  of anything else fail too.
 #
 # Resolution (scripts/check_uifree_state.awk). A type's paths are resolved
-# through the file's `use` declarations (aliases and `{self}` included),
-# explicit `crate::` / `self::` / `super::` paths, the items and `mod`s defined
-# in the same file (an item there belongs to that file's module), the std
+# through the file's module-scope `use` declarations (aliases and `{self}`
+# included; a `use` inside a fn or inline `mod` body binds nothing there, and a
+# name bound to two different paths is unresolved), explicit `crate::` /
+# `self::` / `super::` paths, the module-scope items and `mod`s defined in the
+# same file (an item there belongs to that file's module; a `const` / `static`
+# never shadows a path's first segment), the std
 # prelude and primitives, and signex-app's dependencies. A path whose module is
 # listed is allowed; a re-export is judged where it is named, not where it is
 # defined. An ident nothing binds (a glob import, a generic parameter of the
@@ -40,7 +43,9 @@
 # Known blind spots: an inline `mod x { .. }` that is not test code resolves
 # `self::` / `super::` against the file's module; a path split over lines in a
 # macro body; a macro pulled in by `#[macro_use]`; `cfg(all(test, ..))` code
-# counts as production (fail-safe). The rule file and the baseline are owned by
+# counts as production (fail-safe); a type-erased std field (`Box<dyn Any>`,
+# `Box<dyn Fn(..)>` capturing GUI state) passes, since only the names in the
+# type are judged. The rule file and the baseline are owned by
 # the maintainers (CODEOWNERS): adding a module needs Caner's or Hakan's OK.
 #
 # Usage:
@@ -224,6 +229,7 @@ if (( count > base )) || [[ -n "$new_keys" ]]; then
   (( count > base )) && [[ -z "$new_keys" ]] && cut -f3 "$TMP/counted" | sed 's/^/    /'
   echo "  Give the field a type from std, a DOMAIN crate or app/core/, or move its type to a"
   echo "  module listed as UI-free in $RULES first (ADR-0006, Enforcement)."
+  echo "  A renamed or moved counted field needs --generate and a maintainer's approval of $BASELINE."
   status=1
 elif (( count < base )); then
   echo "UI-free state: $count counted fields, below the baseline of $base. Lower it:"
