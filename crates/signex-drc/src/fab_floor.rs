@@ -27,7 +27,8 @@ pub fn is_fab_rule(name: &str) -> bool {
 /// Each non-fab rule limit looser than the strictest fab rule of that
 /// limit whose scope it shares (a net, a layer, an object pair), in
 /// written order: a floor for inner layers says nothing of an outer-layer
-/// rule.
+/// rule. A fab rule more specific than the rule is left out: precedence
+/// gives it its own scope, so the broad rule loosens nothing there.
 pub(crate) fn below_floor(rules: &[ScopedRule]) -> Vec<BelowFloor> {
     let mut out = Vec::new();
     for &kind in LimitKind::ALL {
@@ -38,6 +39,7 @@ pub(crate) fn below_floor(rules: &[ScopedRule]) -> Vec<BelowFloor> {
             let floor = rules
                 .iter()
                 .filter(|s| is_fab_rule(&s.rule.name) && s.overlaps(scoped))
+                .filter(|s| s.rule.rank() <= scoped.rule.rank())
                 .filter_map(|s| Some((s.rule.limit(kind)?, &s.rule.name)))
                 .reduce(|held, next| {
                     if kind.stricter(next.0, held.0) {

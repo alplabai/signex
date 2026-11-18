@@ -265,7 +265,8 @@ pub(crate) fn write_new_project_files_with(
         created.roll_back(&target.folder);
     }
     if result.is_ok() {
-        seed_project_rules(&target.project_path, seed);
+        let tier = plan.setup.as_ref().and_then(|setup| setup.fab);
+        seed_project_rules(&target.project_path, seed, tier);
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -300,8 +301,13 @@ pub(crate) struct RuleSeed {
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
-/// the user stores some.
-fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+/// the user stores some. A fab tier picked in the setup adds its `fab_*`
+/// rules to the copy (#2311).
+fn seed_project_rules(
+    project_path: &Path,
+    seed: &RuleSeed,
+    tier: Option<signex_types::project::FabTemplate>,
+) {
     if let Some(dir) = seed.dir.as_deref()
         && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
     {
@@ -309,8 +315,17 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
             "[new project] a queued profile change was not saved first: {why}"
         ));
     }
-    let (rules, notes) =
+    let (mut rules, mut notes) =
         crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
+    if let Some(tier) = tier {
+        match signex_drc_dsl::table::presets::with_tier(&rules.drc, tier) {
+            Ok(drc) => rules.drc = drc,
+            Err(why) => notes.push(format!(
+                "the {} fab tier rules were not added, the profile's rule text has an error: {why}",
+                tier.token()
+            )),
+        }
+    }
     for note in notes {
         crate::diagnostics::log_warning(format!("[new project] {note}"));
     }
@@ -709,5 +724,52 @@ mod tests {
             data.annotate_undo(),
             Some(crate::annotate_undo::AnnotateUndo::PerSheet)
         );
+    }
+
+    /// #2311: a fab tier picked in the setup adds its `fab_*` rules to the
+    /// stored rules, beside the profile's, and they read back as written.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_fab_rules() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        let mut setup = ProjectSetup::default();
+        setup.apply_fab(FabTemplate::Advanced);
+        let plan = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(setup),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Fab.snxprj"), &seed, &plan).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        let rules = data.rules.clone().expect("rules stored");
+        let shipped = signex_erc::project_rules::profile::builtin_profile();
+        assert_eq!(rules.erc, shipped.erc, "the profile's rules are kept");
+        let expected = signex_drc_dsl::table::presets::with_tier(&shipped.drc, FabTemplate::Advanced)
+            .unwrap();
+        assert_eq!(rules.drc, expected);
+        let dsl = rules.drc.dsl.unwrap_or_default();
+        assert!(
+            dsl.contains("rule fab_clearance on clearance require clearance >= 0.1mm then error"),
+            "{dsl}"
+        );
+        // Saved again, the project reads back the same.
+        signex_types::project::write_project(&written, &data).unwrap();
+        let again = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(again.rules, data.rules);
+
+        // No tier picked: no fab rule.
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let rules = signex_types::project::parse_project(&written).unwrap().rules;
+        let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
+        assert!(!dsl.contains("fab_"), "{dsl}");
     }
 }

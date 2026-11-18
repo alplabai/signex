@@ -405,6 +405,13 @@ dates the numbers; they are starting points, not one maker's limits.
 | HDI | 0.075 | 0.075 | 0.3 / 0.15 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
 
 All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
+Picking a tier in project setup (New Project, the Project tab's Project
+setup, New PCB) writes the same seven rules as the tier preset: see
+`docs/PROJECT_SETUP.md`, "Rule templates".
+
+The annular ring and the via diameter are separate limits: the ring is
+measured from the drill, the diameter across the copper, so a via under
+both minimums is two findings.
 
 Project rules can be stricter than the floor. A written rule that is not a
 `fab_*` rule and asks less than the strictest `fab_*` rule of the same limit
@@ -412,7 +419,9 @@ whose scope it shares (a net, a copper layer, an object pair: a floor for
 inner layers says nothing of a rule for the outer layers) is still applied (the most specific rule wins, as everywhere), but Run DRC
 and `check_drc` say so in Messages, `DRC rule 'tight' asks min_clearance
 0.1 mm, past the fab floor 'fab_clearance' of 0.15 mm`, and the Rules tab
-flags it.
+flags it. A `fab_*` rule more specific than the written rule (one for inner
+layers against a board-wide rule) is left out of that comparison: it wins
+on its own scope, so the broad rule loosens nothing there.
 
 ## Not in this version
 

@@ -319,6 +319,7 @@ impl Signex {
         };
         let defaults_before = project.data.schematic_defaults.clone();
         let pages_before = project.data.sheet_order();
+        let rules_before = project.data.rules.clone();
         let moved = if undo {
             tab.general_history.undo(&mut project.data)
         } else {
@@ -327,6 +328,8 @@ impl Signex {
         // Redraw the sheets when their defaults or page numbers moved.
         let defaults_moved = project.data.schematic_defaults != defaults_before
             || project.data.sheet_order() != pages_before;
+        // A fab tier step (#2311) puts the rules back too.
+        let rules_moved = project.data.rules != rules_before;
         // The boxes show the stored values again.
         tab.default_drafts.clear();
         tab.setup_draft = None;
@@ -336,6 +339,9 @@ impl Signex {
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);
+            if rules_moved {
+                self.invalidate_pending_profile_update();
+            }
             self.after_project_general_change(defaults_moved);
         }
         moved

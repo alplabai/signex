@@ -144,6 +144,12 @@ impl Signex {
             NewProjectMsg::RuleEdited(field, _) => Some(*field),
             _ => None,
         };
+        // A tier pick also writes its `fab_*` rules (#2311), even when the
+        // values it fills are already shown: an edited fab rule comes back.
+        let tier_rules = match &msg {
+            NewProjectMsg::FabPicked(tier) => Some((*tier, self.rules_with_tier(project_id, *tier))),
+            _ => None,
+        };
         let tab = self
             .document_state
             .project_tabs
@@ -163,7 +169,7 @@ impl Signex {
             stored => return self.after_profile_store(stored),
         }
         let before = draft.setup.clone();
-        if !draft.apply_setup(msg, users) || draft.setup == before {
+        if !draft.apply_setup(msg, users) || (draft.setup == before && tier_rules.is_none()) {
             return iced::Task::none();
         }
         let Some(part) = part else {
@@ -197,14 +203,43 @@ impl Signex {
                     .then_some(draft.setup.designators);
             }
         }
-        self.apply_project_general(
-            project_id,
-            ProjectGeneralCommand::SetProjectDefaults {
+        let command = match tier_rules {
+            Some((_, Ok(rules))) => ProjectGeneralCommand::SetFabTier {
+                defaults,
+                rules: Box::new(rules),
+            },
+            Some((tier, Err(why))) => {
+                crate::diagnostics::log_warning(format!(
+                    "Project setup: the {} fab tier rules were not added: {why}",
+                    tier.token()
+                ));
+                ProjectGeneralCommand::SetProjectDefaults {
+                    defaults,
+                    designators,
+                    typing,
+                }
+            }
+            None => ProjectGeneralCommand::SetProjectDefaults {
                 defaults,
                 designators,
                 typing,
             },
-        );
+        };
+        let rules_before = self.rules_of(project_id);
+        self.apply_project_general(project_id, command);
+        if self.rules_of(project_id) != rules_before {
+            self.invalidate_pending_profile_update();
+        }
         iced::Task::none()
+    }
+
+    /// `project_id`'s stored rules, `None` when it stores none or is closed.
+    pub(crate) fn rules_of(
+        &self,
+        project_id: ProjectId,
+    ) -> Option<signex_types::project::ProjectRules> {
+        self.document_state
+            .project_by_id(project_id)
+            .and_then(|p| p.data.rules.clone())
     }
 }
