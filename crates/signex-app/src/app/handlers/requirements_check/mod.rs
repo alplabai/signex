@@ -86,8 +86,8 @@ impl Signex {
                 match bom::project_boms(inputs, read, confine.as_deref()) {
                     Ok(boms) => {
                         facts.warnings.extend(boms.warnings);
-                        facts.parts = needs.parts.then(|| Ok(boms.parts));
-                        facts.bom = needs.bom.then(|| Ok(boms.grouped));
+                        facts.parts = needs.parts.then_some(Ok(boms.parts));
+                        facts.bom = needs.bom.then_some(Ok(boms.grouped));
                     }
                     Err(why) => {
                         facts.parts = needs.parts.then(|| Err(why.clone()));
