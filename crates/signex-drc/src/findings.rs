@@ -103,7 +103,29 @@ pub fn describe(v: &Violation) -> String {
         ViolationKind::TrackWidth => size_text("track width", v),
         ViolationKind::ViaDiameter => size_text("via diameter", v),
         ViolationKind::ViaDrill => size_text("via drill", v),
+        ViolationKind::HoleSize => size_text("hole", v),
+        ViolationKind::AnnularRing => size_text("annular ring", v),
+        ViolationKind::HoleToHole => gap_text("hole to hole", v),
+        ViolationKind::EdgeClearance => gap_text("board edge clearance", v),
+        ViolationKind::ViaInPad if v.measured_nm == 0 => "via in a pad".to_string(),
+        ViolationKind::ViaInPad => gap_text("via to pad", v),
+        ViolationKind::SilkToPad => gap_text("silkscreen to pad", v),
+        ViolationKind::SilkToSilk => gap_text("silkscreen to silkscreen", v),
+        ViolationKind::MaskSliver => size_text("solder mask sliver", v),
+        ViolationKind::MaskExpansion => size_text("solder mask expansion", v),
+        ViolationKind::PasteExpansion => size_text("paste expansion", v),
+        ViolationKind::CourtyardOverlap if v.measured_nm == 0 => "courtyards overlap".to_string(),
+        ViolationKind::CourtyardOverlap => gap_text("courtyard gap", v),
     }
+}
+
+/// A gap under its minimum: `<what> 0.1 mm, needs 0.2 mm`.
+fn gap_text(what: &str, v: &Violation) -> String {
+    format!(
+        "{what} {} mm, needs {} mm",
+        mm(v.measured_nm),
+        mm(v.required_nm)
+    )
 }
 
 /// Run DRC's Messages line for `v`: what broke, the written rule, the nets

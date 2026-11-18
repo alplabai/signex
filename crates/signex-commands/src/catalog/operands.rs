@@ -609,7 +609,8 @@ pub const RULES_ONE: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// `rules_add`: a rule of `kind` (clearance, track, via) with its limits.
+/// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
+/// edge, silk, mask, paste, courtyard) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),

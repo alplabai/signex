@@ -540,7 +540,21 @@ fn a_tier_preset_shows_its_diff_then_applies_as_one_undo_step() {
         .clone()
         .expect("a preview");
     let names: Vec<&str> = preview.changes.iter().map(|c| c.name.as_str()).collect();
-    assert_eq!(names, ["fab_clearance", "fab_track", "fab_via"]);
+    assert_eq!(
+        names,
+        [
+            "fab_clearance",
+            "fab_track",
+            "fab_via",
+            "fab_hole",
+            "fab_edge",
+            "fab_mask",
+            "fab_silk"
+        ]
+    );
+    // #2311: a tier says where its numbers come from and names no maker.
+    let fab = preview.fab.as_ref().expect("a tier names its source");
+    assert!(fab.manufacturer.is_empty() && !fab.published.is_empty());
     assert_eq!(dsl(&app), TEXT, "the preview changes nothing");
     let _ = app.view_rules_tab(id);
 
@@ -591,7 +605,8 @@ fn the_preset_commands_diff_and_apply_tiers_and_profiles() {
     let (mut app, _) = app_with_board(&dir);
     let diff = answer(&mut app, "rules_preset_diff", &["preset=advanced"]);
     assert_eq!(diff["mode"], "merge");
-    assert_eq!(diff["added"], 3);
+    assert_eq!(diff["added"], 7);
+    assert_eq!(diff["fab"]["published"], "2026-11-17", "{diff}");
     assert_eq!(diff["removed"], 0);
     assert_eq!(dsl(&app), TEXT);
 
@@ -611,6 +626,7 @@ fn the_preset_commands_diff_and_apply_tiers_and_profiles() {
             dsl: Some("rule fab_only on track require width >= 0.2mm then error\n".into()),
             ..DrcRuleSet::default()
         },
+        fab: None,
         unknown: Default::default(),
     };
     let manager = &mut app.ui_state.profile_manager;

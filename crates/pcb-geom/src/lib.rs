@@ -72,6 +72,7 @@ pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
     footprint_graphic_placement,
 };
+pub use graphic_index::graphic_strokes;
 pub use index::{
     BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, item_by_uuid, track_shape, via_shape,
 };

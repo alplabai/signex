@@ -23,6 +23,11 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     let keepouts = super::keepout::check(board);
     violations.extend(keepouts.violations);
     violations.extend(super::limits::violations(board, rules));
+    violations.extend(super::holes::violations(board, rules));
+    violations.extend(super::edge::violations(board, rules));
+    violations.extend(super::silk::violations(board, rules));
+    violations.extend(super::mask::violations(board, rules));
+    violations.extend(super::courtyard::violations(board, rules));
     violations.sort_unstable();
     let mut skipped = index.rejected().to_vec();
     skipped.extend(keepouts.bodies);

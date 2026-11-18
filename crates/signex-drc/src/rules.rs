@@ -104,6 +104,12 @@ impl DrcRules {
         self.remarks.extend(infos);
         let lowered = crate::rule_notes::lowered_classes(&self, board, classes);
         self.notes.extend(lowered);
+        for below in crate::fab_floor::below_floor(&self.user) {
+            let note = crate::fab_floor::note(&below);
+            if !self.notes.contains(&note) {
+                self.notes.push(note);
+            }
+        }
         self
     }
 
@@ -340,6 +346,23 @@ impl DrcRules {
 
     pub(crate) fn sets(&self, kind: LimitKind) -> bool {
         user_rules::sets(&self.user, kind)
+    }
+
+    /// The largest value any written rule sets for `kind`, whatever it
+    /// covers; 0 with none. How far a search for pairs must look.
+    pub(crate) fn widest_limit(&self, kind: LimitKind) -> i64 {
+        self.user
+            .iter()
+            .filter_map(|s| s.rule.limit(kind))
+            .max()
+            .unwrap_or(0)
+            .clamp(0, MAX_ABS_NM)
+    }
+
+    /// The limit of `kind` a board-wide rule sets for objects off copper
+    /// (silkscreen, mask openings, courtyards), and the rule's id.
+    pub(crate) fn board_limit(&self, kind: LimitKind) -> Option<(i64, String)> {
+        self.object_limit(kind, 0, u32::MAX)
     }
 }
 

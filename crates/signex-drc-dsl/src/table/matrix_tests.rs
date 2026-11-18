@@ -222,6 +222,10 @@ fn a_tier_merges_by_name_and_a_profile_replaces() {
             ("fab_track", RowChangeKind::Changed),
             ("fab_clearance", RowChangeKind::Added),
             ("fab_via", RowChangeKind::Added),
+            ("fab_hole", RowChangeKind::Added),
+            ("fab_edge", RowChangeKind::Added),
+            ("fab_mask", RowChangeKind::Added),
+            ("fab_silk", RowChangeKind::Added),
         ]
     );
     let replaced = preset_result(current, &tier, PresetMode::Replace).unwrap();

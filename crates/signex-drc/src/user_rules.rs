@@ -12,6 +12,8 @@ use signex_types::violation::Severity;
 
 use pcb_geom::ItemRef;
 
+pub use crate::limit_kind::{Limit, LimitKind};
+
 /// Which nets a rule is for, least specific first.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetScope {
@@ -64,76 +66,6 @@ impl CopperObject {
             | ItemRef::Dimension(_)
             | ItemRef::Graphic { .. } => None,
         }
-    }
-}
-
-/// One limit a rule sets, in nm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Limit {
-    MinClearance(i64),
-    MinTrackWidth(i64),
-    MaxTrackWidth(i64),
-    MinViaDiameter(i64),
-    MinViaDrill(i64),
-}
-
-/// Which limit, without its value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LimitKind {
-    MinClearance,
-    MinTrackWidth,
-    MaxTrackWidth,
-    MinViaDiameter,
-    MinViaDrill,
-}
-
-impl Limit {
-    pub(crate) fn split(self) -> (LimitKind, i64) {
-        match self {
-            Limit::MinClearance(nm) => (LimitKind::MinClearance, nm),
-            Limit::MinTrackWidth(nm) => (LimitKind::MinTrackWidth, nm),
-            Limit::MaxTrackWidth(nm) => (LimitKind::MaxTrackWidth, nm),
-            Limit::MinViaDiameter(nm) => (LimitKind::MinViaDiameter, nm),
-            Limit::MinViaDrill(nm) => (LimitKind::MinViaDrill, nm),
-        }
-    }
-}
-
-impl LimitKind {
-    pub const ALL: [LimitKind; 5] = [
-        LimitKind::MinClearance,
-        LimitKind::MinTrackWidth,
-        LimitKind::MaxTrackWidth,
-        LimitKind::MinViaDiameter,
-        LimitKind::MinViaDrill,
-    ];
-
-    /// For a maximum the smaller value is the stricter one.
-    pub fn stricter(self, a: i64, b: i64) -> bool {
-        match self {
-            LimitKind::MaxTrackWidth => a < b,
-            _ => a > b,
-        }
-    }
-
-    /// Stable name in answers (`min_clearance`, `max_track_width`, ...).
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            LimitKind::MinClearance => "min_clearance",
-            LimitKind::MinTrackWidth => "min_track_width",
-            LimitKind::MaxTrackWidth => "max_track_width",
-            LimitKind::MinViaDiameter => "min_via_diameter",
-            LimitKind::MinViaDrill => "min_via_drill",
-        }
-    }
-
-    pub fn from_str_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|k| k.as_str() == id)
-    }
-
-    /// Whether it is a maximum (the item must stay at or under it).
-    pub const fn is_maximum(self) -> bool {
-        matches!(self, LimitKind::MaxTrackWidth)
     }
 }
 

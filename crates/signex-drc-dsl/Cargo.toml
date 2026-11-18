@@ -12,9 +12,14 @@ pcb-geom = { path = "../pcb-geom" }
 signex-drc.workspace = true
 signex-types.workspace = true
 chumsky.workspace = true
+uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
 uuid.workspace = true
+
+[features]
+# The base-rule boards (`fixture`) for the app's tests.
+test-support = ["dep:uuid"]
 
 [lints]
 workspace = true

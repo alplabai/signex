@@ -190,7 +190,7 @@ fn what_was_not_applied_is_counted() {
 #[test]
 fn an_unknown_target_field_or_condition_drops_only_that_rule() {
     let src = r#"
-rule a on silk require width >= 1mm then error
+rule a on glue require width >= 1mm then error
 rule b on track require gap >= 1mm then error
 rule c on track when colour == "red" require width >= 1mm then error
 rule d on via require drill <= 1mm then error
@@ -202,7 +202,8 @@ rule ok on via require drill >= 0.2mm then error
     assert_eq!(
         messages(&got),
         [
-            "unknown target 'silk' (clearance, track or via)",
+            "unknown target 'glue' (clearance, track, via, hole, edge, silk, mask, paste or \
+             courtyard)",
             "unknown field 'gap' for this target (width)",
             "unknown condition 'colour' (net, class, other_class or layer)",
             "'drill' takes only '>=' (a minimum)",
@@ -212,7 +213,7 @@ rule ok on via require drill >= 0.2mm then error
     let at = |i: usize| &src[got.diagnostics[i].span.clone()];
     assert_eq!(
         [at(0), at(1), at(2), at(3)],
-        ["silk", "gap", "colour", "drill"]
+        ["glue", "gap", "colour", "drill"]
     );
 }
 

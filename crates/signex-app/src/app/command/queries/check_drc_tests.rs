@@ -17,7 +17,7 @@ use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::LOOSE_BOARD_WARNING;
 use crate::keymap::AppCommandId;
 
-const BOARD: &str = "board.snxpcb";
+pub(super) const BOARD: &str = "board.snxpcb";
 
 /// Track `n` (a fixed uuid, so a rewritten board keeps its items) of `net`.
 fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
@@ -57,7 +57,7 @@ fn sample_board() -> PcbBoard {
     board
 }
 
-fn write_board(path: &Path, board: PcbBoard) {
+pub(super) fn write_board(path: &Path, board: PcbBoard) {
     let text = SnxPcb::new(board).write_string().expect("encode");
     std::fs::write(path, text).expect("write board");
 }
@@ -91,7 +91,7 @@ fn check(app: &mut Signex, document: &Path, extra: &[&str]) -> CommandOutcome {
     }
 }
 
-fn report(app: &mut Signex, document: &Path, extra: &[&str]) -> Value {
+pub(super) fn report(app: &mut Signex, document: &Path, extra: &[&str]) -> Value {
     match check(app, document, extra) {
         CommandOutcome::Answered(value) => value,
         other => panic!("not answered: {other:?}"),
@@ -110,7 +110,7 @@ fn findings(report: &Value) -> &Vec<Value> {
 }
 
 /// `(rule, items)` of each finding, sorted.
-fn rules_and_items(report: &Value) -> Vec<(String, Vec<String>)> {
+pub(super) fn rules_and_items(report: &Value) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = findings(report)
         .iter()
         .map(|f| {
@@ -145,7 +145,7 @@ pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn run_drc(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
+pub(super) fn run_drc(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
     let _serial = drc_serial();
     run_drc_held(app, path)
 }
@@ -161,7 +161,9 @@ fn run_drc_held(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
 }
 
 /// What Run DRC found, as `(rule, items)` in the check's words, sorted.
-fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<String>)> {
+pub(super) fn run_drc_rules_and_items(
+    report: &signex_drc::DrcReport,
+) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = report
         .violations
         .iter()
@@ -190,18 +192,18 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
     out
 }
 
-fn open_board(app: &mut Signex, path: &Path) {
+pub(super) fn open_board(app: &mut Signex, path: &Path) {
     let board = SnxPcb::parse(&std::fs::read_to_string(path).unwrap())
         .unwrap()
         .board;
     app.open_pcb_tab(path.to_path_buf(), BOARD.into(), board);
 }
 
-fn set_rules(app: &mut Signex, rules: ProjectRules) {
+pub(super) fn set_rules(app: &mut Signex, rules: ProjectRules) {
     app.document_state.projects[0].data.rules = Some(rules);
 }
 
-fn dsl(text: &str) -> DrcRuleSet {
+pub(super) fn dsl(text: &str) -> DrcRuleSet {
     DrcRuleSet {
         dsl: Some(text.into()),
         ..DrcRuleSet::default()

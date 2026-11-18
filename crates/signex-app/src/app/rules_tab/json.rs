@@ -88,6 +88,17 @@ pub(crate) fn flag_json(flagged: &FlaggedRule) -> Value {
             to_nm,
         } => json!({ "class": class, "from_mm": mm(*from_nm), "to_mm": mm(*to_nm) }),
         RuleFlag::NoNets => json!({}),
+        RuleFlag::BelowFabFloor {
+            floor,
+            limit,
+            from_nm,
+            to_nm,
+        } => json!({
+            "floor": floor,
+            "limit": limit.as_str(),
+            "from_mm": mm(*from_nm),
+            "to_mm": mm(*to_nm),
+        }),
     };
     if let (Some(out), Value::Object(extra)) = (out.as_object_mut(), extra) {
         out.extend(extra);

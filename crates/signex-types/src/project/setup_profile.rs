@@ -57,8 +57,9 @@ impl SetupProfile {
     }
 }
 
-/// A generic fabrication capability class: the minimum clearance, track and
-/// via sizes a fab of that class can make. No fabricator is named.
+/// A generic fabrication capability class: the minimums of the base DRC
+/// rules a fab of that class can make (`fab_tier.rs`). No fabricator is
+/// named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FabTemplate {
     Standard,
@@ -68,15 +69,6 @@ pub enum FabTemplate {
 
 impl FabTemplate {
     pub const ALL: [Self; 3] = [Self::Standard, Self::Advanced, Self::Hdi];
-
-    /// `(clearance, track, via size, via drill)` in mm.
-    pub const fn minimums(self) -> (f64, f64, f64, f64) {
-        match self {
-            Self::Standard => (0.15, 0.15, 0.5, 0.25),
-            Self::Advanced => (0.1, 0.1, 0.4, 0.2),
-            Self::Hdi => (0.075, 0.075, 0.3, 0.15),
-        }
-    }
 }
 
 /// Where the stepper starts when the user first picks Custom.

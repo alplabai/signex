@@ -10,6 +10,7 @@ mod bom;
 mod chrome;
 mod dialog;
 mod dialog_text;
+mod drc_rules;
 mod editors;
 mod fab_outputs;
 mod file_dialog;
@@ -40,6 +41,7 @@ pub use bom::*;
 pub use chrome::*;
 pub use dialog::*;
 pub use dialog_text::*;
+pub use drc_rules::*;
 pub use editors::*;
 pub use fab_outputs::*;
 pub use file_dialog::*;
@@ -74,6 +76,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         chrome::CHROME,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
+        drc_rules::DRC_RULES,
         editors::EDITORS,
         fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
