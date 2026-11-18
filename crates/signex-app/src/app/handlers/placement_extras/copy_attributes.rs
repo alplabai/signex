@@ -51,11 +51,23 @@ fn font_name(family: Option<&String>, sheet_default: &str) -> String {
 
 impl Signex {
     pub(super) fn copy_attributes_at(&mut self, at: Option<(f64, f64)>) -> Task<Message> {
-        // Any run or shape mid-draw: a wire or bus, a line or shape anchor,
-        // arc or polyline points (`is_drawing_on`).
+        // A wire or bus run, or a draw tool's shape mid-draw. Other tools that
+        // set a shape anchor (Measure, Sheet, Blanket) still copy attributes.
+        let is_draw_tool = matches!(
+            self.interaction_state.current_tool,
+            Tool::Wire
+                | Tool::Bus
+                | Tool::Line
+                | Tool::Polyline
+                | Tool::Rectangle
+                | Tool::Circle
+                | Tool::Arc
+        );
         let is_drawing = self.interaction_state.wire_drawing
             || self.interaction_state.active_canvas().drawing_mode
-            || (self.document_state.active_path.as_deref()).is_some_and(|p| self.is_drawing_on(p));
+            || (is_draw_tool
+                && (self.document_state.active_path.as_deref())
+                    .is_some_and(|p| self.is_drawing_on(p)));
         if is_drawing {
             return self.add_vertex_while_drawing(at);
         }

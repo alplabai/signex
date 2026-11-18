@@ -345,6 +345,11 @@ fn add_vertex_while_a_rectangle_is_drawn_says_so_and_changes_nothing() {
     let anchor = app.interaction_state.shape_anchor;
     assert!(anchor.is_some(), "rectangle open");
     let drawings = doc(&app).drawings.len();
+    // Only entries logged by this call count; ids only grow.
+    let last_id = signex_app::diagnostics::recent_entries()
+        .iter()
+        .map(|e| e.id)
+        .max();
     let _ = extras(
         &mut app,
         PlacementExtrasMsg::CopyAttributesRequested { at: None },
@@ -352,11 +357,43 @@ fn add_vertex_while_a_rectangle_is_drawn_says_so_and_changes_nothing() {
     assert_eq!(app.interaction_state.shape_anchor, anchor);
     assert_eq!(doc(&app).drawings.len(), drawings);
     assert_eq!(app.interaction_state.current_tool, Tool::Rectangle);
-    let logged = signex_app::diagnostics::recent_entries().iter().any(|e| {
-        e.message
-            .starts_with("Add vertex: works while drawing a wire")
-    });
-    assert!(logged, "the refusal must reach the Messages panel");
+    let logged = signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| last_id.is_none_or(|last| e.id > last))
+        .filter(|e| {
+            e.message
+                .starts_with("Add vertex: works while drawing a wire")
+        })
+        .count();
+    assert_eq!(
+        logged, 1,
+        "this call's refusal must reach the Messages panel"
+    );
+}
+
+/// #1669 - a tool that sets a shape anchor but draws nothing (Measure's
+/// first point, a Sheet symbol's first corner) keeps Copy Attributes as on
+/// trunk: the key copies the selected part.
+#[test]
+fn copy_attributes_mid_measure_or_sheet_placement_still_copies() {
+    for tool in [Tool::Measure, Tool::Sheet] {
+        let mut app = app_with_sheet(populated_sheet());
+        app.interaction_state.current_tool = tool;
+        click(&mut app, (152.4, 152.4));
+        assert!(
+            app.interaction_state.shape_anchor.is_some(),
+            "{tool:?}: first point placed"
+        );
+        select(&mut app, &[("R2", 1)], false);
+        let _ = extras(
+            &mut app,
+            PlacementExtrasMsg::CopyAttributesRequested { at: None },
+        );
+        assert!(
+            app.interaction_state.placement.is_some(),
+            "{tool:?}: a copy of R2 is on the cursor"
+        );
+    }
 }
 
 /// #1669 - with the Wire tool shown but no run open the key still copies
