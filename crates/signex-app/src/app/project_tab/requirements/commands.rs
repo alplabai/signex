@@ -113,7 +113,11 @@ pub(crate) fn project_enable_requirement(app: &mut Signex, args: &CommandArgs) -
     };
     let on = *on;
     match named_entry(app, args) {
-        Ok((id, index)) => edit(app, id, &ProjectRequirementCommand::SetEnabled { index, on }),
+        Ok((id, index)) => edit(
+            app,
+            id,
+            &ProjectRequirementCommand::SetEnabled { index, on },
+        ),
         Err(reason) => refused(reason),
     }
 }

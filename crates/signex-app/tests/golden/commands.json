@@ -1195,7 +1195,17 @@
     "category": "file"
   },
   {
+    "id": "project_add_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_add_variant",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_enable_requirement",
     "group": "General",
     "category": "design"
   },
@@ -1210,6 +1220,11 @@
     "category": "design"
   },
   {
+    "id": "project_remove_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_remove_variant",
     "group": "General",
     "category": "design"
@@ -1220,12 +1235,22 @@
     "category": "design"
   },
   {
+    "id": "project_run_requirements",
+    "group": "General",
+    "category": "validation"
+  },
+  {
     "id": "project_set_active_variant",
     "group": "General",
     "category": "design"
   },
   {
     "id": "project_set_annotate_undo",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_requirement",
     "group": "General",
     "category": "design"
   },

@@ -114,7 +114,10 @@ fn add_picker<'a>(project_id: ProjectId, i18n: &I18n) -> Element<'a, Message> {
         .graphite()
         .placeholder(t!(i18n, ids::REQUIREMENTS_ADD).to_string())
         .on_select(move |choice: Choice<&'static str>| {
-            message(project_id, RequirementsMsg::AddPicked { kind: choice.value })
+            message(
+                project_id,
+                RequirementsMsg::AddPicked { kind: choice.value },
+            )
         })
         .width(Length::Fixed(TS.body * PICKER_EMS))
         .boxed()
@@ -214,7 +217,8 @@ impl Entry<'_> {
                     .align_y(Alignment::Center)
                     .boxed(),
                 );
-                let words = t!(self.i18n, ids::REQUIREMENTS_UNREADABLE, "reason" => reason.as_str());
+                let words =
+                    t!(self.i18n, ids::REQUIREMENTS_UNREADABLE, "reason" => reason.as_str());
                 col = col.push(problem(words, self.tokens));
             }
         }
@@ -238,7 +242,9 @@ impl Entry<'_> {
             .size(TS.title)
             .labelled(t!(self.i18n, ids::REQUIREMENTS_ENABLED))
             .text_size(TS.label)
-            .on_toggle(move |on| message(project_id, RequirementsMsg::EnabledToggled { index, on }));
+            .on_toggle(move |on| {
+                message(project_id, RequirementsMsg::EnabledToggled { index, on })
+            });
         let kind = text(t!(self.i18n, kind_words(requirement.kind.name())))
             .size(TS.title)
             .color(crate::styles::ti(self.tokens.text))
@@ -246,18 +252,35 @@ impl Entry<'_> {
         let mut line = row![enabled, kind].spacing(SP.m).align_y(Alignment::Center);
         if let Some(status) = outcome(self.report, &requirement.id) {
             let (words, color) = match status {
-                Outcome::Passed => (ids::REQUIREMENTS_PASSED, crate::styles::ti(self.tokens.success)),
+                Outcome::Passed => (
+                    ids::REQUIREMENTS_PASSED,
+                    crate::styles::ti(self.tokens.success),
+                ),
                 Outcome::Failed(_) => (ids::REQUIREMENTS_FAILED, ink::danger(self.tokens)),
-                Outcome::NotChecked => (ids::REQUIREMENTS_NOT_CHECKED, ink::muted_text(self.tokens)),
+                Outcome::NotChecked => {
+                    (ids::REQUIREMENTS_NOT_CHECKED, ink::muted_text(self.tokens))
+                }
             };
-            line = line.push(text(t!(self.i18n, words)).size(TS.label).color(color).boxed());
+            line = line.push(
+                text(t!(self.i18n, words))
+                    .size(TS.label)
+                    .color(color)
+                    .boxed(),
+            );
         }
         line.push(self.remove()).boxed()
     }
 
     fn remove<'a>(&self) -> Element<'a, Message> {
-        let removed = message(self.project_id, RequirementsMsg::Removed { index: self.index });
-        action(t!(self.i18n, ids::REQUIREMENTS_REMOVE), Some(removed), self.tokens)
+        let removed = message(
+            self.project_id,
+            RequirementsMsg::Removed { index: self.index },
+        );
+        action(
+            t!(self.i18n, ids::REQUIREMENTS_REMOVE),
+            Some(removed),
+            self.tokens,
+        )
     }
 
     fn severity<'a>(&self, current: Severity) -> Element<'a, Message> {
@@ -300,13 +323,23 @@ impl Entry<'_> {
             return self.text_field(field, raw);
         }
         let (project_id, index) = (self.project_id, self.index);
-        let on = raw.get(field.key()).and_then(Value::as_bool).unwrap_or(false);
+        let on = raw
+            .get(field.key())
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let flag = checkbox(on)
             .style(crate::panels::form_look::checkbox_style)
             .size(TS.title)
             .on_toggle(move |on| {
                 let value = on.to_string();
-                message(project_id, RequirementsMsg::FieldPicked { index, field, value })
+                message(
+                    project_id,
+                    RequirementsMsg::FieldPicked {
+                        index,
+                        field,
+                        value,
+                    },
+                )
             });
         self.labelled(field, flag.boxed())
     }
@@ -326,7 +359,10 @@ impl Entry<'_> {
         };
         let input = text_input(hint, shown)
             .on_input(move |text| {
-                message(project_id, RequirementsMsg::FieldEdited { index, field, text })
+                message(
+                    project_id,
+                    RequirementsMsg::FieldEdited { index, field, text },
+                )
             })
             .on_submit(message(
                 project_id,
@@ -339,7 +375,11 @@ impl Entry<'_> {
         self.labelled(field, input.boxed())
     }
 
-    fn labelled<'a>(&self, field: RequirementField, value: Element<'a, Message>) -> Element<'a, Message> {
+    fn labelled<'a>(
+        &self,
+        field: RequirementField,
+        value: Element<'a, Message>,
+    ) -> Element<'a, Message> {
         labelled(t!(self.i18n, field_words(field)), value, self.tokens)
     }
 

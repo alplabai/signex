@@ -115,7 +115,10 @@ pub enum RequirementProblem {
     EntryUnreadable(String),
     UnknownKind(String),
     /// The field is not one of this kind's.
-    NotAField { kind: String, field: String },
+    NotAField {
+        kind: String,
+        field: String,
+    },
     IdEmpty,
     IdTooLong,
     /// The id holds a control character.
@@ -254,9 +257,9 @@ impl ProjectData {
             });
         }
         let value = match field {
-            RequirementField::Id => Some(Value::String(
-                self.check_requirement_id(text, Some(index))?,
-            )),
+            RequirementField::Id => {
+                Some(Value::String(self.check_requirement_id(text, Some(index))?))
+            }
             _ => field_value(field, text)?,
         };
         match value {
@@ -308,7 +311,10 @@ impl ProjectData {
     }
 
     /// The kind and stored value of the readable entry at `index`.
-    fn editable_entry(&self, index: usize) -> Result<(String, Map<String, Value>), RequirementProblem> {
+    fn editable_entry(
+        &self,
+        index: usize,
+    ) -> Result<(String, Map<String, Value>), RequirementProblem> {
         self.check_requirements_editable()?;
         let entry = self
             .requirements
@@ -428,7 +434,9 @@ fn positive_number(typed: &str) -> Result<Value, RequirementProblem> {
     }
     match serde_json::from_str::<Number>(typed) {
         Ok(number) => Ok(Value::Number(number)),
-        Err(_) => Number::from_f64(value).map(Value::Number).ok_or_else(refused),
+        Err(_) => Number::from_f64(value)
+            .map(Value::Number)
+            .ok_or_else(refused),
     }
 }
 

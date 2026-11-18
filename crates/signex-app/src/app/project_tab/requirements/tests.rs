@@ -5,9 +5,7 @@
 //! same.
 
 use serde_json::{Value, json};
-use signex_types::project::{
-    RequirementField, RequirementProblem, parse_project, write_project,
-};
+use signex_types::project::{RequirementField, RequirementProblem, parse_project, write_project};
 
 use super::RequirementsMsg;
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -31,10 +29,12 @@ fn app() -> (Signex, ProjectId, tempfile::TempDir) {
 }
 
 fn send(app: &mut Signex, id: ProjectId, msg: RequirementsMsg) -> iced::Task<Message> {
-    app.update(Message::Project(ProjectMsg::Tab(ProjectTabMsg::Requirements {
-        project_id: id,
-        msg,
-    })))
+    app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::Requirements {
+            project_id: id,
+            msg,
+        },
+    )))
 }
 
 fn stored(app: &Signex) -> Vec<Value> {
@@ -138,7 +138,10 @@ fn a_field_commits_on_enter_and_a_refused_value_stays_with_its_reason() {
     assert_eq!(stored(&app)[0]["max_width_mm"], json!(80.5), "refused");
     let state = tab(&app, id);
     assert_eq!(
-        state.drafts.get(&(0, RequirementField::MaxWidthMm)).map(String::as_str),
+        state
+            .drafts
+            .get(&(0, RequirementField::MaxWidthMm))
+            .map(String::as_str),
         Some("-2"),
         "the typed text stays in its box"
     );
@@ -170,18 +173,30 @@ fn a_pick_commits_at_once_and_toggle_and_remove_are_steps() {
         value: "true".into(),
     };
     let _ = send(&mut app, id, allow);
-    let _ = send(&mut app, id, RequirementsMsg::EnabledToggled { index: 0, on: false });
+    let _ = send(
+        &mut app,
+        id,
+        RequirementsMsg::EnabledToggled {
+            index: 0,
+            on: false,
+        },
+    );
     assert_eq!(
         stored(&app),
-        [json!({"id": "erc_clean", "kind": "erc_clean", "severity": "warning",
-                "allow_warnings": true, "enabled": false})]
+        [
+            json!({"id": "erc_clean", "kind": "erc_clean", "severity": "warning",
+                "allow_warnings": true, "enabled": false})
+        ]
     );
     let _ = send(&mut app, id, RequirementsMsg::Removed { index: 0 });
     assert!(stored(&app).is_empty());
     for _ in 0..4 {
         assert!(undo(&mut app, id, true));
     }
-    assert_eq!(stored(&app), [json!({"id": "erc_clean", "kind": "erc_clean"})]);
+    assert_eq!(
+        stored(&app),
+        [json!({"id": "erc_clean", "kind": "erc_clean"})]
+    );
 }
 
 #[test]
@@ -210,7 +225,11 @@ fn run_checks_lands_its_report_in_the_tab_off_the_ui_thread() {
 #[test]
 fn the_commands_edit_through_the_same_path_and_refuse_with_the_reason() {
     let (mut app, id, _dir) = app();
-    let value = answer(&mut app, "project_add_requirement", &["kind=bom_cost", "id=cost"]);
+    let value = answer(
+        &mut app,
+        "project_add_requirement",
+        &["kind=bom_cost", "id=cost"],
+    );
     assert_eq!(value["changed"], true);
     assert_eq!(value["requirements"][0]["id"], "cost");
     let value = answer(
@@ -232,7 +251,11 @@ fn the_commands_edit_through_the_same_path_and_refuse_with_the_reason() {
         &["requirement=cost", "field=quantity", "value=0"],
     );
     assert!(reason.contains("whole number"), "{reason}");
-    let reason = refusal(&mut app, "project_remove_requirement", &["requirement=size"]);
+    let reason = refusal(
+        &mut app,
+        "project_remove_requirement",
+        &["requirement=size"],
+    );
     assert!(reason.contains("no requirement `size`"), "{reason}");
     let reason = refusal(&mut app, "project_add_requirement", &["kind=rail_budget"]);
     assert!(reason.contains("rail_budget"), "{reason}");
@@ -244,9 +267,16 @@ fn the_commands_edit_through_the_same_path_and_refuse_with_the_reason() {
         run(&mut app, "project_run_requirements", &[]),
         CommandOutcome::Ran
     ));
-    assert!(tab(&app, id).last_run.is_some(), "the run landed in the tab");
+    assert!(
+        tab(&app, id).last_run.is_some(),
+        "the run landed in the tab"
+    );
 
-    let value = answer(&mut app, "project_remove_requirement", &["requirement=cost"]);
+    let value = answer(
+        &mut app,
+        "project_remove_requirement",
+        &["requirement=cost"],
+    );
     assert_eq!(value["requirements"], json!([]));
     // Each edit was one step: four undos reach the empty list again.
     for _ in 0..4 {
@@ -260,7 +290,12 @@ fn the_commands_edit_through_the_same_path_and_refuse_with_the_reason() {
 fn a_save_writes_the_edited_list_and_reads_back_the_same() {
     let (mut app, id, _dir) = app();
     add(&mut app, id, "parts_state");
-    type_and_submit(&mut app, id, RequirementField::States, "released, in_review");
+    type_and_submit(
+        &mut app,
+        id,
+        RequirementField::States,
+        "released, in_review",
+    );
     add(&mut app, id, "net_class");
     let path = app.document_state.projects[0].path.clone();
     let task = app.save_project_at_path(&path).expect("the save starts");
@@ -269,7 +304,10 @@ fn a_save_writes_the_edited_list_and_reads_back_the_same() {
         .expect("the save settles");
     assert!(!dirty(&app));
     let again = parse_project(&path).expect("the saved project");
-    assert_eq!(again.requirements, app.document_state.projects[0].data.requirements);
+    assert_eq!(
+        again.requirements,
+        app.document_state.projects[0].data.requirements
+    );
     assert_eq!(
         again.requirements[0].raw()["states"],
         json!(["released", "in_review"])

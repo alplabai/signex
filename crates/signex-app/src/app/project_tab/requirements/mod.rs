@@ -66,7 +66,9 @@ impl RequirementsTabState {
 #[derive(Debug, Clone)]
 pub enum RequirementsMsg {
     /// A kind picked in the Add picker: a new requirement of that kind.
-    AddPicked { kind: &'static str },
+    AddPicked {
+        kind: &'static str,
+    },
     /// A field as typed, not committed yet.
     FieldEdited {
         index: usize,
@@ -84,15 +86,23 @@ pub enum RequirementsMsg {
         field: RequirementField,
         value: String,
     },
-    EnabledToggled { index: usize, on: bool },
-    Removed { index: usize },
+    EnabledToggled {
+        index: usize,
+        on: bool,
+    },
+    Removed {
+        index: usize,
+    },
     RunRequested,
     RunFinished(Arc<RequirementsRun>),
 }
 
 /// `msg` for the Requirements section of `project_id`.
 pub(super) fn message(project_id: ProjectId, msg: RequirementsMsg) -> Message {
-    Message::Project(ProjectMsg::Tab(ProjectTabMsg::Requirements { project_id, msg }))
+    Message::Project(ProjectMsg::Tab(ProjectTabMsg::Requirements {
+        project_id,
+        msg,
+    }))
 }
 
 impl Signex {
@@ -122,7 +132,10 @@ impl Signex {
                 tab.problem = None;
             }
             RequirementsMsg::FieldSubmitted { index, field } => {
-                let Some(text) = self.requirements_tab(project_id).drafts.get(&(index, field))
+                let Some(text) = self
+                    .requirements_tab(project_id)
+                    .drafts
+                    .get(&(index, field))
                 else {
                     return Task::none();
                 };
@@ -197,7 +210,10 @@ impl Signex {
         if reshaped && outcome.is_ok() {
             tab.drafts.clear();
         }
-        tab.problem = outcome.as_ref().err().map(|problem| (index, problem.clone()));
+        tab.problem = outcome
+            .as_ref()
+            .err()
+            .map(|problem| (index, problem.clone()));
         outcome
     }
 

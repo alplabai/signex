@@ -85,7 +85,10 @@ fn a_refused_edit_changes_nothing_and_says_why() {
     let mut data = project(list.clone());
     let field = RequirementField::MaxWidthMm;
     for typed in ["", "0", "-3", "wide", "inf", "NaN"] {
-        assert!(data.set_requirement_field(0, field, typed).is_err(), "{typed}");
+        assert!(
+            data.set_requirement_field(0, field, typed).is_err(),
+            "{typed}"
+        );
     }
     assert_eq!(
         data.set_requirement_field(0, RequirementField::Id, "usb"),

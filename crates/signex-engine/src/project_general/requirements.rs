@@ -10,15 +10,23 @@ use signex_types::project::{ProjectData, RequirementField, RequirementProblem};
 pub enum ProjectRequirementCommand {
     /// Add a requirement of `kind` after the others; `id` `None` takes the
     /// kind's name, made unique.
-    Add { kind: String, id: Option<String> },
+    Add {
+        kind: String,
+        id: Option<String>,
+    },
     /// One field as typed; empty clears an optional field.
     SetField {
         index: usize,
         field: RequirementField,
         text: String,
     },
-    SetEnabled { index: usize, on: bool },
-    Remove { index: usize },
+    SetEnabled {
+        index: usize,
+        on: bool,
+    },
+    Remove {
+        index: usize,
+    },
 }
 
 impl ProjectRequirementCommand {
