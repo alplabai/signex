@@ -666,6 +666,57 @@ mod tests {
         assert!(ends.contains(&Point::new(30.0, 50.0)) && ends.contains(&Point::new(45.0, 60.0)));
     }
 
+    /// #1669 - through the canvas: a drag's ghost is built in Auto, the mode
+    /// changes, and the next event (the redraw after the key, at the same
+    /// delta) rebuilds the ready ghost in the new mode.
+    #[test]
+    fn the_next_canvas_event_rebuilds_the_ghost_in_a_changed_mode() {
+        use crate::canvas::{CanvasSlot, CanvasState, SchematicCanvas};
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut slot = CanvasSlot::new();
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet_at(&sheet, 1),
+        ));
+        slot.selected = vec![item];
+        let (overrides, filters) = (Default::default(), Default::default());
+        let mut prefs = super::super::tests::test_prefs(&overrides, &filters);
+        prefs.snap_enabled = false;
+        prefs.snap_hotspots = false;
+        let mut state = CanvasState {
+            move_dragging: true,
+            move_origin: Some((50.0, 50.0)),
+            move_current: Some((50.0, 60.0)),
+            ..Default::default()
+        };
+        let ready = |canvas: &SchematicCanvas<'_>, state: &CanvasState| {
+            let (dx, dy) = canvas.drag_delta(state).expect("a drag");
+            let (gx, gy) = canvas.ghost_delta(dx, dy);
+            state.ghost.ready(1, &[item], gx, gy)
+        };
+
+        let auto = SchematicCanvas::new(&slot, prefs);
+        auto.refresh_drag_ghost(&mut state);
+        let before = ready(&auto, &state).expect("the Auto ghost");
+        assert_eq!(before.wires.len(), 2, "{:?}", before.wires);
+
+        prefs.drag_wiring = DragWiringMode::Straight;
+        let straight = SchematicCanvas::new(&slot, prefs);
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        let action = iced::widget::canvas::Program::update(
+            &straight,
+            &mut state,
+            &redraw,
+            bounds,
+            iced::mouse::Cursor::Unavailable,
+        );
+        assert!(action.is_some(), "the rebuilt ghost asks for a redraw");
+        let after = ready(&straight, &state).expect("the Straight ghost");
+        assert_eq!(after.wires.len(), 1, "no corner: {:?}", after.wires);
+    }
+
     #[test]
     fn the_ghost_is_exactly_what_the_commit_leaves() {
         let (sheet, item) = sheet_with_wired_resistor();

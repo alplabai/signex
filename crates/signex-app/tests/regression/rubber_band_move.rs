@@ -419,6 +419,24 @@ fn the_drag_commit_carries_the_cycled_wiring_mode() {
     assert!(has((55.0, 60.0), (75.0, 50.0)), "{segs:?}");
 }
 
+/// #1669 - click-click Move commits through the same `MoveSelected` as a
+/// drag, so it carries the mode too.
+#[test]
+fn a_click_click_move_commit_carries_the_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    app.interaction_state.drag_wiring = signex_types::corner::DragWiringMode::Straight;
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::MoveSelection,
+    )));
+    assert!(app.ui_state.move_pick.is_some(), "the lift must arm");
+    drop_by(&mut app, 0.0, 10.0);
+    let segs = segments(&app, &path);
+    let has = |a, b| segs.contains(&(a, b)) || segs.contains(&(b, a));
+    assert_eq!(segs.len(), 2, "no corner inserted: {segs:?}");
+    assert!(has((30.0, 50.0), (45.0, 60.0)), "{segs:?}");
+    assert!(has((55.0, 60.0), (75.0, 50.0)), "{segs:?}");
+}
+
 /// #1669 - the mode belongs to a drag: Move By keeps today's corners.
 #[test]
 fn move_by_ignores_the_drag_wiring_mode() {
