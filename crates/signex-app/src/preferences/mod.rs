@@ -25,6 +25,7 @@ mod graphite_fields;
 mod keycaps;
 mod keymap;
 mod profiles;
+mod schematic_display;
 mod shell;
 mod theme_cards;
 mod widgets;
@@ -37,6 +38,8 @@ use editing::content_editing;
 use keymap::content_keyboard_shortcuts;
 use profiles::content_profiles;
 pub use profiles::{ProfileAction, ProfilesMsg};
+pub use schematic_display::BodyFillMsg;
+use schematic_display::{DisplayPage, content_schematic_display};
 
 // Shared style / text / button helpers live in `widgets`; re-export them
 // at their original module-local visibility so the shell here and every
@@ -55,6 +58,8 @@ pub enum PrefNav {
     Annotation,
     /// Schematic editing behaviour (rubber-banding wires on move).
     Editing,
+    /// How the schematic is drawn (symbol body fill).
+    SchematicDisplay,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -78,6 +83,7 @@ impl PrefNav {
         PrefNav::Keyboard,
         PrefNav::Annotation,
         PrefNav::Editing,
+        PrefNav::SchematicDisplay,
         PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -88,6 +94,7 @@ impl PrefNav {
             PrefNav::Appearance => "Appearance",
             PrefNav::Annotation => "Annotation",
             PrefNav::Editing => "Editing",
+            PrefNav::SchematicDisplay => "Display",
             PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
@@ -105,6 +112,7 @@ impl PrefNav {
             PrefNav::Appearance => "System",
             PrefNav::Annotation => "Schematic",
             PrefNav::Editing => "Schematic",
+            PrefNav::SchematicDisplay => "Schematic",
             PrefNav::Keyboard => "System",
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
@@ -154,6 +162,8 @@ pub enum PrefMsg {
     DraftDragDirectionSelect(bool),
     /// Toggle "Show net info on hover". Persisted on Save.
     DraftNetHoverEnabled(bool),
+    /// The "Fill symbol bodies" rows changed. Persisted on Save.
+    SymbolBodyFill(BodyFillMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
     /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
@@ -308,6 +318,10 @@ pub struct PrefsView<'a> {
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
+    pub draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// The fill colour field's preset palette and custom picker are open.
+    pub body_fill_palette_open: bool,
+    pub body_fill_picker_open: bool,
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_remember_window_geometry: bool,
@@ -461,6 +475,15 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 i18n,
             },
         ),
+        PrefNav::SchematicDisplay => content_schematic_display(DisplayPage {
+            draft: v.draft_symbol_body_fill,
+            // The tint of the theme the dialog is showing.
+            theme_tint: signex_types::theme::canvas_colors(v.draft_theme).body_tint,
+            palette_open: v.body_fill_palette_open,
+            picker_open: v.body_fill_picker_open,
+            tokens: panel_tokens,
+            i18n,
+        }),
         PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens, i18n),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form

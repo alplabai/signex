@@ -213,6 +213,18 @@ pub fn build_renderer_snapshot(
             family: resolve_family(None, document_family),
             defaults: overrides.defaults,
         };
+        // "Fill symbol bodies": the theme tint or the user's colour, `None`
+        // when the preference is off.
+        if let Some(tint) = colors.body_tint {
+            symbol::push_body_fills(
+                &signex_types::schematic::default_body_fill_shapes(
+                    snapshot.body_of(symbol),
+                    symbol,
+                ),
+                focus_color(to_iced(&tint), focus_set, symbol.uuid),
+                &mut polygons,
+            );
+        }
         let mut sink = symbol::SymbolSink {
             wires: &mut wires,
             arcs: &mut arcs,

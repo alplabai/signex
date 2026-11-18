@@ -288,6 +288,13 @@ pub struct CanvasColors {
     pub junction: Color,
     pub body: Color,
     pub body_fill: Color,
+    /// Fill of the symbol body shapes a symbol leaves unfilled (closed
+    /// rectangles, polygons and circles, see
+    /// `schematic::default_body_fill_shapes`); `None` leaves them unfilled.
+    /// Both Graphite themes set a soft tint; the "Fill symbol bodies"
+    /// preference replaces or clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_tint: Option<Color>,
     pub pin: Color,
     pub reference: Color,
     pub value: Color,
@@ -516,6 +523,9 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     junction: c(0x2B, 0x2D, 0x33),
     body: c(0x2B, 0x2D, 0x33),
     body_fill: c(0xFF, 0xFF, 0xFF),
+    // About 8% of the body ink mixed into the background, stored opaque so
+    // the PDF and SVG paint the same colour; pin and field text stay readable.
+    body_tint: s(0xEC, 0xEB, 0xEA),
     pin: c(0x2B, 0x2D, 0x33),
     reference: c(0x15, 0x17, 0x1A),
     value: c(0x5B, 0x5E, 0x66),
@@ -591,6 +601,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     junction: c(0xC9, 0xCB, 0xD1),
     body: c(0xC9, 0xCB, 0xD1),
     body_fill: c(0x1B, 0x1D, 0x21),
+    // About 8% of the body ink mixed into the background, as in Light.
+    body_tint: s(0x22, 0x24, 0x27),
     pin: c(0xC9, 0xCB, 0xD1),
     reference: c(0xEC, 0xEA, 0xE5),
     value: c(0xA3, 0xA5, 0xAB),
@@ -808,6 +820,36 @@ mod tests {
             let canvas = canvas_colors(id);
             assert_eq!(canvas.background, canvas.paper, "{id:?}");
             assert!(!theme_tokens(id).extended.is_empty(), "{id:?}");
+        }
+    }
+
+    /// The symbol body tint sits between the paper and the body ink, much
+    /// nearer the paper, so pin names and field text stay readable on it.
+    #[test]
+    fn every_builtin_sets_a_body_tint_near_its_paper() {
+        fn luma(c: Color) -> f64 {
+            0.299 * f64::from(c.r) + 0.587 * f64::from(c.g) + 0.114 * f64::from(c.b)
+        }
+        for &id in ThemeId::BUILTINS {
+            let canvas = canvas_colors(id);
+            let tint = canvas
+                .body_tint
+                .expect("every built-in theme sets a body tint");
+            let (paper, ink) = (luma(canvas.paper), luma(canvas.body));
+            let tint = luma(tint);
+            assert!(
+                (tint - paper).abs() > 0.0,
+                "{id:?}: the tint must differ from the paper"
+            );
+            assert!(
+                (tint - paper).abs() < (ink - paper).abs() * 0.15,
+                "{id:?}: the tint must stay near the paper"
+            );
+            assert_eq!(
+                (tint - paper).signum(),
+                (ink - paper).signum(),
+                "{id:?}: the tint leans toward the body ink"
+            );
         }
     }
 

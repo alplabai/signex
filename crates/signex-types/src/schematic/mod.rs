@@ -791,6 +791,8 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_fill;
+pub use body_fill::{BodyFillShape, default_body_fill_shapes};
 mod body_style;
 pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
 mod bus_entry;

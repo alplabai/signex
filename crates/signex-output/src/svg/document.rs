@@ -16,7 +16,7 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_lib_graphics, push_symbol_pins};
+use super::symbols::{push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -103,6 +103,7 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        push_symbol_body_fills(&mut elements, &sheet.schematic, &xform, palette);
 
         // Base primitives
         for wire in &sheet.schematic.wires {

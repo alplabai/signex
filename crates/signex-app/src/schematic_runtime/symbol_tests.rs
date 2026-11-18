@@ -414,3 +414,70 @@ fn a_child_sheet_frame_resolves_its_stored_width_through_the_one_rule() {
         assert_eq!(frame.stroke_width_mm, drawn, "stored {stored}");
     }
 }
+
+/// One placed symbol whose 10 x 4 mm body rectangle has `fill`.
+fn sheet_with_filled_body(fill: FillType) -> SchematicSheet {
+    let (mut sheet, symbol) = sheet_with_body(10.0, 4.0, 50.0, 50.0, 0.0);
+    let lib = sheet
+        .lib_symbols
+        .get_mut(&symbol.lib_id)
+        .expect("the body's library entry");
+    if let Graphic::Rectangle { fill: stored, .. } = &mut lib.graphics[0].graphic {
+        *stored = fill;
+    }
+    sheet
+}
+
+/// The Graphite Light canvas colours under the fill preference `fill`.
+fn light_colors(fill: crate::symbol_fill_prefs::SymbolBodyFill) -> CanvasColors {
+    use signex_types::theme::{ThemeId, canvas_colors};
+    fill.apply(canvas_colors(ThemeId::GraphiteLight))
+}
+
+/// The polygons the canvas draws for `sheet` in `colors`, in draw order.
+fn drawn_polygons(sheet: &SchematicSheet, colors: &CanvasColors) -> Vec<PolygonInput> {
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(1000.0, 1000.0));
+    let snapshot =
+        build_renderer_snapshot(sheet, &transform, colors, bounds, None, Default::default());
+    snapshot.polygons
+}
+
+#[test]
+fn an_unfilled_body_is_filled_with_the_tint_first_under_the_default_preference() {
+    let colors = light_colors(Default::default());
+    let tint = colors.body_tint.expect("the theme has a body tint");
+    let polygons = drawn_polygons(&sheet_with_filled_body(FillType::None), &colors);
+    assert_eq!(polygons.len(), 2, "the fill, then the outline");
+    assert_eq!(polygons[0].fill_color, to_rgba(to_iced(&tint)));
+    assert_eq!(polygons[0].stroke_color, None, "the fill draws no outline");
+    assert_eq!(polygons[1].fill_color, [0.0; 4], "the outline stays unfilled");
+    assert!(polygons[1].stroke_color.is_some());
+}
+
+#[test]
+fn an_unfilled_body_has_no_fill_when_the_preference_is_off() {
+    let colors = light_colors(crate::symbol_fill_prefs::SymbolBodyFill {
+        enabled: false,
+        color: None,
+    });
+    let polygons = drawn_polygons(&sheet_with_filled_body(FillType::None), &colors);
+    assert_eq!(polygons.len(), 1, "the outline only");
+    assert_eq!(polygons[0].fill_color, [0.0; 4]);
+}
+
+#[test]
+fn a_body_with_its_own_fill_keeps_it_over_the_preference() {
+    let colors = light_colors(crate::symbol_fill_prefs::SymbolBodyFill {
+        enabled: true,
+        color: Some(signex_types::theme::Color::new(0xFF, 0x00, 0x00, 0xFF)),
+    });
+    let polygons = drawn_polygons(&sheet_with_filled_body(FillType::Background), &colors);
+    assert_eq!(polygons.len(), 1, "no second fill under the symbol's own");
+    assert_eq!(polygons[0].fill_color, to_rgba(to_iced(&colors.body_fill)));
+}

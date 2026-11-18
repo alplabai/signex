@@ -494,9 +494,12 @@ impl Signex {
     /// Canvas colours for a given theme id — the one derivation shared by
     /// the schematic panel context and
     /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
-    /// each frame).
+    /// each frame), the symbol previews and the print / export palette. The
+    /// saved "Fill symbol bodies" preference sets the body tint.
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
-        signex_types::theme::canvas_colors(id)
+        self.ui_state
+            .symbol_body_fill
+            .apply(signex_types::theme::canvas_colors(id))
     }
 
     /// UI chrome tokens for a given theme id — the token twin of
