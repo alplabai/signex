@@ -555,7 +555,7 @@ mod tests {
                     net,
                     dimmed: false,
                     ink: CopperInk::Unknown,
-                    object: BoardObject::Tracks,
+                    object: super::BoardObject::Tracks,
                 })
                 .collect(),
             ..PcbSnapshot::default()
