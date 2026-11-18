@@ -47,6 +47,7 @@ pub mod frame_probe;
 pub mod headless;
 pub mod icons;
 pub mod io_ports;
+pub mod pan_zoom_bench;
 pub mod paste_array;
 pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of

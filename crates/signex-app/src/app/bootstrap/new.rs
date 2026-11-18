@@ -805,6 +805,7 @@ impl Signex {
             },
             native_menu: Default::default(),
             agent: crate::app::agent::AgentState::new(),
+            pan_zoom_bench: None,
         };
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).

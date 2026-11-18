@@ -58,6 +58,8 @@ nanometres, so a save and reopen gives the same board back).
 
 The exit criterion "10k-track board at 60 fps", measured on a real GPU. The
 emit and cull numbers above are CPU only; this bench times whole frames.
+The same board timed in the running app, with vsync and present, is the
+pan/zoom bench in `docs/PERFORMANCE.md`.
 
 ```text
 cargo test -p signex-app --release --lib pcb_frame_bench -- --ignored --nocapture --test-threads=1
