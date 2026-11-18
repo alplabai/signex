@@ -207,7 +207,7 @@ fn a_power_port_without_a_library_entry_is_drawn_from_its_built_in_body() {
 /// shows the same elements as the entry-less built-in body.
 #[test]
 fn power_port_library_entry_draws_its_pin_like_the_built_in_body() {
-    for lib_id in ["power:GND", "power:+5V", "power:arrow"] {
+    for lib_id in ["power:GND", "power:+5V", "power:arrow", "power:Chassis"] {
         let sym = Symbol {
             lib_id: lib_id.to_string(),
             is_power: true,

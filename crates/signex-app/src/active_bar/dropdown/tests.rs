@@ -456,6 +456,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -476,6 +477,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -496,6 +498,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -516,6 +519,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (

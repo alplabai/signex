@@ -365,6 +365,7 @@ pub enum ActiveBarAction {
     PlacePowerCircle,
     PlacePowerSignalGND,
     PlacePowerEarth,
+    PlacePowerChassis,
     // Harness
     PlaceSignalHarness,
     PlaceHarnessConnector,

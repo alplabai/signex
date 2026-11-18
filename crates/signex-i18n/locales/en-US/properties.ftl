@@ -145,6 +145,7 @@ properties-power-style-circle = Circle
 properties-power-style-power-ground = Power Ground
 properties-power-style-signal-ground = Signal Ground
 properties-power-style-earth = Earth
+properties-power-style-chassis = Chassis
 properties-physical-name = Physical Name
 properties-power-net = Power Net
 properties-high-speed = High Speed

@@ -109,6 +109,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_POWER_STYLE_POWER_GROUND, "Power Ground"),
     (ids::PROPERTIES_POWER_STYLE_SIGNAL_GROUND, "Signal Ground"),
     (ids::PROPERTIES_POWER_STYLE_EARTH, "Earth"),
+    (ids::PROPERTIES_POWER_STYLE_CHASSIS, "Chassis"),
     (ids::PROPERTIES_PHYSICAL_NAME, "Physical Name"),
     (ids::PROPERTIES_POWER_NET, "Power Net"),
     (ids::PROPERTIES_HIGH_SPEED, "High Speed"),
@@ -631,6 +632,13 @@ fn each_pick_list_shows_the_stored_entry() {
         &[("Type", "Power Port"), ("Library ID", "power:Earth")],
     );
     check("Style", beside(&texts(&port), "Style"), "Earth");
+
+    // #1284: the chassis style is a choice of its own.
+    let chassis = one_selected(
+        SelectedKindForTest::Symbol,
+        &[("Type", "Power Port"), ("Library ID", "power:Chassis")],
+    );
+    check("Style", beside(&texts(&chassis), "Style"), "Chassis");
 
     let note = one_selected(
         SelectedKindForTest::TextNote,
