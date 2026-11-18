@@ -168,10 +168,11 @@ message (`git lfs pull` fetches them).
   adds, other than an unrouted link, names the route's own tracks or vias.
 - **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
   and bench with every test run (DRC delta and convergence asserted) on the
-  fixed boards and a fixed sample of six routing corpus boards spread over
-  size and layer count (`SHORT_SAMPLE` in `tests/routing/fixtures.rs`),
-  each with a few actions (8 in the soak, 4 in the bench), so per-PR CI
-  stays short. The budget is an action count, never a clock. The scheduled `routing-soak` workflow runs the ignored
+  fixed boards only: routing a corpus board in the debug test profile takes
+  too long for per-PR CI. Per PR the routing corpus is checked by loading
+  alone (`tests/routing/corpus_check.rs`): every board parses, names only
+  layers this build knows (copper items on copper), and no track end lands
+  on another net's pad once the pads are placed. The scheduled `routing-soak` workflow runs the ignored
   `soak_long` (10 000 actions on every board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
   of actions; median latency at most 16 ms and p95 at most 33 ms on the
   median board by copper count) in release; a failed night opens or

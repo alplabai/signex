@@ -1,9 +1,9 @@
 //! The boards the routing soak and bench run on: a synthetic board, the
 //! realistic corpus boards (`signex-types/tests/corpus/pcb/real/`), and the
 //! boards of the routing corpus (`testdata/routing-corpus/*.snxpcb`, #2481),
-//! all of them or a fixed short sample. A board's net classes come from the
-//! `.snxprj` beside it. The routing corpus is stored in Git LFS: a board
-//! whose objects were not fetched is skipped with a message.
+//! all of them or none. A board's net classes come from the `.snxprj`
+//! beside it. The routing corpus is stored in Git LFS: a board whose
+//! objects were not fetched is skipped with a message.
 
 use std::path::{Path, PathBuf};
 
@@ -14,18 +14,6 @@ use signex_types::pcb::PcbBoard;
 use signex_types::project::parse_project_bytes;
 use uuid::Uuid;
 
-/// The routing-corpus boards a per-PR run takes, spread over the manifest's
-/// size classes, copper layer counts and both converters: four small (S)
-/// boards of 2, 4, 6 and 4 layers and two medium (M) ones of 4 and 6.
-pub const SHORT_SAMPLE: [&str; 6] = [
-    "n64-expansion-pak",
-    "adf4158",
-    "soldiercrab",
-    "pimx8-bridge-fpc",
-    "h616-ddr3",
-    "pimx8-io-db",
-];
-
 /// The first line of a Git LFS pointer, which stands in for a file whose
 /// objects were not fetched.
 const LFS_POINTER: &str = "version https://git-lfs.github.com/spec/v1";
@@ -34,61 +22,54 @@ pub struct Fixture {
     pub name: String,
     pub board: PcbBoard,
     pub classes: Vec<NetClass>,
-    /// Whether the board is from the routing corpus.
-    pub from_corpus: bool,
 }
 
-/// Which routing-corpus boards a run takes.
+/// Whether a run takes the routing-corpus boards.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Corpus {
     All,
-    /// [`SHORT_SAMPLE`], so a per-PR run stays short.
-    Short,
+    /// The fixed boards only: per-PR runs, where routing a corpus board in
+    /// the debug test profile takes too long.
+    None,
 }
 
 /// The boards, in a fixed order: the synthetic one, the realistic corpus,
-/// then the routing corpus boards `corpus` picks.
+/// then the routing corpus when `corpus` takes it.
 pub fn boards(corpus: Corpus) -> Vec<Fixture> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut out = vec![synthetic()];
-    out.extend(boards_in(
-        &root.join("../signex-types/tests/corpus/pcb/real"),
-        Corpus::All,
-        false,
-    ));
-    out.extend(boards_in(
-        &root.join("../../testdata/routing-corpus"),
-        corpus,
-        true,
-    ));
+    out.extend(
+        board_paths(&root.join("../signex-types/tests/corpus/pcb/real"))
+            .iter()
+            .filter_map(|path| load(path)),
+    );
+    if corpus == Corpus::All {
+        out.extend(corpus_paths().iter().filter_map(|path| load(path)));
+    }
     out
 }
 
-/// The `.snxpcb` boards in `dir` that `corpus` picks, by file name; none
-/// when there is no `dir`.
-fn boards_in(dir: &Path, corpus: Corpus, from_corpus: bool) -> Vec<Fixture> {
+/// The routing corpus's `.snxpcb` files, by file name.
+pub fn corpus_paths() -> Vec<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    board_paths(&root.join("../../testdata/routing-corpus"))
+}
+
+/// The `.snxpcb` files in `dir`, by file name; none when there is no `dir`.
+fn board_paths(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut paths: Vec<PathBuf> = entries
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "snxpcb"))
-        .filter(|path| match corpus {
-            Corpus::All => true,
-            Corpus::Short => path
-                .file_stem()
-                .is_some_and(|stem| SHORT_SAMPLE.iter().any(|name| stem == *name)),
-        })
         .collect();
     paths.sort();
     paths
-        .iter()
-        .filter_map(|path| load(path, from_corpus))
-        .collect()
 }
 
 /// The board at `path`; `None`, with a message, for a Git LFS pointer.
-fn load(path: &Path, from_corpus: bool) -> Option<Fixture> {
+pub fn load(path: &Path) -> Option<Fixture> {
     let name = path
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
@@ -114,7 +95,6 @@ fn load(path: &Path, from_corpus: bool) -> Option<Fixture> {
         name,
         board,
         classes,
-        from_corpus,
     })
 }
 
@@ -152,7 +132,6 @@ pub fn synthetic() -> Fixture {
         name: "synthetic".into(),
         board,
         classes: Vec::new(),
-        from_corpus: false,
     }
 }
 
