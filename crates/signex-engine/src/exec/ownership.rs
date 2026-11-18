@@ -65,8 +65,7 @@ impl Ownership {
         (self.tips.iter())
             .filter(|(tip, delta)| {
                 let k = tip.old_key();
-                (self.wire_points.iter())
-                    .any(|(_, at, d)| *at == k && d != delta)
+                (self.wire_points.iter()).any(|(_, at, d)| *at == k && d != delta)
             })
             .map(|(tip, _)| tip.old_key())
             .collect()
