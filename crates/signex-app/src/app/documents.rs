@@ -685,6 +685,11 @@ impl FootprintDocument {
             &mut baseline,
             log_repairs,
         );
+        if log_repairs {
+            crate::library::editor::footprint::pad_shape_warnings::warn_trapezoid_faults(
+                &path, &file,
+            );
+        }
         let mut state =
             crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
                 &file.footprints[active_idx],

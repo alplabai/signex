@@ -160,7 +160,7 @@ fn footprint_file_toml_round_trip_empty() {
     let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.footprints.len(), 1);
     assert_eq!(back.footprints[0].name, "SOIC-8");
-    assert_eq!(back.format, "snxfpt/1");
+    assert_eq!(back.format, "snxfpt/1.1");
     assert_eq!(back.file_uuid, original.file_uuid);
 }
 
@@ -388,7 +388,7 @@ fn footprint_file_to_toml_emits_pads_as_literal_multiline() {
 
 #[test]
 fn footprint_file_unsupported_format_token_is_rejected() {
-    // Any token other than "snxfpt/1" must surface
+    // A token newer than "snxfpt/1.1" must surface
     // FootprintFileError::UnsupportedFormat.
     let bad = r#"
 format = "snxfpt/99"

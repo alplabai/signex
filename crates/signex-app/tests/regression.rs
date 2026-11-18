@@ -289,6 +289,9 @@ mod footprint_hand_silk_rebake;
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
 mod footprint_pad_fields_persist;
+// #2242 — a trapezoid delta without copper is named when the file opens.
+#[path = "regression/footprint_trapezoid_warning.rs"]
+mod footprint_trapezoid_warning;
 
 #[path = "regression/library_cross_track.rs"]
 mod library_cross_track;

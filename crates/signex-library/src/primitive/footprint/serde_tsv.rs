@@ -354,7 +354,10 @@ pub enum FootprintFileError {
     NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
-    #[error("unsupported .snxfpt format token {got:?}; this build supports \"snxfpt/1\"")]
+    #[error(
+        "unsupported .snxfpt format {got:?}: this build reads \"snxfpt/1\" and \"snxfpt/1.1\"; \
+         a newer format needs a newer Signex"
+    )]
     UnsupportedFormat { got: String },
     #[error(
         "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
