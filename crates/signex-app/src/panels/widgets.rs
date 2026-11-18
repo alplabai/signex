@@ -46,6 +46,7 @@ pub fn collapsible_section_header<'a>(
             container(
                 row![
                     signex_widgets::chevron::chevron(!is_collapsed, TS.label, header_color),
+                    // raw: footprint-editor section titles move with #2060.
                     text(raw(title.to_string()))
                         .size(TS.label)
                         .color(header_color),
@@ -79,19 +80,18 @@ pub fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
     collapsed.contains(key)
 }
 
-/// Property key-value row (owned strings to avoid lifetime issues in closures).
+/// Property key-value row: the key is UI text, the value is design data
+/// (owned, to avoid lifetime issues in closures).
 pub fn prop_kv_row<'a>(
-    key: &str,
+    key: impl Into<signex_widgets::Label<'a>>,
     value: &str,
     key_c: Color,
     val_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(raw(key.to_string()))
-                .size(TS.body)
-                .color(key_c)
-                .width(84),
+            text(key).size(TS.body).color(key_c).width(84),
+            // raw: the value is design data (a position, a size), not language.
             text(raw(value.to_string())).size(TS.body).color(val_c),
         ]
         .spacing(SP.s),
@@ -101,12 +101,14 @@ pub fn prop_kv_row<'a>(
     .boxed()
 }
 
-pub fn section_title<'a>(
-    title: &str,
+pub fn section_title<'a, 'b>(
+    title: impl Into<signex_widgets::Label<'b>>,
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> iced::widget::Text<'a> {
-    text(raw(i18n.upper_for_display(title)))
+    let title = title.into();
+    // raw: the title as given, upper-cased for the locale.
+    text(raw(i18n.upper_for_display(title.as_str())))
         .size(TS.section)
         .style(crate::styles::section_label(tokens))
 }
@@ -114,6 +116,7 @@ pub fn section_title<'a>(
 pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
     // Use a cached static string instead of allocating on every render
     const SEP: &str = "──────────────────────────────";
+    // raw: a rule of box-drawing glyphs, not language.
     text(raw(SEP))
         .size(TS.micro)
         .color(theme_ext::border_color(tokens))
@@ -126,10 +129,9 @@ pub fn view_stub<'a>(
     desc: signex_i18n::MessageId,
     ctx: &PanelContext,
 ) -> Element<'a, PanelMsg> {
-    let title = ctx.i18n.message(title, &[]).into_string();
     container(
         column![
-            section_title(&title, &ctx.tokens, &ctx.i18n),
+            section_title(ctx.i18n.message(title, &[]), &ctx.tokens, &ctx.i18n),
             separator(&ctx.tokens),
             text(
                 ctx.i18n
@@ -152,7 +154,7 @@ pub fn view_stub<'a>(
 /// Active part gets the selection background; otherwise the row hovers
 /// like the symbol rows above it.
 pub fn part_tree_row<'a>(
-    label: &str,
+    label: signex_i18n::Localized,
     part: u8,
     is_active: bool,
     primary: Color,
@@ -164,11 +166,12 @@ pub fn part_tree_row<'a>(
         row![
             // Tree-expander indent: 18 px gutter + a faint glyph so
             // the part rows visually nest under the symbol.
+            // raw: a tree-branch glyph, not language.
             text(raw("\u{2514}"))
                 .size(TS.body)
                 .color(muted)
                 .width(Length::Fixed(18.0)),
-            text(raw(label.to_string()))
+            text(label)
                 .size(TS.body)
                 .color(label_color)
                 .width(Length::Fill),
@@ -202,9 +205,12 @@ pub fn part_tree_row<'a>(
 /// narrow panel grows the row and a wide one widens the field; a single
 /// over-long word is clipped, never split mid-word, and never reaches the
 /// value column.
-pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
+pub fn property_label<'a, M: 'a>(
+    label: impl Into<signex_widgets::Label<'a>>,
+    color: Color,
+) -> Element<'a, M> {
     container(
-        text(raw(label.into()))
+        text(label)
             .size(TS.body)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
@@ -218,7 +224,7 @@ pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Elem
 /// stays as a draft while the box is edited, so `-` and `1.` survive; each
 /// parsable keystroke is applied, and Enter shows the stored value again.
 pub fn form_edit_row_f64<'a>(
-    label: &'a str,
+    label: signex_i18n::Localized,
     value: f64,
     key: crate::panels::NumericFieldKey,
     draft: Option<&crate::panels::NumericDraft>,
@@ -292,7 +298,13 @@ mod label_tests {
     #[test]
     fn property_labels_take_the_fixed_column() {
         for window_w in [400.0, 1600.0] {
-            let label: Element<'_, ()> = property_label("Designator", Color::BLACK);
+            let label: Element<'_, ()> = property_label(
+                signex_i18n::t!(
+                    signex_i18n::I18n::en_us(),
+                    signex_i18n::ids::PROPERTIES_DESIGNATOR
+                ),
+                Color::BLACK,
+            );
             let size = crate::layout_probe::root_size(label, iced::Size::new(window_w, 100.0));
             assert_eq!(
                 size.width, PROPERTY_LABEL_WIDTH,

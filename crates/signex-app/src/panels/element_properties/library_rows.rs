@@ -3,6 +3,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use signex_i18n::{I18n, MessageId, ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -15,6 +16,7 @@ pub(super) fn push_symbol_choice_row<'a>(
     id: uuid::Uuid,
     choices: &[SymbolChoiceItem],
     muted: Color,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(current) = choices.iter().find(|i| i.selected) else {
         return c;
@@ -22,10 +24,12 @@ pub(super) fn push_symbol_choice_row<'a>(
     if choices.len() < 2 {
         return c;
     }
+    // Drawing names, plus "Default" and "(no longer offered)".
+    // raw: (#2061: handler-worded state text)
     let labels: Vec<String> = choices.iter().map(|i| i.label.clone()).collect();
     let items = choices.to_vec();
     c.push(form_pick_row(
-        "Symbol",
+        t!(i18n, ids::PROPERTIES_SYMBOL),
         labels,
         current.label.clone(),
         move |label| {
@@ -57,11 +61,11 @@ impl std::fmt::Display for FootprintEntry {
 /// Label of the free-text footprint field. Under the pick list it is an
 /// override: a name typed there is held over the picked binding (shown in
 /// the list as "(edited)"); alone it is the part's only footprint field.
-pub(super) fn footprint_text_label(has_pick_list: bool) -> &'static str {
+pub(super) fn footprint_text_label(has_pick_list: bool) -> MessageId {
     if has_pick_list {
-        "Footprint override"
+        ids::PROPERTIES_FOOTPRINT_OVERRIDE
     } else {
-        "Footprint"
+        ids::PROPERTIES_FOOTPRINT
     }
 }
 
@@ -74,9 +78,12 @@ pub(super) fn push_footprint_row<'a>(
     footprint: &str,
     choices: &[FootprintChoiceItem],
     muted: Color,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let current = choices.iter().position(|i| i.selected);
     if let Some(current) = current {
+        // Footprint names, plus "(no longer offered)" and "(edited)".
+        // raw: (#2061: handler-worded state text)
         let entry = |index: usize| FootprintEntry {
             index,
             label: choices[index].label.clone(),
@@ -84,7 +91,7 @@ pub(super) fn push_footprint_row<'a>(
         let options: Vec<FootprintEntry> = (0..choices.len()).map(entry).collect();
         let bindings: Vec<String> = choices.iter().map(|i| i.binding.clone()).collect();
         c = c.push(form_pick_row(
-            "Footprint",
+            t!(i18n, ids::PROPERTIES_FOOTPRINT),
             options,
             entry(current),
             move |picked: FootprintEntry| {
@@ -95,7 +102,7 @@ pub(super) fn push_footprint_row<'a>(
         ));
     }
     c.push(form_edit_row(
-        footprint_text_label(current.is_some()),
+        t!(i18n, footprint_text_label(current.is_some())),
         footprint,
         muted,
         move |s| PanelMsg::EditSymbolFootprint(id, s),
@@ -109,6 +116,7 @@ pub(super) fn library_id_row<'a>(
     label: Color,
     input_bg: Color,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let value = container(
@@ -149,7 +157,7 @@ pub(super) fn library_id_row<'a>(
     .style(crate::styles::context_menu(tokens));
     container(
         iced::widget::row![
-            property_label("Library ID", label),
+            property_label(t!(i18n, ids::PROPERTIES_LIBRARY_ID), label),
             container(tip).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
@@ -189,10 +197,6 @@ pub(super) fn push_library_rows<'a>(
     input_bg: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
-    use signex_i18n::{ids, t};
-    if !library_name.is_empty() {
-        c = c.push(form_input_row("Library", library_name, muted, input_bg));
-    }
     let LibraryStatus {
         drifted,
         older_instances,
@@ -200,6 +204,14 @@ pub(super) fn push_library_rows<'a>(
         missing,
         i18n,
     } = status;
+    if !library_name.is_empty() {
+        c = c.push(form_input_row(
+            t!(i18n, ids::PROPERTIES_LIBRARY),
+            library_name,
+            muted,
+            input_bg,
+        ));
+    }
     if missing {
         c = c.push(
             signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
@@ -229,7 +241,6 @@ fn out_of_date_row<'a>(
     i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    use signex_i18n::{ids, t};
     let update = signex_widgets::button(
         signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE)).size(TS.body),
     )
@@ -277,12 +288,12 @@ fn out_of_date_row<'a>(
 }
 
 /// The placed-part actions of the Properties panel, label first.
-fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
+fn part_action_buttons() -> Vec<(MessageId, PanelMsg)> {
     use crate::library::PlacedPartAction as A;
     [
-        ("Open Datasheet", A::OpenDatasheet),
-        ("Edit Symbol", A::EditSymbol),
-        ("Change Component\u{2026}", A::ChangeComponent),
+        (ids::PROPERTIES_ACTION_OPEN_DATASHEET, A::OpenDatasheet),
+        (ids::PROPERTIES_ACTION_EDIT_SYMBOL, A::EditSymbol),
+        (ids::PROPERTIES_ACTION_CHANGE_COMPONENT, A::ChangeComponent),
     ]
     .into_iter()
     .map(|(label, action)| (label, PanelMsg::PlacedPartAction(action)))
@@ -293,12 +304,13 @@ fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
 /// part into its library (#1301, #1262, #1260).
 pub(super) fn push_part_actions<'a>(
     c: Column<Element<'a, PanelMsg>>,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     // Wrapping row: at a narrow dock width the last button drops to the
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(
         |(label, message)| -> Element<'a, PanelMsg> {
-            signex_widgets::button(signex_widgets::text(signex_widgets::raw(label)).size(TS.body))
+            signex_widgets::button(signex_widgets::text(t!(i18n, label)).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
                 .style(super::super::form_look::ghost_button)
@@ -324,7 +336,11 @@ mod tests {
     #[test]
     fn the_part_actions_carry_the_issue_labels_and_their_actions() {
         let buttons = part_action_buttons();
-        let labels: Vec<&str> = buttons.iter().map(|(label, _)| *label).collect();
+        let en = I18n::en_us();
+        let labels: Vec<String> = buttons
+            .iter()
+            .map(|(label, _)| en.message_plain(*label, &[]))
+            .collect();
         assert_eq!(
             labels,
             ["Open Datasheet", "Edit Symbol", "Change Component\u{2026}"]
@@ -344,7 +360,9 @@ mod tests {
 
     #[test]
     fn the_text_field_under_a_footprint_pick_list_is_the_override() {
-        assert_eq!(footprint_text_label(true), "Footprint override");
-        assert_eq!(footprint_text_label(false), "Footprint");
+        let en =
+            |has_pick_list| I18n::en_us().message_plain(footprint_text_label(has_pick_list), &[]);
+        assert_eq!(en(true), "Footprint override");
+        assert_eq!(en(false), "Footprint");
     }
 }

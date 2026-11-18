@@ -18,10 +18,17 @@ mod title_block;
 
 #[cfg(test)]
 pub(crate) use form_rows::check_state_color;
+pub(crate) use form_rows::form_choice_row;
+#[cfg(test)]
+pub(crate) use form_rows::rotation_choice;
 pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
     form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
+<<<<<<< HEAD
     form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, section_hdr, thin_sep,
+=======
+    form_label, form_mm_edit_row, form_pick_row, form_rotation_row, section_hdr, thin_sep,
+>>>>>>> origin/trunk
     typed_mm,
 };
 #[cfg(test)]

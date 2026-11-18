@@ -986,13 +986,13 @@ fn a_rolled_back_replace_restores_both_sheets_and_leaves_no_redo() {
             path: root_sheet.clone(),
             tabless: false,
             hits: 1,
-            invalidation: None,
+            patch: None,
         },
         Applied {
             path: child.clone(),
             tabless: true,
             hits: 1,
-            invalidation: None,
+            patch: None,
         },
     ];
 

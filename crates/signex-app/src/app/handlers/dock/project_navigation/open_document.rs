@@ -225,8 +225,8 @@ impl Signex {
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
     label
-        .trim_end_matches("  (missing)")
-        .trim_end_matches("  (unreadable)")
+        .trim_end_matches(crate::panels::MISSING_MARK)
+        .trim_end_matches(crate::panels::UNREADABLE_MARK)
 }
 
 #[cfg(test)]

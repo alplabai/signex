@@ -313,7 +313,7 @@ impl Signex {
             ));
         }
 
-        let mut active_invalidation = None;
+        let mut active_patch = None;
         let mut dropped_now = Vec::new();
         for path in &members {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
@@ -325,8 +325,7 @@ impl Signex {
             };
             match result {
                 Ok(Some(patch_pair)) if *path == active_path => {
-                    active_invalidation =
-                        Some(Self::render_invalidation_for_patch(patch_pair.document));
+                    active_patch = Some(patch_pair.document);
                 }
                 Ok(Some(_)) => {
                     // A parked sheet undone back to what was loaded from disk
@@ -370,10 +369,8 @@ impl Signex {
         }
         // A member sheet other than the active one changed too.
         self.document_state.note_sheet_edit();
-        let changed = match active_invalidation {
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, update_selection_info)
-            }
+        let changed = match active_patch {
+            Some(patch) => self.finish_schematic_mutation(patch, true, update_selection_info),
             None => false,
         };
         // The ERC panel's out-of-date notice follows even when the active
@@ -451,7 +448,7 @@ impl Signex {
             ));
         }
         let active = self.document_state.active_path.clone();
-        let mut active_invalidation = None;
+        let mut active_patch = None;
         let mut moved = Vec::new();
         for path in &sheets {
             let Some(engine) = self.document_state.engines.get_mut(path) else {
@@ -461,8 +458,7 @@ impl Signex {
                 Ok(Some(pair)) => {
                     moved.push(path.clone());
                     if active.as_ref() == Some(path) {
-                        active_invalidation =
-                            Some(Self::render_invalidation_for_patch(pair.document));
+                        active_patch = Some(pair.document);
                     } else {
                         self.document_state.sync_history_dirty(path);
                     }
@@ -483,8 +479,8 @@ impl Signex {
             record.undone = moved;
         }
         self.document_state.note_sheet_edit();
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
+        if let Some(patch) = active_patch {
+            self.finish_schematic_mutation(patch, true, true);
         }
         self.refresh_panel_ctx();
         true

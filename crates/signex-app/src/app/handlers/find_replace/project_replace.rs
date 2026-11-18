@@ -54,7 +54,7 @@ pub(super) struct Applied {
     /// The sheet had no engine and this run loaded one for it.
     pub(super) tabless: bool,
     pub(super) hits: usize,
-    pub(super) invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    pub(super) patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -296,9 +296,7 @@ impl Signex {
                     path,
                     tabless,
                     hits,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => self.drop_unchanged_tabless(&path, tabless),
                 Err(error) => {
@@ -365,7 +363,7 @@ impl Signex {
             kind: crate::app::UndoGroupKind::Replace,
             ..Default::default()
         };
-        let mut active_invalidation = None;
+        let mut active_patch = None;
         let mut replaced = 0usize;
         for done in &applied {
             replaced += done.hits;
@@ -374,7 +372,7 @@ impl Signex {
                 recorded.parked.push(done.path.clone());
             }
             if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
+                active_patch = done.patch;
             } else {
                 // Recorded in the sheet's history: undo back to the save
                 // point clears the mark.
@@ -386,8 +384,8 @@ impl Signex {
             .map(|a| shown_path(project_dir, &a.path))
             .collect();
         self.set_undo_group_sheets(group, recorded);
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
+        if let Some(patch) = active_patch {
+            self.finish_schematic_mutation(patch, true, true);
         }
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(if names.is_empty() {

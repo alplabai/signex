@@ -31,6 +31,7 @@ mod pdf_preview;
 mod placeholder;
 mod preferences;
 mod project;
+mod properties;
 mod requirements;
 mod rules;
 mod update_pcb;
@@ -64,6 +65,7 @@ pub use pdf_preview::*;
 pub use placeholder::*;
 pub use preferences::*;
 pub use project::*;
+pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
 pub use update_pcb::*;
@@ -101,6 +103,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         placeholder::PLACEHOLDER,
         preferences::PREFERENCES,
         project::PROJECT,
+        properties::PROPERTIES,
         requirements::REQUIREMENTS,
         rules::RULES,
         update_pcb::UPDATE_PCB,

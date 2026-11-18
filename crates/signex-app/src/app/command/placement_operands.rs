@@ -16,6 +16,7 @@
 //! (`wire_runs`); they still commit through the click's `apply_engine_commands`.
 
 use iced::Task;
+use signex_engine::DocumentPatch;
 use signex_net::NameChange;
 use signex_types::schematic::{LabelType, Point};
 
@@ -25,7 +26,6 @@ use crate::app::handlers::canvas::{
     pre_placement_shape,
 };
 use crate::app::{Message, Signex};
-use crate::schematic_runtime::RenderInvalidation;
 
 /// What a placement id commits.
 #[derive(Clone, Copy)]
@@ -82,16 +82,16 @@ fn run_on_document(
     // Inside an edit list the list owns the repaint; on its own the run does.
     let own_repaint = previous.is_none();
     if own_repaint {
-        targets.owed = RenderInvalidation::NONE;
+        targets.owed = DocumentPatch::NONE;
     }
     let ran = run_on_target(app, edit);
     let owed = if own_repaint {
         std::mem::take(&mut app.document_state.agent_edits.owed)
     } else {
-        RenderInvalidation::NONE
+        DocumentPatch::NONE
     };
     app.document_state.agent_edits.target = previous;
-    if owed != RenderInvalidation::NONE {
+    if owed != DocumentPatch::NONE {
         app.after_sheet_change(&path, owed);
     }
     ran

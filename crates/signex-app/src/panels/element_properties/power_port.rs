@@ -2,7 +2,23 @@
 
 use super::super::*;
 use super::rows::{PanelStyle, info_row, rotation_degrees};
+use crate::choice::{Choice, chosen};
 use iced::Widget;
+use signex_i18n::{MessageId, ids, t};
+use signex_types::schematic::PowerPortStyle;
+
+/// The catalog name of a power-port style.
+fn style_label(style: PowerPortStyle) -> MessageId {
+    match style {
+        PowerPortStyle::Bar => ids::PROPERTIES_POWER_STYLE_BAR,
+        PowerPortStyle::Arrow => ids::PROPERTIES_POWER_STYLE_ARROW,
+        PowerPortStyle::Wave => ids::PROPERTIES_POWER_STYLE_WAVE,
+        PowerPortStyle::Circle => ids::PROPERTIES_POWER_STYLE_CIRCLE,
+        PowerPortStyle::PowerGround => ids::PROPERTIES_POWER_STYLE_POWER_GROUND,
+        PowerPortStyle::SignalGround => ids::PROPERTIES_POWER_STYLE_SIGNAL_GROUND,
+        PowerPortStyle::Earth => ids::PROPERTIES_POWER_STYLE_EARTH,
+    }
+}
 
 pub(super) fn push_power_port_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
@@ -35,13 +51,12 @@ pub(super) fn push_power_port_sections<'a>(
         missing: get("Library Status") == "Symbol missing",
     };
     let rotation_deg = rotation_degrees(&rotation_str);
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     // The Style row reads the same classifier the built-in power-port
     // body is drawn from, so the style shown is the shape on the canvas.
-    let current_style = signex_types::schematic::PowerPortStyle::of(&lib_id).label();
-    let style_options: Vec<String> = signex_types::schematic::PowerPortStyle::ALL
-        .iter()
-        .map(|s| s.label().to_string())
-        .collect();
+    let style_choices = Choice::named(&PowerPortStyle::ALL, style_label, i18n);
+    let current_style = chosen(&style_choices, &PowerPortStyle::of(&lib_id))
+        .unwrap_or_else(|| style_choices[0].clone());
 
     // ── Location ── (#2418): Position and Rotation through the shared rows.
     let rot_current = rotation_deg;
@@ -54,25 +69,23 @@ pub(super) fn push_power_port_sections<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_props",
-            "Properties",
+            ids::PANELS_PLACED_PROPERTIES,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
-                    PanelMsg::EditSymbolValue(id, s)
-                }));
+                c = c.push(form_edit_row(
+                    t!(i18n, ids::PROPERTIES_NAME),
+                    &name_val,
+                    muted,
+                    move |s| PanelMsg::EditSymbolValue(id, s),
+                ));
                 let base_lib = base_lib.clone();
                 let current_rot = rot_current;
-                c = c.push(form_pick_row(
-                    "Style",
-                    style_options,
-                    current_style.to_string(),
-                    move |style_label| {
-                        use signex_types::schematic::PowerPortStyle;
-                        let new_style = PowerPortStyle::ALL
-                            .into_iter()
-                            .find(|s| s.label() == style_label)
-                            .unwrap_or(PowerPortStyle::Bar);
+                c = c.push(form_choice_row(
+                    t!(i18n, ids::PROPERTIES_STYLE),
+                    style_choices,
+                    current_style,
+                    move |new_style: PowerPortStyle| {
                         let new_lib = format!("power:{}", new_style.lib_tag());
                         // A ground body hangs below its connection point and
                         // every other style rises above it. Turn the port by
@@ -110,7 +123,7 @@ pub(super) fn push_power_port_sections<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_props_font",
-            "Font",
+            ids::PROPERTIES_SECTION_FONT,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -122,7 +135,7 @@ pub(super) fn push_power_port_sections<'a>(
                     "Times New Roman".into(),
                 ];
                 c = c.push(form_pick_row(
-                    "Font",
+                    t!(i18n, ids::PROPERTIES_FONT),
                     font_opts,
                     "Iosevka Fixed SS03".to_string(),
                     |_| PanelMsg::Noop,
@@ -133,7 +146,7 @@ pub(super) fn push_power_port_sections<'a>(
                     .map(|n| n.to_string())
                     .collect();
                 c = c.push(form_pick_row(
-                    "Size",
+                    t!(i18n, ids::PROPERTIES_SIZE),
                     size_opts,
                     "10".to_string(),
                     move |s| {
@@ -154,14 +167,24 @@ pub(super) fn push_power_port_sections<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_net",
-            "General (Net)",
+            ids::PROPERTIES_SECTION_NET_GENERAL,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row("Physical Name", &phys_name, muted, input_bg));
-                c = c.push(form_input_row("Net Name", &phys_name, muted, input_bg));
+                c = c.push(form_input_row(
+                    t!(i18n, ids::PROPERTIES_PHYSICAL_NAME),
+                    &phys_name,
+                    muted,
+                    input_bg,
+                ));
+                c = c.push(form_input_row(
+                    t!(i18n, ids::PROPERTIES_NET_NAME),
+                    &phys_name,
+                    muted,
+                    input_bg,
+                ));
                 c = c.push(net_numeric_row(
-                    "Power Net",
+                    t!(i18n, ids::PROPERTIES_POWER_NET),
                     "0.000",
                     "V",
                     muted,
@@ -169,18 +192,18 @@ pub(super) fn push_power_port_sections<'a>(
                     input_bdr,
                 ));
                 c = c.push(net_numeric_row(
-                    "High Speed",
+                    t!(i18n, ids::PROPERTIES_HIGH_SPEED),
                     "0.000",
                     "Hz",
                     muted,
                     input_bg,
                     input_bdr,
                 ));
-                let dp_opts: Vec<String> = vec!["None".into()];
+                let none = i18n.message_plain(ids::PROPERTIES_DIFF_PAIR_NONE, &[]);
                 c = c.push(form_pick_row(
-                    "Differential Pair",
-                    dp_opts,
-                    "None".to_string(),
+                    t!(i18n, ids::PROPERTIES_DIFF_PAIR),
+                    vec![none.clone()],
+                    none,
                     |_| PanelMsg::Noop,
                     muted,
                 ));
@@ -194,16 +217,20 @@ pub(super) fn push_power_port_sections<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_net_params",
-            "Parameters (Net)",
+            ids::PROPERTIES_SECTION_NET_PARAMETERS,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(net_params_tabs(primary, input_bg, input_bdr));
-                c = c.push(net_params_header(muted, border_c));
-                c = c.push(empty_section_row("No Parameters", muted, border_c));
-                c = c.push(empty_section_row("No Rules", muted, border_c));
-                c = c.push(empty_section_row("No Classes", muted, border_c));
-                c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
+                c = c.push(net_params_tabs(i18n, primary, input_bg, input_bdr));
+                c = c.push(net_params_header(i18n, muted, border_c));
+                for empty in [
+                    ids::PROPERTIES_NET_NO_PARAMETERS,
+                    ids::PROPERTIES_NET_NO_RULES,
+                    ids::PROPERTIES_NET_NO_CLASSES,
+                ] {
+                    c = c.push(empty_section_row(t!(i18n, empty), muted, border_c));
+                }
+                c = c.push(net_params_add_bar(i18n, muted, input_bg, input_bdr));
                 c
             },
         )
@@ -211,4 +238,24 @@ pub(super) fn push_power_port_sections<'a>(
     );
 
     col
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each style reads as `PowerPortStyle::label`, the English the list
+    /// showed before, and a choice is found by its value.
+    #[test]
+    fn each_style_keeps_its_english_name() {
+        let en = signex_i18n::I18n::en_us();
+        let choices = Choice::named(&PowerPortStyle::ALL, style_label, &en);
+        for style in PowerPortStyle::ALL {
+            assert_eq!(en.message_plain(style_label(style), &[]), style.label());
+            assert_eq!(
+                chosen(&choices, &style).map(|c| c.label).as_deref(),
+                Some(style.label())
+            );
+        }
+    }
 }

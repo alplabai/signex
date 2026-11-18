@@ -10,8 +10,9 @@
 
 use std::path::Path;
 
+use signex_engine::DocumentPatch;
+
 use crate::app::Signex;
-use crate::schematic_runtime::RenderInvalidation;
 
 impl Signex {
     /// Run `command` on the engine of the sheet at `path`, as one undo step.
@@ -27,11 +28,10 @@ impl Signex {
         };
         let executed = engine.execute(command);
         Self::report_engine_warnings(engine);
-        let invalidation = match executed {
+        let patch = match executed {
             Ok(result) if result.changed => result
                 .patch_pair
-                .map(|pair| Self::render_invalidation_for_patch(pair.document))
-                .unwrap_or(RenderInvalidation::NONE),
+                .map_or(DocumentPatch::NONE, |pair| pair.document),
             Ok(_) => return Ok(false),
             Err(error) => {
                 let reason = error.to_string();
@@ -39,8 +39,8 @@ impl Signex {
                 return Err(reason);
             }
         };
-        self.after_sheet_change(path, invalidation);
-        Ok(invalidation != RenderInvalidation::NONE)
+        self.after_sheet_change(path, patch);
+        Ok(patch != DocumentPatch::NONE)
     }
 
     /// One Undo (`undo`) or Redo of the sheet at `path`: its newest net-class
@@ -50,7 +50,7 @@ impl Signex {
     /// moves other sheets too, which only the run's own undo may do.
     pub(crate) fn step_sheet_on(&mut self, path: &Path, undo: bool) -> Result<bool, String> {
         if self.step_net_class_pick_on(path, undo) {
-            self.after_sheet_change(path, RenderInvalidation::NET_COLORS);
+            self.after_sheet_change(path, DocumentPatch::NET_COLORS);
             return Ok(true);
         }
         let Some(engine) = self.document_state.engines.get(path) else {
@@ -76,8 +76,8 @@ impl Signex {
             return Err(format!("{} is not loaded", path.display()));
         };
         let stepped = if undo { engine.undo() } else { engine.redo() };
-        let invalidation = match stepped {
-            Ok(Some(pair)) => Self::render_invalidation_for_patch(pair.document),
+        let patch = match stepped {
+            Ok(Some(pair)) => pair.document,
             Ok(None) => return Ok(false),
             Err(error) => {
                 let reason = error.to_string();
@@ -92,7 +92,7 @@ impl Signex {
         };
         // Undo / redo can bring back an older embedded library symbol.
         self.library.drift.check_pending = true;
-        self.after_sheet_change(path, invalidation);
+        self.after_sheet_change(path, patch);
         Ok(true)
     }
 
@@ -100,19 +100,19 @@ impl Signex {
     /// mark, ERC's epoch, the windows that show it, the panel context. When
     /// the sheet is also the main window's active one the same refresh keeps
     /// that canvas current.
-    pub(crate) fn after_sheet_change(&mut self, path: &Path, invalidation: RenderInvalidation) {
+    pub(crate) fn after_sheet_change(&mut self, path: &Path, patch: DocumentPatch) {
         // Inside an agent's edit list the refresh is owed once, at its end.
         if self.document_state.agent_edits.target.as_deref() == Some(path) {
-            self.document_state.agent_edits.owed |= invalidation;
+            self.document_state.agent_edits.owed |= patch;
             return;
         }
-        let display_only = invalidation == RenderInvalidation::NET_COLORS;
+        let display_only = patch.is_display_only();
         if !display_only {
             self.document_state.note_sheet_edit();
         }
         self.document_state.sync_history_dirty(path);
         let is_active = self.document_state.active_path.as_deref() == Some(path);
-        self.refresh_slots_from_engine(path, is_active, invalidation, false);
+        self.refresh_slots_from_engine(path, is_active, patch.into(), false);
         if is_active {
             self.prune_selected_wires();
             if !display_only {
