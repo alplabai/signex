@@ -397,7 +397,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
-| `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |
+| `place_board_string` | Place a string on the active silkscreen, mechanical or documentation layer | place | — | — |
 | `place_board_text_frame` | Place text wrapped in a box on the active non-copper layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |

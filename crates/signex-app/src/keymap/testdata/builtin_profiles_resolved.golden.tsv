@@ -324,6 +324,7 @@ altium	hint	-	-	back_annotate_schematics
 altium	hint	-	F8	run_erc
 altium	hint	-	-	check_erc
 altium	hint	-	-	open_erc_dialog
+altium	hint	-	-	repair_pin_junctions
 altium	hint	-	T D	run_drc
 altium	hint	-	-	check_drc
 altium	hint	-	-	check_requirements
@@ -829,6 +830,7 @@ classic	hint	-	-	back_annotate_schematics
 classic	hint	-	F8	run_erc
 classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
+classic	hint	-	-	repair_pin_junctions
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
 classic	hint	-	-	check_requirements
