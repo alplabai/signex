@@ -11,7 +11,7 @@ use signex_types::project::{
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{CheckboxLabel as _, checkbox, text, text_input};
+use signex_widgets::{CheckboxLabel as _, PickListPlaceholder as _, checkbox, text, text_input};
 
 use super::super::table::{SP, TS, action, labelled, note, problem, section};
 use super::words::{field_words, kind_words, problem_words};
@@ -112,7 +112,7 @@ fn add_picker<'a>(project_id: ProjectId, i18n: &I18n) -> Element<'a, Message> {
         .collect();
     pick_list(None::<Choice<&'static str>>, kinds, Choice::to_string)
         .graphite()
-        .placeholder(t!(i18n, ids::REQUIREMENTS_ADD).to_string())
+        .placeholder_label(t!(i18n, ids::REQUIREMENTS_ADD))
         .on_select(move |choice: Choice<&'static str>| {
             message(
                 project_id,

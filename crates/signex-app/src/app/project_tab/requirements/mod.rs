@@ -32,6 +32,7 @@ pub(super) use view::view;
 use super::ProjectTabMsg;
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
+use crate::ignore::IgnoreResult;
 
 /// One run of the checks from the tab: what it found and when it finished.
 #[derive(Debug, Clone)]
@@ -124,7 +125,8 @@ impl Signex {
                     kind: kind.to_string(),
                     id: None,
                 };
-                let _ = self.edit_requirements_from_tab(project_id, None, &command);
+                self.edit_requirements_from_tab(project_id, None, &command)
+                    .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::FieldEdited { index, field, text } => {
                 let tab = self.requirements_tab(project_id);
@@ -149,11 +151,13 @@ impl Signex {
             } => self.commit_requirement_field(project_id, index, field, value),
             RequirementsMsg::EnabledToggled { index, on } => {
                 let command = ProjectRequirementCommand::SetEnabled { index, on };
-                let _ = self.edit_requirements_from_tab(project_id, Some(index), &command);
+                self.edit_requirements_from_tab(project_id, Some(index), &command)
+                    .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::Removed { index } => {
                 let command = ProjectRequirementCommand::Remove { index };
-                let _ = self.edit_requirements_from_tab(project_id, Some(index), &command);
+                self.edit_requirements_from_tab(project_id, Some(index), &command)
+                    .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::RunRequested => return self.run_requirements_in_tab(project_id),
             RequirementsMsg::RunFinished(run) => {
