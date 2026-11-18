@@ -470,6 +470,11 @@
     "category": "reports"
   },
   {
+    "id": "export_board_step",
+    "group": "Pcb",
+    "category": "reports"
+  },
+  {
     "id": "fabrication_outputs",
     "group": "Pcb",
     "category": "file"

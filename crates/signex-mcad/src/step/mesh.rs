@@ -91,9 +91,10 @@ impl MeshWriter<'_> {
         let (_, end) = self.vertex(key.1);
         let span = sub(self.points[key.1], self.points[key.0]);
         let length = dot3(span, span).sqrt();
-        let direction = self
-            .data
-            .add(format!("DIRECTION('',{})", triple(span.map(|x| x / length))));
+        let direction = self.data.add(format!(
+            "DIRECTION('',{})",
+            triple(span.map(|x| x / length))
+        ));
         let vector = self
             .data
             .add(format!("VECTOR('',{direction},{})", real(length)));
@@ -114,19 +115,15 @@ impl MeshWriter<'_> {
                     .add(format!("ORIENTED_EDGE('',*,*,{edge},{})", flag(forward))),
             );
         }
-        let edge_loop = self
-            .data
-            .add(format!("EDGE_LOOP('',{})", refs(&oriented)));
+        let edge_loop = self.data.add(format!("EDGE_LOOP('',{})", refs(&oriented)));
         let bound = self
             .data
             .add(format!("FACE_OUTER_BOUND('',{edge_loop},.T.)"));
         let (point, _) = self.vertex(a);
         let axis = placement_at(self.data, point, normal, perpendicular(normal));
         let plane = self.data.add(format!("PLANE('',{axis})"));
-        self.data.add(format!(
-            "ADVANCED_FACE('',{},{plane},.T.)",
-            refs(&[bound])
-        ))
+        self.data
+            .add(format!("ADVANCED_FACE('',{},{plane},.T.)", refs(&[bound])))
     }
 }
 

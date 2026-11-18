@@ -5972,6 +5972,7 @@ name = "signex-mcad"
 version = "26.11.0"
 dependencies = [
  "earcut",
+ "signex-3d-model-importer",
  "solidcore",
  "thiserror 2.0.18",
 ]
@@ -6011,6 +6012,7 @@ dependencies = [
  "serde_json",
  "signex-3d-model-importer",
  "signex-gfx",
+ "signex-mcad",
  "signex-types",
  "tempfile",
  "uuid",

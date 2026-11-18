@@ -1080,6 +1080,10 @@ ENDSEC;
         src += "#300 = ADVANCED_FACE('',(#41),#999,.T.);\nENDSEC;";
         let result = parse_to_meshes(&src).expect("parse");
         let mesh = &result.meshes[0];
-        assert!((total_area(mesh) - 480.0).abs() < 1e-3, "{}", total_area(mesh));
+        assert!(
+            (total_area(mesh) - 480.0).abs() < 1e-3,
+            "{}",
+            total_area(mesh)
+        );
     }
 }

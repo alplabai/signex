@@ -22,7 +22,11 @@ fn header() -> StepHeader {
     }
 }
 
-fn model<'a>(schema: StepSchema, solids: Vec<StepSolid<'a>>, meshes: Vec<StepMesh>) -> StepModel<'a> {
+fn model<'a>(
+    schema: StepSchema,
+    solids: Vec<StepSolid<'a>>,
+    meshes: Vec<StepMesh>,
+) -> StepModel<'a> {
     StepModel {
         schema,
         header: header(),
@@ -97,7 +101,10 @@ fn read_back(bytes: &[u8]) -> (([f64; 3], [f64; 3]), f64) {
             .collect();
         for t in mesh.indices.chunks_exact(3) {
             let [a, b, c] = [p[t[0] as usize], p[t[1] as usize], p[t[2] as usize]];
-            let (u, v) = ([0, 1, 2].map(|k| b[k] - a[k]), [0, 1, 2].map(|k| c[k] - a[k]));
+            let (u, v) = (
+                [0, 1, 2].map(|k| b[k] - a[k]),
+                [0, 1, 2].map(|k| c[k] - a[k]),
+            );
             let n = [
                 u[1] * v[2] - u[2] * v[1],
                 u[2] * v[0] - u[0] * v[2],
@@ -122,7 +129,12 @@ fn assert_close(got: [f64; 3], want: [f64; 3], tolerance: f64) {
 #[test]
 fn the_file_is_iso_10303_21_in_the_chosen_schema() {
     let board = drilled_board();
-    let solids = || vec![StepSolid { name: "Board", solid: &board }];
+    let solids = || {
+        vec![StepSolid {
+            name: "Board",
+            solid: &board,
+        }]
+    };
     let ap214 = write_step(&model(StepSchema::Ap214, solids(), Vec::new())).expect("AP214");
     let text = std::str::from_utf8(&ap214).expect("ASCII");
     assert!(text.starts_with("ISO-10303-21;\nHEADER;\n"));
@@ -167,7 +179,13 @@ fn every_face_is_written_on_its_exact_surface() {
         .into_iter()
         .map(|f| file.name(f))
         .collect();
-    for name in ["Top", "Bottom", "Hole 0 wall", "Hole 1 wall", "Cut-out 2 wall"] {
+    for name in [
+        "Top",
+        "Bottom",
+        "Hole 0 wall",
+        "Hole 1 wall",
+        "Cut-out 2 wall",
+    ] {
         assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
     }
 }
@@ -326,7 +344,10 @@ fn cube(name: &str, at: [f64; 3]) -> StepMesh {
 #[test]
 fn mesh_bodies_read_back_with_their_triangles() {
     let board = drilled_board();
-    let meshes = vec![cube("U1", [5.0, 5.0, THICKNESS]), cube("R1", [30.0, 15.0, -1.0])];
+    let meshes = vec![
+        cube("U1", [5.0, 5.0, THICKNESS]),
+        cube("R1", [30.0, 15.0, -1.0]),
+    ];
     let bytes = write_step(&model(
         StepSchema::Ap214,
         vec![StepSolid {

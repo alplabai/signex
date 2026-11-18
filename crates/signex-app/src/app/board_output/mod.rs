@@ -74,7 +74,10 @@ pub enum BoardOutputMsg {
     /// dialog for the board in view.
     StepExportRequested,
     /// The save dialog answered with `path` for `board`.
-    StepPathChosen { board: PathBuf, path: PathBuf },
+    StepPathChosen {
+        board: PathBuf,
+        path: PathBuf,
+    },
     /// The STEP model of `board` was made off the update thread, or why it
     /// could not be; `path` is where it goes.
     StepBuilt {
@@ -188,7 +191,11 @@ impl crate::app::Signex {
             M::Closed => self.ui_state.board_output.dialog = None,
             M::StepExportRequested => return self.request_board_step(),
             M::StepPathChosen { board, path } => {
-                return self.build_board_step(&board, path, signex_renderer::board3d::StepSchema::default());
+                return self.build_board_step(
+                    &board,
+                    path,
+                    signex_renderer::board3d::StepSchema::default(),
+                );
             }
             M::StepBuilt { board, path, built } => {
                 return self.write_board_step(&board, path, built);

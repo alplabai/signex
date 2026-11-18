@@ -10,8 +10,8 @@ use std::path::Path;
 
 use signex_3d_model_importer::step::p21::parse_to_meshes;
 use signex_renderer::board3d::{
-    Board3dColors, Board3dInput, BoardStepInput, ComponentModel, StepHeader, StepSchema, board_step,
-    build_board_scene,
+    Board3dColors, Board3dInput, BoardStepInput, ComponentModel, StepHeader, StepSchema,
+    board_step, build_board_scene,
 };
 use signex_renderer::pcb::PcbLayerView;
 use signex_types::format::SnxPcb;

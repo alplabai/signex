@@ -8,8 +8,7 @@ use std::collections::HashMap;
 
 use signex_gfx::scene3d::Scene3d;
 use signex_mcad::{
-    Hole, McadError, StepHeader, StepMesh, StepModel, StepSchema, StepSolid, board_body,
-    write_step,
+    Hole, McadError, StepHeader, StepMesh, StepModel, StepSchema, StepSolid, board_body, write_step,
 };
 use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::PcbBoard;

@@ -24,8 +24,8 @@ use solidcore::topology::{Brep, EdgeId, FaceId, VertexId};
 use super::context::placement;
 use super::p21::{Data, Ref, flag, real, refs, string, triple};
 use super::shape::{
-    ON_GEOMETRY_MM, as_line, facing, near_triangles, newell, on_circle, on_cylinder,
-    perpendicular, winding,
+    ON_GEOMETRY_MM, as_line, facing, near_triangles, newell, on_circle, on_cylinder, perpendicular,
+    winding,
 };
 use crate::board::new_kernel;
 use crate::error::{McadError, contained};
@@ -197,9 +197,7 @@ impl SolidWriter<'_> {
                 [0.0, 0.0, 1.0],
                 [1.0, 0.0, 0.0],
             );
-            let circle = self
-                .data
-                .add(format!("CIRCLE('',{axis},{})", real(radius)));
+            let circle = self.data.add(format!("CIRCLE('',{axis},{})", real(radius)));
             return Ok((circle, winding(points, center) > 0.0));
         }
         Err(refused(
@@ -238,14 +236,12 @@ impl SolidWriter<'_> {
             let mut oriented = Vec::with_capacity(l.uses.len());
             for &(e, forward) in &l.uses {
                 let edge = self.edge(e)?;
-                oriented.push(self.data.add(format!(
-                    "ORIENTED_EDGE('',*,*,{edge},{})",
-                    flag(forward)
-                )));
+                oriented.push(
+                    self.data
+                        .add(format!("ORIENTED_EDGE('',*,*,{edge},{})", flag(forward))),
+                );
             }
-            let edge_loop = self
-                .data
-                .add(format!("EDGE_LOOP('',{})", refs(&oriented)));
+            let edge_loop = self.data.add(format!("EDGE_LOOP('',{})", refs(&oriented)));
             let kind = if outer == Some(n) {
                 "FACE_OUTER_BOUND"
             } else {
@@ -276,10 +272,9 @@ impl SolidWriter<'_> {
                     [0.0, 0.0, 1.0],
                     [1.0, 0.0, 0.0],
                 );
-                let cylinder = self.data.add(format!(
-                    "CYLINDRICAL_SURFACE('',{axis},{})",
-                    real(radius)
-                ));
+                let cylinder = self
+                    .data
+                    .add(format!("CYLINDRICAL_SURFACE('',{axis},{})", real(radius)));
                 (cylinder, outward_from_axis)
             }
         };
@@ -458,13 +453,16 @@ fn cylinder_bounds(
                 if dot3(left, left) == 0.0 {
                     continue;
                 }
-                let side = |sign: f64| onto_cylinder([0, 1, 2].map(|k| mid[k] + sign * step * left[k]));
+                let side =
+                    |sign: f64| onto_cylinder([0, 1, 2].map(|k| mid[k] + sign * step * left[k]));
                 let on_left = near_triangles(side(1.0), triangles, step / 2.0);
                 let on_right = near_triangles(side(-1.0), triangles, step / 2.0);
                 votes += i64::from(on_left && !on_right) - i64::from(on_right && !on_left);
             }
             if votes == 0 {
-                return Err(refused("cannot tell which side of a hole wall's bound the wall is on"));
+                return Err(refused(
+                    "cannot tell which side of a hole wall's bound the wall is on",
+                ));
             }
             Ok(votes > 0)
         })
@@ -483,11 +481,7 @@ fn face_triangles(mesh: &Mesh, index: usize) -> Vec<[[f64; 3]; 3]> {
         .unwrap_or_default()
         .iter()
         .filter_map(|t| {
-            let corner = |i: u32| {
-                mesh.positions
-                    .get(i as usize)
-                    .map(|p| p.map(f64::from))
-            };
+            let corner = |i: u32| mesh.positions.get(i as usize).map(|p| p.map(f64::from));
             Some([corner(t[0])?, corner(t[1])?, corner(t[2])?])
         })
         .collect()
@@ -551,7 +545,8 @@ fn vertex_point(brep: &Brep, v: VertexId) -> Result<[f64; 3], McadError> {
 /// The faces of `face_list` grouped by the edges they share: one group per
 /// connected shell, in face order.
 fn shells(brep: &Brep, face_list: &[FaceId]) -> Result<Vec<Vec<usize>>, McadError> {
-    let index: HashMap<FaceId, usize> = face_list.iter().enumerate().map(|(i, &f)| (f, i)).collect();
+    let index: HashMap<FaceId, usize> =
+        face_list.iter().enumerate().map(|(i, &f)| (f, i)).collect();
     let mut parent: Vec<usize> = (0..face_list.len()).collect();
     for &e in brep.edge_list() {
         let faces: Vec<usize> = edge_faces(brep, e)?

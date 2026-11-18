@@ -14,7 +14,9 @@ impl StepSchema {
     fn schema_name(self) -> &'static str {
         match self {
             Self::Ap214 => "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }",
-            Self::Ap242 => "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF { 1 0 10303 442 1 1 4 }",
+            Self::Ap242 => {
+                "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF { 1 0 10303 442 1 1 4 }"
+            }
         }
     }
 
@@ -123,7 +125,12 @@ pub(crate) fn placement(
 }
 
 /// An `AXIS2_PLACEMENT_3D` at the existing point `point`.
-pub(crate) fn placement_at(data: &mut Data, point: Ref, axis: [f64; 3], reference: [f64; 3]) -> Ref {
+pub(crate) fn placement_at(
+    data: &mut Data,
+    point: Ref,
+    axis: [f64; 3],
+    reference: [f64; 3],
+) -> Ref {
     let axis = data.add(format!("DIRECTION('',{})", triple(axis)));
     let reference = data.add(format!("DIRECTION('',{})", triple(reference)));
     data.add(format!("AXIS2_PLACEMENT_3D('',{point},{axis},{reference})"))

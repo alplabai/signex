@@ -42,7 +42,11 @@ impl Data {
 /// kernel's arithmetic (`9.999999999999998` is written `10.`).
 pub(crate) fn real(x: f64) -> String {
     let snapped = (x * 1e9).round() / 1e9;
-    let x = if (snapped - x).abs() <= 1e-12 { snapped } else { x };
+    let x = if (snapped - x).abs() <= 1e-12 {
+        snapped
+    } else {
+        x
+    };
     let x = if x == 0.0 { 0.0 } else { x };
     let text = format!("{x:?}");
     match text.split_once('e') {

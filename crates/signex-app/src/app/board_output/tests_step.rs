@@ -58,16 +58,14 @@ fn a_model_that_could_not_be_made_is_reported_and_nothing_is_written() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, board) = app_with_board(dir.path());
     let file = dir.path().join("board.step");
-    let task = output(
-        &mut app,
-        BoardOutputMsg::StepBuilt {
-            board,
-            path: file.clone(),
-            built: Err("the kernel failed".to_owned()),
-        },
-    );
-    assert_eq!(task.units(), 0);
+    let task = app.dispatch_board_output_message(BoardOutputMsg::StepBuilt {
+        board,
+        path: file.clone(),
+        built: Err("the kernel failed".to_owned()),
+    });
+    assert_eq!(task.units(), 0, "no write");
     assert!(app.document_state.error_notice.is_some());
+    settle(&mut app, task);
     assert!(!file.exists());
 }
 

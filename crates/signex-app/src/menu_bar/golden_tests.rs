@@ -398,6 +398,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("board_report_net_length", "BoardReportNetLength"),
     ("board_report_components", "BoardReportComponents"),
     ("export_board_report", "ExportBoardReport"),
+    ("export_board_step", "ExportBoardStep"),
     ("back_annotate_schematics", "BackAnnotate"),
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),

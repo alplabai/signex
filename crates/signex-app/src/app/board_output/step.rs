@@ -51,7 +51,11 @@ impl Signex {
         Task::perform(
             async move {
                 target
-                    .dialog(picker.dialog().title_in(&i18n, ids::BOARD_STEP_EXPORT_TITLE))
+                    .dialog(
+                        picker
+                            .dialog()
+                            .title_in(&i18n, ids::BOARD_STEP_EXPORT_TITLE),
+                    )
                     .await
                     .filter_in(&i18n, ids::FILE_FILTER_STEP_EXT, &["step", "stp"])
                     .set_file_name(file_name)
@@ -122,9 +126,7 @@ impl Signex {
             schema,
             header: StepHeader {
                 file_name,
-                timestamp: chrono::Local::now()
-                    .format("%Y-%m-%dT%H:%M:%S")
-                    .to_string(),
+                timestamp: chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
                 system: format!("Signex {}", env!("CARGO_PKG_VERSION")),
             },
             product: super::file_title(board),
@@ -141,7 +143,9 @@ impl Signex {
         let built = match built {
             Ok(built) => built,
             Err(why) => {
-                self.report_export_failure(Translatable::new(ids::BOARD_STEP_FAILED).arg("why", why));
+                self.report_export_failure(
+                    Translatable::new(ids::BOARD_STEP_FAILED).arg("why", why),
+                );
                 return Task::none();
             }
         };
@@ -188,7 +192,9 @@ pub(super) fn step_warnings(built: &BoardStepBuilt) -> Vec<String> {
         )
     });
     let unread = built.unread_models.iter().map(|(source, why)| {
-        format!("STEP export: the model of {source} could not be read ({why}); its plain body is used")
+        format!(
+            "STEP export: the model of {source} could not be read ({why}); its plain body is used"
+        )
     });
     holes.into_iter().chain(unread).collect()
 }
