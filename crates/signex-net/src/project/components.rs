@@ -11,6 +11,7 @@ use uuid::Uuid;
 use super::members::NetMemberKind;
 use super::net_index::{NetAnchor, NetIndex};
 use super::{Occ, SheetKey};
+use crate::parts::needs_annotation;
 
 /// One placed, non-power symbol of the walk, once per placement.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,15 +25,10 @@ pub struct PlacedSymbol {
     pub footprint: String,
 }
 
-/// Whether `designator` names one part: not blank and holding no `?`.
-fn names_one_part(designator: &str) -> bool {
-    !designator.is_empty() && !designator.contains('?')
-}
-
 impl PlacedSymbol {
     /// Whether the designator names one part: not blank and holding no `?`.
     pub fn is_annotated(&self) -> bool {
-        names_one_part(&self.designator)
+        !needs_annotation(&self.designator)
     }
 }
 
@@ -65,7 +61,7 @@ impl ComponentReport {
     /// Whether the designator names one part; a part not annotated yet is
     /// one symbol, known only by its [`anchor`](Self::anchor).
     pub fn is_annotated(&self) -> bool {
-        names_one_part(&self.designator)
+        !needs_annotation(&self.designator)
     }
 }
 
