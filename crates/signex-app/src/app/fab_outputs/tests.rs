@@ -117,10 +117,20 @@ fn older_files_of_the_same_stem_are_reported_and_left_in_place() {
     std::fs::write(folder.join("other-pth.drl"), "another stem").unwrap();
     let options = FabOptions {
         centroid: false,
+        ipc2581: false,
+        odb: None,
         ..FabOptions::all("b")
     };
     let second = write_fab_outputs(&board, &options, &folder).expect("written");
-    assert_eq!(second.stale, ["b-centroid.csv", "b-copper-l3-inner2.gbr"]);
+    assert_eq!(
+        second.stale,
+        [
+            "b-centroid.csv",
+            "b-copper-l3-inner2.gbr",
+            "b-ipc2581.xml",
+            "b-odb.tar"
+        ]
+    );
     assert!(
         folder.join("b-copper-l3-inner2.gbr").is_file(),
         "never deleted"

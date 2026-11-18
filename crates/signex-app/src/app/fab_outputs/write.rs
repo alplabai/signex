@@ -10,7 +10,7 @@ use super::FabProblem;
 
 /// The extensions of the files Generate writes; a file of the same stem
 /// with one of them, left by an earlier run, is reported as stale.
-const FAB_EXTENSIONS: [&str; 5] = ["gbr", "drl", "csv", "ipc", "gbrjob"];
+const FAB_EXTENSIONS: [&str; 7] = ["gbr", "drl", "csv", "ipc", "gbrjob", "xml", "tar"];
 
 /// What one Generate wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]

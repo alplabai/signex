@@ -26,6 +26,7 @@ mod ipc2581;
 mod ipc356;
 mod job;
 mod layers;
+mod naming;
 mod marks;
 mod notes;
 mod odb;

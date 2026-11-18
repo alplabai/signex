@@ -250,6 +250,34 @@ mod tests {
     }
 
     #[test]
+    fn a_polygon_pad_is_one_surface_with_the_pads_attribute() {
+        let mut features = Features::default();
+        let pad = Mark::Flash {
+            shape: ApertureShape::Outline {
+                corners: vec![
+                    PointNm::new(-500_000, -500_000),
+                    PointNm::new(500_000, -500_000),
+                    PointNm::new(500_000, 500_000),
+                    PointNm::new(-500_000, 500_000),
+                ],
+            },
+            function: Function::SmdPad,
+            at: PointNm::new(2_000_000, 0),
+            attributes: Attributes::default(),
+        };
+        assert_eq!(features.mark(&pad), 0..1);
+        let text = features.finish();
+        assert!(!text.contains("$0"), "no symbol: {text}");
+        assert!(text.contains("@0 .smd\n"), "{text}");
+        assert!(
+            text.contains(
+                "S P 0;0\nOB 1.5 0.5 I\nOS 2.5 0.5\nOS 2.5 -0.5\nOS 1.5 -0.5\nOS 1.5 0.5\nOE\nSE\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn a_full_circle_is_two_half_arcs_and_a_surface_winds_island_clockwise() {
         let mut features = Features::default();
         let circle = Mark::circle(PointNm::new(0, 0), 1_000_000, 100_000, Function::Graphic);

@@ -5,6 +5,7 @@
 //! choices: `docs/FABRICATION_OUTPUTS.md`, "IPC-2581".
 
 mod features;
+mod names;
 mod parts;
 mod stack;
 mod xml;
@@ -22,6 +23,7 @@ use super::notes::Tally;
 use super::parts::Parts;
 use super::roles::board_stack;
 use features::{Dictionary, contour, layer_feature, xy};
+use names::Names;
 use parts::write_nets;
 use stack::{Declared, LayerPlan, Source, write_layers};
 use xml::{Xml, qualified};
@@ -59,6 +61,7 @@ pub(crate) fn write_ipc2581(
     let step = qualified(name);
     let bom = format!("{step}_BOM");
     let parts = Parts::of(board, qualified);
+    let names = Names::of(&parts, images.values().flatten());
     let mut dictionary = Dictionary::default();
 
     // The CAD data first: it fills the dictionary the content lists.
@@ -76,17 +79,17 @@ pub(crate) fn write_ipc2581(
         .iter()
         .filter(|(layer, _)| layer.is_copper())
         .flat_map(|(_, marks)| marks);
-    write_nets(&mut ecad, copper_marks);
+    write_nets(&mut ecad, copper_marks, &names);
     let mut slots = 0;
     for layer in &declared {
         match layer.source {
             Source::Board(board_layer) => {
                 let marks = board_marks(&images, &documents, board_layer);
-                layer_feature(&mut ecad, &mut dictionary, &layer.name, marks);
+                layer_feature(&mut ecad, &mut dictionary, &names, &layer.name, marks);
             }
             Source::VScore => {
                 let marks = images.get(&FabLayer::VScore).map_or(&[][..], Vec::as_slice);
-                layer_feature(&mut ecad, &mut dictionary, &layer.name, marks);
+                layer_feature(&mut ecad, &mut dictionary, &names, &layer.name, marks);
             }
             Source::Drill(file) => drill_feature(&mut ecad, layer, file, &holes, &mut slots),
             Source::Dielectric(_) => {}

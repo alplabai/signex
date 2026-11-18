@@ -3,7 +3,7 @@
 //! component layers' `components` files, whose toeprints name their net
 //! and subnet.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use pcb_geom::{Placement, PointNm, Side, mm_to_nm};
@@ -15,6 +15,7 @@ use crate::fab::collect::pad_aperture;
 use crate::fab::frame::{FabFrame, fab_angle_udeg};
 use crate::fab::layers::Face;
 use crate::fab::marks::{ApertureShape, Function, Mark, PadKey};
+use crate::fab::naming::unique_names;
 use crate::fab::parts::{PackagePin, Parts, oem_number, package_pins, pin_box};
 
 /// The net a toeprint whose pad carries none is listed under.
@@ -134,8 +135,10 @@ impl<'a> Eda<'a> {
             }
         }
         let mut components: [Vec<Component>; 2] = Default::default();
-        for (index, footprint, package) in &parts.placed {
-            let Some(package) = package
+        for placed in &parts.placed {
+            let (index, footprint) = (placed.index, placed.footprint);
+            let Some(package) = placed
+                .package
                 .as_ref()
                 .and_then(|name| parts.packages.iter().position(|(n, _)| n == name))
             else {
@@ -157,7 +160,7 @@ impl<'a> Eda<'a> {
                 };
                 let pad_index = footprint.pads.iter().position(|p| std::ptr::eq(p, pad));
                 let (net, fids) = pad_index
-                    .and_then(|pad_index| pins.remove(&(*index, pad_index)))
+                    .and_then(|pad_index| pins.remove(&(index, pad_index)))
                     .unwrap_or_default();
                 let kind = SubnetKind::Toeprint {
                     face,
@@ -178,7 +181,7 @@ impl<'a> Eda<'a> {
             }
             components[side(face)].push(Component {
                 package,
-                name: word(&footprint.reference),
+                name: placed.designator.clone(),
                 part: word(&oem_number(footprint)),
                 at: frame.point(placement.origin),
                 udeg: fab_angle_udeg(placement.rotation_deg),
@@ -192,13 +195,14 @@ impl<'a> Eda<'a> {
                 nets.entry(net).or_default().trace.extend(fids);
             }
         }
-        let mut names = BTreeSet::new();
+        // Net names are unique: `VCC 3V3` and `VCC_3V3` are one word.
+        let names = unique_names(nets.keys().map(String::as_str), word);
         let nets = nets
             .into_iter()
             .enumerate()
             .map(|(number, (name, net_copper))| {
                 let subnets = subnets(number, net_copper, &mut components);
-                (unique_word(&mut names, &name), subnets)
+                (names[&name].clone(), subnets)
             })
             .collect();
         Self {
@@ -302,19 +306,6 @@ fn subnets(net: usize, copper: NetCopper, components: &mut [Vec<Component>; 2]) 
     subnets
 }
 
-/// `name` as a record word, with `_2`, `_3`, ... when another net's name
-/// became the same word (`VCC 3V3` and `VCC_3V3`): net names are unique.
-fn unique_word(taken: &mut BTreeSet<String>, name: &str) -> String {
-    let base = word(name);
-    let mut candidate = base.clone();
-    let mut n = 1;
-    while !taken.insert(candidate.clone()) {
-        n += 1;
-        candidate = format!("{base}_{n}");
-    }
-    candidate
-}
-
 fn side(face: Face) -> usize {
     match face {
         Face::Top => 0,
@@ -413,4 +404,29 @@ fn rect(lower_left: PointNm, w: i64, h: i64) -> String {
         mm(w),
         mm(h)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_polygon_pin_is_a_contour_and_a_box_pin_a_rectangle() {
+        let corners = vec![
+            PointNm::new(-500_000, -500_000),
+            PointNm::new(500_000, -500_000),
+            PointNm::new(500_000, 500_000),
+            PointNm::new(-500_000, 500_000),
+        ];
+        let at = PointNm::new(1_000_000, 0);
+        assert_eq!(
+            pin_outline(&ApertureShape::Outline { corners }, at),
+            "CT\nOB 0.5 0.5 I\nOS 1.5 0.5\nOS 1.5 -0.5\nOS 0.5 -0.5\nOS 0.5 0.5\nOE\nCE\n"
+        );
+        let rect_pin = ApertureShape::Rect {
+            w: 1_000_000,
+            h: 500_000,
+        };
+        assert_eq!(pin_outline(&rect_pin, at), "RC 0.5 -0.25 1 0.5\n");
+    }
 }

@@ -72,7 +72,7 @@ pub(crate) fn write_odb(
             parts
                 .placed
                 .iter()
-                .any(|(_, f, package)| package.is_some() && Side::of_layer(&f.layer) == side)
+                .any(|p| p.package.is_some() && Side::of_layer(&p.footprint.layer) == side)
         }),
         v_score: images.contains_key(&FabLayer::VScore),
         drills: &drills,
