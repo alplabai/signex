@@ -6,6 +6,7 @@ use iced::{Event, Point, Rectangle, mouse};
 use signex_library::primitive::{
     Drill, Footprint, FpGraphic, FpGraphicKind, Pad, PadKind, PadShape, Polygon,
 };
+use signex_library::primitive::footprint::ChamferedCorners;
 
 use super::footprint_scale::{length_label, round_length_mm, scale_bar, size_label};
 use super::{FootprintPreview, PreviewState};
@@ -186,8 +187,9 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
 
 /// The pads are drawn as the PCB canvas draws them (#2348): a top-copper pad
 /// in the colour the Layers panel lists Top Copper with, a through-hole pad
-/// in the Multi-Layer colour with its drill as an opening. A pad the board
-/// cannot hold (the custom outline) is left to the editor's renderer.
+/// in the Multi-Layer colour with its drill as an opening. The custom outline
+/// is board copper too since #2242; a pad the board cannot hold (a chamfered
+/// rectangle) is left to the editor's renderer.
 #[test]
 fn preview_pads_are_the_board_lowering_in_the_board_palette() {
     use crate::pcb_canvas::layer_style::{board_layer_colour, multi_layer_colour};
@@ -202,21 +204,37 @@ fn preview_pads_are_the_board_lowering_in_the_board_palette() {
     };
     let model = preview_of(&fixture());
     let pads = &model.board_pads().top_polygons;
-    assert_eq!(pads.len(), 3, "pad 1, pad 2 and pad 2's drill");
+    assert_eq!(pads.len(), 4, "pads 1, 2 and 3 and pad 2's drill");
     let top_copper = board_layer_colour(PcbLayer::Copper(CopperLayer::Top));
     assert_eq!(rgba(pads[0].fill_color), top_copper);
     assert_eq!(rgba(pads[1].fill_color), multi_layer_colour());
     assert_ne!(top_copper, multi_layer_colour());
+    let top_count = pads
+        .iter()
+        .filter(|p| rgba(p.fill_color) == top_copper)
+        .count();
+    assert_eq!(top_count, 2, "pad 1 and the custom pad 3");
 
     let board = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
-    let drill = &pads[2];
-    assert_eq!(drill.fill_color, board.color(ColorSlot::BoardOpening));
+    let opening = board.color(ColorSlot::BoardOpening);
+    let drill = pads
+        .iter()
+        .find(|p| p.fill_color == opening)
+        .expect("pad 2's drill");
     assert!(drill.vertices.len() >= 8);
     for v in &drill.vertices {
         let r = ((v[0] - 1.5).powi(2) + v[1].powi(2)).sqrt();
         assert!((r - 0.3).abs() < 1e-4, "{v:?} on the 0.6 mm drill");
     }
 
+    assert!(model.unheld_pads().is_empty());
+
+    let mut chamfered = fixture();
+    chamfered.pads[2].shape = PadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners::default(),
+    };
+    let model = preview_of(&chamfered);
     let unheld: Vec<&str> = model
         .unheld_pads()
         .iter()
