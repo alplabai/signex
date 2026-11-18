@@ -4,7 +4,7 @@
 //! is reported and repaired in one step, never changed on open.
 
 use crate::rubber_band_tests::{
-    add_wire, has, lib_pin, lib_symbol, mv, net_shape, place, segments,
+    add_resistor, add_wire, has, lib_pin, lib_symbol, mv, net_shape, place, segments,
 };
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, bare_pin_taps, pin_junction_repairs};
@@ -140,4 +140,27 @@ fn an_old_bare_contact_is_reported_untouched_and_repaired_in_one_step() {
 
     engine.undo().unwrap();
     assert!(dots(&engine).is_empty(), "one undo step");
+}
+
+/// A wire drawn along a part through both its pin ends would short the part
+/// if each end got a dot: neither does, and the two pins stay apart.
+#[test]
+fn a_wire_through_both_pins_of_one_part_does_not_short_it() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 40.0)); // pins 45, 55
+    let mut engine = Engine::new(sheet).unwrap();
+    let wire = signex_types::schematic::Wire {
+        uuid: Uuid::now_v7(),
+        start: Point::new(20.0, 40.0),
+        end: Point::new(80.0, 40.0),
+        ..Default::default()
+    };
+    engine
+        .execute(Command::PlaceWireSegmentAsIs { wire })
+        .unwrap();
+    assert!(dots(&engine).is_empty());
+    let shorted = net_shape(engine.document()).into_iter().any(|(_, pins)| {
+        pins.contains(&(r1, "1".to_string())) && pins.contains(&(r1, "2".to_string()))
+    });
+    assert!(!shorted, "R1's pins stay apart");
 }
