@@ -1,3 +1,4 @@
+mod board_step_real;
 mod no_literal_colors;
 mod pcb3d_benchmark_smoke;
 mod pcb3d_runtime_glb_ingest;

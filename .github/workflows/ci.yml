@@ -134,6 +134,15 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      # signex-mcad does no IO and must build for a web front end (#2487,
+      # docs/ROADMAP.md "MCAD (P3)"). `rustup` inside the repo adds the
+      # target to the toolchain rust-toolchain.toml pins.
+      - name: Build signex-mcad for wasm32
+        if: runner.os == 'Linux'
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build -p signex-mcad --target wasm32-unknown-unknown
+
       # No `-W clippy::all`. `clippy::all` is already the default lint set, so
       # the flag bought nothing — but a *group-level* `-W` sets every lint in
       # the group to warn, and that group contains the 67 deny-by-default
@@ -508,6 +517,18 @@ jobs:
       - name: Command-id gate controls
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_catalog_ids.sh
+
+      # Core-bound state stays UI-free (#2494, ADR-0006): fields of the structs in
+      # scripts/uifree-state.txt with a UI or unlisted signex-app type may only
+      # get fewer, and a listed UI-free module imports nothing outside the
+      # allowlist. Rules and blind spots live in the script. Hard gate.
+      - name: UI-free state ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_uifree_state.sh
+
+      - name: UI-free state ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_uifree_state.sh
 
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its

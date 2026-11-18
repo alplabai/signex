@@ -1,7 +1,7 @@
-//! The board output commands from their operands (#2404, #2402): an agent
-//! or the CLI names the board (`document`) and gets the table as JSON, or
-//! the CLI writes the CSV or PDF to `path`. The same `signex_output`
-//! builders and export write path as the dialogs.
+//! The board output commands from their operands (#2404, #2402, #2488): an
+//! agent or the CLI names the board (`document`) and gets the table as JSON,
+//! or the CLI writes the CSV, PDF or STEP model to `path`. The same builders
+//! and export write path as the dialogs.
 
 use std::path::PathBuf;
 
@@ -11,14 +11,15 @@ use signex_i18n::RenderTranslatable as _;
 use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReportKind,
 };
+use signex_renderer::board3d::StepSchema;
 
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
 use crate::app::{Message, Signex};
 
-type Ran = (CommandOutcome, Task<Message>);
+pub(super) type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(super) fn refused(reason: impl Into<String>) -> Ran {
     (
         CommandOutcome::Disabled {
             reason: reason.into(),
@@ -27,21 +28,21 @@ fn refused(reason: impl Into<String>) -> Ran {
     )
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
         _ => None,
     }
 }
 
-fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
+pub(super) fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
     match args.operand(name) {
         Some(OperandValue::Bool(value)) => Some(*value),
         _ => None,
     }
 }
 
-fn file(args: &CommandArgs) -> Option<PathBuf> {
+pub(super) fn file(args: &CommandArgs) -> Option<PathBuf> {
     match args.operand("path") {
         Some(OperandValue::Path(path)) => Some(PathBuf::from(path)),
         _ => None,
@@ -211,5 +212,35 @@ pub(crate) fn export_board_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         "warnings": super::print::pdf_warnings(&output),
     });
     let task = app.write_pdf_file(output, path);
+    (CommandOutcome::Answered(answer), task)
+}
+
+/// `export_board_step document=<board> path=<file> [schema=ap214|ap242]`:
+/// the board and its parts as a STEP model, made and written off the UI
+/// thread; the answer says what is written where.
+pub(crate) fn export_board_step(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let board = match app.named_output_board(args) {
+        Ok(board) => board,
+        Err(reason) => return refused(reason),
+    };
+    let Some(path) = file(args) else {
+        return refused("needs the operand `path`");
+    };
+    let schema = match text(args, "schema") {
+        None => StepSchema::default(),
+        Some(id) => match StepSchema::from_id(id) {
+            Some(schema) => schema,
+            None => {
+                let ids: Vec<&str> = StepSchema::ALL.iter().map(|s| s.id()).collect();
+                return refused(format!("`schema` is one of {}", ids.join(", ")));
+            }
+        },
+    };
+    let answer = json!({
+        "document": board.display().to_string(),
+        "path": path.display().to_string(),
+        "schema": schema.id(),
+    });
+    let task = app.build_board_step(&board, path, schema);
     (CommandOutcome::Answered(answer), task)
 }

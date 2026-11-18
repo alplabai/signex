@@ -33,35 +33,97 @@ pub(super) fn append_board_slab(
     thickness: f32,
     colors: &Board3dColors,
 ) -> (Range<u32>, usize) {
-    let features = &every.board_features;
-    let outline: Vec<[f32; 2]> = if features.outline.len() >= 3 {
-        features.outline.iter().copied().map(board_xy).collect()
-    } else {
-        match copper_box(every) {
-            Some(rect) => rect,
-            None => return (scene.indices.len() as u32..scene.indices.len() as u32, 0),
-        }
+    let Some(outline) = slab_outline(every) else {
+        return (scene.indices.len() as u32..scene.indices.len() as u32, 0);
     };
-    let mut holes: Vec<Vec<[f32; 2]>> = features
+    let (openings, dropped) = slab_openings(every, &outline);
+    let holes: Vec<Vec<[f32; 2]>> = openings.iter().map(Opening::ring).collect();
+    let range = scene.append_prism(&outline, &holes, (0.0, thickness), colors.mask, colors.edge);
+    (range, dropped)
+}
+
+/// An opening through the board slab, in the 3D frame.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Opening {
+    /// A cutout, closing point not repeated.
+    Cutout(Vec<[f32; 2]>),
+    /// A mounting hole, pad drill or via drill.
+    Drill { center: [f32; 2], diameter: f32 },
+}
+
+impl Opening {
+    /// The opening as a ring: a drill as a circle of `ROUND_SEGMENTS`
+    /// points.
+    pub(super) fn ring(&self) -> Vec<[f32; 2]> {
+        match self {
+            Self::Cutout(ring) => ring.clone(),
+            Self::Drill { center, diameter } => circle(*center, diameter * 0.5, ROUND_SEGMENTS),
+        }
+    }
+}
+
+/// The slab's outline in the 3D frame: the board outline, or with none the
+/// box round the copper; `None` when there is nothing to frame.
+pub(super) fn slab_outline(every: &PcbSnapshot) -> Option<Vec<[f32; 2]>> {
+    let features = &every.board_features;
+    if features.outline.len() >= 3 {
+        Some(features.outline.iter().copied().map(board_xy).collect())
+    } else {
+        copper_box(every)
+    }
+}
+
+/// The cutouts, mounting holes, pad drills and via drills that lie inside
+/// `outline`, less each that meets one before it (as rings,
+/// `disjoint_holes`); the second value counts those.
+pub(super) fn slab_openings(every: &PcbSnapshot, outline: &[[f32; 2]]) -> (Vec<Opening>, usize) {
+    let features = &every.board_features;
+    let cutouts = features
         .cutouts
         .iter()
         .filter(|cutout| cutout.len() >= 3)
-        .map(|cutout| cutout.iter().copied().map(board_xy).collect())
-        .collect();
+        .map(|cutout| Opening::Cutout(cutout.iter().copied().map(board_xy).collect()));
     let drills = features
         .holes
         .iter()
         .map(|hole| (hole.center, hole.drill_mm))
         .chain(every.pads.iter().map(|pad| (pad.center, pad.drill_mm)))
         .chain(every.vias.iter().map(|via| (via.center, via.drill_mm)))
-        .filter(|(_, drill)| drill.is_finite() && *drill > 0.0);
-    for (center, drill) in drills {
-        holes.push(circle(board_xy(center), drill * 0.5, ROUND_SEGMENTS));
-    }
-    retain_holes_inside(&outline, &mut holes);
-    let (holes, dropped) = disjoint_holes(holes);
-    let range = scene.append_prism(&outline, &holes, (0.0, thickness), colors.mask, colors.edge);
-    (range, dropped)
+        .filter(|(_, drill)| drill.is_finite() && *drill > 0.0)
+        .map(|(center, drill)| Opening::Drill {
+            center: board_xy(center),
+            diameter: drill,
+        });
+    let mut openings: Vec<Opening> = cutouts.chain(drills).collect();
+    let mut rings: Vec<Vec<[f32; 2]>> = openings.iter().map(Opening::ring).collect();
+    let inside: Vec<bool> = rings
+        .iter()
+        .map(|ring| {
+            let mut one = vec![ring.clone()];
+            retain_holes_inside(outline, &mut one);
+            !one.is_empty()
+        })
+        .collect();
+    let mut keep = inside.iter();
+    openings.retain(|_| keep.next().copied().unwrap_or(false));
+    let mut keep = inside.iter();
+    rings.retain(|_| keep.next().copied().unwrap_or(false));
+    let (kept, dropped) = disjoint_holes(rings.clone());
+    // `kept` is `rings` in order less the dropped ones: walk both.
+    let mut next = kept.iter().peekable();
+    let survived: Vec<bool> = rings
+        .iter()
+        .map(|ring| {
+            let hit = next.peek().is_some_and(|k| *k == ring);
+            if hit {
+                next.next();
+            }
+            hit
+        })
+        .collect();
+    let mut keep = survived.iter();
+    openings.retain(|_| keep.next().copied().unwrap_or(false));
+    (openings, dropped)
 }
 
 /// The copper `shown` holds on the two faces: tracks, pads, vias and

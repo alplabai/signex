@@ -29,8 +29,8 @@ use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::agent_journal::AgentJournalSettings;
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
-    AnnotationState, PcbField, ProjectData, ProjectDefaults, ProjectRules, SchematicDefaultField,
-    SchematicDefaultOverrides,
+    AnnotationState, FabOutputKinds, PcbField, ProjectData, ProjectDefaults, ProjectRules,
+    SchematicDefaultField, SchematicDefaultOverrides,
 };
 
 pub use requirements::ProjectRequirementCommand;
@@ -94,6 +94,9 @@ pub enum ProjectGeneralCommand {
         defaults: ProjectDefaults,
         rules: Box<ProjectRules>,
     },
+    /// The kinds of file Fabrication Outputs writes (#2489); `None` is the
+    /// defaults. Always a step of its own.
+    SetFabOutputs(Option<FabOutputKinds>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -122,6 +125,7 @@ struct GeneralSnapshot {
     schematic_defaults: SchematicDefaultOverrides,
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
+    fab_outputs: Option<FabOutputKinds>,
     sections: SectionsSnapshot,
     /// The project's rules, held only by the two sides of a
     /// [`ProjectGeneralCommand::SetFabTier`] step.
@@ -137,6 +141,7 @@ impl GeneralSnapshot {
             schematic_defaults: data.schematic_defaults.clone(),
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
+            fab_outputs: data.fab_outputs,
             sections: SectionsSnapshot::of(data),
             rules: None,
         }
@@ -162,6 +167,7 @@ impl GeneralSnapshot {
         data.schematic_defaults = self.schematic_defaults;
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
+        data.fab_outputs = self.fab_outputs;
         self.sections.restore(data);
     }
 }
@@ -245,6 +251,7 @@ impl ProjectGeneralHistory {
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
                 | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
                 | ProjectGeneralCommand::SetFabTier { .. }
+                | ProjectGeneralCommand::SetFabOutputs(_)
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -301,6 +308,7 @@ impl ProjectGeneralHistory {
                 data.project_defaults = defaults;
                 data.rules = Some(*rules);
             }
+            ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
         }
         if GeneralSnapshot::of_step(data, owns_rules) == before {
             return false;

@@ -26,8 +26,11 @@ use crate::pcb::{PcbLayerView, PcbSnapshot};
 mod copper;
 mod model_file;
 mod parts;
+mod step;
 
 pub use model_file::read_model_file;
+pub use signex_mcad::{McadError, StepHeader, StepSchema};
+pub use step::{BoardStep, BoardStepInput, board_step};
 
 /// One mesh of a component model: positions in the model's own frame
 /// (mm, z up), triangles into them, one colour.
@@ -176,11 +179,7 @@ impl BoardScene3d {
 /// Build the 3D scene of `input.board` as `input.view` shows it.
 pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
     let board = input.board;
-    let thickness = if board.thickness.is_finite() && board.thickness > 0.0 {
-        board.thickness as f32
-    } else {
-        PCB_DEFAULT_THICKNESS_MM as f32
-    };
+    let thickness = board_thickness_mm(board) as f32;
     // Holes go through whatever layers are hidden; copper shows as the
     // layers' eyes show it. Single-layer mode is a flat-view editing aid and
     // does not reach 3D: see `docs/RENDERING_RULES.md`, "board-3d".
@@ -199,6 +198,16 @@ pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
         }
     }
     out
+}
+
+/// The board's thickness, mm: its layer stack's total (the board engine
+/// keeps `thickness` equal to it), else the default.
+pub(crate) fn board_thickness_mm(board: &PcbBoard) -> f64 {
+    if board.thickness.is_finite() && board.thickness > 0.0 {
+        board.thickness
+    } else {
+        PCB_DEFAULT_THICKNESS_MM
+    }
 }
 
 /// `view` with single-layer mode off: the hidden layers stay hidden.

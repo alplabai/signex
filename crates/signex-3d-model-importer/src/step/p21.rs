@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::holes::{MAX_FILE_CUT_VERTICES, face_vertex_count, triangulate_with_holes};
 use crate::vrml::parser::VrmlMesh;
@@ -42,6 +42,8 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
     let mut poly_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut edge_loops: HashMap<u32, Vec<u32>> = HashMap::new();
     let mut oriented_edges: HashMap<u32, u32> = HashMap::new();
+    // ORIENTED_EDGE ids whose orientation is `.F.`.
+    let mut reversed_edges: HashSet<u32> = HashSet::new();
     let mut edge_curves: HashMap<u32, (u32, u32)> = HashMap::new();
     // EDGE_CURVE id -> id of the curve geometry it runs along.
     let mut edge_geometry: HashMap<u32, u32> = HashMap::new();
@@ -70,6 +72,10 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             "ORIENTED_EDGE" => {
                 if let Some(curve_id) = parse_refs(&entity.params).last().copied() {
                     oriented_edges.insert(id, curve_id);
+                }
+                // `.F.`: the loop runs the edge from its end to its start.
+                if entity.params.trim_end().ends_with(".F.") {
+                    reversed_edges.insert(id);
                 }
             }
             "EDGE_CURVE" => {
@@ -113,6 +119,7 @@ pub fn parse_to_meshes(source: &str) -> Result<StepMeshResult, ParseError> {
             resolve_edge_loop_points(
                 edge_refs,
                 &oriented_edges,
+                &reversed_edges,
                 &edge_curves,
                 &vertex_to_point,
                 &points,
@@ -473,6 +480,7 @@ fn resolve_poly_loop_points(
 fn resolve_edge_loop_points(
     oriented_edge_refs: &[u32],
     oriented_edges: &HashMap<u32, u32>,
+    reversed_edges: &HashSet<u32>,
     edge_curves: &HashMap<u32, (u32, u32)>,
     vertex_to_point: &HashMap<u32, u32>,
     points: &HashMap<u32, [f32; 3]>,
@@ -485,6 +493,11 @@ fn resolve_edge_loop_points(
         };
         let Some((start, end)) = edge_curves.get(&curve_id).copied() else {
             continue;
+        };
+        let (start, end) = if reversed_edges.contains(oriented_edge_id) {
+            (end, start)
+        } else {
+            (start, end)
         };
 
         if vertex_chain.is_empty() {
@@ -1039,5 +1052,38 @@ ENDSEC;
         let src = "ISO-10303-21;\nHEADER;\nENDSEC;\n";
         let err = parse_to_meshes(src).expect_err("must fail");
         assert!(matches!(err, ParseError::DataSectionMissing));
+    }
+
+    /// An L-shaped face whose loop runs some edges against their
+    /// direction (`.F.`): the outline is the L, not a tangle of the edges'
+    /// own ends (#2488).
+    #[test]
+    fn reversed_oriented_edges_are_walked_end_to_start() {
+        let corners = [(0, 0), (30, 0), (30, 10), (12, 10), (12, 25), (0, 25)];
+        let mut src = String::from("DATA;\n#9 = LINE('',#1,#8);\n");
+        for (i, (x, y)) in corners.iter().enumerate() {
+            let n = i + 1;
+            src += &format!("#{n} = CARTESIAN_POINT('',({x}.,{y}.,0.));\n");
+            src += &format!("#{} = VERTEX_POINT('',#{n});\n", 10 + n);
+        }
+        // Every other edge is stored from its end to its start.
+        for i in 0..6 {
+            let (a, b) = (11 + i, 11 + (i + 1) % 6);
+            let reversed = i % 2 == 0;
+            let (from, to) = if reversed { (b, a) } else { (a, b) };
+            let flag = if reversed { ".F." } else { ".T." };
+            src += &format!("#{} = EDGE_CURVE('',#{from},#{to},#9,.T.);\n", 20 + i);
+            src += &format!("#{} = ORIENTED_EDGE('',*,*,#{},{flag});\n", 30 + i, 20 + i);
+        }
+        src += "#40 = EDGE_LOOP('',(#30,#31,#32,#33,#34,#35));\n";
+        src += "#41 = FACE_OUTER_BOUND('',#40,.T.);\n";
+        src += "#300 = ADVANCED_FACE('',(#41),#999,.T.);\nENDSEC;";
+        let result = parse_to_meshes(&src).expect("parse");
+        let mesh = &result.meshes[0];
+        assert!(
+            (total_area(mesh) - 480.0).abs() < 1e-3,
+            "{}",
+            total_area(mesh)
+        );
     }
 }

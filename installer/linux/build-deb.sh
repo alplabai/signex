@@ -32,6 +32,8 @@ mkdir -p "$PKG_DIR/usr/share/doc/signex"
 cp "$BINARY_PATH" "$PKG_DIR/usr/bin/signex"
 # Licenses of the fonts compiled into the binary (#1179).
 bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$PKG_DIR/usr/share/doc/signex/fonts"
+# Licence, NOTICE and third-party notices (Apache-2.0 §4(d), #2487).
+bash "$SCRIPT_DIR/../copy-notices.sh" "$PKG_DIR/usr/share/doc/signex"
 chmod 755 "$PKG_DIR/usr/bin/signex"
 
 # Stock library -> /usr/share/signex/library (the app resolves it as

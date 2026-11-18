@@ -33,7 +33,17 @@ impl PageFrame {
         page_mm: (f64, f64),
         mirrored: bool,
     ) -> Self {
-        let (min, max) = board_extent(board);
+        Self::for_extent(board_extent(board), options, page_mm, mirrored)
+    }
+
+    /// The frame of a drawing over `extent` (model mm) rather than the
+    /// board's outline: an assembly drawing framed on its Edge Cuts.
+    pub(crate) fn for_extent(
+        (min, max): (Point, Point),
+        options: &BoardPrintOptions,
+        page_mm: (f64, f64),
+        mirrored: bool,
+    ) -> Self {
         let (w, h) = ((max.x - min.x).max(1e-6), (max.y - min.y).max(1e-6));
         let below = if options.title_block {
             TITLE_BLOCK_MM + MARGIN_MM / 2.0

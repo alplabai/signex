@@ -25,6 +25,7 @@ File/Import/DXF to Current Layer...	item	DXF to Current Layer...	-	-	ImportDxf	0
 File/Import/DXF as Board Outline...	item	DXF as Board Outline...	-	-	ImportDxfOutline	01100000	cmd:import_dxf_outline
 File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01100000	cmd:print
+File/Export/STEP 3D Model…	item	STEP 3D Model…	-	-	ExportBoardStep	01100000	cmd:export_board_step
 File/Fabrication Outputs…	item	Fabrication Outputs…	-	-	FabricationOutputs	01100000	cmd:fabrication_outputs
 File/Print...	item	Print...	print	Mod+P	Print	01100000	cmd:print
 File/---	separator	-	-	-	-	-	-
@@ -212,6 +213,7 @@ Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	c
 Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
 Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
 Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
+Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
 Window	menu	Window	-	-	-	-	-
 Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
 Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
