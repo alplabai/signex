@@ -6061,8 +6061,8 @@ version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
- "signex-expr",
  "sha2",
+ "signex-expr",
  "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
