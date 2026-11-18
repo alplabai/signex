@@ -117,7 +117,11 @@ pub(crate) fn qualified(value: &str) -> String {
         .chars()
         .map(|c| if c == ':' { '_' } else { c })
         .collect();
-    if name.is_empty() { "_".to_string() } else { name }
+    if name.is_empty() {
+        "_".to_string()
+    } else {
+        name
+    }
 }
 
 #[cfg(test)]

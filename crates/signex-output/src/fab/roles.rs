@@ -160,22 +160,47 @@ mod tests {
     fn every_role_maps_the_way_the_plan_table_says() {
         use TechnicalLayer as T;
         let cases = [
-            (PcbLayer::Copper(CopperLayer::Top), false, "SIGNAL", Some("SIGNAL")),
+            (
+                PcbLayer::Copper(CopperLayer::Top),
+                false,
+                "SIGNAL",
+                Some("SIGNAL"),
+            ),
             (
                 PcbLayer::Copper(CopperLayer::Bottom),
                 true,
                 "PLANE",
                 Some("POWER_GROUND"),
             ),
-            (tech(T::SilkscreenBottom), false, "LEGEND", Some("SILK_SCREEN")),
-            (tech(T::SolderMaskTop), false, "SOLDERMASK", Some("SOLDER_MASK")),
-            (tech(T::PasteBottom), false, "SOLDERPASTE", Some("SOLDER_PASTE")),
+            (
+                tech(T::SilkscreenBottom),
+                false,
+                "LEGEND",
+                Some("SILK_SCREEN"),
+            ),
+            (
+                tech(T::SolderMaskTop),
+                false,
+                "SOLDERMASK",
+                Some("SOLDER_MASK"),
+            ),
+            (
+                tech(T::PasteBottom),
+                false,
+                "SOLDERPASTE",
+                Some("SOLDER_PASTE"),
+            ),
             (tech(T::AdhesiveTop), false, "GLUE", Some("DOCUMENT")),
             (tech(T::EdgeCuts), false, "BOARD_OUTLINE", None),
             (tech(T::DrillDrawing), false, "DOCUMENT", Some("DOCUMENT")),
             (tech(T::FabBottom), false, "DOCUMENT", Some("DOCUMENT")),
             (tech(T::AssemblyTop), false, "ASSEMBLY", Some("DOCUMENT")),
-            (tech(T::CourtyardBottom), false, "COURTYARD", Some("DOCUMENT")),
+            (
+                tech(T::CourtyardBottom),
+                false,
+                "COURTYARD",
+                Some("DOCUMENT"),
+            ),
             (
                 PcbLayer::Mechanical(MechanicalLayer::new(7).unwrap()),
                 false,

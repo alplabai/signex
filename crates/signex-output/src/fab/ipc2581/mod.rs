@@ -14,6 +14,7 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 
+use super::FabExtras;
 use super::collect::{self, Images};
 use super::documents::collect_documents;
 use super::drill::{self, DrillFile, Hole};
@@ -22,7 +23,6 @@ use super::layers::{CopperStack, FabLayer};
 use super::marks::Mark;
 use super::notes::Tally;
 use super::roles::board_stack;
-use super::FabExtras;
 use features::{Dictionary, contour, layer_feature, xy};
 use parts::{Parts, write_nets};
 use stack::{Declared, LayerPlan, Source, image_layer, write_layers};
@@ -130,7 +130,12 @@ fn used_layers(
         .keys()
         .filter_map(|image| image_layer(*image))
         .chain(documents.iter().map(|(layer, _)| *layer))
-        .chain(board.layers.iter().filter_map(|def| parse_pcb_layer(&def.name)))
+        .chain(
+            board
+                .layers
+                .iter()
+                .filter_map(|def| parse_pcb_layer(&def.name)),
+        )
         .collect()
 }
 
@@ -161,7 +166,10 @@ fn logistics(doc: &mut Xml) {
         "Role",
         &[("id", "Owner".into()), ("roleFunction", "SENDER".into())],
     );
-    doc.leaf("Enterprise", &[("id", "Signex".into()), ("code", "NONE".into())]);
+    doc.leaf(
+        "Enterprise",
+        &[("id", "Signex".into()), ("code", "NONE".into())],
+    );
     doc.leaf(
         "Person",
         &[
@@ -192,7 +200,10 @@ fn logistics(doc: &mut Xml) {
             ("revision", "1".into()),
         ],
     );
-    doc.leaf("Certification", &[("certificationStatus", "SELFTEST".into())]);
+    doc.leaf(
+        "Certification",
+        &[("certificationStatus", "SELFTEST".into())],
+    );
     doc.close();
     doc.close();
     doc.close();
@@ -272,8 +283,8 @@ fn drill_feature(
         let center = PointNm::new((hole.at.x + to.x) / 2, (hole.at.y + to.y) / 2);
         let (dx, dy) = ((to.x - hole.at.x) as f64, (to.y - hole.at.y) as f64);
         let length = dx.hypot(dy).round() as i64;
-        let udeg = (dy.atan2(dx).to_degrees().rem_euclid(360.0) * 1.0e6).round() as i64
-            % 360_000_000;
+        let udeg =
+            (dy.atan2(dx).to_degrees().rem_euclid(360.0) * 1.0e6).round() as i64 % 360_000_000;
         xml.leaf("Location", &xy(center));
         if udeg != 0 {
             xml.leaf("Xform", &[("rotation", millionths(udeg))]);

@@ -10,7 +10,7 @@ use signex_types::pcb_stack::{LayerStack, StackLayerKind};
 use super::xml::{Xml, qualified};
 use crate::fab::drill::DrillFile;
 use crate::fab::frame::millionths;
-use crate::fab::layers::{CopperStack, Face, FabLayer};
+use crate::fab::layers::{CopperStack, FabLayer, Face};
 use crate::fab::roles::{LayerPlace, LayerRole, layer_label, plane_layers};
 
 /// What a declared layer is.
@@ -205,7 +205,6 @@ impl LayerPlan<'_> {
         xml.close();
         xml.close();
     }
-
 }
 
 enum Row {
@@ -225,7 +224,10 @@ pub(crate) fn write_layers(xml: &mut Xml, declared: &[Declared]) {
         match &layer.span {
             Some((from, to)) => {
                 xml.open("Layer", &attrs);
-                xml.leaf("Span", &[("fromLayer", from.clone()), ("toLayer", to.clone())]);
+                xml.leaf(
+                    "Span",
+                    &[("fromLayer", from.clone()), ("toLayer", to.clone())],
+                );
                 xml.close();
             }
             None => xml.leaf("Layer", &attrs),

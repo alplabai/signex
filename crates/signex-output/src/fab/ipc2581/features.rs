@@ -69,10 +69,16 @@ impl Dictionary {
                     xml.leaf("Circle", &[("diameter", millionths(diameter))]);
                 }
                 Shape::Rect { w, h } => {
-                    xml.leaf("RectCenter", &[("width", millionths(w)), ("height", millionths(h))]);
+                    xml.leaf(
+                        "RectCenter",
+                        &[("width", millionths(w)), ("height", millionths(h))],
+                    );
                 }
                 Shape::Oval { w, h } => {
-                    xml.leaf("Oval", &[("width", millionths(w)), ("height", millionths(h))]);
+                    xml.leaf(
+                        "Oval",
+                        &[("width", millionths(w)), ("height", millionths(h))],
+                    );
                 }
                 Shape::RoundRect { w, h, r } => {
                     let corner = || "true".to_string();
@@ -114,7 +120,10 @@ pub(crate) fn placed_shape(
         xml.leaf("Xform", &[("rotation", millionths(udeg))]);
     }
     xml.leaf("Location", &xy(at));
-    xml.leaf("StandardPrimitiveRef", &[("id", dictionary.reference(shape))]);
+    xml.leaf(
+        "StandardPrimitiveRef",
+        &[("id", dictionary.reference(shape))],
+    );
 }
 
 /// One layer's marks.
@@ -230,7 +239,10 @@ fn polyline(xml: &mut Xml, start: PointNm, steps: &[Step], width: i64) {
     }
     xml.leaf(
         "LineDesc",
-        &[("lineEnd", "ROUND".into()), ("lineWidth", millionths(width))],
+        &[
+            ("lineEnd", "ROUND".into()),
+            ("lineWidth", millionths(width)),
+        ],
     );
     xml.close();
 }
@@ -319,14 +331,27 @@ mod tests {
         };
         layer_feature(&mut xml, &mut dictionary, "TopCopper", &[pad]);
         let text = xml.finish();
-        assert!(text.contains("<Set net=\"A_B\" padUsage=\"TERMINATION\">"), "{text}");
+        assert!(
+            text.contains("<Set net=\"A_B\" padUsage=\"TERMINATION\">"),
+            "{text}"
+        );
         assert!(text.contains("<Xform rotation=\"30\"/>"), "{text}");
         assert!(text.contains("<Location x=\"2\" y=\"-1.5\"/>"), "{text}");
-        assert!(text.contains("<StandardPrimitiveRef id=\"RECT_1x0.5\"/>"), "{text}");
-        assert!(text.contains("<PinRef componentRef=\"R1\" pin=\"2\"/>"), "{text}");
+        assert!(
+            text.contains("<StandardPrimitiveRef id=\"RECT_1x0.5\"/>"),
+            "{text}"
+        );
+        assert!(
+            text.contains("<PinRef componentRef=\"R1\" pin=\"2\"/>"),
+            "{text}"
+        );
         let mut entries = Xml::fragment(0);
         dictionary.write(&mut entries);
-        assert!(entries.finish().contains("<RectCenter width=\"1\" height=\"0.5\"/>"));
+        assert!(
+            entries
+                .finish()
+                .contains("<RectCenter width=\"1\" height=\"0.5\"/>")
+        );
     }
 
     #[test]

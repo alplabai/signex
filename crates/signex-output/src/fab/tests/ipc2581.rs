@@ -45,7 +45,10 @@ fn the_four_layer_sensor_board_matches_its_golden_file() {
         return;
     }
     let expected = std::fs::read_to_string(&path).expect("golden file");
-    assert_eq!(actual, expected, "the IPC-2581 file differs from its golden");
+    assert_eq!(
+        actual, expected,
+        "the IPC-2581 file differs from its golden"
+    );
 }
 
 #[test]
@@ -73,7 +76,11 @@ fn the_layers_take_their_function_from_the_typed_layer() {
     assert!(!xml.contains("GND plane"));
     assert!(xml.contains("<Span fromLayer=\"TopCopper\" toLayer=\"BottomCopper\"/>"));
     let stack_rows = xml.matches("<StackupLayer ").count();
-    assert_eq!(stack_rows, board_stack_rows(&board), "one row per stack row");
+    assert_eq!(
+        stack_rows,
+        board_stack_rows(&board),
+        "one row per stack row"
+    );
 }
 
 fn board_stack_rows(board: &PcbBoard) -> usize {
@@ -128,7 +135,9 @@ fn one_board_gives_the_same_bytes_and_a_well_nested_file() {
     let board = fixture_board();
     let first = ipc2581(&board, &FabExtras::default(), "fab");
     assert_eq!(first, ipc2581(&board, &FabExtras::default(), "fab"));
-    assert!(first.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<IPC-2581 revision=\"C\""));
+    assert!(
+        first.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<IPC-2581 revision=\"C\"")
+    );
     assert!(first.ends_with("</IPC-2581>\n"));
     let mut open: Vec<&str> = Vec::new();
     for line in first.lines().skip(1).map(str::trim) {
