@@ -150,7 +150,10 @@ pub(crate) mod tests {
                 (format!("{root}/{long}"), String::new()),
             ]
         );
-        assert!(tar.starts_with(&format!("{root}/\0")), "the root folder comes first");
+        assert!(
+            tar.starts_with(&format!("{root}/\0")),
+            "the root folder comes first"
+        );
         assert_eq!(tar, archive(&root, &files), "the same bytes every time");
     }
 }

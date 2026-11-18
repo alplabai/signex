@@ -139,12 +139,7 @@ fn write_package(xml: &mut Xml, dictionary: &mut Dictionary, name: &str, footpri
     attrs.push(("pinOneOrientation", "OTHER".into()));
     xml.open("Package", &attrs);
     let (lo, hi) = pin_box(&pins);
-    let outline = [
-        lo,
-        PointNm::new(hi.x, lo.y),
-        hi,
-        PointNm::new(lo.x, hi.y),
-    ];
+    let outline = [lo, PointNm::new(hi.x, lo.y), hi, PointNm::new(lo.x, hi.y)];
     xml.open("Outline", &[]);
     super::features::closed_polygon(xml, "Polygon", &outline);
     xml.leaf(

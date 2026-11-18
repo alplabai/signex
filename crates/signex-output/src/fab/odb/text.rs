@@ -35,9 +35,19 @@ pub(crate) fn word(value: &str) -> String {
     let word: String = value
         .trim()
         .chars()
-        .map(|c| if c.is_ascii_graphic() && c != ';' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_graphic() && c != ';' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
-    if word.is_empty() { "_".to_string() } else { word }
+    if word.is_empty() {
+        "_".to_string()
+    } else {
+        word
+    }
 }
 
 /// A length in nm as mm.

@@ -55,11 +55,7 @@ fn listing(job: &BTreeMap<String, String>) -> String {
 #[test]
 fn the_four_layer_sensor_board_matches_its_golden_listing() {
     let board = real_board("sensor-4layer");
-    let actual = listing(&job(
-        &board,
-        &FabExtras::of_board(&board),
-        "sensor-4layer",
-    ));
+    let actual = listing(&job(&board, &FabExtras::of_board(&board), "sensor-4layer"));
     let path = golden_path("sensor-4layer-odb.txt");
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         std::fs::write(&path, &actual).expect("golden written");
@@ -131,8 +127,14 @@ fn the_layers_take_their_type_from_the_typed_layer_in_physical_order() {
     assert_eq!(kind("topcourtyard"), "MISC DOCUMENT");
     assert_eq!(kind("dielectric1"), "BOARD DIELECTRIC");
     assert_eq!(kind("comp_+_top"), "BOARD COMPONENT");
-    assert_eq!(layers[row("drill_pth")][1..].join(" "), "BOARD DRILL topcopper bottomcopper");
-    assert!(!layers.iter().any(|l| l[0].contains("edge")), "the outline is the profile");
+    assert_eq!(
+        layers[row("drill_pth")][1..].join(" "),
+        "BOARD DRILL topcopper bottomcopper"
+    );
+    assert!(
+        !layers.iter().any(|l| l[0].contains("edge")),
+        "the outline is the profile"
+    );
     assert!(row("comp_+_top") < row("topsilkscreen"));
     assert!(row("topsoldermask") < row("topcopper"));
     assert!(row("topcopper") < row("dielectric1"));
@@ -166,7 +168,10 @@ fn every_toeprint_and_feature_reference_resolves() {
             nets.last_mut().expect("a net").push(line.to_string());
         } else if let Some(fid) = line.strip_prefix("FID C ") {
             let [layer, feature] = [0, 1].map(|i| {
-                fid.split(' ').nth(i).and_then(|n| n.parse::<usize>().ok()).expect("number")
+                fid.split(' ')
+                    .nth(i)
+                    .and_then(|n| n.parse::<usize>().ok())
+                    .expect("number")
             });
             let features = &job[&format!("steps/pcb/layers/{}/features", layers[layer])];
             let records = features
@@ -234,7 +239,9 @@ fn a_mechanical_layer_is_a_document_layer_that_keeps_its_name() {
     let job = job(&board, &FabExtras::default(), "fab");
     let layers = matrix(&job);
     assert!(
-        layers.iter().any(|l| l[..3] == ["fold_lines", "MISC", "DOCUMENT"]),
+        layers
+            .iter()
+            .any(|l| l[..3] == ["fold_lines", "MISC", "DOCUMENT"]),
         "{layers:?}"
     );
     let features = &job["steps/pcb/layers/fold_lines/features"];
@@ -249,8 +256,12 @@ fn one_board_gives_the_same_bytes_and_the_folder_is_listed_once() {
     assert_eq!(first, job(&board, &FabExtras::default(), "fab"));
     assert!(first["misc/info"].contains("JOB_NAME=fab\n"));
     assert!(first["steps/pcb/profile"].contains("\nS P 0\nOB "));
-    let set = generate(&board, &FabExtras::default(), &options("fab", OdbForm::Directory))
-        .expect("generates");
+    let set = generate(
+        &board,
+        &FabExtras::default(),
+        &options("fab", OdbForm::Directory),
+    )
+    .expect("generates");
     let gbrjob = set.files.last().expect("the job file");
     assert_eq!(gbrjob.contents.matches("\"fab-odb\"").count(), 1);
 }

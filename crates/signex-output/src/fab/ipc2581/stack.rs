@@ -11,9 +11,7 @@ use super::xml::{Xml, qualified};
 use crate::fab::drill::DrillFile;
 use crate::fab::frame::millionths;
 use crate::fab::layers::CopperStack;
-use crate::fab::roles::{
-    LayerPlace, LayerRole, StackRow, layer_label, plane_layers, stack_rows,
-};
+use crate::fab::roles::{LayerPlace, LayerRole, StackRow, layer_label, plane_layers, stack_rows};
 
 /// What a declared layer is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,7 +122,6 @@ impl LayerPlan<'_> {
         }
         out
     }
-
 
     /// The `Stackup`: one group holding every stack row in order.
     pub(crate) fn write_stackup(&self, xml: &mut Xml, declared: &[Declared]) {
