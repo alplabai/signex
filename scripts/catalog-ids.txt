@@ -1,6 +1,6 @@
 # Every accepted command id, sorted with LC_ALL=C. Checked by
-# scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
 # removing a line removes a command and needs a maintainer decision.
+# scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
 add_board_graphic
 add_net_class
 add_teardrops
@@ -270,6 +270,7 @@ remove_board_panel
 remove_last_vertex
 remove_teardrops
 rename_net_class
+repair_pin_junctions
 repeat_last_item
 report_manager_bom
 repour_all
