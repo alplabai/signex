@@ -100,13 +100,13 @@ fn open_shells(triangles: &[[usize; 3]]) -> Vec<Vec<usize>> {
             if taken[t] {
                 continue;
             }
-            let fits = sides(triangles[t]).iter().all(|&(a, b)| {
-                match uses.get(&key((a, b))) {
+            let fits = sides(triangles[t])
+                .iter()
+                .all(|&(a, b)| match uses.get(&key((a, b))) {
                     None => true,
                     Some(Some(forward)) => *forward != (a < b),
                     Some(None) => false,
-                }
-            });
+                });
             if !fits {
                 continue;
             }
