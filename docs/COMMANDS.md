@@ -416,19 +416,25 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
+| `set_active_layer` | Make one layer the active layer | view | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
+| `set_layer_color` | Give one layer its own colour in the board view, or the palette colour again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
+| `set_layer_visible` | Show or hide one layer of the board view | view | — | — |
 | `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_object_transparency` | Set how transparent one kind of object is drawn | view | — | — |
+| `set_object_visible` | Show or hide one kind of object in the board view | view | — | — |
 | `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |
 | `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
+| `show_used_layers_only` | List only the layers the board uses in the Layers panel | view | — | — |
 | `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
 | `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |
