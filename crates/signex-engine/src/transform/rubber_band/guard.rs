@@ -25,19 +25,23 @@ use signex_net::{
     NetBase, NetSignature, best_net_name_of, name_carrying_ports, net_signatures,
     net_signatures_at, pt_key, uf::Key,
 };
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{LabelType, SchematicSheet};
 use uuid::Uuid;
 
 use super::guard_local::LocalGuard;
 use super::{PinIdent, PinTip};
 
-/// Per old-tip routing overrides chosen by the guard.
+/// Per old-tip routing overrides chosen by the guard, and the caller's drag
+/// wiring mode.
 #[derive(Debug, Clone, Default)]
 pub struct Policy {
     /// Tips that skip the follow attempt and always get a new path.
     pub forced: HashSet<Key>,
     /// Tips that are not rubber-banded at all.
     pub plain: HashSet<Key>,
+    /// How an inserted corner bends; the guard never changes it.
+    pub wiring: DragWiringMode,
 }
 
 impl Policy {

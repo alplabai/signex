@@ -396,3 +396,36 @@ fn g_arms_a_drag_that_keeps_connections_and_esc_disarms_it() {
     let canvas = app.interaction_state.active_canvas();
     assert!(!canvas.keep_connections_next && canvas.move_pick.is_none());
 }
+
+/// #1669 - the drag wiring mode cycled during a drag reaches the commit:
+/// in Straight the wire ends go to the moved pins at a slope.
+#[test]
+fn the_drag_commit_carries_the_cycled_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    for _ in 0..3 {
+        let _ = app.update(Message::Tool(
+            signex_app::toolbar::ToolMessage::DragWiringCycleRequested,
+        ));
+    }
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        signex_types::corner::DragWiringMode::Straight
+    );
+    drop_by(&mut app, 0.0, 10.0);
+    let segs = segments(&app, &path);
+    assert_eq!(segs.len(), 2, "no corner inserted: {segs:?}");
+    let has = |a, b| segs.contains(&(a, b)) || segs.contains(&(b, a));
+    assert!(has((30.0, 50.0), (45.0, 60.0)), "{segs:?}");
+    assert!(has((55.0, 60.0), (75.0, 50.0)), "{segs:?}");
+}
+
+/// #1669 - the mode belongs to a drag: Move By keeps today's corners.
+#[test]
+fn move_by_ignores_the_drag_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    app.interaction_state.drag_wiring = signex_types::corner::DragWiringMode::Straight;
+    app.ui_state.move_selection.dx = "0".to_string();
+    app.ui_state.move_selection.dy = "10".to_string();
+    let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+    assert_connected_after_dy(&segments(&app, &path), 10.0);
+}

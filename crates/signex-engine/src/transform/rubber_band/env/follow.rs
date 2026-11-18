@@ -1,6 +1,7 @@
 //! Following: a wire end goes with its pin, sliding an elbow or bending.
 
 use signex_net::uf::Key;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
@@ -125,6 +126,21 @@ impl Env {
             segs,
             joins: vec![kf],
         };
+        // A chosen mode replaces the elbow slide and the wire-direction rule;
+        // a zero-length leg of an aligned L is dropped by the caller.
+        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
+        let corners = match self.policy.wiring {
+            DragWiringMode::Auto => None,
+            DragWiringMode::Straight => {
+                return (vec![straight(vec![(fixed, new)])], Vec::new());
+            }
+            DragWiringMode::HorizontalFirst => Some([across, down]),
+            DragWiringMode::VerticalFirst => Some([down, across]),
+        };
+        if let Some(corners) = corners {
+            let plans = corners.map(|c| straight(vec![(fixed, c), (c, new)]));
+            return (plans.into(), Vec::new());
+        }
         if !(horizontal || vertical) {
             return (vec![straight(vec![(fixed, new)])], Vec::new());
         }

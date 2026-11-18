@@ -119,6 +119,7 @@ pub fn move_to_command(
         dx: to.x - from.x,
         dy: to.y - from.y,
         keep_wires,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     })
 }
 

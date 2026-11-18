@@ -431,6 +431,7 @@ fn deliver(
             trackpad_pan: false,
             wheel_mode: Default::default(),
             corner_rule: Default::default(),
+            drag_wiring: Default::default(),
             current_tool: signex_app::app::Tool::Select,
             window_width: 1400.0,
             wire_color_overrides: &overrides,

@@ -734,6 +734,7 @@ fn a_rollback_that_found_no_run_leaves_an_unrelated_edit_dirty() {
             dx: 5.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,

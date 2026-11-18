@@ -311,6 +311,11 @@ impl Signex {
                 self.set_corner_rule(rule);
                 self.finish_update()
             }
+            // The canvas redoes a drag's ghost when it sees the new mode.
+            ToolMessage::DragWiringCycleRequested => {
+                self.interaction_state.drag_wiring = self.interaction_state.drag_wiring.next();
+                self.finish_update()
+            }
             // Outside a draw it is a delete.
             ToolMessage::RemoveLastVertex => {
                 if self.pop_pending_vertex() {
