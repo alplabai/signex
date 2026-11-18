@@ -211,7 +211,8 @@ impl Entry<'_> {
                             .width(Length::Fill),
                         self.remove(),
                     ]
-                    .align_y(Alignment::Center),
+                    .align_y(Alignment::Center)
+                    .boxed(),
                 );
                 let words = t!(self.i18n, ids::REQUIREMENTS_UNREADABLE, "reason" => reason.as_str());
                 col = col.push(problem(words, self.tokens));
@@ -249,7 +250,7 @@ impl Entry<'_> {
                 Outcome::Failed(_) => (ids::REQUIREMENTS_FAILED, ink::danger(self.tokens)),
                 Outcome::NotChecked => (ids::REQUIREMENTS_NOT_CHECKED, ink::muted_text(self.tokens)),
             };
-            line = line.push(text(t!(self.i18n, words)).size(TS.label).color(color));
+            line = line.push(text(t!(self.i18n, words)).size(TS.label).color(color).boxed());
         }
         line.push(self.remove()).boxed()
     }
