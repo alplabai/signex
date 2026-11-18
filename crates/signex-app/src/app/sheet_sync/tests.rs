@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::SheetSyncMsg;
 use super::open::previews_of;
+use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::app::{Message, Signex, TabInfo, TabKind};
 
 const SYMBOL: u128 = 5;
@@ -309,4 +310,40 @@ fn a_file_already_placed_on_the_sheet_is_refused() {
     send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(child)));
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1);
+}
+
+fn node(dir: &std::path::Path, file: &str, children: Vec<SheetNode>) -> SheetNode {
+    SheetNode {
+        name: file.into(),
+        filename: file.into(),
+        placed_as: Some(Uuid::now_v7()),
+        path: dir.join(file),
+        kind: SheetNodeKind::Present,
+        detail: None,
+        children,
+    }
+}
+
+/// top places mid, mid places parent (the sheet in view): a symbol for top
+/// on parent would loop two levels up, which no one-level check sees.
+#[test]
+fn a_grandparent_sheet_is_refused_as_a_loop() {
+    let mut rig = rig(Vec::new(), Vec::new());
+    let dir = rig.child.parent().expect("dir").to_path_buf();
+    let top = dir.join("top.snxsch");
+    write_sheet(
+        &top,
+        SchematicSheet {
+            labels: vec![hierarchical("VIN", "input", 10.0)],
+            ..SchematicSheet::default()
+        },
+    );
+    let mid = node(&dir, "mid.snxsch", vec![node(&dir, "parent.snxsch", Vec::new())]);
+    rig.app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+        root: Some(node(&dir, "top.snxsch", vec![mid])),
+        ..Default::default()
+    });
+    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(top)));
+    let engine = rig.app.document_state.active_engine().expect("parent");
+    assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
 }

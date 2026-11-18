@@ -510,6 +510,43 @@ menu action, run by a person, keeps its read in place. The answer is
 `{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
+### Bottom-up hierarchy {#bottom-up-hierarchy}
+
+```text
+create_sheet_symbol_from_sheet path=power.snxsch [at=x,y] [allow_merge=..] [document=..]
+sync_sheet_entries symbol=<id or name> direction=to_symbol|to_sheet [document=..]
+```
+
+The operand forms of Design ▸ Create Sheet Symbol From Sheet and Design ▸
+Synchronize Sheet Entries and Ports (#1276); rules in
+[MENU_BAR.md](MENU_BAR.md#bottom-up-hierarchy).
+
+`create_sheet_symbol_from_sheet` places one sheet symbol for the sheet file
+`path` with an auto-generated entry for every port of the file, as one undo
+step. `path` is checked as `place_sheet_symbol`'s `file` is: inside the
+project folder, not through a link out of it, not this sheet, not a sheet
+above it at any depth, not a file whose subtree places this sheet, and the
+frozen name rule (a page of the project, a file placed elsewhere, or names
+that would short or rename a net need `allow_merge=true`). A file this sheet
+already places is refused. `at` is the top-left corner (a grid coordinate,
+never a pin reference); without it the symbol goes under the sheet's content.
+The file is read off the UI thread before the edit runs. The answer is
+`{"id", "name", "file", "at", "size", "entries"}`. It takes a file path, so it
+is not an edit of `apply_edits`, as `place_design_block` is not.
+
+`sync_sheet_entries` applies what the dialog's preview would show for
+`direction`, at once, on the sheet symbol `symbol` (its id, or its unique
+name): `to_symbol` changes the symbol's entries (a renamed entry keeps its
+place and wires; only auto-generated entries are removed), `to_sheet`
+changes the child sheet's Hierarchical labels (never a Global label) as one
+undo step of the child, left unsaved; a closed child goes to a tabless
+engine. The closed child file is read off the UI thread first; a sheet that
+changed while it was read is refused with nothing applied, as any edit is.
+`to_sheet` is refused inside `apply_edits` and an agent's one-step run,
+whose undo step covers the edited sheet only. The answer is
+`{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
+`renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
+
 ## Editing placed objects
 
 The Location and Parameters rows of a placed object in Properties run these

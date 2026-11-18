@@ -484,6 +484,20 @@ impl Signex {
                 }
             }
             "sync_sheet_pins" => self.plan_child_read(args, list, target, plan),
+            // #1276: the sheet a symbol is made from is read for its ports,
+            // and checked as a `place_sheet_symbol` file is.
+            "create_sheet_symbol_from_sheet" => {
+                let named = super::sheet_sync_operands::sheet_file_operand(args)
+                    .and_then(|f| self.child_file_target(&f));
+                if let Ok((dir, path, _)) = named {
+                    plan.seeds.push(path.clone());
+                    plan.links.push((dir, path.clone()));
+                    if !self.document_state.engines.contains_key(&path) {
+                        plan.children.push(path);
+                    }
+                }
+            }
+            "sync_sheet_entries" => self.plan_entry_sync_read(args, list, target, plan),
             // The file a design block or a graphics import places (#1667).
             "place_design_block" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args)
@@ -534,8 +548,37 @@ impl Signex {
         let Some(file) = self.planned_child_file(&name, list, target) else {
             return;
         };
+        self.plan_child_file(&file, target, plan);
+    }
+
+    /// The closed child file of the sheet symbol a `sync_sheet_entries` names
+    /// (#1276): by id on the target sheet, else by name as `sync_sheet_pins`.
+    fn plan_entry_sync_read(
+        &self,
+        args: &CommandArgs,
+        list: &[ListedEdit],
+        target: &Path,
+        plan: &mut ReadPlan,
+    ) {
+        let Ok(key) = text(args, "symbol") else {
+            return;
+        };
+        let file = match Uuid::parse_str(key.trim()) {
+            Ok(id) => self.document_state.edit_engine().and_then(|engine| {
+                let found = engine.document().child_sheets.iter().find(|c| c.uuid == id);
+                found.map(|c| c.filename.clone())
+            }),
+            Err(_) => self.planned_child_file(&key, list, target),
+        };
+        if let Some(file) = file {
+            self.plan_child_file(&file, target, plan);
+        }
+    }
+
+    /// Read the child file `file` of `target` unless an engine holds it.
+    fn plan_child_file(&self, file: &str, target: &Path, plan: &mut ReadPlan) {
         let dir = target.parent().unwrap_or_else(|| Path::new(""));
-        if let Ok(path) = resolve_child_reference_quiet(dir, &file)
+        if let Ok(path) = resolve_child_reference_quiet(dir, file)
             && !self.document_state.engines.contains_key(&path)
         {
             plan.children.push(path);

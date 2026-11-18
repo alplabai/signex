@@ -13,6 +13,7 @@ use signex_types::schematic::{Point, SchematicSheet};
 use super::SheetSyncMsg;
 use crate::app::handlers::canvas::reference_from;
 use crate::app::project_sheets::{fold_key, load_sheet_file, resolve_child_reference};
+use crate::app::sheet_hierarchy::normalised_key;
 use crate::app::{Message, Signex};
 
 const LABEL: &str = "Create Sheet Symbol From Sheet";
@@ -129,6 +130,17 @@ impl Signex {
         if places_target {
             return Err(format!(
                 "{} places this sheet: a sheet cannot contain itself",
+                path.display()
+            ));
+        }
+        // Any sheet above this one, however far up, in the hierarchy the
+        // Navigator holds (the walk the operand form's check starts with).
+        if self
+            .sheets_above_known(target, fold)
+            .contains(&normalised_key(path, fold))
+        {
+            return Err(format!(
+                "{} is above this sheet in the hierarchy: a sheet cannot contain itself",
                 path.display()
             ));
         }

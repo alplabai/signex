@@ -647,7 +647,9 @@ symbol for it on the sheet in view as one undo step: named after the file
 the cursor's last point on this sheet (else under the sheet's content), with an
 auto-generated entry for every port of the file (outputs on the right edge,
 every other direction on the left). It refuses the sheet itself, a file that
-places this sheet, and a file this sheet already places.
+places this sheet, a sheet above this one at any depth, and a file this sheet
+already places. Both commands also run from operands; see
+[CLI.md](CLI.md#bottom-up-hierarchy).
 
 Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
 dialog for the selected sheet symbol. Choose the side that wins: **Sheet to

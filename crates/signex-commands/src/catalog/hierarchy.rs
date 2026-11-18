@@ -68,8 +68,8 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         operands: operands::SYNC_SHEET,
         ..CommandMetadata::DEFAULT
     },
-    // #1276: bottom-up hierarchy. Both pick a file or confirm a preview in
-    // a dialog first, so they run from the GUI only.
+    // #1276: bottom-up hierarchy. In a window they pick a file or show a
+    // preview first; with operands they run at once.
     CommandMetadata {
         id: "create_sheet_symbol_from_sheet",
         category: "design",
@@ -77,7 +77,8 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CREATE_SHEET_SYMBOL_FROM_SHEET),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL_FROM_SHEET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -87,7 +88,8 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_SYNC_SHEET_ENTRIES),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYNC_SHEET_ENTRIES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

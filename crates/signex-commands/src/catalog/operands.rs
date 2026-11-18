@@ -204,6 +204,21 @@ pub const SYNC_SHEET: &[Operand] = &[
     required("sheet", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// A sheet symbol for the sheet file `path` with an entry for every port
+/// (#1276): its top-left corner at `at`, else under the sheet's content.
+pub const SHEET_SYMBOL_FROM_SHEET: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("at", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// The sync of the sheet symbol `symbol` (an id or a name) and its sheet,
+/// `direction` `to_symbol` or `to_sheet` (#1276).
+pub const SYNC_SHEET_ENTRIES: &[Operand] = &[
+    required("symbol", OperandKind::Text),
+    required("direction", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// An absolute move of the placed object `id` (#2418): `at` is where its
 /// position goes (a part's origin, a wire's start, a sheet symbol's top-left).
 pub const OBJECT_POSITION: &[Operand] = &[
