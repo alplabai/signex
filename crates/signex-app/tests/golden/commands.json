@@ -1365,6 +1365,11 @@
     "category": "pcb"
   },
   {
+    "id": "reset_board_origin",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "reset_layer_colors",
     "group": "Pcb",
     "category": "view"
@@ -1580,6 +1585,11 @@
     "category": "edit"
   },
   {
+    "id": "set_board_origin",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "set_board_panel",
     "group": "Pcb",
     "category": "pcb"
@@ -1717,6 +1727,11 @@
   {
     "id": "smart_paste",
     "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "snap_board_origin_to_corner",
+    "group": "Pcb",
     "category": "edit"
   },
   {

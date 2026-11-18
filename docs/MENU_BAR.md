@@ -760,6 +760,20 @@ Edit ▸ Arrange orders schematic drawings, so it is not in the Edit menu while
 a board is in view (#2405); the golden fixture marks its rows `-` in the
 `pcb` column.
 
+## Edit ▸ Origin {#edit-origin}
+
+Edit ▸ Origin (decided 2026-11-18) follows Move and Arrange: **Set**
+(`set_board_origin`) arms a click on the board that becomes the origin, on
+the non-component grid; Esc cancels it. **Reset** (`reset_board_origin`)
+moves the origin to the bottom-left of the board outline, or of the board
+area without one. **Snap to Outline Corner** (`snap_board_origin_to_corner`)
+moves it to the outline corner nearest the pointer; before the pointer was
+on the board, Messages says to point at it first. Each is one undo step on
+the board's options and marks the board changed. The rows are shown on a
+sheet too, greyed, and are greyed on a read-only board. Set is `E O S` in
+the chord profile and `Shift+O` in Classic. The board's right-click menu
+does not list them.
+
 ## The board's right-click menu {#board-context-menu}
 
 The board canvas menu (#2240, #2405) follows what is under the pointer

@@ -65,6 +65,9 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 footprints: 1,
                 pad_pair: false,
                 one_footprint: true,
+                routes: false,
+                hovered: false,
+                net: false,
             },
             ..base
         }),
@@ -361,6 +364,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2394: fixture names only.
     ("toggle_layer_numbers", "ToggleLayerNumbers"),
     ("flip_board_view", "FlipBoardView"),
+    // 2026-11-18: Edit ▸ Origin, fixture names only.
+    ("set_board_origin", "SetBoardOrigin"),
+    ("reset_board_origin", "ResetBoardOrigin"),
+    ("snap_board_origin_to_corner", "SnapBoardOriginToCorner"),
     ("view_rotate", "RotateView"),
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),

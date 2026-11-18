@@ -891,6 +891,15 @@ Two other ways to get an outline:
 - Select closed lines on the board and choose **Tools ▸ Board Shape from
   Selection**.
 
+**The board origin**
+
+Coordinates on a board count from its origin, with X to the right and Y up.
+A new board starts at the bottom-left corner of its area. **Edit ▸ Origin**
+moves it: **Set** (`E O S`, or `Shift+O` with the Classic keys) puts it
+where you click next, **Reset** puts it at the bottom-left of the board
+outline, and **Snap to Outline Corner** puts it at the outline corner
+nearest the pointer. Each is one undo step and is saved with the board.
+
 **The layer stack**
 
 The number of copper layers comes from the **New PCB** dialog. To change the

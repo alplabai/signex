@@ -85,6 +85,10 @@ impl Signex {
                 self.lock_pcb_selection(locked);
                 Task::none()
             }
+            PcbMsg::Origin(event) => {
+                self.handle_board_origin(event);
+                Task::none()
+            }
             PcbMsg::Net(event) => {
                 self.handle_board_net(event);
                 Task::none()

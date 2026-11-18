@@ -47,6 +47,9 @@ pub struct InteractionState {
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// Edit ▸ Origin ▸ Set armed (2026-11-18): the board whose next click on
+    /// the main window sets its origin.
+    pub pcb_origin_place: Option<std::path::PathBuf>,
     /// The board Measure tool and the highlighted board net (#2403).
     pub pcb_query: super::pcb_query::PcbQueryState,
     /// Arrange in Box armed on a board (#2409): the components it moves

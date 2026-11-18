@@ -94,6 +94,7 @@ altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
 altium	bind	Pcb	1	command:board_sketch
 altium	bind	Pcb	3	command:view_board_3d
+altium	bind	Pcb	E O S	command:set_board_origin
 altium	bind	Pcb	F	command:change_footprint
 altium	bind	Pcb	L	command:flip_selection
 altium	bind	Pcb	N	command:toggle_ratsnest
@@ -460,6 +461,9 @@ altium	hint	-	-	view_rotate_ccw
 altium	hint	-	-	view_rotate_180
 altium	hint	-	-	view_rotate_reset
 altium	hint	-	-	toggle_origin_marker
+altium	hint	-	E O S	set_board_origin
+altium	hint	-	-	reset_board_origin
+altium	hint	-	-	snap_board_origin_to_corner
 altium	hint	-	⌃M	measure_distance
 altium	hint	-	-	measure_board
 altium	hint	-	-	reset_local_coordinates
@@ -608,6 +612,7 @@ classic	bind	Pcb	K	command:place_board_keepout
 classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
+classic	bind	Pcb	⇧O	command:set_board_origin
 classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
@@ -962,6 +967,9 @@ classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
 classic	hint	-	-	toggle_origin_marker
+classic	hint	-	⇧O	set_board_origin
+classic	hint	-	-	reset_board_origin
+classic	hint	-	-	snap_board_origin_to_corner
 classic	hint	-	⌃M	measure_distance
 classic	hint	-	-	measure_board
 classic	hint	-	SPACE	reset_local_coordinates

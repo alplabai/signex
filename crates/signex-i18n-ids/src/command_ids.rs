@@ -429,6 +429,12 @@ define_ids! {
         CMD_TOGGLE_RATSNEST = "cmd-toggle-ratsnest";
         CMD_MENU_TOGGLE_RATSNEST = "cmd-menu-toggle-ratsnest";
         CMD_TOGGLE_ORIGIN_MARKER = "cmd-toggle-origin-marker";
+        CMD_SET_BOARD_ORIGIN = "cmd-set-board-origin";
+        CMD_MENU_SET_BOARD_ORIGIN = "cmd-menu-set-board-origin";
+        CMD_RESET_BOARD_ORIGIN = "cmd-reset-board-origin";
+        CMD_MENU_RESET_BOARD_ORIGIN = "cmd-menu-reset-board-origin";
+        CMD_SNAP_BOARD_ORIGIN_TO_CORNER = "cmd-snap-board-origin-to-corner";
+        CMD_MENU_SNAP_BOARD_ORIGIN_TO_CORNER = "cmd-menu-snap-board-origin-to-corner";
         CMD_MENU_TOGGLE_ORIGIN_MARKER = "cmd-menu-toggle-origin-marker";
         CMD_NEXT_LAYER = "cmd-next-layer";
         CMD_MENU_NEXT_LAYER = "cmd-menu-next-layer";

@@ -349,6 +349,9 @@ view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+snap_board_origin_to_corner	edit	Move the board origin to the outline corner nearest the pointer	Snap to Outline Corner	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-

@@ -18,6 +18,10 @@ pcb-layer-tab-colour-unavailable = This layer's colour cannot be changed yet.
 # Give the layer, or every layer, the board palette colour again.
 pcb-layer-tab-colour-reset = Reset layer colour
 pcb-layer-tab-colour-reset-all = Reset all layer colours
+# Edit ▸ Origin ▸ Set waits for a click on the board.
+pcb-origin-set-hint = Origin: click on the board to set the origin there. Esc cancels
+# Edit ▸ Origin ▸ Snap to Outline Corner before the pointer was on the board.
+pcb-origin-no-pointer = Origin: point at the board first; the origin snaps to the outline corner nearest the pointer
 # Highlight one layer: every other layer is drawn dimmed. $layer is its name.
 pcb-layer-tab-highlight = Highlight { $layer }
 # Flyouts of the layer tab menu: one row per kind of layer.

@@ -19,6 +19,8 @@ The board origin (#2384), `BoardOptions::origin` (`signex_types::pcb_origin::Boa
 
 A new board (`PcbDefaults::new_board`, the New PCB setup dialog included) has no outline yet, so its board area is `EMPTY_BOARD_AREA` (100 × 80 mm) and its origin is that area's bottom-left corner (`board_area_bottom_left`). A board saved without an origin keeps counting from the model's zero. The origin marker is drawn at the origin, and the board's own grid (drawn and snapped) counts from it.
 
+Edit ▸ Origin moves it (2026-11-18): **Set** (`set_board_origin`) takes the next click on the board, on the non-component grid; **Reset** (`reset_board_origin`) puts it at the bottom-left of the outline, or of the board area without one; **Snap to Outline Corner** (`snap_board_origin_to_corner`) puts it at the outline or board-area corner nearest the pointer. Each is one `SetBoardOptions` undo step, marks the board changed and is written on Save; all three are greyed on a read-only board. This is how a board saved without an origin is given one.
+
 Update PCB stages new parts to the right of the board; on a board with no outline and no parts it stages them inside the board area from its bottom-left corner, rows going up (`pcb_geom::stage_up`).
 
 ## Which grid snaps what

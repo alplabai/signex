@@ -48,6 +48,7 @@ impl Signex {
                 if self.board_measure_clicked(at, tolerance_mm)
                     || self.pcb_arrange_box_clicked(at)
                     || self.pcb_guide_place_clicked(at)
+                    || self.pcb_origin_place_clicked(at)
                     || self.board_tool_clicked(at)
                     || self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
@@ -118,6 +119,8 @@ impl Signex {
         self.interaction_state.pcb_primitive.net_pick = None;
         // And a guide armed by the panel's Place (#2374).
         self.interaction_state.pcb_guide_place = None;
+        // And Edit ▸ Origin ▸ Set waiting for its click (2026-11-18).
+        self.interaction_state.pcb_origin_place = None;
         // And Arrange in Box waiting for its corners (#2409).
         self.interaction_state.pcb_arrange_box = None;
         let carried = self.has_own_pcb_carry();

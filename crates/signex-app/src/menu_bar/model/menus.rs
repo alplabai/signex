@@ -152,6 +152,9 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     if !ctx.commands.pcb.shown {
         rows.push(submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)));
     }
+    // Where the board counts from (2026-11-18); greyed without an editable
+    // board.
+    rows.push(submenu(ctx, menu_ids::MENU_EDIT_ORIGIN, origin_menu(ctx)));
     rows.extend([
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
@@ -177,6 +180,17 @@ fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("mirror_x", "X")),
         cmd_item_gated(ctx, cmd("mirror_y", "Y")),
         cmd_item_gated(ctx, cmd("flip_selection", "")),
+    ]
+}
+
+/// Edit ▸ Origin (2026-11-18): set the board origin at a click, reset it to
+/// the bottom-left of the board, or snap it to the outline corner nearest
+/// the pointer.
+fn origin_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![
+        cmd_item_gated(ctx, cmd("set_board_origin", "")),
+        cmd_item_gated(ctx, cmd("reset_board_origin", "")),
+        cmd_item_gated(ctx, cmd("snap_board_origin_to_corner", "")),
     ]
 }
 

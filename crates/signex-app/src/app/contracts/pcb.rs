@@ -108,6 +108,23 @@ pub enum PcbMsg {
     PartSwap(PartSwapMsg),
     /// Design reuse blocks of the project (#2410).
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// Edit ▸ Origin on the board in view (2026-11-18).
+    Origin(BoardOriginMsg),
+}
+
+/// Edit ▸ Origin (2026-11-18): where the board in view counts from. Each
+/// change is one `SetBoardOptions` undo step on `BoardOptions::origin`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardOriginMsg {
+    /// Set (`set_board_origin`): the next click on the board sets the
+    /// origin there.
+    SetPicked,
+    /// Reset (`reset_board_origin`): the origin goes to the bottom-left of
+    /// the board outline, or of the board area without one.
+    ResetPicked,
+    /// Snap to Outline Corner (`snap_board_origin_to_corner`): the origin
+    /// goes to the outline corner nearest the pointer.
+    SnapToCornerPicked,
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the

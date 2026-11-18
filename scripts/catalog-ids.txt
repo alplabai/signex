@@ -274,6 +274,7 @@ repeat_last_item
 report_manager_bom
 repour_all
 repour_selected
+reset_board_origin
 reset_layer_colors
 reset_local_coordinates
 reset_schematic_designators
@@ -317,6 +318,7 @@ send_to_back
 send_to_back_of
 set_active_layer
 set_board_graphic
+set_board_origin
 set_board_panel
 set_footprint_text
 set_layer_color
@@ -345,6 +347,7 @@ show_layer_group
 show_layer_set
 show_used_layers_only
 smart_paste
+snap_board_origin_to_corner
 stitch_vias
 swap_gates
 swap_pins

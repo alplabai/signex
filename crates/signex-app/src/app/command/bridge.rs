@@ -6,6 +6,7 @@
 //! palette, and a future CLI all route a command id through here on
 //! their way to `update`.
 
+use crate::app::contracts::BoardOriginMsg;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::{AppCommandId, CatalogTextExt};
 
@@ -68,6 +69,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
+    let board_origin = |event| Message::Pcb(PcbMsg::Origin(event));
     let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
@@ -438,6 +440,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::app::LayerTabMenuMsg::ColourEditRequested(None),
         )),
         "reset_layer_colors" => pcb_view(PcbViewMsg::LayerColoursReset),
+        // 2026-11-18: Edit ▸ Origin.
+        "set_board_origin" => board_origin(BoardOriginMsg::SetPicked),
+        "reset_board_origin" => board_origin(BoardOriginMsg::ResetPicked),
+        "snap_board_origin_to_corner" => board_origin(BoardOriginMsg::SnapToCornerPicked),
         "toggle_layer_numbers" => Message::Pcb(PcbMsg::LayerStrip(
             crate::app::LayerStripMsg::LayerNumbersToggled,
         )),

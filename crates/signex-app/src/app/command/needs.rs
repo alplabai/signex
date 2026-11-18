@@ -432,7 +432,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_circle"
         | "place_board_rectangle"
         | "place_board_text_frame"
-        | "board_sketch" => Needs::EditablePcb,
+        | "board_sketch"
+        // 2026-11-18: Edit ▸ Origin changes the board.
+        | "set_board_origin"
+        | "reset_board_origin"
+        | "snap_board_origin_to_corner" => Needs::EditablePcb,
         // #2389, #2373: the routing and arc modes change no board.
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
