@@ -97,14 +97,12 @@ fn unannotated_parts_are_kept_and_flagged() {
 }
 
 #[test]
-fn a_multi_unit_part_anchors_on_its_smallest_unit() {
+fn a_multi_unit_part_is_one_part_with_every_unit() {
     let (root, _) = fixture();
     let parts = design_parts(&[(InstancePath::root(), &root)]);
     let u1 = parts.iter().find(|p| p.designator == "U1").unwrap();
     assert_eq!(u1.units.len(), 2);
-    let anchor = u1.anchor().unwrap();
-    assert_eq!(anchor.sheet, InstancePath::root());
-    assert_eq!(Some(&anchor.part), u1.units.iter().min());
+    assert_eq!(u1.sheet, InstancePath::root());
     assert!(
         parts.iter().all(|p| p.designator != "#PWR01"),
         "power is no part"
