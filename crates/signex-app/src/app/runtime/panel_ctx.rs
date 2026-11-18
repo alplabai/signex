@@ -586,6 +586,20 @@ impl Signex {
             .and_then(|path| self.document_state.document_project(path))
             .map(|project| project.data.parameters.clone())
             .unwrap_or_default();
+        // The read-only Parameters rows, resolved by the special strings the
+        // canvas and the PDF use.
+        let builtin_parameters: Vec<(crate::panels::BuiltinParameter, String)> = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.special_strings_for_path(path))
+            .map(|special| {
+                crate::panels::BuiltinParameter::ALL
+                    .into_iter()
+                    .map(|parameter| (parameter, special.resolve(parameter.token())))
+                    .collect()
+            })
+            .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
         self.document_state
@@ -717,6 +731,7 @@ impl Signex {
             title_block,
             project_parameters,
             sheet_variables,
+            builtin_parameters,
             drafts,
             numeric_draft,
             title_block_sheet,

@@ -198,6 +198,9 @@ pub struct PanelContext {
     pub project_parameters: std::collections::BTreeMap<String, String>,
     /// The active sheet's variables (#1987), as stored: name to source text.
     pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The active sheet's read-only Parameters rows with their values, as
+    /// `signex_output::resolve` gives them; empty with no active sheet.
+    pub builtin_parameters: Vec<(super::BuiltinParameter, String)>,
     /// The app's one store of half-typed title-block fields and custom
     /// paper edges (#2027): a handle the view reads, never a copy.
     pub drafts: super::PanelDrafts,

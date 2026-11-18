@@ -15,7 +15,6 @@ define_ids! {
     PROPERTIES_SECTION_NET_PARAMETERS = "properties-section-net-parameters";
     PROPERTIES_SECTION_PARAMETERS = "properties-section-parameters";
     PROPERTIES_SECTION_PAGE_OPTIONS = "properties-section-page-options";
-    PROPERTIES_SECTION_TITLE_BLOCK = "properties-section-title-block";
     PROPERTIES_SECTION_SELECTION_FILTERS = "properties-section-selection-filters";
     PROPERTIES_XY = "properties-xy";
     PROPERTIES_POSITION = "properties-position";
@@ -163,6 +162,11 @@ define_ids! {
     PROPERTIES_SHEET_VARIABLE_SHOWS = "properties-sheet-variable-shows";
     PROPERTIES_SHEET_VARIABLE_ERROR = "properties-sheet-variable-error";
     PROPERTIES_SHEET_VARIABLES_HINT = "properties-sheet-variables-hint";
+    PROPERTIES_PARAMETER_DOCUMENT_NAME = "properties-parameter-document-name";
+    PROPERTIES_PARAMETER_SHEET_NAME = "properties-parameter-sheet-name";
+    PROPERTIES_PARAMETER_SHEET_NUMBER = "properties-parameter-sheet-number";
+    PROPERTIES_PARAMETER_SHEET_COUNT = "properties-parameter-sheet-count";
+    PROPERTIES_PARAMETER_PROJECT_NAME = "properties-parameter-project-name";
     PROPERTIES_VALUE_SHOWS = "properties-value-shows";
     PROPERTIES_VALUE_ERROR = "properties-value-error";
 }

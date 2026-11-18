@@ -1,11 +1,12 @@
-//! Title Block section of the sheet's Properties (#1080): edits the active
-//! sheet's `title_block` map, which the canvas frame, the PDF title block
-//! and every `${TOKEN}` substitution read.
+//! Title-block rows of Document Options ▸ Parameters (#1080): edit the
+//! active sheet's `title_block` map, which the canvas frame, the PDF title
+//! block and every `${TOKEN}` substitution read.
 //!
 //! Each field commits on Enter, as one undoable edit; a half-typed value
 //! is a draft that never reaches the document or undo.
 
 use super::super::*;
+use super::graphite_table::ParameterRow;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 
@@ -93,88 +94,66 @@ pub struct TitleBlockDraft {
     pub text: String,
 }
 
-/// The Title Block collapsible section for the active sheet.
-pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+/// What a title-block row shows in its field: the text being typed, else
+/// the sheet's own value; empty when the sheet has none.
+pub fn shown_title_block_value(ctx: &PanelContext, field: TitleBlockField) -> String {
+    ctx.title_block_sheet
+        .as_deref()
+        .and_then(|sheet| ctx.drafts.title_block_text(sheet, field))
+        .or_else(|| ctx.title_block.get(field.key()).cloned())
+        .unwrap_or_default()
+}
+
+/// The title-block rows of the Parameters table for the active sheet. Each
+/// field commits on Enter through `CommitTitleBlockField`.
+pub(super) fn title_block_rows<'a>(ctx: &'a PanelContext) -> Vec<ParameterRow<'a>> {
     use signex_i18n::{RenderTranslatable, Translatable, ids, t};
-    let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
     let i18n = &ctx.i18n;
-    ctx.collapsible(
-        "prop_title_block",
-        ids::PROPERTIES_SECTION_TITLE_BLOCK,
-        &ctx.collapsed_sections,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            for field in TitleBlockField::ALL {
-                let draft = ctx
-                    .title_block_sheet
-                    .as_deref()
-                    .and_then(|sheet| ctx.drafts.title_block_text(sheet, field));
-                let own = ctx
-                    .title_block
-                    .get(field.key())
-                    .cloned()
-                    .unwrap_or_default();
-                let value = match draft {
-                    Some(draft) => draft,
-                    None => own.clone(),
-                };
-                // The project's value, shown greyed while the sheet leaves
-                // the field empty, and named in the label (#1080).
-                let project_value = ctx
-                    .project_parameters
-                    .get(field.key())
-                    .filter(|v| !v.is_empty())
-                    .cloned();
-                // Rendered without isolation marks, so the label reads as before.
-                let around = |id| {
-                    Translatable::new(id)
-                        .arg("field", Translatable::new(field.message()))
-                        .localized(i18n)
-                };
-                let label = match (&project_value, own.is_empty()) {
-                    (Some(_), true) => around(ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT),
-                    (Some(_), false) => around(ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT),
-                    (None, _) => t!(i18n, field.message()),
-                };
-                c = c.push(
-                    container(
-                        row![
-                            property_label(label, muted),
-                            signex_widgets::text_input(
-                                // The project's own value for the field, shown verbatim.
-                                signex_i18n::UserText::new(
-                                    project_value.clone().unwrap_or_default()
-                                ),
-                                value.clone()
-                            )
-                            .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
-                            .on_submit(PanelMsg::CommitTitleBlockField(field))
-                            .size(TS.body)
-                            .padding(SP.s)
-                            .style(crate::panels::form_look::text_input_style)
-                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-                        ]
-                        .spacing(SP.m)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([2, PROPERTY_ROW_PAD_X])
+    TitleBlockField::ALL
+        .into_iter()
+        .map(|field| {
+            let own_is_empty = ctx
+                .title_block
+                .get(field.key())
+                .is_none_or(String::is_empty);
+            // The project's value, shown greyed while the sheet leaves the
+            // field empty, and named in the label (#1080).
+            let project_value = ctx
+                .project_parameters
+                .get(field.key())
+                .filter(|v| !v.is_empty())
+                .cloned();
+            // Rendered without isolation marks, so the label reads as before.
+            let around = |id| {
+                Translatable::new(id)
+                    .arg("field", Translatable::new(field.message()))
+                    .localized(i18n)
+            };
+            let name = match (&project_value, own_is_empty) {
+                (Some(_), true) => around(ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT),
+                (Some(_), false) => around(ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT),
+                (None, _) => t!(i18n, field.message()),
+            };
+            let input = signex_widgets::text_input(
+                // The project's own value for the field, shown verbatim.
+                signex_i18n::UserText::new(project_value.unwrap_or_default()),
+                shown_title_block_value(ctx, field),
+            )
+            .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
+            .on_submit(PanelMsg::CommitTitleBlockField(field))
+            .size(TS.body)
+            .padding(SP.xs)
+            .style(crate::panels::form_look::text_input_style)
+            .width(Length::Fill);
+            ParameterRow {
+                name: name.into(),
+                value: container(input)
+                    .padding([2.0, SP.xs])
                     .width(Length::Fill)
                     .boxed(),
-                );
             }
-            c = c.push(
-                container(
-                    text(t!(i18n, ids::PROPERTIES_TITLE_BLOCK_HINT))
-                        .size(TS.caption)
-                        .color(muted),
-                )
-                .padding([3.0, SP.m])
-                .boxed(),
-            );
-            c
-        },
-    )
-    .boxed()
+        })
+        .collect()
 }
 
 #[cfg(test)]
