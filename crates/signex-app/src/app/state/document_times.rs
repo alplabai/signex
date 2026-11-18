@@ -18,13 +18,24 @@ const TIME_FORMAT: &str = "%H:%M";
 /// The clock stamp and the file times of the open documents.
 #[derive(Debug, Clone, Default)]
 pub struct DocumentTimes {
-    /// The clock as read at the last panel refresh; `None` before the first.
+    /// The clock as read at boot and at each panel refresh; `None` only in a
+    /// default-built value.
     pub now: Option<DateTime<Local>>,
     /// Each document file's modified time, from its last read or save.
     pub modified: HashMap<PathBuf, SystemTime>,
 }
 
 impl DocumentTimes {
+    /// The clock read now, no file times yet. The app starts with it, so a
+    /// frame lowered before the first panel refresh already shows today for
+    /// an empty Date, and does not change when that refresh reads the clock.
+    pub fn from_clock() -> Self {
+        Self {
+            now: Some(Local::now()),
+            ..Self::default()
+        }
+    }
+
     /// Record that the file of `path` was modified at `at`.
     pub fn set_modified(&mut self, path: &Path, at: SystemTime) {
         self.modified.insert(path.to_path_buf(), at);
