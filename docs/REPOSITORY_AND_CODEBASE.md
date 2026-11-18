@@ -338,7 +338,7 @@ The most likely additions are:
   union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
   boolean ops are not part of it yet. The interactive router (walkaround,
   shove, diff pair, tuning) is its `route` module, not a crate of its own
-  (#2389); see `internal/docs/PCB_ROUTER_PLAN.md`.
+  (#2389).
 
 These should be added only when their responsibility is real and clear, not as
 speculative abstraction.

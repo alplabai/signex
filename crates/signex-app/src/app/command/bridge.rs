@@ -324,9 +324,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_report_components" => board_report(signex_output::BoardReportKind::Components),
         "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
         "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
-        // #2486: the assembly drawings as SVG; one drawing opens Board Print / PDF.
+        // #2486: the assembly drawings as SVG; one drawing opens Board Print /
+        // PDF on the assembly set of its `side`.
         "export_assembly_svg" => Message::from(crate::app::BoardOutputMsg::SvgExportRequested),
-        "board_assembly_drawing" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        "board_assembly_drawing" => {
+            Message::from(crate::app::BoardOutputMsg::AssemblyPrintRequested(
+                crate::app::board_output::side_operand(args),
+            ))
+        }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),

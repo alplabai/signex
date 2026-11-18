@@ -117,7 +117,8 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
-as the Run DRC button of the Messages panel; no keymap preset binds it.
+as the Run DRC button of the Messages panel. On a board the key is `T D` in
+the default profile and `F7` in Classic.
 
 ## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
 
@@ -314,7 +315,8 @@ sketch mode, where the footprint editor's sketch tools draw its outline,
 keepouts, cutouts and mounting holes; run again, it leaves the mode and
 commits the changes as one undo step. It is greyed while no PCB is open.
 The same command is the PCB Active Bar's Board Sketch button, a row of the
-board canvas menu and a palette row; no keymap preset binds it. The mode:
+board canvas menu and a palette row; on a board both built-in profiles bind
+it to `1`. The mode:
 [PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
 ## Design ▸ Layer Stack Manager {#design-layer-stack}
