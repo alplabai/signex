@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use signex_net::{point_on_segment, pt_key, uf::Key};
+use signex_net::{SheetConnectivity, point_on_segment, pt_key, uf::Key};
 use signex_types::object_id::IdSource;
 use signex_types::schematic::{
     Junction, Point, SchematicSheet, SelectedItem, SelectedKind, Symbol, SymbolTransform, Wire,
@@ -29,11 +29,84 @@ pub(crate) fn symbol_pin_tips(sheet: &SchematicSheet, symbol: &Symbol) -> Vec<Po
         .collect()
 }
 
-/// Every pin tip of `sheet`.
-fn all_pin_tips(sheet: &SchematicSheet) -> Vec<Point> {
-    (sheet.symbols.iter())
-        .flat_map(|symbol| symbol_pin_tips(sheet, symbol))
-        .collect()
+/// Whether `wire` holds a pin end of `tips` other than the one at `k`, end or
+/// interior.
+fn holds_another(wire: &Wire, k: Key, tips: &[Point]) -> bool {
+    let (a, b) = (pt_key(&wire.start), pt_key(&wire.end));
+    tips.iter()
+        .map(pt_key)
+        .any(|t| t != k && point_on_segment(t, a, b))
+}
+
+/// The nets of a sheet, built only when a tap needs them.
+struct Nets<'s> {
+    sheet: &'s SchematicSheet,
+    cache: Option<(SheetConnectivity, HashSet<Key>)>,
+}
+
+impl Nets<'_> {
+    /// The connectivity, and the wire end and dot points that connect a pin.
+    fn built(&mut self) -> &mut (SheetConnectivity, HashSet<Key>) {
+        let sheet = self.sheet;
+        self.cache.get_or_insert_with(|| {
+            let anchors = (sheet.wires.iter())
+                .flat_map(|w| [pt_key(&w.start), pt_key(&w.end)])
+                .chain(sheet.junctions.iter().map(|j| pt_key(&j.position)))
+                .collect();
+            (SheetConnectivity::build(sheet), anchors)
+        })
+    }
+
+    /// Whether a pin end of `tips` other than the one at `k` is already on
+    /// the net of `wire`: it is a wire end or dot point of that net.
+    fn net_holds_another(&mut self, wire: &Wire, k: Key, tips: &[Point]) -> bool {
+        let (nets, anchors) = self.built();
+        let net = nets.root_of(&wire.start);
+        tips.iter().any(|other| {
+            let at = pt_key(other);
+            at != k && anchors.contains(&at) && nets.root_of(other) == net
+        })
+    }
+
+    /// Whether wires `a` and `b` are on one net.
+    fn same_net(&mut self, a: &Wire, b: &Wire) -> bool {
+        let (nets, _) = self.built();
+        nets.root_of(&a.start) == nets.root_of(&b.start)
+    }
+}
+
+/// The pin ends of the symbols of `sheet` that `pick` keeps which lie strictly
+/// inside a wire and may join it. A dot must never short a part: a pin end
+/// may not join a wire that holds another pin end of the same part (a wire
+/// running along a resistor through both its pins), nor a wire whose net
+/// already has one, nor a net another pin end of the part joins here.
+fn safe_taps(
+    sheet: &SchematicSheet,
+    lines: &WireLines<'_>,
+    pick: impl Fn(&Symbol) -> bool,
+) -> Vec<Point> {
+    let mut nets = Nets { sheet, cache: None };
+    let mut out = Vec::new();
+    for symbol in sheet.symbols.iter().filter(|symbol| pick(symbol)) {
+        let tips = symbol_pin_tips(sheet, symbol);
+        // The nets this part's pin ends join here, by a wire of each.
+        let mut joined: Vec<&Wire> = Vec::new();
+        for tip in &tips {
+            let k = pt_key(tip);
+            let through = lines.through(k);
+            let Some(&wire) = through.first() else {
+                continue;
+            };
+            let shorts = through.iter().any(|w| holds_another(w, k, &tips))
+                || nets.net_holds_another(wire, k, &tips)
+                || joined.iter().any(|other| nets.same_net(other, wire));
+            if !shorts {
+                joined.push(wire);
+                out.push(*tip);
+            }
+        }
+    }
+    out
 }
 
 /// Where the dots of `sheet` are.
@@ -77,28 +150,31 @@ impl<'a> WireLines<'a> {
         lines
     }
 
-    /// Whether some wire passes through `k` with neither end there.
-    fn passes_through(&self, k: Key) -> bool {
+    /// The wires that pass through `k` with neither end there.
+    fn through(&self, k: Key) -> Vec<&'a Wire> {
         let row = self.rows.get(&k.1).into_iter().flatten();
         let column = self.columns.get(&k.0).into_iter().flatten();
         row.chain(column)
             .chain(self.slanted.iter())
-            .any(|wire| strictly_inside(k, wire))
+            .filter(|wire| strictly_inside(k, wire))
+            .copied()
+            .collect()
     }
 }
 
 /// Where a pin tip sits strictly inside a wire with no dot there: a contact
-/// the netlist does not count, left by an older Signex or another tool.
+/// the netlist does not count, left by an older Signex or another tool. A
+/// touch a dot would turn into a short of its own part is not one.
 #[must_use]
 pub fn bare_pin_taps(sheet: &SchematicSheet) -> Vec<Point> {
     let dots = dot_keys(sheet);
     let lines = WireLines::of(&sheet.wires);
     let mut seen: HashSet<Key> = HashSet::new();
-    all_pin_tips(sheet)
+    safe_taps(sheet, &lines, |_| true)
         .into_iter()
         .filter(|tip| {
             let k = pt_key(tip);
-            !dots.contains(&k) && lines.passes_through(k) && seen.insert(k)
+            !dots.contains(&k) && seen.insert(k)
         })
         .collect()
 }
@@ -136,16 +212,12 @@ pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Ve
         return Vec::new();
     }
     let lines = WireLines::of(&sheet.wires);
-    let mut candidates: Vec<Point> = (sheet.symbols.iter())
-        .filter(|symbol| symbols.contains(&symbol.uuid))
-        .flat_map(|symbol| symbol_pin_tips(sheet, symbol))
-        .filter(|tip| lines.passes_through(pt_key(tip)))
-        .collect();
+    let mut candidates = safe_taps(sheet, &lines, |symbol| symbols.contains(&symbol.uuid));
     if !wires.is_empty() {
         let touched: Vec<&Wire> = (sheet.wires.iter())
             .filter(|wire| wires.contains(&wire.uuid))
             .collect();
-        candidates.extend(all_pin_tips(sheet).into_iter().filter(|tip| {
+        candidates.extend(safe_taps(sheet, &lines, |_| true).into_iter().filter(|tip| {
             touched
                 .iter()
                 .any(|wire| strictly_inside(pt_key(tip), wire))
@@ -160,20 +232,20 @@ pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Ve
         .collect()
 }
 
-/// The pin tips of `sheet` that lie strictly inside a wire, for judging the
-/// minted dots again: such a dot stays while its pin does.
+/// The pin tips of `sheet` that lie strictly inside a wire and may join it
+/// (see [`safe_taps`]), for judging the minted dots again: such a dot stays
+/// while its pin does, and goes once it would short its part.
 pub(crate) fn pin_taps(sheet: &SchematicSheet) -> HashSet<Key> {
     let lines = WireLines::of(&sheet.wires);
-    (all_pin_tips(sheet).into_iter())
+    (safe_taps(sheet, &lines, |_| true).into_iter())
         .map(|tip| pt_key(&tip))
-        .filter(|k| lines.passes_through(*k))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rubber_band_tests::{add_wire, lib_pin, lib_symbol, place};
+    use crate::rubber_band_tests::{add_resistor, add_wire, lib_pin, lib_symbol, place};
     use crate::test_support::test_sheet;
     use signex_types::object_id::SequentialIds;
 
@@ -209,5 +281,21 @@ mod tests {
         sheet.junctions.push(junction.clone());
         assert!(bare_pin_taps(&sheet).is_empty());
         assert!(pin_junction_repairs(&sheet, &mut ids).is_empty());
+    }
+
+    /// A wire along a part through both its pin ends: a dot on each would short
+    /// the part, so neither gets one, none is reported and none repaired.
+    #[test]
+    fn a_wire_through_both_pins_of_a_part_gets_no_dot() {
+        let mut sheet = test_sheet();
+        let r1 = add_resistor(&mut sheet, "R1", Point::new(20.0, 10.0)); // pins 15, 25
+        let wire = add_wire(&mut sheet, (0.0, 10.0), (40.0, 10.0));
+        assert!(bare_pin_taps(&sheet).is_empty());
+        assert!(pin_taps(&sheet).is_empty());
+        let items = [
+            SelectedItem::new(wire, SelectedKind::Wire),
+            SelectedItem::new(r1, SelectedKind::Symbol),
+        ];
+        assert!(pin_dots_for(&sheet, &items).is_empty());
     }
 }
