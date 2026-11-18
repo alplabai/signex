@@ -429,7 +429,7 @@ mod tests {
                 name: port.to_string(),
                 direction: "input".to_string(),
             }],
-            renames: Vec::new(),
+            renames: None,
         }
     }
 

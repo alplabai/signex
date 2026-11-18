@@ -280,10 +280,12 @@ impl Engine {
                     if self.document.child_sheets[idx].filename != child_filename {
                         continue;
                     }
-                    changed |= sheet_sync::rename_sheet_entries(
-                        &mut self.document.child_sheets[idx],
-                        &renames,
-                    );
+                    if let Some(renames) = &renames {
+                        changed |= sheet_sync::rename_sheet_entries(
+                            &mut self.document.child_sheets[idx],
+                            renames,
+                        );
+                    }
                     let contacts = signex_net::SheetPinContacts::of_sheet(&self.document);
                     changed |= sheet::reconcile_child_sheet_pins(
                         &mut self.document.child_sheets[idx],

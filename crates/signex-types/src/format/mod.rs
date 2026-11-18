@@ -162,12 +162,19 @@ use tsv::{parse_optional_block, write_tsv_section};
 // Format version tokens
 // ---------------------------------------------------------------------------
 
-/// Current `.snxsch` format version; the policy is [`SNXSCH_VERSION`]
-/// (`docs/FORMAT_VERSIONS.md`). 1.1 (#2209): `lib_symbols` is keyed by body
-/// ref (`<lib_id>#<hash>`) and a symbol names its body in `body_ref`. A 1.0
-/// build reads that table by `lib_id` and would show parts without pins, so
-/// 1.0 builds open 1.1 files read-only (`is_newer_minor`) instead.
+/// The `.snxsch` token a sheet without No-ERC rule lists writes; the policy
+/// is [`SNXSCH_VERSION`] (`docs/FORMAT_VERSIONS.md`). 1.1 (#2209):
+/// `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a symbol names
+/// its body in `body_ref`. A 1.0 build reads that table by `lib_id` and would
+/// show parts without pins, so 1.0 builds open 1.1 files read-only
+/// (`is_newer_minor`) instead.
 pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
+
+/// Written instead of [`SNXSCH_FORMAT_V1`] when a No-ERC directive names the
+/// rules it silences (#1699). A 1.1 build would drop the list on its next
+/// save and the marker would silence every rule, so it opens 1.2 read-only.
+/// A sheet without lists stays 1.1, byte for byte.
+pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
@@ -180,13 +187,30 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 /// a load error. The policy is [`SNXPCB_VERSION`].
 pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
 
-/// `.snxsch` version policy: a newer minor opens read-only.
+/// `.snxsch` version policy: a newer minor opens read-only. A save writes the
+/// lowest token its content needs ([`snxsch_token`]).
 pub const SNXSCH_VERSION: FormatVersion = FormatVersion {
-    current: SNXSCH_FORMAT_V1,
-    readable: &["snxsch/1", SNXSCH_FORMAT_V1],
+    current: SNXSCH_FORMAT_NO_ERC_RULES,
+    readable: &["snxsch/1", SNXSCH_FORMAT_V1, SNXSCH_FORMAT_NO_ERC_RULES],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
 };
+
+/// The token a save of `sheet` writes: [`SNXSCH_FORMAT_NO_ERC_RULES`] when a
+/// No-ERC directive names rules, else [`SNXSCH_FORMAT_V1`]. From content, not
+/// the token the file loaded with, so a sheet whose last list is cleared
+/// goes back to 1.1.
+pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
+    if sheet
+        .no_erc_directives
+        .iter()
+        .any(|directive| !directive.rules.is_empty())
+    {
+        SNXSCH_FORMAT_NO_ERC_RULES
+    } else {
+        SNXSCH_FORMAT_V1
+    }
+}
 
 /// `.snxpcb` version policy: a newer minor opens read-only.
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
@@ -455,7 +479,7 @@ impl SnxSchematic {
 
         // Manifest header — emit as a small TOML document.
         let manifest = SchManifest {
-            format: SNXSCH_FORMAT_V1.to_string(),
+            format: snxsch_token(&self.sheet).to_string(),
             schematic_id: self.sheet.uuid,
             version: self.sheet.version,
             generator: self.sheet.generator.clone(),

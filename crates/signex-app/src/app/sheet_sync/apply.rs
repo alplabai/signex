@@ -108,8 +108,9 @@ impl Signex {
         Task::none()
     }
 
-    /// Sheet to Symbol: one `ReconcileChildSheetPins` with the preview's
-    /// renames, for every sheet symbol of the file on the active sheet.
+    /// Sheet to Symbol: one `ReconcileChildSheetPins` for every sheet symbol
+    /// of the file on the active sheet, with the preview's renames on
+    /// `symbol` only.
     fn write_sync_to_symbol(
         &mut self,
         symbol: &ChildSheet,
@@ -121,7 +122,7 @@ impl Signex {
             return;
         };
         let ports = signex_engine::ports_for_pin_sync(child, parent, &symbol.filename);
-        let command = signex_engine::sync_from_sheet_command(&symbol.filename, ports, preview);
+        let command = signex_engine::sync_from_sheet_command(symbol, ports, preview);
         let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], true, true);
         if outcome == MutationOutcome::Failed {
             if let Some(reason) = reason {
