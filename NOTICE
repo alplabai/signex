@@ -9,3 +9,6 @@ Version 1.1, Apache 2.0 Future License (FSL-1.1-ALv2); see LICENSE.
 Contributions made before the licence change (issue #2344) were licensed
 under the Apache License, Version 2.0, and those grants remain in effect.
 A copy of the Apache License, Version 2.0 is in LICENSE-APACHE.
+
+Third-party components whose licence requires a notice are listed, with
+that notice, in THIRD_PARTY_NOTICES.md.

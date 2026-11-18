@@ -29,6 +29,7 @@ members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-mcad",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -56,6 +57,7 @@ default-members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-mcad",
 ]
 
 [workspace.package]
