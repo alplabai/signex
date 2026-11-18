@@ -19,11 +19,12 @@ use super::items::{
 };
 use crate::app::command::CommandContext;
 use crate::icons as ic;
-use crate::keymap::AppCommandId;
 use iced::widget::svg::Handle;
 use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
+
+pub(super) use super::board_menu::pcb_canvas_menu_with_blocks;
 
 /// Command ids whose keyboard hint the canvas menu shows.
 pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
@@ -463,121 +464,6 @@ pub(super) fn pcb_canvas_menu_entries(
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
     pcb_canvas_menu_with_blocks(i18n, tid, ctx, active_submenu, sc, &[])
-}
-
-/// The board canvas menu (#2240, #2405): Find Similar and Find; the Place
-/// and Align flyouts; Undo and Redo; the clipboard; move, turn, flip and
-/// mirror; the pin swap and reuse block group (#2410); Delete; Board Sketch;
-/// the net of the selection; Cross Probe and
-/// Properties; then the View group's Toggle Ratsnest. Each row runs its
-/// catalog command like the keys and the Edit menu do, and is live exactly
-/// when that command is enabled in `ctx`: on a read-only board every editing
-/// row is greyed. Align is offered with a selection, as on a sheet.
-pub(super) fn pcb_canvas_menu_with_blocks(
-    i18n: &I18n,
-    tid: ThemeId,
-    ctx: &crate::app::command::CommandContext,
-    active_submenu: Option<ContextSubmenu>,
-    sc: &CanvasShortcuts,
-    blocks: &[String],
-) -> Vec<DropdownEntry<Message>> {
-    let row = |icon: Option<iced::widget::svg::Handle>, command_id: &'static str| {
-        let live =
-            AppCommandId::new(command_id).is_ok_and(|id| crate::app::command::is_enabled(&id, ctx));
-        if live {
-            dd_command(i18n, icon, command_id, sc.of(command_id), None)
-        } else {
-            dd_cmd_disabled(i18n, icon, command_id, sc.of(command_id))
-        }
-    };
-    // A row live only when the selection holds what it acts on (the lock
-    // rows #2407, the board Tools edits #2408, #2409), and its command is
-    // enabled.
-    let gated_row = |command_id: &'static str, live: bool| {
-        if live {
-            row(None, command_id)
-        } else {
-            dd_cmd_disabled(i18n, None, command_id, sc.of(command_id))
-        }
-    };
-    let launcher = |kind: ContextSubmenu, icon: iced::widget::svg::Handle, label: String| {
-        submenu_launcher(Some(icon), &label, kind, active_submenu == Some(kind))
-    };
-    let mut v = vec![
-        row(Some(ic::icon_dd_find_similar(tid)), "find_similar_objects"),
-        row(Some(ic::icon_chrome_search(tid)), "find"),
-        DropdownEntry::Separator,
-        launcher(
-            ContextSubmenu::Place,
-            ic::icon_dd_place_menu(tid),
-            text(i18n, menu_ids::MENU_PLACE),
-        ),
-    ];
-    if ctx.pcb.any {
-        v.push(launcher(
-            ContextSubmenu::Align,
-            ic::icon_dd_align_menu(tid),
-            text(i18n, menu_ids::CTX_ALIGN),
-        ));
-    }
-    v.extend([
-        DropdownEntry::Separator,
-        row(None, "undo"),
-        row(None, "redo"),
-        DropdownEntry::Separator,
-        // The clipboard group (#2361), as on a sheet.
-        row(Some(ic::icon_dd_cut(tid)), "cut"),
-        row(Some(ic::icon_dd_copy(tid)), "copy"),
-        row(Some(ic::icon_dd_paste(tid)), "paste"),
-        row(Some(ic::icon_dd_smart_paste(tid)), "smart_paste"),
-        row(None, "duplicate"),
-        row(Some(ic::icon_dd_select_all(tid)), "select_all"),
-        DropdownEntry::Separator,
-        row(Some(ic::icon_dd_move_sel(tid)), "move_selection"),
-        DropdownEntry::Separator,
-        row(Some(ic::icon_dd_rotate(tid)), "rotate_counterclockwise"),
-        row(Some(ic::icon_dd_rotate_cw(tid)), "rotate_clockwise"),
-        row(Some(ic::icon_dd_flip_x(tid)), "flip_selection"),
-        row(Some(ic::icon_dd_flip_x(tid)), "mirror_x"),
-        row(Some(ic::icon_dd_flip_y(tid)), "mirror_y"),
-        // Picks a library footprint for the selected components (#2366).
-        row(None, "change_footprint"),
-        // Lock or unlock the selected tracks and vias (#2407).
-        gated_row("lock_board_items", ctx.pcb.lockable),
-        gated_row("unlock_board_items", ctx.pcb.unlockable),
-    ]);
-    // The pin swap and reuse block group (#2410), whose Place rows name the
-    // project's `blocks`.
-    v.extend(super::board_part_rows::part_rows(i18n, ctx.pcb, sc, blocks));
-    v.extend([
-        DropdownEntry::Separator,
-        row(Some(ic::icon_dd_delete(tid)), "delete_selection"),
-        DropdownEntry::Separator,
-        // Enter or leave the board's sketch mode (#2234).
-        row(Some(ic::icon_dd_rect(tid)), "board_sketch"),
-        DropdownEntry::Separator,
-        // The board Tools edits on the selection (#2408, #2409), as in Tools.
-        gated_row("gloss_selected_routes", ctx.pcb.any),
-        gated_row("add_teardrops", true),
-        gated_row("board_shape_from_selection", ctx.pcb.any),
-        gated_row("keepout_from_selection", ctx.pcb.any),
-        gated_row("arrange_in_box", ctx.pcb.placeable),
-        DropdownEntry::Separator,
-        // The net of the selection or of what is under the cursor (#2403).
-        row(None, "select_board_net"),
-        row(None, "highlight_board_net"),
-        row(Some(ic::icon_dd_cross_probe(tid)), "cross_probe"),
-        // Shows the Properties panel, where one selected footprint's
-        // designator and value are edited (#1312).
-        row(
-            Some(ic::icon_dd_properties(tid)),
-            "edit_selected_object_properties",
-        ),
-        DropdownEntry::Separator,
-        // View group (#2223): the View menu's board-view row.
-        row(None, "toggle_ratsnest"),
-    ]);
-    v
 }
 
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the

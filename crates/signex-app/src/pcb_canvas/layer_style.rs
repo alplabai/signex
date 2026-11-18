@@ -215,7 +215,7 @@ pub fn board_3d_background() -> Color {
 mod tests {
     use super::*;
     use signex_renderer::pcb::{BOARD_OUTLINE, copper_slot};
-    use signex_types::theme::Color as ThemeColor;
+    use signex_types::theme::{Color as ThemeColor, pair_bottom};
 
     /// Every layer has a catalog name: none falls back to its message id.
     #[test]
@@ -445,10 +445,15 @@ mod tests {
         let light = theme_tokens(ThemeId::GraphiteLight);
         let dark = theme_tokens(ThemeId::GraphiteDark);
         let keepout = theme.color(ColorSlot::Keepout);
-        for t in [TechnicalLayer::KeepoutTop, TechnicalLayer::KeepoutBottom] {
-            let s = layer_colour(PcbLayer::Technical(t), &light);
-            assert_eq!([s.r, s.g, s.b, s.a], keepout, "{t:?}");
-        }
+        let keepout_top = layer_colour(PcbLayer::Technical(TechnicalLayer::KeepoutTop), &light);
+        assert_eq!(
+            [keepout_top.r, keepout_top.g, keepout_top.b, keepout_top.a],
+            keepout
+        );
+        // 2026-11-18: the bottom of a pair is its top, darker.
+        let keepout_bottom = PcbLayer::Technical(TechnicalLayer::KeepoutBottom);
+        let s = layer_colour(keepout_bottom, &light);
+        assert!(luminance(s) < luminance(keepout_top));
         let top = layer_colour(PcbLayer::Copper(CopperLayer::Top), &light);
         assert_eq!(rgba(top), palette_rgba(colors.top_copper));
         let bottom = layer_colour(PcbLayer::Copper(CopperLayer::Bottom), &light);
@@ -477,6 +482,9 @@ mod tests {
                 colors.silkscreen,
                 colors.solder_mask,
                 colors.paste,
+                pair_bottom(colors.silkscreen),
+                pair_bottom(colors.solder_mask),
+                pair_bottom(colors.paste),
                 t.dimensions,
                 t.notes,
                 t.drill_drawing,
@@ -487,7 +495,7 @@ mod tests {
             ]
             .map(palette_rgba),
         );
-        for layer in PcbLayer::all() {
+        for layer in PcbLayer::all().filter(|&l| l != keepout_bottom) {
             let swatch = layer_colour(layer, &light);
             assert!(palette.contains(&rgba(swatch)), "{layer:?}: {swatch:?}");
             assert_eq!(swatch, layer_colour(layer, &dark), "{layer:?}");
@@ -579,26 +587,22 @@ mod tests {
         }
     }
 
-    /// One related pair per kind: the top layer is the brighter.
+    /// Every Top/Bottom pair (2026-11-18), silkscreen, solder, paste and
+    /// keep-out included: the bottom is darker, in the top's hue.
     #[test]
     fn a_top_technical_layer_is_brighter_than_its_bottom() {
         let tokens = dark_tokens();
-        for top in
-            listed_technical().filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top))
-        {
-            if matches!(
-                top,
-                TechnicalLayer::SilkscreenTop
-                    | TechnicalLayer::SolderMaskTop
-                    | TechnicalLayer::PasteTop
-            ) {
-                continue;
-            }
+        let tops = TechnicalLayer::ALL
+            .into_iter()
+            .filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top));
+        for top in tops {
             let t = layer_colour(PcbLayer::Technical(top), &tokens);
             let b = layer_colour(PcbLayer::Technical(top.flipped()), &tokens);
             assert!(luminance(t) > luminance(b), "{top:?}");
+            // A grey (the silkscreen) has no hue to keep.
+            let grey = t.r == t.g && t.g == t.b;
             assert!(
-                (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
+                grey || (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
                 "{top:?} pair is not one hue"
             );
         }
