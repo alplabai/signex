@@ -203,7 +203,10 @@ fn sample_loop(
         let edge = brep
             .edge(edgeuse_edge(brep, eu)?)
             .map_err(McadError::kernel("read edge"))?;
-        let curve = edge.curve.as_ref().ok_or_else(|| fail("edge without curve"))?;
+        let curve = edge
+            .curve
+            .as_ref()
+            .ok_or_else(|| fail("edge without curve"))?;
         let trim = uv_trim_curve(brep, eu)
             .map_err(McadError::kernel("read trim curve"))?
             .0

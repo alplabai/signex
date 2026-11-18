@@ -86,7 +86,11 @@ fn tessellation_is_non_empty_closed_and_outward() {
     let mesh = tessellate(&board, TessellationTolerance::default()).expect("mesh");
     assert!(!mesh.is_empty());
     assert_eq!(mesh.faces.len(), board.face_count());
-    assert!(mesh.faces.iter().all(|f| f.triangle_count > 0), "{:?}", mesh.faces);
+    assert!(
+        mesh.faces.iter().all(|f| f.triangle_count > 0),
+        "{:?}",
+        mesh.faces
+    );
     assert_eq!(mesh.normals.len(), mesh.positions.len());
     // Polygonal holes are a little smaller than round ones, so allow 1 %.
     let volume = mesh.signed_volume();

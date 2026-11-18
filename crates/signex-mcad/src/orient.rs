@@ -52,10 +52,7 @@ fn points_inward(patch: &FacePatch, all: &[[[f64; 3]; 3]], offset: f64) -> bool 
     let centroid = [0, 1, 2].map(|k| (a[k] + b[k] + c[k]) / 3.0);
     let start = [0, 1, 2].map(|k| centroid[k] + normal[k] * offset);
     let direction = unit([0, 1, 2].map(|k| normal[k] + SKEW[k]));
-    let crossings = all
-        .iter()
-        .filter(|t| ray_hits(start, direction, t))
-        .count();
+    let crossings = all.iter().filter(|t| ray_hits(start, direction, t)).count();
     crossings % 2 == 1
 }
 

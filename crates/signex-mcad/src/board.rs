@@ -118,10 +118,7 @@ fn round_hole_radius(center: [f64; 2], diameter: f64) -> Result<f64, McadError> 
 /// The polygon as a counter-clockwise ring without repeated points.
 fn profile_ring(operation: &'static str, points: &[[f64; 2]]) -> Result<Vec<[f64; 2]>, McadError> {
     if !points.iter().flatten().all(|c| c.is_finite()) {
-        return Err(McadError::invalid(
-            operation,
-            "coordinates must be finite",
-        ));
+        return Err(McadError::invalid(operation, "coordinates must be finite"));
     }
     let mut ring: Vec<[f64; 2]> = Vec::with_capacity(points.len());
     for &p in points {
@@ -129,7 +126,12 @@ fn profile_ring(operation: &'static str, points: &[[f64; 2]]) -> Result<Vec<[f64
             ring.push(p);
         }
     }
-    while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(&a, &b)| same_xy(a, b)) {
+    while ring.len() > 1
+        && ring
+            .first()
+            .zip(ring.last())
+            .is_some_and(|(&a, &b)| same_xy(a, b))
+    {
         ring.pop();
     }
     if ring.len() < 3 {
