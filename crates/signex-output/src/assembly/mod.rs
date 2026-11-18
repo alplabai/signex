@@ -159,9 +159,9 @@ fn mark_points(mark: &AssemblyMark) -> Vec<Point> {
 /// The corners of the box around `points`; `None` without a finite point
 /// or with a box of no area.
 fn bounds(points: impl Iterator<Item = Point>) -> Option<(Point, Point)> {
-    let (min, max) = points
-        .filter(|p| p.x.is_finite() && p.y.is_finite())
-        .fold(None, |acc: Option<(Point, Point)>, p| {
+    let (min, max) = points.filter(|p| p.x.is_finite() && p.y.is_finite()).fold(
+        None,
+        |acc: Option<(Point, Point)>, p| {
             Some(match acc {
                 None => (p, p),
                 Some((min, max)) => (
@@ -169,7 +169,8 @@ fn bounds(points: impl Iterator<Item = Point>) -> Option<(Point, Point)> {
                     Point::new(max.x.max(p.x), max.y.max(p.y)),
                 ),
             })
-        })?;
+        },
+    )?;
     (max.x > min.x && max.y > min.y).then_some((min, max))
 }
 

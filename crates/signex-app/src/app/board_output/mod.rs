@@ -223,6 +223,6 @@ fn file_title(path: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_print;
-#[cfg(test)]
 mod tests_assembly;
+#[cfg(test)]
+mod tests_print;

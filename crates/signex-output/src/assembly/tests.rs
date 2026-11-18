@@ -14,7 +14,12 @@ fn line(layer: &str, a: (f64, f64), b: (f64, f64)) -> serde_json::Value {
     })
 }
 
-fn part(reference: &str, at: (f64, f64), layer: &str, graphics: serde_json::Value) -> serde_json::Value {
+fn part(
+    reference: &str,
+    at: (f64, f64),
+    layer: &str,
+    graphics: serde_json::Value,
+) -> serde_json::Value {
     json!({
         "uuid": uuid::Uuid::now_v7(),
         "reference": reference,

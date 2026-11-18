@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="54mm" height="44mm" viewBox="0 0 54 44">
+<rect x="0" y="0" width="54" height="44" fill="#ffffff"/>
+<g stroke-linecap="round" stroke-linejoin="round">
+<path d="M19.73 25.875 L21.73 25.875 L21.73 27.125 L19.73 27.125 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M15.875 29 L15.875 27 L17.125 27 L17.125 29 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<text x="20.73" y="26.5" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(0 20.73 26.5)">C3</text>
+<text x="16.5" y="28" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(-90 16.5 28)">C4</text>
+<path d="M52 2 L12 2 L11.02 2.048 L10.049 2.192 L9.097 2.431 L8.173 2.761 L7.286 3.181 L6.444 3.685 L5.656 4.27 L4.929 4.929 L4.27 5.656 L3.685 6.444 L3.181 7.286 L2.761 8.173 L2.431 9.097 L2.192 10.049 L2.048 11.02 L2 12 L2 42 L52 42 Z" fill="none" stroke="#000000" stroke-width="0.1"/>
+<path d="M52 2 L12 2" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M12 2 L10.264 2.152 L8.58 2.603 L7 3.34 L5.572 4.34 L4.34 5.572 L3.34 7 L2.603 8.58 L2.152 10.264 L2 12" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M2 12 L2 42" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M2 42 L52 42" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M52 42 L52 2" fill="none" stroke="#000000" stroke-width="0.05"/>
+</g>
+</svg>

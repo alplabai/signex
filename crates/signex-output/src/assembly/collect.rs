@@ -219,9 +219,12 @@ fn placed_marks(
             ring.pop();
             closed_shape(ring, placed.filled, width_mm, ink)
         }
-        GraphicShape::Polygon { points } => {
-            closed_shape(points.iter().map(mm).collect(), placed.filled, width_mm, ink)
-        }
+        GraphicShape::Polygon { points } => closed_shape(
+            points.iter().map(mm).collect(),
+            placed.filled,
+            width_mm,
+            ink,
+        ),
         GraphicShape::Text(placement) if !text.0.trim().is_empty() => AssemblyMark::Text {
             at: placement.anchor.to_mm(),
             rotation_deg: placement.rotation_deg,

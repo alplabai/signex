@@ -281,17 +281,15 @@ fn render_pages(
     for (index, (sets, mirrored)) in plan.iter().enumerate() {
         let mut surface = PdfSurface::new(fonts);
         let drawing = match sets.as_slice() {
-            [set] => set.assembly_side().map(|side| assembly_drawing(board, side)),
+            [set] => set
+                .assembly_side()
+                .map(|side| assembly_drawing(board, side)),
             _ => None,
         };
         let frame = match &drawing {
             Some(drawing) => {
-                let frame = PageFrame::for_extent(
-                    (drawing.min, drawing.max),
-                    options,
-                    page_mm,
-                    *mirrored,
-                );
+                let frame =
+                    PageFrame::for_extent((drawing.min, drawing.max), options, page_mm, *mirrored);
                 assembly::page(&mut surface, drawing, &frame, options.monochrome);
                 frame
             }
@@ -371,6 +369,6 @@ fn assemble(
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod tests;

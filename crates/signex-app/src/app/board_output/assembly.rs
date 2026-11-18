@@ -160,12 +160,15 @@ impl Signex {
         let tasks: Vec<Task<Message>> = files
             .into_iter()
             .map(|file| {
-                let log = format!(
-                    "Wrote {} ({} bytes)",
-                    file.path.display(),
-                    file.svg.len()
-                );
-                self.write_export(file.path, file.svg.into_bytes(), "SVG", log, None, Vec::new())
+                let log = format!("Wrote {} ({} bytes)", file.path.display(), file.svg.len());
+                self.write_export(
+                    file.path,
+                    file.svg.into_bytes(),
+                    "SVG",
+                    log,
+                    None,
+                    Vec::new(),
+                )
             })
             .collect();
         Task::batch(tasks)

@@ -74,6 +74,9 @@ fn the_real_board_assembly_svgs_match_their_goldens() {
             mirrored,
             monochrome: false,
         };
-        check_golden(name, &assembly_svg(&assembly_drawing(&board, side), &options));
+        check_golden(
+            name,
+            &assembly_svg(&assembly_drawing(&board, side), &options),
+        );
     }
 }

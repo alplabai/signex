@@ -98,7 +98,10 @@ fn the_cli_writes_the_named_sides_into_the_folder() {
     assert_eq!(files[0]["mirrored"], false);
     settle(&mut app, task);
     assert!(dir.path().join("board-assembly-bottom.svg").exists());
-    assert!(app.ui_state.board_output.dialog.is_none(), "no dialog opens");
+    assert!(
+        app.ui_state.board_output.dialog.is_none(),
+        "no dialog opens"
+    );
 
     let (outcome, _) = headless(
         &mut app,

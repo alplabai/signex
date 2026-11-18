@@ -62,7 +62,10 @@ fn an_assembly_page_is_framed_on_the_boards_edge_cuts() {
     assert_eq!(out.pages.len(), 2);
     for page in &out.pages {
         let (w, h) = page.printed_size_mm;
-        assert!((w - 50.0).abs() < 1e-9 && (h - 40.0).abs() < 1e-9, "{w} x {h}");
+        assert!(
+            (w - 50.0).abs() < 1e-9 && (h - 40.0).abs() < 1e-9,
+            "{w} x {h}"
+        );
     }
     assert_eq!(page_mirrors(&out.pages), [false, true]);
 }
@@ -107,8 +110,7 @@ fn the_real_board_assembly_pages_match_their_goldens() {
     };
     let mut fonts = FontUsage::new();
     let print = options(&BOTH, BoardPrintPages::PerSet);
-    let (contents, pages) =
-        render_pages(&real_board(), &print, &text, &mut fonts).expect("pages");
+    let (contents, pages) = render_pages(&real_board(), &print, &text, &mut fonts).expect("pages");
     assert_eq!(pages.len(), 2);
     check_golden("mixed-tht-smd-top.pdf.txt", &normalised(&contents[0]));
     check_golden("mixed-tht-smd-bottom.pdf.txt", &normalised(&contents[1]));
