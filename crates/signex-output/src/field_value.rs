@@ -129,6 +129,7 @@ pub fn shown_value(scope: &ValueScope<'_>, symbol: &Symbol) -> ShownValue {
 pub fn sheet_context(metadata: &ProjectMetadata) -> SubstitutionContext<'_> {
     SubstitutionContext {
         metadata,
+        document_path: std::path::PathBuf::new(),
         filename: String::new(),
         sheet_name: String::new(),
         sheet_number: 0,

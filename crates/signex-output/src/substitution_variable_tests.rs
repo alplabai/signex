@@ -33,6 +33,7 @@ fn sheet(variables: &[(&str, &str)], title_block: &[(&str, &str)]) -> SchematicS
 fn on<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {
     SubstitutionContext {
         metadata: m,
+        document_path: std::path::PathBuf::new(),
         filename: "power.snxsch".into(),
         sheet_name: "power".into(),
         sheet_number: 1,

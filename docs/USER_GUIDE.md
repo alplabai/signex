@@ -692,16 +692,29 @@ the **Properties** panel shows **Document Options**, and open its
 **Parameters** tab. Each row shows its current value.
 
 - **Title**, **Document No.**, **Revision**, **Date**, **Company**, **Drawn
-  By**, **Checked By** and **Approved By** are the sheet's title-block
-  fields. Type a value and press `Enter` to apply it; each applied field is
-  one undo step, and the title block on the sheet shows it. The name shows
-  `(project)` while the field is empty and takes the project's value (shown
-  greyed in the field), and `(overrides project)` while the sheet has its
-  own. Clear the field to fall back to the project's value.
-- **Document Name**, **Sheet Name**, **Sheet Number**, **Sheet Count** and
-  **Project Name** are read-only: they show what `${FILENAME}`,
-  `${SHEETNAME}`, `${SHEETNUMBER}`, `${SHEETCOUNT}` and `${PROJECT_NAME}`
-  print on this sheet. A row with no value is empty.
+  By**, **Checked By**, **Approved By**, **Author**, **Engineer**,
+  **Organization** and **Address 1** to **Address 4** are the sheet's
+  title-block fields. Type a value and press `Enter` to apply it; each
+  applied field is one undo step, and the title block on the sheet shows it.
+  A field you leave empty is not saved. The name shows `(project)` while
+  the field is empty and takes the project's value (shown greyed in the
+  field), and `(overrides project)` while the sheet has its own. Clear the
+  field to fall back to the project's value.
+- An empty **Date** with no project value shows today's date, greyed, and
+  its name says `(today)`; nothing is saved for it, so it always shows the
+  current day. Type a date to store it.
+- **Current Time**, **Current Date**, **Time**, **Document Full Path**,
+  **Document Name**, **Modified Date**, **Sheet Name**, **Sheet Number**,
+  **Sheet Count** and **Project Name** are read-only. The clock rows show
+  the time the panel was last refreshed, to the minute; **Modified Date** is
+  the date the sheet's file was last read from disk or saved. A row with no
+  value is empty.
+
+Every row name is also a special string you can type in any text, note or
+title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
+`${Address1}`, `${CurrentDate}`, `${CurrentTime}` (or `${Time}`),
+`${ModifiedDate}`, `${DocumentFullPathAndName}`, `${DocumentName}` and
+so on. The names are matched exactly, before any variable of the same name.
 
 A sheet has its own variables too, under **Sheet Variables** in the same
 tab. Type a name, press **Add**, type the value and press `Enter`; **Remove**

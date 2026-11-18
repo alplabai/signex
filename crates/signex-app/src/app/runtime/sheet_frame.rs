@@ -63,8 +63,11 @@ impl Signex {
         );
         // The sheet's variables shadow the project's (#1987).
         metadata.sheet_variables = engine.document().variables.clone();
+        // The clock and file times the computed tokens show, as kept in state.
+        metadata.document_facts = document_state.times.facts();
         Some(SpecialStrings {
             metadata,
+            path: path.to_path_buf(),
             filename: path
                 .file_name()
                 .unwrap_or_default()

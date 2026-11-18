@@ -741,6 +741,20 @@ fn the_general_tab_has_no_title_block_field() {
     }
 }
 
+/// An empty Date row shows today, greyed, and says so; a typed Date does
+/// not (decision 2026-11-18).
+#[test]
+fn an_empty_date_row_says_it_shows_today() {
+    let mut ctx = document_parameters();
+    ctx.builtin_parameters = vec![(BuiltinParameter::CurrentDate, "2026-11-18".into())];
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "Date (today)"), "{shown:#?}");
+    ctx.title_block.insert("date".into(), "2026-01-02".into());
+    let shown = texts(&ctx);
+    let today = shown.iter().any(|t| t.text == "Date (today)");
+    assert!(!today, "{shown:#?}");
+}
+
 /// Maintainer decision 2026-11-18: a Parameters row shows its real value,
 /// never a `*` placeholder, and a long name wraps inside its column instead
 /// of running into the value.

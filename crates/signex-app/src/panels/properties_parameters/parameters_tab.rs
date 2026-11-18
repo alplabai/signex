@@ -18,10 +18,16 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// A read-only row of the Parameters tab: a built-in special string of the
-/// sheet, which nothing in the panel edits.
+/// sheet, which nothing in the panel edits. The clock rows show the time the
+/// panel was last built (`DocumentTimes`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinParameter {
+    CurrentTime,
+    CurrentDate,
+    Time,
+    DocumentFullPathAndName,
     DocumentName,
+    ModifiedDate,
     SheetName,
     SheetNumber,
     SheetCount,
@@ -29,8 +35,13 @@ pub enum BuiltinParameter {
 }
 
 impl BuiltinParameter {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 10] = [
+        Self::CurrentTime,
+        Self::CurrentDate,
+        Self::Time,
+        Self::DocumentFullPathAndName,
         Self::DocumentName,
+        Self::ModifiedDate,
         Self::SheetName,
         Self::SheetNumber,
         Self::SheetCount,
@@ -40,18 +51,28 @@ impl BuiltinParameter {
     /// The special string whose resolved value the row shows.
     pub fn token(self) -> &'static str {
         match self {
-            Self::DocumentName => "${FILENAME}",
-            Self::SheetName => "${SHEETNAME}",
-            Self::SheetNumber => "${SHEETNUMBER}",
-            Self::SheetCount => "${SHEETCOUNT}",
-            Self::ProjectName => "${PROJECT_NAME}",
+            Self::CurrentTime => "${CurrentTime}",
+            Self::CurrentDate => "${CurrentDate}",
+            Self::Time => "${Time}",
+            Self::DocumentFullPathAndName => "${DocumentFullPathAndName}",
+            Self::DocumentName => "${DocumentName}",
+            Self::ModifiedDate => "${ModifiedDate}",
+            Self::SheetName => "${SheetName}",
+            Self::SheetNumber => "${SheetNumber}",
+            Self::SheetCount => "${SheetCount}",
+            Self::ProjectName => "${ProjectName}",
         }
     }
 
     /// The row's name in the catalog.
     pub fn message(self) -> MessageId {
         match self {
+            Self::CurrentTime => ids::PROPERTIES_PARAMETER_CURRENT_TIME,
+            Self::CurrentDate => ids::PROPERTIES_PARAMETER_CURRENT_DATE,
+            Self::Time => ids::PROPERTIES_PARAMETER_TIME,
+            Self::DocumentFullPathAndName => ids::PROPERTIES_PARAMETER_DOCUMENT_FULL_PATH,
             Self::DocumentName => ids::PROPERTIES_PARAMETER_DOCUMENT_NAME,
+            Self::ModifiedDate => ids::PROPERTIES_PARAMETER_MODIFIED_DATE,
             Self::SheetName => ids::PROPERTIES_PARAMETER_SHEET_NAME,
             Self::SheetNumber => ids::PROPERTIES_PARAMETER_SHEET_NUMBER,
             Self::SheetCount => ids::PROPERTIES_PARAMETER_SHEET_COUNT,
