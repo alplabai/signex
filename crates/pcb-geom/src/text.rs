@@ -148,10 +148,25 @@ pub fn footprint_text(
 /// The designator and comment `footprint` shows: not hidden, not empty, and
 /// placed. Parameters are not drawn.
 pub fn footprint_texts(footprint: &Footprint) -> Vec<FootprintText> {
+    shown_footprint_texts(footprint)
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect()
+}
+
+/// The designator and comment `footprint` shows (not hidden, not empty),
+/// each placed or refused, for a caller that must account for a text it
+/// cannot draw (the fabrication outputs).
+pub fn shown_footprint_texts(footprint: &Footprint) -> Vec<Result<FootprintText, GeomError>> {
     BoardTextField::ALL
         .into_iter()
-        .filter_map(|field| footprint_text(footprint, field)?.ok())
-        .filter(|text| !footprint.properties[text.index].hidden && !text.content.trim().is_empty())
+        .filter(|&field| {
+            property_index(footprint, field).is_some_and(|index| {
+                let property = &footprint.properties[index];
+                !property.hidden && !property.value.trim().is_empty()
+            })
+        })
+        .filter_map(|field| footprint_text(footprint, field))
         .collect()
 }
 

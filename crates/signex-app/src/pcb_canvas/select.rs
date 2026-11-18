@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use pcb_geom::{
     BoardIndex, BoardTextField, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
-    turned_marquee_select,
+    pick_under_texts, turned_marquee_select,
 };
 use signex_renderer::pcb::PcbLayerView;
 use signex_types::pcb::{PcbBoard, Point};
@@ -144,6 +144,27 @@ impl PcbSelectionState {
     /// Properties net pick, #2355).
     pub fn item_at(&mut self, board: &PcbBoard, at: Point, tolerance_mm: f64) -> Option<ItemRef> {
         self.pick_at(board, at, tolerance_mm).map(|(item, _)| item)
+    }
+
+    /// [`Self::click`] for a tool that acts on parts (Move): a designator
+    /// or comment is passed over for what lies under it (#2368).
+    pub fn click_part(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+        mode: ClickMode,
+    ) -> bool {
+        let hit = self.part_at(board, at, tolerance_mm);
+        self.selection.apply_click(hit, mode)
+    }
+
+    /// [`Self::item_at`] passing over designators and comments (Measure).
+    pub fn part_at(&mut self, board: &PcbBoard, at: Point, tolerance_mm: f64) -> Option<ItemRef> {
+        let p = PointNm::from_mm(at, "pointer").ok()?;
+        let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
+        self.ensure_index(board);
+        pick_under_texts(self.index.as_ref()?, p, tol, &self.filter).map(|i| i.item)
     }
 
     /// A box from `from` to `to`, drawn along the screen of a view turned
@@ -295,8 +316,12 @@ impl PcbSelectionState {
             Vec::new()
         } else {
             let mut grab = self.shapes_of_footprints(board, |_| true);
-            // A designator or comment is grabbed to move on its own (#2368).
-            grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
+            // A designator or comment is grabbed to move on its own (#2368),
+            // unless the filter turns texts off: a press there then starts a
+            // box, as before texts were picked.
+            if self.filter.is_on(pcb_geom::PickKind::Texts) {
+                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
+            }
             grab
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())

@@ -538,8 +538,14 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally:
             function: graphic_function(layer),
             width_override: (layer == FabLayer::Profile).then_some(PROFILE_WIDTH_NM),
         };
-        // A text frame's box; its lines are written by `fab::text`.
-        place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
+        // A text frame's box; its lines are written by `fab::text`. A board
+        // drawing of kind `text` is not one the board draws, and `fab::text`
+        // does not write it: it is counted as skipped, never dropped.
+        let drawn = match draw(&Drawing::from(graphic), &pen) {
+            Ok(Drawn::Text) => Ok(Drawn::Skipped),
+            other => other,
+        };
+        place_drawing(images, layer, drawn, tally);
     }
 }
 

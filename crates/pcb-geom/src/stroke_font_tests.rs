@@ -109,3 +109,17 @@ fn a_size_that_is_not_a_length_is_refused() {
 fn the_pen_is_a_share_of_the_height() {
     assert_eq!(text_stroke_width_mm(2.0), 2.0 * TEXT_STROKE_EM);
 }
+
+#[test]
+fn a_line_too_long_for_its_room_is_condensed_and_a_short_one_kept() {
+    // "RH" at 2 mm is 2.5 mm long; in 2 mm of room it is squeezed to 2 mm,
+    // centred on the anchor, its height unchanged.
+    let strokes = text_strokes_within("RH", &upright(), 2.0, HAlign::Center, 2.0).unwrap();
+    let (left, right, top, bottom) = bounds(&strokes);
+    assert_eq!((left, right), (-1_000_000, 1_000_000));
+    assert_eq!((top, bottom), (-1_000_000, 1_000_000));
+    // With room to spare it is written as `text_strokes` writes it.
+    let roomy = text_strokes_within("RH", &upright(), 2.0, HAlign::Center, 10.0).unwrap();
+    let plain = text_strokes("RH", &upright(), 2.0, HAlign::Center).unwrap();
+    assert_eq!(roomy, plain);
+}

@@ -124,10 +124,33 @@ pub fn pick_filtered<'a>(
     tolerance: i64,
     filter: &PickFilter,
 ) -> Option<&'a IndexedItem> {
+    pick_where(index, p, tolerance, |item| filter.allows(item))
+}
+
+/// [`pick_filtered`] passing over designators and comments, for a tool that
+/// acts on parts (Move, Measure): a click on a part's text picks the body or
+/// copper under it, or nothing (#2368).
+pub fn pick_under_texts<'a>(
+    index: &'a BoardIndex,
+    p: PointNm,
+    tolerance: i64,
+    filter: &PickFilter,
+) -> Option<&'a IndexedItem> {
+    pick_where(index, p, tolerance, |item| {
+        filter.allows(item) && !matches!(item, ItemRef::FootprintText { .. })
+    })
+}
+
+fn pick_where(
+    index: &BoardIndex,
+    p: PointNm,
+    tolerance: i64,
+    keep: impl Fn(ItemRef) -> bool,
+) -> Option<&IndexedItem> {
     index
         .items_at(p, tolerance)
         .into_iter()
-        .filter(|i| filter.allows(i.item))
+        .filter(|i| keep(i.item))
         .min_by_key(|i| (rank(i.item), i.item))
 }
 

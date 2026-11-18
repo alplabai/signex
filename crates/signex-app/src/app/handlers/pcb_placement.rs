@@ -103,9 +103,10 @@ impl Signex {
         let Some(anchor) = carry.anchor else {
             let mut footprints = carry.footprints;
             if footprints.is_empty() {
-                // The click picks, and selects, what it lands on.
+                // The click picks, and selects, the part it lands on; a
+                // designator or comment stands for nothing here (#2368).
                 self.with_pcb_selection(|state, board| {
-                    state.click(board, at, tolerance_mm, pcb_geom::ClickMode::Replace)
+                    state.click_part(board, at, tolerance_mm, pcb_geom::ClickMode::Replace)
                 });
                 footprints = self.pcb_selected_footprints();
                 if footprints.is_empty() {

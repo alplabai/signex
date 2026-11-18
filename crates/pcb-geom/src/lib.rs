@@ -91,7 +91,9 @@ pub use region::{
     OFFSET_ARC_POINTS, Polygon, chord_sag, difference, intersection, offset, twice_signed_area,
     union,
 };
-pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered};
+pub use selection::{
+    ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered, pick_under_texts,
+};
 pub use shape::Shape;
 pub use shape_gap::Separation;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
@@ -99,12 +101,14 @@ pub use stats::BoardStats;
 pub use stitch::{StitchSpec, stitch_points, stitch_spec_mm};
 pub use stroke_font::{
     TEXT_STROKE_EM, justify_start_mm, stroke_text_width_mm, text_stroke_width_mm, text_strokes,
+    text_strokes_within,
 };
 pub use teardrop::{Teardrop, TeardropPlan, teardrops};
 pub use text::{
     BoardTextField, FootprintText, TextPlacement, footprint_text, footprint_texts,
     is_board_text_key, justified_centre, local_text_position, local_text_rotation, property_index,
-    property_text_layer, property_text_placement, property_text_size_mm, text_box,
+    property_text_layer, property_text_placement, property_text_size_mm, shown_footprint_texts,
+    text_box,
 };
 pub use text_frame::{
     FrameLine, TEXT_FRAME_ADVANCE_EM, TEXT_FRAME_LINE_PITCH_EM, TEXT_FRAME_MARGIN_EM,

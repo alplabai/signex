@@ -19,6 +19,9 @@ struct Line<'a> {
     at: TextPlacement,
     size_mm: f64,
     justify: HAlign,
+    /// The longest the line may be, mm: a text frame line is condensed to
+    /// its box.
+    room_mm: Option<f64>,
 }
 
 /// Every text of `board` on a fabrication layer, as strokes on its image.
@@ -29,12 +32,17 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
         if pcb_geom::Placement::of_footprint(footprint).is_err() {
             continue;
         }
-        for text in pcb_geom::footprint_texts(footprint) {
+        for text in pcb_geom::shown_footprint_texts(footprint) {
+            let Ok(text) = text else {
+                tally.skipped += 1;
+                continue;
+            };
             let line = Line {
                 content: &text.content,
                 at: text.placement,
                 size_mm: text.size_mm,
                 justify: text.justify,
+                room_mm: None,
             };
             write(images, FabLayer::of(text.layer), &line, frame, tally);
         }
@@ -54,6 +62,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                             at,
                             size_mm: size_or_default(graphic.font_size),
                             justify: HAlign::Center,
+                            room_mm: None,
                         };
                         write(images, Some(layer), &line, frame, tally);
                     }
@@ -77,6 +86,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                 at: frame_line.placement,
                 size_mm,
                 justify: HAlign::Center,
+                room_mm: Some(frame_line.width_mm),
             };
             write(images, Some(layer), &line, frame, tally);
         }
@@ -92,6 +102,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                     at,
                     size_mm: size_or_default(text.font_size),
                     justify: HAlign::Center,
+                    room_mm: None,
                 };
                 write(images, Some(layer), &line, frame, tally);
             }
@@ -132,7 +143,12 @@ fn write(
 fn marks(line: &Line<'_>, layer: FabLayer, frame: FabFrame) -> Result<Vec<Mark>, GeomError> {
     let pen = pcb_geom::text_stroke_width_mm(line.size_mm);
     let width = mm_to_nm(pen, "text.pen")?.abs();
-    let strokes = pcb_geom::text_strokes(line.content, &line.at, line.size_mm, line.justify)?;
+    let strokes = match line.room_mm {
+        Some(room) => {
+            pcb_geom::text_strokes_within(line.content, &line.at, line.size_mm, line.justify, room)?
+        }
+        None => pcb_geom::text_strokes(line.content, &line.at, line.size_mm, line.justify)?,
+    };
     Ok(strokes
         .into_iter()
         .filter_map(|points| stroke(&points, width, layer, frame))

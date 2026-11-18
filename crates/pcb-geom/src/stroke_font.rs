@@ -59,21 +59,52 @@ pub fn text_strokes(
     size_mm: f64,
     justify: HAlign,
 ) -> Result<Vec<Vec<PointNm>>, GeomError> {
+    scaled_strokes(content, at, size_mm, justify, 1.0)
+}
+
+/// [`text_strokes`] condensed along the line, never stretched, so the line
+/// is at most `width_mm` long: a text frame line, whose wrap assumes a
+/// narrower advance than this font's.
+pub fn text_strokes_within(
+    content: &str,
+    at: &TextPlacement,
+    size_mm: f64,
+    justify: HAlign,
+    width_mm: f64,
+) -> Result<Vec<Vec<PointNm>>, GeomError> {
+    let natural = stroke_text_width_mm(content, size_mm);
+    let squeeze = if width_mm.is_finite() && natural > width_mm {
+        width_mm.max(0.0) / natural
+    } else {
+        1.0
+    };
+    scaled_strokes(content, at, size_mm, justify, squeeze)
+}
+
+/// The strokes of `content`, each glyph's x and advance scaled by `squeeze`.
+fn scaled_strokes(
+    content: &str,
+    at: &TextPlacement,
+    size_mm: f64,
+    justify: HAlign,
+    squeeze: f64,
+) -> Result<Vec<Vec<PointNm>>, GeomError> {
     if !(size_mm.is_finite() && size_mm > 0.0) {
         return Err(GeomError::Unrepresentable("text.size"));
     }
     let unit = size_mm / GRID_CAP;
-    let start = justify_start_mm(justify, stroke_text_width_mm(content, size_mm));
+    let along = unit * squeeze;
+    let start = justify_start_mm(justify, stroke_text_width_mm(content, size_mm) * squeeze);
     let mut strokes = Vec::new();
     for (n, glyph) in content.chars().enumerate() {
-        let left = start + n as f64 * GRID_ADVANCE * unit;
+        let left = start + n as f64 * GRID_ADVANCE * along;
         for polyline in glyph_strokes(glyph) {
             let points = polyline
                 .iter()
                 .map(|&(x, y)| {
                     // Grid y is up from the baseline; the text's own y is
                     // down, with the cap height centred on the anchor.
-                    at.offset_mm(left + x * unit, (GRID_CAP / 2.0 - y) * unit)
+                    at.offset_mm(left + x * along, (GRID_CAP / 2.0 - y) * unit)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             if !points.is_empty() {

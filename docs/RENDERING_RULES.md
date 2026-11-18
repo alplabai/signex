@@ -456,11 +456,15 @@ width. `pcb_geom::text_frame_lines` places its text:
 The lines join `PcbSnapshot::texts` and draw as a board text does; the board
 print (#2402) prints the box and the lines in the same places; fabrication
 outputs (#2388) draw the box on a fabrication layer and write the lines in
-the board stroke font (#2368, "pcb-stroke-font").
+the board stroke font (#2368, "pcb-stroke-font"). That font is wider than
+the wrap's 0.6, so a line longer than the room inside the margins
+(`FrameLine::width_mm`) is condensed along its line to fit
+(`pcb_geom::text_strokes_within`); its height is kept.
 
 Checks: `pcb_geom::text_frame::tests`, `pcb::graphics::tests::a_text_frame_draws_its_box_and_its_lines`,
 `pdf::board::tests::a_text_frame_prints_its_box_and_lines`,
-`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`.
+`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`,
+`fab::tests::a_full_width_text_frame_line_stays_inside_its_box`.
 
 ## board-3d — Board 3D view (#2390)
 
