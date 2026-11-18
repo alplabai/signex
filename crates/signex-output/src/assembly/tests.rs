@@ -180,6 +180,58 @@ fn the_extent_is_the_outline_else_the_edge_cuts_else_the_marks() {
 }
 
 #[test]
+fn a_dimension_past_the_board_edge_is_inside_the_extent() {
+    let mut board = board();
+    board.free.dimensions[0].offset = 3.0;
+    let drawing = assembly_drawing(&board, BoardSide::Top);
+    let dimension_ys: Vec<f64> = drawing
+        .marks
+        .iter()
+        .filter(|m| mark_ink(m) == AssemblyInk::Dimension)
+        .flat_map(mark_points)
+        .map(|p| p.y)
+        .collect();
+    let lowest = dimension_ys.iter().copied().fold(f64::MIN, f64::max);
+    assert!(lowest >= 23.0, "the fixture puts the line below the board");
+    assert!(
+        drawing.max.y >= lowest,
+        "framed to {}, the dimension reaches {lowest}",
+        drawing.max.y
+    );
+    assert_eq!((drawing.min.x, drawing.min.y), (0.0, 0.0));
+    let svg = crate::assembly_svg(&drawing, &crate::AssemblySvgOptions::default());
+    let view_box_height: f64 = svg
+        .split("viewBox=\"0 0 ")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .and_then(|wh| wh.split_whitespace().nth(1))
+        .and_then(|h| h.parse().ok())
+        .expect("the SVG has a viewBox");
+    // The page starts 2 mm above `min.y`; the dimension must end above its
+    // bottom edge.
+    assert!(
+        view_box_height >= lowest - drawing.min.y + 2.0,
+        "viewBox height {view_box_height} cuts the dimension at {lowest}"
+    );
+}
+
+#[test]
+fn a_footprint_slot_on_edge_cuts_is_drawn_as_outline_on_both_sides() {
+    let mut board = board();
+    board.footprints[0].graphics.push(
+        serde_json::from_value(line("EdgeCuts", (-1.0, -3.0), (1.0, -3.0))).expect("a slot edge"),
+    );
+    for side in [BoardSide::Top, BoardSide::Bottom] {
+        let drawing = assembly_drawing(&board, side);
+        let slot = drawing.marks.iter().any(|m| {
+            matches!(m, AssemblyMark::Stroke { points, ink: AssemblyInk::Outline, .. }
+                if points == &[Point::new(9.0, 7.0), Point::new(11.0, 7.0)])
+        });
+        assert!(slot, "{side:?}: U1's slot at y=7 is drawn");
+    }
+}
+
+#[test]
 fn only_the_sides_documentation_layers_and_the_shared_ones_have_an_ink() {
     use signex_types::pcb_layer::CopperLayer;
     let t = |layer| PcbLayer::Technical(layer);

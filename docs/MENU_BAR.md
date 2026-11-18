@@ -78,7 +78,10 @@ Then, after a separator, the board's reports (#2404), greyed without a board
 in view: Board Bill of Materials..., Board Netlist..., Net Lengths...,
 Component Report... (each opens Board Reports on its table) and Export Report
 as CSV... (the table in view, or the BOM). The Board panel's Reports button
-opens the same dialog. Rules: `BOARD_OUTPUT.md`.
+opens the same dialog. Last, Assembly Drawings as SVG... (#2486) writes the
+board's top and bottom assembly drawings into a folder the person picks; the
+PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
+`BOARD_OUTPUT.md`.
 
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see

@@ -33,6 +33,20 @@ pub(super) fn layer_marks(
     out: &mut Vec<AssemblyMark>,
 ) {
     let wanted = |layer: &str| ink_of(side, layer) == Some(ink);
+    footprint_drawings(board, ink, &wanted, out);
+    board_drawings(board, ink, &wanted, out);
+    if ink == AssemblyInk::Dimension {
+        dimensions(board, &wanted, out);
+    }
+}
+
+/// The footprints' drawings and texts on a `wanted` layer, placed.
+fn footprint_drawings(
+    board: &PcbBoard,
+    ink: AssemblyInk,
+    wanted: &dyn Fn(&str) -> bool,
+    out: &mut Vec<AssemblyMark>,
+) {
     for fp in &board.footprints {
         for graphic in fp.graphics.iter().filter(|g| wanted(&g.layer)) {
             if let Ok(Some(placed)) = pcb_geom::footprint_graphic_placement(fp, graphic) {
@@ -40,10 +54,6 @@ pub(super) fn layer_marks(
                 placed_marks(&placed, ink, text, out);
             }
         }
-    }
-    board_drawings(board, ink, &wanted, out);
-    if ink == AssemblyInk::Dimension {
-        dimensions(board, &wanted, out);
     }
 }
 
@@ -170,7 +180,8 @@ fn upright(degrees: f64) -> f64 {
     }
 }
 
-/// The board outline and the Edge Cuts drawings.
+/// The board outline and the Edge Cuts drawings, the footprints' (a slot
+/// or a cutout) as well as the board's.
 pub(super) fn outline(board: &PcbBoard, side: BoardSide, out: &mut Vec<AssemblyMark>) {
     let ring: Vec<Point> = board
         .outline
@@ -187,6 +198,7 @@ pub(super) fn outline(board: &PcbBoard, side: BoardSide, out: &mut Vec<AssemblyM
         });
     }
     let wanted = |layer: &str| ink_of(side, layer) == Some(AssemblyInk::Outline);
+    footprint_drawings(board, AssemblyInk::Outline, &wanted, out);
     board_drawings(board, AssemblyInk::Outline, &wanted, out);
 }
 

@@ -76,8 +76,8 @@ pub enum AssemblyMark {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssemblyDrawing {
     pub side: BoardSide,
-    /// The extent the drawing is framed on, board mm: the outline's, else
-    /// the marks', else the default board area.
+    /// The extent the drawing is framed on, board mm: every mark's, the
+    /// outline's included, else the default board area.
     pub min: Point,
     pub max: Point,
     /// In drawing order: dimensions, fab, assembly, fiducial, designators,
@@ -132,14 +132,13 @@ pub fn assembly_drawing(board: &PcbBoard, side: BoardSide) -> AssemblyDrawing {
     }
 }
 
-/// The outline marks' extent, else every mark's, else the default area.
+/// Every mark's extent, the outline's included, so a dimension or a part
+/// body past the board edge stays on the page; else the default area.
 fn extent(marks: &[AssemblyMark]) -> (Point, Point) {
-    let outline = marks.iter().filter(|m| mark_ink(m) == AssemblyInk::Outline);
-    bounds(outline.flat_map(mark_points))
-        .or_else(|| bounds(marks.iter().flat_map(mark_points)))
-        .unwrap_or(EMPTY_BOARD_AREA)
+    bounds(marks.iter().flat_map(mark_points)).unwrap_or(EMPTY_BOARD_AREA)
 }
 
+#[cfg(test)]
 fn mark_ink(mark: &AssemblyMark) -> AssemblyInk {
     match mark {
         AssemblyMark::Stroke { ink, .. }
@@ -148,12 +147,37 @@ fn mark_ink(mark: &AssemblyMark) -> AssemblyInk {
     }
 }
 
+/// A text's width per character of its height; a rough sans-serif average,
+/// so the extent can hold the text, not only its centre.
+const TEXT_ADVANCE_PER_HEIGHT: f64 = 0.6;
+
 fn mark_points(mark: &AssemblyMark) -> Vec<Point> {
     match mark {
         AssemblyMark::Stroke { points, .. } => points.clone(),
         AssemblyMark::Fill { rings, .. } => rings.iter().flatten().copied().collect(),
-        AssemblyMark::Text { at, .. } => vec![*at],
+        AssemblyMark::Text {
+            at,
+            rotation_deg,
+            size_mm,
+            text,
+            ..
+        } => text_corners(*at, *rotation_deg, *size_mm, text.chars().count()),
     }
+}
+
+/// The corners of the box a centred text of `chars` characters fills,
+/// turned by `rotation_deg`.
+fn text_corners(at: Point, rotation_deg: f64, size_mm: f64, chars: usize) -> Vec<Point> {
+    let half_w = 0.5 * size_mm * TEXT_ADVANCE_PER_HEIGHT * chars as f64;
+    let half_h = 0.5 * size_mm;
+    let (sin, cos) = rotation_deg.to_radians().sin_cos();
+    [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+        .into_iter()
+        .map(|(sx, sy): (f64, f64)| {
+            let (dx, dy) = (sx * half_w, sy * half_h);
+            Point::new(at.x + dx * cos - dy * sin, at.y + dx * sin + dy * cos)
+        })
+        .collect()
 }
 
 /// The corners of the box around `points`; `None` without a finite point

@@ -71,11 +71,13 @@ pub enum BoardOutputMsg {
     /// folder dialog.
     SvgExportRequested,
     /// The folder dialog answered with `folder`; `options` are the ones
-    /// in use when the export was asked for.
+    /// in use when the export was asked for; `replaced` are the files
+    /// already in the folder that the export overwrites.
     SvgFolderChosen {
         board: PathBuf,
         options: Box<BoardPrintOptions>,
         folder: PathBuf,
+        replaced: Vec<PathBuf>,
     },
     /// Close, Esc or the header's close button.
     Closed,
@@ -187,7 +189,8 @@ impl crate::app::Signex {
                 board,
                 options,
                 folder,
-            } => return self.write_assembly_svgs(&board, &options, &folder),
+                replaced,
+            } => return self.write_assembly_svgs(&board, &options, &folder, &replaced),
             M::Closed => self.ui_state.board_output.dialog = None,
         }
         iced::Task::none()

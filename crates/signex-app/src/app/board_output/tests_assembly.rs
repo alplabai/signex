@@ -8,6 +8,7 @@ use super::{BoardOutputDialog, BoardOutputMsg};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::{Message, Signex};
+use crate::ignore::IgnoreResult;
 use crate::keymap::AppCommandId;
 
 fn headless(
@@ -48,6 +49,7 @@ fn export_svg_writes_both_drawings_when_no_assembly_set_is_chosen() {
             board,
             options: Box::new(BoardPrintOptions::default()),
             folder: dir.path().to_path_buf(),
+            replaced: Vec::new(),
         },
     );
     settle(&mut app, task);
@@ -73,6 +75,7 @@ fn export_svg_writes_the_chosen_assembly_sets_only() {
             board,
             options: Box::new(options),
             folder: dir.path().to_path_buf(),
+            replaced: Vec::new(),
         },
     );
     settle(&mut app, task);
@@ -155,4 +158,40 @@ fn the_cli_prints_the_assembly_drawings_as_pdf_pages() {
     settle(&mut app, task);
     let bytes = std::fs::read(dir.path().join("assembly.pdf")).expect("written");
     assert!(bytes.starts_with(b"%PDF-"));
+}
+
+#[test]
+fn an_export_over_existing_drawings_says_it_replaced_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    let top = dir.path().join("board-assembly-top.svg");
+    std::fs::write(&top, "old").unwrap();
+    let names = vec![
+        "board-assembly-top.svg".to_string(),
+        "board-assembly-bottom.svg".to_string(),
+    ];
+    let replaced = super::assembly::existing_files(dir.path(), &names);
+    assert_eq!(replaced, [top.clone()], "only the top file was there");
+
+    crate::diagnostics::init_logging().ignore("the logger may already be installed");
+    let since = crate::diagnostics::recent_entries().last().map(|e| e.id);
+    let task = output(
+        &mut app,
+        BoardOutputMsg::SvgFolderChosen {
+            board,
+            options: Box::new(BoardPrintOptions::default()),
+            folder: dir.path().to_path_buf(),
+            replaced,
+        },
+    );
+    settle(&mut app, task);
+    assert_ne!(std::fs::read_to_string(&top).unwrap(), "old");
+    let logged = |needle: String| {
+        crate::diagnostics::recent_entries()
+            .into_iter()
+            .any(|e| Some(e.id) > since && e.message.contains(&needle))
+    };
+    assert!(logged(format!("Replaced {}", top.display())));
+    let bottom = dir.path().join("board-assembly-bottom.svg");
+    assert!(logged(format!("Wrote {}", bottom.display())));
 }

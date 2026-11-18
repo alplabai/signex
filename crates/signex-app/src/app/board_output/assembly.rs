@@ -67,6 +67,22 @@ pub(super) fn svg_file_name(stem: &str, side: BoardSide) -> String {
     format!("{stem}-assembly-{}.svg", side_id(side))
 }
 
+/// The files named `names` that are already in `folder`. Runs in the
+/// folder dialog's task, off the UI thread.
+pub(super) fn existing_files(folder: &Path, names: &[String]) -> Vec<PathBuf> {
+    names
+        .iter()
+        .map(|name| folder.join(name))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
+/// The Messages line of a written drawing.
+fn svg_written_log(file: &AssemblySvgFile, replaced: bool) -> String {
+    let verb = if replaced { "Replaced" } else { "Wrote" };
+    format!("{verb} {} ({} bytes)", file.path.display(), file.svg.len())
+}
+
 impl Signex {
     /// The drawings of the open board at `board` for `sides`, each named
     /// for its file in `folder`; `None` when the board is not open.
@@ -115,39 +131,49 @@ impl Signex {
         let target = self.save_target(Some(&board));
         let picker = self.ui_state.io.picker.clone();
         let i18n = self.ui_state.i18n.clone();
+        let stem = super::file_title(&board);
+        let names: Vec<String> = svg_sides(&options)
+            .into_iter()
+            .map(|side| svg_file_name(&stem, side))
+            .collect();
         let options = Box::new(options);
         Task::perform(
             async move {
-                target
+                let folder = target
                     .dialog(picker.dialog().title_in(&i18n, ids::BOARD_PRINT_SVG_FOLDER))
                     .await
                     .pick_folder()
-                    .await
+                    .await?;
+                let replaced = existing_files(&folder, &names);
+                Some((folder, replaced))
             },
-            move |folder| match folder {
-                Some(folder) => Message::from(BoardOutputMsg::SvgFolderChosen {
+            move |chosen| match chosen {
+                Some((folder, replaced)) => Message::from(BoardOutputMsg::SvgFolderChosen {
                     board,
                     options,
                     folder,
+                    replaced,
                 }),
                 None => Message::noop(),
             },
         )
     }
 
-    /// Draw the assembly drawings of `board`, as it is now, into `folder`.
+    /// Draw the assembly drawings of `board`, as it is now, into `folder`;
+    /// `replaced` are the files there the folder answer found.
     pub(super) fn write_assembly_svgs(
         &mut self,
         board: &Path,
         options: &BoardPrintOptions,
         folder: &Path,
+        replaced: &[PathBuf],
     ) -> Task<Message> {
         let look = AssemblySvgOptions {
             mirrored: options.mirror_bottom,
             monochrome: options.monochrome,
         };
         match self.assembly_svgs_of(board, &svg_sides(options), look, folder) {
-            Some(files) => self.write_svg_files(files),
+            Some(files) => self.write_svg_files(files, replaced),
             None => {
                 self.refuse_board_gone(board);
                 Task::none()
@@ -155,12 +181,17 @@ impl Signex {
         }
     }
 
-    /// Write made drawings off the UI thread, each crash-safe.
-    pub(super) fn write_svg_files(&mut self, files: Vec<AssemblySvgFile>) -> Task<Message> {
+    /// Write made drawings off the UI thread, each crash-safe; the Messages
+    /// line of a file in `replaced` says it was replaced.
+    pub(super) fn write_svg_files(
+        &mut self,
+        files: Vec<AssemblySvgFile>,
+        replaced: &[PathBuf],
+    ) -> Task<Message> {
         let tasks: Vec<Task<Message>> = files
             .into_iter()
             .map(|file| {
-                let log = format!("Wrote {} ({} bytes)", file.path.display(), file.svg.len());
+                let log = svg_written_log(&file, replaced.contains(&file.path));
                 self.write_export(
                     file.path,
                     file.svg.into_bytes(),
@@ -229,7 +260,7 @@ pub(crate) fn export_assembly_svg(app: &mut Signex, args: &CommandArgs) -> Ran {
         "document": board.display().to_string(),
         "files": listed,
     });
-    let task = app.write_svg_files(files);
+    let task = app.write_svg_files(files, &[]);
     (CommandOutcome::Answered(answer), task)
 }
 

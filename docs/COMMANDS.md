@@ -325,7 +325,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
 | `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
-| `board_assembly_drawing` | Show a board assembly drawing as SVG | pcb | — | — |
+| `board_assembly_drawing` | Open Board Print / PDF for an assembly drawing | pcb | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_panel` | Describe the board's panel | pcb | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |

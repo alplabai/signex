@@ -465,6 +465,8 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_report_net_length", "")),
         cmd_item_gated(ctx, cmd("board_report_components", "")),
         cmd_item_gated(ctx, cmd("export_board_report", "")),
+        // #2486: the assembly drawings as SVG files.
+        cmd_item_gated(ctx, cmd("export_assembly_svg", "")),
     ]
 }
 

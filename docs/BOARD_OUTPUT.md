@@ -107,16 +107,19 @@ two never differ.
   texts and linear dimensions), the side's Fab, Assembly and Fiducial layers
   (footprint and board drawings and texts), the side's Designator layer, the
   designator of each part on that side, then the board outline and the Edge
-  Cuts drawings on top. The designator is the part's own designator text when
+  Cuts drawings (the board's and the footprints', such as a slot) on top.
+  The designator is the part's own designator text when
   it sits on the side's Designator layer (left out when hidden), else the
   designator centred on the part's origin, turned with the part and kept
   upright, 1 mm high. Silkscreen, copper, courtyard and the other side are
   left out.
 - **Inks**: outline black, fab grey, assembly blue, fiducial green,
   designators red, dimensions purple; black in monochrome.
-- **Extent**: the outline and Edge Cuts drawings, else every mark, else the
-  default board area. An assembly page is framed on it, so a board drawn only
-  with Edge Cuts lines still fills the page.
+- **Extent**: every mark, the outline and Edge Cuts drawings included, else
+  the default board area; a text counts with its estimated box, not only its
+  centre. An assembly page is framed on it, so a dimension or a part body
+  past the board edge stays on the page and a board drawn only with Edge
+  Cuts lines still fills it.
 - **PDF**: the sets Assembly Drawing, Top (`assembly_top`) and Assembly
   Drawing, Bottom (`assembly_bottom`) of Board Print / PDF, with the page's
   scale, ink, mirror and title block options.
@@ -126,10 +129,12 @@ two never differ.
   centred `<text>` elements in Roboto (a viewer falls back to sans-serif).
   The bottom file is mirrored when Mirror the Bottom Side is on.
 
-Surfaces: Board Print / PDF's Export Assembly SVG and the palette's
+Surfaces: Board Print / PDF's Export Assembly SVG, Reports ▸ Assembly Drawings
+as SVG... and the palette's
 Assembly Drawings as SVG (`export_assembly_svg`) ask for a folder and write
 the drawings of the chosen assembly sets, both sides when none is chosen,
-off the UI thread and crash-safe. Headless and CLI:
+off the UI thread and crash-safe; a file already in the folder is replaced,
+and its Messages line says "Replaced" instead of "Wrote". Headless and CLI:
 `export_assembly_svg document=<board> path=<folder>` with the optional
 `sides` (`top`, `bottom`; both when left out), `mirror_bottom` (on when left
 out) and `monochrome`; the answer lists each file's side, path and mirror.
