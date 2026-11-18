@@ -424,7 +424,7 @@ impl PcbSelectionState {
             .iter()
             .flat_map(|index| index.items())
             .filter(|i| keep(i.item))
-            .map(|i| i.shape)
+            .map(|i| i.shape.clone())
             .collect()
     }
 
