@@ -918,3 +918,6 @@ mod dialog;
 
 #[path = "update_pcb_swap.rs"]
 mod swap;
+
+#[path = "update_pcb_e2e.rs"]
+mod e2e;
