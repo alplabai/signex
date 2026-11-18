@@ -180,12 +180,13 @@ sheet first and judge the result with the netlist derivation
    included; running along a body edge or ending on one does not count.
 3. **Extra connection** (never allowed): the run pulls another pin, label,
    junction or wire into the net, wherever on its path or bend ("the wire also
-   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins: a pin
-   the run only passes over, with no wire end or junction at its tip, is not
-   connected and not named. What an end intends is what is connected there
-   before the run (wire ends, junctions, labels, connected pins, sheet pins) and
-   what the caller named: a pin reference names only that pin (another pin on
-   the same tip is extra), a coordinate names the pins at the point. A start
+   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins. A pin
+   end the run passes over gets an automatic junction (2026-11-18), so it is
+   joined and named like a pin the run ends on. What an end intends is what is
+   connected there before the run (wire ends, junctions, labels, connected pins,
+   sheet pins) and what the caller named: a pin reference names only that pin
+   (another pin on the same tip is extra), a coordinate names the pins at the
+   point. A start
    or end on a wire's interior is a T the caller asked for only for a
    coordinate with no pin tip there; for a pin reference, or any end on a pin
    tip, a wire passing under the tip is not intended, so its net is extra.

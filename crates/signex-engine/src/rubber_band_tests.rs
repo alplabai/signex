@@ -1487,13 +1487,23 @@ fn property_run(seed: u64, cases: usize) -> RunCounts {
             "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
             describe(after)
         );
-        if let Err(why) = check_closure_oracle(
-            &sheet,
-            plain.document(),
-            after,
-            &warned_items(&sheet, &unkept),
-            &moved_pin_items(&tips),
-        ) {
+        // A pin end the plain move put inside a wire joins it through a new
+        // dot (2026-11-18): the user's placement, which may join two nets,
+        // not the pass's doing. Such a case is held to the checks above only.
+        let pin_joined = (plain.document().junctions.iter())
+            .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
+        let oracle = if pin_joined {
+            Ok(())
+        } else {
+            check_closure_oracle(
+                &sheet,
+                plain.document(),
+                after,
+                &warned_items(&sheet, &unkept),
+                &moved_pin_items(&tips),
+            )
+        };
+        if let Err(why) = oracle {
             panic!(
                 "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
                 describe(after)
@@ -1503,14 +1513,11 @@ fn property_run(seed: u64, cases: usize) -> RunCounts {
             .symbols
             .iter()
             .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
-        // A pin end the plain move put inside a wire joins it through a new
-        // dot (2026-11-18): the user's placement, not the pass's doing.
-        let pin_joined = (plain.document().junctions.iter())
-            .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
         if selects_wire || moves_power || pin_joined {
             // Co-selected items move plainly, wherever the user puts them, and
             // a power port landing on a net merges it by name: the closure
-            // oracle above is the check for these cases.
+            // oracle above is the check for these cases (for a pin join, the
+            // overlap and zero-length checks).
             continue;
         }
         // A warned pin keeps the old plain behaviour; every other net stays.
