@@ -54,6 +54,10 @@ Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00-0000
 Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00-00000	cmd:send_drawings_to_back
 Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00-00000	cmd:bring_drawings_forward
 Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00-00000	cmd:send_drawings_backward
+Edit/Origin	submenu	Origin	-	-	-	-	-
+Edit/Origin/Set	item	Set	-	-	SetBoardOrigin	01100000	cmd:set_board_origin
+Edit/Origin/Reset	item	Reset	-	-	ResetBoardOrigin	01100000	cmd:reset_board_origin
+Edit/Origin/Snap to Outline Corner	item	Snap to Outline Corner	-	-	SnapBoardOriginToCorner	01100000	cmd:snap_board_origin_to_corner
 Edit/---	separator	-	-	-	-	-	-
 Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-

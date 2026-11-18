@@ -67,6 +67,8 @@ define_ids! {
     PCB_LAYER_TAB_COLOUR_UNAVAILABLE = "pcb-layer-tab-colour-unavailable";
     PCB_LAYER_TAB_COLOUR_RESET = "pcb-layer-tab-colour-reset";
     PCB_LAYER_TAB_COLOUR_RESET_ALL = "pcb-layer-tab-colour-reset-all";
+    PCB_ORIGIN_SET_HINT = "pcb-origin-set-hint";
+    PCB_ORIGIN_NO_POINTER = "pcb-origin-no-pointer";
     PCB_3D_TITLE = "pcb-3d-title";
     PCB_3D_HINT = "pcb-3d-hint";
     PCB_3D_FLAT = "pcb-3d-flat";

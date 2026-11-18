@@ -409,6 +409,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rename_net_class` | Rename a net class | design | — | — |
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
 | `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
+| `reset_board_origin` | Move the board origin to the bottom-left of the board outline | edit | — | — |
 | `reset_layer_colors` | Give every layer the board palette colour again | view | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
@@ -432,6 +433,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `set_active_layer` | Make one layer the active layer | view | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
+| `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
 | `set_layer_color` | Give one layer its own colour, saved with the board, or the palette colour again | view | — | — |
@@ -449,6 +451,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
 | `show_used_layers_only` | List only the layers the board uses in the Layers panel | view | — | — |
+| `snap_board_origin_to_corner` | Move the board origin to the outline corner nearest the pointer | edit | — | — |
 | `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
 | `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |
