@@ -53,7 +53,10 @@ fn the_drawing_command_opens_board_print_on_its_assembly_side_in_a_window() {
     run(&mut app, "board_assembly_drawing");
     assert_eq!(
         shown_sets(&app),
-        Some(vec![BoardLayerSet::AssemblyTop, BoardLayerSet::AssemblyBottom]),
+        Some(vec![
+            BoardLayerSet::AssemblyTop,
+            BoardLayerSet::AssemblyBottom
+        ]),
         "no side: both assembly sets"
     );
 
