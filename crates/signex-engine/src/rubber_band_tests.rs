@@ -1166,6 +1166,28 @@ fn items_per_net(sheet: &SchematicSheet, stable: &std::collections::HashSet<Uuid
         .collect()
 }
 
+/// Wires the plain move moved that sit where it put them in `after` too: the
+/// selected wires, which carry their joins along.
+fn carried_wires(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    after: &SchematicSheet,
+) -> Vec<Uuid> {
+    let geometry = |sheet: &SchematicSheet, id: Uuid| {
+        (sheet.wires.iter())
+            .find(|w| w.uuid == id)
+            .map(|w| (signex_net::pt_key(&w.start), signex_net::pt_key(&w.end)))
+    };
+    (plain.wires.iter())
+        .filter(|w| {
+            let now = geometry(plain, w.uuid);
+            let was = geometry(before, w.uuid);
+            was.is_some() && was != now && geometry(after, w.uuid) == now
+        })
+        .map(|w| w.uuid)
+        .collect()
+}
+
 /// Wires present with identical geometry in every sheet.
 fn unedited_wires(sheets: &[&SchematicSheet]) -> std::collections::HashSet<Uuid> {
     let geometry = |sheet: &SchematicSheet| -> std::collections::HashMap<Uuid, _> {
@@ -1248,7 +1270,11 @@ pub(crate) fn check_closure_oracle(
 ) -> Result<(), String> {
     // Wires the plain move leaves alone bridge the before and plain nets; the
     // rubber-banded result is judged on identified items only.
-    let stable = unedited_wires(&[before, plain]);
+    let mut stable = unedited_wires(&[before, plain]);
+    // A selected wire keeps its joins as it moves and makes new ones where it
+    // lands (`wire_contacts`): it bridges its net before the move and its net
+    // after the plain move.
+    stable.extend(carried_wires(before, plain, after));
     let (b, p, r) = (
         items_per_net(before, &stable),
         items_per_net(plain, &stable),
