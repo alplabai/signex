@@ -335,6 +335,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
 | `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
+| `board_assembly_drawing` | Open Board Print / PDF for an assembly drawing | pcb | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_panel` | Describe the board's panel | pcb | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
@@ -348,6 +349,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |
+| `export_assembly_svg` | Write the board's top and bottom assembly drawings as SVG files | reports | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |

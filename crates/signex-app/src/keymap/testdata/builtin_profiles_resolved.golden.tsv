@@ -127,6 +127,8 @@ altium	hint	-	-	board_report_net_length
 altium	hint	-	-	board_report_components
 altium	hint	-	-	export_board_report
 altium	hint	-	-	export_board_pdf
+altium	hint	-	-	export_assembly_svg
+altium	hint	-	-	board_assembly_drawing
 altium	hint	-	-	project_settings
 altium	hint	-	-	project_move_sheet
 altium	hint	-	-	project_add_variant
@@ -620,6 +622,8 @@ classic	hint	-	-	board_report_net_length
 classic	hint	-	-	board_report_components
 classic	hint	-	-	export_board_report
 classic	hint	-	-	export_board_pdf
+classic	hint	-	-	export_assembly_svg
+classic	hint	-	-	board_assembly_drawing
 classic	hint	-	-	project_settings
 classic	hint	-	-	project_move_sheet
 classic	hint	-	-	project_add_variant

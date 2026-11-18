@@ -65,6 +65,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("outline", OperandKind::Bool),
     ("drill_marks", OperandKind::Bool),
     ("title_block", OperandKind::Bool),
+    // #2486: the assembly drawings by side.
+    ("side", OperandKind::Text),
+    ("sides", OperandKind::Text),
     ("field", OperandKind::Text),
     ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),

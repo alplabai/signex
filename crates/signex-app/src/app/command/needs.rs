@@ -393,7 +393,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "board_report_net_length"
         | "board_report_components"
         | "export_board_report"
-        | "export_board_pdf" => Needs::Pcb,
+        | "export_board_pdf"
+        | "export_assembly_svg"
+        | "board_assembly_drawing" => Needs::Pcb,
         "measure_distance" => Needs::MeasureTarget,
         // #2410: panelisation acts on the board in view.
         "panelize_board" | "remove_board_panel" | "set_board_panel" => Needs::Pcb,

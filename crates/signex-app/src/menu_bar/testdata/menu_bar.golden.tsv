@@ -213,6 +213,7 @@ Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	c
 Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
 Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
 Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
+Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
 Window	menu	Window	-	-	-	-	-
 Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
 Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically

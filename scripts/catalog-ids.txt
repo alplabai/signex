@@ -21,6 +21,7 @@ assign_footprints
 assign_net_class
 autoplace_fields
 back_annotate_schematics
+board_assembly_drawing
 board_layer_stack
 board_panel
 board_report_bom
@@ -94,6 +95,7 @@ edit_selected_object_properties
 edit_selected_symbol_in_symbol_editor
 edit_text_in_place
 edit_value
+export_assembly_svg
 export_board_pdf
 export_board_report
 fabrication_outputs

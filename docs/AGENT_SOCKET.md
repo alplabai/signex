@@ -113,6 +113,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `clear_all_net_colors`, the read-only board reports `board_report_bom`,
   `board_report_netlist`, `board_report_net_length` and
   `board_report_components` (#2404, each answers with its table as JSON),
+  `board_assembly_drawing` (#2486; answers one assembly drawing as SVG text
+  and writes nothing),
   `repour_all` (#2216; fills the named board's pours again and answers with
   each pour's pieces, copper area and removed islands; no undo step),
   `assign_net_class`, `autoplace_fields` (#1667; one undo step on the named
@@ -175,7 +177,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   pane `{"focused", "document", "name"}` in pane order (`document` and
   `name` are null for a pane outside an open project). They never change the
   active tab.
-  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
+  The CSV, PDF and SVG writers `export_board_report`, `export_board_pdf` and
+  `export_assembly_svg` take a
   `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):

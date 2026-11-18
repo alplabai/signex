@@ -17,6 +17,8 @@ pub(crate) fn set_label(set: BoardLayerSet) -> MessageId {
         BoardLayerSet::Bottom => ids::BOARD_PRINT_SET_BOTTOM,
         BoardLayerSet::Inner => ids::BOARD_PRINT_SET_INNER,
         BoardLayerSet::Mechanical => ids::BOARD_PRINT_SET_MECHANICAL,
+        BoardLayerSet::AssemblyTop => ids::BOARD_PRINT_SET_ASSEMBLY_TOP,
+        BoardLayerSet::AssemblyBottom => ids::BOARD_PRINT_SET_ASSEMBLY_BOTTOM,
     }
 }
 

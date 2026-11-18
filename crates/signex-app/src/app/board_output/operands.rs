@@ -16,9 +16,9 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
 use crate::app::{Message, Signex};
 
-type Ran = (CommandOutcome, Task<Message>);
+pub(super) type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(super) fn refused(reason: impl Into<String>) -> Ran {
     (
         CommandOutcome::Disabled {
             reason: reason.into(),
@@ -27,21 +27,21 @@ fn refused(reason: impl Into<String>) -> Ran {
     )
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
         _ => None,
     }
 }
 
-fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
+pub(super) fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
     match args.operand(name) {
         Some(OperandValue::Bool(value)) => Some(*value),
         _ => None,
     }
 }
 
-fn file(args: &CommandArgs) -> Option<PathBuf> {
+pub(super) fn file(args: &CommandArgs) -> Option<PathBuf> {
     match args.operand("path") {
         Some(OperandValue::Path(path)) => Some(PathBuf::from(path)),
         _ => None,
