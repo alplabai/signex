@@ -75,11 +75,13 @@ fn build(outline: &[[f64; 2]], holes: &[Hole], thickness: f64) -> Result<Solid, 
 
     // Tools reach past both faces so no sliver of a face survives the cut.
     let margin = thickness.max(1.0);
+    let mut round_holes = Vec::with_capacity(holes.len());
     for (index, hole) in holes.iter().enumerate() {
         let index = u32::try_from(index).map_err(|_| McadError::invalid(OP, "too many holes"))?;
         let (mut tool, name) = match hole {
             Hole::Round { center, diameter } => {
                 let radius = round_hole_radius(*center, *diameter)?;
+                round_holes.push(Some((*center, radius)));
                 let origin = Point3::new(center[0], center[1], -margin);
                 let tool = kernel_call("hole tool", || {
                     create_cylinder(&mut kernel, origin, radius, thickness + 2.0 * margin)
@@ -88,6 +90,7 @@ fn build(outline: &[[f64; 2]], holes: &[Hole], thickness: f64) -> Result<Solid, 
             }
             Hole::Polygon(points) => {
                 let ring = profile_ring("cut-out", points)?;
+                round_holes.push(None);
                 let tool = prism(&mut kernel, &ring, -margin, thickness + 2.0 * margin)?;
                 (tool, FaceName::CutoutWall(index))
             }
@@ -99,7 +102,11 @@ fn build(outline: &[[f64; 2]], holes: &[Hole], thickness: f64) -> Result<Solid, 
         body = kernel_call("cut hole", || boolean_difference(&mut kernel, blank, tool))?;
     }
     complete_trim_curves(&kernel, &mut body)?;
-    Ok(Solid { brep: body, names })
+    Ok(Solid {
+        brep: body,
+        names,
+        round_holes,
+    })
 }
 
 fn round_hole_radius(center: [f64; 2], diameter: f64) -> Result<f64, McadError> {

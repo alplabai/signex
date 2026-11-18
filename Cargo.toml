@@ -128,6 +128,7 @@ signex-history = { path = "crates/signex-history" }
 signex-commands = { path = "crates/signex-commands" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
+signex-mcad = { path = "crates/signex-mcad" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }

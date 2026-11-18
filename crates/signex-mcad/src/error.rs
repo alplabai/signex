@@ -27,6 +27,9 @@ pub enum McadError {
     /// A face could not be turned into triangles.
     #[error("face {face} cannot be tessellated: {reason}")]
     Tessellation { face: usize, reason: String },
+    /// A solid holds geometry the STEP writer cannot describe exactly.
+    #[error("STEP export: {reason}")]
+    StepExport { reason: String },
 }
 
 impl McadError {

@@ -10,6 +10,8 @@
 //! - Every kernel call is guarded: a failed operation, or a kernel panic, is a
 //!   [`McadError`] value, never a crash.
 //! - [`tessellate`] turns a solid into a triangle [`Mesh`] for the 3D view.
+//! - [`write_step`] writes solids (exact) and meshes (faceted) as a STEP
+//!   AP214 or AP242 file.
 //!
 //! The crate does no IO and starts no threads: data comes in as values and
 //! leaves as values, so it builds for `wasm32-unknown-unknown`. See
@@ -20,6 +22,7 @@ mod error;
 mod naming;
 mod orient;
 mod solid;
+mod step;
 mod tessellate;
 mod topology;
 
@@ -27,4 +30,5 @@ pub use board::{Hole, board_body};
 pub use error::McadError;
 pub use naming::{EdgeName, FaceName};
 pub use solid::{FaceInfo, Solid};
+pub use step::{StepHeader, StepMesh, StepModel, StepSchema, StepSolid, write_step};
 pub use tessellate::{Mesh, MeshFace, TessellationTolerance, tessellate};

@@ -14,6 +14,10 @@ use crate::topology::edge_faces;
 pub struct Solid {
     pub(crate) brep: Brep,
     pub(crate) names: NameTable,
+    /// Per entry of the hole list, the centre and radius of a round hole
+    /// (`None` for a cut-out): the exact cylinder behind its
+    /// [`FaceName::HoleWall`] faces.
+    pub(crate) round_holes: Vec<Option<([f64; 2], f64)>>,
 }
 
 /// One face of a [`Solid`], in the solid's face order.

@@ -1,6 +1,6 @@
 [package]
 name = "signex-mcad"
-description = "Mechanical CAD core: solids on an exact B-rep kernel, persistent face and edge names, tessellation for the 3D view"
+description = "Mechanical CAD core: solids on an exact B-rep kernel, persistent face and edge names, tessellation for the 3D view, STEP export"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,6 +15,10 @@ solidcore = "1.0.1"
 # Polygon triangulation of trimmed faces in their UV domain.
 earcut = "0.4.12"
 thiserror.workspace = true
+
+[dev-dependencies]
+# The round-trip tests read the written STEP back through Signex's importer.
+signex-3d-model-importer.workspace = true
 
 [lints]
 workspace = true
