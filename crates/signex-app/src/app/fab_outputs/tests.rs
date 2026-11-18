@@ -4,7 +4,7 @@ use signex_output::fab::{FabError, FabOptions};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
-use super::{FabOutput, FabOutputsState, FabProblem, write_fab_outputs};
+use super::{BoardNote, FabKinds, FabOutput, FabOutputsState, FabProblem, write_fab_outputs};
 
 fn board(outline: &[(f64, f64)]) -> PcbBoard {
     let mut board: PcbBoard =
@@ -17,7 +17,14 @@ fn board(outline: &[(f64, f64)]) -> PcbBoard {
 fn a_new_dialog_writes_everything_named_after_the_board_beside_it() {
     let path = PathBuf::from("projects").join("main.snxpcb");
     let state = FabOutputsState::new(path, "main.snxpcb".into());
-    assert_eq!(state.options, FabOptions::all("main"));
+    assert_eq!(state.name, "main");
+    assert_eq!(state.kinds, FabKinds::default());
+    assert_eq!(
+        state.kinds.fab_options(&state.name),
+        FabOptions::all("main")
+    );
+    assert!(state.kinds.assembly_pdf, "the assembly PDF by default");
+    assert!(!state.kinds.assembly_svg && !state.kinds.step, "asked for");
     assert_eq!(
         PathBuf::from(&state.folder),
         PathBuf::from("projects").join("fabrication")
@@ -30,18 +37,25 @@ fn a_new_dialog_writes_everything_named_after_the_board_beside_it() {
 fn generate_needs_a_kind_a_name_and_a_folder_and_no_write_in_flight() {
     let mut state = FabOutputsState::new(PathBuf::from("b.snxpcb"), "b".into());
     for kind in FabOutput::ALL {
-        kind.toggle(&mut state.options);
-        assert!(!kind.is_on(&state.options));
+        if kind.is_on(&state.kinds) {
+            kind.toggle(&mut state.kinds);
+        }
+        assert!(!kind.is_on(&state.kinds));
     }
     assert!(!state.can_generate(), "no kind chosen");
-    FabOutput::Drill.toggle(&mut state.options);
+    for kind in FabOutput::ALL {
+        kind.toggle(&mut state.kinds);
+        assert!(state.can_generate(), "{kind:?} alone is enough");
+        kind.toggle(&mut state.kinds);
+    }
+    FabOutput::Drill.toggle(&mut state.kinds);
     assert!(state.can_generate());
     state.folder = "  ".into();
     assert!(!state.can_generate(), "no folder");
     state.folder = "out".into();
-    state.options.name = String::new();
+    state.name = String::new();
     assert!(!state.can_generate(), "no name");
-    state.options.name = "b".into();
+    state.name = "b".into();
     state.writing = Some(1);
     assert!(!state.can_generate(), "a write in flight");
 }
@@ -134,10 +148,21 @@ fn a_set_with_notes_or_stale_files_is_a_warning_in_messages() {
         files: vec!["b-job.gbrjob".into()],
         folder: PathBuf::from("out"),
         notes: Vec::new(),
+        board_notes: Vec::new(),
         stale: Vec::new(),
     };
     let (line, is_warning) = super::written_message(&clean, &i18n);
     assert!(!is_warning, "{line}");
+    let model = super::FabWritten {
+        board_notes: vec![BoardNote::ModelUnread {
+            source: "lib:fp@1".into(),
+            why: "not found".into(),
+        }],
+        ..clean.clone()
+    };
+    let (line, is_warning) = super::written_message(&model, &i18n);
+    assert!(is_warning, "{line}");
+    assert!(line.contains("lib:fp@1"), "{line}");
     let zones = super::FabWritten {
         notes: vec![signex_output::fab::FabNote::ZonesNotFilled { count: 2 }],
         ..clean.clone()
@@ -152,4 +177,29 @@ fn a_set_with_notes_or_stale_files_is_a_warning_in_messages() {
     let (line, is_warning) = super::written_message(&stale, &i18n);
     assert!(is_warning);
     assert!(line.contains("b-npth.drl"), "{line}");
+}
+
+#[test]
+fn the_odb_box_picks_the_folder_or_the_archive_and_unticked_writes_none() {
+    let mut kinds = FabKinds::default();
+    let form = |k: &FabKinds| k.fab_options("b").odb;
+    assert_eq!(form(&kinds), Some(signex_output::fab::OdbForm::Archive));
+    kinds.odb_folder = true;
+    assert_eq!(form(&kinds), Some(signex_output::fab::OdbForm::Directory));
+    FabOutput::Odb.toggle(&mut kinds);
+    assert_eq!(form(&kinds), None);
+}
+
+#[test]
+fn only_the_documents_ticked_is_not_a_fabrication_set() {
+    let mut kinds = FabKinds::default();
+    for kind in FabOutput::ALL {
+        if kind.is_on(&kinds) {
+            kind.toggle(&mut kinds);
+        }
+    }
+    FabOutput::Step.toggle(&mut kinds);
+    assert!(!kinds.has_fab_files());
+    FabOutput::Ipc2581.toggle(&mut kinds);
+    assert!(kinds.has_fab_files());
 }

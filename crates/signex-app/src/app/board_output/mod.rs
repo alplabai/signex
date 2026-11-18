@@ -21,8 +21,9 @@ use signex_output::{
     BoardReportKind,
 };
 
-pub(crate) use print::set_label;
+pub(crate) use print::{print_text, set_label};
 pub use step::BoardStepBuilt;
+pub(crate) use step::{StepContext, make_step_of};
 
 pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg};
 pub(crate) use operands::{

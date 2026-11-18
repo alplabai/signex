@@ -236,7 +236,7 @@ fn the_fabrication_outputs_button_opens_its_dialog() {
         .as_ref()
         .expect("the dialog is open");
     assert!(state.board.ends_with("pcb_active_bar.snxpcb"));
-    assert_eq!(state.options.name, "pcb_active_bar");
+    assert_eq!(state.name, "pcb_active_bar");
     assert!(state.writing.is_none() && state.outcome.is_none());
 }
 

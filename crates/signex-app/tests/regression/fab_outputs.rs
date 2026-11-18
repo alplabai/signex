@@ -1,7 +1,8 @@
 //! #2388: File ▸ Fabrication Outputs, driven through `Signex::update` with
 //! the messages the menu row, the palette and the dialog send. Nothing is
 //! written until Generate; Generate writes every file into the folder, and
-//! the same board gives the same bytes.
+//! the same board gives the same bytes. #2489: the IPC-2581 file, the ODB++
+//! job, the assembly drawings and the STEP model through the same dialog.
 
 use signex_app::app::{
     CommandPaletteMsg, FabOutput, FabOutputsMsg, FabProblem, FileMsg, Message, Signex,
@@ -126,7 +127,7 @@ fn the_menu_row_opens_the_dialog_and_writes_nothing() {
     let mut f = open_board(true);
     menu_row(&mut f.app);
     let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
-    assert_eq!(state.options.name, "board");
+    assert_eq!(state.name, "board");
     let folder = std::path::PathBuf::from(&state.folder);
     // Beside the board, however the opener spelled its path.
     assert_eq!(
@@ -325,4 +326,165 @@ fn a_pour_inside_the_board_is_a_region_in_the_top_copper_image() {
         copper.contains("%TO.N,GND*%\nG36*"),
         "the pour's fill: {copper}"
     );
+}
+
+/// Open the dialog on a board with an outline, aim it at `out` under the
+/// fixture's folder and leave only `kinds` ticked.
+fn dialog_with_only(kinds: &[FabOutput], out: &str) -> (Fixture, std::path::PathBuf) {
+    let mut f = open_board(true);
+    menu_row(&mut f.app);
+    let out = f.tmp.path().join(out);
+    send(
+        &mut f.app,
+        fab(FabOutputsMsg::FolderPicked(Some(out.clone()))),
+    );
+    for kind in FabOutput::ALL {
+        let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+        if kind.is_on(&state.kinds) != kinds.contains(&kind) {
+            send(&mut f.app, fab(FabOutputsMsg::OutputToggled(kind)));
+        }
+    }
+    (f, out)
+}
+
+/// The files the last Generate wrote, as the dialog lists them.
+fn written_files(app: &Signex) -> Vec<String> {
+    let state = app.ui_state.fab_outputs.as_ref().expect("the dialog stays");
+    match &state.outcome {
+        Some(Ok(written)) => written.files.clone(),
+        other => panic!("written, not {other:?}"),
+    }
+}
+
+/// #2489: each new kind of file is ticked in the dialog, nothing reaches
+/// the disk before Generate, and Generate writes it.
+#[test]
+fn the_board_documents_and_whole_job_files_are_written_by_generate() {
+    let (mut f, out) = dialog_with_only(
+        &[
+            FabOutput::Ipc2581,
+            FabOutput::Odb,
+            FabOutput::AssemblyPdf,
+            FabOutput::AssemblySvg,
+            FabOutput::Step,
+        ],
+        "documents",
+    );
+    assert!(!out.exists(), "nothing is written before Generate");
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let files = written_files(&f.app);
+    for name in [
+        "board-ipc2581.xml",
+        "board-odb.tar",
+        "board-assembly.pdf",
+        "board-assembly-top.svg",
+        "board-assembly-bottom.svg",
+        "board-board.step",
+    ] {
+        assert!(files.contains(&name.to_string()), "{name} in {files:?}");
+        assert!(out.join(name).is_file(), "{name} is on disk");
+    }
+    assert!(
+        !out.join("board-copper-l1-top.gbr").exists(),
+        "Gerber unticked"
+    );
+
+    let ipc = std::fs::read_to_string(out.join("board-ipc2581.xml")).unwrap();
+    assert!(ipc.starts_with("<?xml"), "{ipc}");
+    assert!(ipc.contains("IPC-2581"));
+    assert!(ipc.contains("R1"), "the part is in the file");
+    let odb = std::fs::read(out.join("board-odb.tar")).unwrap();
+    assert!(
+        odb.windows(b"matrix/matrix".len())
+            .any(|w| w == b"matrix/matrix"),
+        "the archive holds the matrix"
+    );
+    let pdf = std::fs::read(out.join("board-assembly.pdf")).unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+    for side in ["top", "bottom"] {
+        let svg = std::fs::read_to_string(out.join(format!("board-assembly-{side}.svg"))).unwrap();
+        assert!(svg.contains("<svg "), "{side}: {svg}");
+    }
+    let step = std::fs::read_to_string(out.join("board-board.step")).unwrap();
+    assert!(step.starts_with("ISO-10303-21;"));
+    assert!(
+        step.contains("=MANIFOLD_SOLID_BREP('Board'"),
+        "the board body"
+    );
+}
+
+#[test]
+fn the_odb_folder_box_writes_the_job_as_its_folder_tree() {
+    let (mut f, out) = dialog_with_only(&[FabOutput::Odb], "odb-folder");
+    send(&mut f.app, fab(FabOutputsMsg::OdbFolderToggled));
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let files = written_files(&f.app);
+    assert!(
+        files.contains(&"board-odb/board/matrix/matrix".to_string()),
+        "{files:?}"
+    );
+    assert!(
+        out.join("board-odb")
+            .join("board")
+            .join("matrix")
+            .join("matrix")
+            .is_file()
+    );
+    assert!(!out.join("board-odb.tar").exists(), "no archive");
+}
+
+/// A STEP model alone is no fabrication set: no job file is written.
+#[test]
+fn the_step_model_alone_writes_only_the_model() {
+    let (mut f, out) = dialog_with_only(&[FabOutput::Step], "step-only");
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    assert_eq!(written_files(&f.app), ["board-board.step"]);
+    assert!(!out.join("board-job.gbrjob").exists());
+}
+
+/// The checks every file shares hold with documents alone: a board without
+/// an outline writes nothing.
+#[test]
+fn documents_alone_of_a_board_without_an_outline_write_nothing() {
+    let mut f = open_board(false);
+    menu_row(&mut f.app);
+    let out = f.tmp.path().join("out");
+    send(
+        &mut f.app,
+        fab(FabOutputsMsg::FolderPicked(Some(out.clone()))),
+    );
+    for kind in FabOutput::ALL {
+        let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+        if kind.is_on(&state.kinds) != (kind == FabOutput::AssemblySvg) {
+            send(&mut f.app, fab(FabOutputsMsg::OutputToggled(kind)));
+        }
+    }
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+    assert_eq!(
+        state.outcome,
+        Some(Err(FabProblem::Refused(FabError::NoOutline)))
+    );
+    assert!(!out.exists(), "nothing is written");
+}
+
+/// The kinds of file are kept for the next opening; the name is the
+/// board's own each time.
+#[test]
+fn the_next_dialog_opens_with_the_kinds_last_used() {
+    let (mut f, _out) = dialog_with_only(&[FabOutput::Step], "kept");
+    send(&mut f.app, fab(FabOutputsMsg::OdbFolderToggled));
+    send(&mut f.app, fab(FabOutputsMsg::NameEdited("rev-b".into())));
+    send(&mut f.app, fab(FabOutputsMsg::CancelRequested));
+    menu_row(&mut f.app);
+    let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+    for kind in FabOutput::ALL {
+        assert_eq!(
+            kind.is_on(&state.kinds),
+            kind == FabOutput::Step,
+            "{kind:?}"
+        );
+    }
+    assert!(state.kinds.odb_folder);
+    assert_eq!(state.name, "board");
 }

@@ -30,6 +30,13 @@ pub struct BoardStepBuilt {
 /// blocking task.
 struct StepJob {
     board: PcbBoard,
+    context: StepContext,
+}
+
+/// What a STEP model is made from besides the board: where the parts'
+/// models are read from, the schema and the file header. Taken in `update`;
+/// Fabrication Outputs (#2489) makes its model with it on its worker.
+pub(crate) struct StepContext {
     sources: Vec<FootprintSourceRef>,
     open_libraries: Vec<(Uuid, PathBuf)>,
     schema: StepSchema,
@@ -102,6 +109,26 @@ impl Signex {
     /// when it is not open.
     fn board_step_job(&self, board: &Path, path: &Path, schema: StepSchema) -> Option<StepJob> {
         let pcb = self.document_state.pcb_board(board)?.clone();
+        let file_name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let context = self.step_context(&pcb, file_name, super::file_title(board), schema);
+        Some(StepJob {
+            board: pcb,
+            context,
+        })
+    }
+
+    /// What the STEP model of `pcb` is made from besides the board, for a
+    /// file named `file_name` whose product is `product`.
+    pub(crate) fn step_context(
+        &self,
+        pcb: &PcbBoard,
+        file_name: String,
+        product: String,
+        schema: StepSchema,
+    ) -> StepContext {
         let mut seen = HashSet::new();
         let sources: Vec<FootprintSourceRef> = pcb
             .footprints
@@ -115,12 +142,7 @@ impl Signex {
             .iter()
             .map(|l| (l.library_id, l.root.clone()))
             .collect();
-        let file_name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        Some(StepJob {
-            board: pcb,
+        StepContext {
             sources,
             open_libraries,
             schema,
@@ -129,8 +151,8 @@ impl Signex {
                 timestamp: chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
                 system: format!("Signex {}", env!("CARGO_PKG_VERSION")),
             },
-            product: super::file_title(board),
-        })
+            product,
+        }
     }
 
     /// Write a made STEP model to `path`, or say why it could not be made.
@@ -167,20 +189,29 @@ impl Signex {
 /// Read the parts' models and make the STEP model. Blocking: IO and kernel
 /// work.
 fn make_board_step(job: StepJob) -> Result<Arc<BoardStepBuilt>, String> {
-    let read = read_models(&job.sources, &job.open_libraries);
+    make_step_of(&job.board, job.context).map(Arc::new)
+}
+
+/// Read the parts' models named in `context` and make the STEP model of
+/// `board`. Blocking: IO and kernel work.
+pub(crate) fn make_step_of(
+    board: &PcbBoard,
+    context: StepContext,
+) -> Result<BoardStepBuilt, String> {
+    let read = read_models(&context.sources, &context.open_libraries);
     let models: HashMap<_, _> = read.models.into_iter().collect();
     let step = board_step(&BoardStepInput {
-        board: &job.board,
+        board,
         models: &models,
-        schema: job.schema,
-        header: job.header,
-        product: job.product,
+        schema: context.schema,
+        header: context.header,
+        product: context.product,
     })
     .map_err(|e| e.to_string())?;
-    Ok(Arc::new(BoardStepBuilt {
+    Ok(BoardStepBuilt {
         step,
         unread_models: read.failures,
-    }))
+    })
 }
 
 /// What a made STEP model warns of: holes left out and models not read.

@@ -9,7 +9,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{CheckboxLabel as _, checkbox, text, text_input};
 
 use super::sizes;
-use crate::app::fab_outputs::{FabOutput, FabOutputsMsg, FabOutputsState, note_text, stale_text};
+use crate::app::fab_outputs::{
+    FabOutput, FabOutputsMsg, FabOutputsState, board_note_text, note_text, stale_text,
+};
 use crate::app::{Message, Signex};
 use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
@@ -35,7 +37,23 @@ fn kind_label(kind: FabOutput) -> MessageId {
         FabOutput::Drill => ids::FAB_OUTPUTS_DRILL,
         FabOutput::Centroid => ids::FAB_OUTPUTS_CENTROID,
         FabOutput::TestNetlist => ids::FAB_OUTPUTS_TEST_NETLIST,
+        FabOutput::Ipc2581 => ids::FAB_OUTPUTS_IPC2581,
+        FabOutput::Odb => ids::FAB_OUTPUTS_ODB,
+        FabOutput::AssemblyPdf => ids::FAB_OUTPUTS_ASSEMBLY_PDF,
+        FabOutput::AssemblySvg => ids::FAB_OUTPUTS_ASSEMBLY_SVG,
+        FabOutput::Step => ids::FAB_OUTPUTS_STEP,
     }
+}
+
+/// One tick box of the dialog.
+fn tick<'a>(on: bool, label: signex_i18n::Localized, msg: FabOutputsMsg) -> Element<'a, Message> {
+    checkbox(on)
+        .style(crate::panels::form_look::checkbox_style)
+        .size(TS.title)
+        .labelled(label)
+        .text_size(TS.label)
+        .on_toggle(move |_| fo(msg.clone()))
+        .boxed()
 }
 
 impl Signex {
@@ -108,15 +126,27 @@ fn body<'a>(state: &'a FabOutputsState, i18n: &I18n, tokens: &ThemeTokens) -> El
             .spacing(SP.s)
             .push(caption(i18n, ids::FAB_OUTPUTS_FILES, tokens));
     for kind in FabOutput::ALL {
-        kinds = kinds.push(
-            checkbox(kind.is_on(&state.options))
-                .style(crate::panels::form_look::checkbox_style)
-                .size(TS.title)
-                .labelled(t!(i18n, kind_label(kind)))
-                .text_size(TS.label)
-                .on_toggle(move |_| fo(FabOutputsMsg::OutputToggled(kind)))
-                .boxed(),
-        );
+        kinds = kinds.push(tick(
+            kind.is_on(&state.kinds),
+            t!(i18n, kind_label(kind)),
+            FabOutputsMsg::OutputToggled(kind),
+        ));
+        // The ODB++ form, under its row while it is ticked.
+        if kind == FabOutput::Odb && state.kinds.odb {
+            let folder = tick(
+                state.kinds.odb_folder,
+                t!(i18n, ids::FAB_OUTPUTS_ODB_FOLDER),
+                FabOutputsMsg::OdbFolderToggled,
+            );
+            kinds = kinds.push(
+                container(folder)
+                    .padding(iced::Padding {
+                        left: SP.xl,
+                        ..iced::Padding::ZERO
+                    })
+                    .boxed(),
+            );
+        }
     }
     // #2410: a board with a panel writes the whole panel unless unticked.
     if let Some((columns, rows)) = state.panel {
@@ -147,7 +177,7 @@ fn fields<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let name = text_input(t!(i18n, ids::FAB_OUTPUTS_NAME), &state.options.name)
+    let name = text_input(t!(i18n, ids::FAB_OUTPUTS_NAME), &state.name)
         .style(crate::panels::form_look::text_input_style)
         .on_input(|v| fo(FabOutputsMsg::NameEdited(v)))
         .size(TS.label)
@@ -223,6 +253,14 @@ fn outcome<'a>(
     for note in state.notes() {
         col = col.push(
             text(note_text(*note, i18n))
+                .size(TS.body)
+                .color(warning)
+                .boxed(),
+        );
+    }
+    for note in state.board_notes() {
+        col = col.push(
+            text(board_note_text(note, i18n))
                 .size(TS.body)
                 .color(warning)
                 .boxed(),

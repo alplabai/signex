@@ -13,12 +13,26 @@ to Messages. When the set leaves something out (see "Not drawn yet") the
 Messages line carries every note and is a warning, not an info line, so a
 set without its zone copper is never logged as a clean one.
 
+The dialog has a tick box per kind of file (#2489): Gerber, drill, pick and
+place, the test netlist, IPC-2581, ODB++ (with a second box under it to
+write the job as its folder tree instead of one archive), the assembly
+drawing as a PDF, the assembly drawings as SVG, and the board's STEP model.
+A new dialog ticks every kind but the SVG drawings and the STEP model; after
+that it opens with the kinds it was last used with, for as long as Signex
+runs. The name and the folder are the board's own each time.
+
+Generate makes every ticked file first and only then writes them, so a file
+that cannot be made (no outline, a bad name, a drawing or a model that
+fails) writes nothing, and the dialog says why. The name and outline checks
+hold for every kind, the drawings and the model included.
+
 Generate never deletes. Files in the folder that start with `<name>-`, end
-in `.gbr`, `.drl`, `.csv`, `.ipc` or `.gbrjob`, and were not written by this
-run (an inner layer removed since, a kind unticked, a span no longer
-drilled) are listed in the dialog and in the Messages warning as older
-files to remove before the folder goes to a board house. The job file
-lists only the files of this run.
+in `.gbr`, `.drl`, `.csv`, `.ipc`, `.gbrjob`, `.xml`, `.tar`, `.pdf`, `.svg`
+or `.step`, and were not written by this run (an inner layer removed since,
+a kind unticked, a span no longer drilled) are listed in the dialog and in
+the Messages warning as older files to remove before the folder goes to a
+board house. The job file lists only the fabrication files of this run, and
+is written only when one of them is ticked.
 
 The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 `crates/signex-app/src/app/fab_outputs/`.
@@ -40,7 +54,10 @@ The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 | `<name>-netlist.ipc` | IPC-D-356 bare-board test netlist |
 | `<name>-ipc2581.xml` | IPC-2581 revision C: the whole job in one file (#2484) |
 | `<name>-odb.tar`, or the folder `<name>-odb/` | the ODB++ job (#2485), as one archive or as its folder tree |
-| `<name>-job.gbrjob` | every file written, with its X2 file function |
+| `<name>-job.gbrjob` | every fabrication file written, with its X2 file function |
+| `<name>-assembly.pdf` | the assembly drawings, top then bottom, a page each (#2489) |
+| `<name>-assembly-top.svg`, `<name>-assembly-bottom.svg` | the same drawings as SVG at 1:1 in mm, the bottom read from below (#2489) |
+| `<name>-board.step` | the board and its parts as a STEP model (#2489) |
 
 The copper stack is top and bottom always, every inner layer the board's
 layer table lists, and any inner layer an item is drawn on. Legend, mask and
@@ -226,8 +243,8 @@ It holds:
   in the pick-and-place file, mirrored on the bottom), a BOM item per value
   and footprint, and a logical net per net with the pins its pads carry.
 
-No person, company or date is recorded. The file is written with every
-generation; the dialog's own tick box for it is #2489.
+No person, company or date is recorded. The dialog writes it while its
+IPC-2581 box is ticked (#2489).
 
 ## ODB++
 
@@ -235,7 +252,8 @@ Version 7.0, millimetres, one step `pcb`. `FabOptions::odb` picks the form:
 `OdbForm::Archive` writes one uncompressed POSIX tar, `<name>-odb.tar`, whose
 root folder is the job name; `OdbForm::Directory` writes the same tree under
 `<name>-odb/`, so the job folder is `<name>-odb/<job name>/`. The dialog
-writes the archive. Entity names (job, layers) are lowercase ASCII letters,
+writes the archive, or the folder while the box under its ODB++ row is
+ticked (#2489). Entity names (job, layers) are lowercase ASCII letters,
 digits and `_ + - .`, at most 64 characters: a layer is named by its export
 name from the table above, lowercased (`topcopper`, `inner1copper`, a
 mechanical layer's own name such as `fold_lines`), and a name another layer
@@ -280,10 +298,26 @@ takes `_2`, `_3`, ..., since net names are unique. The job holds:
   axis when `M`, then turned clockwise by the rotation, then moved to the
   part's position. A part with no pads has no package and is left out.
 
-No date or user is recorded. The archive is written with every generation;
-the dialog's own choice of ODB++ and of its form is #2489.
+No date or user is recorded. The dialog writes the job while its ODB++ box
+is ticked.
+
+## Assembly drawings and STEP (#2489)
+
+The assembly PDF is Board Print / PDF's two assembly page sets, one page
+each, top then bottom, on the page size and orientation Board Print / PDF
+was last used with; the SVG files are Export Assembly SVG's drawings, the
+bottom read from below, in colour. Both draw what `docs/BOARD_OUTPUT.md`,
+"Assembly drawings", describes. The STEP model is File ▸ Export ▸ STEP 3D
+Model's (AP214), its parts' models read from the open libraries. With
+"Whole panel" ticked, the drawings and the model are of the panel too.
+
+What they leave out shows under the result and in the Messages warning:
+holes the STEP board body leaves out, part models that could not be read
+(their plain body is used), and characters of the PDF no bundled font
+covers.
 
 ## Refusals
 
 Generate writes nothing, and says why, when no kind of file is chosen, the
-name is empty or holds `/ \ : * ? " < > |`, or the board has no outline.
+name is empty or holds `/ \ : * ? " < > |`, the board has no outline, the
+assembly PDF cannot be drawn, or the STEP model cannot be made.

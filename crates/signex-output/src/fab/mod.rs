@@ -191,6 +191,19 @@ pub enum FabError {
 /// Characters a file-name stem may not hold on any platform.
 const NAME_FORBIDDEN: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
+/// The file-name stem `name` trimmed, when it can name files and `board`
+/// has an outline: the checks every output of a generation shares.
+pub fn check_job<'a>(board: &PcbBoard, name: &'a str) -> Result<&'a str, FabError> {
+    let name = name.trim();
+    if name.is_empty() || name.contains(NAME_FORBIDDEN) || name.chars().any(char::is_control) {
+        return Err(FabError::BadName);
+    }
+    if board.outline.len() < 3 {
+        return Err(FabError::NoOutline);
+    }
+    Ok(name)
+}
+
 /// The fabrication files of `board`.
 pub fn generate(
     board: &PcbBoard,
@@ -200,13 +213,7 @@ pub fn generate(
     if !options.any() {
         return Err(FabError::NothingSelected);
     }
-    let name = options.name.trim();
-    if name.is_empty() || name.contains(NAME_FORBIDDEN) || name.chars().any(char::is_control) {
-        return Err(FabError::BadName);
-    }
-    if board.outline.len() < 3 {
-        return Err(FabError::NoOutline);
-    }
+    let name = check_job(board, &options.name)?;
     let stack = CopperStack::of(board, collect::used_copper(board, extras).into_iter());
     let mut tally = Tally::default();
     let mut skipped = 0;

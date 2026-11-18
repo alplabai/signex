@@ -444,6 +444,7 @@ impl Signex {
                 board_reannotate_options: Default::default(),
                 fab_outputs: None,
                 fab_outputs_writes: 0,
+                fab_outputs_kinds: Default::default(),
                 board_output: Default::default(),
                 back_annotate: None,
                 find_similar: None,

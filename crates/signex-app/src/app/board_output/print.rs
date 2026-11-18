@@ -23,7 +23,7 @@ pub(crate) fn set_label(set: BoardLayerSet) -> MessageId {
 }
 
 /// The words a printed title block carries, in `i18n`'s language.
-pub(super) fn print_text(i18n: &I18n, title: &str) -> BoardPrintText {
+pub(crate) fn print_text(i18n: &I18n, title: &str) -> BoardPrintText {
     BoardPrintText {
         title: title.to_string(),
         sets: BoardLayerSet::ALL
