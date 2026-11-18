@@ -231,6 +231,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
 | `color_net` | Color net | view | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
+| `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |
 | `drag` | Drag | modify | — | — |
@@ -323,6 +324,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_symbol_parameter` | Set a parameter of a placed part | edit | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |

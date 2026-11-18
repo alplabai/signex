@@ -90,7 +90,10 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 [Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
-greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398),
+then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
+Sheet Entries and Ports..., greyed with no sheet in view (see
+[Bottom-up hierarchy](#bottom-up-hierarchy), #1276). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
@@ -652,8 +655,36 @@ Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
 selected. Copy Attributes copies the object at the point the menu was opened
 over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
-From Sheet Symbol and Sync Sheet Pins, live with a sheet symbol selected, and
-Number Schematic Sheets.
+From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
+live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
+Number Schematic Sheets (#1276).
+
+## Bottom-up hierarchy {#bottom-up-hierarchy}
+
+Design ▸ Create Sheet Symbol From Sheet... (`create_sheet_symbol_from_sheet`,
+#1276) asks for a `.snxsch` file, reads it off the UI thread and places a sheet
+symbol for it on the sheet in view as one undo step: named after the file
+(`name_2`, ... when taken), referring to the file relative to this sheet, at
+the cursor's last point on this sheet (else under the sheet's content), with an
+auto-generated entry for every port of the file (outputs on the right edge,
+every other direction on the left). It refuses the sheet itself, a file that
+places this sheet, a sheet above this one at any depth, and a file this sheet
+already places. Both commands also run from operands; see
+[CLI.md](CLI.md#bottom-up-hierarchy).
+
+Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
+dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
+sheet symbol** changes the symbol's entries, **Sheet symbol to sheet** changes
+the sheet's hierarchical ports. The dialog lists the names that would be added,
+removed and renamed, and Apply makes exactly those changes as one undo step.
+Esc and Cancel close it without a change. A rename is read only when, for one
+direction (input, output, ...), exactly one name is gone and one is new; it
+keeps the entry's place and wires, or the port label's place. Sheet to sheet
+symbol removes auto-generated entries only, as Sync Sheet Pins does; Sheet
+symbol to sheet removes and renames Hierarchical labels only and never touches
+a Global label. A sheet that is not open is changed in memory, left unsaved,
+and refused if its file changed on disk after the dialog read it. The rules:
+`signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
 
 Assign Net Class... is greyed: `assign_net_class` takes the net and the class
 as operands, which the menu cannot supply yet; its tooltip points at the Net

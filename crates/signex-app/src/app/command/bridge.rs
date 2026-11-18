@@ -174,6 +174,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
         "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
         "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),
+        // #1276: bottom-up hierarchy.
+        "create_sheet_symbol_from_sheet" => {
+            Message::from(crate::app::SheetSyncMsg::CreateSymbolRequested)
+        }
+        "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.

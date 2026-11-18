@@ -447,6 +447,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "place_sheet_symbol",
         "place_sheet_entry",
         "sync_sheet_pins",
+        "create_sheet_symbol_from_sheet",
+        "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
         "set_sheet_symbol_size",

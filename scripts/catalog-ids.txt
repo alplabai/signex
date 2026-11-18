@@ -52,6 +52,7 @@ color_net
 copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol
+create_sheet_symbol_from_sheet
 cross_probe
 cut
 cycle_arc_mode
@@ -346,6 +347,7 @@ stitch_vias
 swap_gates
 swap_pins
 switch_segment_posture
+sync_sheet_entries
 sync_sheet_pins
 tile_windows_horizontally
 tile_windows_vertically

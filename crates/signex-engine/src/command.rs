@@ -11,6 +11,13 @@ pub struct SheetPort {
     pub direction: String,
 }
 
+/// A sheet entry or port that keeps its place and takes a new name (#1276).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetEntryRename {
+    pub from: String,
+    pub to: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MirrorAxis {
     Horizontal,
@@ -438,9 +445,13 @@ pub enum Command {
     },
     /// Reconcile parent-sheet symbolic pins for all child sheets that point
     /// to `child_filename`, based on the exposed ports from that child.
+    /// `renames` run first: a pin named `from` takes the name `to` in place,
+    /// so its wires stay on it (#1276); a symbol that already has a `to`
+    /// pin keeps both pins as they are.
     ReconcileChildSheetPins {
         child_filename: String,
         ports: Vec<SheetPort>,
+        renames: Vec<SheetEntryRename>,
     },
     /// Re-point every hierarchical child-sheet reference whose `filename`
     /// is `from` at `to` — the follow-up to renaming the referenced

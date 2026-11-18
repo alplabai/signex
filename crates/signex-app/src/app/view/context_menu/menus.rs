@@ -51,6 +51,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "open_child_sheet",
     "create_sheet_from_sheet_symbol",
     "sync_sheet_pins",
+    "sync_sheet_entries",
+    "create_sheet_symbol_from_sheet",
     "open_preferences",
     "open_datasheet",
     "edit_selected_symbol_in_symbol_editor",

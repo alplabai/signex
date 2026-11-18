@@ -27,6 +27,7 @@ use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::selection_filter_operands as filter;
+use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -104,6 +105,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
+    // #1276: bottom-up hierarchy.
+    (
+        "create_sheet_symbol_from_sheet",
+        sheet_sync::create_sheet_symbol_from_sheet,
+    ),
+    ("sync_sheet_entries", sheet_sync::sync_sheet_entries),
     ("set_object_position", placed::set_object_position),
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),

@@ -440,6 +440,8 @@ impl Signex {
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
+                sheet_sync: None,
+                sheet_sync_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
                 fab_outputs: None,

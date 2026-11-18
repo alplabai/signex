@@ -945,6 +945,9 @@ pub enum EditMsg {
     ArrangeDrawings(signex_engine::DrawingArrange),
     /// A placement extra on a sheet (#1667).
     Extras(super::PlacementExtrasMsg),
+    /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
+    /// sheet entry sync with its preview.
+    SheetSync(crate::app::SheetSyncMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

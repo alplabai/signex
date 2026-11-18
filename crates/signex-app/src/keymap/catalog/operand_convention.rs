@@ -53,6 +53,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("size", OperandKind::Point),
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
+    // #1276: a sheet symbol by id or name.
+    ("symbol", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
     ("layer", OperandKind::Text),

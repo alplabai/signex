@@ -511,6 +511,8 @@ mod tests {
             "set_object_rotation",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            "sync_sheet_entries",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();
@@ -536,6 +538,7 @@ mod tests {
             ("toggle_properties_panel", "not runnable headless"),
             ("place_design_block", "takes a file path"),
             ("import_graphics", "takes a file path"),
+            ("create_sheet_symbol_from_sheet", "takes a file path"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");
