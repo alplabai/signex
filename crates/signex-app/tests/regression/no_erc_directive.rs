@@ -103,8 +103,8 @@ fn edit_rules(app: &mut Signex, id: uuid::Uuid, edit: NoErcRuleEdit) {
     let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
 }
 
-/// #1699: ticking rules in Properties narrows the directive to them, each
-/// tick is one undo step, and "All Rules" clears the list again.
+/// #1699: ticking rules in Properties narrows the directive to them (stored
+/// sorted), each tick is one undo step, and "All Rules" clears the list again.
 #[test]
 fn properties_rule_checkboxes_edit_the_list_one_undo_step_each() {
     let mut app = app_with_empty_sheet();
@@ -121,7 +121,7 @@ fn properties_rule_checkboxes_edit_the_list_one_undo_step_each() {
     edit_rules(&mut app, id, tick("builtin::pin_type_conflict"));
     assert_eq!(
         doc(&app).no_erc_directives[0].rules,
-        vec!["builtin::unused_pin", "builtin::pin_type_conflict"]
+        vec!["builtin::pin_type_conflict", "builtin::unused_pin"]
     );
     assert!(!doc(&app).no_erc_directives[0].suppresses("builtin::orphan_label"));
 

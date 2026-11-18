@@ -88,6 +88,7 @@ duplicate
 edit_blanket
 edit_footprint_field
 edit_library_symbol
+edit_no_erc_rules
 edit_object_properties
 edit_reference_designator
 edit_selected_object_properties

@@ -36,6 +36,18 @@ impl NoErcDirective {
     }
 }
 
+/// The stored form of a rule list: sorted, without repeats, and empty when it
+/// names [`ALL_ERC_RULES`], so a list saves the same whatever order it was
+/// picked in. The engine stores every list in this form.
+pub fn canonical_no_erc_rules(mut rules: Vec<String>) -> Vec<String> {
+    if rules.iter().any(|r| r == ALL_ERC_RULES) {
+        return Vec::new();
+    }
+    rules.sort_unstable();
+    rules.dedup();
+    rules
+}
+
 /// Whether a No-ERC rule list silences `rule_id`: an empty list, or one that
 /// names the rule or [`ALL_ERC_RULES`]. The one test every suppression path
 /// shares (the per-sheet run and the project-wide passes).
@@ -67,5 +79,15 @@ mod tests {
         assert!(d.suppresses("builtin::unused_pin"));
         assert!(!d.suppresses("builtin::pin_type_conflict"));
         assert!(at_origin(&[ALL_ERC_RULES]).suppresses("builtin::pin_type_conflict"));
+    }
+
+    #[test]
+    fn the_canonical_list_is_sorted_without_repeats_and_star_is_every_rule() {
+        let ids = |list: &[&str]| list.iter().map(|r| r.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            canonical_no_erc_rules(ids(&["builtin::b", "builtin::a", "builtin::b"])),
+            ids(&["builtin::a", "builtin::b"])
+        );
+        assert!(canonical_no_erc_rules(ids(&["builtin::a", ALL_ERC_RULES])).is_empty());
     }
 }

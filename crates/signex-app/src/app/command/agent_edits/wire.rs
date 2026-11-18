@@ -488,6 +488,7 @@ mod tests {
             "draw_rectangle",
             "draw_wire",
             "edit_blanket",
+            "edit_no_erc_rules",
             "place_blanket",
             "place_bus",
             "place_compile_mask",

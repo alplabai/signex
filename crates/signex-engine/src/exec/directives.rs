@@ -84,6 +84,7 @@ impl Engine {
         id: uuid::Uuid,
         rules: Vec<String>,
     ) -> Result<CommandResult, EngineError> {
+        let rules = signex_types::schematic::canonical_no_erc_rules(rules);
         let Some(slot) = self
             .document
             .no_erc_directives

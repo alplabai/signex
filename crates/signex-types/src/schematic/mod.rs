@@ -827,7 +827,7 @@ pub use directive::{
     parse_erc_exclusions,
 };
 mod no_erc;
-pub use no_erc::{NoErcDirective, no_erc_rules_suppress};
+pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

@@ -96,6 +96,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
     ("corners", OperandKind::Text),
+    // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
+    ("rules", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

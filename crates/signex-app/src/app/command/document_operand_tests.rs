@@ -440,6 +440,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_rectangle",
         "place_blanket",
         "edit_blanket",
+        "edit_no_erc_rules",
         "place_compile_mask",
         "place_diff_pair",
         "place_component",

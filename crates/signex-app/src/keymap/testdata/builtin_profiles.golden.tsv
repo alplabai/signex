@@ -274,6 +274,7 @@ altium	hint	-	-	draw_polygon
 altium	hint	-	-	draw_bezier
 altium	hint	-	-	import_graphics
 altium	hint	-	-	edit_blanket
+altium	hint	-	-	edit_no_erc_rules
 altium	hint	-	-	place_board_arc
 altium	hint	-	-	place_board_string
 altium	hint	-	-	place_board_dimension
@@ -768,6 +769,7 @@ classic	hint	-	-	draw_polygon
 classic	hint	-	-	draw_bezier
 classic	hint	-	Ctrl+Shift+F	import_graphics
 classic	hint	-	-	edit_blanket
+classic	hint	-	-	edit_no_erc_rules
 classic	hint	-	-	place_board_arc
 classic	hint	-	-	place_board_string
 classic	hint	-	-	place_board_dimension

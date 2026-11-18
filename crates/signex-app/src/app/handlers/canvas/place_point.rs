@@ -109,7 +109,11 @@ impl Signex {
     }
 
     pub(crate) fn place_no_erc_directive_at(&mut self, at: Point) -> bool {
-        let directive = NoErcDirective::new(uuid::Uuid::now_v7(), at);
+        self.place_no_erc_directive(NoErcDirective::new(uuid::Uuid::now_v7(), at))
+    }
+
+    /// Place `directive` as it is, its rule list included (#1699).
+    pub(crate) fn place_no_erc_directive(&mut self, directive: NoErcDirective) -> bool {
         self.apply_engine_command(
             signex_engine::Command::PlaceNoErcDirective { directive },
             false,

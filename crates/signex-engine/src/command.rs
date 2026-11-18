@@ -556,8 +556,9 @@ pub enum Command {
         directive: signex_types::schematic::SchDirective,
     },
     /// Set the ERC rule ids the No-ERC directive `id` silences (#1699); an
-    /// empty list silences every rule. Refused when no such directive
-    /// exists; unchanged when the list is already `rules`.
+    /// empty list silences every rule. Stored sorted without repeats (`*`
+    /// stores as empty). Refused when no such directive exists; unchanged
+    /// when the stored list is already that.
     SetNoErcRules {
         id: Uuid,
         rules: Vec<String>,

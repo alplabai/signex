@@ -96,6 +96,21 @@ pub const SEGMENT: &[Operand] = &[
     required("end", OperandKind::Point),
     optional("document", OperandKind::Document),
 ];
+/// A No-ERC directive (#1699): its point and, comma separated, the ERC rule
+/// ids it silences there; left out or empty silences every rule.
+pub const NO_ERC: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A No-ERC rule list edit (#1699): the directive `id` and the rule ids it
+/// silences, comma separated; left out or empty (a required text operand
+/// cannot be empty) silences every rule.
+pub const EDIT_NO_ERC_RULES: &[Operand] = &[
+    required("id", OperandKind::Text),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// A Blanket (#2420): its two corners, the net class it gives the nets
 /// inside it and the ERC rule ids, comma separated, it does not report there.
 pub const BLANKET: &[Operand] = &[

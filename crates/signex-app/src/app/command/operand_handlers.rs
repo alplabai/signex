@@ -94,6 +94,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_rectangle", place::rectangle),
     ("place_blanket", directive::blanket),
     ("edit_blanket", directive::edit_blanket),
+    ("edit_no_erc_rules", directive::edit_no_erc_rules),
     ("place_compile_mask", directive::compile_mask),
     ("place_diff_pair", directive::diff_pair),
     ("autoplace_fields", extras::autoplace_fields),
@@ -466,6 +467,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \
              select the Blanket to read them in Properties",
+        ),
+        "edit_no_erc_rules" => Some(
+            "`edit_no_erc_rules` needs the operand `id` and the rules to set — \
+             tick the rules under Suppressed Rules in Properties",
         ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(

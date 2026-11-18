@@ -121,6 +121,16 @@ Rules, checked while the list is empty. Ticking a rule while All Rules is
 checked narrows the marker to that rule; unticking the last listed rule
 leaves the list empty, which is every rule again. Each checkbox is one undo
 step (`Command::SetNoErcRules`, patch `DocumentPatch::NO_ERC_DIRECTIVES`).
+The engine stores every list sorted without repeats, and a list naming `*`
+as empty (`canonical_no_erc_rules`), so a file does not depend on the order
+the rules were picked in.
+
+Automation: `place_no_erc at [rules] [document]` places a marker with the
+comma-separated `rules` (left out: every rule), and
+`edit_no_erc_rules id [rules] [document]` sets the list of an existing
+marker (`rules` left out or empty: every rule) through the same
+`SetNoErcRules` as a checkbox. An unknown rule id is refused, as for a
+Blanket's `exclude`.
 Copy, cut and paste carry No-ERC directives with their lists.
 
 ## Not yet
