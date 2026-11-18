@@ -313,7 +313,7 @@ pub(in crate::format) struct SheetExtras {
     #[serde(default)]
     pub(in crate::format) drawings: Vec<crate::schematic::SchDrawing>,
     #[serde(default)]
-    pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoConnect>,
+    pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoErcDirective>,
     /// Blankets, Compile Masks and Differential Pair directives (#2420);
     /// omitted when empty so a sheet without any re-saves byte-identical.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

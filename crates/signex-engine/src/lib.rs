@@ -730,9 +730,9 @@ impl Engine {
                 self.exec_drawings(before, cmd)
             }
             Command::ResizeChildSheet { .. } => self.exec_resize_child_sheet(before, cmd),
-            Command::PlaceDirective { .. } | Command::UpdateDirective { .. } => {
-                self.exec_directives(before, cmd)
-            }
+            Command::PlaceDirective { .. }
+            | Command::UpdateDirective { .. }
+            | Command::SetNoErcRules { .. } => self.exec_directives(before, cmd),
             Command::AutoplaceFields { symbol_ids } => {
                 Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }

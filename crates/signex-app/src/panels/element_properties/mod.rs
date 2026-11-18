@@ -17,6 +17,7 @@ mod footprint_section;
 mod header;
 mod label;
 mod library_rows;
+mod no_erc;
 mod pins;
 mod placed_kinds;
 mod placed_rows;
@@ -34,6 +35,7 @@ pub(crate) use body_row::{
 };
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
+pub use no_erc::NoErcRuleEdit;
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
 pub use footprint_card::{

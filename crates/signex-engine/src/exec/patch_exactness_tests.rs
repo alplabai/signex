@@ -15,9 +15,9 @@ use crate::{
 use signex_types::schematic::LinkStamp;
 use signex_types::schematic::{
     AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
-    LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDirective,
-    SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol,
-    SymbolTransform, TextNote, TextProp, VAlign, Wire,
+    LabelType, LibPin, LibSymbol, NoConnect, NoErcDirective, Pin, PinDirection, PinShapeStyle,
+    Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin,
+    StrokeColor, Symbol, SymbolTransform, TextNote, TextProp, VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -261,9 +261,10 @@ fn fixture() -> SchematicSheet {
             uuid: uid(NO_CONNECT, n),
             position: pt(110.0, 5.0 * n as f64),
         });
-        s.no_erc_directives.push(NoConnect {
+        s.no_erc_directives.push(NoErcDirective {
             uuid: uid(NO_ERC, n),
             position: pt(120.0, 5.0 * n as f64),
+            rules: Vec::new(),
         });
         s.child_sheets.push(child_sheet(n));
         s.drawings.push(drawing(n, 65.0));
@@ -451,6 +452,7 @@ const ALL_KINDS: [CommandKind; 64] = [
     CommandKind::SetDrawingPlacement,
     CommandKind::PlaceDirective,
     CommandKind::UpdateDirective,
+    CommandKind::SetNoErcRules,
     CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
 ];
@@ -522,6 +524,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetDrawingPlacement
         | CommandKind::PlaceDirective
         | CommandKind::UpdateDirective
+        | CommandKind::SetNoErcRules
         | CommandKind::AutoplaceFields
         | CommandKind::MoveEach => {}
     }
@@ -940,10 +943,7 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "PlaceNoErcDirective",
         Command::PlaceNoErcDirective {
-            directive: NoConnect {
-                uuid: uid(NO_ERC, NEW),
-                position: pt(5.0, 5.0),
-            },
+            directive: NoErcDirective::new(uid(NO_ERC, NEW), pt(5.0, 5.0)),
         },
     );
     add(
@@ -1134,6 +1134,13 @@ fn samples() -> Vec<(String, Command)> {
         "UpdateDirective",
         Command::UpdateDirective {
             directive: blanket(1, "HighSpeed"),
+        },
+    );
+    add(
+        "SetNoErcRules",
+        Command::SetNoErcRules {
+            id: uid(NO_ERC, 1),
+            rules: vec!["builtin::unused_pin".into()],
         },
     );
     add(

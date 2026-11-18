@@ -702,3 +702,8 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+# Section title: the ERC rules a selected No-ERC directive silences at its
+# point (#1699).
+panels-no-erc-rules = Suppressed Rules
+# Checkbox: the No-ERC directive silences every ERC rule at its point.
+panels-no-erc-all-rules = All Rules

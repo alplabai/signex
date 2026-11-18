@@ -108,7 +108,7 @@ place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_
 place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text,allow_merge:bool?,document:document?
 place_junction	place	Place junction	Junction	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,allow_merge:bool?,document:document?
 place_no_connect	place	Place no-connect flag	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
-place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
+place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,rules:text?,document:document?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 place_design_block	place	Place design block	Design Block...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -166,6 +166,7 @@ draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
+edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
 place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_string	place	Place a string on the active overlay, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_dimension	place	Place a linear dimension on the board	Dimension	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-

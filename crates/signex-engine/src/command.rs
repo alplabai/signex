@@ -1,7 +1,7 @@
 use crate::exec::change_component::ComponentReplacement;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
+    NoErcDirective, SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
 };
 use uuid::Uuid;
 
@@ -117,6 +117,7 @@ pub enum CommandKind {
     SetDrawingPlacement,
     PlaceDirective,
     UpdateDirective,
+    SetNoErcRules,
     AutoplaceFields,
 }
 
@@ -379,7 +380,7 @@ pub enum Command {
     /// Place a generic No-ERC directive; lands in `no_erc_directives`,
     /// never `no_connects`.
     PlaceNoErcDirective {
-        directive: NoConnect,
+        directive: NoErcDirective,
     },
     PlaceBusEntry {
         bus_entry: BusEntry,
@@ -562,6 +563,14 @@ pub enum Command {
     UpdateDirective {
         directive: signex_types::schematic::SchDirective,
     },
+    /// Set the ERC rule ids the No-ERC directive `id` silences (#1699); an
+    /// empty list silences every rule. Stored sorted without repeats (`*`
+    /// stores as empty). Refused when no such directive exists; unchanged
+    /// when the stored list is already that.
+    SetNoErcRules {
+        id: Uuid,
+        rules: Vec<String>,
+    },
     /// Put the reference and value fields of the parts `symbol_ids` where the
     /// autoplacer puts them, as one undo step (#1667). Asked for by name, so a
     /// field the user moved is placed too and the part's fields count as
@@ -708,6 +717,7 @@ impl Command {
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
             Command::PlaceDirective { .. } => CommandKind::PlaceDirective,
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
+            Command::SetNoErcRules { .. } => CommandKind::SetNoErcRules,
             Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
         }
     }

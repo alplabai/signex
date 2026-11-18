@@ -372,6 +372,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_compile_mask"
         | "place_diff_pair"
         | "edit_blanket"
+        // #1699: a No-ERC directive's rule list.
+        | "edit_no_erc_rules"
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"

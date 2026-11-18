@@ -360,6 +360,7 @@ define_ids! {
         CMD_PLACE_BLANKET = "cmd-place-blanket";
         CMD_MENU_PLACE_BLANKET = "cmd-menu-place-blanket";
         CMD_EDIT_BLANKET = "cmd-edit-blanket";
+        CMD_EDIT_NO_ERC_RULES = "cmd-edit-no-erc-rules";
         CMD_PLACE_TEXT_STRING = "cmd-place-text-string";
         CMD_MENU_PLACE_TEXT_STRING = "cmd-menu-place-text-string";
         CMD_PLACE_TEXT_FRAME = "cmd-place-text-frame";

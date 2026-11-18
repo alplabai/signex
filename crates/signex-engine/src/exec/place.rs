@@ -1,7 +1,7 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
-use signex_types::schematic::{SelectedItem, SelectedKind};
+use signex_types::schematic::{SelectedItem, SelectedKind, canonical_no_erc_rules};
 
 /// Whether `item` is the designator or value field of a symbol `symbols`
 /// holds: that symbol's own move or turn already carries the text (#2087,
@@ -621,7 +621,9 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::PlaceNoErcDirective { directive } => {
+            Command::PlaceNoErcDirective { mut directive } => {
+                // Stored sorted (#1699), so a file does not depend on pick order.
+                directive.rules = canonical_no_erc_rules(std::mem::take(&mut directive.rules));
                 self.document.no_erc_directives.push(directive);
 
                 let patch_pair = PatchPair {

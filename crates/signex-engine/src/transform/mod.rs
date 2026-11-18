@@ -660,6 +660,7 @@ impl_has_uuid!(
     signex_types::schematic::Label,
     signex_types::schematic::Junction,
     signex_types::schematic::NoConnect,
+    signex_types::schematic::NoErcDirective,
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
     signex_types::schematic::ChildSheet,

@@ -440,6 +440,11 @@
     "category": "library"
   },
   {
+    "id": "edit_no_erc_rules",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "edit_object_properties",
     "group": "General",
     "category": "edit"

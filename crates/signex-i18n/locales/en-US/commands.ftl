@@ -374,6 +374,7 @@ cmd-place-blanket = Place blanket
 # Noun: a directive that covers an area of the sheet.
 cmd-menu-place-blanket = Blanket
 cmd-edit-blanket = Edit blanket parameters
+cmd-edit-no-erc-rules = Edit No ERC rules
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
 cmd-place-text-frame = Place text frame
