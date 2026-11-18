@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::fixtures::Fixture;
 use crate::rng::Rng;
-use crate::session::{Routed, plan, route, rules_of, shove_rounds};
+use crate::session::{Routed, ShoveTry, plan, route, rules_of, shove_rounds};
 
 /// Rounds a shove may take on most actions.
 pub const ROUNDS_LIMIT: usize = 8;
@@ -36,8 +36,8 @@ pub struct BoardBench {
     pub copper: usize,
     pub landed: usize,
     pub refused: usize,
-    /// Rounds of every shove action that tried a push.
-    pub rounds: Vec<usize>,
+    /// How every shove action that tried a push ended.
+    pub shoves: Vec<ShoveTry>,
     /// One per routed or refused leg.
     pub latencies: Vec<Duration>,
     /// Actions that broke a promise: a DRC delta off the route, or a route
@@ -46,13 +46,22 @@ pub struct BoardBench {
 }
 
 impl BoardBench {
-    /// The share of shove actions within [`ROUNDS_LIMIT`]; 1 with none.
+    /// The share of shove actions that cleared the way within
+    /// [`ROUNDS_LIMIT`]; a shove that gave up never counts. 1 with none.
     pub fn converged_share(&self) -> f64 {
-        if self.rounds.is_empty() {
+        if self.shoves.is_empty() {
             return 1.0;
         }
-        let within = self.rounds.iter().filter(|&&r| r <= ROUNDS_LIMIT).count();
-        within as f64 / self.rounds.len() as f64
+        let within = self
+            .shoves
+            .iter()
+            .filter(|s| s.converged && s.rounds <= ROUNDS_LIMIT)
+            .count();
+        within as f64 / self.shoves.len() as f64
+    }
+
+    fn gave_up(&self) -> usize {
+        self.shoves.iter().filter(|s| !s.converged).count()
     }
 
     pub fn percentile(&self, share: f64) -> Duration {
@@ -67,15 +76,16 @@ impl BoardBench {
     pub fn line(&self) -> String {
         format!(
             "{:<24} copper {:>5}  legs {:>4} landed / {:>4} refused  shove {:>4} actions, \
-             {:>5.1}% within {ROUNDS_LIMIT} rounds, max {}  latency median {:>7.2?} p95 {:>7.2?}  \
-             breaks {}",
+             {:>5.1}% converged within {ROUNDS_LIMIT} rounds, {} gave up, max {}  \
+             latency median {:>7.2?} p95 {:>7.2?}  breaks {}",
             self.name,
             self.copper,
             self.landed,
             self.refused,
-            self.rounds.len(),
+            self.shoves.len(),
             self.converged_share() * 100.0,
-            self.rounds.iter().max().copied().unwrap_or(0),
+            self.gave_up(),
+            self.shoves.iter().map(|s| s.rounds).max().unwrap_or(0),
             self.percentile(0.5),
             self.percentile(0.95),
             self.breaks.len(),
@@ -109,7 +119,7 @@ pub fn bench(fixture: &Fixture, seed: u64, actions: usize) -> BoardBench {
             continue;
         };
         if mode == RouteMode::Shove {
-            out.rounds.extend(shove_rounds(
+            out.shoves.extend(shove_rounds(
                 engine.board(),
                 &rules,
                 &fixture.classes,

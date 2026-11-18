@@ -40,8 +40,10 @@ type Pusher = (Option<usize>, CopperItem);
 /// many rounds of pushing it ran, whether it cleared the way or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShoveRun {
+    /// `None` when the shove gave up: the way cannot be cleared by pushing.
     pub pushed: Option<Vec<Pushed>>,
-    /// Rounds that pushed tracks: 0 when nothing was in the way.
+    /// Rounds run, counting the round it gave up in: 0 when nothing was in
+    /// the way, `ROUNDS + 1` when the pushing never settled.
     pub rounds: usize,
 }
 

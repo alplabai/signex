@@ -145,19 +145,26 @@ the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
   was, ids are unique, tracks are finite, on copper and on known nets, no
   zero-length track appeared, a refused route changed nothing, and a
   just-routed draft fits the board it was routed on. A failure prints its
-  seed, action index and the command that replays it. A route that lays a
-  track exactly over a same-net track already there is counted in the
-  run's report (`repeated_tracks`), not failed: the router does that today.
+  seed, action index and the command that replays it. A routed track laid
+  over a same-net track already there (same layer, on one line, sharing a
+  stretch) is counted in the run's report (`overlapped_tracks`), not
+  failed, until the router defect #BUG is fixed. Not checked yet (#2482):
+  dangling track ends and connectivity against the net list. The soak's own
+  edits make both on purpose (a stub routed into open board, a track moved
+  off its pads or across another net), so these checks must first tell an
+  edit's effect from a defect.
 - **Bench.** One-leg routes, half of them shoves: the rounds each shove
-  took (`pcb_geom::route::shove_run`), the time from click to landed step,
-  and the DRC delta: every design rule check finding a route adds, other
-  than an unrouted link, names the route's own tracks or vias.
+  took (`pcb_geom::route::shove_run`; a shove that gave up, so the router
+  walks around instead, counts as not converged), the time from click to
+  landed step, and the DRC delta: every design rule check finding a route
+  adds, other than an unrouted link, names the route's own tracks or vias.
 - **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
   and bench with every test run (DRC delta and convergence asserted). The
   scheduled `routing-soak` workflow runs the ignored `soak_long` (10 000
-  actions per board) and `bench_thresholds` (shoves within 8 rounds on 95%
+  actions per board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
   of actions; median latency at most 16 ms and p95 at most 33 ms on the
-  median board by copper count) in release. `SIGNEX_SOAK_SEED`,
+  median board by copper count) in release; a failed night opens or
+  comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
   `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
   and one board.
 

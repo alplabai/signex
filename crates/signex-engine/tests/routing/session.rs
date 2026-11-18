@@ -180,15 +180,25 @@ pub fn route(
     Ok(Routed::Landed(draft))
 }
 
-/// The rounds the push of `plan`'s first leg takes on `board`, as the
-/// router tries it: the corner rule, then the flipped rule. `None` when
-/// neither rule bends the leg, or a point does not convert.
+/// How the push of a leg ended: the rounds run, and whether it cleared the
+/// way. A shove that gave up did not converge, whatever its rounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShoveTry {
+    pub rounds: usize,
+    pub converged: bool,
+}
+
+/// The push of `plan`'s first leg on `board`, as the router tries it
+/// (`pushed_way` in `signex_engine::pcb::route`): the corner rule, then the
+/// flipped rule, skipping a rule with no legs. The rounds are those of the
+/// attempt the router keeps; when both give up, the longer one's. `None`
+/// when neither rule has legs, or a point does not convert.
 pub fn shove_rounds(
     board: &PcbBoard,
     rules: &DrcRules,
     classes: &[NetClass],
     plan: &RoutePlan,
-) -> Option<usize> {
+) -> Option<ShoveTry> {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let world = RouteWorld::with_reach(board, &clearance, rules.widest_clearance());
     let style =
@@ -197,19 +207,28 @@ pub fn shove_rounds(
     let b = PointNm::from_mm(*plan.points.get(1)?, "to").ok()?;
     let radius = mm_to_nm(style.width_mm, "width").ok()?.abs() / 2;
     let layers = 1 << layer_bit(plan.layer);
-    let mut rounds = None;
+    let mut gave_up: Option<usize> = None;
     for rule in [plan.corner, plan.corner.flipped()] {
+        let Some(bends) = rule_legs(rule, a, b) else {
+            continue;
+        };
         let mut path = vec![a];
-        path.extend(rule_legs(rule, a, b)?);
+        path.extend(bends);
         let legs: Vec<NewCopper> = path
             .windows(2)
             .map(|leg| NewCopper::track(leg[0], leg[1], radius, style.net, layers))
             .collect();
         let run = shove_run(&world, &legs);
-        rounds = Some(rounds.unwrap_or(0).max(run.rounds));
         if run.pushed.is_some() {
-            break;
+            return Some(ShoveTry {
+                rounds: run.rounds,
+                converged: true,
+            });
         }
+        gave_up = Some(gave_up.unwrap_or(0).max(run.rounds));
     }
-    rounds
+    gave_up.map(|rounds| ShoveTry {
+        rounds,
+        converged: false,
+    })
 }

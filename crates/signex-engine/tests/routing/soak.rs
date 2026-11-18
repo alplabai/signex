@@ -89,9 +89,10 @@ pub struct Tally {
     pub edits: usize,
     pub undos: usize,
     pub redos: usize,
-    /// Routes that laid a track exactly over a same-net track already
-    /// there: a known router defect, counted until it is fixed, not failed.
-    pub repeated_tracks: usize,
+    /// Routed tracks laid over a same-net track already there (the same
+    /// layer, collinear, sharing a stretch): a router defect, #BUG, counted
+    /// until it is fixed instead of failing the soak.
+    pub overlapped_tracks: usize,
 }
 
 /// The engine, the history the soak expects of it, and what the board held
@@ -195,9 +196,11 @@ impl Soak<'_> {
         match routed {
             Routed::Landed(draft) => {
                 self.tally.landed += 1;
-                self.tally.repeated_tracks += repeats(self.engine.board())
+                let board = self.engine.board();
+                self.tally.overlapped_tracks += draft
+                    .tracks
                     .iter()
-                    .filter(|&&id| draft.tracks.iter().any(|t| t.uuid == id))
+                    .filter(|t| board.segments.iter().any(|s| overlaps(t, s)))
                     .count();
                 self.stepped(before);
             }
@@ -411,22 +414,28 @@ fn zero_length(board: &PcbBoard) -> usize {
     board.segments.iter().filter(|s| s.start == s.end).count()
 }
 
-/// The tracks that repeat an earlier track's net, layer, width and ends
-/// (either way round).
-fn repeats(board: &PcbBoard) -> Vec<Uuid> {
-    let mut seen = HashSet::new();
-    board
-        .segments
-        .iter()
-        .filter(|s| {
-            let (a, b) = (s.start, s.end);
-            let (a, b) = if (a.x, a.y) <= (b.x, b.y) {
-                (a, b)
-            } else {
-                (b, a)
-            };
-            !seen.insert(format!("{}|{}|{}|{a:?}|{b:?}", s.net, s.layer, s.width))
-        })
-        .map(|s| s.uuid)
-        .collect()
+/// What "on the line" and "a shared stretch" mean for [`overlaps`], in mm.
+const OVERLAP_MM: f64 = 1e-3;
+
+/// Whether `track` lies over `other`, a different track on the same net and
+/// layer: both on one line and sharing a stretch longer than
+/// [`OVERLAP_MM`]. Meeting end to end is not an overlap.
+pub fn overlaps(track: &Segment, other: &Segment) -> bool {
+    if track.uuid == other.uuid || track.net != other.net || track.layer != other.layer {
+        return false;
+    }
+    let (dx, dy) = (track.end.x - track.start.x, track.end.y - track.start.y);
+    let length = dx.hypot(dy);
+    if length <= OVERLAP_MM {
+        return false;
+    }
+    // Signed distance from the track's line, and distance along it.
+    let off = |p: Point| (dx * (p.y - track.start.y) - dy * (p.x - track.start.x)) / length;
+    let along = |p: Point| (dx * (p.x - track.start.x) + dy * (p.y - track.start.y)) / length;
+    if off(other.start).abs() > OVERLAP_MM || off(other.end).abs() > OVERLAP_MM {
+        return false;
+    }
+    let (a, b) = (along(other.start), along(other.end));
+    let shared = a.max(b).min(length) - a.min(b).max(0.0);
+    shared > OVERLAP_MM
 }

@@ -99,10 +99,65 @@ fn assert_delta_and_convergence(benches: &[BoardBench]) {
         assert!(b.breaks.is_empty(), "{}: {:#?}", b.name, b.breaks);
         assert!(
             b.converged_share() >= ROUNDS_SHARE,
-            "{}: {:.1}% of shoves within {ROUNDS_LIMIT} rounds",
+            "{}: {:.1}% of shoves converged within {ROUNDS_LIMIT} rounds",
             b.name,
             b.converged_share() * 100.0
         );
+    }
+}
+
+/// A shove that gave up never counts as converged, whatever its rounds;
+/// one that cleared the way counts while its rounds stay within the limit.
+#[test]
+fn a_shove_that_gave_up_does_not_converge() {
+    use session::ShoveTry;
+
+    let try_of = |rounds, converged| ShoveTry { rounds, converged };
+    let refused = BoardBench {
+        shoves: vec![try_of(1, false), try_of(5, false), try_of(0, false)],
+        ..BoardBench::default()
+    };
+    assert_eq!(refused.converged_share(), 0.0);
+    let mixed = BoardBench {
+        shoves: vec![
+            try_of(0, true),
+            try_of(ROUNDS_LIMIT, true),
+            try_of(ROUNDS_LIMIT + 1, true),
+            try_of(1, false),
+        ],
+        ..BoardBench::default()
+    };
+    assert_eq!(mixed.converged_share(), 0.5);
+    assert_eq!(BoardBench::default().converged_share(), 1.0);
+}
+
+/// A track over a same-net track counts whether it repeats it exactly or
+/// shares only part of its line; meeting end to end, running beside it or
+/// another net's track does not.
+#[test]
+fn an_overlap_is_any_shared_stretch_of_one_net_and_layer() {
+    use signex_types::pcb::Segment;
+
+    let track = |id: u128, from: (f64, f64), to: (f64, f64), net: u32| -> Segment {
+        serde_json::from_value(serde_json::json!({
+            "uuid": uuid::Uuid::from_u128(id),
+            "start": {"x": from.0, "y": from.1}, "end": {"x": to.0, "y": to.1},
+            "width": 0.25, "layer": "TopCopper", "net": net
+        }))
+        .expect("a track")
+    };
+    let laid = track(1, (0.0, 0.0), (4.0, 0.0), 1);
+    let cases = [
+        (track(2, (4.0, 0.0), (0.0, 0.0), 1), true, "the same ends"),
+        (track(2, (2.0, 0.0), (9.0, 0.0), 1), true, "part of its line"),
+        (track(2, (1.0, 0.0), (3.0, 0.0), 1), true, "inside it"),
+        (track(2, (4.0, 0.0), (9.0, 0.0), 1), false, "end to end"),
+        (track(2, (0.0, 0.5), (4.0, 0.5), 1), false, "beside it"),
+        (track(2, (0.0, 0.0), (4.0, 0.0), 2), false, "another net"),
+        (track(1, (0.0, 0.0), (4.0, 0.0), 1), false, "itself"),
+    ];
+    for (other, expected, case) in cases {
+        assert_eq!(soak::overlaps(&laid, &other), expected, "{case}");
     }
 }
 
@@ -150,7 +205,7 @@ fn the_drc_delta_check_tells_a_side_effect_from_the_route_own() {
 fn bench_short() {
     let benches = bench_all(DEFAULT_SEED, 30);
     assert!(
-        benches.iter().any(|b| b.landed > 0 && !b.rounds.is_empty()),
+        benches.iter().any(|b| b.landed > 0 && !b.shoves.is_empty()),
         "the bench routed and shoved something"
     );
     assert_delta_and_convergence(&benches);
