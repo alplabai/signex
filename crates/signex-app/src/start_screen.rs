@@ -149,6 +149,37 @@ pub enum StartScreenMsg {
     /// The start-up check of the pins finished off the UI thread: the pins
     /// whose file is not on disk, or why the check could not run.
     PinsChecked(Result<Vec<PathBuf>, String>),
+    /// A navigation page row (Home or Projects) was clicked.
+    SectionPicked(StartSection),
+    /// The Libraries navigation row was clicked: an open library's Library
+    /// Browser tab opens, else the Library panel with its library list.
+    LibrariesPicked,
+}
+
+/// The navigation page row last picked on the Start screen. Home is the one
+/// page; it holds the project lists, so Projects scrolls them into view.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StartSection {
+    #[default]
+    Home,
+    Projects,
+}
+
+/// Id of the Start screen's scrolling main column.
+const MAIN_SCROLL_ID: &str = "start-screen-main";
+
+/// The Task that brings `section` into view: the top of the main column for
+/// Home, its end (the Pinned and Recent Projects lists) for Projects.
+pub fn reveal_section<M: Send + 'static>(section: StartSection) -> iced::Task<M> {
+    let offset = match section {
+        StartSection::Home => iced::widget::scrollable::RelativeOffset::START,
+        StartSection::Projects => iced::widget::scrollable::RelativeOffset::END,
+    };
+    iced::widget::operation::scrollable::snap_to(
+        MAIN_SCROLL_ID,
+        offset,
+        iced::widget::operation::Animation::Instant,
+    )
 }
 
 /// The open right-click menu of a Start screen project row.
@@ -169,6 +200,7 @@ fn recent_label(path: &Path) -> String {
 /// components it holds.
 pub type LoadedLibrary = (String, usize);
 
+/// The Start screen with `section`'s navigation row highlighted.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     i18n: &'a signex_i18n::I18n,
@@ -176,8 +208,16 @@ pub fn view<'a>(
     recent: &'a [PathBuf],
     pinned: &'a PinnedProjects,
     libraries: &[LoadedLibrary],
+    section: StartSection,
 ) -> Element<'a, Message> {
-    graphite::view(tokens, i18n, open_shortcut, recent, pinned, libraries)
+    graphite::view(
+        tokens,
+        i18n,
+        open_shortcut,
+        (recent, pinned),
+        libraries,
+        section,
+    )
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
@@ -229,6 +269,86 @@ mod tests {
     }
 
     static NO_PINS: PinnedProjects = PinnedProjects::new();
+
+    /// The Start screen on Home, as the app first shows it.
+    fn view<'a>(
+        tokens: &'a ThemeTokens,
+        i18n: &'a signex_i18n::I18n,
+        open_shortcut: &str,
+        recent: &'a [PathBuf],
+        pinned: &'a PinnedProjects,
+        libraries: &[LoadedLibrary],
+    ) -> Element<'a, Message> {
+        super::view(
+            tokens,
+            i18n,
+            open_shortcut,
+            recent,
+            pinned,
+            libraries,
+            StartSection::Home,
+        )
+    }
+
+    /// What the Home, Projects and Libraries navigation rows send.
+    fn nav_messages() -> [Message; 3] {
+        [
+            message(StartScreenMsg::SectionPicked(StartSection::Home)),
+            message(StartScreenMsg::SectionPicked(StartSection::Projects)),
+            message(StartScreenMsg::LibrariesPicked),
+        ]
+    }
+
+    /// The messages a click on the full navigation's `label` row sends,
+    /// with `section` picked.
+    fn nav_click(section: StartSection, label: &str) -> Vec<String> {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        crate::layout_probe::messages_on_click(
+            super::view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[], section),
+            MOCK_WINDOW,
+            label,
+        )
+        .iter()
+        .map(|m| format!("{m:?}"))
+        .collect()
+    }
+
+    /// The Home, Projects and Libraries rows send their messages (they sent
+    /// nothing after #2270), on either page.
+    #[test]
+    fn the_page_rows_send_their_messages() {
+        let [home, projects, libraries] = nav_messages().map(|m| format!("{m:?}"));
+        for section in [StartSection::Home, StartSection::Projects] {
+            assert_eq!(nav_click(section, "Home"), [home.clone()]);
+            assert_eq!(nav_click(section, "Projects"), [projects.clone()]);
+            assert_eq!(nav_click(section, "Libraries"), [libraries.clone()]);
+        }
+        assert!(nav_click(StartSection::Home, "Parts search").is_empty());
+    }
+
+    /// The picked page's row is the one highlighted: the Projects row is
+    /// filled on the Projects page and Home's is not, and the other way
+    /// round on Home.
+    #[test]
+    fn the_picked_page_row_is_highlighted() {
+        let tokens = graphite();
+        let status = signex_widgets::button::Status::Active;
+        let filled = |active: bool| {
+            let style = graphite::nav_row_style(&tokens, active);
+            style(&iced::Theme::Dark, status).background
+        };
+        assert!(filled(true).is_some());
+        assert!(filled(false).is_none());
+        assert_eq!(
+            graphite::active_page_rows(StartSection::Projects),
+            [false, true]
+        );
+        assert_eq!(
+            graphite::active_page_rows(StartSection::Home),
+            [true, false]
+        );
+    }
 
     #[test]
     fn the_list_is_capped_and_keeps_order() {
@@ -747,7 +867,7 @@ mod tests {
     }
 
     /// #2346: every strip row sends the message of its full row; the
-    /// current page and the planned Parts search send none.
+    /// planned Parts search sends none.
     #[test]
     fn the_icon_strip_rows_send_their_full_rows_messages() {
         let tokens = graphite();
@@ -768,7 +888,9 @@ mod tests {
             .collect();
         let actions: Vec<String> = Action::ALL
             .iter()
-            .map(|a| format!("{:?}", a.message()))
+            .map(|a| a.message())
+            .chain(nav_messages())
+            .map(|m| format!("{m:?}"))
             .collect();
         for action in &actions {
             assert!(

@@ -761,6 +761,7 @@ impl Signex {
                 grid_picker: None,
                 tab_context_menu: None,
                 start_row_menu: None,
+                start_section: Default::default(),
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,

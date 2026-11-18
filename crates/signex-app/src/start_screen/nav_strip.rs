@@ -10,8 +10,10 @@ use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{Label, button, text, tooltip};
 
-use super::Action;
-use super::graphite::{NAV_ROW_H, nav_chrome, nav_divider, nav_row_style, outline_button};
+use super::graphite::{
+    NAV_ROW_H, nav_chrome, nav_divider, nav_row_style, outline_button, page_message,
+};
+use super::{Action, StartScreenMsg, StartSection, message};
 use crate::app::Message;
 use crate::icons;
 use crate::styles::{self, Spacing, TypeScale, ti, tokens::resolve};
@@ -139,6 +141,7 @@ pub(super) fn view<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
     open_shortcut: &str,
+    section: StartSection,
 ) -> Element<'a, Message> {
     let page = |icon: svg::Handle, label: MessageId, active: bool| StripRow {
         icon,
@@ -163,22 +166,30 @@ pub(super) fn view<'a>(
         action: Some(action.message()),
         ..page(icon, label, false)
     };
-    let pages = [
-        page(
-            icons::icon_dd_sheet_actions(GLYPH_THEME),
-            ids::START_HOME,
-            true,
-        ),
-        page(
-            icons::icon_dd_project_options(GLYPH_THEME),
-            ids::START_PROJECTS,
-            false,
-        ),
-        page(
+    let section_row = |icon: svg::Handle, label: MessageId, row: StartSection| StripRow {
+        action: Some(page_message(row)),
+        ..page(icon, label, section == row)
+    };
+    let libraries = StripRow {
+        action: Some(message(StartScreenMsg::LibrariesPicked)),
+        ..page(
             icons::icon_component(GLYPH_THEME),
             ids::START_LIBRARIES,
             false,
+        )
+    };
+    let pages = [
+        section_row(
+            icons::icon_dd_sheet_actions(GLYPH_THEME),
+            ids::START_HOME,
+            StartSection::Home,
         ),
+        section_row(
+            icons::icon_dd_project_options(GLYPH_THEME),
+            ids::START_PROJECTS,
+            StartSection::Projects,
+        ),
+        libraries,
         parts,
     ];
     // The two app-only rows, under the full navigation's divider.
