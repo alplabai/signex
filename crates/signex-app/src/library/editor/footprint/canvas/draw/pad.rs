@@ -61,7 +61,7 @@ pub(super) fn draw_pad(
 ) {
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
-    let color = layer.color_in(palette);
+    let color = layer.color();
     // Pad-local extents: the shape is built around the origin and the
     // whole path is placed by the saved transform below, so rotation
     // is applied once here rather than smeared through every vertex.

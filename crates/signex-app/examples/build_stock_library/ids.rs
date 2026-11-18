@@ -36,6 +36,8 @@ pub enum StockKind {
     Chip2512Polarised,
     MountingHole3p2,
     Fiducial1mm,
+    /// Three-lead SOT-23 (TO-236): pins 1 and 2 on one side, 3 opposite.
+    Sot23,
 }
 
 /// Identity of the stock library itself. Designs reference stock
@@ -308,6 +310,17 @@ pub const STOCK_IDS: &[StockIds] = &[
         footprint_uuid: "019df45d-af66-75c0-b9cf-2ba7e253d69c",
         plane: "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9",
         entities: &["4373d9fb-b5a8-49e6-adc7-5f6307803a36"],
+    },
+    StockIds {
+        kind: StockKind::Sot23,
+        file_uuid: "6fb3666c-71f4-4c78-bf12-6535674eb12d",
+        footprint_uuid: "1fee7be8-629b-447a-a98e-746df8bed8af",
+        plane: "9b7fa1e5-063f-4555-9d00-efa5f2f8b171",
+        entities: &[
+            "a962386a-5ef1-4a3c-b047-d342b0bd6a76",
+            "392771c9-7439-4707-885f-513ff01da7fa",
+            "7805c96b-4387-435b-9ccb-39736ee85fea",
+        ],
     },
 ];
 

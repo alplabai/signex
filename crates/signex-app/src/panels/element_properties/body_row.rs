@@ -84,7 +84,7 @@ pub(super) fn push_body_row<'a>(
             _,
             iced::Theme,
         >(
-            form_input_row("Body", "Normal", muted, input_bg),
+            form_input_row_untipped("Body", "Normal", muted, input_bg),
             signex_widgets::text::<iced::Theme>(signex_widgets::raw(
                 "This library symbol has no alternate (De Morgan) body",
             ))

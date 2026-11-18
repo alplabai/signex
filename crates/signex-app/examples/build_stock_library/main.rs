@@ -27,6 +27,7 @@ pub mod chip;
 pub mod ids;
 pub mod manifest;
 pub mod rows;
+pub mod sot23;
 pub mod symbols;
 
 use std::error::Error;
@@ -68,6 +69,7 @@ fn build(ids: &StockIds) -> Footprint {
         StockKind::Qfn16 => build_qfn16(ids),
         StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
         StockKind::Fiducial1mm => build_fiducial_1mm(ids),
+        StockKind::Sot23 => sot23::build(ids),
         StockKind::Chip0805
         | StockKind::Chip0805Polarised
         | StockKind::Chip0201
@@ -84,7 +86,34 @@ fn build(ids: &StockIds) -> Footprint {
         | StockKind::Chip2512Polarised => build_chip(ids.kind, ids),
     };
     bake_sketch(&mut fp);
+    describe(&mut fp, ids.kind);
     fp
+}
+
+/// The Description and Default Designator the footprint editor shows. A
+/// chip land serves resistors, capacitors, inductors and diodes alike, so
+/// it names no designator; the placed part's symbol supplies it.
+fn describe(fp: &mut Footprint, kind: StockKind) {
+    let (description, designator) = match kind {
+        StockKind::Soic8 => ("SOIC-8, 1.27 mm pitch, 3.9 x 4.9 mm body.".into(), "U?"),
+        StockKind::Qfn16 => ("QFN-16, 0.5 mm pitch, 3 x 3 mm body.".into(), "U?"),
+        StockKind::Sot23 => ("SOT-23, three leads, 0.95 mm pitch.".into(), "Q?"),
+        StockKind::MountingHole3p2 => ("Mounting hole, 3.2 mm unplated drill.".into(), "H?"),
+        StockKind::Fiducial1mm => (
+            "Fiducial, 1 mm copper in a 2 mm mask opening.".into(),
+            "FID?",
+        ),
+        _ => match chip::lookup(kind) {
+            Some((size, true)) => (
+                format!("{} chip land, two pads; pad 1 is marked.", size.code),
+                "",
+            ),
+            Some((size, false)) => (format!("{} chip land, two pads.", size.code), ""),
+            None => return,
+        },
+    };
+    fp.description = description;
+    fp.default_designator = designator.to_string();
 }
 
 fn build_chip(kind: StockKind, ids: &StockIds) -> Footprint {

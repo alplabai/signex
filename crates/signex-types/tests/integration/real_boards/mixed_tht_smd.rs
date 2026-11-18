@@ -145,6 +145,14 @@ pub fn build() -> Builder {
         &[("1", "LED_A"), ("2", "GND")],
     );
 
+    // Designators clear of the other parts and the tracks, upright (#2468):
+    // D1 is turned half round, C3 sits under U1's legs, C2's default spot
+    // is on the +5V track and J2's is past the board edge.
+    b.move_label(d1, p(0.0, -1.85), 180.0);
+    b.move_label(c2, p(6.0, 0.0), 0.0);
+    b.move_label(c3, p(3.0, 0.0), 0.0);
+    b.move_label(j2, p(-4.4, 0.0), 270.0);
+
     // Input: jack, diode, bulk cap, regulator.
     b.track("VIN", TOP, POWER, &[b.pad_at(j1, "1"), b.pad_at(d1, "2")]);
     let k = b.pad_at(d1, "1");
@@ -217,10 +225,11 @@ pub fn build() -> Builder {
     b.board_text("12V IN", p(8.0, 28.0), "TopSilkscreen", 1.2, 0.0);
     b.board_text("5V OUT", p(44.0, 18.5), "TopSilkscreen", 1.2, 0.0);
     b.board_text("+  -", p(44.0, 34.5), "TopSilkscreen", 1.2, 90.0);
+    // On the top overlay, so a top view reads it (#2468).
     b.board_text(
         "7805 SUPPLY rev B",
         p(25.0, 38.0),
-        "BottomSilkscreen",
+        "TopSilkscreen",
         1.0,
         0.0,
     );
