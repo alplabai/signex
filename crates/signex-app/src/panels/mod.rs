@@ -94,8 +94,8 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft, TitleBlockField,
-    shown_title_block_value, typed_mm,
+    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft,
+    TitleBlockField, shown_title_block_value, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,

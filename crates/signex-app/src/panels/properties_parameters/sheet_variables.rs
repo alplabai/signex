@@ -120,22 +120,19 @@ pub(super) fn add_sheet_variable_row<'a>(ctx: &'a PanelContext) -> Element<'a, P
         .as_deref()
         .and_then(|s| ctx.drafts.sheet_variable_text(s, None))
         .unwrap_or_default();
-    let name_input = signex_widgets::text_input(
-        t!(i18n, ids::PLACEHOLDER_SHEET_VARIABLE_NAME),
-        new_name,
-    )
-    .on_input(|text| msg(SheetVariableMsg::NewNameTyped(text)))
-    .on_submit(msg(SheetVariableMsg::Added))
-    .size(TS.body)
-    .padding(SP.s)
-    .style(crate::panels::form_look::text_input_style)
-    .width(Length::Fill);
-    let add = signex_widgets::button(
-        text(t!(i18n, ids::PROPERTIES_SHEET_VARIABLE_ADD)).size(TS.caption),
-    )
-    .padding([SP.xs, SP.s])
-    .style(crate::styles::outline_button(&ctx.tokens))
-    .on_press(msg(SheetVariableMsg::Added));
+    let name_input =
+        signex_widgets::text_input(t!(i18n, ids::PLACEHOLDER_SHEET_VARIABLE_NAME), new_name)
+            .on_input(|text| msg(SheetVariableMsg::NewNameTyped(text)))
+            .on_submit(msg(SheetVariableMsg::Added))
+            .size(TS.body)
+            .padding(SP.s)
+            .style(crate::panels::form_look::text_input_style)
+            .width(Length::Fill);
+    let add =
+        signex_widgets::button(text(t!(i18n, ids::PROPERTIES_SHEET_VARIABLE_ADD)).size(TS.caption))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::outline_button(&ctx.tokens))
+            .on_press(msg(SheetVariableMsg::Added));
     container(
         row![name_input, add]
             .spacing(SP.m)

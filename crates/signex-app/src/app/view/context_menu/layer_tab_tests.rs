@@ -202,7 +202,9 @@ fn the_flyouts_list_each_kind_and_its_layers() {
     assert_eq!(hide[1].0, "Top Layer", "the shown signal layer");
     assert!(!hide.iter().any(|(l, _, _)| l == "Bottom Layer"));
     assert_eq!(
-        hide.iter().filter(|(l, _, _)| l.ends_with(" layers")).count(),
+        hide.iter()
+            .filter(|(l, _, _)| l.ends_with(" layers"))
+            .count(),
         LayerKind::ALL.len()
     );
     assert!(hide.iter().any(|(l, _, _)| l == "Top Silkscreen"));

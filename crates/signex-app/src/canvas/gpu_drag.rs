@@ -200,7 +200,9 @@ impl SchematicCanvas<'_> {
         // A grip drag always shows the engine's sheet, kept wires or not.
         if let Some(grip) = state.held_grip() {
             let held = (grip.wire, grip.start);
-            return state.ghost.ready_grip_frame(revision, &self.selected, held, gx, gy);
+            return state
+                .ghost
+                .ready_grip_frame(revision, &self.selected, held, gx, gy);
         }
         if !self.keeps_wires(state) {
             return None;

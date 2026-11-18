@@ -57,7 +57,6 @@ pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 mod pcb_align;
 mod pcb_board_options;
-mod pcb_origin;
 mod pcb_board_panel;
 mod pcb_clipboard;
 #[cfg(test)]
@@ -74,6 +73,7 @@ pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
 mod pcb_parking;

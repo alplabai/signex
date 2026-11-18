@@ -472,6 +472,9 @@ fn the_board_menu_offers_the_selection_tools() {
         "Keepout from Selection",
         "Arrange in Box",
     ] {
-        assert!(absent(&empty, label), "{label} is not on the empty-area menu");
+        assert!(
+            absent(&empty, label),
+            "{label} is not on the empty-area menu"
+        );
     }
 }

@@ -231,7 +231,10 @@ fn a_pair_from_top_copper_on_an_inner_layer_starts_with_a_via_per_net() {
     // The two stubs come first; the pair's tracks follow them.
     let routed = &board.segments[2..];
     assert!(!routed.is_empty());
-    assert!(routed.iter().all(|s| s.layer == "Inner1Copper"), "{routed:?}");
+    assert!(
+        routed.iter().all(|s| s.layer == "Inner1Copper"),
+        "{routed:?}"
+    );
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "vias and tracks are one step");
 }

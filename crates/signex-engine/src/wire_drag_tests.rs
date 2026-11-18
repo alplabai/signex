@@ -30,7 +30,11 @@ fn ends_at(segs: &[((f64, f64), (f64, f64))], p: (f64, f64)) -> bool {
 
 /// Every wire as `(uuid, start, end)`, for an exact undo comparison.
 fn wires(sheet: &SchematicSheet) -> Vec<(Uuid, Point, Point)> {
-    sheet.wires.iter().map(|w| (w.uuid, w.start, w.end)).collect()
+    sheet
+        .wires
+        .iter()
+        .map(|w| (w.uuid, w.start, w.end))
+        .collect()
 }
 
 /// The maintainer's sheet: U1's pin at (50,50), a stub up to (50,40), the

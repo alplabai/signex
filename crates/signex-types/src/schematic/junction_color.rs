@@ -222,10 +222,7 @@ mod tests {
 
     #[test]
     fn a_slanted_wire_through_the_dot_votes() {
-        let (s, dot) = sheet(
-            vec![wire((0.0, 0.0), (10.0, 10.0), Some(RED))],
-            (5.0, 5.0),
-        );
+        let (s, dot) = sheet(vec![wire((0.0, 0.0), (10.0, 10.0), Some(RED))], (5.0, 5.0));
         assert_eq!(junction_wire_colors(&s, own).get(&dot), Some(&RED));
     }
 }

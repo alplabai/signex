@@ -7,7 +7,9 @@
 use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
-use signex_engine::pcb::route::{PadAt, PadEnd, RouteRefusal, RoutedLeg, pad_at, pad_end, via_fits};
+use signex_engine::pcb::route::{
+    PadAt, PadEnd, RouteRefusal, RoutedLeg, pad_at, pad_end, via_fits,
+};
 use signex_i18n::{Arg, I18n, ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::pcb::{PcbBoard, Point, Via};

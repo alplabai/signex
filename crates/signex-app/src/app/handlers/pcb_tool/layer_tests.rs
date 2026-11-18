@@ -268,7 +268,13 @@ fn a_route_ending_on_a_pad_of_no_net_gives_it_the_routes_net() {
     let (mut app, path) = app_with(dir.path(), u1(None));
     let before = live(&app, &path);
     route_round_u1(&mut app);
-    assert!(app.interaction_state.pcb_canvas.highlight().blocked.is_empty());
+    assert!(
+        app.interaction_state
+            .pcb_canvas
+            .highlight()
+            .blocked
+            .is_empty()
+    );
     click(&mut app, 10.0, 0.0);
     assert_eq!(placed(&app), 5, "the last leg reaches the pad");
     let why = status(&app);

@@ -252,7 +252,10 @@ fn copper_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
 
 /// Whether `event` sets layer colours, which are board data.
 fn is_colour_event(event: PcbViewMsg) -> bool {
-    matches!(event, PcbViewMsg::LayerColourSet { .. } | PcbViewMsg::LayerColoursReset)
+    matches!(
+        event,
+        PcbViewMsg::LayerColourSet { .. } | PcbViewMsg::LayerColoursReset
+    )
 }
 
 /// What `event` changes in `view`; `layers` is the board's stackup.

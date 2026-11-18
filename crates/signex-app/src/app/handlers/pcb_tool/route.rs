@@ -179,7 +179,11 @@ pub(super) fn start_on_copper(
         return style;
     }
     match copper_under(board, at) {
-        Some((layer, net)) => TrackStyle { layer, net, ..style },
+        Some((layer, net)) => TrackStyle {
+            layer,
+            net,
+            ..style
+        },
         None => style,
     }
 }

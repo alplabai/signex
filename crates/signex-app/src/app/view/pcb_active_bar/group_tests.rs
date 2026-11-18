@@ -290,20 +290,24 @@ fn the_copper_areas_group_lists_the_pour_rows() {
 
 /// A click on the canvas of the board in view at (`x`, `y`) mm.
 fn canvas_click(app: &mut Signex, x: f64, y: f64) {
-    let _ = app.update(Message::PcbCanvas(crate::pcb_canvas::PcbCanvasMsg::Clicked {
-        at: signex_types::pcb::Point::new(x, y),
-        tolerance_mm: 0.05,
-        mode: pcb_geom::ClickMode::Replace,
-    }));
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::Clicked {
+            at: signex_types::pcb::Point::new(x, y),
+            tolerance_mm: 0.05,
+            mode: pcb_geom::ClickMode::Replace,
+        },
+    ));
 }
 
 /// The pointer moved over the canvas to (`x`, `y`) mm.
 fn canvas_hover(app: &mut Signex, x: f64, y: f64) {
-    let _ = app.update(Message::PcbCanvas(crate::pcb_canvas::PcbCanvasMsg::PointerMoved {
-        at: signex_types::pcb::Point::new(x, y),
-        zoom_pct: 100.0,
-        tolerance_mm: 0.05,
-    }));
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::PointerMoved {
+            at: signex_types::pcb::Point::new(x, y),
+            zoom_pct: 100.0,
+            tolerance_mm: 0.05,
+        },
+    ));
 }
 
 /// The maintainer's report (2026-11-18): Interactive Routing picked from

@@ -63,12 +63,13 @@ fn layer_colors(raw: BTreeMap<String, String>) -> Result<Vec<LayerColor>, Format
     raw.into_iter()
         .enumerate()
         .map(|(row, (token, cell))| {
-            let layer = super::parse_pcb_layer(&token).ok_or_else(|| FormatError::TsvFieldParse {
-                block: LAYER_COLORS.to_string(),
-                row,
-                field: "layer".to_string(),
-                message: format!("`{token}` is not a board layer"),
-            })?;
+            let layer =
+                super::parse_pcb_layer(&token).ok_or_else(|| FormatError::TsvFieldParse {
+                    block: LAYER_COLORS.to_string(),
+                    row,
+                    field: "layer".to_string(),
+                    message: format!("`{token}` is not a board layer"),
+                })?;
             Ok(LayerColor {
                 layer,
                 color: color(&cell, LAYER_COLORS, row)?,

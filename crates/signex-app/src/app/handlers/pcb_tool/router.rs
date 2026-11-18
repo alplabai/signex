@@ -528,14 +528,12 @@ impl Signex {
         let Some(held) = self.current_router_preview() else {
             return Vec::new();
         };
-        held
-            .aimed
+        held.aimed
             .iter()
             .filter_map(|track| pcb_geom::track_shape(track).ok())
             .collect()
     }
 }
-
 
 /// Route `leg` with the route's rules, in the corner rule and mode given,
 /// expanding at most `budget` lattice points.

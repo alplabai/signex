@@ -3,7 +3,9 @@
 //! carries the pin with a stub, and a sheet that already had the bare contact
 //! is reported and repaired in one step, never changed on open.
 
-use crate::rubber_band_tests::{add_wire, has, lib_pin, lib_symbol, mv, net_shape, place, segments};
+use crate::rubber_band_tests::{
+    add_wire, has, lib_pin, lib_symbol, mv, net_shape, place, segments,
+};
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, bare_pin_taps, pin_junction_repairs};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
@@ -38,9 +40,9 @@ fn dots(engine: &Engine) -> Vec<Point> {
 
 /// Whether one net holds every part of `ids` (pin 1 each).
 fn one_net(sheet: &SchematicSheet, ids: &[Uuid]) -> bool {
-    net_shape(sheet).into_iter().any(|(_, pins)| {
-        ids.iter().all(|id| pins.contains(&(*id, "1".to_string())))
-    })
+    net_shape(sheet)
+        .into_iter()
+        .any(|(_, pins)| ids.iter().all(|id| pins.contains(&(*id, "1".to_string()))))
 }
 
 /// J1's pin at the left end of a wire (20,40)-(80,40).

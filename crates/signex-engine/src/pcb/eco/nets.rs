@@ -435,8 +435,9 @@ fn issue_text(board: &PcbBoard, issue: &PadNetIssue) -> Option<String> {
             pad_name(board, *footprint, *pad),
             pad_net_name(board, *footprint, *pad)
         ),
-        PadNetIssue::FootprintNotInSchematic { .. }
-        | PadNetIssue::FootprintNotLinked { .. } => return None,
+        PadNetIssue::FootprintNotInSchematic { .. } | PadNetIssue::FootprintNotLinked { .. } => {
+            return None;
+        }
     })
 }
 

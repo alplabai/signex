@@ -194,7 +194,9 @@ fn each_new_field_edits_saves_reopens_and_reads_in_a_note() {
 fn the_computed_tokens_resolve_in_a_note_and_their_rows() {
     use chrono::TimeZone;
     let (mut app, path, _recorder) = app_on_sheet();
-    let modified = chrono::Local.with_ymd_and_hms(2026, 11, 17, 8, 0, 0).unwrap();
+    let modified = chrono::Local
+        .with_ymd_and_hms(2026, 11, 17, 8, 0, 0)
+        .unwrap();
     let modified = std::time::SystemTime::from(modified);
     app.document_state.times.set_modified(&path, modified);
     app.refresh_panel_ctx();

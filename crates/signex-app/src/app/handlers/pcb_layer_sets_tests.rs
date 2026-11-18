@@ -303,7 +303,10 @@ fn short_names_show_tl_and_bl_and_numbers_go_in_front() {
     let shown = texts(&app, main);
     assert!(shown.iter().any(|t| t == "1 TL"), "{shown:?}");
     assert!(shown.iter().any(|t| t == "2 BL"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "TO"), "a silkscreen has no number");
+    assert!(
+        shown.iter().any(|t| t == "TO"),
+        "a silkscreen has no number"
+    );
 }
 
 #[test]

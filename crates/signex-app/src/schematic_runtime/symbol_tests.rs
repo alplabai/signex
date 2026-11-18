@@ -456,7 +456,10 @@ fn an_unfilled_body_is_filled_with_the_tint_first_under_the_default_preference()
     assert_eq!(polygons.len(), 2, "the fill, then the outline");
     assert_eq!(polygons[0].fill_color, to_rgba(to_iced(&tint)));
     assert_eq!(polygons[0].stroke_color, None, "the fill draws no outline");
-    assert_eq!(polygons[1].fill_color, [0.0; 4], "the outline stays unfilled");
+    assert_eq!(
+        polygons[1].fill_color, [0.0; 4],
+        "the outline stays unfilled"
+    );
     assert!(polygons[1].stroke_color.is_some());
 }
 

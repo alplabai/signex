@@ -62,7 +62,11 @@ fn set_takes_the_next_click_as_one_undo_step() {
         tolerance_mm: 0.05,
         mode: ClickMode::Replace,
     }));
-    assert!(near(origin(&app, &path), 12.0, 48.0), "{:?}", origin(&app, &path));
+    assert!(
+        near(origin(&app, &path), 12.0, 48.0),
+        "{:?}",
+        origin(&app, &path)
+    );
     assert_eq!(app.document_state.dirty_document_count(), 1);
     assert!(app.interaction_state.pcb_origin_place.is_none());
     let _ = app.update(Message::Edit(EditMsg::Undo));

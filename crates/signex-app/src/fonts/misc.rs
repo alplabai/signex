@@ -291,10 +291,7 @@ pub fn write_symbol_body_fill_pref(fill: crate::symbol_fill_prefs::SymbolBodyFil
     write_symbol_body_fill_pref_at(&prefs_path(), fill)
 }
 
-pub fn write_symbol_body_fill_pref_at(
-    path: &Path,
-    fill: crate::symbol_fill_prefs::SymbolBodyFill,
-) {
+pub fn write_symbol_body_fill_pref_at(path: &Path, fill: crate::symbol_fill_prefs::SymbolBodyFill) {
     update_prefs_json(path, crate::symbol_fill_prefs::ENABLED_KEY, |prefs| {
         fill.write_into(prefs);
     })

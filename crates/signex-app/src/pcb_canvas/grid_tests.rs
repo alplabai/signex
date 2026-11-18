@@ -195,15 +195,23 @@ fn every_fifth_line_from_the_origin_is_major() {
 /// bottom-left corner on screen (Y up), not at its top-left.
 #[test]
 fn a_new_board_marks_its_origin_at_the_area_bottom_left_on_screen() {
-    let board = signex_types::project::SetupProfile::Standard.pcb(2).new_board();
+    let board = signex_types::project::SetupProfile::Standard
+        .pcb(2)
+        .new_board();
     let marks = crate::pcb_canvas::BoardMarks::of(&board);
     let camera = crate::pcb_canvas::BoardCamera::default();
     let screen = |p: [f32; 2]| camera.world_to_screen(Point::new(p[0], p[1]));
     let marker = screen(marks.origin);
     let corners: Vec<Point> = board_region(None).iter().map(|p| screen(*p)).collect();
     let left = corners.iter().map(|c| c.x).fold(f32::INFINITY, f32::min);
-    let bottom = corners.iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+    let bottom = corners
+        .iter()
+        .map(|c| c.y)
+        .fold(f32::NEG_INFINITY, f32::max);
     assert_eq!((marker.x, marker.y), (left, bottom));
     let top = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
-    assert!(bottom > top, "screen y grows down: the bottom edge is below");
+    assert!(
+        bottom > top,
+        "screen y grows down: the bottom edge is below"
+    );
 }

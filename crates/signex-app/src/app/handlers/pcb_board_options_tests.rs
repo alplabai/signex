@@ -412,7 +412,9 @@ fn a_layer_colour_is_saved_with_the_board_as_an_undo_step() {
     );
 
     let reset = PcbViewMsg::LayerColoursReset;
-    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(reset))));
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(
+        reset,
+    ))));
     assert!(options(&app, &path).layer_colors.is_empty());
     undo(&mut app);
     assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
