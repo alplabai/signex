@@ -289,9 +289,7 @@ fn every_item_lies_inside_the_board_outline() {
             .collect();
         let outside: Vec<&String> = points
             .iter()
-            .filter(|(_, q)| {
-                !inside(&board.outline, *q) || cutouts.iter().any(|c| inside(c, *q))
-            })
+            .filter(|(_, q)| !inside(&board.outline, *q) || cutouts.iter().any(|c| inside(c, *q)))
             .map(|(what, _)| what)
             .collect();
         assert!(
