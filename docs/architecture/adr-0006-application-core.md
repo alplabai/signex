@@ -2,6 +2,7 @@
 
 - **Status:** Accepted 2026-11-16 (#2327, merged by Hakan; Caner's review decisions of 2026-11-15 applied). Amended 2026-11-17 (#2443, Hakan): the contract grows with the slices, slice C is the safety net, slice 1b moves the catalog.
 - **Decides on merge:** epic #2326 decisions D0 (this record and the ADR-0001 notes), D1, D2, D3, D5, D7 and D11. Already decided: D10 (web, [maintainer decision 2026-11-15](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348)) and D12 (no event bus, 2026-11-13). The i18n placement below is Caner's decision of 2026-11-15 (`docs/DECISIONS.md`).
+- **Amended (proposed):** [ADR-0007](adr-0007-cloud-boundary.md), not yet accepted, would amend the `wasm32` gate and domain-crate lint bullets under "Enforcement", slice S-IO and "A web front end (epic D10)". Each place carries a "proposed" pointer; they are removed if ADR-0007 is not accepted.
 - **Scope:** an iced-free application core shared by the GUI, `signex-cli` and later front ends; the crates `signex-commands`, `signex-i18n-ids` and `signex-workspace` (`signex-workspace` planned)
 - **Amends:** [ADR-0001](adr-0001-app-structure-and-boundaries.md) A1, A2, A3.2, D1, D5, D8 and three Part C bullets, each of which carries a short note pointing here
 - **Builds on:** [ADR-0003](adr-0003-deferred-work-and-consistent-history.md) (owed work, the boundary flush, late results)
@@ -87,7 +88,7 @@ One iced-free application core, `AppCore`, is the application layer over the eng
 
 ```mermaid
 flowchart TB
-  subgraph domain["UI-free domain crates: no iced; native IO moves out (S-IO · DOMAIN-crate part scheduled by issue 2431, see ADR-0007)"]
+  subgraph domain["UI-free domain crates: no iced; native IO moves out (S-IO, not scheduled · proposed by ADR-0007: DOMAIN-crate part by issue 2431)"]
     types["signex-types"] --- engine["signex-engine"]
     engine --- erc["signex-erc / signex-erc-dsl"]
     engine --- drc["signex-drc / signex-drc-dsl"]
@@ -295,7 +296,7 @@ The application core and the crates it uses get the treatment ADR-0001 D5 gives 
     - *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): #2431 schedules the DOMAIN-crate part of S-IO now.*
   - Clippy reads the nearest `clippy.toml` and does not merge it with the workspace file, so a per-crate file must repeat the workspace bans.
 - **No `wasm32-unknown-unknown` gate now** (epic D10: native first).
-  - *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): a `wasm32` check gate on the DOMAIN crates the read-only viewer links (#2431).*
+  - *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): a `wasm32` check gate on the `DOMAIN` set in `scripts/check_arch_guard.sh` (#2431).*
   - If a web front end is ever scheduled, a wasm32 build of the core and the crates below it would keep OS-bound dependencies (git2, tokio's IO and multi-thread runtime) out.
   - That build alone would not catch `std::fs` or `std::thread`: they compile there and fail only at run time. The lint above is what keeps them out either way.
 - **Stack frames (recommendation, open).** Run Clippy `large_stack_frames` on the core, against the stack overflow of #2325. This comes from the research note (§7.6), not from an epic decision.
@@ -334,7 +335,7 @@ Every slice has the same stop rule: stop and come back to the maintainers if its
 | S-A | Agent wire protocol and `OperandKind` in `signex-commands` | `signex-cli` has no `signex_app::headless::agent_client` import. | — | revert |
 | S-L | Library, pricing, editors and 3D import onto the core | The moved areas have no IO in `app/core/` (the guard passes). | — | revert per sub-area |
 | 9 | Lift `app/core/` into `signex-workspace`; the CLI drops `signex-app` | Three checks: `cargo tree -p signex-cli -e normal` shows no `iced*`, `wgpu*` or `winit`; a headless run with no commands boots in about `--help` time; `git grep -E 'gui_only\|honest_status\|boot_headless' -- crates` gives 0. | — | revert the move; the module stays in place |
-| S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a future web front end being scheduled, S-P on #1707 | — |
+| S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a future web front end being scheduled, S-P on #1707. *Amended by [ADR-0007](adr-0007-cloud-boundary.md) (proposed): #2431 schedules the DOMAIN-crate part of S-IO now.* | — |
 
 ```mermaid
 flowchart LR
@@ -352,7 +353,7 @@ flowchart LR
   SA["S-A · agent protocol<br/>into signex-commands"]
   SL["S-L · library · editors · 3D"]
   S9["9 · lift the crate<br/>CLI drops signex-app"]
-  SIO["S-IO · domain IO out<br/>DOMAIN part: issue 2431, see ADR-0007"]
+  SIO["S-IO · domain IO out<br/>not scheduled · proposed by ADR-0007:<br/>DOMAIN part by issue 2431"]
   SP["S-P · plugin host<br/>not scheduled"]
   S0 --> S1 --> S1b --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
   S1 --> SA --> S9
