@@ -551,3 +551,39 @@ fn a_zone_is_not_picked_inside_its_holes() {
     let outline_only = RectNm::new(at(-1.0, -1.0), at(11.0, 3.0));
     assert!(index.hit_rect(&outline_only, RectSelect::Inside).is_empty());
 }
+
+#[test]
+fn a_box_never_takes_a_footprint_text_and_a_point_does() {
+    let mut part = footprint(id(1), 10.0, 10.0, 0.0, "TopCopper", Vec::new());
+    part.properties.push(signex_types::property::PcbProperty {
+        key: "Reference".into(),
+        value: "R1".into(),
+        position: Some(Point::new(0.0, -2.0)),
+        ..Default::default()
+    });
+    let index = BoardIndex::build_selectable(&board(vec![part], Vec::new(), Vec::new()));
+    let text = ItemRef::FootprintText {
+        footprint: id(1),
+        field: BoardTextField::Designator,
+    };
+    assert!(
+        index
+            .hit_point(PointNm::new(10 * MM, 8 * MM), 0)
+            .contains(&text)
+    );
+    let rect = RectNm::new(PointNm::new(0, 0), PointNm::new(20 * MM, 20 * MM));
+    let square = [
+        PointNm::new(0, 0),
+        PointNm::new(20 * MM, 0),
+        PointNm::new(20 * MM, 20 * MM),
+        PointNm::new(0, 20 * MM),
+    ];
+    for mode in [RectSelect::Inside, RectSelect::Touching] {
+        let boxed = index.hit_rect(&rect, mode);
+        assert!(boxed.contains(&ItemRef::Footprint(id(1))), "{boxed:?}");
+        assert!(!boxed.contains(&text), "{boxed:?}");
+        let lassoed = index.hit_polygon(&square, mode);
+        assert!(lassoed.contains(&ItemRef::Footprint(id(1))), "{lassoed:?}");
+        assert!(!lassoed.contains(&text), "{lassoed:?}");
+    }
+}

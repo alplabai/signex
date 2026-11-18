@@ -233,6 +233,14 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                     points.extend([g.start, g.end, g.center].into_iter().flatten());
                 }
             }
+            ItemRef::FootprintText { footprint, field } => {
+                let placed = board
+                    .footprints
+                    .iter()
+                    .filter(|fp| fp.uuid == footprint)
+                    .filter_map(|fp| pcb_geom::footprint_text(fp, field)?.ok());
+                points.extend(placed.map(|text| text.placement.anchor.to_mm()));
+            }
         }
     }
     let first = points.first()?;

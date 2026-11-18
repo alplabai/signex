@@ -101,12 +101,14 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
   crosses. When no zone has any copper to write (a pour that fills nothing),
   the dialog and Messages note how many zones were left out. A keepout (a
   zone with `fill_type` `keepout`, #2373) has no copper and is not counted.
-
-### Not drawn yet
-
-- **Text (#2387).** Board and footprint text needs the stroke font board text
-  drawing brings; stroked glyphs enter through `FabExtras::strokes`. Until
-  then the dialog notes how many texts were not drawn.
+- Text on a fabrication layer is written in the board stroke font
+  (`pcb_geom::text_strokes`, `docs/RENDERING_RULES.md`, "pcb-stroke-font")
+  as strokes with a round aperture of `TEXT_STROKE_EM` of the text height
+  (#2368): each footprint's shown designator and comment, placed and
+  justified as the canvas places it (mirrored on the bottom side), a
+  footprint's text drawings, board strings and text frame lines. A dot is a
+  stroke of no length. A text the geometry cannot hold is counted with the
+  skipped items.
 
 ## V-score lines and panels (#2410)
 

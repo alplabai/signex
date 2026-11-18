@@ -1515,6 +1515,11 @@
     "category": "pcb"
   },
   {
+    "id": "set_footprint_text",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "set_layer_sizes",
     "group": "Pcb",
     "category": "modify"

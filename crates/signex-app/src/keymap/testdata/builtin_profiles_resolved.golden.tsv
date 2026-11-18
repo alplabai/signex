@@ -276,6 +276,7 @@ altium	hint	-	-	place_board_rectangle
 altium	hint	-	-	place_board_text_frame
 altium	hint	-	-	add_board_graphic
 altium	hint	-	-	set_board_graphic
+altium	hint	-	-	set_footprint_text
 altium	hint	-	-	import_dxf
 altium	hint	-	-	import_dxf_outline
 altium	hint	-	ESC	cancel_current_tool
@@ -756,6 +757,7 @@ classic	hint	-	-	place_board_rectangle
 classic	hint	-	-	place_board_text_frame
 classic	hint	-	-	add_board_graphic
 classic	hint	-	-	set_board_graphic
+classic	hint	-	-	set_footprint_text
 classic	hint	-	-	import_dxf
 classic	hint	-	-	import_dxf_outline
 classic	hint	-	ESC	cancel_current_tool

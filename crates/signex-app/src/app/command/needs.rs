@@ -428,6 +428,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
+        // #2368: a footprint text on the board `document` names.
+        "set_footprint_text" => Needs::Pcb,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.

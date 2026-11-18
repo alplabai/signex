@@ -394,6 +394,18 @@ pub const BOARD_GRAPHIC_SET: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
+/// `set_footprint_text` (#2368): one `field` (`x`, `y`, `rotation`,
+/// `height`, `justify`) of the `text` (`designator` or `comment`) of the
+/// component `designator` set to `value`; X and Y in mm from the board origin
+/// with Y up, as Properties shows them, `justify` one of `left`, `center`,
+/// `right`.
+pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+    required("text", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
 /// `swap_pins` (#2410): two pins of the component `designator` on the board
 /// `document`, as `pins` = `a,b` (pad numbers).
 pub const SWAP_PINS: &[Operand] = &[

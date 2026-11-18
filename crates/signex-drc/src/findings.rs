@@ -220,6 +220,7 @@ pub fn item_id(item: &ItemRef) -> String {
         | ItemRef::FreePad(id)
         | ItemRef::Dimension(id)
         | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+        ItemRef::FootprintText { footprint, field } => format!("{footprint}/{}", field.id()),
     }
 }
 
@@ -234,6 +235,7 @@ pub(crate) fn item_label(item: &ItemRef) -> String {
         ItemRef::Arc(_) => "arc",
         ItemRef::Dimension(_) => "dimension",
         ItemRef::Graphic { .. } => "drawing",
+        ItemRef::FootprintText { .. } => "text",
     };
     format!("{kind} {}", item_id(item))
 }

@@ -108,6 +108,7 @@ mod tests {
             layer: layer.map(String::from),
             font_size: None,
             hidden: false,
+            justify: Default::default(),
         };
         let mut fp = footprint(0.0, "TopCopper");
         fp.properties = vec![

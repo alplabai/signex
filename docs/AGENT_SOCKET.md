@@ -140,7 +140,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
-  each, answered with the drawing as JSON), and the length tuning commands
+  each, answered with the drawing as JSON), and `set_footprint_text` (#2368;
+  a component's designator or comment placed, turned, sized or justified on
+  its own, one board undo step, answered with the text as JSON), and the
+  length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`

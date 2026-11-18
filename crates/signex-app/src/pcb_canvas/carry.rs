@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pcb_geom::TrackEnds;
+use pcb_geom::{BoardTextField, TrackEnds};
 use signex_engine::pcb::BoardClipboard;
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_for, grid_step_mm};
@@ -63,6 +63,9 @@ pub struct PcbCarry {
     /// The part a Place carries; its origin is at `anchor` once the pointer
     /// has been over the board.
     pub part: Option<Box<PartToPlace>>,
+    /// A footprint's designator or comment a drag moves on its own (#2368);
+    /// `footprints` is then empty.
+    pub text: Option<(Uuid, BoardTextField)>,
 }
 
 impl PcbCarry {
@@ -89,6 +92,7 @@ impl PcbCarry {
             delta: Point::new(0.0, 0.0),
             paste: None,
             part: None,
+            text: None,
         }
     }
 

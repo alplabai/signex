@@ -9,9 +9,6 @@ pub enum FabNote {
     /// outline is never written in place of a fill: it would short every
     /// other net it crosses.
     ZonesNotFilled { count: usize },
-    /// Texts on a fabrication layer, left for the stroke font of board text
-    /// drawing (#2387).
-    TextsNotDrawn { count: usize },
     /// Placed parts the BOM lists that have no designator, so the
     /// pick-and-place file has no row for them.
     PartsWithoutDesignator { count: usize },
@@ -23,7 +20,6 @@ pub enum FabNote {
 /// The running counts behind the notes.
 #[derive(Debug, Default)]
 pub(crate) struct Tally {
-    pub texts: usize,
     pub unnamed_parts: usize,
     pub skipped: usize,
 }
@@ -35,7 +31,6 @@ impl Tally {
             FabNote::ZonesNotFilled {
                 count: zones_not_filled,
             },
-            FabNote::TextsNotDrawn { count: self.texts },
             FabNote::PartsWithoutDesignator {
                 count: self.unnamed_parts,
             },
@@ -53,7 +48,6 @@ impl FabNote {
     pub fn count(self) -> usize {
         match self {
             FabNote::ZonesNotFilled { count }
-            | FabNote::TextsNotDrawn { count }
             | FabNote::PartsWithoutDesignator { count }
             | FabNote::ItemsSkipped { count } => count,
         }

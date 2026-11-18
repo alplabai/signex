@@ -1,5 +1,5 @@
 //! The board as Gerber images: every item on the image of its layer, in a
-//! fixed order (zone fills, footprints, tracks, vias, board graphics,
+//! fixed order (zone fills, footprints, tracks, vias, board graphics, texts,
 //! extra strokes, the profile, then the V-score lines), so one board gives
 //! the same bytes.
 
@@ -10,7 +10,6 @@ use pcb_geom::{
     pad_shape, pad_world_center, pad_world_rotation_deg, via_layers,
 };
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via};
-use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use super::draw::{Drawing, Drawn, Pen, draw};
@@ -50,6 +49,7 @@ pub(crate) fn collect(
     arcs(&mut images, board, frame, tally);
     vias(&mut images, board, stack, frame, tally);
     board_graphics(&mut images, board, frame, tally);
+    super::text::texts(&mut images, board, frame, tally);
     extra_strokes(&mut images, extras, frame, tally);
     profile(&mut images, board, frame, tally);
     v_scores(&mut images, board, frame, tally);
@@ -225,12 +225,6 @@ fn footprint_marks(
         };
         place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
     }
-    tally.texts += footprint
-        .properties
-        .iter()
-        .filter(|p| !p.hidden && !p.value.is_empty())
-        .filter(|p| p.layer.as_deref().and_then(FabLayer::of_token).is_some())
-        .count();
 }
 
 fn place_drawing(
@@ -241,12 +235,13 @@ fn place_drawing(
 ) {
     match drawn {
         Ok(Drawn::Marks(marks)) => marks.into_iter().for_each(|m| push(images, layer, m)),
-        Ok(Drawn::Text) => tally.texts += 1,
+        // `fab::text` writes it.
+        Ok(Drawn::Text) => {}
         Ok(Drawn::Skipped) | Err(_) => tally.skipped += 1,
     }
 }
 
-fn graphic_function(layer: FabLayer) -> Function {
+pub(super) fn graphic_function(layer: FabLayer) -> Function {
     match layer {
         FabLayer::Profile => Function::Profile,
         FabLayer::Copper(_) => Function::NonConductor,
@@ -556,18 +551,15 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally:
             function: graphic_function(layer),
             width_override: (layer == FabLayer::Profile).then_some(PROFILE_WIDTH_NM),
         };
-        place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
-        // A text frame's box is drawn; its text waits for the stroke font,
-        // as a board text does (#2424).
-        if graphic.kind() == Some(BoardGraphicKind::TextFrame) && !graphic.text.trim().is_empty() {
-            tally.texts += 1;
-        }
+        // A text frame's box; its lines are written by `fab::text`. A board
+        // drawing of kind `text` is not one the board draws, and `fab::text`
+        // does not write it: it is counted as skipped, never dropped.
+        let drawn = match draw(&Drawing::from(graphic), &pen) {
+            Ok(Drawn::Text) => Ok(Drawn::Skipped),
+            other => other,
+        };
+        place_drawing(images, layer, drawn, tally);
     }
-    tally.texts += board
-        .texts
-        .iter()
-        .filter(|t| !t.text.is_empty() && FabLayer::of_token(&t.layer).is_some())
-        .count();
 }
 
 fn extra_strokes(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &mut Tally) {
