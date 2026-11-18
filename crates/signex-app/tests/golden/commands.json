@@ -440,6 +440,11 @@
     "category": "edit"
   },
   {
+    "id": "edit_layer_color",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "edit_library_symbol",
     "group": "General",
     "category": "library"
@@ -1358,6 +1363,11 @@
     "id": "repour_selected",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "reset_layer_colors",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "reset_local_coordinates",

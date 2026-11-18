@@ -392,6 +392,8 @@ altium	hint	-	-	set_pad_shape
 altium	hint	-	-	set_layer_visible
 altium	hint	-	-	set_active_layer
 altium	hint	-	-	set_layer_color
+altium	hint	-	-	edit_layer_color
+altium	hint	-	-	reset_layer_colors
 altium	hint	-	-	show_used_layers_only
 altium	hint	-	-	set_object_visible
 altium	hint	-	-	set_object_transparency
@@ -891,6 +893,8 @@ classic	hint	-	-	set_pad_shape
 classic	hint	-	-	set_layer_visible
 classic	hint	-	-	set_active_layer
 classic	hint	-	-	set_layer_color
+classic	hint	-	-	edit_layer_color
+classic	hint	-	-	reset_layer_colors
 classic	hint	-	-	show_used_layers_only
 classic	hint	-	-	set_object_visible
 classic	hint	-	-	set_object_transparency

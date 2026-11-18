@@ -1,4 +1,4 @@
-//! The board menu's pin swap and design reuse group (#2410): Swap Pins and
+//! The board menu's pin swap and design reuse rows (#2410): Swap Pins and
 //! Swap Gates, live with two pads of one unlocked component selected; Save
 //! as Reuse Block, live with board objects selected; and one Place row per
 //! block of the project, live with one unlocked component selected (the
@@ -13,36 +13,63 @@ use crate::app::{ContextAction, Message, ReuseBlockMsg};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
-/// The group's rows for `board`'s selection and the project's `blocks`.
-pub(super) fn part_rows(
+/// A command row, live while `enabled`.
+fn command(
+    i18n: &I18n,
+    sc: &CanvasShortcuts,
+    command_id: &'static str,
+    enabled: bool,
+) -> DropdownEntry<Message> {
+    if enabled {
+        dd_command(i18n, None, command_id, sc.of(command_id), None)
+    } else {
+        dd_cmd_disabled(i18n, None, command_id, sc.of(command_id))
+    }
+}
+
+/// Swap Pins and Swap Gates: footprint rows, shown with a footprint
+/// selected (2026-11-18).
+pub(super) fn swap_rows(
     i18n: &I18n,
     board: PcbTargets,
     sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    vec![
+        command(i18n, sc, "swap_pins", board.pad_pair),
+        command(i18n, sc, "swap_gates", board.pad_pair),
+    ]
+}
+
+/// Save as Reuse Block, live with board objects selected.
+pub(super) fn save_row(
+    i18n: &I18n,
+    board: PcbTargets,
+    sc: &CanvasShortcuts,
+) -> DropdownEntry<Message> {
+    command(i18n, sc, "save_board_reuse_block", board.copyable)
+}
+
+/// One Place row per block of the project; a greyed Place Reuse Block row
+/// with none saved.
+pub(super) fn place_rows(
+    i18n: &I18n,
+    board: PcbTargets,
     blocks: &[String],
 ) -> Vec<DropdownEntry<Message>> {
-    let command = |command_id: &'static str, enabled: bool| {
-        if enabled {
-            dd_command(i18n, None, command_id, sc.of(command_id), None)
-        } else {
-            dd_cmd_disabled(i18n, None, command_id, sc.of(command_id))
-        }
-    };
-    let mut rows = vec![
-        command("swap_pins", board.pad_pair),
-        command("swap_gates", board.pad_pair),
-        command("save_board_reuse_block", board.copyable),
-    ];
     if blocks.is_empty() {
-        rows.push(dd_cmd_disabled(i18n, None, "place_board_reuse_block", ""));
+        return vec![dd_cmd_disabled(i18n, None, "place_board_reuse_block", "")];
     }
-    for name in blocks {
-        let label = t!(i18n, ids::PCB_REUSE_BLOCK_PLACE_ROW, "name" => name.as_str()).into_string();
-        rows.push(if board.one_footprint {
-            let place = ReuseBlockMsg::PlaceRequested { name: name.clone() };
-            dd_kb(None, &label, "", ContextAction::ReuseBlock(place))
-        } else {
-            dd_disabled(None, &label, None)
-        });
-    }
-    rows
+    blocks
+        .iter()
+        .map(|name| {
+            let label =
+                t!(i18n, ids::PCB_REUSE_BLOCK_PLACE_ROW, "name" => name.as_str()).into_string();
+            if board.one_footprint {
+                let place = ReuseBlockMsg::PlaceRequested { name: name.clone() };
+                dd_kb(None, &label, "", ContextAction::ReuseBlock(place))
+            } else {
+                dd_disabled(None, &label, None)
+            }
+        })
+        .collect()
 }

@@ -10,6 +10,14 @@ pcb-layers-show-all = Show all layers
 # it and hide every other layer. $layer is the layer's name.
 pcb-layer-tab-hide = Hide { $layer }
 pcb-layer-tab-show-only = Show only this layer
+# The layer's colour, saved with the board: opens the Layers panel's
+# colour picker for the layer; greyed with the reason for a layer whose
+# colour the board cannot change yet.
+pcb-layer-tab-colour = Layer colour...
+pcb-layer-tab-colour-unavailable = This layer's colour cannot be changed yet.
+# Give the layer, or every layer, the board palette colour again.
+pcb-layer-tab-colour-reset = Reset layer colour
+pcb-layer-tab-colour-reset-all = Reset all layer colours
 # Highlight one layer: every other layer is drawn dimmed. $layer is its name.
 pcb-layer-tab-highlight = Highlight { $layer }
 # Flyouts of the layer tab menu: one row per kind of layer.
@@ -19,7 +27,7 @@ pcb-layer-tab-show-layers = Show layers
 pcb-layer-kind = { $kind ->
     [signal] Signal layers
     [plane] Plane layers
-    [overlay] Overlay layers
+    [overlay] Silkscreen layers
     [mask] Mask layers
     [paste] Paste layers
     [mechanical] Mechanical layers
@@ -172,12 +180,12 @@ pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer 
 # The text a string placed with the String tool reads until it is edited.
 pcb-tool-string-text = String
 # A String click while the active layer takes no text.
-pcb-tool-string-needs-text-layer = String: make an overlay, mechanical or documentation layer active to place a string on it
+pcb-tool-string-needs-text-layer = String: make a silkscreen, mechanical or documentation layer active to place a string on it
 # The free pad, arc, string and dimension tools (#2373): what the Messages
 # panel says when one is armed, and when a click adds nothing.
 pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
 pcb-tool-hint-arc = Arc: { $mode }. Esc drops the arc being drawn, then ends the tool
-pcb-tool-hint-string = String: click to place a string on the active overlay, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
+pcb-tool-hint-string = String: click to place a string on the active silkscreen, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
 pcb-tool-hint-dimension = Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
 pcb-tool-no-arc = Arc: those points make no arc, so nothing was added
 pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was added
@@ -281,8 +289,8 @@ pcb-layer-mechanical = Mechanical { $index }
 # The board edge: the outline and the rims of its openings.
 pcb-layer-board-outline = Board Outline
 pcb-layer-margin = Margin
-pcb-layer-silkscreen-top = Top Overlay
-pcb-layer-silkscreen-bottom = Bottom Overlay
+pcb-layer-silkscreen-top = Top Silkscreen
+pcb-layer-silkscreen-bottom = Bottom Silkscreen
 pcb-layer-solder-mask-top = Top Solder
 pcb-layer-solder-mask-bottom = Bottom Solder
 pcb-layer-paste-top = Top Paste

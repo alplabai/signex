@@ -30,7 +30,7 @@ pcb-stack-kind-plane = Plane
 pcb-stack-kind-dielectric = Dielectric
 pcb-stack-kind-solder-mask = Solder Mask
 pcb-stack-kind-paste = Paste
-pcb-stack-kind-overlay = Overlay
+pcb-stack-kind-overlay = Silkscreen
 
 ## Buttons.
 pcb-stack-add-signal = Add Signal

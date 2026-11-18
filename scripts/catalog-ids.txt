@@ -89,6 +89,7 @@ draw_wire
 duplicate
 edit_blanket
 edit_footprint_field
+edit_layer_color
 edit_library_symbol
 edit_no_erc_rules
 edit_object_properties
@@ -273,6 +274,7 @@ repeat_last_item
 report_manager_bom
 repour_all
 repour_selected
+reset_layer_colors
 reset_local_coordinates
 reset_schematic_designators
 resolve

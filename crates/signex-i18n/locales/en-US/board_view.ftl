@@ -35,7 +35,7 @@ pcb-layers-pair = { $pair ->
     [component_outline] Component Outline
     [courtyard] Courtyard
     [designator] Designator
-    [overlay] Overlay
+    [overlay] Silkscreen
     [paste] Paste
     [solder] Solder
     [tenting] Tenting

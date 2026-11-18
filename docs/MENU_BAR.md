@@ -762,20 +762,28 @@ a board is in view (#2405); the golden fixture marks its rows `-` in the
 
 ## The board's right-click menu {#board-context-menu}
 
-The board canvas menu (#2240, #2405) lists, in order: Find Similar Objects
-and Find; the Place ▸ flyout (the board's tools as Place on a board lists
-them, then Board Sketch) and, with a selection, Align ▸ (the Align rows of
-the PCB Active Bar, live for unlocked footprints); Undo and Redo; Cut, Copy,
-Paste, Paste Special, Duplicate and Select All; Move Selection; Rotate,
-Rotate Clockwise, Flip Selection, Mirror X, Mirror Y and Change Footprint;
-Delete; Board Sketch; Select Net (`select_board_net`) and Highlight Net
-(`highlight_board_net`), which act on the net of the selection or of what is
-under the cursor; Cross Probe and Properties; then Toggle Ratsnest. Each row
-runs its catalog command and is live exactly when that command is enabled in
-the window's `CommandContext`, so the menu greys what the keys and the menu
-bar grey. A board written by a newer Signex is read-only
-(`PcbTargets::read_only`): every row that edits it, the Place tools and
-Board Sketch included, is greyed, and the rows that only read it stay live.
+The board canvas menu (#2240, #2405) follows what is under the pointer
+(maintainer request 2026-11-18, `app/view/context_menu/board_menu.rs`), as
+the sheet menu shows its selection rows only with a selection. On an empty
+area with nothing selected it lists, in order: Find; the Place ▸ flyout (the
+board's tools as Place on a board lists them, then Board Sketch); Undo and
+Redo; Paste, Paste Special and Select All; Board Sketch and the reuse block
+Place rows; then Toggle Ratsnest. On an object or with a selection, Find
+Similar Objects comes first and, with a selection, Align ▸ (the Align rows of
+the PCB Active Bar, live for unlocked footprints), Cut, Copy and Duplicate,
+Move Selection, Rotate, Rotate Clockwise, Flip Selection, Mirror X and
+Mirror Y, Save as Reuse Block, Delete, Board Shape and Keepout from
+Selection follow. Change Footprint, Swap Pins, Swap Gates and Arrange in Box
+show only with a footprint selected; Lock, Unlock, Gloss Selected Routes and
+Add Teardrops only with a track or via selected; Select Net
+(`select_board_net`) and Highlight Net (`highlight_board_net`) only when the
+selection or the object under the pointer has a net; Cross Probe and
+Properties with an object. Each row runs its catalog command and is live
+exactly when that command is enabled in the window's `CommandContext`, so
+the menu greys what the keys and the menu bar grey. A board written by a
+newer Signex is read-only (`PcbTargets::read_only`): every row that edits
+it, the Place tools and Board Sketch included, is greyed, and the rows that
+only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 
@@ -813,7 +821,7 @@ Ratsnest: it shows or hides the circle-and-X marker at the board origin,
 which is shown by default. It is greyed without a board, has no default key,
 and like the rows above it changes only the board view.
 
-The board canvas menu ends with a View group holding the same Toggle
+Every board canvas menu ends with a View group holding the same Toggle
 Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
 always live there.
 

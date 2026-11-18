@@ -28,7 +28,16 @@ impl Signex {
         let Some(path) = self.active_tab_path() else {
             return false;
         };
-        let Some(engine) = self.document_state.board_engine(&path) else {
+        self.edit_pcb_board_options_at(&path, edit)
+    }
+
+    /// [`Self::edit_pcb_board_options`] on the open board at `path`.
+    pub(crate) fn edit_pcb_board_options_at(
+        &mut self,
+        path: &std::path::Path,
+        edit: impl FnOnce(&mut BoardOptions) -> bool,
+    ) -> bool {
+        let Some(engine) = self.document_state.board_engine(path) else {
             return false;
         };
         let mut options = engine.board().options.clone();
@@ -44,7 +53,7 @@ impl Signex {
         let command = BoardCommand::SetBoardOptions {
             options: Box::new(options),
         };
-        match self.execute_board_commands(&path, vec![command], Some(step)) {
+        match self.execute_board_commands(path, vec![command], Some(step)) {
             Ok(_) => true,
             Err(error) => {
                 self.say_pcb_options_refused(error.to_string());

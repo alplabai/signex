@@ -55,6 +55,7 @@ fn options() -> BoardOptions {
             fingerprint: String::new(),
         }],
         panel: Some(panel()),
+        layer_colors: Vec::new(),
     }
 }
 
@@ -209,4 +210,48 @@ fn the_panel_round_trips_and_a_broken_one_is_refused() {
         SnxPcb::parse(&broken),
         Err(FormatError::TsvFieldParse { .. })
     ));
+}
+
+/// 2026-11-18: layer colours round-trip in `[board_options.layer_colors]`
+/// under `snxpcb/1.5`; a board whose colours are all reset writes 1.4 again.
+#[test]
+fn layer_colours_round_trip_and_raise_the_token() {
+    use crate::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let top = PcbLayer::Copper(CopperLayer::Top);
+    let mut board = empty_board();
+    let plain = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(plain.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
+    assert!(board.options.set_layer_color(silk, Some(MARK_COLORS[1])));
+    assert!(board.options.set_layer_color(top, Some(MARK_COLORS[0])));
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_LAYER_COLORS}\"")),
+        "{text}"
+    );
+    assert!(text.contains("[board_options.layer_colors]"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.layer_colors, board.options.layer_colors);
+    assert_eq!(back.options.layer_color(silk), Some(MARK_COLORS[1]));
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+
+    assert!(board.options.set_layer_color(silk, None));
+    assert!(board.options.set_layer_color(top, None));
+    let reset = SnxPcb::new(board).write_string().expect("writes");
+    assert_eq!(reset, plain, "no colours: byte-identical to before");
+}
+
+/// A colour row naming a layer this build does not know refuses the file
+/// instead of dropping the colour on the next save.
+#[test]
+fn an_unknown_layer_colour_token_refuses_the_file() {
+    let mut board = empty_board();
+    board.options.set_layer_color(
+        crate::pcb_layer::PcbLayer::Technical(crate::pcb_layer::TechnicalLayer::PasteTop),
+        Some(MARK_COLORS[2]),
+    );
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    let broken = text.replacen("TopPaste =", "NoSuchLayer =", 1);
+    assert_ne!(broken, text, "{text}");
+    assert!(SnxPcb::parse(&broken).is_err());
 }

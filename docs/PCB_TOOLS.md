@@ -666,27 +666,47 @@ value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
 `rotation`, `height` and `justify` (`left`, `center`, `right`). Rules:
 `docs/RENDERING_RULES.md`, "pcb-footprint-text".
 
+## Layer tabs
+
+The strip under the board has a tab for every layer the Layers panel shows
+that is not hidden, in the panel's order: the copper top to bottom, each
+component pair's top then bottom layer, Board Outline, Margin, Dimensions,
+Notes, ECO 1 and 2, Drill Drawing, the board's mechanical layers, then
+Multi-Layer while it is shown (2026-11-18). Hiding a layer, by its eye in the
+panel or its tab's Hide row, takes its tab away; Show layers ▸ or the eye
+brings it back. The strip scrolls sideways when the tabs do not fit. A tab's
+swatch is the layer's colour on this board.
+
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394):
 
 - Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
-  picking it again ends the highlight), Show only this layer and Show all
-  layers. Show only this layer makes the layer active and hides every other
-  layer the Layers panel lists; the board outline and the Multi-Layer row
-  keep their state, as in single-layer mode.
-- Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
-  mask (solder mask and adhesive), paste, mechanical (board outline,
-  documentation and mechanical layers) and all.
+  picking it again ends the highlight).
+- Layer colour..., Reset layer colour and Reset all layer colours
+  (2026-11-18). Layer colour... opens the Layers panel on Layers & Colors with
+  that layer's colours open under its row; it is greyed for the keep-out and
+  mechanical layers, which have no colour row yet. A colour is saved with the
+  board (`[board_options.layer_colors]`, `docs/PCB_BOARD_OPTIONS.md`), one
+  undo step; the resets are greyed while there is nothing to reset.
+- Show only this layer and Show all layers. Show only this layer makes the
+  layer active and hides every other layer the Layers panel lists; the board
+  outline and the Multi-Layer row keep their state, as in single-layer mode.
+- Hide layers ▸ and Show layers ▸: per kind (signal, plane, silkscreen, mask
+  (solder mask and adhesive), paste, mechanical (board outline,
+  documentation and mechanical layers)) a row for the whole kind, then the
+  layers of that kind the row would change, one by one: the shown ones under
+  Hide, the hidden ones under Show. All layers ends the list.
 - Layer stack... runs `board_layer_stack` (#2401) from the window the menu
   was opened in and is greyed exactly when that command is. Drill symbols...
   and Layer drawing order... are greyed with the reason as their hover text:
   neither editor exists yet.
 - Short, Medium and Long tab names and Show layer numbers. Short names are
-  `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
-  `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A
-  number goes in front: a copper layer's place in the stack (1 is the top),
-  a mechanical layer's index; technical layers have none.
+  `TL`, `BL`, `M1` (Mid-Layer 1), `TO` (Top Silkscreen), `TS` (Top Solder)
+  and so on; Medium names are `Top`, `Bottom`, `Mid 1`, and a technical layer
+  keeps its long name. A number goes in front: a copper layer's place in the
+  stack (1 is the top), a mechanical layer's index; technical layers have
+  none.
 - Flip board view: the board seen from below. The view is mirrored left to
   right (the turn of the view, #2316, still applies on top), board text
   reads mirrored, a box selection keeps its left-to-right and right-to-left
@@ -694,9 +714,25 @@ A right-click on a layer tab under the board opens its menu (#2379, #2394):
   drawn over the copper nearer the top. The active or highlighted layer still
   draws last.
 
-The rows change the view of the board in the window the menu was opened in,
-never the board file. The tab names are per user (`prefs.json`,
-`pcb_layer_strip`); the flip is the board view's, for the session.
+The rows change the view of the board in the window the menu was opened in;
+only the colour rows change the board file. The tab names are per user
+(`prefs.json`, `pcb_layer_strip`); the flip is the board view's, for the
+session.
+
+## Board canvas menu
+
+A right-click on the board opens a menu that follows what is under the
+pointer (2026-11-18). On an empty area with nothing selected: Find, Place ▸,
+Undo, Redo, Paste, Paste Special, Select All, Board Sketch, the reuse block
+Place rows and Toggle Ratsnest. On an object, or with a selection, Find
+Similar Objects and the rows that act on it follow: with a selection Align ▸,
+Cut, Copy, Duplicate, Move Selection, the turns and mirrors, Save as Reuse
+Block, Delete, Board Shape and Keepout from Selection; Change Footprint, Swap
+Pins, Swap Gates and Arrange in Box only with a footprint selected; Lock,
+Unlock, Gloss Selected Routes and Add Teardrops only with a track or via
+selected; Select Net and Highlight Net only when the selection or the object
+under the pointer has a net; Cross Probe and Properties. Each row runs its
+catalog command and is live by that command's own rule.
 
 ## Layer sets
 
@@ -721,7 +757,9 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 `show_layer_group` name their board with `document` and are on the agent
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
-View menu rows. See `docs/COMMANDS.md`.
+View menu rows; `edit_layer_color` opens the colour picker of the active
+layer and `reset_layer_colors` gives every layer the palette colour again
+(`set_layer_color` sets one, saved with the board). See `docs/COMMANDS.md`.
 
 ## Board view configuration
 
@@ -743,7 +781,7 @@ which keeps the rows whose name holds the text, and two tabs.
 - Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
   side. The rows map onto the named technical layers: 3D Body, Assembly,
   Component Outline (the fabrication layers), Courtyard, Designator,
-  Overlay (silkscreen), Paste, Solder (solder mask), Adhesive, Fiducial and
+  Silkscreen, Paste, Solder (solder mask), Adhesive, Fiducial and
   Keep-Out. Coating, Component Center, Tenting and Value have no layer and
   are greyed.
 - Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
