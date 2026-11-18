@@ -180,6 +180,24 @@ pub fn is_reserved_symbol_key(key: &str) -> bool {
     )
 }
 
+/// Whether `cmd` can make a pin end touch a wire, so its reconcile needs the
+/// bare contacts the sheet held before it (`transform::pin_junctions`).
+fn makes_pin_contacts(cmd: &Command) -> bool {
+    matches!(
+        cmd,
+        Command::MoveSelection { .. }
+            | Command::MoveEach { .. }
+            | Command::RotateSelection { .. }
+            | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
+            | Command::PlaceWireSegment { .. }
+            | Command::PlaceWireSegmentAsIs { .. }
+            | Command::BreakWire { .. }
+            | Command::PlaceSymbol { .. }
+            | Command::MoveWireEnd { .. }
+    )
+}
+
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
 #[derive(Debug)]
@@ -248,6 +266,9 @@ pub struct Engine {
     /// The pre-move sheet itself, which a drag preview's move reads in place
     /// of a copy of the engine's document (drag previews).
     preset_sheet: Option<std::sync::Arc<SchematicSheet>>,
+    /// Where pin ends touched a wire bare before the command in flight: the
+    /// reconcile leaves those contacts be (`transform::pin_junctions`).
+    taps_before: Option<std::collections::HashSet<signex_net::uf::Key>>,
     /// Test switch: a move folds by weighing every wire, as it did before the
     /// fold looked only where wires changed.
     #[cfg(test)]
@@ -432,6 +453,7 @@ impl Engine {
             preset_dots: None,
             preset_wires: None,
             preset_sheet: None,
+            taps_before: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -474,6 +496,7 @@ impl Engine {
             preset_dots: None,
             preset_wires: None,
             preset_sheet: None,
+            taps_before: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -680,6 +703,13 @@ impl Engine {
         let mark = self.revision_mark();
         self.bump_revision();
         let before = self.pre_image(&cmd);
+        // The bare pin contacts the sheet holds now: an edit that can make a
+        // pin end touch a wire dots only the contacts it makes.
+        self.taps_before = if makes_pin_contacts(&cmd) {
+            Some(transform::bare_tap_keys(&self.document))
+        } else {
+            None
+        };
 
         let result = match cmd {
             Command::ReplaceDocument { .. }
@@ -754,6 +784,7 @@ impl Engine {
                 Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }
         };
+        self.taps_before = None;
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {
             self.restore_revision(mark);

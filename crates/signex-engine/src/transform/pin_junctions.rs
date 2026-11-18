@@ -197,10 +197,30 @@ pub fn pin_junction_repairs(sheet: &SchematicSheet, ids: &mut dyn IdSource) -> V
         .collect()
 }
 
+/// Where a pin end touches a wire strictly inside it with no dot: the bare
+/// contacts a sheet holds, read before an edit so the edit leaves them be.
+#[must_use]
+pub fn bare_tap_keys(sheet: &SchematicSheet) -> HashSet<Key> {
+    let dots = dot_keys(sheet);
+    let lines = WireLines::of(&sheet.wires);
+    (sheet.symbols.iter())
+        .flat_map(|symbol| symbol_pin_tips(sheet, symbol))
+        .map(|tip| pt_key(&tip))
+        .filter(|k| !dots.contains(k) && !lines.through(*k).is_empty())
+        .collect()
+}
+
 /// The dots an edit needs because a pin end now lies strictly inside a wire:
 /// the pins of the `items` symbols on any wire, and any pin on the `items`
-/// wires. Only places with no dot yet; called with the edit applied.
-pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Vec<Junction> {
+/// wires. Only places with no dot yet; called with the edit applied. A pin end
+/// that touched a wire bare before the edit (`before`, see [`bare_tap_keys`])
+/// stays bare: the edit did not make that contact, and only Repair Pin
+/// Junctions turns an old bare touch into a connection.
+pub(crate) fn pin_dots_for(
+    sheet: &SchematicSheet,
+    items: &[SelectedItem],
+    before: Option<&HashSet<Key>>,
+) -> Vec<Junction> {
     let kinds = |kind: SelectedKind| -> HashSet<uuid::Uuid> {
         (items.iter())
             .filter(|item| item.kind == kind)
@@ -230,6 +250,7 @@ pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Ve
     let mut taken = dot_keys(sheet);
     candidates
         .into_iter()
+        .filter(|tip| before.is_none_or(|old| !old.contains(&pt_key(tip))))
         .filter(|tip| taken.insert(pt_key(tip)))
         // An automatic dot, made where the T dots of a reconcile are made.
         .map(super::autoplace::junction_at)
@@ -300,6 +321,6 @@ mod tests {
             SelectedItem::new(wire, SelectedKind::Wire),
             SelectedItem::new(r1, SelectedKind::Symbol),
         ];
-        assert!(pin_dots_for(&sheet, &items).is_empty());
+        assert!(pin_dots_for(&sheet, &items, None).is_empty());
     }
 }

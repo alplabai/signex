@@ -164,3 +164,24 @@ fn a_wire_through_both_pins_of_one_part_does_not_short_it() {
     });
     assert!(!shorted, "R1's pins stay apart");
 }
+
+/// A bare touch an older sheet holds stays bare when an edit reshapes its wire
+/// (here the wire grows by its end grip): the edit did not make the contact.
+#[test]
+fn reshaping_a_wire_leaves_an_old_bare_touch_bare() {
+    let mut sheet = test_sheet();
+    add_pin(&mut sheet, "J1", (20.0, 40.0));
+    add_pin(&mut sheet, "TP1", (50.0, 40.0));
+    let wire = add_wire(&mut sheet, (20.0, 40.0), (80.0, 40.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute(Command::MoveWireEnd {
+            wire,
+            start: false,
+            to: Point::new(90.0, 40.0),
+            keep_wires: true,
+        })
+        .unwrap();
+    assert!(dots(&engine).is_empty());
+    assert_eq!(bare_pin_taps(engine.document()).len(), 1, "still reported");
+}

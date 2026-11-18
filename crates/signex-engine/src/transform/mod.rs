@@ -198,11 +198,18 @@ impl Engine {
         let verdict: Vec<Option<bool>> = (self.document.junctions.iter())
             .map(|j| if j.minted { kept(j) } else { None })
             .collect();
-        let judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
+        // A pin end the edit put inside a wire joins it through a dot; the
+        // dot is the connection, as #107 has it (see `pin_junctions`). Found
+        // before the index, so the wires near each new dot are in the index
+        // that judges it: the local and the full-scan commit then agree.
+        let before = self.taps_before.as_ref();
+        let mut pin_dots = pin_junctions::pin_dots_for(&self.document, items, before);
+        let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
             .map(|(j, _)| j.position)
             .collect();
+        judged.extend(pin_dots.iter().map(|dot| dot.position));
         // Wire geometry is fixed for this pass (only junctions change), so one
         // index serves every query. Minting for a wire takes about eight
         // lookups, judging a dot three. The queries are all near a touched
@@ -220,9 +227,11 @@ impl Engine {
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
         }
-        // A pin end the edit put inside a wire joins it through a dot; the
-        // dot is the connection, as #107 has it (see `pin_junctions`).
-        let pin_dots = pin_junctions::pin_dots_for(&self.document, items);
+        // A wire dot minted above may already stand where a pin dot would.
+        let dot_at: std::collections::HashSet<_> = (self.document.junctions.iter())
+            .map(|j| signex_net::pt_key(&j.position))
+            .collect();
+        pin_dots.retain(|dot| !dot_at.contains(&signex_net::pt_key(&dot.position)));
         changed |= !pin_dots.is_empty();
         self.document.junctions.extend(pin_dots);
 
@@ -635,7 +644,7 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
-pub use pin_junctions::{bare_pin_taps, pin_junction_repairs};
+pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
