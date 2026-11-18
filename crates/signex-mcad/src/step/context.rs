@@ -6,8 +6,10 @@
 use super::StepSchema;
 use super::p21::{Data, Ref, refs, string, triple};
 
-/// The length below which two points are the same point, mm.
-pub(crate) const LENGTH_UNCERTAINTY_MM: f64 = 1e-6;
+/// The length below which two points are the same point, mm. The file
+/// declares it, and the writer accepts a vertex this far off its curve or
+/// surface (`shape::ON_GEOMETRY_MM`), so the two must be one value.
+pub(crate) const LENGTH_UNCERTAINTY_MM: f64 = 1e-5;
 
 impl StepSchema {
     /// The schema name of `FILE_SCHEMA`.

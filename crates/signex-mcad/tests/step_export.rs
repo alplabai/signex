@@ -141,6 +141,9 @@ fn the_file_is_iso_10303_21_in_the_chosen_schema() {
     assert!(text.ends_with("ENDSEC;\nEND-ISO-10303-21;\n"));
     assert!(text.contains("FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));"));
     assert!(text.contains("SI_UNIT(.MILLI.,.METRE.)"));
+    // The declared uncertainty is the writer's on-curve/on-surface
+    // tolerance (1e-5 mm), so no accepted vertex breaks it.
+    assert!(text.contains("UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-5),"));
 
     let ap242 = write_step(&model(StepSchema::Ap242, solids(), Vec::new())).expect("AP242");
     let text = std::str::from_utf8(&ap242).expect("ASCII");
@@ -385,6 +388,21 @@ fn mesh_bodies_read_back_with_their_triangles() {
     .expect("mesh only");
     let (_, area) = read_back(&alone);
     assert!((area - 6.0).abs() < 1e-6, "cube area {area}");
+}
+
+#[test]
+fn a_mesh_of_two_parts_is_one_body_of_two_shells() {
+    let mut part = cube("U1", [0.0; 3]);
+    let pin = cube("pin", [3.0, 0.0, 0.0]);
+    let offset = u32::try_from(part.positions.len()).expect("few points");
+    part.positions.extend(pin.positions);
+    part.triangles
+        .extend(pin.triangles.iter().map(|t| t.map(|i| i + offset)));
+    let bytes = write_step(&model(StepSchema::Ap214, Vec::new(), vec![part])).expect("STEP");
+    let file = StepFile::parse(&bytes);
+    assert_eq!(file.count("SHELL_BASED_SURFACE_MODEL"), 1);
+    assert_eq!(file.count("OPEN_SHELL"), 2, "one shell per connected part");
+    assert_eq!(file.count("EDGE_CURVE"), 2 * 18);
 }
 
 #[test]

@@ -57,35 +57,42 @@ pub(crate) fn real(x: f64) -> String {
 }
 
 /// A STRING: apostrophes and backslashes doubled, anything outside
-/// printable ASCII as a `\X2\` UTF-16 run.
+/// printable ASCII as a `\X2\` run (4 hex digits per character, Basic
+/// Multilingual Plane only) or a `\X4\` run (8 hex digits, above U+FFFF).
 pub(crate) fn string(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('\'');
-    let mut wide: Vec<u16> = Vec::new();
-    let flush = |wide: &mut Vec<u16>, out: &mut String| {
-        if wide.is_empty() {
-            return;
-        }
-        out.push_str("\\X2\\");
-        for unit in wide.drain(..) {
-            out.push_str(&format!("{unit:04X}"));
-        }
-        out.push_str("\\X0\\");
-    };
+    // Hex digits per character of the open `\X2\`/`\X4\` run, if any.
+    let mut open: Option<usize> = None;
     for ch in text.chars() {
-        if (' '..='~').contains(&ch) {
-            flush(&mut wide, &mut out);
-            match ch {
+        let code = u32::from(ch);
+        let digits = match ch {
+            ' '..='~' => None,
+            _ if code <= 0xFFFF => Some(4),
+            _ => Some(8),
+        };
+        if open.is_some() && open != digits {
+            out.push_str("\\X0\\");
+            open = None;
+        }
+        match digits {
+            None => match ch {
                 '\'' => out.push_str("''"),
                 '\\' => out.push_str("\\\\"),
                 _ => out.push(ch),
+            },
+            Some(width) => {
+                if open.is_none() {
+                    out.push_str(if width == 4 { "\\X2\\" } else { "\\X4\\" });
+                    open = Some(width);
+                }
+                out.push_str(&format!("{code:0width$X}"));
             }
-        } else {
-            let mut units = [0u16; 2];
-            wide.extend_from_slice(ch.encode_utf16(&mut units));
         }
     }
-    flush(&mut wide, &mut out);
+    if open.is_some() {
+        out.push_str("\\X0\\");
+    }
     out.push('\'');
     out
 }
@@ -128,6 +135,12 @@ mod tests {
         assert_eq!(string("a\\b"), "'a\\\\b'");
         assert_eq!(string("Ω1"), "'\\X2\\03A9\\X0\\1'");
         assert_eq!(string("µΩ"), "'\\X2\\00B503A9\\X0\\'");
+        // Above U+FFFF: an `\X4\` run with 8 hex digits, never a surrogate pair.
+        assert_eq!(string("R\u{1F600}"), "'R\\X4\\0001F600\\X0\\'");
+        assert_eq!(
+            string("Ω\u{1F600}x"),
+            "'\\X2\\03A9\\X0\\\\X4\\0001F600\\X0\\x'"
+        );
     }
 
     #[test]

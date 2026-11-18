@@ -5,9 +5,9 @@
 use crate::tessellate::{cross3, dot3, sub, unit};
 
 /// Samples within this distance of a line, circle, plane or cylinder lie
-/// on it, mm. Far above the kernel's own tolerance, far below any board
-/// feature.
-pub(crate) const ON_GEOMETRY_MM: f64 = 1e-5;
+/// on it, mm: the length uncertainty the file declares. Far above the
+/// kernel's own tolerance, far below any board feature.
+pub(crate) const ON_GEOMETRY_MM: f64 = super::context::LENGTH_UNCERTAINTY_MM;
 
 /// The unit direction and length of the line through `points` when every
 /// point lies on the segment from the first to the last.
