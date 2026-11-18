@@ -7,7 +7,7 @@ use std::rc::Rc;
 use iced::widget::tooltip::Position;
 use iced::widget::{Column, Space, container, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{Localized, ids, t};
+use signex_i18n::{Localized, MessageId, ids, t};
 use signex_renderer::pcb::{BoardPaint, DIMMED_ALPHA};
 use signex_types::pcb_layer::PcbLayer;
 use signex_widgets::{Label, button, text};
@@ -273,15 +273,14 @@ pub(super) fn greyed_row<'a>(
 pub(super) fn section<'a>(
     ctx: &'a PanelContext,
     key: &str,
-    header: Localized,
+    header: MessageId,
     rows: Vec<Element<'a, PanelMsg>>,
 ) -> Option<Element<'a, PanelMsg>> {
     if rows.is_empty() {
         return None;
     }
-    let header = header.into_string();
     Some(
-        ctx.collapsible(key, &header, &ctx.collapsed_sections, || {
+        ctx.collapsible(key, header, &ctx.collapsed_sections, || {
             rows.into_iter()
                 .fold(Column::new().spacing(0), |col, row| col.push(row))
         })

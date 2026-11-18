@@ -21,25 +21,25 @@ pub(super) fn view<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Elem
         section(
             ctx,
             "pcb_view_general",
-            t!(i18n, ids::PCB_VIEW_GENERAL),
+            ids::PCB_VIEW_GENERAL,
             general_rows(panel, ctx),
         ),
         section(
             ctx,
             "pcb_view_objects",
-            t!(i18n, ids::PCB_VIEW_OBJECTS),
+            ids::PCB_VIEW_OBJECTS,
             object_rows(panel, ctx),
         ),
         section(
             ctx,
             "pcb_view_mask_dim",
-            t!(i18n, ids::PCB_VIEW_MASK_DIM),
+            ids::PCB_VIEW_MASK_DIM,
             mask_dim_rows(panel, ctx),
         ),
         section(
             ctx,
             "pcb_view_additional",
-            t!(i18n, ids::PCB_VIEW_ADDITIONAL),
+            ids::PCB_VIEW_ADDITIONAL,
             vec![additional_chips(panel, ctx)],
         ),
     ];

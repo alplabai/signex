@@ -39,31 +39,31 @@ pub(super) fn view<'a>(
         section(
             ctx,
             "pcb_layers_signal_plane",
-            t!(i18n, ids::PCB_LAYERS_SIGNAL_PLANE),
+            ids::PCB_LAYERS_SIGNAL_PLANE,
             copper_rows(panel, ui, ctx),
         ),
         section(
             ctx,
             "pcb_layers_pairs",
-            t!(i18n, ids::PCB_LAYERS_PAIRS),
+            ids::PCB_LAYERS_PAIRS,
             pair_rows(panel, ui, ctx),
         ),
         section(
             ctx,
             "pcb_layers_technical",
-            t!(i18n, ids::PCB_LAYERS_TECHNICAL),
+            ids::PCB_LAYERS_TECHNICAL,
             technical_rows(panel, ui, ctx),
         ),
         section(
             ctx,
             "pcb_layers_other",
-            t!(i18n, ids::PCB_LAYERS_OTHER),
+            ids::PCB_LAYERS_OTHER,
             other_rows(panel, ui, ctx),
         ),
         section(
             ctx,
             "pcb_layers_system",
-            t!(i18n, ids::PCB_LAYERS_SYSTEM_COLORS),
+            ids::PCB_LAYERS_SYSTEM_COLORS,
             system_rows(panel, ui, ctx),
         ),
     ];
