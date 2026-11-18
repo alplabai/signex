@@ -1,9 +1,9 @@
 //! Integration tests for the strict-unit parser
-//! (`crates/signex-sketch/src/unit.rs`).
+//! (`crates/signex-expr/src/unit.rs`).
 //!
 //! Covers Task 4.1 of `docs/internal/SKETCH_MODE_v0.13_PLAN.md`.
 
-use signex_sketch::unit::{Quantity, Unit, UnitError, UnitFamily, parse_quantity};
+use signex_expr::unit::{Quantity, Unit, UnitError, UnitFamily, parse_quantity};
 
 const EPS: f64 = 1e-10;
 
