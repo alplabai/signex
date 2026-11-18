@@ -17,6 +17,15 @@ pub enum LifecycleState {
 }
 
 impl LifecycleState {
+    /// Every state, in lifecycle order.
+    pub const ALL: [Self; 5] = [
+        Self::Draft,
+        Self::InReview,
+        Self::Released,
+        Self::Deprecated,
+        Self::Obsolete,
+    ];
+
     /// The state's name as a project requirement lists it (`released`,
     /// `in_review`; #2339).
     pub fn as_str(self) -> &'static str {
@@ -45,14 +54,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn all_lists_every_state_once() {
+        // Exhaustive on purpose: a new state does not compile here until it
+        // has a place in `ALL`.
+        let place = |state: LifecycleState| match state {
+            LifecycleState::Draft => 0,
+            LifecycleState::InReview => 1,
+            LifecycleState::Released => 2,
+            LifecycleState::Deprecated => 3,
+            LifecycleState::Obsolete => 4,
+        };
+        for (index, state) in LifecycleState::ALL.into_iter().enumerate() {
+            assert_eq!(place(state), index, "{state:?}");
+        }
+    }
+
+    #[test]
     fn round_trip_all_variants() {
-        for s in [
-            LifecycleState::Draft,
-            LifecycleState::InReview,
-            LifecycleState::Released,
-            LifecycleState::Deprecated,
-            LifecycleState::Obsolete,
-        ] {
+        for s in LifecycleState::ALL {
             let json = serde_json::to_string(&s).unwrap();
             let back: LifecycleState = serde_json::from_str(&json).unwrap();
             assert_eq!(s, back);

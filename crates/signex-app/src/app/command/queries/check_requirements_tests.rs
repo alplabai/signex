@@ -228,16 +228,17 @@ fn parts_and_cost_are_checked_on_the_closed_sheets_parts() {
 fn erc_clean_runs_the_projects_erc() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
-    set_requirements(&mut app, json!([{"id": "erc", "kind": "erc_clean"}]));
+    set_requirements(
+        &mut app,
+        json!([
+            {"id": "erc", "kind": "erc_clean"},
+            {"id": "loose", "kind": "erc_clean", "allow_warnings": true},
+        ]),
+    );
     let project = project_path(&app);
     let value = report(&mut app, &project, &[]);
-    let passed = value["passed"] == json!(["req::erc"]);
-    let failed = value["findings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|f| f["rule"] == "req::erc" && f["evidence"]["check"] == "erc");
-    assert!(passed ^ failed, "{value}");
+    assert_eq!(value["passed"], json!(["req::erc", "req::loose"]), "{value}");
+    assert_eq!(value["findings"], json!([]), "{value}");
 }
 
 #[test]
@@ -255,15 +256,10 @@ fn a_document_outside_every_project_is_refused() {
 fn drc_clean_runs_the_drc_of_the_projects_board() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
-    let board = list_board(&mut app, &dir, 50.0, 40.0);
+    list_board(&mut app, &dir, 50.0, 40.0);
     set_requirements(&mut app, json!([{"id": "drc", "kind": "drc_clean"}]));
     let project = project_path(&app);
     let value = report(&mut app, &project, &[]);
-    let passed = value["passed"] == json!(["req::drc"]);
-    let failed = value["findings"].as_array().unwrap().iter().any(|f| {
-        f["rule"] == "req::drc"
-            && f["evidence"]["check"] == "drc"
-            && f["sheet"] == board.display().to_string().as_str()
-    });
-    assert!(passed ^ failed, "{value}");
+    assert_eq!(value["passed"], json!(["req::drc"]), "{value}");
+    assert_eq!(value["findings"], json!([]), "{value}");
 }

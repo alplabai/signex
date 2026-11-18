@@ -120,11 +120,12 @@ const COMMON_FIELDS: [&str; 3] = ["id", "severity", "kind"];
 
 /// One entry of the stored list: a requirement, or an entry this build
 /// cannot read (an unknown kind, a missing or mistyped field, a key it does
-/// not know). An unreadable entry is kept as written, so a save does not
-/// drop what was typed, and the check reports it as not checked.
+/// not know). Every entry keeps the value it was read from and a save writes
+/// that value back, so a hand-written entry keeps its omitted defaults and
+/// its number forms; the check reports an unreadable entry as not checked.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequirementEntry {
-    Known(Requirement),
+    Known { requirement: Requirement, raw: Value },
     Unreadable { raw: Value, reason: String },
 }
 
@@ -137,7 +138,7 @@ impl RequirementEntry {
                     raw,
                     reason: format!("unknown field {keys}"),
                 },
-                None => Self::Known(requirement),
+                None => Self::Known { requirement, raw },
             },
             Err(error) => Self::Unreadable {
                 raw,
@@ -149,8 +150,23 @@ impl RequirementEntry {
     /// The entry's id, when it has a text one.
     pub fn id(&self) -> Option<&str> {
         match self {
-            Self::Known(requirement) => Some(&requirement.id),
+            Self::Known { requirement, .. } => Some(&requirement.id),
             Self::Unreadable { raw, .. } => raw.get("id").and_then(Value::as_str),
+        }
+    }
+
+    /// The requirement, when the entry reads as one.
+    pub fn requirement(&self) -> Option<&Requirement> {
+        match self {
+            Self::Known { requirement, .. } => Some(requirement),
+            Self::Unreadable { .. } => None,
+        }
+    }
+
+    /// The value the entry was read from, as a save writes it.
+    pub fn raw(&self) -> &Value {
+        match self {
+            Self::Known { raw, .. } | Self::Unreadable { raw, .. } => raw,
         }
     }
 }
@@ -172,10 +188,7 @@ fn unread_keys(raw: &Value, requirement: &Requirement) -> Option<String> {
 
 impl Serialize for RequirementEntry {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::Known(requirement) => requirement.serialize(serializer),
-            Self::Unreadable { raw, .. } => raw.serialize(serializer),
-        }
+        self.raw().serialize(serializer)
     }
 }
 

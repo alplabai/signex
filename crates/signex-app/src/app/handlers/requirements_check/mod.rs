@@ -153,3 +153,6 @@ fn row_states(library: &LibraryState) -> HashMap<String, String> {
     }
     states
 }
+
+#[cfg(test)]
+mod lifecycle_tests;

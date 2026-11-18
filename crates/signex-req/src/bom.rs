@@ -5,7 +5,7 @@
 //! a line with no price makes the cost unknown: both fail the requirement.
 
 use serde_json::json;
-use signex_bom::{BomTable, PriceBook, round_cents};
+use signex_bom::{BomTable, PriceBook, apply_prices, round_cents};
 
 use crate::Miss;
 
@@ -90,32 +90,30 @@ pub(crate) fn bom_cost(
     vec![evidence(miss)]
 }
 
-/// Price every line of `table` that fits a part, for `quantity` boards.
+/// Price every line of `table` that fits a part, for `quantity` boards: the
+/// BOM export's own pricing (`apply_prices`) over the build's quantities.
 fn price(table: &BomTable, prices: &PriceBook, quantity: u32, currency: &str) -> Priced {
+    let mut build = table.clone();
+    for row in &mut build.rows {
+        row.fitted_qty = row.fitted_qty.saturating_mul(quantity);
+    }
+    apply_prices(&mut build, prices);
     let mut priced = Priced {
         total: 0.0,
         lines: 0,
         missing: Vec::new(),
         other_currency: Vec::new(),
     };
-    for row in table.rows.iter().filter(|row| row.fitted_qty > 0) {
+    for row in build.rows.iter().filter(|row| row.fitted_qty > 0) {
         priced.lines += 1;
         let line = row.references.join(",");
-        let Some(quote) = prices.quote_for(row) else {
-            priced.missing.push(line);
-            continue;
-        };
-        if !quote.currency.trim().eq_ignore_ascii_case(currency) {
-            priced.other_currency.push((line, quote.currency.clone()));
-            continue;
+        match &row.price {
+            None => priced.missing.push(line),
+            Some(price) if !price.currency.trim().eq_ignore_ascii_case(currency) => {
+                priced.other_currency.push((line, price.currency.clone()));
+            }
+            Some(price) => priced.total += price.extended_price,
         }
-        let wanted = row.fitted_qty.saturating_mul(quantity);
-        let buy = wanted.max(quote.minimum_order().unwrap_or(1));
-        let Some(unit) = quote.unit_price_at(buy) else {
-            priced.missing.push(line);
-            continue;
-        };
-        priced.total += round_cents(unit * f64::from(buy));
     }
     priced
 }

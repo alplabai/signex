@@ -49,7 +49,7 @@ fn every_kind_reads_with_its_parameters() {
         .requirements
         .iter()
         .map(|entry| match entry {
-            RequirementEntry::Known(requirement) => requirement,
+            RequirementEntry::Known { requirement, .. } => requirement,
             RequirementEntry::Unreadable { reason, .. } => panic!("unreadable: {reason}"),
         })
         .collect();
@@ -102,7 +102,7 @@ fn an_unreadable_entry_is_kept_as_written_and_says_why() {
         .iter()
         .map(|entry| match entry {
             RequirementEntry::Unreadable { reason, .. } => reason.as_str(),
-            RequirementEntry::Known(r) => panic!("{} read", r.id),
+            RequirementEntry::Known { requirement, .. } => panic!("{} read", requirement.id),
         })
         .collect();
     assert!(reasons[0].contains("rail_budget"), "{}", reasons[0]);
@@ -146,4 +146,28 @@ fn known_requirements_round_trip() {
     let saved: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(saved["requirements"], list);
+}
+
+#[test]
+fn a_hand_written_entry_saves_as_written() {
+    // No severity, integer mm, no `states`, an explicit `null`: a save
+    // writes none of the defaults and keeps the number forms.
+    let list = json!([
+        {"id": "size", "kind": "board_size", "max_width_mm": 100, "max_height_mm": 80},
+        {"id": "parts", "kind": "parts_state"},
+        {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": null},
+    ]);
+    let (path, _dir) = project_file(&file_with(list.clone()));
+    let data = parse_project(&path).unwrap();
+    assert!(data.requirements.iter().all(|e| e.requirement().is_some()));
+    write_project(&path, &data).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    let saved: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        serde_json::to_string(&saved["requirements"]).unwrap(),
+        serde_json::to_string(&list).unwrap()
+    );
+    assert!(!text.contains("100.0"), "{text}");
+    assert!(!text.contains("severity"), "{text}");
+    assert!(!text.contains("released"), "{text}");
 }

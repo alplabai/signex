@@ -372,6 +372,49 @@ fn an_unreadable_or_repeated_entry_is_reported_as_not_checked() {
 }
 
 #[test]
+fn a_repeated_id_never_leaves_its_rule_passed() {
+    // The first `a` passes on its own; a readable or an unreadable repeat
+    // takes it back out of `passed`, in either order.
+    for list in [
+        json!([
+            {"id": "a", "kind": "erc_clean"},
+            {"id": "a", "kind": "board_size", "max_width_mm": 1, "max_height_mm": 1},
+        ]),
+        json!([
+            {"id": "a", "kind": "erc_clean"},
+            {"id": "a", "kind": "rail_budget"},
+        ]),
+        json!([
+            {"id": "a", "kind": "rail_budget"},
+            {"id": "a", "kind": "erc_clean"},
+        ]),
+    ] {
+        let mut facts = facts(list.clone());
+        facts.erc = Some(Ok(run_report("erc", &[])));
+        let report = check_report(&facts);
+        assert!(report.passed.is_empty(), "{list}: {:?}", report.passed);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.rule == "req::a" && f.message.contains("uses an id an earlier")),
+            "{list}"
+        );
+    }
+}
+
+#[test]
+fn unreadable_entries_with_one_id_keep_apart_keys() {
+    let report = check_report(&facts(json!([
+        {"id": "x", "kind": "rail_budget"},
+        {"id": "x", "kind": "rail_budget", "rail": "3V3"},
+    ])));
+    let keys = report.keys();
+    assert_eq!(keys.len(), 2);
+    assert_ne!(keys[0], keys[1]);
+}
+
+#[test]
 fn a_list_that_cannot_be_read_and_an_empty_list_say_so() {
     let mut unreadable = facts(json!([]));
     unreadable.unreadable_list = true;

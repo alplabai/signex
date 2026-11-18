@@ -47,10 +47,7 @@ impl Needs {
     /// What `entries` need; an unreadable entry needs nothing.
     pub fn of(entries: &[RequirementEntry]) -> Self {
         let mut needs = Self::default();
-        for entry in entries {
-            let RequirementEntry::Known(requirement) = entry else {
-                continue;
-            };
+        for requirement in entries.iter().filter_map(RequirementEntry::requirement) {
             match requirement.kind {
                 RequirementKind::ErcClean { .. } => needs.erc = true,
                 RequirementKind::DrcClean { .. } => needs.drc = true,
@@ -166,32 +163,42 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     for (index, entry) in facts.requirements.iter().enumerate() {
         let label = entry_label(entry, index);
         let rule = format!("req::{label}");
+        let severity = entry
+            .requirement()
+            .map_or(Severity::Error, |requirement| requirement.severity);
+        // Readable or not, an entry's id is taken; a later entry with the
+        // same id is not checked and its rule never counts as passed.
+        let id = entry.id().map(str::trim).filter(|id| !id.is_empty());
+        if let Some(id) = id
+            && !seen.insert(id)
+        {
+            let miss = Miss::new(format!(
+                "Requirement {id} uses an id an earlier requirement has, so it was not checked"
+            ))
+            .with("index", json!(index));
+            let subject = format!("duplicate {index}");
+            findings.push(finding(facts, &rule, severity, &subject, miss));
+            passed.retain(|done| done != &rule);
+            continue;
+        }
         let requirement = match entry {
             RequirementEntry::Unreadable { reason, .. } => {
                 let miss = Miss::new(format!(
                     "Requirement {label} could not be read ({reason}), so it was not checked"
                 ))
-                .with("reason", json!(reason));
-                findings.push(finding(facts, &rule, Severity::Error, "unreadable", miss));
+                .with("reason", json!(reason))
+                .with("index", json!(index));
+                let subject = format!("unreadable {index}");
+                findings.push(finding(facts, &rule, Severity::Error, &subject, miss));
                 continue;
             }
-            RequirementEntry::Known(requirement) => requirement,
+            RequirementEntry::Known { requirement, .. } => requirement,
         };
-        if requirement.id.trim().is_empty() {
+        if id.is_none() {
             let miss = Miss::new(format!(
                 "Requirement {label} has no id, so it was not checked"
             ));
-            findings.push(finding(facts, &rule, requirement.severity, "no id", miss));
-            continue;
-        }
-        if !seen.insert(requirement.id.as_str()) {
-            let miss = Miss::new(format!(
-                "Requirement {} uses an id an earlier requirement has, so it was not checked",
-                requirement.id
-            ))
-            .with("index", json!(index));
-            let subject = format!("duplicate {index}");
-            findings.push(finding(facts, &rule, requirement.severity, &subject, miss));
+            findings.push(finding(facts, &rule, severity, "no id", miss));
             continue;
         }
         let misses = evaluate(requirement, facts);
@@ -319,7 +326,8 @@ fn run_warnings(name: &str, run: Option<&Result<CheckReport, String>>) -> Vec<St
 }
 
 /// Where the requirements came from: the project, how many, and the hash of
-/// the list as stored, so two runs over different lists can be told apart.
+/// the list as stored (each entry's value as read, keys sorted), so two runs
+/// over different lists can be told apart.
 fn rule_set(facts: &Facts) -> Value {
     let text = serde_json::to_string(&facts.requirements).unwrap_or_default();
     let digest = format!("{:x}", Sha256::digest(text.as_bytes()));

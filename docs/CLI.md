@@ -816,7 +816,10 @@ The list is the top-level `requirements` key of the `.snxprj`, beside
 `rules`, not inside it: it is not part of the rule set's hash, a rule profile
 or Update from profile. Each entry is an object with an `id` (unique in the
 list), a `kind`, an optional `severity` (`error`, the default, `warning` or
-`info`; the severity of the findings it raises) and the kind's fields:
+`info`; the severity of the findings it raises) and the kind's fields. A
+project save writes every entry back as it was read: defaults left out stay
+left out and `100` stays `100` (keys come out sorted, as in the rest of the
+file).
 
 | `kind` | Fields | Passes when |
 |---|---|---|
@@ -858,13 +861,15 @@ The report:
   about (a part's designator, a net, a class and its value), so it holds
   while the measured values change.
 - `passed` lists the requirements met (`req::<id>`), in list order. It is an
-  addition to the shared shape: ERC and DRC leave it out.
+  addition to the shared shape: ERC and DRC leave it out. An id used by more
+  than one entry, readable or not, is never in `passed`: the first entry is
+  checked, every later one is a finding.
 - `warnings`: what the ERC and DRC runs could not do (prefixed `ERC:` and
   `DRC:`), the sheets the BOM could not read, and `The project lists no
   requirements` for an empty list.
 - `rule_set`: `source` (`project`), `requirements` (how many) and `sha256`
-  (the hash of the list), so two runs over different lists can be told
-  apart.
+  (the hash of the list as stored, keys sorted), so two runs over different
+  lists can be told apart.
 
 A requirement that cannot be evaluated is a finding, never a pass: an entry
 this build cannot read (an unknown kind, a missing or mistyped field, a field
@@ -886,8 +891,8 @@ How each kind is measured:
 - `bom_cost` prices the BOM as the BOM export groups it, from the prices the
   open libraries cached; it never fetches a price. Each line buys its fitted
   quantity times `quantity`, at least the distributor's minimum order, at
-  that quantity's price break; the line costs are rounded to cents and the
-  total is divided by `quantity`. A price in another currency is not
+  that quantity's price break (the BOM export's own pricing); the line costs
+  are rounded to cents and the total is divided by `quantity`. A price in another currency is not
   converted; the cost is then not known and the requirement fails.
 
 Known limits:
