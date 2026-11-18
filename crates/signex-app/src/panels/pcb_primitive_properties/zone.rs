@@ -162,5 +162,27 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
             ),
         );
     }
+    if let Some(why) = f.unfilled {
+        let why = t!(look.ctx.i18n, unfilled_reason(why)).into_string();
+        let value = t!(look.ctx.i18n, ids::PCB_PRIM_POUR_UNFILLED, "why" => why);
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            labelled(
+                look,
+                ids::PCB_PRIM_POUR_COPPER,
+                fixed_value(look, value, ids::PCB_PRIM_POUR_COPPER_TIP),
+            ),
+        );
+    }
     s.finish()
+}
+
+/// Why a pour has no fill, as Properties and Messages say it.
+pub(crate) fn unfilled_reason(why: pcb_geom::Unfilled) -> signex_i18n::MessageId {
+    match why {
+        pcb_geom::Unfilled::NoCopperLayer => ids::PCB_POUR_UNFILLED_NO_LAYER,
+        pcb_geom::Unfilled::Outline => ids::PCB_POUR_UNFILLED_OUTLINE,
+        pcb_geom::Unfilled::Clearance => ids::PCB_POUR_UNFILLED_CLEARANCE,
+    }
 }

@@ -159,9 +159,9 @@ pcb-bar-dimension-tooltip = Place Dimension
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer (a pad not on it starts with a via), then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
 pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
-pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
-pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
-pcb-tool-hint-pour = Polygon Pour: click each corner, then the first corner or a right-click to close it. It fills with the net under the first corner and keeps clear of other nets' copper; Esc drops the shape, then ends the tool
+pcb-tool-hint-region = Solid Region: click each corner, then the first corner, a double-click or a right-click to close it; Esc drops the shape, then ends the tool
+pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner, a double-click or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
+pcb-tool-hint-pour = Polygon Pour: click each corner, then the first corner, a double-click or a right-click to close it. It fills with the net set in Properties (Tab), else the net under its first corner on copper, and keeps clear of other nets' copper; Esc drops the shape, then ends the tool
 # A Track, Fill or Solid Region click while the active layer is not copper;
 # $tool is the tool's name.
 pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
@@ -195,7 +195,7 @@ pcb-arc-mode-any-name = Any Angle
 pcb-tool-pour-cutout = Pour Cutout
 pcb-tool-slice-pour = Slice Pour
 pcb-bar-pour-cutout-tooltip = Place Pour Cutout (right-click to close)
-pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner or a right-click to close it. The area is cut out of every polygon pour it overlaps on the active copper layer, as one step; Esc drops the shape, then ends the tool
+pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner, a double-click or a right-click to close it. The area is cut out of every polygon pour it overlaps on the active copper layer, as one step; Esc drops the shape, then ends the tool
 pcb-bar-slice-pour-tooltip = Slice Pour
 pcb-tool-hint-slice-pour = Slice Pour: click two points on a line across a polygon pour on the active copper layer; each pour the line meets is cut in two along it, as one step. Esc drops the first point, then ends the tool
 pcb-tool-pour-missed = { $tool }: no polygon pour on the active copper layer is cut there, so nothing changed
@@ -242,10 +242,21 @@ pcb-route-no-net = click on copper of a net to start
 pcb-route-no-pair = { $net } is in no differential pair; name its nets with _P and _N (or + and -), or give their net class a pair gap
 pcb-route-member-no-copper = { $net } has no copper on the active layer to start from
 pcb-route-bus-needs-nets = select copper of two or more nets first
-# A leg aimed at a pad of another net or of none; $pad names the pad
-# (U1.3), $pad_net its net, $net the route's net.
+# A leg aimed at a pad of another net; $pad names the pad (U1.3),
+# $pad_net its net, $net the route's net.
 pcb-route-end-other-net = { $pad } is on net { $pad_net }, the route is on net { $net }
-pcb-route-end-no-net = { $pad } is on no net, the route is on net { $net }
+# A pad of no net a route ended on took the route's net; Update PCB lists
+# it as a net set on the board.
+pcb-route-pad-joined = { $pad } joined net { $net }
+pcb-route-join-gone = a pad the route joins is gone, or its net is no longer in the board's net table
+# A Polygon Pour placed with no net; $tool is its name.
+pcb-pour-no-net = { $tool } has no net; set it in Properties
+# A pour the fill left empty; $pour names it, $why is one of the reasons
+# below.
+pcb-pour-not-filled = { $pour }: not filled: { $why }
+pcb-pour-unfilled-no-layer = it is on no copper layer
+pcb-pour-unfilled-outline = its outline has fewer than three corners the board geometry can hold
+pcb-pour-unfilled-clearance = its clearance is not a length the board geometry can hold
 # The leg on the pointer found no way; the straight leg drawn shows where
 # it was aimed.
 pcb-route-aim-blocked = the preview found no way to the pointer that keeps the clearance the rules ask; a click searches further and says if there is none

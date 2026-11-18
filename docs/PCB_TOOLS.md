@@ -41,14 +41,16 @@ draws nothing.
 Board tools draw on the active layer (maintainer 2026-11-18). While one is
 armed the status bar says how to use it, that Tab paused it, that it needs
 another kind of layer, or why the last click added nothing; Messages keeps
-the same lines.
+the same lines. Arming a tool with a form brings Properties to the front on
+what the next click places; the canvas keeps the keyboard, so a Properties
+window of its own is left where it is.
 
 - A run started on netted copper that does not reach the active copper
   layer (a surface pad on Top with an inner layer active) takes that
   copper's net and starts with a via there (the via of a layer change, in
   the same undo step as the first legs). A pad that reaches the active
-  layer (through-hole) starts directly.
-
+  layer (through-hole) starts directly. A leg ending on such a pad ends
+  with a via there, in the same step.
 - The first click starts the run on the net of the copper under it. A run
   started over bare board takes the net of the copper its next point lands
   on.
@@ -83,9 +85,14 @@ clearance the design rules ask from other nets' copper (#2389).
   way.
 - **Ends.** A leg aimed at a pad of another net is refused; the status bar
   and Messages name the pad and both nets ("U1.1 is on net B, the route is
-  on net A"). A leg aimed at a pad of no net is refused the same way until
-  it is decided whether a route may give the pad its net
-  (`signex_engine::pcb::route::end_refusal`).
+  on net A"). A route that ends on a pad of no net connects: when it lands
+  the pad joins the route's net, locked as a connection made on the board,
+  in the same undo step; the status bar says "U1.1 joined net A", and
+  Update PCB lists the pad as keeping a net set on the board
+  (`signex_engine::pcb::route::pad_end`, `join_pads`). A leg ending on a
+  pad that does not reach its layer (a Top pad while routing on an inner
+  layer) ends with a via there, checked like a layer change's via. Track
+  runs end on such a pad with a via too.
 - **Rules.** The route reads the rules the Design Rule Check of this board
   reads (`DrcRules`, the same project layers and net classes, compiled once
   when the route starts): the clearance between each pair of items
@@ -109,8 +116,8 @@ clearance the design rules ask from other nets' copper (#2389).
   corner rule, the mode, the layer), not per repaint, with a smaller search
   budget than a click (`PREVIEW_BUDGET`); a leg the preview gives up on
   still routes on the click. A leg with no way, or aimed at a pad it may
-  not end on, is drawn straight to the pointer instead of vanishing, and
-  the status bar says why. The route on the cursor is drawn at the full
+  not end on, is drawn straight to the pointer in the DRC error colour
+  instead of vanishing, and the status bar says why. The route on the cursor is drawn at the full
   colour of its layer, never dimmed.
 - **Push and shove.** `cycle_route_mode` (the palette; no default key)
   switches between walking around (the default) and pushing. In push mode
@@ -213,11 +220,13 @@ the active copper layer as one route (#2389).
   when the net's class sets a differential-pair gap and holds exactly two
   of the board's nets, the other one (the first by name is the positive).
   Multi-Route takes the nets of the selected tracks, pads and vias, two or
-  more. A net in no pair, no selection or a net with no copper on the layer
-  starts nothing, and the Messages panel says why.
+  more. A net in no pair, no selection or a net with no copper on any
+  layer starts nothing, and the Messages panel says why.
 - **Start.** Each net starts at its own copper nearest the first click (a
   pad centre, a track end or a via); the route's centre line starts in the
-  middle of those points.
+  middle of those points. A net with no copper on the active layer starts
+  from its copper on the topmost layer that has some, with a via there
+  (maintainer 2026-11-18); the vias land with the tracks.
 - **Width and gap.** The width is the first net's route width (as
   Interactive Routing's). A pair takes its class's differential-pair width
   and gap where they are set; the gap between neighbours is never under the
@@ -286,15 +295,16 @@ Coupled (both nets at once) pair meanders are not done yet.
 
 `place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid
 copper on the active copper layer, stored as a zone (`fill_type = "solid"`)
-on the net of the copper under its first point, or no net. With a
-non-copper layer active the tool says so and draws nothing.
+on the net set in Properties (Tab), else the net of the copper under its
+first corner on copper, or no net. With a non-copper layer active the tool
+says so and draws nothing.
 
 - **Fill:** the first click is one corner, the second the opposite corner of
   the rectangle.
 - **Solid Region:** each click adds a corner. A click on the first corner
-  (or within half a grid step of it), or a right-click once there are
-  three, closes it; Esc drops it. Polygon Pour and Keepout close the same
-  way.
+  (or within half a grid step of it), a double-click, or a right-click once
+  there are three, closes it; Esc drops it. Polygon Pour and Keepout close
+  the same way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
 
@@ -316,8 +326,12 @@ keepout zone's id.
 ## Polygon Pour
 
 `place_board_polygon_pour` (`P G`, #2216). Drawn like a Solid Region, on the
-active copper layer, on the net of the copper under its first corner, or no
-net. With a non-copper layer active the tool says so and draws nothing. It is
+active copper layer, on the net set in Properties (Tab), else the net of the
+copper under its first corner on copper, or no net; a pour placed with no
+net says so in the status bar and Messages. A pour with no fill (on no
+copper layer, an outline or clearance the geometry cannot hold) says why in
+Messages when placed and in its Properties (`pcb_geom::Unfilled`). With a
+non-copper layer active the tool says so and draws nothing. It is
 stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
 the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
 when above 0, else `PcbSetup::clearance`, else 0.2 mm).

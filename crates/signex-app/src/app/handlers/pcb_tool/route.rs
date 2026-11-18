@@ -16,6 +16,7 @@ use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
+use super::route_end::end_via;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -69,11 +70,15 @@ impl Signex {
             return;
         }
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        let (mut style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        // A pad off the run's layer at its end is reached with a via there.
+        let end = end_via(board, defaults, at, &mut style);
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
-            self.run_placement("Track", Ok(vec![command]));
+            let mut commands = vec![command];
+            commands.extend(draw::place_route(Vec::new(), end));
+            self.run_placement("Track", Ok(commands));
         }
         let mut points = self
             .own_board_tool()
@@ -115,12 +120,15 @@ impl Signex {
         };
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let classes = self.track_tool_net_classes();
-        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let (mut style, via) =
+            next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let end = end_via(board, defaults, cursor, &mut style);
         let rule = self.interaction_state.corner_rule;
         preview
             .segments
             .extend(draw::track_run(anchor, cursor, rule, style, Uuid::nil));
         preview.vias.extend(via);
+        preview.vias.extend(end);
     }
 }
 

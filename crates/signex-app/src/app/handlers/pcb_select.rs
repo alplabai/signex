@@ -63,6 +63,20 @@ impl Signex {
                 }
                 self.close_context_menu_on_press()
             }
+            PcbCanvasMsg::DoubleClicked { at, tolerance_mm } => {
+                // The second click lands as a click; a shape with three
+                // corners then closes, as a right-click closes it.
+                let click = PcbCanvasMsg::Clicked {
+                    at,
+                    tolerance_mm,
+                    mode: pcb_geom::ClickMode::Replace,
+                };
+                let task = self.dispatch_pcb_canvas_message(click);
+                if self.close_board_region() {
+                    self.refresh_pcb_highlight();
+                }
+                task
+            }
             PcbCanvasMsg::BoxSelected {
                 from,
                 to,
@@ -202,6 +216,7 @@ impl Signex {
         // The highlighted net and the Measure ruler (#2403).
         highlight.net = self.board_net_shapes();
         highlight.measure = self.board_measure_line();
+        highlight.blocked = self.router_blocked_shapes();
         let part = self.pcb_part_ghost(carry.as_ref());
         // A route or track run being drawn is drawn whole, never dimmed.
         let whole = part.is_none() && self.is_routing_board_track();

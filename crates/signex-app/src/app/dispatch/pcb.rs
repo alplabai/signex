@@ -53,13 +53,16 @@ impl Signex {
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
             PcbMsg::PlaceToolPicked(tool) => {
                 self.arm_board_tool(tool);
+                // Properties shows what the next click places.
+                let form = self.raise_board_tool_form();
                 // From the bar, Place, a key or the palette alike, the
                 // tool's bar group shows it next (#2392).
                 let group = crate::app::pcb_bar_groups::PcbBarGroup::of_tool(tool);
-                match (group, tool.command()) {
+                let remembered = match (group, tool.command()) {
                     (Some(group), Some(command)) => self.remember_pcb_bar_row(group, command),
                     _ => Task::none(),
-                }
+                };
+                Task::batch([form, remembered])
             }
             PcbMsg::RouteModeStepped => {
                 self.step_route_mode();

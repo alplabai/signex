@@ -1,18 +1,30 @@
 //! What a route's ends land on (#2389): the copper a route starts from on
-//! any copper layer, and the pad a leg ends on. The rules they serve:
-//! `docs/PCB_TOOLS.md`, "Interactive Routing".
+//! any copper layer, the pad a leg ends on, and the via that joins a leg to
+//! a pad off its layer. The rules they serve: `docs/PCB_TOOLS.md`,
+//! "Interactive Routing".
 
-use pcb_geom::{PointNm, collect_copper, layer_bit, pad_pieces, pieces_on};
-use signex_types::pcb::{PcbBoard, Point};
+use pcb_geom::route::{NewCopper, NewKind, RouteWorld};
+use pcb_geom::{
+    PointNm, collect_copper, layer_bit, pad_layers, pad_pieces, pieces_on, via_layers, via_shape,
+};
+use signex_types::pcb::{PadNet, PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
+use uuid::Uuid;
 
-/// A pad a route's point lands on: its footprint's reference, its number
-/// and its net (0 for none).
+use super::{RouteDraft, RouteRefusal, RouteRules};
+use crate::pcb::{BoardCommand, FootprintPad};
+
+/// A pad a route's point lands on: its footprint and pad ids, the
+/// footprint's reference, the pad's number, its net (0 for none) and the
+/// copper layers it reaches (a `layer_bit` mask).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PadAt {
+    pub footprint: Uuid,
+    pub pad: Uuid,
     pub reference: String,
     pub number: String,
     pub net: u32,
+    pub layers: u32,
 }
 
 impl PadAt {
@@ -20,16 +32,23 @@ impl PadAt {
     pub fn label(&self) -> String {
         format!("{}.{}", self.reference, self.number)
     }
+
+    /// Whether the pad reaches copper layer `layer`.
+    pub fn reaches(&self, layer: CopperLayer) -> bool {
+        self.layers & (1 << layer_bit(layer)) != 0
+    }
 }
 
-/// Why a leg of a route on `route_net` may not end where it was aimed.
+/// What a leg of a route on `route_net` does at the pad it ends on.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EndRefusal {
-    /// The pad there is on another net.
+pub enum PadEnd {
+    /// No pad there, or one of the route's net (or a route of no net yet).
+    Free,
+    /// A pad of no net: it joins the route's net with the route, as a
+    /// connection made on the board (maintainer 2026-11-18).
+    Joins { pad: PadAt, route_net: u32 },
+    /// A pad of another net: the leg is refused.
     OtherNet { pad: PadAt, route_net: u32 },
-    /// The pad there is on no net. Whether a route may give a no-net pad
-    /// its net is not decided yet; until it is, it is refused.
-    NoNet { pad: PadAt, route_net: u32 },
 }
 
 /// The topmost copper layer holding netted copper under `at`, and its net:
@@ -56,31 +75,76 @@ pub fn pad_at(board: &PcbBoard, at: Point, layers: u32) -> Option<PadAt> {
             let pieces = pad_pieces(footprint, pad).ok()?;
             let hit = pieces_on(pieces, layers).any(|shape| shape.contains(p, 0));
             hit.then(|| PadAt {
+                footprint: footprint.uuid,
+                pad: pad.uuid,
                 reference: footprint.reference.clone(),
                 number: pad.number.clone(),
                 net: pad.net.as_ref().map_or(0, |net| net.number),
+                layers: pad_layers(footprint, pad),
             })
         })
     })
 }
 
-/// Why a leg of a route on `net` may not end at `to` on `layer`: the pad
-/// there is on another net, or on none. A route of no net yet ends
-/// anywhere (it takes the net of what it lands on).
-pub fn end_refusal(
-    board: &PcbBoard,
-    to: Point,
-    net: u32,
-    layer: CopperLayer,
-) -> Option<EndRefusal> {
+/// What a leg of a route on `net` ending at `to` does at the pad there, on
+/// any copper layer. A route of no net yet ends anywhere (it takes the net
+/// of what it lands on).
+pub fn pad_end(board: &PcbBoard, to: Point, net: u32) -> PadEnd {
     if net == 0 {
-        return None;
+        return PadEnd::Free;
     }
-    let pad = pad_at(board, to, 1 << layer_bit(layer))?;
+    let Some(pad) = pad_at(board, to, u32::MAX) else {
+        return PadEnd::Free;
+    };
     let route_net = net;
     match pad.net {
-        0 => Some(EndRefusal::NoNet { pad, route_net }),
-        other if other != net => Some(EndRefusal::OtherNet { pad, route_net }),
-        _ => None,
+        0 => PadEnd::Joins { pad, route_net },
+        other if other != net => PadEnd::OtherNet { pad, route_net },
+        _ => PadEnd::Free,
     }
+}
+
+/// Whether `via` keeps the rules' clearance on `board` with `draft` on it,
+/// and stays out of keepouts that forbid vias.
+pub fn via_fits(
+    board: &PcbBoard,
+    draft: &RouteDraft,
+    via: &Via,
+    rules: &RouteRules,
+) -> Result<(), RouteRefusal> {
+    let working = draft.applied_to(board);
+    let world = RouteWorld::with_reach(&working, rules.clearance, rules.reach);
+    let shape = via_shape(via).map_err(|_| RouteRefusal::Unrepresentable)?;
+    let new = NewCopper {
+        kind: NewKind::Via,
+        net: via.net,
+        layers: via_layers(via),
+        shape,
+    };
+    if world.is_clear(&new) {
+        Ok(())
+    } else {
+        Err(RouteRefusal::ViaBlocked)
+    }
+}
+
+/// The command that gives each `(footprint, pad, net)` of `joined` its net
+/// on `board`, as a connection made on the board: the net is locked, so
+/// Update PCB keeps it and lists it (`PadNetIssue::PadNetLocked`). `None`
+/// when there is nothing to join, a pad is gone or a net is not in the
+/// table.
+pub fn join_pads(board: &PcbBoard, joined: &[(Uuid, Uuid, u32)]) -> Option<BoardCommand> {
+    if joined.is_empty() {
+        return None;
+    }
+    let mut pads = Vec::with_capacity(joined.len());
+    for &(footprint, pad, net) in joined {
+        let on = board.footprints.iter().find(|f| f.uuid == footprint)?;
+        let mut pad = on.pads.iter().find(|p| p.uuid == pad)?.clone();
+        let name = board.nets.iter().find(|n| n.number == net)?.name.clone();
+        pad.net = Some(PadNet { number: net, name });
+        pad.net_locked = true;
+        pads.push(FootprintPad { footprint, pad });
+    }
+    Some(BoardCommand::ReplacePads { pads })
 }
