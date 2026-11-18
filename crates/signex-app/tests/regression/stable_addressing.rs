@@ -123,6 +123,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

@@ -231,6 +231,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

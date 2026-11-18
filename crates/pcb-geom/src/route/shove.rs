@@ -66,7 +66,7 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
         }
         pushers = next
             .into_iter()
-            .map(|index| (Some(index), with_shape(world, index, moved[&index])))
+            .map(|index| (Some(index), with_shape(world, index, moved[&index].clone())))
             .collect();
     }
     None
@@ -218,7 +218,7 @@ fn push_offset(world: &RouteWorld, item: &CopperItem, pushers: &[Pusher]) -> Opt
             (side * normal.0 * distance).round() as i64,
             (side * normal.1 * distance).round() as i64,
         );
-        let shape = item.shape.translated(offset);
+        let shape = item.shape.clone().translated(offset);
         let missing = pressing
             .iter()
             .map(|p| shortfall(world, p, item, &shape))
@@ -267,24 +267,24 @@ fn finish(
     moved: &HashMap<usize, Shape>,
 ) -> Option<Vec<Pushed>> {
     let mut pushed = Vec::with_capacity(moved.len());
-    for (&index, &shape) in moved {
-        let track = with_shape(world, index, shape);
+    for (&index, shape) in moved {
+        let track = with_shape(world, index, shape.clone());
         let as_new = NewCopper {
             kind: NewKind::Track,
             net: track.net,
             layers: track.layers,
-            shape,
+            shape: shape.clone(),
         };
         let crowds_a_leg = legs
             .iter()
-            .any(|leg| world.too_close(&leg.as_item(), &track, &shape));
+            .any(|leg| world.too_close(&leg.as_item(), &track, shape));
         if crowds_a_leg
             || world.in_keepout(&as_new)
             || !world.conflicts(&track, moved, Some(index)).is_empty()
         {
             return None;
         }
-        let (ItemRef::Track(id), Shape::Capsule { a, b, .. }) = (track.item, shape) else {
+        let (ItemRef::Track(id), &Shape::Capsule { a, b, .. }) = (track.item, shape) else {
             return None;
         };
         pushed.push(Pushed {

@@ -217,7 +217,10 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
     let mut nets = std::collections::BTreeSet::new();
     for item in items {
         match *item {
-            ItemRef::Footprint(fp) => footprints.push(fp),
+            // A designator or comment stands for its part (#2368).
+            ItemRef::Footprint(fp) | ItemRef::FootprintText { footprint: fp, .. } => {
+                footprints.push(fp)
+            }
             ItemRef::Pad { footprint, pad } => match cross_probe::pad_net(board, footprint, pad) {
                 Some(net) => {
                     nets.insert(net);

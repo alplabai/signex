@@ -186,6 +186,8 @@ pad_msg_fns! {
     (pad_drill_diameter_msg, String, FpEditorSetNextPadDrillDiameter, FpEditorSetSelectedPadDrillDiameter, value);
     (pad_drill_slot_length_msg, String, FpEditorSetNextPadDrillSlotLength, FpEditorSetSelectedPadDrillSlotLength, value);
     (pad_corner_radius_msg, String, FpEditorSetNextPadCornerRadiusPct, FpEditorSetSelectedPadCornerRadiusPct, value);
+    (pad_trapezoid_delta_x_msg, String, FpEditorSetNextPadTrapezoidDeltaX, FpEditorSetSelectedPadTrapezoidDeltaX, value);
+    (pad_trapezoid_delta_y_msg, String, FpEditorSetNextPadTrapezoidDeltaY, FpEditorSetSelectedPadTrapezoidDeltaY, value);
     (pad_paste_top_msg, String, FpEditorSetNextPadPasteMarginTop, FpEditorSetSelectedPadPasteMarginTop, value);
     (pad_paste_bottom_msg, String, FpEditorSetNextPadPasteMarginBottom, FpEditorSetSelectedPadPasteMarginBottom, value);
     (pad_mask_top_msg, String, FpEditorSetNextPadMaskMarginTop, FpEditorSetSelectedPadMaskMarginTop, value);

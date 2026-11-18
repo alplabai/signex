@@ -17,9 +17,12 @@ use signex_types::pcb::{
     BoardGraphic, BoardText, Footprint, FpGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
     PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard,
 };
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::schematic::HAlign;
 
 use super::board_features::{line, push_loop};
+use super::board_paint::BoardObject;
 use super::emit::{dim_if, mm_with_floor, point_to_xy};
 use super::footprint_text::FootprintTextInput;
 use super::layer_view::PcbLayerView;
@@ -104,24 +107,37 @@ pub(super) fn footprint_drawings(
             continue;
         };
         match &placed.shape {
-            GraphicShape::Text(at) => out.texts.extend(text_graphic(graphic, at, layer)),
+            GraphicShape::Text(at) if shows(view, BoardObject::Texts) => {
+                out.texts.extend(text_graphic(graphic, at, layer));
+            }
+            GraphicShape::Text(_) => {}
             _ => out.graphics.extend(graphic_input(&placed, layer, dimmed)),
         }
     }
 }
 
+/// Whether `view` draws objects of `kind` (View Options, #2363).
+fn shows(view: Option<&PcbLayerView>, kind: BoardObject) -> bool {
+    view.is_none_or(|v| v.shows_object(kind))
+}
+
 /// The board's own drawings and texts that `view` shows.
 pub(super) fn board_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawings) {
+    let texts = shows(view, BoardObject::Texts);
     for graphic in &board.graphics {
         let Some((layer, dimmed)) = shown_layer(&graphic.layer, view) else {
             continue;
         };
+        // A text frame is a text: hiding Texts drops its box too.
+        if !texts && graphic.kind() == Some(BoardGraphicKind::TextFrame) {
+            continue;
+        }
         if let Ok(Some(placed)) = pcb_geom::board_graphic_placement(graphic) {
             out.graphics.extend(graphic_input(&placed, layer, dimmed));
         }
         out.texts.extend(frame_lines(graphic, layer));
     }
-    for text in &board.texts {
+    for text in board.texts.iter().filter(|_| texts) {
         let Some((layer, _)) = shown_layer(&text.layer, view) else {
             continue;
         };
@@ -139,7 +155,7 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
         .free
         .arcs
         .iter()
-        .filter(|a| !pcb_geom::arc_is_copper(a))
+        .filter(|a| shows(view, BoardObject::Arcs) && !pcb_geom::arc_is_copper(a))
     {
         let (Some((layer, dimmed)), Some(sweep)) = (shown_layer(&arc.layer, view), arc.sweep())
         else {
@@ -158,7 +174,8 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
             dimmed,
         });
     }
-    for dimension in &board.free.dimensions {
+    let dimensions = shows(view, BoardObject::Dimensions);
+    for dimension in board.free.dimensions.iter().filter(|_| dimensions) {
         let (Some((layer, dimmed)), Some(drawing)) =
             (shown_layer(&dimension.layer, view), dimension.drawing())
         else {
@@ -183,6 +200,7 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
             size_mm: text_size_mm(dimension.text_height),
             mirrored: false,
             layer,
+            justify: HAlign::Center,
         });
     }
 }
@@ -250,6 +268,7 @@ fn text_graphic(
         size_mm: text_size_mm(graphic.font_size),
         mirrored: at.mirrored,
         layer,
+        justify: HAlign::Center,
     })
 }
 
@@ -267,6 +286,7 @@ fn frame_lines(graphic: &BoardGraphic, layer: PcbLayer) -> Vec<FootprintTextInpu
             size_mm,
             mirrored: line.placement.mirrored,
             layer,
+            justify: HAlign::Center,
         })
         .collect()
 }
@@ -283,6 +303,7 @@ fn board_text(text: &BoardText, layer: PcbLayer) -> Option<FootprintTextInput> {
         size_mm: text_size_mm(text.font_size),
         mirrored: at.mirrored,
         layer,
+        justify: HAlign::Center,
     })
 }
 

@@ -336,6 +336,8 @@ impl EditorPad {
                     p[0] = -p[0];
                 }
             }
+            // The +x and −x edges swap; the +y and −y edges stay.
+            PadShape::Trapezoid { delta } => delta[1] = -delta[1],
             // Round / Rect / RoundRect / Oval are symmetric about
             // their own vertical axis — nothing to mirror.
             PadShape::Round | PadShape::Rect | PadShape::RoundRect { .. } | PadShape::Oval => {}

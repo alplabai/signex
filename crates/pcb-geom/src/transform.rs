@@ -11,8 +11,10 @@
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadShape};
 use signex_types::pcb_layer::BoardSide;
+use signex_types::pcb_pad_shape::{outline_fault, trapezoid_corners};
 
 use crate::shape::Shape;
+use crate::shape_polygon::ccw_ring;
 use crate::units::{GeomError, PointNm, mm_to_nm};
 
 /// Which face of the board a footprint sits on.
@@ -101,7 +103,9 @@ pub fn pad_world_rotation_deg(footprint: &Footprint, pad: &Pad) -> Result<f64, G
 /// `pad`'s copper on the board, the one outline hit-testing, the ratsnest
 /// and the renderer all read. A circle is a disc, an oval a stadium along
 /// its longer side, a rectangle and a round-rect turn with the composed
-/// angle of [`pad_world_rotation_deg`].
+/// angle of [`pad_world_rotation_deg`]. A trapezoid and a custom pad are
+/// their corners placed like any pad point (#2242); parameters that make no
+/// copper are a [`GeomError::PadShape`].
 pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
     let rotation_deg = pad_world_rotation_deg(footprint, pad)?;
     let placement = Placement::of_footprint(footprint)?;
@@ -160,6 +164,44 @@ pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
                 }
             }
         }
+        PadShape::Trapezoid => {
+            let corners =
+                trapezoid_corners(pad.size, pad.trapezoid_delta).map_err(GeomError::PadShape)?;
+            polygon_pad(&placement, pad, &corners)?
+        }
+        PadShape::Custom => {
+            if let Some(fault) = outline_fault(&pad.custom_outline) {
+                return Err(GeomError::PadShape(fault));
+            }
+            polygon_pad(&placement, pad, &pad.custom_outline)?
+        }
+    })
+}
+
+/// A polygon pad from its corners in the pad's own frame: each turned by
+/// the pad's own rotation about its centre, then placed with the footprint
+/// (mirrored on the bottom side), so the outline follows the pad exactly as
+/// a rectangle does.
+fn polygon_pad(
+    placement: &Placement,
+    pad: &Pad,
+    corners: &[signex_types::pcb::Point],
+) -> Result<Shape, GeomError> {
+    if !pad.rotation.is_finite() {
+        return Err(GeomError::Unrepresentable("pad.rotation"));
+    }
+    let (sin, cos) = sin_cos_deg(pad.rotation);
+    let position = PointNm::from_mm(pad.position, "pad.position")?;
+    let ring = corners
+        .iter()
+        .map(|&corner| {
+            let local = PointNm::from_mm(corner, "pad.outline")?;
+            Ok(placement.to_world(rotate(local, sin, cos).plus(position)))
+        })
+        .collect::<Result<Vec<_>, GeomError>>()?;
+    Ok(Shape::Polygon {
+        ring: ccw_ring(ring),
+        radius: 0,
     })
 }
 
@@ -228,6 +270,8 @@ mod tests {
             layers: Vec::new(),
             net: None,
             roundrect_ratio: 0.0,
+            trapezoid_delta: Default::default(),
+            custom_outline: Vec::new(),
             rotation: 0.0,
             layer_sizes: None,
             net_locked: false,
@@ -351,3 +395,7 @@ mod tests {
 #[cfg(test)]
 #[path = "pad_shape_tests.rs"]
 mod pad_shape_tests;
+
+#[cfg(test)]
+#[path = "pad_polygon_tests.rs"]
+mod pad_polygon_tests;

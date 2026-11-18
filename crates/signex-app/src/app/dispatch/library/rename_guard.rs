@@ -481,6 +481,7 @@ mod tests {
                 instance: uuid::Uuid::nil(),
                 generation: 1,
                 footprint_idx: 0,
+                purpose: crate::library::editor::footprint::sketch_solve_task::SolvePurpose::Edit,
                 outcome: std::sync::Arc::new(
                     crate::library::editor::footprint::sketch_solve_task::SolveOutcome::SolveFailed(
                         signex_sketch::SolveError::DidNotConverge {

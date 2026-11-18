@@ -218,3 +218,106 @@ fn an_unreadable_section_is_kept_and_the_section_still_builds() {
     let id = app.document_state.projects[0].id;
     let _ = app.view_project_tab(id);
 }
+
+fn fab_rule_names(app: &Signex) -> Vec<String> {
+    let dsl = app.document_state.projects[0]
+        .data
+        .rules
+        .as_ref()
+        .and_then(|r| r.drc.dsl.clone())
+        .unwrap_or_default();
+    signex_drc_dsl::table::table(&dsl)
+        .rows
+        .iter()
+        .map(|r| r.name.clone())
+        .collect()
+}
+
+fn rule_text(app: &Signex) -> String {
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_ref()
+        .and_then(|r| r.drc.dsl.clone())
+        .unwrap_or_default()
+}
+
+/// #2311: a tier pick writes the tier's `fab_*` rules beside the user's as
+/// one undo step that also takes back the defaults it filled; nothing is
+/// written before Save.
+#[test]
+fn a_fab_tier_pick_seeds_its_rules_as_one_undo_step() {
+    use signex_types::project::{DrcRuleSet, FabTemplate, ProjectRules};
+    let mut app = app();
+    let id = app.document_state.projects[0].id;
+    let project_path = app.document_state.projects[0].path.clone();
+    let on_disk = std::fs::read(&project_path).ok();
+    let mine = "rule mine on clearance require clearance >= 0.3mm then error\n";
+    app.document_state.projects[0].data.rules = Some(ProjectRules {
+        drc: DrcRuleSet {
+            dsl: Some(mine.into()),
+            ..DrcRuleSet::default()
+        },
+        ..ProjectRules::default()
+    });
+    let before_rules = app.document_state.projects[0].data.rules.clone();
+    let before_defaults = app.document_state.projects[0].data.project_defaults.clone();
+
+    edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Standard));
+    let names = fab_rule_names(&app);
+    assert_eq!(
+        names,
+        [
+            "mine",
+            "fab_clearance",
+            "fab_track",
+            "fab_via",
+            "fab_hole",
+            "fab_edge",
+            "fab_mask",
+            "fab_silk"
+        ]
+    );
+    assert!(rule_text(&app).contains("rule fab_track on track require width >= 0.15mm"));
+    assert!(project_dirty(&app));
+    assert_eq!(std::fs::read(&project_path).ok(), on_disk, "no write");
+
+    // Re-choosing replaces only the fab rules: the user's stays as typed.
+    edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Hdi));
+    let text = rule_text(&app);
+    assert!(text.starts_with(mine), "{text}");
+    assert!(text.contains("rule fab_track on track require width >= 0.075mm"));
+    assert_eq!(fab_rule_names(&app).len(), 8, "no rule doubled");
+
+    // Each pick is one step: two undos restore rules and defaults alike.
+    assert!(app.step_project_tab_history(id, true));
+    assert!(rule_text(&app).contains("width >= 0.15mm"));
+    assert!(app.step_project_tab_history(id, true));
+    assert_eq!(app.document_state.projects[0].data.rules, before_rules);
+    assert_eq!(
+        app.document_state.projects[0].data.project_defaults,
+        before_defaults
+    );
+    assert!(app.step_project_tab_history(id, false));
+    assert!(rule_text(&app).contains("width >= 0.15mm"));
+}
+
+/// #2311: re-picking the tier already applied brings back an edited fab
+/// rule, as one step.
+#[test]
+fn re_picking_the_same_tier_restores_an_edited_fab_rule() {
+    use signex_types::project::FabTemplate;
+    let mut app = app();
+    edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Advanced));
+    let seeded = rule_text(&app);
+    let edited = seeded.replace("width >= 0.1mm", "width >= 0.2mm");
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_mut()
+        .expect("rules")
+        .drc
+        .dsl = Some(edited);
+    edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Advanced));
+    assert_eq!(rule_text(&app), seeded);
+}

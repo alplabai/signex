@@ -8,7 +8,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
 use super::{
-    ProjectSection, ProjectTabMsg, erc_annotation, general, libraries, parameters,
+    ProjectSection, ProjectTabMsg, erc_annotation, general, libraries, parameters, requirements,
     schematic_defaults, setup, sheets, variants, version_control,
 };
 use crate::app::state::ProjectId;
@@ -118,6 +118,9 @@ impl Signex {
                 i18n,
                 tokens,
             ),
+            ProjectSection::Requirements => {
+                requirements::view(project, tab.map(|tab| &tab.requirements), i18n, tokens)
+            }
         };
         row![
             section_list(project_id, selected, i18n, tokens),

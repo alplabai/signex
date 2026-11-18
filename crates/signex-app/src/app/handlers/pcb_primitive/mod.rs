@@ -433,7 +433,7 @@ fn primitive_command(
             free::free_command(board, items, edit)
         }
         Some(ItemRef::Graphic { .. }) => graphic::graphic_command(board, items, edit),
-        Some(ItemRef::Footprint(_)) | None => Ok(None),
+        Some(ItemRef::Footprint(_) | ItemRef::FootprintText { .. }) | None => Ok(None),
     }
 }
 

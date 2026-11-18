@@ -39,6 +39,8 @@ fn pad(uuid: Uuid, shape: PadShape, at: (f64, f64), size: (f64, f64), rotation: 
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation,
         layer_sizes: None,
         net_locked: false,

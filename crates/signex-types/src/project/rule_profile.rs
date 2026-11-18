@@ -46,9 +46,33 @@ pub struct RuleProfile {
     /// DRC settings (#2307); not written when empty.
     #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
     pub drc: DrcRuleSet,
+    /// For a fab profile (#2311): whose limits its `drc` rules copy and
+    /// from where; not written when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fab: Option<FabProfileInfo>,
     /// Keys written by a newer build; kept so a save does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
+}
+
+/// What a fab profile's limits are (#2311), so they can be audited and
+/// updated: the maker, its process or service tier, and the published
+/// source and date the numbers were copied from. Every field is free text;
+/// an empty one is not known.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FabProfileInfo {
+    /// Empty for a generic tier that names no maker.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub manufacturer: String,
+    /// The process or service tier: layer count, copper weight, class.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub process: String,
+    /// Where the limits were published.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// When the limits were published or last checked, `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub published: String,
 }
 
 /// Why a profile file could not be used.
@@ -69,6 +93,7 @@ impl RuleProfile {
             version: version.into(),
             erc,
             drc: DrcRuleSet::default(),
+            fab: None,
             unknown: UnknownJson::default(),
         }
     }

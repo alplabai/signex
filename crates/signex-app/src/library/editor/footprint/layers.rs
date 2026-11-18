@@ -99,33 +99,24 @@ impl FpLayer {
         }
     }
 
-    /// Render colour for the layer — Altium-flavoured palette, kept
-    /// muted so multiple visible layers don't drown each other out.
+    /// The layer's colour: the colour of its board layer in the one board
+    /// palette, so a footprint looks the same in the editor, the previews
+    /// and on the board in every theme (#2375).
     pub fn color(self) -> Color {
-        match self {
-            FpLayer::FCu => Color::from_rgba(0.85, 0.20, 0.20, 1.0),
-            FpLayer::BCu => Color::from_rgba(0.30, 0.45, 0.95, 1.0),
-            FpLayer::FSilks => Color::from_rgba(0.95, 0.95, 0.95, 1.0),
-            FpLayer::BSilks => Color::from_rgba(0.65, 0.55, 0.85, 1.0),
-            FpLayer::FFab => Color::from_rgba(0.85, 0.65, 0.30, 1.0),
-            FpLayer::BFab => Color::from_rgba(0.55, 0.45, 0.30, 1.0),
-            FpLayer::EdgeCuts => Color::from_rgba(0.95, 0.85, 0.20, 1.0),
-        }
+        crate::pcb_canvas::layer_style::board_layer_colour(self.board_layer())
     }
 }
 
-/// Which colour set the footprint canvas and layer widgets paint with.
-/// Graphite themes get the Graphite values; every other theme keeps the
-/// Altium-flavoured set of [`FpLayer::color`].
+/// How the footprint canvases draw the layers. The colours always come
+/// from the board palette ([`FpLayer::color`]); the variant only picks the
+/// drawing style around them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayerPalette {
+    /// The footprint editor: dashed courtyard, slightly see-through pads.
     #[default]
-    Legacy,
-    Graphite,
-    /// Graphite colours tuned for the charcoal canvas.
-    CanvasDark,
-    /// Read-only previews: the board palette the PCB canvas draws with, so
-    /// a footprint looks as it does on the board (#2348).
+    Editor,
+    /// Read-only previews: solid courtyard and opaque pads, as on the
+    /// board (#2348).
     Board,
 }
 
@@ -135,20 +126,17 @@ impl LayerPalette {
         Color::WHITE
     }
 
-    /// Whether the courtyard is drawn dashed (the Graphite editor canvas).
+    /// Whether the courtyard is drawn dashed (the editor canvas).
     pub fn dashes_courtyard(self) -> bool {
-        self == LayerPalette::CanvasDark
+        self == LayerPalette::Editor
     }
 
-    /// Colour of the courtyard outline. The editor draws it in the
-    /// Edge.Cuts colour; the board puts it on Courtyard Top.
+    /// Colour of the courtyard outline: Courtyard Top, where the board
+    /// puts it.
     pub fn courtyard_colour(self) -> Color {
-        match self {
-            LayerPalette::Board => crate::pcb_canvas::layer_style::board_layer_colour(
-                PcbLayer::Technical(TechnicalLayer::CourtyardTop),
-            ),
-            other => FpLayer::EdgeCuts.color_in(other),
-        }
+        crate::pcb_canvas::layer_style::board_layer_colour(PcbLayer::Technical(
+            TechnicalLayer::CourtyardTop,
+        ))
     }
 
     /// Alpha of a pad's copper fill: opaque as on the board, slightly
@@ -164,11 +152,6 @@ impl LayerPalette {
     /// Edge stroke of a pad filled with `fill`: the fill colour itself.
     pub fn pad_edge(self, fill: Color) -> Color {
         Color { a: 1.0, ..fill }
-    }
-
-    /// The palette a theme paints with: every theme is Graphite.
-    pub fn for_tokens(_tokens: &signex_types::theme::ThemeTokens) -> Self {
-        Self::Graphite
     }
 }
 
@@ -217,34 +200,6 @@ impl FpLayer {
             FpLayer::FCu | FpLayer::FSilks | FpLayer::FFab => FpSide::Top,
             FpLayer::BCu | FpLayer::BSilks | FpLayer::BFab => FpSide::Bottom,
             FpLayer::EdgeCuts => FpSide::Board,
-        }
-    }
-
-    /// Colour in `palette`. Graphite: pad gold on top copper, blue on
-    /// bottom copper, warm white silk, board-outline yellow. The canvas
-    /// variants put the courtyard (drawn with the Edge.Cuts colour) in
-    /// magenta and keep silk readable on their background.
-    pub fn color_in(self, palette: LayerPalette) -> Color {
-        match palette {
-            LayerPalette::Legacy => self.color(),
-            LayerPalette::Board => {
-                crate::pcb_canvas::layer_style::board_layer_colour(self.board_layer())
-            }
-            LayerPalette::CanvasDark => match self {
-                FpLayer::FFab => Color::from_rgb8(0x4F, 0xA6, 0xB8),
-                FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),
-                FpLayer::EdgeCuts => Color::from_rgb8(0xD1, 0x6B, 0xA5),
-                _ => self.color_in(LayerPalette::Graphite),
-            },
-            LayerPalette::Graphite => match self {
-                FpLayer::FCu => Color::from_rgb8(0xD8, 0xB4, 0x6A),
-                FpLayer::BCu => Color::from_rgb8(0x3B, 0x6F, 0xD8),
-                FpLayer::FSilks => Color::from_rgb8(0xF2, 0xEF, 0xE6),
-                FpLayer::BSilks => Color::from_rgb8(0xA8, 0xA2, 0xC8),
-                FpLayer::FFab => Color::from_rgb8(0x9E, 0xA3, 0xAE),
-                FpLayer::BFab => Color::from_rgb8(0x6F, 0x73, 0x7C),
-                FpLayer::EdgeCuts => Color::from_rgb8(0xE7, 0xD9, 0xA8),
-            },
         }
     }
 }
@@ -329,5 +284,40 @@ impl LayerVisibility {
             FpLayer::BFab => self.b_fab = !self.b_fab,
             FpLayer::EdgeCuts => self.edge_cuts = !self.edge_cuts,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pcb_canvas::layer_style::layer_colour;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    /// The footprint editor draws each layer in the colour the PCB canvas
+    /// gives its board layer, in both themes (#2375, #2468).
+    #[test]
+    fn editor_layer_colours_equal_the_pcb_canvas_colours() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            for layer in FpLayer::ORDER {
+                assert_eq!(
+                    layer.color(),
+                    layer_colour(layer.board_layer(), &tokens),
+                    "{layer:?} in {id:?}"
+                );
+            }
+        }
+    }
+
+    /// Top copper is the board's red, not the gold of the old editor set.
+    #[test]
+    fn editor_top_copper_is_the_board_red() {
+        let gold = Color::from_rgb8(0xD8, 0xB4, 0x6A);
+        assert_ne!(FpLayer::FCu.color(), gold);
+        assert_eq!(
+            FpLayer::FCu.color(),
+            Color::from_rgb8(0xD0, 0x40, 0x40),
+            "the board palette's top copper"
+        );
     }
 }

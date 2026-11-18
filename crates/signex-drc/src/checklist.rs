@@ -77,22 +77,36 @@ impl DrcRules {
     }
 
     /// The copper items written rule `name` applies to on `board`: tracks
-    /// for a width rule, vias for a via rule, and the tracks, pads and vias
-    /// of its object pair (all three without one) for a clearance rule,
-    /// on its nets and layers. `None` when no rule has that name.
+    /// for a width rule, vias for a via rule, pads and vias for a hole rule,
+    /// every copper item for an edge rule, and the tracks, pads and vias of
+    /// its object pair (all three without one) for a clearance rule, on its
+    /// nets and layers; for a board-wide silkscreen, mask, paste or
+    /// courtyard rule, the items that rule measures. `None` when no rule has
+    /// that name.
     pub fn scope_items(&self, board: &PcbBoard, name: &str) -> Option<Vec<ItemRef>> {
         let scoped = self.user.iter().find(|s| s.rule.name == name)?;
         let rule = &scoped.rule;
+        let sets = |kinds: &[LimitKind]| kinds.iter().any(|&k| rule.limit(k).is_some());
         let wants = |object: CopperObject| {
             let clearance = rule.limit(LimitKind::MinClearance).is_some()
                 && rule.pair.is_none_or(|pair| pair.contains(&object));
             let width = object == CopperObject::Track
-                && (rule.limit(LimitKind::MinTrackWidth).is_some()
-                    || rule.limit(LimitKind::MaxTrackWidth).is_some());
+                && sets(&[LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth]);
             let via = object == CopperObject::Via
-                && (rule.limit(LimitKind::MinViaDiameter).is_some()
-                    || rule.limit(LimitKind::MinViaDrill).is_some());
-            clearance || width || via
+                && sets(&[
+                    LimitKind::MinViaDiameter,
+                    LimitKind::MinViaDrill,
+                    LimitKind::MinViaPadGap,
+                ]);
+            let hole = object != CopperObject::Track
+                && sets(&[
+                    LimitKind::MinHoleSize,
+                    LimitKind::MaxHoleSize,
+                    LimitKind::MinAnnularRing,
+                    LimitKind::MinHoleToHole,
+                ]);
+            let edge = rule.limit(LimitKind::MinEdgeClearance).is_some();
+            clearance || width || via || hole || edge
         };
         let mut items: Vec<ItemRef> = collect_copper(board)
             .into_iter()
@@ -100,8 +114,42 @@ impl DrcRules {
             .filter(|c| scoped.covers(c.net, self.on_board(c.layers)))
             .map(|c| c.item)
             .collect();
+        items.extend(off_copper_items(board, &sets));
         items.sort_unstable();
         items.dedup();
         Some(items)
     }
+}
+
+/// What a board-wide silkscreen, mask, paste or courtyard rule applies to:
+/// the owners of the silkscreen, the mask openings, the tracks with a
+/// manual paste expansion, the parts with a courtyard.
+fn off_copper_items(board: &PcbBoard, sets: &dyn Fn(&[LimitKind]) -> bool) -> Vec<ItemRef> {
+    let mut out = Vec::new();
+    if sets(&[LimitKind::MinSilkToPad, LimitKind::MinSilkToSilk]) {
+        out.extend(crate::silk::silk_pieces(board).into_iter().map(|p| p.owner));
+    }
+    let mask = [
+        LimitKind::MinMaskSliver,
+        LimitKind::MinMaskExpansion,
+        LimitKind::MaxMaskExpansion,
+    ];
+    if sets(&mask) {
+        out.extend(crate::mask::openings(board).into_iter().map(|p| p.owner));
+    }
+    if sets(&[LimitKind::MinPasteExpansion, LimitKind::MaxPasteExpansion]) {
+        let manual =
+            |s: &&signex_types::pcb::Segment| s.attributes.paste_mask.manual_mm().is_some();
+        out.extend(
+            board
+                .segments
+                .iter()
+                .filter(manual)
+                .map(|s| ItemRef::Track(s.uuid)),
+        );
+    }
+    if sets(&[LimitKind::MinCourtyardGap]) {
+        out.extend(crate::courtyard::parts(board).map(ItemRef::Footprint));
+    }
+    out
 }

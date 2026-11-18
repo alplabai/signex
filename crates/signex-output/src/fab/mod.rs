@@ -7,10 +7,11 @@
 //! gives the same bytes every time. Frame, units and formats:
 //! `docs/FABRICATION_OUTPUTS.md`.
 //!
-//! Two inputs the board does not hold as items come through [`FabExtras`]:
-//! the zones' copper ([`FabExtras::of_board`] computes the pour fills,
-//! #2216) and stroked board text (#2387, not drawn yet). Without them the
-//! files leave zones and texts out and [`FabSet::notes`] says so.
+//! Inputs the board does not hold as items come through [`FabExtras`]: the
+//! zones' copper ([`FabExtras::of_board`] computes the pour fills, #2216)
+//! and extra strokes. Without the fills the files leave zones out and
+//! [`FabSet::notes`] says so. Text is written in the board stroke font
+//! (#2368).
 
 mod centroid;
 mod collect;
@@ -24,6 +25,7 @@ mod job;
 mod layers;
 mod marks;
 mod notes;
+mod text;
 
 #[cfg(test)]
 mod tests;

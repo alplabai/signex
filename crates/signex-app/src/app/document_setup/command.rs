@@ -69,7 +69,7 @@ pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
             path.display()
         ));
     }
-    let task = app.request_new_pcb(Some(project), Some(setup.pcb));
+    let task = app.request_new_pcb(Some(project), Some(setup.pcb), setup.fab);
     (CommandOutcome::Ran, task)
 }
 

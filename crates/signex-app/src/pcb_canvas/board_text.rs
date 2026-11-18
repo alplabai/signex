@@ -11,10 +11,11 @@ use iced::{Color, Point, Radians, Rectangle, Renderer, Size, Theme, Vector, alig
 use signex_gfx::primitive::text::{
     LINE_HEIGHT_EM, TextRaster, TextSizePolicy, text_px, text_raster,
 };
-use signex_renderer::pcb::FootprintTextInput;
+use signex_renderer::pcb::{BoardPaint, FootprintTextInput};
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::schematic::HAlign;
 
-use super::layer_style::board_layer_colour;
+use super::layer_style::painted_layer_colour;
 use super::{BoardCamera, PcbCanvas};
 use crate::app::Message;
 use crate::renderer_scene_canvas::ATLAS_TEXT_LIMIT_PX;
@@ -86,7 +87,7 @@ impl canvas::Program<Message> for BoardTextLayer<'_> {
         }
         let view = Rectangle::with_size(bounds.size());
         let geometry = canvas.text_cache.draw(renderer, bounds.size(), |frame| {
-            paint_texts(frame, &snapshot.texts, &camera, view);
+            paint_texts(frame, &snapshot.texts, &snapshot.paint, &camera, view);
         });
         vec![geometry]
     }
@@ -102,11 +103,13 @@ impl canvas::Program<Message> for BoardTextLayer<'_> {
 }
 
 /// Paint `texts` at `camera` onto `frame`, leaving out what cannot reach
-/// `view`. Each text is centred on its anchor, turned by its angle and the
-/// view's turn, and mirrored on the bottom side.
+/// `view`. Each text is justified on its anchor in its own frame, turned by
+/// its angle and the view's turn, and mirrored on the bottom side, in its
+/// layer's colour in `paint` (#2363).
 pub(super) fn paint_texts(
     frame: &mut canvas::Frame,
     texts: &[FootprintTextInput],
+    paint: &BoardPaint,
     camera: &BoardCamera,
     view: Rectangle,
 ) {
@@ -119,7 +122,7 @@ pub(super) fn paint_texts(
         let Some(placed) = place(text, camera, view) else {
             continue;
         };
-        let color = colour_of(&mut colours, text.layer);
+        let color = colour_of(&mut colours, paint, text.layer);
         let glyphs = canvas::Text {
             content: text.content.clone(),
             position: Point::ORIGIN,
@@ -127,7 +130,7 @@ pub(super) fn paint_texts(
             size: iced::Pixels(placed.size_px),
             line_height: iced::widget::text::LineHeight::Relative(LINE_HEIGHT_EM),
             font: crate::render_config::IOSEVKA,
-            align_x: advanced_text::Alignment::Center,
+            align_x: align_of(text.justify),
             align_y: alignment::Vertical::Center,
             ..canvas::Text::default()
         };
@@ -180,11 +183,21 @@ pub(super) fn place(
         .then_some(ScreenText { anchor, size_px })
 }
 
-fn colour_of(colours: &mut Vec<(PcbLayer, Color)>, layer: PcbLayer) -> Color {
+/// The anchor end of a text's line: applied before the mirror, so a
+/// mirrored text runs the other way from its anchor, as its strokes do.
+pub(super) fn align_of(justify: HAlign) -> advanced_text::Alignment {
+    match justify {
+        HAlign::Left => advanced_text::Alignment::Left,
+        HAlign::Center => advanced_text::Alignment::Center,
+        HAlign::Right => advanced_text::Alignment::Right,
+    }
+}
+
+fn colour_of(colours: &mut Vec<(PcbLayer, Color)>, paint: &BoardPaint, layer: PcbLayer) -> Color {
     if let Some(&(_, colour)) = colours.iter().find(|(l, _)| *l == layer) {
         return colour;
     }
-    let colour = board_layer_colour(layer);
+    let colour = painted_layer_colour(paint, layer);
     colours.push((layer, colour));
     colour
 }

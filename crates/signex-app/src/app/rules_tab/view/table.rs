@@ -35,15 +35,19 @@ enum Col {
 
 impl Col {
     fn of(domain: RulesDomain) -> Vec<Col> {
+        let kinds = domain.kinds();
         let mut cols = vec![Col::On, Col::Name];
-        if domain == RulesDomain::Routing {
+        if kinds.len() > 1 {
             cols.push(Col::Kind);
         }
-        cols.extend([Col::Scope, Col::Layer]);
-        if domain == RulesDomain::Clearance {
+        // Silkscreen, mask, paste and courtyard rules are board-wide.
+        if kinds.iter().any(|k| k.is_scoped()) {
+            cols.extend([Col::Scope, Col::Layer]);
+        }
+        if kinds.contains(&RuleKind::Clearance) {
             cols.push(Col::Objects);
         }
-        for kind in domain.kinds() {
+        for kind in kinds {
             cols.extend(kind.fields().iter().map(|&f| Col::Limit(f)));
         }
         cols.extend([
@@ -64,11 +68,7 @@ impl Col {
             Col::Scope => ids::RULES_COL_SCOPE,
             Col::Layer => ids::RULES_COL_LAYER,
             Col::Objects => ids::RULES_COL_OBJECTS,
-            Col::Limit(LimitField::MinClearance) => ids::RULES_COL_MIN_CLEARANCE,
-            Col::Limit(LimitField::MinWidth) => ids::RULES_COL_MIN_WIDTH,
-            Col::Limit(LimitField::MaxWidth) => ids::RULES_COL_MAX_WIDTH,
-            Col::Limit(LimitField::MinDiameter) => ids::RULES_COL_MIN_DIAMETER,
-            Col::Limit(LimitField::MinDrill) => ids::RULES_COL_MIN_DRILL,
+            Col::Limit(field) => limit_heading(field),
             Col::Severity => ids::RULES_COL_SEVERITY,
             Col::Actual => ids::RULES_COL_ACTUAL,
             Col::Margin => ids::RULES_COL_MARGIN,
@@ -97,6 +97,45 @@ impl Col {
             Col::Severity => Some(RuleField::Severity),
             _ => None,
         }
+    }
+}
+
+fn limit_heading(field: LimitField) -> MessageId {
+    match field {
+        LimitField::MinClearance => ids::RULES_COL_MIN_CLEARANCE,
+        LimitField::MinWidth => ids::RULES_COL_MIN_WIDTH,
+        LimitField::MaxWidth => ids::RULES_COL_MAX_WIDTH,
+        LimitField::MinDiameter => ids::RULES_COL_MIN_DIAMETER,
+        LimitField::MinDrill => ids::RULES_COL_MIN_DRILL,
+        LimitField::MinPadGap => ids::RULES_COL_MIN_PAD_GAP,
+        LimitField::MinHole => ids::RULES_COL_MIN_HOLE,
+        LimitField::MaxHole => ids::RULES_COL_MAX_HOLE,
+        LimitField::MinAnnular => ids::RULES_COL_MIN_ANNULAR,
+        LimitField::MinHoleSpacing => ids::RULES_COL_MIN_HOLE_SPACING,
+        LimitField::MinEdgeClearance => ids::RULES_COL_MIN_EDGE_CLEARANCE,
+        LimitField::MinSilkPad => ids::RULES_COL_MIN_SILK_PAD,
+        LimitField::MinSilkSpacing => ids::RULES_COL_MIN_SILK_SPACING,
+        LimitField::MinSliver => ids::RULES_COL_MIN_SLIVER,
+        LimitField::MinMaskExpansion => ids::RULES_COL_MIN_MASK_EXPANSION,
+        LimitField::MaxMaskExpansion => ids::RULES_COL_MAX_MASK_EXPANSION,
+        LimitField::MinPasteExpansion => ids::RULES_COL_MIN_PASTE_EXPANSION,
+        LimitField::MaxPasteExpansion => ids::RULES_COL_MAX_PASTE_EXPANSION,
+        LimitField::MinCourtyardSpacing => ids::RULES_COL_MIN_COURTYARD_SPACING,
+    }
+}
+
+/// The word the Kind column shows for `kind`.
+fn kind_label(kind: RuleKind) -> MessageId {
+    match kind {
+        RuleKind::Clearance => ids::RULES_KIND_CLEARANCE,
+        RuleKind::Track => ids::RULES_KIND_TRACK,
+        RuleKind::Via => ids::RULES_KIND_VIA,
+        RuleKind::Hole => ids::RULES_KIND_HOLE,
+        RuleKind::Edge => ids::RULES_KIND_EDGE,
+        RuleKind::Silk => ids::RULES_KIND_SILK,
+        RuleKind::Mask => ids::RULES_KIND_MASK,
+        RuleKind::Paste => ids::RULES_KIND_PASTE,
+        RuleKind::Courtyard => ids::RULES_KIND_COURTYARD,
     }
 }
 
@@ -236,12 +275,7 @@ fn cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> 
                 .boxed()
         }
         Col::Kind => {
-            let kind = match row.kind {
-                Some(RuleKind::Clearance) => ids::RULES_KIND_CLEARANCE,
-                Some(RuleKind::Track) => ids::RULES_KIND_TRACK,
-                Some(RuleKind::Via) => ids::RULES_KIND_VIA,
-                None => ids::RULES_BADGE_TEXT_ONLY,
-            };
+            let kind = row.kind.map_or(ids::RULES_BADGE_TEXT_ONLY, kind_label);
             text(t!(i18n, kind)).size(TS.body).boxed()
         }
         Col::Actual | Col::Margin | Col::Violations => outcome(frame, row, col),
@@ -409,6 +443,18 @@ pub(super) fn flag_text(frame: &Frame, flag: &RuleFlag) -> String {
             "to" => mm(*to_nm)
         ),
         RuleFlag::NoNets => t!(i18n, ids::RULES_FLAG_NO_NETS),
+        RuleFlag::BelowFabFloor {
+            floor,
+            from_nm,
+            to_nm,
+            ..
+        } => t!(
+            i18n,
+            ids::RULES_FLAG_BELOW_FAB,
+            "floor" => floor.as_str(),
+            "from" => mm(*from_nm),
+            "to" => mm(*to_nm)
+        ),
     }
     .into_string()
 }

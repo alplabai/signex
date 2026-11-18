@@ -5719,6 +5719,7 @@ dependencies = [
  "signex-net",
  "signex-output",
  "signex-renderer",
+ "signex-req",
  "signex-sketch",
  "signex-types",
  "signex-widgets",
@@ -5996,6 +5997,16 @@ dependencies = [
  "signex-types",
  "tempfile",
  "uuid",
+]
+
+[[package]]
+name = "signex-req"
+version = "26.11.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "signex-bom",
+ "signex-types",
 ]
 
 [[package]]

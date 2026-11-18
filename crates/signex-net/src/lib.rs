@@ -14,7 +14,7 @@ pub mod uf;
 pub mod board;
 
 mod parts;
-pub use parts::{DesignPart, PartAnchor, design_parts};
+pub use parts::{DesignPart, design_parts};
 
 pub mod cross_probe;
 

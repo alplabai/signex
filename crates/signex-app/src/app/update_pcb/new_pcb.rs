@@ -9,7 +9,7 @@ use iced::Task;
 use signex_engine::pcb::BoardEngine;
 use signex_i18n::{Translatable, ids, t};
 use signex_types::pcb::PcbBoard;
-use signex_types::project::{PcbDefaults, SetupProfile};
+use signex_types::project::{FabTemplate, PcbDefaults, SetupProfile};
 
 use super::UpdatePcbMsg;
 use super::state::{Phase, file_name};
@@ -28,6 +28,7 @@ impl Signex {
         &mut self,
         project: Option<ProjectId>,
         rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
     ) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
             self.refuse_new_pcb(ids::NEW_PCB_NO_PROJECT.into());
@@ -57,6 +58,7 @@ impl Signex {
                     path,
                     exists,
                     rules,
+                    fab,
                 })
             },
         )
@@ -70,6 +72,7 @@ impl Signex {
         path: PathBuf,
         exists: Result<bool, String>,
         rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
     ) {
         let Some(loaded) = self.document_state.project_by_id(project) else {
             return;
@@ -117,6 +120,9 @@ impl Signex {
             self.document_state.mark_document_dirty(&project_path);
         }
         self.open_new_pcb_tab(path.clone(), board);
+        if let Some(tier) = fab {
+            self.seed_tier_rules(project, tier);
+        }
         crate::diagnostics::log_info(
             t!(
                 self.ui_state.i18n,

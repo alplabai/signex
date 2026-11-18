@@ -222,11 +222,14 @@ impl Signex {
             .violations
             .len()
             .saturating_sub(crate::panels::DRC_MAX_ROWS);
-        let name = |net: u32| {
-            done.net_names
+        // Net 0 is no net: left empty for the panel to word.
+        let name = |net: u32| match net {
+            0 => String::new(),
+            _ => done
+                .net_names
                 .get(&net)
                 .cloned()
-                .unwrap_or_else(|| format!("#{net}"))
+                .unwrap_or_else(|| format!("#{net}")),
         };
         let mm = |nm: i64| format!("{:.3}", pcb_geom::nm_to_mm(nm));
         panel.rows = report
@@ -243,7 +246,8 @@ impl Signex {
                     b: name(v.nets.1),
                     measured_mm: mm(v.measured_nm),
                     required_mm: mm(v.required_nm),
-                    over_maximum: v.kind == ViolationKind::TrackWidth
+                    // A kind with a maximum broke it when over the limit.
+                    over_maximum: v.kind.limits().iter().any(|k| k.is_maximum())
                         && v.measured_nm > v.required_nm,
                     x_mm: mm(v.at.x),
                     y_mm: mm(v.at.y),
@@ -414,6 +418,22 @@ fn log_rule_text(report: &signex_drc::DrcReport) {
             "DRC: {} track width, {} via diameter, {} via drill",
             sizes[0], sizes[1], sizes[2]
         ));
+    }
+    // The other base rules (#2435): only the kinds with findings.
+    let others: Vec<String> = ViolationKind::ALL
+        .into_iter()
+        .filter(|&k| k > ViolationKind::ViaDrill)
+        .filter_map(|k| {
+            let n = report.count(k);
+            let name = k
+                .rule_id()
+                .trim_start_matches("builtin::")
+                .replace('_', " ");
+            (n > 0).then(|| format!("{n} {name}"))
+        })
+        .collect();
+    if !others.is_empty() {
+        crate::diagnostics::log_warning(format!("DRC: {}", others.join(", ")));
     }
 }
 

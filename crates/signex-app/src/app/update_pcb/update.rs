@@ -9,8 +9,9 @@ use signex_engine::pcb::eco::{EcoChangeList, refresh_nets};
 use signex_i18n::{MessageId, ids, t};
 
 use super::UpdatePcbMsg;
-use super::design::{self, DesignRequest, LibraryRows};
+use super::design::{self, DesignRequest};
 use super::state::{Phase, UpdatePcbState, file_name};
+use crate::app::design_read::LibraryRows;
 use crate::app::project_sheets::{plan_project_sheets_for, project_root_sheet_path};
 use crate::app::state::{ErrorNotice, ProjectId};
 use crate::app::{Message, Signex};
@@ -110,8 +111,9 @@ impl Signex {
                 path,
                 exists,
                 rules,
+                fab,
             } => {
-                self.new_pcb_path_checked(project, path, exists, rules);
+                self.new_pcb_path_checked(project, path, exists, rules, fab);
                 Task::none()
             }
         }
@@ -268,19 +270,6 @@ impl Signex {
         )
     }
 
-    /// Every open library's rows, for the worker to resolve footprints from.
-    pub(crate) fn library_rows(&self) -> Vec<LibraryRows> {
-        self.library
-            .open_libraries
-            .iter()
-            .map(|lib| LibraryRows {
-                id: lib.library_id,
-                root: lib.root.clone(),
-                rows: lib.tables.values().flatten().cloned().collect(),
-            })
-            .collect()
-    }
-
     fn update_pcb_computed(
         &mut self,
         job: u64,
@@ -407,5 +396,19 @@ impl Signex {
     /// A catalog message with no arguments, as a string.
     pub(super) fn update_pcb_text(&self, id: MessageId) -> String {
         t!(self.ui_state.i18n, id).into_string()
+    }
+
+    /// Every open library's rows, snapshotted on the update thread for the
+    /// design read of Update PCB and Back Annotate.
+    pub(crate) fn library_rows(&self) -> Vec<LibraryRows> {
+        self.library
+            .open_libraries
+            .iter()
+            .map(|lib| LibraryRows {
+                id: lib.library_id,
+                root: lib.root.clone(),
+                rows: lib.tables.values().flatten().cloned().collect(),
+            })
+            .collect()
     }
 }

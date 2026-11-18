@@ -331,7 +331,10 @@ pixels, after reused pans, turned, at fractional display scales).
 ## pcb-footprint-text — Designator and comment text on the board (#2368)
 
 A footprint's `Reference` and `Value` properties are drawn; other
-properties are parameters and are not. A property's position and rotation
+properties are parameters and are not. Where each one is drawn comes from
+`pcb_geom::footprint_texts` (#2434), the one answer the canvas, the board
+print, the fabrication outputs and the selection index read: anchor, turn,
+mirror, layer, height and justification. A property's position and rotation
 are footprint-local, placed by `pcb_geom::property_text_placement` with the
 footprint's own transform (mirror on the bottom side, then turn, then move),
 so the text follows a move, a turn and a flip. The angle composes as a pad's
@@ -339,13 +342,30 @@ does: the footprint's turn plus the text's own, minus it on the bottom side.
 
 - **No position:** the designator sits `PCB_FP_TEXT_OFFSET_MM` above the
   footprint origin, the comment that far below it.
-- **No layer:** the overlay of the footprint's side; an unknown size is
-  `PCB_DEFAULT_TEXT_SIZE_MM`. The text is centred on its anchor.
+- **No layer:** the overlay of the footprint's side
+  (`pcb_geom::property_text_layer`); an unknown size is
+  `PCB_DEFAULT_TEXT_SIZE_MM`.
+- **Justification:** the property's `justify` (left, center, right; centred
+  when not saved) says which end of the line sits on the anchor, in the
+  text's own frame. A mirrored text is justified before its mirror, so a
+  left-justified text on the bottom side runs from its anchor towards -x,
+  as its strokes do. Each drawer lays the line with its own glyph widths:
+  the canvas by the font's alignment, the board print by centring its line
+  on `pcb_geom::justified_centre`, the fabrication outputs by the stroke
+  font.
 - **Shown:** not hidden, not empty, and its layer visible in the board view
   (`PcbLayerView::is_visible`, so single-layer mode shows the active layer's
   text only). Colour: `layer_style::board_layer_colour` of its layer.
 - **Size:** true size (cap height in mm through `mm_per_em`), never clamped
   to a readable minimum; a text under half a pixel is not drawn.
+- **Picked and moved on its own:** the selection index holds each shown
+  text as `ItemRef::FootprintText`, on the box the stroke font fills
+  (`pcb_geom::text_box`). A click picks it over its part's body; a box or
+  Select All takes the footprint instead. A press on it drags the text
+  alone, following the pointer without snapping, and the release is one
+  board undo step (`footprint_text_edit`, a `SetFootprintProperty`); a
+  locked footprint refuses. The drag preview is the text's box.
+  `set_footprint_text` does the same for an agent.
 
 The texts travel in `PcbSnapshot::texts`, not in the `Scene`: the GPU glyph
 atlas can neither mirror nor follow a turned view. `pcb_canvas::BoardTextLayer`
@@ -358,9 +378,24 @@ drag the carried footprints' texts are painted by the highlight layer with
 the rest of the drag preview.
 
 Checks: `pcb::footprint_text::tests` (place, flip, eye, layer and
-single-layer visibility), `pcb_geom::text::tests`,
-`pcb_canvas::board_text::tests`, regression
+single-layer visibility, justification), `pcb_geom::text::tests` (the
+bottom-side mirror case among them), `pcb_canvas::board_text::tests`,
+`signex_engine::pcb::footprint_text_edit::tests`,
+`command::footprint_text_operand_tests` (drag and agent move), regression
 `pcb_component_properties::{the_canvas_draws_the_designator_until_the_eye_hides_it, a_flip_puts_the_designator_mirrored_on_the_bottom_overlay}`.
+
+## pcb-stroke-font — Board text as strokes (#2368)
+
+Where a text must be strokes (a Gerber image), it is written in the board
+stroke font, `pcb_geom::text_strokes`: each glyph a few polylines on a grid
+8 units to the cap height, 4 wide, the next glyph 6 units on (so a line is
+`0.75 × height` per glyph, less the last glyph's gap). Lower case reaches 5
+units, descenders 2 below the baseline. The cap height is centred on the
+anchor. The pen is `TEXT_STROKE_EM` (0.15) of the height. A glyph the font
+lacks is drawn as a box, never left out. Printable ASCII, `µ`, `Ω`, `°` and
+`±` have glyphs. The font is Signex's own drawing.
+
+Checks: `pcb_geom::stroke_font::tests`.
 
 ## pcb-graphics — Footprint and board drawings on the board (#2387)
 
@@ -420,12 +455,16 @@ width. `pcb_geom::text_frame_lines` places its text:
 
 The lines join `PcbSnapshot::texts` and draw as a board text does; the board
 print (#2402) prints the box and the lines in the same places; fabrication
-outputs (#2388) draw the box on a fabrication layer and count the text with
-the board texts the stroke font will draw.
+outputs (#2388) draw the box on a fabrication layer and write the lines in
+the board stroke font (#2368, "pcb-stroke-font"). That font is wider than
+the wrap's 0.6, so a line longer than the room inside the margins
+(`FrameLine::width_mm`) is condensed along its line to fit
+(`pcb_geom::text_strokes_within`); its height is kept.
 
 Checks: `pcb_geom::text_frame::tests`, `pcb::graphics::tests::a_text_frame_draws_its_box_and_its_lines`,
 `pdf::board::tests::a_text_frame_prints_its_box_and_lines`,
-`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`.
+`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`,
+`fab::tests::a_full_width_text_frame_line_stays_inside_its_box`.
 
 ## board-3d — Board 3D view (#2390)
 

@@ -66,6 +66,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("drill_marks", OperandKind::Bool),
     ("title_block", OperandKind::Bool),
     ("field", OperandKind::Text),
+    ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),
     ("scope", OperandKind::Text),
     ("values", OperandKind::Text),
@@ -92,6 +93,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("preset", OperandKind::Text),
     ("pins", OperandKind::Text),
     ("units", OperandKind::Text),
+    ("shape", OperandKind::Text),
+    ("delta", OperandKind::Text),
+    ("corners", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

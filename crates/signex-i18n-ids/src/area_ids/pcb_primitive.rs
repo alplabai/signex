@@ -119,6 +119,8 @@ define_ids! {
     PCB_PRIM_SHAPE_RECT = "pcb-prim-shape-rect";
     PCB_PRIM_SHAPE_ROUNDRECT = "pcb-prim-shape-roundrect";
     PCB_PRIM_SHAPE_OVAL = "pcb-prim-shape-oval";
+    PCB_PRIM_SHAPE_TRAPEZOID = "pcb-prim-shape-trapezoid";
+    PCB_PRIM_SHAPE_CUSTOM = "pcb-prim-shape-custom";
     PCB_PRIM_NO_HOLE = "pcb-prim-no-hole";
     PCB_PRIM_PAD_LOCKED = "pcb-prim-pad-locked";
     PCB_PRIM_TENTED_TIP = "pcb-prim-tented-tip";

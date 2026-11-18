@@ -1,0 +1,97 @@
+//! What a generic fab tier can build (#2311): the minimums of every base
+//! DRC rule a maker's capability page lists, and where the numbers come
+//! from. The tiers are generic starting points; no fabricator is named.
+//! See `docs/DRC_RULES.md`, "Fab profiles".
+
+use super::rule_profile::FabProfileInfo;
+use super::setup_profile::FabTemplate;
+
+/// The limits of one tier, in mm.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FabCapabilities {
+    pub clearance: f64,
+    pub track_width: f64,
+    pub via_diameter: f64,
+    pub via_drill: f64,
+    /// The smallest hole drilled, pad or via.
+    pub hole: f64,
+    pub annular_ring: f64,
+    /// Hole edge to hole edge.
+    pub hole_to_hole: f64,
+    /// Copper to the board outline.
+    pub edge_clearance: f64,
+    /// The narrowest solder mask strip between two openings.
+    pub mask_sliver: f64,
+    /// Silkscreen to an exposed pad.
+    pub silk_to_pad: f64,
+}
+
+/// When the tier numbers were last checked.
+const TIERS_REVISED: &str = "2026-11-17";
+
+impl FabTemplate {
+    /// The tier's limits.
+    pub const fn capabilities(self) -> FabCapabilities {
+        match self {
+            Self::Standard => FabCapabilities {
+                clearance: 0.15,
+                track_width: 0.15,
+                via_diameter: 0.5,
+                via_drill: 0.25,
+                hole: 0.25,
+                annular_ring: 0.125,
+                hole_to_hole: 0.5,
+                edge_clearance: 0.3,
+                mask_sliver: 0.1,
+                silk_to_pad: 0.15,
+            },
+            Self::Advanced => FabCapabilities {
+                clearance: 0.1,
+                track_width: 0.1,
+                via_diameter: 0.4,
+                via_drill: 0.2,
+                hole: 0.2,
+                annular_ring: 0.1,
+                hole_to_hole: 0.4,
+                edge_clearance: 0.25,
+                mask_sliver: 0.075,
+                silk_to_pad: 0.1,
+            },
+            Self::Hdi => FabCapabilities {
+                clearance: 0.075,
+                track_width: 0.075,
+                via_diameter: 0.3,
+                via_drill: 0.15,
+                hole: 0.1,
+                annular_ring: 0.075,
+                hole_to_hole: 0.3,
+                edge_clearance: 0.2,
+                mask_sliver: 0.06,
+                silk_to_pad: 0.075,
+            },
+        }
+    }
+
+    /// `(clearance, track, via size, via drill)` in mm: what a new
+    /// project's board setup takes from the tier.
+    pub const fn minimums(self) -> (f64, f64, f64, f64) {
+        let c = self.capabilities();
+        (c.clearance, c.track_width, c.via_diameter, c.via_drill)
+    }
+
+    /// Where the tier's numbers come from, as a fab profile names its own.
+    pub fn info(self) -> FabProfileInfo {
+        let process = match self {
+            Self::Standard => "standard process: through vias, common spacing",
+            Self::Advanced => "fine-line process: smaller vias, tighter spacing",
+            Self::Hdi => "high-density process: micro vias, the finest spacing",
+        };
+        FabProfileInfo {
+            manufacturer: String::new(),
+            process: process.to_string(),
+            source: "generic tier shipped with Signex; check your maker's published limits"
+                .to_string(),
+            published: TIERS_REVISED.to_string(),
+        }
+    }
+}

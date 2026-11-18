@@ -1,20 +1,29 @@
 //! Read-only design-rule check of a board (#2222): clearance, shorts,
 //! unconnected nets and board-sketch keepouts (#2234), in integer nm, plus
-//! the track width and via size limits of written rules (#2307). Pure:
-//! the board goes in, a report comes out, and nothing here edits it. Rules
-//! and what is not checked yet: `docs/architecture/pcb-drc.md`.
+//! the limits of written rules (#2307, #2435): track width, via size,
+//! holes, board edge, via-in-pad, silkscreen, mask, paste and courtyards.
+//! Pure: the board goes in, a report comes out, and nothing here edits it.
+//! Rules and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
 mod checklist;
+mod courtyard;
+mod edge;
 mod explain;
+mod fab_floor;
 pub mod findings;
 mod flags;
+mod holes;
 mod keepout;
+mod limit_kind;
 mod limits;
+mod mask;
+mod near;
 mod profile;
 mod rule_notes;
 mod rules;
 mod severity;
+mod silk;
 mod user_rules;
 mod waiver;
 
@@ -26,6 +35,7 @@ use signex_types::violation::Severity;
 pub use check::run;
 pub use checklist::RuleResult;
 pub use explain::{Candidate, Effective, Explanation, Source, Verdict};
+pub use fab_floor::{FAB_RULE_PREFIX, is_fab_rule};
 pub use flags::{FlaggedRule, RuleFlag};
 pub use profile::{DrcRuleChange, DrcRuleSection, adopt_profile_drc, diff_drc_against_profile};
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
@@ -58,6 +68,33 @@ pub enum ViolationKind {
     ViaDiameter,
     /// A via whose drill is under a rule's minimum.
     ViaDrill,
+    /// A pad or via hole smaller than a rule's minimum or larger than its
+    /// maximum (#2435).
+    HoleSize,
+    /// The copper ring around a via or plated pad hole narrower than a
+    /// rule's minimum.
+    AnnularRing,
+    /// Two holes closer, edge to edge, than a rule's minimum.
+    HoleToHole,
+    /// Copper closer to the board outline than a rule's minimum.
+    EdgeClearance,
+    /// A via in, or closer than a rule's minimum to, a surface-mount pad.
+    ViaInPad,
+    /// Silkscreen over, or closer than a rule's minimum to, an exposed pad.
+    SilkToPad,
+    /// Silkscreen of two parts (or a part and a board drawing) closer than
+    /// a rule's minimum.
+    SilkToSilk,
+    /// A strip of solder mask between two openings narrower than a rule's
+    /// minimum.
+    MaskSliver,
+    /// A manual solder mask expansion outside a rule's range.
+    MaskExpansion,
+    /// A manual paste expansion outside a rule's range.
+    PasteExpansion,
+    /// The courtyards of two parts on one side overlapping or closer than
+    /// a rule's minimum.
+    CourtyardOverlap,
 }
 
 /// One finding, sorted by `(kind, items, ..)` in a report.
@@ -131,6 +168,8 @@ impl DrcReport {
     }
 }
 
+#[cfg(test)]
+mod base_rules_tests;
 #[cfg(test)]
 mod class_pair_tests;
 #[cfg(test)]

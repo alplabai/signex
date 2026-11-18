@@ -150,3 +150,25 @@ fn offset_corners_stay_on_or_inside_the_true_arc_by_at_most_the_sag() {
     assert!(chord_sag(by) > 0 && chord_sag(by) < by / 500);
     assert_eq!(chord_sag(-5), 0);
 }
+
+/// #899: a point is in a polygon when it is in the outer ring and in no
+/// hole; a hole's edge counts as the hole, a malformed hole as nothing.
+#[test]
+fn a_point_in_a_hole_is_not_in_the_polygon() {
+    let p = |x: i64, y: i64| PointNm::new(x * MM, y * MM);
+    let area = Polygon::new(square(0, 0, 10 * MM), vec![square(4 * MM, 4 * MM, 2 * MM)]);
+    assert!(area.contains_point(p(2, 2)), "on the copper");
+    assert!(area.contains_point(p(0, 5)), "on the outer edge");
+    assert!(!area.contains_point(p(5, 5)), "in the hole");
+    assert!(!area.contains_point(p(4, 5)), "on the hole's edge");
+    assert!(!area.contains_point(p(11, 5)), "outside");
+    let degenerate = Polygon::new(square(0, 0, 10 * MM), vec![vec![p(4, 4), p(6, 6)]]);
+    assert!(
+        degenerate.contains_point(p(5, 5)),
+        "a two-point hole cuts nothing"
+    );
+    assert!(
+        !Polygon::default().contains_point(p(0, 0)),
+        "an empty polygon holds nothing"
+    );
+}

@@ -96,7 +96,19 @@ criterion "five real `.snxpcb` fixtures render". Each is a `.snxpcb` plus a
 | `usb-c-power-input` | USB-C power-only receptacle, 1206 polyfuse, SOD-123 TVS, bulk cap, power LED, output header. 2 layers, 30 x 22 mm, rounded corners | plated shell slots (oval drills); CC escapes through vias to bottom-side 5.1 k pull-downs; a footprint turned 270 degrees |
 | `mcu-breakout-tqfp32` | ATmega328P-AU pin-out on a TQFP-32, each side fanned out to its own 1x8 header; decoupling, AVCC / AREF caps, 16 MHz crystal and load caps on the bottom. 2 layers, 40 x 44 mm | 0.8 mm pitch fan-out (96 track segments), seven bottom-side parts, a net per pin |
 | `sensor-4layer` | BME280-style LGA-8 sensor, SOT-23-5 LDO, I2C pull-ups, 1x4 header. 4 layers, 26 x 18 mm, chamfered | inner GND and +3V3 planes as zones with 22 antipad holes; plane layer types and display names in the stackup; supply vias |
-| `mixed-tht-smd` | 12 V to 5 V supply: barrel jack, SOD-123 diode, TO-220 7805, radial electrolytics, screw terminal, 45-degree LED and resistor, bottom-side 0805 decoupling. 2 layers, 50 x 40 mm | outline with a 10 mm arc corner (an `arc` on `EdgeCuts`); oval slot drills; `[board_sketch]` with four M3 mounting holes (two plated to GND) and a top-copper keepout |
+| `mixed-tht-smd` | 12 V to 5 V supply: barrel jack, SOD-123 diode, TO-220 7805, radial electrolytics, screw terminal, 45-degree LED and resistor, bottom-side 0805 decoupling. 2 layers, 50 x 40 mm | outline with a 10 mm arc corner (an `arc` on `EdgeCuts`); oval slot drills; `[board_sketch]` with four M3 mounting holes (two plated to GND), a top-copper keepout and a routed 8 x 3 mm cable-tie slot (a through cutout) |
+
+Between them the five cover two- and four-layer stack-ups, SMD and
+through-hole parts, vias, pours with thermal relief (every zone is written
+with `thermal_relief = true`), a keepout, a cutout, top and bottom
+placement, footprint silkscreen and board text on both silkscreen layers.
+
+Origin and licence: all five are original work of the Signex project,
+designed for this corpus with Signex's own types and writer (the builders
+in `../integration/real_boards/`). No third-party board file, footprint
+or layout was imported or copied; the part outlines follow the generic
+package dimensions their names give. They are covered by the repository
+licence, like the rest of the tree.
 
 The files are generated, never hand-edited: `../integration/real_boards/`
 builds them deterministically, and `real_boards_match_their_generator`
@@ -109,12 +121,18 @@ What is checked, and where:
 - Format (`signex-types`, `real_boards`): each file reloads and re-saves
   byte-identical, a save and reload leaves the board unchanged, the item
   counts are pinned, every pad, track end, via, zone corner and text sits
-  inside the outline, courtyards on one side do not overlap, each `.snxprj`
+  inside the outline and outside every cutout, no courtyard reaches into a
+  cutout, courtyards on one side do not overlap, each `.snxprj`
   round-trips, and the regulator's links resolve to the sample schematic.
 - Render (`signex-renderer`, `pcb_real_boards`): each board builds a
   `PcbSnapshot` and a scene without panic, with every copper layer as the
-  active one too; drawn item counts, fill triangles and a hash of the drawn
-  geometry (colours excluded) are pinned.
+  active one too. Each board's render golden,
+  `crates/signex-renderer/tests/golden/pcb_real_boards/<board>.json`, is
+  drawn in the board palette and pins the drawn item counts, fill
+  triangles, cutouts, keepouts, holes and texts, and hashes of the copper
+  geometry, the overlay geometry (outline, openings, keepouts, silkscreen
+  and other drawings), the texts and the colours. Regenerate with
+  `UPDATE_GOLDEN=1 cargo test -p signex-renderer --test integration real_boards`.
 - DRC (`signex-drc`, `real_boards`): run against each board's own net
   classes, every board has zero violations of any kind; a positive control
   shows a track moved to another net shorts on each board. Ratsnest

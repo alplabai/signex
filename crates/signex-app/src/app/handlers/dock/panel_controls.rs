@@ -265,7 +265,14 @@ impl Signex {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PcbLayers(msg) => {
+                // A picked colour closes the chip's colours.
+                if matches!(msg, crate::app::PcbViewMsg::LayerColourSet { .. }) {
+                    self.document_state.panel_ctx.pcb_layers_ui.picker = None;
+                }
                 self.apply_pcb_view_event(None, *msg);
+            }
+            crate::panels::PanelMsg::LayersPanel(msg) => {
+                follow = self.handle_layers_panel(msg);
             }
             crate::panels::PanelMsg::NetClass(msg) => {
                 self.handle_net_class_message(msg);

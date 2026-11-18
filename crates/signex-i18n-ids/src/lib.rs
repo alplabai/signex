@@ -241,16 +241,6 @@ define_ids! {
     PCB_LAYERS_TITLE = "pcb-layers-title";
     PCB_LAYERS_EMPTY = "pcb-layers-empty";
     PCB_LAYERS_SHOW_ALL = "pcb-layers-show-all";
-    PCB_LAYERS_SIGNAL = "pcb-layers-signal";
-    PCB_LAYERS_PLANE = "pcb-layers-plane";
-    PCB_LAYERS_OVERLAY = "pcb-layers-overlay";
-    PCB_LAYERS_MASK = "pcb-layers-mask";
-    PCB_LAYERS_DRILL = "pcb-layers-drill";
-    PCB_LAYERS_GROUP_SHOW_ALL = "pcb-layers-group-show-all";
-    PCB_LAYERS_GROUP_HIDE_ALL = "pcb-layers-group-hide-all";
-    PCB_LAYERS_SINGLE_LAYER = "pcb-layers-single-layer";
-    PCB_LAYERS_SINGLE_LAYER_TIP = "pcb-layers-single-layer-tip";
-    PCB_LAYERS_MECHANICAL = "pcb-layers-mechanical";
     PCB_STATUS_LAYER = "pcb-status-layer";
     PCB_STATUS_VIEW_ANGLE = "pcb-status-view-angle";
     PCB_STATUS_VIEW_ANGLE_TIP = "pcb-status-view-angle-tip";

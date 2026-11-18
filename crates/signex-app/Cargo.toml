@@ -39,6 +39,7 @@ signex-erc-dsl = { workspace = true }
 pcb-geom = { path = "../pcb-geom" }
 signex-drc = { workspace = true }
 signex-drc-dsl = { workspace = true }
+signex-req = { workspace = true }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
 signex-library = { workspace = true, features = [
@@ -105,6 +106,8 @@ test-prefs-redirect = []
 signex-app = { path = ".", features = ["test-prefs-redirect"] }
 wiremock = "0.6"
 signex-i18n = { workspace = true, features = ["test-support"] }
+# The base-rule boards (#2474) for the check_drc and Run DRC tests.
+signex-drc-dsl = { workspace = true, features = ["test-support"] }
 signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
 # Names `url::Url` in a fake `DistributorAdapter` (pricing refresh tests).

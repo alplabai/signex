@@ -139,6 +139,11 @@ altium	hint	-	-	project_set_active_variant
 altium	hint	-	-	project_move_library
 altium	hint	-	-	project_set_annotate_undo
 altium	hint	-	-	project_set_version_control
+altium	hint	-	-	project_add_requirement
+altium	hint	-	-	project_set_requirement
+altium	hint	-	-	project_remove_requirement
+altium	hint	-	-	project_enable_requirement
+altium	hint	-	-	project_run_requirements
 altium	hint	-	-	document_info
 altium	hint	-	-	list_documents
 altium	hint	-	-	read_document
@@ -279,6 +284,7 @@ altium	hint	-	-	place_board_rectangle
 altium	hint	-	-	place_board_text_frame
 altium	hint	-	-	add_board_graphic
 altium	hint	-	-	set_board_graphic
+altium	hint	-	-	set_footprint_text
 altium	hint	-	-	import_dxf
 altium	hint	-	-	import_dxf_outline
 altium	hint	-	ESC	cancel_current_tool
@@ -316,6 +322,7 @@ altium	hint	-	-	check_erc
 altium	hint	-	-	open_erc_dialog
 altium	hint	-	T D	run_drc
 altium	hint	-	-	check_drc
+altium	hint	-	-	check_requirements
 altium	hint	-	-	open_drc_panel
 altium	hint	-	-	show_drc_violation
 altium	hint	-	-	waive_drc_violation
@@ -378,6 +385,13 @@ altium	hint	-	-	toggle_layer_numbers
 altium	hint	-	-	board_layer_stack
 altium	hint	-	-	set_layer_stack
 altium	hint	-	-	set_layer_sizes
+altium	hint	-	-	set_pad_shape
+altium	hint	-	-	set_layer_visible
+altium	hint	-	-	set_active_layer
+altium	hint	-	-	set_layer_color
+altium	hint	-	-	show_used_layers_only
+altium	hint	-	-	set_object_visible
+altium	hint	-	-	set_object_transparency
 altium	hint	-	-	highlight_net_under_cursor
 altium	hint	-	-	highlight_related_net_objects
 altium	hint	-	-	clear_net_highlighting
@@ -619,6 +633,11 @@ classic	hint	-	-	project_set_active_variant
 classic	hint	-	-	project_move_library
 classic	hint	-	-	project_set_annotate_undo
 classic	hint	-	-	project_set_version_control
+classic	hint	-	-	project_add_requirement
+classic	hint	-	-	project_set_requirement
+classic	hint	-	-	project_remove_requirement
+classic	hint	-	-	project_enable_requirement
+classic	hint	-	-	project_run_requirements
 classic	hint	-	-	document_info
 classic	hint	-	-	list_documents
 classic	hint	-	-	read_document
@@ -759,6 +778,7 @@ classic	hint	-	-	place_board_rectangle
 classic	hint	-	-	place_board_text_frame
 classic	hint	-	-	add_board_graphic
 classic	hint	-	-	set_board_graphic
+classic	hint	-	-	set_footprint_text
 classic	hint	-	-	import_dxf
 classic	hint	-	-	import_dxf_outline
 classic	hint	-	ESC	cancel_current_tool
@@ -796,6 +816,7 @@ classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
+classic	hint	-	-	check_requirements
 classic	hint	-	-	open_drc_panel
 classic	hint	-	-	show_drc_violation
 classic	hint	-	-	waive_drc_violation
@@ -858,6 +879,13 @@ classic	hint	-	-	toggle_layer_numbers
 classic	hint	-	-	board_layer_stack
 classic	hint	-	-	set_layer_stack
 classic	hint	-	-	set_layer_sizes
+classic	hint	-	-	set_pad_shape
+classic	hint	-	-	set_layer_visible
+classic	hint	-	-	set_active_layer
+classic	hint	-	-	set_layer_color
+classic	hint	-	-	show_used_layers_only
+classic	hint	-	-	set_object_visible
+classic	hint	-	-	set_object_transparency
 classic	hint	-	`	highlight_net_under_cursor
 classic	hint	-	-	highlight_related_net_objects
 classic	hint	-	~	clear_net_highlighting

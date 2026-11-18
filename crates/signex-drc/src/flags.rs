@@ -30,6 +30,14 @@ pub enum RuleFlag {
     },
     /// Its net, class or pattern scope matches no net of this board.
     NoNets,
+    /// It asks less than the fab floor rule `floor` (#2311) for `limit`:
+    /// `from_nm` is the floor's value, `to_nm` this rule's.
+    BelowFabFloor {
+        floor: String,
+        limit: LimitKind,
+        from_nm: i64,
+        to_nm: i64,
+    },
 }
 
 impl RuleFlag {
@@ -39,6 +47,7 @@ impl RuleFlag {
             RuleFlag::Conflict { .. } => "conflict",
             RuleFlag::LowersClass { .. } => "lowers_class",
             RuleFlag::NoNets => "no_nets",
+            RuleFlag::BelowFabFloor { .. } => "below_fab_floor",
         }
     }
 }
@@ -84,7 +93,7 @@ impl DrcRules {
                 add(&scoped.rule.name, RuleFlag::NoNets);
                 continue;
             }
-            for kind in LimitKind::ALL {
+            for &kind in LimitKind::ALL {
                 if scoped.rule.limit(kind).is_none() {
                     continue;
                 }
@@ -115,6 +124,17 @@ impl DrcRules {
                     class: lowered.class,
                     from_nm: lowered.from_nm,
                     to_nm: lowered.to_nm,
+                },
+            );
+        }
+        for below in crate::fab_floor::below_floor(&self.user) {
+            add(
+                &below.rule,
+                RuleFlag::BelowFabFloor {
+                    floor: below.floor,
+                    limit: below.kind,
+                    from_nm: below.floor_nm,
+                    to_nm: below.value_nm,
                 },
             );
         }

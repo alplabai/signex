@@ -6,7 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use signex_types::project::FabTemplate;
+use signex_drc::WrittenRuleEdit;
+use signex_types::project::{DrcRuleSet, FabTemplate};
 
 use super::edit::{EditError, splice};
 use super::table;
@@ -23,29 +24,53 @@ pub enum PresetMode {
 
 /// The stable id of a generic tier (`standard`, `advanced`, `hdi`).
 pub const fn tier_id(tier: FabTemplate) -> &'static str {
-    match tier {
-        FabTemplate::Standard => "standard",
-        FabTemplate::Advanced => "advanced",
-        FabTemplate::Hdi => "hdi",
-    }
+    tier.token()
 }
 
 pub fn tier_from_id(id: &str) -> Option<FabTemplate> {
-    FabTemplate::ALL.into_iter().find(|t| tier_id(*t) == id)
+    FabTemplate::from_token(id)
 }
 
-/// A tier's minimums as rule text: one clearance, one track and one via
-/// rule, board-wide, named `fab_*`.
+/// `drc` with `tier`'s `fab_*` rules merged in: each replaces the rule of
+/// its name and the rest are added; every other rule, a user's or another
+/// profile's, stays. A severity entry of a rule the tier adds or changes
+/// is dropped, so the tier's own `then` governs. Picking a tier in project
+/// setup and the Rules tab's tier preset both write through this.
+pub fn with_tier(drc: &DrcRuleSet, tier: FabTemplate) -> Result<DrcRuleSet, EditError> {
+    let current = drc.dsl.clone().unwrap_or_default();
+    let text = preset_result(&current, &tier_text(tier), PresetMode::Merge)?;
+    let mut out = drc.clone();
+    for change in diff_rows(&current, &text) {
+        signex_drc::follow_written_rule_edit(&mut out, WrittenRuleEdit::Dropped(&change.name));
+    }
+    out.dsl = (!text.trim().is_empty()).then_some(text);
+    Ok(out)
+}
+
+/// A tier's minimums as rule text: one board-wide rule per base rule a
+/// maker limits, named `fab_*` (the fab floor, #2311). Silkscreen and
+/// mask slivers are warnings; the rest are errors.
 pub fn tier_text(tier: FabTemplate) -> String {
-    let (clearance, track, via, drill) = tier.minimums();
+    let c = tier.capabilities();
     format!(
         "rule fab_clearance on clearance require clearance >= {} then error\n\
          rule fab_track on track require width >= {} then error\n\
-         rule fab_via on via require diameter >= {} and drill >= {} then error\n",
-        mm(clearance),
-        mm(track),
-        mm(via),
-        mm(drill)
+         rule fab_via on via require diameter >= {} and drill >= {} then error\n\
+         rule fab_hole on hole require diameter >= {} and annular >= {} and spacing >= {} \
+         then error\n\
+         rule fab_edge on edge require clearance >= {} then error\n\
+         rule fab_mask on mask require sliver >= {} then warning\n\
+         rule fab_silk on silk require pad_clearance >= {} then warning\n",
+        mm(c.clearance),
+        mm(c.track_width),
+        mm(c.via_diameter),
+        mm(c.via_drill),
+        mm(c.hole),
+        mm(c.annular_ring),
+        mm(c.hole_to_hole),
+        mm(c.edge_clearance),
+        mm(c.mask_sliver),
+        mm(c.silk_to_pad),
     )
 }
 

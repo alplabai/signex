@@ -130,6 +130,10 @@ fn render() -> String {
          lands and writes nothing to the ERC panel or Messages;\n\
          `check_drc document=<board> [baseline=<run>]` does the same for DRC on\n\
          one board. Rules in [CLI.md](CLI.md), \"Checks on demand\".\n\
+         `check_requirements document=<project or one of its documents>\n\
+         [baseline=<run>]` runs the project's requirements list as checks and\n\
+         answers in the same shape; rules in [CLI.md](CLI.md), \"Requirement\n\
+         checks\".\n\
          `measure_board`, `query_board_nets` and `find_similar_items` are board\n\
          queries: a distance on one board, point to point or edge to edge between\n\
          two items; each net's routed length, members and routed state; and the\n\

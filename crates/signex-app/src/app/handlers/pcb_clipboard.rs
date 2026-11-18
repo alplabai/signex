@@ -107,7 +107,7 @@ impl Signex {
         let grid = placement::grid_for(board, copy.grid_use());
         let ghost: Vec<pcb_geom::Shape> = BoardIndex::build_selectable(&copy.preview_board(board))
             .items()
-            .map(|indexed| indexed.shape)
+            .map(|indexed| indexed.shape.clone())
             .collect();
         let start = self.board_cursor(&path).unwrap_or(copy.origin());
         let at = grid.snap(start);

@@ -309,6 +309,45 @@ pub const LAYER_SET_NAME: &[Operand] = &[required("name", OperandKind::Text)];
 /// (#2394).
 pub const LAYER_TAB_NAMES: &[Operand] = &[required("style", OperandKind::Text)];
 
+/// One layer of the named board's view shown (`on=true`) or hidden (#2363).
+pub const LAYER_VISIBLE: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// One layer's colour in the named board's view (#2363); without `color`
+/// the board palette's again.
+pub const LAYER_COLOR: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    optional("color", OperandKind::Color),
+    required("document", OperandKind::Document),
+];
+
+/// A switch of the named board's view (#2363).
+pub const ON_BOARD: &[Operand] = &[
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// A kind of object of the named board's view shown or hidden (#2363):
+/// `pads`, `vias`, `arcs`, `tracks`, `polygons`, `regions`, `fills`,
+/// `texts`, `dimensions`, `keepouts`, or `all`.
+pub const OBJECT_VISIBLE: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// How transparent a kind of object of the named board's view is drawn
+/// (#2363): `value` in percent, 0 to 100; `kind` is `pads`, `vias`, `arcs`,
+/// `tracks`, `polygons`, `regions` or `fills`.
+pub const OBJECT_TRANSPARENCY: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("value", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
 /// DXF import onto a layer (#2410): the file, the layer token (the active
 /// layer when left out) and the board.
 pub const IMPORT_DXF: &[Operand] = &[
@@ -394,6 +433,18 @@ pub const BOARD_GRAPHIC_SET: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
+/// `set_footprint_text` (#2368): one `field` (`x`, `y`, `rotation`,
+/// `height`, `justify`) of the `text` (`designator` or `comment`) of the
+/// component `designator` set to `value`; X and Y in mm from the board origin
+/// with Y up, as Properties shows them, `justify` one of `left`, `center`,
+/// `right`.
+pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+    required("text", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
 /// `swap_pins` (#2410): two pins of the component `designator` on the board
 /// `document`, as `pins` = `a,b` (pad numbers).
 pub const SWAP_PINS: &[Operand] = &[
@@ -476,6 +527,13 @@ pub const CHECK_ERC: &[Operand] = &[
 /// `check_drc` (#2199): DRC on the named board, answered as a check report;
 /// `baseline` is an earlier answer's `run` on the same board.
 pub const CHECK_DRC: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("baseline", OperandKind::Text),
+];
+/// `check_requirements` (#2339): the requirements of the project the named
+/// document is (or belongs to), answered as a check report; `baseline` is an
+/// earlier answer's `run` on the same project.
+pub const CHECK_REQUIREMENTS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
@@ -609,7 +667,8 @@ pub const RULES_ONE: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// `rules_add`: a rule of `kind` (clearance, track, via) with its limits.
+/// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
+/// edge, silk, mask, paste, courtyard) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
@@ -754,6 +813,32 @@ pub const PROJECT_VERSION_CONTROL: &[Operand] = &[
     required("document", OperandKind::Document),
     required("on", OperandKind::Bool),
 ];
+/// `project_add_requirement` (#2339): a requirement `kind`, and its `id`
+/// (the kind's name made unique when none is given).
+pub const PROJECT_ADD_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    optional("id", OperandKind::Text),
+];
+/// `project_set_requirement`: one `field` of the requirement with id
+/// `requirement`, as typed in `value`; empty clears an optional field.
+pub const PROJECT_SET_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
+/// `project_remove_requirement`: the requirement by id.
+pub const PROJECT_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+];
+/// `project_enable_requirement`: the requirement by id, on or off.
+pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("on", OperandKind::Bool),
+];
 
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
@@ -784,4 +869,15 @@ pub const SET_LAYER_SIZES: &[Operand] = &[
     required("document", OperandKind::Document),
     required("ids", OperandKind::Text),
     required("sizes", OperandKind::Text),
+];
+/// `set_pad_shape` (#2242): pads by uuid and their `shape` (`circle`, `rect`,
+/// `oval`, `roundrect`, `trapezoid` or `custom`); a trapezoid's `delta`
+/// `<x>,<y>` and a custom pad's `corners` `<x>,<y>;<x>,<y>;..`, in mm in the
+/// pad's own frame.
+pub const SET_PAD_SHAPE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+    required("shape", OperandKind::Text),
+    optional("delta", OperandKind::Text),
+    optional("corners", OperandKind::Text),
 ];

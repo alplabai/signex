@@ -110,20 +110,6 @@ pcb-layer-set-none-saved = No saved sets yet.
 pcb-layer-set-name-placeholder = Set name
 pcb-layer-set-save-button = Save
 pcb-layer-set-delete = Delete
-# Group headers of the Layers panel.
-pcb-layers-signal = Signal
-pcb-layers-plane = Plane
-pcb-layers-mechanical = Mechanical
-pcb-layers-overlay = Overlay
-pcb-layers-mask = Mask
-pcb-layers-drill = Drill
-# Buttons at the top of a Layers panel group: show or hide all its layers.
-pcb-layers-group-show-all = Show all
-pcb-layers-group-hide-all = Hide all
-# Toggle button of the Layers panel: draw only the active layer.
-pcb-layers-single-layer = Single layer
-# Tooltip of that button.
-pcb-layers-single-layer-tip = Draw only the active layer, with the board outline and the vias and through-hole pads that reach it
 # Status bar pill with the active layer; the layer's name follows it.
 pcb-status-layer = Layer:
 # Status bar readout of how far the board view is turned on screen; the

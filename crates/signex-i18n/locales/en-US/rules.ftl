@@ -6,6 +6,9 @@ rules-tab-kind = RUL
 # Sub-tabs, each with the findings of its rules in the last run.
 rules-domain-clearance = Clearance
 rules-domain-routing = Routing
+rules-domain-holes = Holes
+rules-domain-mask = Mask & paste
+rules-domain-assembly = Silkscreen & courtyard
 rules-domain-count = { $count }
 
 # Toolbar.
@@ -23,6 +26,12 @@ rules-drc-running = Checking...
 rules-add-clearance = Add clearance rule
 rules-add-track = Add width rule
 rules-add-via = Add via rule
+rules-add-hole = Add hole rule
+rules-add-edge = Add board edge rule
+rules-add-silk = Add silkscreen rule
+rules-add-mask = Add mask rule
+rules-add-paste = Add paste rule
+rules-add-courtyard = Add courtyard rule
 rules-remove = Remove
 
 # Column headings.
@@ -37,6 +46,20 @@ rules-col-min-width = Min width
 rules-col-max-width = Max width
 rules-col-min-diameter = Min diameter
 rules-col-min-drill = Min drill
+rules-col-min-pad-gap = Min pad gap
+rules-col-min-hole = Min hole
+rules-col-max-hole = Max hole
+rules-col-min-annular = Min annular ring
+rules-col-min-hole-spacing = Min hole spacing
+rules-col-min-edge-clearance = Min edge clearance
+rules-col-min-silk-pad = Min to pad
+rules-col-min-silk-spacing = Min silk spacing
+rules-col-min-sliver = Min sliver
+rules-col-min-mask-expansion = Min mask expansion
+rules-col-max-mask-expansion = Max mask expansion
+rules-col-min-paste-expansion = Min paste expansion
+rules-col-max-paste-expansion = Max paste expansion
+rules-col-min-courtyard-spacing = Min courtyard spacing
 rules-col-severity = Severity
 rules-col-actual = Actual
 rules-col-margin = Margin
@@ -50,6 +73,12 @@ rules-objects-any = Any
 rules-kind-clearance = Clearance
 rules-kind-track = Width
 rules-kind-via = Via
+rules-kind-hole = Hole
+rules-kind-edge = Board edge
+rules-kind-silk = Silkscreen
+rules-kind-mask = Mask
+rules-kind-paste = Paste
+rules-kind-courtyard = Courtyard
 rules-severity-error = Error
 rules-severity-warning = Warning
 rules-severity-info = Info
@@ -68,6 +97,7 @@ rules-flag-shadowed = Never applies: { $by } wins
 rules-flag-conflict = Disagrees with { $with }
 rules-flag-lowers = Lowers { $class } { $from } → { $to } mm
 rules-flag-no-nets = Matches no net
+rules-flag-below-fab = Below the fab floor { $floor }: { $from } → { $to } mm
 rules-badge-text-only = Text only
 rules-badge-problems = { $count ->
         [one] 1 problem

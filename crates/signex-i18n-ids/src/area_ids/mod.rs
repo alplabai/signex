@@ -6,10 +6,12 @@ mod board_checks;
 mod board_output;
 mod board_panel;
 mod board_query;
+mod board_view;
 mod bom;
 mod chrome;
 mod dialog;
 mod dialog_text;
+mod drc_rules;
 mod editors;
 mod fab_outputs;
 mod file_dialog;
@@ -30,6 +32,7 @@ mod placeholder;
 mod preferences;
 mod project;
 mod properties;
+mod requirements;
 mod rules;
 mod update_pcb;
 
@@ -37,10 +40,12 @@ pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
 pub use board_query::*;
+pub use board_view::*;
 pub use bom::*;
 pub use chrome::*;
 pub use dialog::*;
 pub use dialog_text::*;
+pub use drc_rules::*;
 pub use editors::*;
 pub use fab_outputs::*;
 pub use file_dialog::*;
@@ -61,6 +66,7 @@ pub use placeholder::*;
 pub use preferences::*;
 pub use project::*;
 pub use properties::*;
+pub use requirements::*;
 pub use rules::*;
 pub use update_pcb::*;
 
@@ -72,10 +78,12 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
         board_query::BOARD_QUERY,
+        board_view::BOARD_VIEW,
         bom::BOM,
         chrome::CHROME,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
+        drc_rules::DRC_RULES,
         editors::EDITORS,
         fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
@@ -96,6 +104,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         preferences::PREFERENCES,
         project::PROJECT,
         properties::PROPERTIES,
+        requirements::REQUIREMENTS,
         rules::RULES,
         update_pcb::UPDATE_PCB,
     ]

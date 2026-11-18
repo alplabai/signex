@@ -73,7 +73,7 @@ impl Obstacle {
         }
         match &self.copper {
             Copper::Shape(own) => shape.overlaps(own) || shape.separation(own).is_under(gap),
-            Copper::Area(area) => area_meets(area, &shape.inflated(gap)),
+            Copper::Area(area) => area_meets(area, &shape.clone().inflated(gap)),
         }
     }
 
@@ -82,7 +82,7 @@ impl Obstacle {
     fn near_ring(&self, ring: &[PointNm], gap: i64) -> bool {
         let gap = gap.max(0);
         match &self.copper {
-            Copper::Shape(own) => own.inflated(gap).overlaps_polygon(ring),
+            Copper::Shape(own) => own.clone().inflated(gap).overlaps_polygon(ring),
             Copper::Area(area) => {
                 area.outer.len() >= 3
                     && (polygons_meet(ring, &area.outer)
@@ -341,14 +341,7 @@ pub(crate) fn keepout_areas(board: &PcbBoard) -> Vec<KeepoutArea> {
 /// Whether the disc of `radius` about `center` lies inside `area`, clear of
 /// its outer ring and of every hole by at least `margin`.
 pub(crate) fn disc_inside(area: &Polygon, center: PointNm, radius: i64, margin: i64) -> bool {
-    if area.outer.len() < 3 || !point_in_polygon(&area.outer, center) {
-        return false;
-    }
-    if area
-        .holes
-        .iter()
-        .any(|hole| hole.len() >= 3 && point_in_polygon(hole, center))
-    {
+    if !area.contains_point(center) {
         return false;
     }
     let disc = Shape::Disc {

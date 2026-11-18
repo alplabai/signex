@@ -200,6 +200,11 @@
     "category": "validation"
   },
   {
+    "id": "check_requirements",
+    "group": "General",
+    "category": "validation"
+  },
+  {
     "id": "clear_all_net_colors",
     "group": "Schematic",
     "category": "view"
@@ -1190,7 +1195,17 @@
     "category": "file"
   },
   {
+    "id": "project_add_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_add_variant",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_enable_requirement",
     "group": "General",
     "category": "design"
   },
@@ -1205,6 +1220,11 @@
     "category": "design"
   },
   {
+    "id": "project_remove_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_remove_variant",
     "group": "General",
     "category": "design"
@@ -1215,12 +1235,22 @@
     "category": "design"
   },
   {
+    "id": "project_run_requirements",
+    "group": "General",
+    "category": "validation"
+  },
+  {
     "id": "project_set_active_variant",
     "group": "General",
     "category": "design"
   },
   {
     "id": "project_set_annotate_undo",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_requirement",
     "group": "General",
     "category": "design"
   },
@@ -1505,6 +1535,11 @@
     "category": "modify"
   },
   {
+    "id": "set_active_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "set_board_graphic",
     "group": "Pcb",
     "category": "edit"
@@ -1513,6 +1548,16 @@
     "id": "set_board_panel",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "set_footprint_text",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
+    "id": "set_layer_color",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "set_layer_sizes",
@@ -1530,6 +1575,11 @@
     "category": "view"
   },
   {
+    "id": "set_layer_visible",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "set_net_class_rules",
     "group": "Pcb",
     "category": "design"
@@ -1543,6 +1593,21 @@
     "id": "set_object_rotation",
     "group": "Schematic",
     "category": "edit"
+  },
+  {
+    "id": "set_object_transparency",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "set_object_visible",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "set_pad_shape",
+    "group": "Pcb",
+    "category": "modify"
   },
   {
     "id": "set_selection_filters",
@@ -1606,6 +1671,11 @@
   },
   {
     "id": "show_layer_set",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "show_used_layers_only",
     "group": "Pcb",
     "category": "view"
   },

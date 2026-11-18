@@ -50,6 +50,7 @@ pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
+pub(crate) mod design_read;
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;

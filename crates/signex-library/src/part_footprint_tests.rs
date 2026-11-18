@@ -191,3 +191,73 @@ fn a_footprint_the_board_cannot_hold_is_refused_through_the_resolver() {
         })
     );
 }
+
+/// A placed unit of `row` from library `library`, stamped at version `1.0.0`
+/// with `binding`; `stamp_version` is the version its stamp was taken at.
+fn placed(
+    row: &ComponentRow,
+    library: Uuid,
+    binding: Option<&PrimitiveRef>,
+    stamp_version: &str,
+) -> signex_types::schematic::Symbol {
+    signex_types::schematic::Symbol {
+        library_id: Some(library),
+        row_id: Some(row.row_id),
+        library_version: "1.0.0".into(),
+        library_stamp: Some(signex_types::schematic::RowStamp {
+            row_id: row.row_id,
+            version: Some(stamp_version.into()),
+            footprint_ref: binding.map(|b| format!("{}:{}", b.library_id, b.uuid)),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_symbol_resolves_through_its_row_and_the_binding_its_valid_stamp_names() {
+    let (row, alternate, library) = fixture();
+    let lib = Uuid::now_v7();
+    let find = |l: Uuid, r: Uuid| (l == lib && r == row.row_id).then_some(&row);
+
+    let symbol = placed(&row, lib, Some(&alternate), "1.0.0");
+    assert_eq!(chosen_footprint(&symbol), Some(alternate));
+    let resolved = resolve_symbol_footprint(&symbol, find, lookup(&library)).unwrap();
+    assert_eq!(resolved.source.footprint, alternate.uuid);
+
+    // A stamp taken at another version is not trusted: the row default.
+    let stale = placed(&row, lib, Some(&alternate), "0.9.0");
+    assert_eq!(chosen_footprint(&stale), None);
+    assert_eq!(
+        stamped_footprint(stale.library_stamp.as_ref().unwrap()),
+        Some(alternate),
+        "the stamp itself still records the binding"
+    );
+    let resolved = resolve_symbol_footprint(&stale, find, lookup(&library)).unwrap();
+    assert_eq!(resolved.source.footprint, row.footprint_ref.unwrap().uuid);
+}
+
+#[test]
+fn a_symbol_with_no_row_uses_the_footprint_it_names_else_has_none() {
+    let (row, alternate, library) = fixture();
+    let no_row = |_: Uuid, _: Uuid| None::<&ComponentRow>;
+
+    let mut symbol = placed(&row, Uuid::now_v7(), None, "1.0.0");
+    assert_eq!(
+        resolve_symbol_footprint(&symbol, no_row, lookup(&library)),
+        Err(FootprintResolveError::RowNotFound {
+            library: symbol.library_id.unwrap(),
+            row: row.row_id,
+        })
+    );
+    symbol.footprint = format!(" {}:{} ", alternate.library_id, alternate.uuid);
+    let named = resolve_symbol_footprint(&symbol, no_row, lookup(&library)).unwrap();
+    assert_eq!(named.source.footprint, alternate.uuid);
+    assert_eq!(named.pin_map.pad_for("1"), "1", "a named footprint is 1:1");
+
+    let bare = signex_types::schematic::Symbol::default();
+    assert_eq!(
+        resolve_symbol_footprint(&bare, no_row, lookup(&library)),
+        Err(FootprintResolveError::NoFootprint)
+    );
+}

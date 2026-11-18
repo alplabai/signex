@@ -57,8 +57,9 @@ impl SetupProfile {
     }
 }
 
-/// A generic fabrication capability class: the minimum clearance, track and
-/// via sizes a fab of that class can make. No fabricator is named.
+/// A generic fabrication capability class: the minimums of the base DRC
+/// rules a fab of that class can make (`fab_tier.rs`). No fabricator is
+/// named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FabTemplate {
     Standard,
@@ -69,13 +70,18 @@ pub enum FabTemplate {
 impl FabTemplate {
     pub const ALL: [Self; 3] = [Self::Standard, Self::Advanced, Self::Hdi];
 
-    /// `(clearance, track, via size, via drill)` in mm.
-    pub const fn minimums(self) -> (f64, f64, f64, f64) {
+    /// The stable id (`standard`, `advanced`, `hdi`) a preset, an override
+    /// and a script name the tier by.
+    pub const fn token(self) -> &'static str {
         match self {
-            Self::Standard => (0.15, 0.15, 0.5, 0.25),
-            Self::Advanced => (0.1, 0.1, 0.4, 0.2),
-            Self::Hdi => (0.075, 0.075, 0.3, 0.15),
+            Self::Standard => "standard",
+            Self::Advanced => "advanced",
+            Self::Hdi => "hdi",
         }
+    }
+
+    pub fn from_token(token: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|t| t.token() == token)
     }
 }
 
@@ -346,8 +352,10 @@ impl ProjectSetup {
     /// Apply `key=value,key=value` overrides on top of the profile, the form
     /// the `new_project_with_profile` command takes. Keys: `layers`,
     /// `thickness`, `clearance`, `track`, `via`, `drill` (mm), `sheet`,
-    /// `title_block` (`true`/`false`) and `designators` (`ieee315`,
-    /// `din40719_2`, `iec81346_2`).
+    /// `title_block` (`true`/`false`), `designators` (`ieee315`,
+    /// `din40719_2`, `iec81346_2`) and `fab` (`standard`, `advanced`, `hdi`:
+    /// the tier's minimums, and its `fab_*` rules in the new project). Keys
+    /// apply in written order.
     pub fn apply_overrides(&mut self, text: &str) -> Result<(), String> {
         for pair in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
             let (key, value) = pair
@@ -376,6 +384,12 @@ impl ProjectSetup {
                     return Err(format!("override `layers`: {n} must be 1 to 32"));
                 }
                 self.set_layers(n);
+            }
+            "fab" => {
+                let tier = FabTemplate::from_token(value).ok_or_else(|| {
+                    format!("override `fab`: {value} is not standard, advanced or hdi")
+                })?;
+                self.apply_fab(tier);
             }
             "thickness" => self.pcb.thickness_mm = mm(PcbField::Thickness)?,
             "clearance" => self.pcb.clearance_mm = mm(PcbField::Clearance)?,

@@ -71,7 +71,7 @@ fn technical_group(layer: TechnicalLayer) -> LayerGroup {
 }
 
 /// The plane layers a board's stackup lists.
-fn plane_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
+pub fn plane_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
     layers
         .iter()
         .filter(|def| is_plane(def))

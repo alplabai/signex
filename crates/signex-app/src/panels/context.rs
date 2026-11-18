@@ -80,6 +80,9 @@ pub struct PanelContext {
     pub net_classes: NetClassPanel,
     /// Layers panel of the active board (#2223).
     pub pcb_layers: PcbLayersPanel,
+    /// The Layers panel's tab, search, open colour chip and set name; kept
+    /// across context rebuilds (#2363).
+    pub pcb_layers_ui: super::LayersPanelUi,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
     /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
