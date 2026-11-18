@@ -344,6 +344,12 @@ layer sets, one page per set or one composite page, the bottom side mirrored,
 1:1 or fitted, colour or black, the outline, drill holes and the title block.
 The palette names it `export_board_pdf`. Rules: `BOARD_OUTPUT.md`.
 
+## File ▸ Export ▸ STEP 3D Model {#file-export-step}
+
+On a board (#2488), File ▸ Export ▸ STEP 3D Model... (`export_board_step`)
+asks where to save and writes the board body and its parts as a STEP model;
+greyed without a board in view. Rules: `BOARD_OUTPUT.md`, "STEP export".
+
 Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu
 row always works.

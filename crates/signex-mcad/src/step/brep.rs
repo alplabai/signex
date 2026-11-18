@@ -343,10 +343,6 @@ impl SolidWriter<'_> {
         triangles: &[[[f64; 3]; 3]],
     ) -> Result<Surface, McadError> {
         let points: Vec<[f64; 3]> = loops.iter().flat_map(|l| l.ring.iter().copied()).collect();
-        let out = facing(triangles);
-        if dot3(out, out) == 0.0 {
-            return Err(refused("a face has no area"));
-        }
         if let Some((center, radius)) = self.hole_cylinder(f) {
             if !on_cylinder(&points, center, radius) {
                 return Err(refused("a hole wall does not lie on its hole's cylinder"));
@@ -359,6 +355,9 @@ impl SolidWriter<'_> {
                     n[0] * (mid[0] - center[0]) + n[1] * (mid[1] - center[1])
                 })
                 .sum();
+            if away == 0.0 {
+                return Err(refused("a hole wall has no triangles"));
+            }
             return Ok(Surface::Cylinder {
                 center,
                 radius,
@@ -382,6 +381,10 @@ impl SolidWriter<'_> {
             return Err(refused(
                 "a face is neither flat nor the wall of a round hole",
             ));
+        }
+        let out = facing(triangles);
+        if dot3(out, out) == 0.0 {
+            return Err(refused("a flat face has no triangles"));
         }
         if dot3(normal, out) < 0.0 {
             normal = normal.map(|x| -x);

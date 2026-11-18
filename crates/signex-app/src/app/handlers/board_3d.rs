@@ -240,7 +240,7 @@ impl Signex {
 
 /// Read the model of each of `sources` from the open libraries, each
 /// library opened once. Blocking IO.
-fn read_models(
+pub(crate) fn read_models(
     sources: &[FootprintSourceRef],
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Board3dModelsRead {

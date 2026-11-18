@@ -164,8 +164,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   pane `{"focused", "document", "name"}` in pane order (`document` and
   `name` are null for a pane outside an open project). They never change the
   active tab.
-  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
-  `path`, so they are CLI only.
+  The CSV, PDF and STEP writers `export_board_report`, `export_board_pdf` and
+  `export_board_step` take a `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

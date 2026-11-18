@@ -566,6 +566,8 @@ define_ids! {
         CMD_MENU_EXPORT_BOARD_REPORT = "cmd-menu-export-board-report";
         CMD_EXPORT_BOARD_PDF = "cmd-export-board-pdf";
         CMD_MENU_EXPORT_BOARD_PDF = "cmd-menu-export-board-pdf";
+        CMD_EXPORT_BOARD_STEP = "cmd-export-board-step";
+        CMD_MENU_EXPORT_BOARD_STEP = "cmd-menu-export-board-step";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
         CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";

@@ -316,13 +316,15 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
-        // #2404, #2402: Board Reports on a table, its CSV, Board Print / PDF.
+        // #2404, #2402, #2488: Board Reports on a table, its CSV, Board Print /
+        // PDF, the STEP model.
         "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),
         "board_report_netlist" => board_report(signex_output::BoardReportKind::Netlist),
         "board_report_net_length" => board_report(signex_output::BoardReportKind::NetLength),
         "board_report_components" => board_report(signex_output::BoardReportKind::Components),
         "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
         "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),

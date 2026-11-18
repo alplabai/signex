@@ -95,6 +95,7 @@ edit_text_in_place
 edit_value
 export_board_pdf
 export_board_report
+export_board_step
 fabrication_outputs
 fast_grid_1
 fast_grid_2

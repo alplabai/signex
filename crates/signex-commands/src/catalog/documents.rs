@@ -235,6 +235,20 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #2488: File > Export > STEP on a board asks where to save the board
+    // and its parts as a STEP model; headless it writes `document` to
+    // `path`.
+    CommandMetadata {
+        id: "export_board_step",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_STEP,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_STEP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_STEP,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",

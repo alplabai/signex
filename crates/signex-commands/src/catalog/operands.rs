@@ -369,6 +369,13 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
 ];
+/// A board written as a STEP model (#2488): which board and the file;
+/// `schema` is `ap214` (the default) or `ap242`.
+pub const BOARD_STEP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("schema", OperandKind::Text),
+];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
 /// line, rectangle or text frame takes `start` and `end`; an arc its centre

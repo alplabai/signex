@@ -120,6 +120,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_report_components", output::board_report_components),
     ("export_board_report", output::export_board_report),
     ("export_board_pdf", output::export_board_pdf),
+    ("export_board_step", output::export_board_step),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_selection_filters", filter::set_selection_filters),
