@@ -106,41 +106,6 @@ pub(super) fn action_enabled(
     true
 }
 
-/// Theme-derived colors for Active Bar chrome (all Copy+ʼstatic).
-/// `bar_bg` / `bar_border` were used by the bespoke bar container;
-/// since `view_bar` now delegates to
-/// `signex_widgets::active_bar::view`, those fields are unused but
-/// kept on the struct so the dropdown helpers below don't have to
-/// rebuild a separate palette.
-#[derive(Clone, Copy)]
-#[expect(
-    dead_code,
-    reason = "palette carried on the struct so the dropdown helpers need not rebuild it"
-)]
-struct AbColors {
-    text: Color,
-    bar_bg: Color,
-    bar_border: Color,
-    drop_bg: Color,
-    drop_border: Color,
-    sep: Color,
-    hover: Color,
-}
-
-impl AbColors {
-    fn from_tokens(tokens: &ThemeTokens) -> Self {
-        Self {
-            text: styles::ti(tokens.text),
-            bar_bg: styles::ti(tokens.toolbar_bg),
-            bar_border: styles::ti(tokens.border),
-            drop_bg: styles::ti(tokens.panel_bg),
-            drop_border: styles::ti(tokens.border),
-            sep: styles::ti(tokens.border),
-            hover: styles::ti(tokens.hover),
-        }
-    }
-}
-
 // ─── Icons ───────────────────────────────────────────────────
 //
 // Icon handles are resolved through `crate::icons`, which threads the
