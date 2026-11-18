@@ -199,7 +199,7 @@ mod tests {
 
     use crate::app::handlers::menu::export::tests as fx;
     use crate::app::{TabInfo, TabKind, TileLayout};
-    use crate::schematic_runtime::RenderInvalidation;
+    use signex_engine::DocumentPatch;
 
     /// A change to the sheet of an unfocused pane redraws that pane, as it
     /// redraws an undocked window on the sheet.
@@ -227,7 +227,7 @@ mod tests {
         let _task = app.tile(TileLayout::SideBySide);
         let clears = app.interaction_state.tile_panes.schematic[&paths[0]].content_cache_clears;
 
-        app.after_sheet_change(&paths[0], RenderInvalidation::NET_COLORS);
+        app.after_sheet_change(&paths[0], DocumentPatch::NET_COLORS);
 
         let pane = &app.interaction_state.tile_panes.schematic[&paths[0]];
         assert!(pane.content_cache_clears > clears, "the pane redraws");

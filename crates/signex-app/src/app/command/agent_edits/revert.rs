@@ -158,7 +158,7 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
     // Undo can bring back an older embedded library symbol.
     app.library.drift.check_pending = true;
     for (member, _, patch) in &taken {
-        app.after_sheet_change(member, Signex::render_invalidation_for_patch(*patch));
+        app.after_sheet_change(member, *patch);
     }
     if let Some(reason) = failure {
         return refused(format!(
