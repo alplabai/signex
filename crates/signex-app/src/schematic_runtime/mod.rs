@@ -371,6 +371,9 @@ pub struct SceneOverrides<'a> {
     /// The project's widths and sizes for unset items (#2026); built-in by
     /// default.
     pub defaults: signex_types::schematic::SchematicDefaults,
+    /// The project's designator standard: a reference draws as
+    /// `signex_types::designator::display_reference` shows it (#1416).
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 pub fn render_schematic(
@@ -1150,6 +1153,8 @@ mod drawings_tests;
 mod font_geometry_tests;
 #[cfg(test)]
 mod multiline_note_tests;
+#[cfg(test)]
+mod reference_sign_tests;
 #[cfg(test)]
 mod sample_layout_tests;
 #[cfg(test)]

@@ -1091,3 +1091,36 @@ fn the_export_carries_the_title_blocks_sign_off_fields() {
         Some("DOC-0042")
     );
 }
+
+/// #1416: under EN IEC 81346-2 full class codes every output prints `-QAC1`
+/// (pages, the netlist's sheets and its terminals) while the document keeps
+/// the stored `QAC1`.
+#[test]
+fn full_class_codes_export_with_the_product_aspect_sign() {
+    use signex_types::designator::DesignatorStandard;
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    open_with(&mut ds, &top, sheet_with_net("QAC1", "N1", &[]));
+    ds.active_path = Some(top.clone());
+    ds.projects[0]
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+
+    let ctx = context(&ds);
+    let pages: Vec<&str> = ctx
+        .sheets
+        .iter()
+        .flat_map(|page| page.schematic.symbols.iter())
+        .map(|symbol| symbol.reference.as_str())
+        .collect();
+    assert_eq!(pages, ["-QAC1"]);
+    let netlist_sheets: Vec<&str> = ctx
+        .netlist_sheets
+        .iter()
+        .flat_map(|sheet| sheet.symbols.iter())
+        .map(|symbol| symbol.reference.as_str())
+        .collect();
+    assert_eq!(netlist_sheets, ["-QAC1"]);
+    assert_eq!(netlist_references(&ctx), ["-QAC1"]);
+    assert_eq!(ds.engines[&top].document().symbols[0].reference, "QAC1");
+}

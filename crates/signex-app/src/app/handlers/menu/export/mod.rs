@@ -585,17 +585,17 @@ fn build_scope(
     };
 
     issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying);
-    Some((
-        ExportContext {
-            sheets,
-            metadata,
-            netlist,
-            netlist_sheets,
-            netlist_placements,
-            current_sheet: Some(current_sheet),
-        },
-        issues,
-    ))
+    let mut ctx = ExportContext {
+        sheets,
+        metadata,
+        netlist,
+        netlist_sheets,
+        netlist_placements,
+        current_sheet: Some(current_sheet),
+    };
+    // Every output prints references as the project's standard shows them.
+    ctx.show_references_for(owning_project.and_then(|p| p.data.designator_standard()));
+    Some((ctx, issues))
 }
 
 impl Signex {

@@ -19,6 +19,7 @@ mod markup_escape;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
+mod reference_display;
 pub mod substitution;
 pub mod svg;
 pub mod template;

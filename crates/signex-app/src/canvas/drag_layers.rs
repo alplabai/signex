@@ -583,6 +583,7 @@ mod tests {
                 designators: None,
                 special_strings: None,
                 defaults: Default::default(),
+                designator_standard: None,
             },
         )
     }

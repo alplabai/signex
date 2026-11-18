@@ -625,6 +625,9 @@ pub struct CanvasViewPrefs<'a> {
     pub wire_class_revision: u64,
     /// The sheet's project defaults for unset widths and sizes (#2026).
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// The sheet's project designator standard, for how references draw
+    /// (#1416).
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// Content attached to the cursor, for the window whose document is the
     /// session's target sheet only (`None` everywhere else).
@@ -694,6 +697,7 @@ impl<'a> SchematicCanvas<'a> {
             designators: Some(&self.slot.designators),
             special_strings: self.slot.special_strings.as_ref(),
             defaults: self.prefs.schematic_defaults,
+            designator_standard: self.prefs.designator_standard,
         }
     }
 
@@ -1051,6 +1055,7 @@ mod tests {
             wire_class_styles: class_styles,
             wire_class_revision: 0,
             schematic_defaults: Default::default(),
+            designator_standard: None,
             selection_filters: filters,
             placement: None,
             power_port_pending: false,

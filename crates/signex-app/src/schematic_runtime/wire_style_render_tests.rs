@@ -117,6 +117,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
                     designators: Some(designators),
                     special_strings: None,
                     defaults: Default::default(),
+                    designator_standard: None,
                 },
             );
             cache.builds()

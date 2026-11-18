@@ -972,6 +972,15 @@ impl DocumentState {
         self.document_project(path)
     }
 
+    /// The designator standard of the project that owns `sheet` (#1416).
+    pub fn designator_standard_for(
+        &self,
+        sheet: &std::path::Path,
+    ) -> Option<signex_types::designator::DesignatorStandard> {
+        self.document_project(sheet)
+            .and_then(|p| p.data.designator_standard())
+    }
+
     /// The resolved schematic defaults (#2026) of the project that owns
     /// `sheet`; the built-in table for a loose sheet.
     pub fn schematic_defaults_for(

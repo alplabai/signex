@@ -154,7 +154,8 @@ new_project_with_profile name=<text> location=<absolute path>
 
 `overrides` keys: `layers`, `thickness`, `clearance`, `track`, `via`, `drill`
 (mm), `sheet` (such as `A4` or `ANSI A portrait`), `title_block`
-(`true`/`false`), `designators` (`ieee315`, `din40719_2`, `iec81346_2`) and
+(`true`/`false`), `designators` (`ieee315`, `din40719_2`, `iec81346_2`,
+`iec81346_2_full`) and
 `fab` (`standard`, `advanced`, `hdi`: the class's values and its `fab_*`
 rules). Keys apply in written order, so `fab=hdi,clearance=0.2` keeps 0.2.
 It answers with the id, path and kind of the project it made. Without

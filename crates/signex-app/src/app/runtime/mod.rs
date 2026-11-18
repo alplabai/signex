@@ -594,6 +594,10 @@ impl Signex {
                 .sheet_path_for_window(window, &self.ui_state)
                 .map(|path| self.document_state.schematic_defaults_for(path))
                 .unwrap_or_default(),
+            designator_standard: self
+                .document_state
+                .sheet_path_for_window(window, &self.ui_state)
+                .and_then(|path| self.document_state.designator_standard_for(path)),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
