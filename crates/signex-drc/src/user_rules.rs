@@ -216,6 +216,24 @@ impl ScopedRule {
         };
         (a, b) == (x, y) || (a, b) == (y, x)
     }
+
+    /// Whether some object could fall under both rules: they share a net
+    /// and a layer, and any object pairs they name are the same.
+    pub(crate) fn overlaps(&self, other: &ScopedRule) -> bool {
+        let nets = match (&self.nets, &other.nets) {
+            (Some(a), Some(b)) => !a.is_disjoint(b),
+            _ => true,
+        };
+        let layers = match (self.rule.layers, other.rule.layers) {
+            (Some(a), Some(b)) => a & b != 0,
+            _ => true,
+        };
+        let pair = match (self.rule.pair, other.rule.pair) {
+            (Some(p), Some(_)) => other.pairs_with(p.map(Some)),
+            _ => true,
+        };
+        nets && layers && pair
+    }
 }
 
 /// The limit of `kind` the written rules set for an object of `net` on

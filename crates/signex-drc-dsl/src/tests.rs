@@ -127,10 +127,12 @@ fn an_implausible_or_zero_limit_is_said() {
         "rule big on clearance require clearance >= 20mm then error\n\
          rule huge on clearance require clearance >= 200mm then error\n\
          rule none on track require width >= 0mm then error\n\
-         rule all on track require width <= 0mm then error",
+         rule all on track require width <= 0mm then error\n\
+         rule holes on hole require diameter <= 0mm then error\n\
+         rule bare on mask require expansion <= 0mm then warning",
     );
     let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
-    assert_eq!(names, ["big", "none", "all"]);
+    assert_eq!(names, ["big", "none", "all", "holes", "bare"]);
     let said: Vec<_> = got
         .diagnostics
         .iter()
@@ -154,6 +156,10 @@ fn an_implausible_or_zero_limit_is_said() {
             (
                 Level::Warning,
                 "a maximum of 0 reports every track in this rule's scope"
+            ),
+            (
+                Level::Warning,
+                "a maximum of 0 reports every hole in this rule's scope"
             ),
         ]
     );

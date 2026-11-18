@@ -179,11 +179,14 @@ impl Signex {
             .violations
             .len()
             .saturating_sub(crate::panels::DRC_MAX_ROWS);
-        let name = |net: u32| {
-            done.net_names
+        // Net 0 is no net: left empty for the panel to word.
+        let name = |net: u32| match net {
+            0 => String::new(),
+            _ => done
+                .net_names
                 .get(&net)
                 .cloned()
-                .unwrap_or_else(|| format!("#{net}"))
+                .unwrap_or_else(|| format!("#{net}")),
         };
         let mm = |nm: i64| format!("{:.3}", pcb_geom::nm_to_mm(nm));
         panel.rows = report

@@ -199,6 +199,21 @@ fn a_set_needs_known_limits_with_units() {
 }
 
 #[test]
+fn a_set_refuses_a_board_wide_limit_it_could_never_apply() {
+    let Err(EditError::BadValue { field, reason }) = new_set("min_sliver=0.1mm", None) else {
+        panic!("a board-wide limit is refused");
+    };
+    assert_eq!(field, "values");
+    assert!(
+        reason.starts_with("board-wide limit, not for a set 'min_sliver'"),
+        "{reason}"
+    );
+    assert!(!reason.contains("min_silk_pad"), "{reason}");
+    assert!(reason.contains("min_pad_gap"), "{reason}");
+    assert!(new_set("min_hole=0.3mm, min_edge_clearance=0.5mm", None).is_ok());
+}
+
+#[test]
 fn a_tier_merges_by_name_and_a_profile_replaces() {
     assert_eq!(tier_from_id("advanced"), Some(FabTemplate::Advanced));
     let tier = tier_text(FabTemplate::Standard);

@@ -22,7 +22,9 @@ pub fn is_set_name(name: &str) -> bool {
 }
 
 /// A set from `values` (`min_clearance=0.8mm, min_width=0.3mm`) and an
-/// optional severity (`error`, `warning`, `info`).
+/// optional severity (`error`, `warning`, `info`). Only limits of a kind
+/// that takes a net scope: a set is applied to net classes or nets, and a
+/// board-wide limit (silkscreen, mask, paste, courtyard) cannot be.
 pub fn new_set(values: &str, severity: Option<&str>) -> Result<NamedRuleSet, EditError> {
     let mut set = NamedRuleSet::default();
     for item in values
@@ -38,10 +40,21 @@ pub fn new_set(values: &str, severity: Option<&str>) -> Result<NamedRuleSet, Edi
             .split_once('=')
             .ok_or_else(|| bad(format!("'{item}' is not <limit>=<length>")))?;
         let (id, length) = (id.trim(), length.trim());
-        let field = LimitField::from_id(id).ok_or_else(|| {
-            let known: Vec<&str> = LimitField::ALL.iter().map(|f| f.id()).collect();
-            bad(format!("unknown limit '{id}' ({})", known.join(", ")))
-        })?;
+        let field = LimitField::from_id(id)
+            .filter(|f| f.kind().is_scoped())
+            .ok_or_else(|| {
+                let known: Vec<&str> = LimitField::ALL
+                    .iter()
+                    .filter(|f| f.kind().is_scoped())
+                    .map(|f| f.id())
+                    .collect();
+                let what = if LimitField::from_id(id).is_some() {
+                    "board-wide limit, not for a set"
+                } else {
+                    "unknown limit"
+                };
+                bad(format!("{what} '{id}' ({})", known.join(", ")))
+            })?;
         if !edit::is_length(length) {
             return Err(bad(format!(
                 "{}: a length with its unit, such as 0.2mm or 8mil",

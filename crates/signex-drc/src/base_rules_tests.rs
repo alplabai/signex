@@ -64,6 +64,30 @@ fn an_unplated_hole_has_no_annular_ring_but_has_a_size() {
 }
 
 #[test]
+fn a_via_drill_under_both_a_via_and_a_hole_minimum_is_one_finding() {
+    let mut v = via(1, (5.0, 5.0), 1);
+    v.drill = 0.2;
+    let mut p = pad(1, (0.0, 0.0), 1, PadType::NpThru, "TopCopper");
+    p.drill = Some(DrillDef {
+        diameter: 0.2,
+        shape: String::new(),
+    });
+    let b = board(vec![footprint(1, vec![p])], vec![], vec![v]);
+    let both = || {
+        vec![
+            rule("fab_via", vec![Limit::MinViaDrill(250_000)]),
+            rule("fab_hole", vec![Limit::MinHoleSize(250_000)]),
+        ]
+    };
+    let found = report(&b, both());
+    assert_eq!(found.count(ViolationKind::ViaDrill), 1);
+    assert_eq!(found.count(ViolationKind::HoleSize), 1, "the pad hole only");
+    // With no via rule, the hole minimum still covers the via.
+    let found = report(&b, both().split_off(1));
+    assert_eq!(found.count(ViolationKind::HoleSize), 2);
+}
+
+#[test]
 fn a_hole_to_hole_finding_explains_both_holes() {
     let b = board(
         vec![],
@@ -109,6 +133,33 @@ fn a_rule_below_the_fab_floor_is_noted_and_flagged() {
     assert_eq!(below.len(), 1, "{flags:?}");
     assert_eq!(below[0].rule, "tight_pitch");
     assert!(is_fab_rule("fab_clearance") && !is_fab_rule("safe"));
+}
+
+#[test]
+fn a_fab_floor_holds_only_where_its_scope_reaches() {
+    const OUTER: u32 = 1 | 1 << 31;
+    const INNER: u32 = !OUTER;
+    let b = board(vec![], vec![], vec![]);
+    let on = |name: &str, layers: u32, nm: i64| UserRule {
+        layers: Some(layers),
+        ..rule(name, vec![Limit::MinClearance(nm)])
+    };
+    let rules = vec![
+        rule("fab_clearance", vec![Limit::MinClearance(100_000)]),
+        on("fab_inner", INNER, 200_000),
+        on("outer", OUTER, 150_000),
+        on("inner", INNER, 150_000),
+    ];
+    let rules = DrcRules::new(200_000).with_user_rules(&b, &[], rules);
+    let notes: Vec<&String> = rules
+        .notes
+        .iter()
+        .filter(|n| n.contains("fab floor"))
+        .collect();
+    assert_eq!(
+        notes,
+        ["DRC rule 'inner' asks min_clearance 0.15 mm, past the fab floor 'fab_inner' of 0.2 mm"]
+    );
 }
 
 #[test]

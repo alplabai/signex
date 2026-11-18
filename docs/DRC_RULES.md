@@ -73,10 +73,12 @@ A `silk`, `mask`, `paste` or `courtyard` rule is board-wide: it takes no
 
 A length is a number with its unit: `0.2mm` or `0.2 mm`, `8mil`, `150um`
 (or `150µm`), `125000nm`. A limit of 0 is reported: a minimum of 0 checks
-nothing, and `width <= 0mm` reports every track in scope. A gap of 0
+nothing, `width <= 0mm` reports every track in scope and `diameter <= 0mm`
+every hole. A gap of 0
 (`pad_gap`, a hole, silkscreen or courtyard `spacing`, `pad_clearance`, an
-edge `clearance`) still finds objects that touch or overlap, and a minimum
-expansion of 0 finds negative ones, so those are not reported. A
+edge `clearance`) still finds objects that touch or overlap, a minimum
+expansion of 0 finds negative ones and a maximum expansion of 0 finds
+positive ones, so those are not reported. A
 clearance over 10 mm is reported as a likely wrong unit, and one over 100 mm
 is not applied.
 
@@ -116,11 +118,11 @@ keepouts alone.
 | Clearance | `on clearance require clearance >= …` | copper of two nets, edge to edge |
 | Track width | `on track require width >= … and width <= …` | each track and copper arc |
 | Annular ring | `on hole require annular >= …` | (smallest copper size − drill) / 2 of each via and plated pad; an unplated hole has none |
-| Hole size | `on hole require diameter >= … and diameter <= …` | the drill of each via and pad hole |
+| Hole size | `on hole require diameter >= … and diameter <= …` | the drill of each via and pad hole; the minimum skips a via a via `drill` rule covers, so a too-small via drill is one finding |
 | Hole to hole | `on hole require spacing >= …` | two holes, edge to edge, whatever their nets; the pair needs the larger of its two holes' limits |
 | Via in pad | `on via require pad_gap >= 0mm` | a via's copper against each surface-mount pad of its own net (or of no net) on a shared layer; `0mm` finds a via in a pad, a larger value also one too near it |
 | Silkscreen to pad | `on silk require pad_clearance >= …` | silkscreen against each pad with copper on that side's outer layer |
-| Silkscreen to silkscreen | `on silk require spacing >= …` | the silkscreen of two parts, or of a part and a board drawing or string |
+| Silkscreen to silkscreen | `on silk require spacing >= …` | the silkscreen of two parts, or of a part and a board drawing or string; two board drawings or strings are not checked against each other |
 | Mask sliver and expansion | `on mask require sliver >= … and expansion <= …` | the mask strip between two openings on one side (openings that touch leave none); the manual mask expansion of vias and tracks |
 | Paste expansion | `on paste require expansion >= … and expansion <= …` | the manual paste expansion of tracks |
 | Board outline clearance | `on edge require clearance >= …` | each netted copper item against the board outline, at its closest point |
@@ -343,7 +345,9 @@ differential-pair class to name.
 
 A named rule set holds limits written once (`min_clearance=0.8mm,
 min_width=0.3mm`) and a severity. It is stored beside the rule text in
-`rules.drc.sets` and is not a rule itself. Apply writes, for one scope (a
+`rules.drc.sets` and is not a rule itself. It takes clearance, track, via,
+hole and edge limits only; a board-wide limit (silkscreen, mask, paste,
+courtyard) has no scope to apply to and is refused. Apply writes, for one scope (a
 class, a net, a pattern or a class pair), one ordinary rule per kind the set
 limits, named `<set>_<scope>_<kind>`; applying it again to the same scope
 writes those rules anew. Giving the set new limits rewrites every rule it
@@ -387,7 +391,8 @@ are:
 ```
 
 Every `fab` field is free text and may be left out; `rules_preset_diff`
-answers it as `fab`. Picking the profile (Presets, or "Update from profile")
+answers it as `fab`, leaving out an empty field as the file does (a generic
+tier's `fab` has no `manufacturer` key). Picking the profile (Presets, or "Update from profile")
 sets the project's DRC rules from it, with the same drift check as any rule
 profile. The generic tiers are fab profiles shipped with Signex: their
 `fab` block names no maker, says which process class they stand for, and
@@ -403,7 +408,8 @@ All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
 
 Project rules can be stricter than the floor. A written rule that is not a
 `fab_*` rule and asks less than the strictest `fab_*` rule of the same limit
-is still applied (the most specific rule wins, as everywhere), but Run DRC
+whose scope it shares (a net, a copper layer, an object pair: a floor for
+inner layers says nothing of a rule for the outer layers) is still applied (the most specific rule wins, as everywhere), but Run DRC
 and `check_drc` say so in Messages, `DRC rule 'tight' asks min_clearance
 0.1 mm, past the fab floor 'fab_clearance' of 0.15 mm`, and the Rules tab
 flags it.

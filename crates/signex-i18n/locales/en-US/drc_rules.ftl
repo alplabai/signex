@@ -15,9 +15,11 @@ drc-kind-courtyard = Courtyard overlap
 # A gap under a rule's minimum; at 0 the two touch or overlap.
 drc-detail-gap = { $measured } mm apart, needs { $required } mm
 drc-detail-overlap = Touching or overlapping, needs { $required } mm apart
+# The net cell of a finding on an object of no net.
+drc-detail-no-net = No net
 
 # The base rules, shown before the first run. Each names how to write it
-# in the Rules tab; the last four need no rule text.
+# in the Rules tab; keepout, unrouted net and short need no rule text.
 drc-base-rules = The base rules:
 drc-base-clearance = Clearance: on clearance require clearance >= …
 drc-base-track-width = Track width: on track require width >= … and width <= …

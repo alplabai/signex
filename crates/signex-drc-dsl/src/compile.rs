@@ -295,16 +295,20 @@ impl Checker<'_> {
     }
 
     /// Says a limit of 0 (a minimum of 0 checks nothing, unless touching
-    /// already breaks it; a track maximum of 0 reports every track) and a
-    /// clearance so large it is likely a wrong unit: over 10 mm a warning,
-    /// over 100 mm an error (a clearance widens the search around every
-    /// copper item it covers). False when the limit is refused.
+    /// already breaks it; a track or hole maximum of 0 reports every one; a
+    /// maximum expansion of 0 is a real limit) and a clearance so large it
+    /// is likely a wrong unit: over 10 mm a warning, over 100 mm an error
+    /// (a clearance widens the search around every copper item it covers).
+    /// False when the limit is refused.
     fn plausible(&mut self, ast: &LimitAst, limit: &Limit, nm: i64) -> bool {
         let kind = limit.kind();
         if nm == 0 && !kind.zero_still_checks() {
             let msg = match kind {
                 LimitKind::MaxTrackWidth => {
                     Some("a maximum of 0 reports every track in this rule's scope")
+                }
+                LimitKind::MaxHoleSize => {
+                    Some("a maximum of 0 reports every hole in this rule's scope")
                 }
                 _ if kind.is_maximum() => None,
                 _ => Some("a limit of 0 checks nothing for this rule's scope"),

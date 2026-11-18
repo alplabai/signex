@@ -16,6 +16,7 @@ define_ids! {
     DRC_KIND_COURTYARD = "drc-kind-courtyard";
     DRC_DETAIL_GAP = "drc-detail-gap";
     DRC_DETAIL_OVERLAP = "drc-detail-overlap";
+    DRC_DETAIL_NO_NET = "drc-detail-no-net";
     DRC_BASE_RULES = "drc-base-rules";
     DRC_BASE_CLEARANCE = "drc-base-clearance";
     DRC_BASE_TRACK_WIDTH = "drc-base-track-width";

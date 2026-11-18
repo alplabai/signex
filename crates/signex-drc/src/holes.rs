@@ -48,9 +48,12 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
     if sizes.iter().any(|&k| rules.sets(k)) {
         let holes = holes(board);
         for hole in &holes {
-            for kind in [LimitKind::MinHoleSize, LimitKind::MaxHoleSize] {
-                hole.object.check(rules, kind, hole.drill, &mut found);
+            if !via_drill_ruled(hole, rules) {
+                hole.object
+                    .check(rules, LimitKind::MinHoleSize, hole.drill, &mut found);
             }
+            hole.object
+                .check(rules, LimitKind::MaxHoleSize, hole.drill, &mut found);
             if let Some(copper) = hole.copper {
                 let ring = (copper - hole.drill) / 2;
                 hole.object
@@ -65,6 +68,16 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
         vias_in_pads(board, rules, &mut found);
     }
     found
+}
+
+/// A via whose drill a via `drill` rule already limits: its minimum is that
+/// rule's, so a too-small drill is one via-drill finding, not two.
+fn via_drill_ruled(hole: &Hole, rules: &DrcRules) -> bool {
+    let o = &hole.object;
+    matches!(o.item, ItemRef::Via(_))
+        && rules
+            .object_limit(LimitKind::MinViaDrill, o.net, o.layers)
+            .is_some()
 }
 
 fn holes(board: &PcbBoard) -> Vec<Hole> {

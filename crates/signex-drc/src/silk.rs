@@ -64,7 +64,11 @@ fn between(
     let pairs = near_pairs(&shapes, *limit, |i, j| {
         let (p, q) = (piece(i), piece(j));
         let sides = same || (i < n && j >= n);
-        sides && p.side == q.side && p.owner != q.owner
+        // Board drawings and strings are not checked against each other:
+        // a frame drawn line by line touches itself at every corner.
+        let part = |o: ItemRef| matches!(o, ItemRef::Footprint(_));
+        let owners = !same || part(p.owner) || part(q.owner);
+        sides && owners && p.side == q.side && p.owner != q.owner
     });
     let mut worst: HashMap<Vec<ItemRef>, Violation> = HashMap::new();
     for (i, j) in pairs {

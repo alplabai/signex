@@ -5,8 +5,8 @@
 //! board's findings are of its rule alone.
 
 use signex_types::pcb::{
-    DrillDef, Footprint, FpGraphic, NetDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point,
-    Segment, Via, ViaType,
+    BoardGraphic, DrillDef, Footprint, FpGraphic, NetDef, Pad, PadNet, PadShape, PadType, PcbBoard,
+    Point, Segment, Via, ViaType,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_route_attrs::MaskExpansion;
@@ -168,6 +168,12 @@ impl BaseRule {
                     footprint(1, (25.0, 25.0), Vec::new(), vec![a]),
                     footprint(2, (25.0, 25.0 + gap), Vec::new(), vec![b_line]),
                 ];
+                // A board frame drawn line by line touches itself at its
+                // corner; board drawings are not checked against each other.
+                b.graphics = vec![
+                    board_line(1, (5.0, 5.0), (10.0, 5.0)),
+                    board_line(2, (10.0, 5.0), (10.0, 10.0)),
+                ];
             }
             BaseRule::Mask => {
                 let pitch = pick(1.3, 1.05);
@@ -235,6 +241,30 @@ impl BaseRule {
             }
         }
         b
+    }
+
+    /// Boards that break this rule another way than [`BaseRule::board`],
+    /// each with the built-in id of the kind of finding it gives: a track
+    /// over the maximum width, a via mask expansion over the maximum.
+    pub fn also_broken(self) -> Vec<(PcbBoard, &'static str)> {
+        match self {
+            BaseRule::TrackWidth => {
+                let mut b = blank();
+                let mut t = track(1, (20.0, 25.0), (30.0, 25.0), 1);
+                t.width = 1.2;
+                b.segments = vec![t];
+                vec![(b, "builtin::track_width")]
+            }
+            BaseRule::Mask => {
+                let mut b = blank();
+                let mut v = via(1, (25.0, 25.0), 1);
+                v.attributes.top.expansion = MaskExpansion::Manual { mm: 0.2 };
+                v.attributes.bottom.expansion = MaskExpansion::Manual { mm: 0.2 };
+                b.vias = vec![v];
+                vec![(b, "builtin::mask_expansion")]
+            }
+            _ => Vec::new(),
+        }
     }
 }
 
@@ -353,6 +383,23 @@ fn line(layer: &str, a: (f64, f64), b: (f64, f64)) -> FpGraphic {
         position: None,
         rotation: 0.0,
         fill: String::new(),
+    }
+}
+
+/// A 0.1 mm board-level line on the top silkscreen.
+fn board_line(n: u128, a: (f64, f64), b: (f64, f64)) -> BoardGraphic {
+    BoardGraphic {
+        uuid: id(0x5000 + n),
+        graphic_type: "line".into(),
+        layer: "TopSilkscreen".into(),
+        width: 0.1,
+        start: Some(Point::new(a.0, a.1)),
+        end: Some(Point::new(b.0, b.1)),
+        center: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
     }
 }
 
