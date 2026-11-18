@@ -88,14 +88,7 @@ pub(super) fn push_body_row<'a>(
             _,
             iced::Theme,
         >(
-<<<<<<< HEAD
-            form_input_row_untipped("Body", "Normal", muted, input_bg),
-            signex_widgets::text::<iced::Theme>(signex_widgets::raw(
-                "This library symbol has no alternate (De Morgan) body",
-            ))
-            .size(TS.body),
-=======
-            form_input_row(
+            form_input_row_untipped(
                 t!(i18n, ids::PROPERTIES_BODY),
                 &i18n.message_plain(ids::PROPERTIES_BODY_NORMAL, &[]),
                 muted,
@@ -103,7 +96,6 @@ pub(super) fn push_body_row<'a>(
             ),
             signex_widgets::text::<iced::Theme>(t!(i18n, ids::PROPERTIES_BODY_NO_ALTERNATE_TIP))
                 .size(TS.body),
->>>>>>> origin/trunk
             iced::widget::tooltip::Position::Bottom,
         ))),
         _ => c,

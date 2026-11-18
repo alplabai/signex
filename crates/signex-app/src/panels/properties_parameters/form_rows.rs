@@ -100,7 +100,7 @@ pub fn form_input_row<'a, M: 'a>(
 /// [`form_input_row`] without the value tooltip, for a row that carries a
 /// tooltip of its own.
 pub fn form_input_row_untipped<'a, M: 'a>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
     label_c: Color,
     input_bg: Color,
@@ -109,7 +109,7 @@ pub fn form_input_row_untipped<'a, M: 'a>(
 }
 
 fn value_row<'a, M: 'a>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
     label_c: Color,
     input_bg: Color,
@@ -117,6 +117,9 @@ fn value_row<'a, M: 'a>(
 ) -> Element<'a, M> {
     let field = container(
         container(
+            // raw: the value as the caller gives it; each caller marks
+            // what it is (design data, a reading, catalog text or an
+            // engine word with its own issue).
             text(raw(value.to_string()))
                 .size(TS.body)
                 .color(text_on(input_bg))
@@ -150,40 +153,8 @@ fn value_row<'a, M: 'a>(
     };
     container(
         row![
-<<<<<<< HEAD
-            property_label(label.to_string(), label_c),
-            container(field).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-=======
             property_label(label, label_c),
-            container(
-                container(
-                    // raw: the value as the caller gives it; each caller marks
-                    // what it is (design data, a reading, catalog text or an
-                    // engine word with its own issue).
-                    text(raw(value.to_string()))
-                        .size(TS.body)
-                        .color(text_on(input_bg))
-                        .wrapping(iced::widget::text::Wrapping::None),
-                )
-                .width(Length::Fill)
-                .clip(true),
-            )
-            .padding([3, 6])
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-            .style(move |theme: &Theme| {
-                let (bg, bdr, radius) = form_look::value_box(theme);
-                container::Style {
-                    background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: radius.into(),
-                        color: bdr,
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }
-            }),
->>>>>>> origin/trunk
+            container(field).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center),
@@ -655,18 +626,8 @@ pub fn form_edit_row<'a>(
     label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
-<<<<<<< HEAD
     let input =
         signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_string())
-=======
-    container(
-        row![
-            property_label(label, label_c),
-            signex_widgets::text_input(
-                signex_i18n::UserText::new(String::new()),
-                value.to_string()
-            )
->>>>>>> origin/trunk
             .on_input(on_input)
             .size(TS.body)
             .padding(SP.s)
@@ -675,7 +636,7 @@ pub fn form_edit_row<'a>(
             .boxed();
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             container(with_value_tip(input, value))
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
