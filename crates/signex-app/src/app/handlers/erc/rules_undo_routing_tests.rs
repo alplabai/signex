@@ -55,6 +55,7 @@ fn move_symbol(app: &mut Signex, symbol: uuid::Uuid) {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,

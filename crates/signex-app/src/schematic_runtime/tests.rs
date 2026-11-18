@@ -287,6 +287,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
             dx: 10.0,
             dy: 5.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let moved = engine.document();

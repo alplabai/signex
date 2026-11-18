@@ -25,6 +25,7 @@ fn ghost_equals_commit(sheet: &SchematicSheet, moves: &Moves) {
         .execute(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     let shown = describe(sheet);

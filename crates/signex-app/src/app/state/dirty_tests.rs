@@ -166,6 +166,7 @@ fn move_symbol(engine: &mut signex_engine::Engine, id: uuid::Uuid) {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     assert!(result.changed);

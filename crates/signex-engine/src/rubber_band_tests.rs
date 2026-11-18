@@ -72,6 +72,7 @@ pub(crate) fn mv(
             dx,
             dy,
             keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
 }
@@ -356,6 +357,7 @@ fn the_patch_reports_the_edited_wires() {
             dx: 0.0,
             dy: 10.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     assert!(
@@ -746,6 +748,7 @@ fn move_each_in_one_step_translates_a_wire_between_alike_moved_symbols() {
         .execute(Command::MoveEach {
             moves: vec![(symbol_item(r1), 0.0, 10.0), (symbol_item(r2), 0.0, 10.0)],
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move each");
     let segs = segments(&engine);
@@ -763,6 +766,7 @@ fn move_each_with_different_deltas_bends_and_keeps_the_nets() {
         .execute(Command::MoveEach {
             moves: vec![(symbol_item(r1), 0.0, 10.0), (symbol_item(r2), 0.0, 20.0)],
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move each");
     assert_clean(&mut engine, &before);
@@ -1450,6 +1454,7 @@ fn property_run(seed: u64, cases: usize) -> RunCounts {
                 .execute(Command::MoveEach {
                     moves: moves.clone(),
                     keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 })
                 .expect("move");
             engine
@@ -1725,6 +1730,7 @@ fn move_each_with_opposite_deltas_keeps_the_shared_wire_connected() {
     e.execute(Command::MoveEach {
         moves: vec![(symbol_item(r1), 0.0, 10.0), (symbol_item(r2), 0.0, -10.0)],
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     })
     .unwrap();
     assert_eq!(net_shape(e.document()), before, "T8 netlist changed");
@@ -1996,6 +2002,7 @@ fn a_pin_whose_wire_moves_with_it_stays_on_the_net_the_wire_lands_on() {
         e.execute(Command::MoveEach {
             moves: moves.clone(),
             keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
         e
