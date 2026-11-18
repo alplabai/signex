@@ -267,14 +267,16 @@ pub(in crate::panels) fn tab_chip(theme: &Theme, active: bool, hovered: bool) ->
 }
 
 /// Section label of a Graphite form: uppercase, muted, 12 px side padding.
-pub(in crate::panels) fn section_label<'a, M: 'a>(
-    title: &str,
+pub(in crate::panels) fn section_label<'a, 'b, M: 'a>(
+    title: impl Into<signex_widgets::Label<'b>>,
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, M> {
     let ink = resolve(tokens).ink4;
+    let title = title.into();
     container(
-        text(raw(i18n.upper_for_display(title)))
+        // raw: the title as given, upper-cased for the locale.
+        text(raw(i18n.upper_for_display(title.as_str())))
             .size(TS.section)
             .color(ink),
     )
@@ -292,7 +294,7 @@ pub(in crate::panels) fn section_label<'a, M: 'a>(
 /// uppercase label, no rule.
 fn graphite_section_header<'a>(
     key: &str,
-    title: &str,
+    title: &signex_i18n::Translatable,
     is_collapsed: bool,
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
@@ -300,7 +302,8 @@ fn graphite_section_header<'a>(
     let ink = resolve(tokens).ink4;
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
-        text(raw(i18n.upper_for_display(title)))
+        // raw: the catalog title, upper-cased for the locale.
+        text(raw(i18n.upper_for_display(&title.render(i18n))))
             .size(TS.section)
             .color(ink),
     ]
@@ -327,16 +330,18 @@ fn graphite_section_header<'a>(
 }
 
 impl PanelContext {
-    /// A collapsible form section on the Graphite uppercase-label chrome.
+    /// A collapsible form section on the Graphite uppercase-label chrome;
+    /// `title` is a catalog message, rendered here.
     pub(in crate::panels) fn collapsible<'a>(
         &self,
         key: &str,
-        title: &str,
+        title: impl Into<signex_i18n::Translatable>,
         collapsed: &CollapsedSections,
         content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
     ) -> Column<Element<'a, PanelMsg>> {
         let is_collapsed = collapsed.contains(key);
-        let mut col = graphite_section_header(key, title, is_collapsed, &self.tokens, &self.i18n);
+        let title = title.into();
+        let mut col = graphite_section_header(key, &title, is_collapsed, &self.tokens, &self.i18n);
         if !is_collapsed {
             col = col.push(content().boxed());
         }

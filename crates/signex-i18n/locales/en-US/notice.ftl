@@ -247,6 +247,9 @@ notice-bom-source-closed = Cannot export BOM: the source document { $path } is n
 notice-bom-export-failed = BOM export failed: { $error }
 # $menu is the menu path of Run ERC.
 notice-erc-report-not-run = Cannot export the ERC report: ERC has not been run. Run ERC ({ $menu }) first, then export.
+# A menu row named in a notice: $menu is the menu's title, $row the row's
+# label, both as the menu bar shows them.
+notice-menu-path = { $menu } ▸ { $row }
 # $path is the source document.
 notice-pdf-source-closed = PDF export refused: the source document { $path } is no longer open.
 notice-pdf-no-files = Cannot export PDF: no files selected in the Settings tab.

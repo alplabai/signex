@@ -197,6 +197,8 @@ pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
 }
 
 fn mono_text(s: String, color: Color) -> Text<'static> {
+    // raw: a reading, a unit symbol, or an activity note its caller already
+    // rendered from the catalog.
     text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
 

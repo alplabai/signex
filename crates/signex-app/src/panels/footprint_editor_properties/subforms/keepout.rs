@@ -36,7 +36,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
     // (real iced checkbox + On/Off) so the chrome matches the
     // schematic Properties panel byte-for-byte.
     col = col.push(super::super::super::form_check_row(
-        "No routing",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No routing"),
         k.no_routing,
         PanelMsg::FpEditorSetKeepoutKind {
             id,
@@ -47,7 +48,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
-        "No components",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No components"),
         k.no_components,
         PanelMsg::FpEditorSetKeepoutKind {
             id,
@@ -58,7 +60,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
-        "No copper",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No copper"),
         k.no_copper,
         PanelMsg::FpEditorSetKeepoutKind {
             id,
@@ -69,7 +72,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
-        "No vias",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No vias"),
         k.no_vias,
         PanelMsg::FpEditorSetKeepoutKind {
             id,
@@ -80,7 +84,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
-        "No drilling",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No drilling"),
         k.no_drilling,
         PanelMsg::FpEditorSetKeepoutKind {
             id,
@@ -91,7 +96,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
         panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
-        "No pours",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("No pours"),
         k.no_pours,
         PanelMsg::FpEditorSetKeepoutKind {
             id,

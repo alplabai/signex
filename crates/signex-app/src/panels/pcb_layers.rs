@@ -187,9 +187,8 @@ fn layers_list<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Element<
             continue;
         }
         let (key, header) = group_section(group);
-        let header = t!(i18n, header).into_string();
         body = body.push(
-            ctx.collapsible(key, &header, &ctx.collapsed_sections, || {
+            ctx.collapsible(key, header, &ctx.collapsed_sections, || {
                 let col = Column::<Element<'_, PanelMsg>>::new()
                     .spacing(0)
                     .push(group_button(panel, group, ctx));

@@ -62,7 +62,11 @@ fn the_card_shows_the_placed_parts_library_footprint_once_read() {
     };
     assert_eq!(facts.name, shown.name);
     assert_eq!(facts.pad_count, 2, "a chip resistor has two pads");
-    assert_eq!(facts.summary(), "2 pads", "two pads have no pitch");
+    assert_eq!(
+        facts.summary(&signex_i18n::I18n::en_us()),
+        "2 pads",
+        "two pads have no pitch"
+    );
 }
 
 #[test]

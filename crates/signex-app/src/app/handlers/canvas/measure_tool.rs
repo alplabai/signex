@@ -36,10 +36,12 @@ impl Signex {
             return None;
         }
         let canvas = self.interaction_state.canvas_for_window(window_id);
+        let prompt = |id| self.ui_state.i18n.message_plain(id, &[]);
         Some(match (&canvas.measure, canvas.shape_anchor) {
-            (_, Some(_)) => "Click the second point".to_owned(),
+            (_, Some(_)) => prompt(signex_i18n::ids::PANELS_STATUS_BAR_MEASURE_SECOND),
+            // The result's dx / dy / dist wording is signex-types' own (#2060).
             (Some(done), None) => Measurement::between(done.a, done.b).describe(self.ui_state.unit),
-            (None, None) => "Click the first point".to_owned(),
+            (None, None) => prompt(signex_i18n::ids::PANELS_STATUS_BAR_MEASURE_FIRST),
         })
     }
 }
@@ -54,6 +56,21 @@ mod tests {
         app.ui_state.unit = unit;
         app.interaction_state.current_tool = Tool::Measure;
         (app, iced::window::Id::unique())
+    }
+
+    /// #2059: the prompts follow the interface language.
+    #[test]
+    fn the_prompts_follow_the_language() {
+        let (mut app, window) = app_measuring(Unit::Mm);
+        app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &signex_i18n::LanguagePref::Locale("en-XA".into()),
+        ));
+        let first = app.measure_status(window).expect("a prompt");
+        assert_ne!(first, "Click the first point");
+        app.measure_click(0.0, 0.0);
+        let second = app.measure_status(window).expect("a prompt");
+        assert_ne!(second, "Click the second point");
+        assert_ne!(first, second);
     }
 
     #[test]

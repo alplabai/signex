@@ -119,7 +119,7 @@ pub struct MultiView<'a> {
 impl MultiView<'_> {
     fn text_row<'a>(
         &self,
-        label: &str,
+        label: signex_widgets::Label<'a>,
         field: MultiField,
         stored: String,
         mixed: bool,
@@ -138,7 +138,7 @@ impl MultiView<'_> {
         };
         container(
             row![
-                property_label(label.to_string(), muted),
+                property_label(label, muted),
                 text_input(placeholder, shown)
                     .on_input(move |s| {
                         PanelMsg::MultiEdit(MultiEditMsg::DraftChanged(changed.clone(), s))
@@ -158,7 +158,7 @@ impl MultiView<'_> {
 
     fn string_row<'a>(
         &self,
-        label: &str,
+        label: signex_widgets::Label<'a>,
         field: MultiField,
         shared: &Shared<String>,
         muted: Color,
@@ -169,7 +169,7 @@ impl MultiView<'_> {
 
     fn number_row<'a>(
         &self,
-        label: &str,
+        label: signex_widgets::Label<'a>,
         field: MultiField,
         shared: &Shared<f64>,
         scale: f64,
@@ -197,7 +197,7 @@ fn flag_row<'a>(
     };
     container(
         row![
-            property_label(t!(i18n, label).into_string(), muted),
+            property_label(t!(i18n, label), muted),
             row![
                 checkbox(checked)
                     .on_toggle(move |on| PanelMsg::MultiEdit(MultiEditMsg::Picked(edit(on))))
@@ -228,7 +228,7 @@ fn justify_row<'a>(
     let i18n = &ctx.i18n;
     let button = |label: MessageId, to: HAlign| {
         seg_btn(
-            &t!(i18n, label).into_string(),
+            t!(i18n, label),
             shared.same() == Some(&to),
             PanelMsg::MultiEdit(MultiEditMsg::Picked(MultiEdit::LabelJustify(to))),
             accent,
@@ -243,7 +243,7 @@ fn justify_row<'a>(
     };
     container(
         row![
-            property_label(label.into_string(), muted),
+            property_label(label, muted),
             row![
                 button(ids::PANELS_MULTI_JUSTIFY_LEFT, HAlign::Left),
                 button(ids::PANELS_MULTI_JUSTIFY_CENTER, HAlign::Center),
@@ -273,7 +273,8 @@ fn rotation_row<'a>(
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     let buttons = LABEL_TURNS.map(|deg| {
         seg_btn(
-            &format!("{deg:.0}"),
+            // raw: a number of degrees, not language.
+            signex_widgets::raw(format!("{deg:.0}")),
             shared.same().is_some_and(|v| (v - deg).abs() < 1e-6),
             PanelMsg::MultiEdit(MultiEditMsg::Picked(MultiEdit::LabelRotationDegrees(deg))),
             accent,
@@ -288,7 +289,7 @@ fn rotation_row<'a>(
     };
     container(
         row![
-            property_label(label.into_string(), muted),
+            property_label(label, muted),
             row(buttons)
                 .spacing(SP.xs)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -314,8 +315,8 @@ pub fn view_multi_selection<'a>(
     };
     let i18n = &ctx.i18n;
     // Counts go in as the `format!` strings they were, so English reads as before.
-    let count = |id: MessageId, n: usize| t!(i18n, id, "count" => n.to_string()).into_string();
-    let shown = |id: MessageId| t!(i18n, id).into_string();
+    let count = |id: MessageId, n: usize| t!(i18n, id, "count" => n.to_string());
+    let shown = |id: MessageId| -> signex_widgets::Label<'a> { t!(i18n, id).into() };
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
         container(
@@ -343,18 +344,18 @@ pub fn view_multi_selection<'a>(
     );
     if let Some(g) = &ctx.multi_groups.symbols {
         col = col.push(section_hdr(
-            &count(ids::PANELS_MULTI_SYMBOLS, g.count),
+            count(ids::PANELS_MULTI_SYMBOLS, g.count),
             primary,
             border_c,
         ));
         col = col.push(view.string_row(
-            &shown(ids::PANELS_MULTI_VALUE),
+            shown(ids::PANELS_MULTI_VALUE),
             MultiField::SymbolValue,
             &g.value,
             muted,
         ));
         col = col.push(view.string_row(
-            &shown(ids::PANELS_MULTI_FOOTPRINT),
+            shown(ids::PANELS_MULTI_FOOTPRINT),
             MultiField::SymbolFootprint,
             &g.footprint,
             muted,
@@ -385,7 +386,8 @@ pub fn view_multi_selection<'a>(
         ));
         for (key, shared) in &g.parameters {
             col = col.push(view.string_row(
-                key,
+                // raw: a parameter name from the design, not language.
+                signex_widgets::raw(key.clone()),
                 MultiField::SymbolParameter(key.clone()),
                 shared,
                 muted,
@@ -394,12 +396,12 @@ pub fn view_multi_selection<'a>(
     }
     if let Some(g) = &ctx.multi_groups.labels {
         col = col.push(section_hdr(
-            &count(ids::PANELS_MULTI_LABELS, g.count),
+            count(ids::PANELS_MULTI_LABELS, g.count),
             primary,
             border_c,
         ));
         col = col.push(view.number_row(
-            &shown(ids::PANELS_MULTI_SIZE_PT),
+            shown(ids::PANELS_MULTI_SIZE_PT),
             MultiField::LabelFontPt,
             &g.font_size_mm,
             SCHEMATIC_PT_TO_MM,
@@ -410,12 +412,12 @@ pub fn view_multi_selection<'a>(
     }
     if let Some(g) = &ctx.multi_groups.wires {
         col = col.push(section_hdr(
-            &count(ids::PANELS_MULTI_WIRES, g.count),
+            count(ids::PANELS_MULTI_WIRES, g.count),
             primary,
             border_c,
         ));
         col = col.push(view.number_row(
-            &shown(ids::PANELS_MULTI_WIDTH_MM),
+            shown(ids::PANELS_MULTI_WIDTH_MM),
             MultiField::WireWidth,
             &g.width_mm,
             1.0,

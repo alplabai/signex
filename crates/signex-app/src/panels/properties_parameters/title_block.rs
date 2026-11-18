@@ -66,6 +66,21 @@ impl TitleBlockField {
             Self::ApprovedBy => "Approved By",
         }
     }
+
+    /// The field's name in the catalog, as the Properties panel shows it.
+    pub fn message(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::Title => ids::PROPERTIES_TITLE_BLOCK_TITLE,
+            Self::DocumentNumber => ids::PROPERTIES_TITLE_BLOCK_DOCUMENT_NUMBER,
+            Self::Revision => ids::PROPERTIES_TITLE_BLOCK_REVISION,
+            Self::Date => ids::PROPERTIES_TITLE_BLOCK_DATE,
+            Self::Company => ids::PROPERTIES_TITLE_BLOCK_COMPANY,
+            Self::DrawnBy => ids::PROPERTIES_TITLE_BLOCK_DRAWN_BY,
+            Self::CheckedBy => ids::PROPERTIES_TITLE_BLOCK_CHECKED_BY,
+            Self::ApprovedBy => ids::PROPERTIES_TITLE_BLOCK_APPROVED_BY,
+        }
+    }
 }
 
 /// A half-typed title-block value, tied to the sheet and field it was typed
@@ -80,10 +95,12 @@ pub struct TitleBlockDraft {
 
 /// The Title Block collapsible section for the active sheet.
 pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    use signex_i18n::{RenderTranslatable, Translatable, ids, t};
     let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
+    let i18n = &ctx.i18n;
     ctx.collapsible(
         "prop_title_block",
-        "Title Block",
+        ids::PROPERTIES_SECTION_TITLE_BLOCK,
         &ctx.collapsed_sections,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -108,10 +125,16 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
                     .get(field.key())
                     .filter(|v| !v.is_empty())
                     .cloned();
+                // Rendered without isolation marks, so the label reads as before.
+                let around = |id| {
+                    Translatable::new(id)
+                        .arg("field", Translatable::new(field.message()))
+                        .localized(i18n)
+                };
                 let label = match (&project_value, own.is_empty()) {
-                    (Some(_), true) => format!("{} (project)", field.label()),
-                    (Some(_), false) => format!("{} (overrides project)", field.label()),
-                    (None, _) => field.label().to_string(),
+                    (Some(_), true) => around(ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT),
+                    (Some(_), false) => around(ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT),
+                    (None, _) => t!(i18n, field.message()),
                 };
                 c = c.push(
                     container(
@@ -141,7 +164,7 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
             }
             c = c.push(
                 container(
-                    text(raw("Press Enter to apply a field."))
+                    text(t!(i18n, ids::PROPERTIES_TITLE_BLOCK_HINT))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -152,4 +175,19 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
         },
     )
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each field's catalog name reads as `TitleBlockField::label`, the
+    /// English the panel showed before.
+    #[test]
+    fn each_field_keeps_its_english_name() {
+        let en = signex_i18n::I18n::en_us();
+        for field in TitleBlockField::ALL {
+            assert_eq!(en.message_plain(field.message(), &[]), field.label());
+        }
+    }
 }

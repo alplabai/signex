@@ -229,7 +229,10 @@ The message ids (`MessageId`, `ids::*`, `command_ids::*`, …), `Translatable`,
 (epic #2326, decision of 2026-11-15); `signex-i18n` re-exports them under
 the same paths and renders them. `Translatable::render` takes any
 `MessageRenderer`; `render_en_us` and `localized` come from the
-`signex_i18n::RenderTranslatable` trait.
+`signex_i18n::RenderTranslatable` trait. A `Translatable` can itself be a
+message argument, and every render path (`Translatable::render`, `t!`,
+`I18n::message`, `I18n::message_plain`) renders it first, in the same
+language (#2059).
 
 The app holds the locale in `UiState::i18n`, saves it as `language` in the
 preferences file and restores it at launch. `Signex::set_language` (reached by

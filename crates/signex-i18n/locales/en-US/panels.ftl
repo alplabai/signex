@@ -234,6 +234,9 @@ panels-coming-soon = Coming in AI Design
 
 # Signex AI panel, Assistant mode: empty-state title and line.
 panels-signal-assistant-title = Signex AI is not available yet
+# The two Signex AI modes on the panel's switch.
+panels-signal-mode-assistant = Assistant
+panels-signal-mode-generator = Generator
 panels-signal-assistant-body = Ask about this sheet and review proposed changes before anything is applied.
 # Signex AI panel, Generator mode: empty-state title and line.
 panels-signal-generator-title = The Generator is not available yet
@@ -366,6 +369,9 @@ panels-component-sheet-table = Table
 panels-component-sheet-updated = Updated
 # Shown in place of an empty field.
 panels-component-sheet-no-value = —
+# Section titles of a component row's sheet; shown upper-cased.
+panels-component-sheet-section-component = Component
+panels-component-sheet-section-storage = Storage
 
 ## Projects panel footer summary
 
@@ -494,6 +500,14 @@ panels-status-bar-selected-shapes = { $count ->
     }
 # Selected objects that are none of the kinds above.
 panels-status-bar-selected-other = { $count } other
+# A drag in progress that carries the wires along. $key is the modifier key
+# that flips it (Alt).
+panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
+# A drag in progress that leaves the wires. $key is the modifier key.
+panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
+# Measure tool prompts.
+panels-status-bar-measure-first = Click the first point
+panels-status-bar-measure-second = Click the second point
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…
@@ -534,6 +548,22 @@ panels-net-classes-color-hint = #RRGGBB, empty = theme
 panels-net-classes-width-hint = empty = wire's own
 panels-net-classes-nets-hint = GND, +3V3
 panels-net-classes-patterns-hint = VCC*, ?SDA
+# Section title in Document Options; shown upper-cased.
+panels-net-classes-section = Net Classes
+# Row labels of the selected net class.
+panels-net-classes-name = Name
+panels-net-classes-color = Colour
+panels-net-classes-width = Width (mm)
+panels-net-classes-line = Line
+# Line pick-list entries. Default follows the project's line style.
+panels-net-classes-line-default = Default
+# Net Class pick-list entry of a net label: in no class.
+panels-net-classes-no-class = (none)
+panels-net-classes-line-solid = Solid
+panels-net-classes-line-dashed = Dashed
+panels-net-classes-line-dotted = Dotted
+panels-net-classes-nets = Nets
+panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
 panels-child-sheet-line-width = Line Width (mm)
@@ -658,7 +688,7 @@ panels-placed-start-y = Start Y ({ $unit })
 panels-placed-width = Width ({ $unit })
 panels-placed-height = Height ({ $unit })
 panels-placed-rotation = Rotation
-# A rotation choice; $degrees is 0, 90, 180 or 270.
+# A rotation choice; $degrees is a whole number of degrees (0, 90, 180 or 270 in a list, any value for the current one).
 panels-placed-degrees = { $degrees } Degrees
 # Shown above the disabled rows of a locked object; $reason is the lock's own words.
 panels-placed-locked = Locked: { $reason }

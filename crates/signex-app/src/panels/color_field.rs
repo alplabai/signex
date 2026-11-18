@@ -46,13 +46,13 @@ const PRESETS: [(&str, [u8; 3]); 12] = [
 /// open / advanced flags and feeds them back in each render.
 pub struct ColorFieldProps<'a, M> {
     /// Left-hand row label (e.g. "Fill", "Fills", "Border Colour").
-    pub label: &'a str,
+    pub label: signex_widgets::Label<'a>,
     /// Current colour as RGBA, or `None` for the default/inherit/no-fill
     /// state (drawn as a muted translucent swatch + `none_label` caption).
     pub current: Option<[u8; 4]>,
     /// Caption shown when `current` is `None` (e.g. "Default", "None",
     /// "Inherit").
-    pub none_label: &'a str,
+    pub none_label: signex_widgets::Label<'a>,
     /// Whether the inline preset grid is expanded below the row.
     pub show_palette: bool,
     /// Whether the HSV / RGB overlay is open (takes precedence over the
@@ -77,12 +77,17 @@ pub struct ColorFieldProps<'a, M> {
     pub on_clear: Option<M>,
 }
 
-/// Render a colour-selection field. See [`ColorFieldProps`].
+/// Render a colour-selection field. See [`ColorFieldProps`]; `i18n` names
+/// the palette and its buttons.
 ///
 /// `M: 'static` because the `on_pick` callback (and the `iced_aw`
 /// submit closure it feeds) must outlive the widget; panel messages are
 /// all `'static`, so this holds everywhere.
-pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Element<'a, M> {
+pub fn color_field<'a, M: Clone + 'static>(
+    props: ColorFieldProps<'a, M>,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, M> {
+    use signex_i18n::{ids, t};
     let ColorFieldProps {
         label,
         current,
@@ -108,10 +113,10 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             )
         })
         .unwrap_or(Color::from_rgba(0.5, 0.5, 0.5, 0.4));
-    let label_text = if let Some(c) = current {
-        format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])
-    } else {
-        none_label.to_string()
+    let label_text = match current {
+        // raw: a hex colour code, not language.
+        Some(c) => raw(format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])),
+        None => none_label,
     };
 
     // Swatch button: 18x18 colour fill + small hex / none caption.
@@ -134,7 +139,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     let swatch_button = button(
         row![
             swatch,
-            text(raw(label_text))
+            text(label_text)
                 .size(TS.caption)
                 .style(|theme: &Theme| iced::widget::text::Style {
                     color: Some(super::form_look::FormLook::of(theme).ink),
@@ -159,15 +164,9 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             move |c: Color| (on_pick_hsv)(color_to_rgba(c)),
         );
         return container(
-            row![
-                text(raw(label.to_string()))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(96),
-                picker,
-            ]
-            .spacing(SP.s)
-            .align_y(Alignment::Center),
+            row![text(label).size(TS.caption).color(muted).width(96), picker,]
+                .spacing(SP.s)
+                .align_y(Alignment::Center),
         )
         .padding([SP.s, SP.m])
         .width(Length::Fill)
@@ -177,10 +176,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     // The header row (label + swatch button) is always shown.
     let header = container(
         row![
-            text(raw(label.to_string()))
-                .size(TS.caption)
-                .color(muted)
-                .width(96),
+            text(label).size(TS.caption).color(muted).width(96),
             swatch_button,
         ]
         .spacing(SP.s)
@@ -233,7 +229,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         .padding([6.0, SP.m])
         .width(Length::Fill);
     palette_col = palette_col.push(
-        text(raw("Preset Colours"))
+        text(t!(i18n, ids::PROPERTIES_COLOR_PRESETS))
             .size(TS.caption)
             .color(muted)
             .boxed(),
@@ -243,7 +239,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     let mut action_row: Row<Element<'a, M>> = Row::new().spacing(SP.s).width(Length::Fill);
     action_row = action_row.push(
         button(
-            text(raw("Custom…"))
+            text(t!(i18n, ids::PROPERTIES_COLOR_CUSTOM))
                 .size(TS.caption)
                 .color(Color::from_rgb(0.92, 0.92, 0.94)),
         )
@@ -256,7 +252,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     if let Some(on_clear) = on_clear {
         action_row = action_row.push(
             button(
-                text(raw("Reset to Default"))
+                text(t!(i18n, ids::PROPERTIES_COLOR_RESET))
                     .size(TS.caption)
                     .color(Color::from_rgb(0.92, 0.92, 0.94)),
             )
