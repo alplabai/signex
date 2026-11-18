@@ -178,3 +178,54 @@ fn every_limit_names_the_kind_of_its_finding_and_back() {
         }
     }
 }
+
+#[test]
+fn a_broad_rule_is_not_below_a_more_specific_fab_floor() {
+    const INNER: u32 = !(1 | 1 << 31);
+    let b = board(vec![], vec![], vec![]);
+    let floor = UserRule {
+        layers: Some(INNER),
+        ..rule("fab_inner", vec![Limit::MinClearance(200_000)])
+    };
+    // The board-wide rule loses to the inner-layer floor on inner layers
+    // and meets no floor elsewhere: nothing to say.
+    let broad = rule("broad", vec![Limit::MinClearance(100_000)]);
+    let rules = DrcRules::new(200_000).with_user_rules(&b, &[], vec![floor, broad]);
+    assert!(
+        !rules.notes.iter().any(|n| n.contains("fab floor")),
+        "{:?}",
+        rules.notes
+    );
+    let flags = rules.rule_flags(&b, &[]);
+    assert!(
+        !flags
+            .iter()
+            .any(|f| matches!(f.flag, RuleFlag::BelowFabFloor { .. })),
+        "{flags:?}"
+    );
+}
+
+#[test]
+fn a_via_under_both_its_diameter_and_its_annular_ring_is_two_findings() {
+    let mut v = via(1, (5.0, 5.0), 1);
+    v.diameter = 0.4;
+    v.drill = 0.3;
+    let b = board(vec![], vec![], vec![v]);
+    let limits = vec![
+        Limit::MinViaDiameter(500_000),
+        Limit::MinAnnularRing(100_000),
+    ];
+    let found = report(&b, vec![rule("fab_via", limits)]);
+    let mut kinds: Vec<_> = found
+        .violations
+        .iter()
+        .map(|v| v.kind)
+        .filter(|k| matches!(k, ViolationKind::AnnularRing | ViolationKind::ViaDiameter))
+        .collect();
+    kinds.sort_by_key(|k| k.rule_id());
+    assert_eq!(
+        kinds,
+        [ViolationKind::AnnularRing, ViolationKind::ViaDiameter],
+        "two measurements, two findings"
+    );
+}

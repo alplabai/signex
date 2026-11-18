@@ -60,6 +60,23 @@ fabricator; none names a fabricator.
 
 A class does not change the layer count.
 
+A class also writes its DRC floor (#2311): the seven `fab_*` rules of
+`docs/DRC_RULES.md`, "Fab profiles", go into the project's rules beside the
+rule profile's, and are edited afterwards like any rule. Where the class is
+picked decides when:
+
+- **New Project**: the class chosen when Create is pressed is stored with
+  the rule profile copy in the new `.snxprj`.
+- **Project tab, Project setup**: each pick writes the rules at once, one
+  undo step with the values it fills; the `.snxprj` is dirty and written by
+  Save.
+- **New PCB**: the class chosen goes into the project's rules when the board
+  is made, one step of the rule history, written by Save.
+
+Picking a class again replaces only the rules it writes, by name; every
+other rule, and its severity entry, stays. Picking the class already applied
+brings back a `fab_*` rule edited since.
+
 ## Rule file (Import rules...)
 
 A rule file is TOML, at most 64 KiB. Unknown keys are refused so a typo is
@@ -137,7 +154,9 @@ new_project_with_profile name=<text> location=<absolute path>
 
 `overrides` keys: `layers`, `thickness`, `clearance`, `track`, `via`, `drill`
 (mm), `sheet` (such as `A4` or `ANSI A portrait`), `title_block`
-(`true`/`false`) and `designators` (`ieee315`, `din40719_2`, `iec81346_2`).
+(`true`/`false`), `designators` (`ieee315`, `din40719_2`, `iec81346_2`) and
+`fab` (`standard`, `advanced`, `hdi`: the class's values and its `fab_*`
+rules). Keys apply in written order, so `fab=hdi,clearance=0.2` keeps 0.2.
 It answers with the id, path and kind of the project it made. Without
 operands, the palette entry opens the dialog. The command needs the `save`
 capability in `signex-cli` (`--save`), and the folder it creates must stay

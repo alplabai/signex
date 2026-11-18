@@ -220,7 +220,8 @@ impl Signex {
         };
         match state.kind {
             SetupKind::Pcb => {
-                self.request_new_pcb(Some(state.project), Some(state.draft.setup.pcb))
+                let setup = state.draft.setup;
+                self.request_new_pcb(Some(state.project), Some(setup.pcb), setup.fab)
             }
             SetupKind::Sheet => {
                 let choice = state.sheet_choice();

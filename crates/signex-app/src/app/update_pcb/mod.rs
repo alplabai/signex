@@ -141,5 +141,8 @@ pub enum UpdatePcbMsg {
         /// The rules the setup dialog or the command chose; `None`: the
         /// project defaults.
         rules: Option<signex_types::project::PcbDefaults>,
+        /// The fab tier picked with them, whose `fab_*` rules the project
+        /// takes when the board is made (#2311).
+        fab: Option<signex_types::project::FabTemplate>,
     },
 }

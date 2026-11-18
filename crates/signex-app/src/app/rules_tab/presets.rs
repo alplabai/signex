@@ -5,12 +5,11 @@
 //! one undo step. Behaviour: `docs/DRC_RULES.md`, "Presets".
 
 use serde_json::{Value, json};
-use signex_drc::{DrcRuleSection, WrittenRuleEdit, adopt_profile_drc, diff_drc_against_profile};
+use signex_drc::{DrcRuleSection, adopt_profile_drc, diff_drc_against_profile};
 use signex_drc_dsl::table::presets::{
-    PresetMode, RowChange, RowChangeKind, diff_rows, preset_result, tier_from_id, tier_id,
-    tier_text,
+    RowChange, RowChangeKind, diff_rows, tier_from_id, tier_id, with_tier,
 };
-use signex_types::project::{DrcRuleSet, FabTemplate, RuleProfile};
+use signex_types::project::{DrcRuleSet, FabTemplate, ProjectRules, RuleProfile};
 
 use super::PresetPreview;
 use super::commands::{Ran, answered, refused, text};
@@ -89,14 +88,9 @@ impl Signex {
             .rules_drc_of(id)
             .ok_or("the project is no longer open")?;
         let current = base.dsl.clone().unwrap_or_default();
-        let found = self.find_preset(preset)?;
-        let merged = matches!(found, Preset::Tier(_));
-        let (key, label, mut result, other, fab) = match found {
+        let (key, label, result, other, fab) = match self.find_preset(preset)? {
             Preset::Tier(tier) => {
-                let text = preset_result(&current, &tier_text(tier), PresetMode::Merge)
-                    .map_err(|e| e.to_string())?;
-                let mut result = base.clone();
-                result.dsl = (!text.trim().is_empty()).then_some(text);
+                let result = with_tier(&base, tier).map_err(|e| e.to_string())?;
                 let id = tier_id(tier).to_string();
                 (tier_preset(tier), id, result, Vec::new(), Some(tier.info()))
             }
@@ -118,15 +112,6 @@ impl Signex {
             }
         };
         let changes = diff_rows(&current, result.dsl.as_deref().unwrap_or_default());
-        if merged {
-            // A rule a tier adds or replaces must not keep a stale entry.
-            for change in &changes {
-                signex_drc::follow_written_rule_edit(
-                    &mut result,
-                    WrittenRuleEdit::Dropped(&change.name),
-                );
-            }
-        }
         Ok(PresetPreview {
             preset: key,
             label,
@@ -136,6 +121,49 @@ impl Signex {
             base,
             result,
         })
+    }
+
+    /// `id`'s rules with `tier`'s `fab_*` rules merged in (#2311), for a
+    /// tier picked in project setup. A project that stores no rules starts
+    /// from this machine's, as any rule edit does.
+    pub(crate) fn rules_with_tier(
+        &self,
+        id: ProjectId,
+        tier: FabTemplate,
+    ) -> Result<ProjectRules, String> {
+        let project = self
+            .document_state
+            .project_by_id(id)
+            .ok_or("the project is no longer open")?;
+        if project.data.has_unreadable_rules() {
+            return Err(
+                "this project holds a rule set from a newer Signex, which storing rules \
+                 would replace"
+                    .into(),
+            );
+        }
+        let mut rules = project
+            .data
+            .rules
+            .clone()
+            .unwrap_or_else(|| self.seeded_project_rules());
+        rules.drc = with_tier(&rules.drc, tier).map_err(|e| e.to_string())?;
+        Ok(rules)
+    }
+
+    /// A tier picked for a new board of `id`: its `fab_*` rules merged into
+    /// the project's as one rule-history step, nothing written until Save.
+    /// A refusal is said in Messages; the board is made either way.
+    pub(crate) fn seed_tier_rules(&mut self, id: ProjectId, tier: FabTemplate) {
+        let seeded = self
+            .rules_with_tier(id, tier)
+            .and_then(|rules| self.commit_drc_section(id, |drc| *drc = rules.drc));
+        if let Err(why) = seeded {
+            crate::diagnostics::log_warning(format!(
+                "New PCB: the {} fab tier rules were not added: {why}",
+                tier.token()
+            ));
+        }
     }
 
     /// Apply `preview` as one undo step, unless the rules moved since it

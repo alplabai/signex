@@ -111,8 +111,9 @@ impl Signex {
                 path,
                 exists,
                 rules,
+                fab,
             } => {
-                self.new_pcb_path_checked(project, path, exists, rules);
+                self.new_pcb_path_checked(project, path, exists, rules, fab);
                 Task::none()
             }
         }

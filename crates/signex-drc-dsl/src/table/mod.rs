@@ -260,3 +260,5 @@ pub(crate) fn tight(src: &str, span: &Span) -> Span {
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tier_tests;
