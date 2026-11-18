@@ -23,8 +23,11 @@ fn wire_item(uuid: Uuid) -> SelectedItem {
     SelectedItem::new(uuid, SelectedKind::Wire)
 }
 
+/// One wire segment as its two end points.
+type Seg = ((f64, f64), (f64, f64));
+
 /// Whether a wire of `segs` ends at `p`.
-fn ends_at(segs: &[((f64, f64), (f64, f64))], p: (f64, f64)) -> bool {
+fn ends_at(segs: &[Seg], p: (f64, f64)) -> bool {
     segs.iter().any(|s| s.0 == p || s.1 == p)
 }
 
