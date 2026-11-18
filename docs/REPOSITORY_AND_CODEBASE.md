@@ -336,9 +336,9 @@ The most likely additions are:
   (`docs/DRC_RULES.md`)
 - `pcb-geom` — *(landed, #2174)* integer-nm board geometry: R-tree, hit-test,
   union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
-  boolean ops are not part of it yet.
-- `pcb-router` — interactive router (walkaround, shove, diff pair,
-  tuning, pour). Added with PCB Routing. See `internal/docs/PCB_ROUTER_PLAN.md`.
+  boolean ops are not part of it yet. The interactive router (walkaround,
+  shove, diff pair, tuning) is its `route` module, not a crate of its own
+  (#2389); see `internal/docs/PCB_ROUTER_PLAN.md`.
 
 These should be added only when their responsibility is real and clear, not as
 speculative abstraction.

@@ -106,6 +106,8 @@ struct Soak<'a> {
     initial_zero_length: usize,
     initial_duplicates: usize,
     tally: Tally,
+    /// What the last action did, for a failure message.
+    last: String,
 }
 
 /// Run `actions` seeded actions on `fixture`.
@@ -119,8 +121,9 @@ pub fn run(fixture: &Fixture, seed: u64, actions: usize) -> Result<(Tally, PcbBo
         undo: Vec::new(),
         redo: Vec::new(),
         initial_zero_length: zero_length(&fixture.board),
-        initial_duplicates: duplicates(&fixture.board),
+        initial_duplicates: duplicates(&fixture.board).len(),
         tally: Tally::default(),
+        last: String::new(),
     };
     for index in 0..actions {
         let action = Action::draw(&mut soak.rng);
@@ -133,6 +136,7 @@ pub fn run(fixture: &Fixture, seed: u64, actions: usize) -> Result<(Tally, PcbBo
             Ok(Err(message)) => message,
             Err(panic) => format!("panicked: {}", panic_text(&*panic)),
         };
+        let message = format!("{message}\n  last action: {}", soak.last);
         return Err(Failure {
             board: fixture.name.clone(),
             seed,
@@ -158,6 +162,7 @@ fn snapshot(board: &PcbBoard) -> String {
 
 impl Soak<'_> {
     fn act(&mut self, action: Action) -> Result<(), String> {
+        self.last = format!("{action:?}");
         match action {
             Action::Route => self.route(RouteMode::Walkaround),
             Action::Shove => self.route(RouteMode::Shove),
@@ -182,6 +187,10 @@ impl Soak<'_> {
             Uuid::from_u128(SOAK_IDS | *next_id)
         };
         let routed = route(&mut self.engine, &self.rules, self.classes, &plan, &mut ids)?;
+        self.last = match &routed {
+            Routed::Landed(draft) => format!("{plan:?} landed {draft:?}"),
+            Routed::Refused => format!("{plan:?} refused"),
+        };
         match routed {
             Routed::Landed(_) => {
                 self.tally.landed += 1;
@@ -262,6 +271,7 @@ impl Soak<'_> {
     }
 
     fn edit(&mut self, command: BoardCommand) -> Result<(), String> {
+        self.last = format!("{command:?}");
         let before = snapshot(self.engine.board());
         self.engine
             .execute(command.clone())
@@ -358,8 +368,9 @@ impl Soak<'_> {
         if zero_length(board) > self.initial_zero_length {
             return Err("a zero-length track appeared".into());
         }
-        if duplicates(board) > self.initial_duplicates {
-            return Err("a track appeared twice".into());
+        let repeated = duplicates(board);
+        if repeated.len() > self.initial_duplicates {
+            return Err(format!("a track appeared twice: {repeated:?}"));
         }
         if let Some(line) = ratsnest(board).iter().find(|l| !known(l.net)) {
             return Err(format!("the ratsnest names net {} the board lacks", line.net));
@@ -391,14 +402,19 @@ fn zero_length(board: &PcbBoard) -> usize {
 }
 
 /// Tracks that repeat another's net, layer, width and ends (either way
-/// round).
-fn duplicates(board: &PcbBoard) -> usize {
-    let mut seen: HashMap<String, usize> = HashMap::new();
+/// round), with the ids of each repeat.
+fn duplicates(board: &PcbBoard) -> Vec<(String, Uuid)> {
+    let mut seen: HashMap<String, Uuid> = HashMap::new();
+    let mut repeated = Vec::new();
     for s in &board.segments {
         let (a, b) = (s.start, s.end);
         let (a, b) = if (a.x, a.y) <= (b.x, b.y) { (a, b) } else { (b, a) };
         let key = format!("{}|{}|{}|{:?}|{:?}", s.net, s.layer, s.width, a, b);
-        *seen.entry(key).or_default() += 1;
+        if let Some(&first) = seen.get(&key) {
+            repeated.push((format!("{key} first {first}"), s.uuid));
+        } else {
+            seen.insert(key, s.uuid);
+        }
     }
-    seen.values().map(|n| n - 1).sum()
+    repeated
 }

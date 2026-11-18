@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+#
+# Router soak and bench (#2482, #2483). Non-required, scheduled: 10 000
+# random routing and editing actions per board, then the shove convergence,
+# latency and DRC-delta thresholds, in release. Per-PR CI runs the short
+# versions with the workspace tests. The seed is the run number, so each
+# night soaks a new sequence; a failure prints the command that replays it.
+# What it checks: docs/PCB_TOOLS.md, "Router soak and bench".
+
+name: routing-soak
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Soak seed (decimal or 0x hex); empty uses the run number"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  soak:
+    name: routing · soak + bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Soak and bench
+        env:
+          SIGNEX_SOAK_SEED: ${{ inputs.seed || github.run_number }}
+        run: cargo test --release -p signex-engine --test routing -- --ignored --nocapture --test-threads 1
