@@ -110,6 +110,13 @@ impl Env {
         if !connected || plain {
             return;
         }
+        // An attached wire whose far end sits inside another wire with no dot
+        // is left alone: the reconcile would dot that T once the wire is edited,
+        // a connection that was not there (#107). The point stays as the move
+        // left it.
+        if wire.is_some() && self.far_end_on_undotted_t(&attached) {
+            return;
+        }
         let new = group[0].new;
         let anchored = on_wire
             || locked
@@ -126,6 +133,17 @@ impl Env {
             return;
         }
         self.add_paths(group, &attached, &skip, out);
+    }
+
+    /// Whether the far end of one of the `attached` wires lies inside another
+    /// wire with no dot there.
+    fn far_end_on_undotted_t(&self, attached: &[(usize, bool)]) -> bool {
+        attached.iter().any(|&(index, at_start)| {
+            let wire = &self.wires[index];
+            let far = if at_start { wire.end } else { wire.start };
+            let probe = self.probe(key(&far), &[index]);
+            probe.interior && probe.junctions.is_empty()
+        })
     }
 
     /// A no-connect marks the pin: it moves with the tip.
