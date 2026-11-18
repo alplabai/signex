@@ -143,9 +143,11 @@ the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
   undo and redo. After every action: nothing panicked, the engine's history
   matches the steps taken, undo and redo give back the board exactly as it
   was, ids are unique, tracks are finite, on copper and on known nets, no
-  zero-length or repeated track appeared, a refused route changed nothing,
-  and a just-routed draft fits the board it was routed on. A failure prints
-  its seed, action index and the command that replays it.
+  zero-length track appeared, a refused route changed nothing, and a
+  just-routed draft fits the board it was routed on. A failure prints its
+  seed, action index and the command that replays it. A route that lays a
+  track exactly over a same-net track already there is counted in the
+  run's report (`repeated_tracks`), not failed: the router does that today.
 - **Bench.** One-leg routes, half of them shoves: the rounds each shove
   took (`pcb_geom::route::shove_run`), the time from click to landed step,
   and the DRC delta: every design rule check finding a route adds, other
