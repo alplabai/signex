@@ -25,8 +25,7 @@ pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
     form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
     form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
-    section_hdr, thin_sep,
-    typed_mm,
+    section_hdr, thin_sep, typed_mm,
 };
 #[cfg(test)]
 pub(crate) use general::seg_text;
