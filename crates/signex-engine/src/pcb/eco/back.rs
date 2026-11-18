@@ -27,7 +27,7 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
 use super::change::GroupTicks;
-use super::{EcoPart, is_under};
+use super::{EcoPart, duplicate_designators, is_under};
 use crate::{Command, TextTarget, designator_commands};
 
 /// One part of the design, as Back Annotate needs it.
@@ -333,7 +333,7 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             })
             .collect(),
     };
-    let duplicates = schematic_duplicates(input.parts);
+    let duplicates = duplicate_designators(input.parts.iter().map(|p| &p.eco));
     // A part carried back once: a second footprint linked to it is a note.
     let mut matched: HashSet<usize> = HashSet::new();
     for fp in &input.board.footprints {
@@ -370,19 +370,6 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
     list.rows.sort_by_key(|r| r.group);
     list.refresh_shared_notes();
     list
-}
-
-/// Designators carried by more than one annotated part.
-fn schematic_duplicates(parts: &[BackPart]) -> HashSet<String> {
-    let mut count: HashMap<&str, usize> = HashMap::new();
-    for p in parts.iter().filter(|p| !p.eco.part.needs_annotation) {
-        *count.entry(p.eco.part.designator.as_str()).or_default() += 1;
-    }
-    count
-        .into_iter()
-        .filter(|(_, n)| *n > 1)
-        .map(|(d, _)| d.to_string())
-        .collect()
 }
 
 fn not_annotated(designator: &str) -> bool {

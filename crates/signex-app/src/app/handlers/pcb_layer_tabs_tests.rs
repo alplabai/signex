@@ -184,21 +184,21 @@ fn panel_send(app: &mut Signex, sent: Vec<PanelMsg>) {
     }
 }
 
-/// #2359: on a board tab the one Layers panel lists the board's layers in
-/// groups; a row click sets the active layer, an eye hides the layer from
-/// the canvas draw.
+/// #2359, #2363: on a board tab the one Layers panel lists the board's
+/// layers in sections; a row click sets the active layer, an eye hides the
+/// layer from the canvas draw.
 #[test]
 fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
     let (mut app, path, main) = open();
-    let panel = Size::new(300.0, 1800.0);
+    let panel = Size::new(300.0, 2400.0);
     let ctx = app.document_state.panel_ctx.clone();
     let texts = lay_out_texts(view_panel(PanelKind::Layers, &ctx), panel);
     for label in [
-        "SIGNAL",
+        "SIGNAL AND PLANE LAYERS",
         "Top Layer",
         "Bottom Layer",
-        "OVERLAY",
-        "Top Overlay",
+        "COMPONENT LAYER PAIRS",
+        "Overlay",
     ] {
         assert!(texts.iter().any(|t| t.text == label), "{label} listed");
     }

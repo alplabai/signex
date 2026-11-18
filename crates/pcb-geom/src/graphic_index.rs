@@ -6,10 +6,11 @@
 use signex_types::pcb::BoardGraphic;
 use signex_types::pcb_graphic::BoardGraphicKind;
 
-use crate::graphic::{GraphicShape, board_graphic_placement};
+use crate::graphic::{GraphicShape, PlacedGraphic, board_graphic_placement};
 use crate::index::{Area, IndexedItem, ItemRef, Rejected};
 use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
+use crate::region::Polygon;
 use crate::shape::Shape;
 use crate::units::{GeomError, PointNm};
 
@@ -69,7 +70,7 @@ pub(crate) fn add_graphic(
                 item,
                 edges: entries.len(),
                 inside: kind == BoardGraphicKind::TextFrame,
-                ring: outline.points,
+                region: Polygon::new(outline.points, Vec::new()),
                 bounds,
             });
             items.extend(entries);
@@ -99,8 +100,26 @@ fn outline(graphic: &BoardGraphic) -> Result<Option<(Outline, i64)>, GeomError> 
     let Some(placed) = board_graphic_placement(graphic)? else {
         return Ok(None);
     };
+    Ok(placed_outline(&placed).map(|outline| (outline, placed.width / 2)))
+}
+
+/// The stroke of a placed drawing as capsules, one per piece of its
+/// outline (an arc or circle in chords): what the design-rule check
+/// measures a silkscreen drawing by. A filled drawing is measured by its
+/// outline too. Empty for a text, which has no outline here.
+pub fn graphic_strokes(placed: &PlacedGraphic) -> Vec<Shape> {
+    let Some(outline) = placed_outline(placed) else {
+        return Vec::new();
+    };
     let radius = placed.width / 2;
-    let outline = match placed.shape {
+    pieces(&outline)
+        .into_iter()
+        .map(|(a, b)| Shape::Capsule { a, b, radius })
+        .collect()
+}
+
+fn placed_outline(placed: &PlacedGraphic) -> Option<Outline> {
+    let outline = match placed.shape.clone() {
         GraphicShape::Line { a, b } => Outline {
             points: vec![a, b],
             closed: false,
@@ -126,9 +145,9 @@ fn outline(graphic: &BoardGraphic) -> Result<Option<(Outline, i64)>, GeomError> 
             points,
             closed: true,
         },
-        GraphicShape::Text(_) => return Ok(None),
+        GraphicShape::Text(_) => return None,
     };
-    Ok(Some((outline, radius)))
+    Some(outline)
 }
 
 /// Points along an arc, at most [`CHORD_DEG`] apart, both ends included.

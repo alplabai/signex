@@ -196,7 +196,6 @@ pub(crate) fn note_text(note: FabNote, i18n: &I18n) -> Localized {
     let count = note.count();
     match note {
         FabNote::ZonesNotFilled { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_ZONES, "count" => count),
-        FabNote::TextsNotDrawn { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_TEXTS, "count" => count),
         FabNote::PartsWithoutDesignator { .. } => {
             t!(i18n, ids::FAB_OUTPUTS_NOTE_UNNAMED_PARTS, "count" => count)
         }

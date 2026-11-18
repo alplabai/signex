@@ -334,4 +334,62 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::PROJECT_VERSION_CONTROL,
         ..CommandMetadata::DEFAULT
     },
+    // #2339: the Project tab's Requirements section. An edit is one General
+    // step; the run shows its results in the tab (`check_requirements` is the
+    // query that answers with the report).
+    CommandMetadata {
+        id: "project_add_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ADD_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ADD_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_SET_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_remove_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_REMOVE_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_enable_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ENABLE_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ENABLE_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_run_requirements",
+        category: "validation",
+        label: command_ids::CMD_PROJECT_RUN_REQUIREMENTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
 ];

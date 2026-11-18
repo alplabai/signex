@@ -185,3 +185,19 @@ pub(crate) fn stable_uuid(parts: &[&[u8]]) -> Uuid {
 pub(crate) fn is_under(path: &InstancePath, sheet: &InstancePath) -> bool {
     path.chain().starts_with(sheet.chain())
 }
+
+/// Designators carried by more than one annotated part: Update PCB and Back
+/// Annotate block a row on one of these alike.
+pub(crate) fn duplicate_designators<'a>(
+    parts: impl IntoIterator<Item = &'a EcoPart>,
+) -> std::collections::HashSet<String> {
+    let mut count: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for p in parts.into_iter().filter(|p| !p.part.needs_annotation) {
+        *count.entry(p.part.designator.as_str()).or_default() += 1;
+    }
+    count
+        .into_iter()
+        .filter(|(_, n)| *n > 1)
+        .map(|(d, _)| d.to_string())
+        .collect()
+}

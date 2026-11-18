@@ -44,6 +44,7 @@ mod mixed_versions;
 pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;
+mod pan_zoom_bench;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
@@ -71,6 +72,7 @@ pub(crate) mod pcb_footprint_text;
 pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
+mod pcb_layers_panel;
 #[cfg(test)]
 mod pcb_origin_tests;
 mod pcb_parking;
@@ -86,6 +88,9 @@ pub(crate) mod pcb_query;
 pub mod pcb_select;
 #[cfg(test)]
 mod pcb_select_tests;
+mod pcb_text_move;
+#[cfg(test)]
+mod pcb_text_pick_tests;
 pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
@@ -99,6 +104,8 @@ pub mod preferences;
 pub mod project_case;
 mod project_fs;
 mod repeat_placement;
+mod requirements_check;
+pub(crate) use requirements_check::REQUIREMENTS_CHECK;
 pub mod selection_transform;
 pub mod selection_workflow;
 pub mod window_controls;

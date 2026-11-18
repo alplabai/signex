@@ -22,7 +22,16 @@ fn text(content: &str, at: [f32; 2]) -> FootprintTextInput {
         size_mm: 1.0,
         mirrored: false,
         layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
+        justify: HAlign::Center,
     }
+}
+
+#[test]
+fn the_line_is_anchored_at_its_justified_end() {
+    use iced::advanced::text::Alignment;
+    assert_eq!(align_of(HAlign::Left), Alignment::Left);
+    assert_eq!(align_of(HAlign::Center), Alignment::Center);
+    assert_eq!(align_of(HAlign::Right), Alignment::Right);
 }
 
 #[test]

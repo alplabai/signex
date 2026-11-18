@@ -129,6 +129,7 @@ impl Signex {
             Message::Pcb(msg) => self.dispatch_pcb_message(msg),
             Message::CrossProbe(msg) => self.dispatch_cross_probe_message(msg),
             Message::UpdatePcb(msg) => self.dispatch_update_pcb_message(msg),
+            Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
         }
     }
 

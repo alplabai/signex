@@ -15,9 +15,11 @@ use super::agent_edits as agent;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
+use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
 use super::part_operands as part;
@@ -114,6 +116,16 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("hide_layer_group", strip::hide_layer_group),
     ("show_layer_group", strip::show_layer_group),
     ("set_layer_tab_names", strip::set_layer_tab_names),
+    // #2363: the Layers panel's board view configuration.
+    ("set_layer_visible", board_view::set_layer_visible),
+    ("set_active_layer", board_view::set_active_layer),
+    ("set_layer_color", board_view::set_layer_color),
+    ("show_used_layers_only", board_view::show_used_layers_only),
+    ("set_object_visible", board_view::set_object_visible),
+    (
+        "set_object_transparency",
+        board_view::set_object_transparency,
+    ),
     ("board_report_bom", output::board_report_bom),
     ("board_report_netlist", output::board_report_netlist),
     ("board_report_net_length", output::board_report_net_length),
@@ -122,6 +134,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_board_pdf", output::export_board_pdf),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
+    ("set_footprint_text", fp_text::set_footprint_text),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -145,6 +158,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("unlock_board_items", board_edit::unlock_board_items),
     ("set_via_span", board_edit::set_via_span),
     ("set_layer_sizes", board_edit::set_layer_sizes),
+    ("set_pad_shape", board_edit::set_pad_shape),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
     // #2408, #2409: the board Tools edits on the board `document` names.
@@ -217,6 +231,27 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     (
         "project_set_version_control",
         crate::app::project_tab::project_set_version_control,
+    ),
+    // #2339: the Project tab's Requirements section.
+    (
+        "project_add_requirement",
+        crate::app::project_tab::project_add_requirement,
+    ),
+    (
+        "project_set_requirement",
+        crate::app::project_tab::project_set_requirement,
+    ),
+    (
+        "project_remove_requirement",
+        crate::app::project_tab::project_remove_requirement,
+    ),
+    (
+        "project_enable_requirement",
+        crate::app::project_tab::project_enable_requirement,
+    ),
+    (
+        "project_run_requirements",
+        crate::app::project_tab::project_run_requirements,
     ),
 ];
 
@@ -333,6 +368,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
         ),
+        // #2363: a person uses the Layers panel.
+        "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(
+            "this command needs the operands `layer` and `document` — \
+             use the layer's row in the Layers panel",
+        ),
+        "show_used_layers_only" => Some(
+            "`show_used_layers_only` needs the operands `on` and `document` — \
+             use Used On in the Layers panel",
+        ),
+        "set_object_visible" | "set_object_transparency" => Some(
+            "this command needs the operands `kind` and `document` — \
+             use View Options in the Layers panel",
+        ),
         // #2410: a person edits the panel in the board's Properties.
         "set_board_panel" => Some(
             "`set_board_panel` needs the operands `document`, `field` and `value` — \
@@ -372,6 +420,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
              select the drawing and use Properties",
         ),
+        // #2368: a person drags the text on the board.
+        "set_footprint_text" => Some(
+            "`set_footprint_text` needs the operands `document`, `designator`, `text`, \
+             `field` and `value` — drag the designator or comment on the board",
+        ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(
             "the `rules_*` edits need their operands — \
@@ -405,6 +458,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_layer_sizes` needs the operands `document`, `ids` and `sizes` — \
              use the stack rows of the Via or Pad panel in Properties",
         ),
+        "set_pad_shape" => Some(
+            "`set_pad_shape` needs the operands `document`, `ids` and `shape`, \
+             with `delta` for a trapezoid or `corners` for a custom pad — \
+             trapezoid and custom pads are drawn in the footprint editor",
+        ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \
              select the Blanket to read them in Properties",
@@ -421,7 +479,12 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_active_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
-        | "project_set_version_control" => Some(
+        | "project_set_version_control"
+        | "project_add_requirement"
+        | "project_set_requirement"
+        | "project_remove_requirement"
+        | "project_enable_requirement"
+        | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
         ),

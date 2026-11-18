@@ -4,6 +4,7 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+use crate::pcb::BoardPaint;
 use serde::Deserialize;
 use signex_gfx::style::ColorSlot;
 use signex_types::theme::{BoardLayerColors, CanvasColors, Color, ThemeId, canvas_colors};
@@ -14,6 +15,8 @@ pub struct ResolvedTheme {
     slots: [[f32; 4]; 32],
     /// The board palette every layer is drawn in (#2387).
     board_layers: BoardLayerColors,
+    /// A board view's own layer colours and transparencies (#2363).
+    paint: BoardPaint,
 }
 
 impl ResolvedTheme {
@@ -81,6 +84,17 @@ impl ResolvedTheme {
         self.slots[slot as usize] = color;
     }
 
+    /// This theme with a board view's own colours and transparencies.
+    pub fn with_paint(mut self, paint: BoardPaint) -> Self {
+        self.paint = paint;
+        self
+    }
+
+    /// The board view's own colours and transparencies.
+    pub fn paint(&self) -> &BoardPaint {
+        &self.paint
+    }
+
     /// The board layer colours this theme draws with.
     pub fn board_layers(&self) -> &BoardLayerColors {
         &self.board_layers
@@ -90,6 +104,7 @@ impl ResolvedTheme {
         Self {
             slots: [[0.0; 4]; 32],
             board_layers: canvas_colors(ThemeId::GraphiteDark).board_layer_colors(),
+            paint: BoardPaint::default(),
         }
     }
 }

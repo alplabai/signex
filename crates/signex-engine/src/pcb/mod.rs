@@ -30,6 +30,7 @@ pub mod find;
 mod footprint;
 mod footprint_content;
 pub mod footprint_swap;
+pub mod footprint_text_edit;
 pub mod graphic;
 mod graphics;
 mod items;

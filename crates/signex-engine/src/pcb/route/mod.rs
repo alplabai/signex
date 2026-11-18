@@ -346,7 +346,7 @@ fn pushed_way(
             let legs: Vec<NewCopper> = path
                 .windows(2)
                 .map(|leg| NewCopper::track(leg[0], leg[1], walk.radius, walk.net, walk.layers))
-                .chain(via)
+                .chain(via.clone())
                 .collect();
             shove(world, &legs).map(|pushed| (path, pushed))
         })

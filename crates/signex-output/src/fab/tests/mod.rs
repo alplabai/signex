@@ -313,8 +313,13 @@ fn the_test_netlist_has_a_record_per_pad_and_via() {
     assert_eq!(&via[72..74], "S3");
 }
 
+/// The strokes (`D01` moves) an image draws.
+fn strokes_in(set: &FabSet, name: &str) -> usize {
+    file(set, name).map_or(0, |f| f.matches("D01*").count())
+}
+
 #[test]
-fn board_text_is_counted_until_it_can_be_drawn() {
+fn board_text_is_written_on_its_legend_in_the_stroke_font() {
     let mut board = fixture_board();
     board.texts.push(signex_types::pcb::BoardText {
         uuid: Uuid::from_u128(90),
@@ -325,7 +330,102 @@ fn board_text_is_counted_until_it_can_be_drawn() {
         rotation: 0.0,
     });
     let set = generated(&board);
-    assert_eq!(set.notes, vec![FabNote::TextsNotDrawn { count: 1 }]);
+    assert!(set.notes.is_empty(), "{:?}", set.notes);
+    assert!(strokes_in(&set, "fab-legend-top.gbr") > 0);
+    assert_eq!(strokes_in(&set, "fab-legend-bottom.gbr"), 0);
+}
+
+fn with_designator(layer: &str, hidden: bool) -> signex_types::pcb::PcbBoard {
+    let mut board = fixture_board();
+    let part = &mut board.footprints[0];
+    part.layer = layer.into();
+    part.properties.push(signex_types::property::PcbProperty {
+        key: "Reference".into(),
+        value: "R1".into(),
+        hidden,
+        ..Default::default()
+    });
+    board
+}
+
+#[test]
+fn a_designator_is_written_on_its_sides_legend_unless_hidden() {
+    let set = generated(&with_designator("TopCopper", false));
+    assert!(strokes_in(&set, "fab-legend-top.gbr") > 0);
+    let set = generated(&with_designator("BottomCopper", false));
+    assert!(strokes_in(&set, "fab-legend-bottom.gbr") > 0);
+    assert_eq!(strokes_in(&set, "fab-legend-top.gbr"), 0);
+    let set = generated(&with_designator("TopCopper", true));
+    assert_eq!(strokes_in(&set, "fab-legend-top.gbr"), 0);
+}
+
+/// A board drawing of `kind` on the top overlay, from `(0, 0)` to `(20, 5)`.
+fn board_drawing(kind: &str, text: &str) -> signex_types::pcb::BoardGraphic {
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(91), "graphic_type": kind, "layer": "TopSilkscreen",
+        "width": 0.1, "start": {"x": 0.0, "y": 0.0}, "end": {"x": 20.0, "y": 5.0},
+        "center": null, "text": text, "font_size": 1.0
+    }))
+    .expect("a board drawing")
+}
+
+#[test]
+fn a_full_width_text_frame_line_stays_inside_its_box() {
+    // 1 mm text in a 20 mm box wraps at 32 characters; the stroke font is
+    // wider than the wrap assumes, so the line is condensed to the box.
+    let mut board = fixture_board();
+    board
+        .graphics
+        .push(board_drawing("text_frame", &"W".repeat(32)));
+    let frame = super::frame::FabFrame::of(&board);
+    let mut images = super::collect::Images::new();
+    let mut tally = super::notes::Tally::default();
+    super::text::texts(&mut images, &board, frame, &mut tally);
+    assert_eq!(tally.skipped, 0);
+    let left = frame.of_mm(p(0.0, 0.0), "left").unwrap().x;
+    let right = frame.of_mm(p(20.0, 0.0), "right").unwrap().x;
+    let mut written = 0;
+    for mark in images.values().flatten() {
+        let super::marks::Mark::Stroke {
+            width,
+            start,
+            steps,
+            ..
+        } = mark
+        else {
+            continue;
+        };
+        let ends = steps.iter().filter_map(|step| match step {
+            super::marks::Step::Line(point) => Some(*point),
+            _ => None,
+        });
+        for point in std::iter::once(*start).chain(ends) {
+            written += 1;
+            assert!(
+                point.x - width / 2 >= left && point.x + width / 2 <= right,
+                "{point:?} leaves the box {left}..{right}"
+            );
+        }
+    }
+    assert!(written > 0, "the line is written");
+}
+
+#[test]
+fn a_designator_the_geometry_refuses_is_counted_as_skipped() {
+    let mut board = with_designator("TopCopper", false);
+    let designator = board.footprints[0].properties.last_mut().unwrap();
+    designator.position = Some(p(1.0e9, 0.0));
+    let set = generated(&board);
+    assert_eq!(set.notes, vec![FabNote::ItemsSkipped { count: 1 }]);
+    assert_eq!(strokes_in(&set, "fab-legend-top.gbr"), 0);
+}
+
+#[test]
+fn a_board_drawing_of_kind_text_is_counted_as_skipped() {
+    let mut board = fixture_board();
+    board.graphics.push(board_drawing("text", "REV A"));
+    let set = generated(&board);
+    assert_eq!(set.notes, vec![FabNote::ItemsSkipped { count: 1 }]);
 }
 
 #[test]

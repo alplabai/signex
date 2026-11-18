@@ -105,8 +105,9 @@ impl Signex {
         let Some(snapped) = self.measure_point(at) else {
             return false;
         };
+        // A designator or comment is not an object to measure to (#2368).
         let item = self
-            .with_pcb_selection(|sel, board| sel.item_at(board, at, tolerance_mm))
+            .with_pcb_selection(|sel, board| sel.part_at(board, at, tolerance_mm))
             .flatten();
         let mark = MeasureMark { at: snapped, item };
         let reading = match first {

@@ -88,7 +88,7 @@ pub(super) fn push_body_row<'a>(
             _,
             iced::Theme,
         >(
-            form_input_row(
+            form_input_row_untipped(
                 t!(i18n, ids::PROPERTIES_BODY),
                 &i18n.message_plain(ids::PROPERTIES_BODY_NORMAL, &[]),
                 muted,

@@ -5,7 +5,7 @@ use pcb_geom::PointNm;
 
 /// The shape of a flashed aperture. Lengths in nm, angles in
 /// micro-degrees counter-clockwise in the fabrication frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ApertureShape {
     Circle {
         diameter: i64,
@@ -38,6 +38,11 @@ pub(crate) enum ApertureShape {
         h: i64,
         r: i64,
         udeg: i64,
+    },
+    /// A polygon pad (trapezoid or custom, #2242): its corners relative to
+    /// the flash point, already turned.
+    Outline {
+        corners: Vec<PointNm>,
     },
 }
 

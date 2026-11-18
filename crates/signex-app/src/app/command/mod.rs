@@ -20,6 +20,9 @@ mod board_edit_operands;
 mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
+#[cfg(test)]
+mod board_view_operand_tests;
+mod board_view_operands;
 pub(crate) mod bridge;
 #[cfg(test)]
 mod directive_operand_tests;
@@ -36,6 +39,9 @@ pub(crate) mod enablement;
 #[cfg(test)]
 mod file_operand_tests;
 mod file_operands;
+#[cfg(test)]
+mod footprint_text_operand_tests;
+mod footprint_text_operands;
 #[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]

@@ -236,6 +236,18 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         operands: super::operands::BOARD_GRAPHIC_SET,
         ..CommandMetadata::DEFAULT
     },
+    // #2368: a footprint's designator or comment placed on its own, as a
+    // drag on the board moves it. No default key.
+    CommandMetadata {
+        id: "set_footprint_text",
+        category: "edit",
+        label: command_ids::CMD_SET_FOOTPRINT_TEXT,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::FOOTPRINT_TEXT_SET,
+        ..CommandMetadata::DEFAULT
+    },
     // #2410: DXF import. Without operands it asks for the file; the import
     // is one board undo step. No default key.
     CommandMetadata {

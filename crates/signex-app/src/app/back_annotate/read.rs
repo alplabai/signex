@@ -1,7 +1,7 @@
-//! The worker half of Back Annotate: assemble the project's sheets, find
-//! each part's sheet file, resolve its footprint and diff the board against
-//! the design. Everything it reads is owned, so it runs on a blocking thread.
-//! The assembly is Update PCB's (`update_pcb/design.rs`).
+//! The worker half of Back Annotate: read the project's design (the read
+//! Update PCB uses, `app/design_read`), find each part's sheet file, resolve
+//! its footprint and diff the board against the design. Everything it reads
+//! is owned, so it runs on a blocking thread.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,10 +13,8 @@ use signex_types::pcb::PcbBoard;
 use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
-use crate::app::project_sheets::{
-    DiskStamps, ProjectSheetPlan, project_graph_with, project_roots, sheet_key_with,
-};
-use crate::app::update_pcb::design::{LibraryRows, Resolver, unreadable_placements};
+use crate::app::design_read::{DesignGraph, LibraryRows, Resolver};
+use crate::app::project_sheets::{DiskStamps, ProjectSheetPlan};
 
 /// Where one part lives: the sheet file its placement reads, and whether
 /// that file is placed only once in the project.
@@ -61,36 +59,8 @@ pub(crate) struct BackRequest {
 /// no list.
 pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
     let (set, mut stamps) = request.plan.assemble_stamped();
-    let root = set
-        .root
-        .clone()
-        .ok_or_else(|| "the project has no root sheet".to_string())?;
-    let base = Some(request.project_dir.as_path());
-    let graph = project_graph_with(&set.sheets, base, Some(&root), set.fold);
-    let root_key = sheet_key_with(&root, base, set.fold);
-    if !graph.sheets.contains_key(&root_key) {
-        return Err(format!(
-            "the root sheet {} could not be read",
-            root.display()
-        ));
-    }
-    let roots = project_roots(root_key, &set, &graph, base, set.fold);
-    let project = signex_net::ProjectGraph {
-        sheets: &graph.sheets,
-        resolved: &graph.resolved,
-        roots: &roots,
-    };
-    let occurrences = signex_net::project_occurrences(&project);
-    let placed: Vec<(InstancePath, &SchematicSheet, &PathBuf)> = occurrences
-        .iter()
-        .filter_map(|o| {
-            Some((
-                o.instance_path.clone(),
-                graph.sheets.get(&o.key)?,
-                graph.paths.get(&o.key)?,
-            ))
-        })
-        .collect();
+    let design = DesignGraph::read(&set, &request.project_dir)?;
+    let placed = design.placed();
     let mut placements: HashMap<&PathBuf, usize> = HashMap::new();
     for (_, _, file) in &placed {
         *placements.entry(*file).or_default() += 1;
@@ -99,7 +69,6 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         .iter()
         .map(|(path, sheet, _)| (path.clone(), *sheet))
         .collect();
-    let unreadable = unreadable_placements(&set, &graph, &occurrences);
     let resolver = Resolver::open(&request.libraries);
     let eco_parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
     let mut files = HashMap::new();
@@ -124,17 +93,13 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         board: &request.board,
         revision: request.revision,
         parts: &parts,
-        unreadable: &unreadable,
+        unreadable: &design.unreadable,
     });
     if let Some(previous) = &request.previous {
         list.keep_choices_from(previous);
     }
     let open: HashMap<PathBuf, u64> = request.open_revisions.into_iter().collect();
-    let sheet_revisions = graph
-        .paths
-        .values()
-        .map(|path| (path.clone(), open.get(path).copied()))
-        .collect();
+    let sheet_revisions = design.sheet_revisions(&open);
     let loaded: HashMap<PathBuf, SchematicSheet> = files
         .values()
         .map(|f: &PartFile| &f.file)

@@ -639,6 +639,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

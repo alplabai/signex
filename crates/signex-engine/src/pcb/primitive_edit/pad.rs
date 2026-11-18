@@ -6,6 +6,7 @@
 use pcb_geom::{Placement, PointNm, Side, pad_world_center};
 use signex_types::pcb::{Footprint, LayerSizes, Pad, PadNet, PadShape, PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_pad_shape::pad_shape_fault;
 use signex_types::pcb_stack::{StackMode, board_copper_layers, sizes_in_mode};
 use uuid::Uuid;
 
@@ -24,6 +25,14 @@ pub enum PadEdit {
     SizeX(f64),
     SizeY(f64),
     Shape(PadShape),
+    /// The shape with the parameters it reads, set together so a pad
+    /// turning into a trapezoid or custom pad is never left without them
+    /// (#2242). Pad-local mm.
+    Geometry {
+        shape: PadShape,
+        trapezoid_delta: Point,
+        custom_outline: Vec<Point>,
+    },
     HoleSize(f64),
     /// 0 is no net. A net set here is kept when the schematic is synced
     /// (`Pad::net_locked`).
@@ -102,6 +111,15 @@ pub(super) fn apply(
         PadEdit::SizeX(x) => pad.size.x = finite(*x)?,
         PadEdit::SizeY(y) => pad.size.y = finite(*y)?,
         PadEdit::Shape(shape) => pad.shape = *shape,
+        PadEdit::Geometry {
+            shape,
+            trapezoid_delta,
+            custom_outline,
+        } => {
+            pad.shape = *shape;
+            pad.trapezoid_delta = *trapezoid_delta;
+            pad.custom_outline = custom_outline.clone();
+        }
         PadEdit::Sizes(sizes) => pad.layer_sizes = sizes.clone(),
         PadEdit::Mode(mode) => {
             let copper = board_copper_layers(&board.layers);
@@ -137,7 +155,11 @@ pub(super) fn apply(
             pad.net_locked = true;
         }
     }
-    Ok(())
+    // The file refuses such a pad on save and load, so the edit does too.
+    match pad_shape_fault(pad) {
+        Some(fault) => Err(PrimitiveEditRefusal::PadShape(fault)),
+        None => Ok(()),
+    }
 }
 
 /// Set the pad's x and/or y size on `layer`, the other axis kept.

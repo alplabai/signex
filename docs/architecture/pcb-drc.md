@@ -159,7 +159,10 @@ severity := "error" | "warning" | "info"
 |---|---|---|---|
 | `clearance` | `clearance >=` | `between` two of `track`, `pad`, `via`, `hole`, `edge` | checked between copper items (track, pad, via); a pair with `hole` or `edge` is valid but not checked yet: a warning says so and the rule is not applied |
 | `track` | `width >=`, `width <=` | none | checked |
-| `via` | `diameter >=`, `drill >=` | none | checked |
+| `via` | `diameter >=`, `drill >=`, `pad_gap >=` | none | checked |
+| `hole` | `diameter >=`, `diameter <=`, `annular >=`, `spacing >=` | none | checked (#2435): every via and pad hole |
+| `edge` | `clearance >=` | none | checked: netted copper against the saved outline |
+| `silk`, `mask`, `paste`, `courtyard` | see `DRC_RULES.md`, "The base rules" | none | checked; board-wide only (no `when`) |
 
 | Condition | Scope | Net-scope rank |
 |---|---|---|
@@ -180,7 +183,8 @@ Units are `mm`, `mil`, `um` (or `µm`) and `nm`, converted to integer nm with
 `pcb_geom::mm_to_nm`. A unit may follow the number directly (`0.2mm`) or after
 spaces (`0.2 mm`); after a space only these unit words count, so `0.2 and`
 is a missing unit, not a unit called `and`. There is no expression
-arithmetic (#1984, #1989). A limit of 0 is a warning (it checks nothing); a
+arithmetic (#1984, #1989). A limit of 0 is a warning where it checks nothing
+(a gap or a minimum expansion of 0 still checks, `DRC_RULES.md`); a
 clearance over 10 mm is a warning and one over 100 mm is refused, since a
 clearance widens the search around every copper item it covers.
 
@@ -425,13 +429,14 @@ many keepouts make it slow.
 
 ## Not checked yet
 
-Hole-to-hole, silk-to-pad, courtyard overlap, zone clearance (#2216), annular
-ring, copper with no net (net 0 is skipped, like in the ratsnest), clearance
-to holes and the board edge (the rule language parses them), region-scoped
-rules (v2) and the board setup's minimum width and via sizes. Each is its own
-follow-up.
+Zone clearance (#2216), copper with no net (net 0 is skipped, like in the
+ratsnest, also against the board edge), clearance between copper and holes
+(the rule language parses it), region-scoped rules (v2) and the board
+setup's minimum width and via sizes. The base rules of #2435 measure
+approximately where `DRC_RULES.md` says so (a part's silkscreen texts, a
+courtyard as a box). Each is its own follow-up.
 
 From the board sketch (#2234): `no_pours` keepouts (zones are not tested
 against keepouts), board mounting holes in a `no_drilling` keepout, and
-copper-to-board-edge and copper-to-cutout clearance: the rules hold no edge
-clearance yet, so the baked outline and cutouts are not checked.
+copper-to-cutout clearance: an edge rule (`on edge`) measures the saved
+outline only.

@@ -204,6 +204,7 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("unlock_board_items", BOARD_EDIT),
     ("set_via_span", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
+    ("set_pad_shape", BOARD_EDIT),
     // #2408, #2409: the board Tools edits are board steps of their own.
     ("stitch_vias", BOARD_EDIT),
     ("add_teardrops", BOARD_EDIT),
@@ -238,6 +239,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ),
     (
         "set_board_graphic",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_text",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
     // #2389: length tuning lands on the named board's own undo stack.
@@ -303,6 +308,22 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ),
     (
         "project_set_version_control",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_add_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_enable_requirement",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
 ];

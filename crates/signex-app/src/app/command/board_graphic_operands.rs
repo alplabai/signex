@@ -70,7 +70,10 @@ fn answer(path: &std::path::Path, graphic: &BoardGraphic, revision: u64) -> Valu
 
 impl Signex {
     /// The board `document` names, when it is open and can be edited.
-    fn editable_named_board(&self, args: &CommandArgs) -> Result<std::path::PathBuf, String> {
+    pub(super) fn editable_named_board(
+        &self,
+        args: &CommandArgs,
+    ) -> Result<std::path::PathBuf, String> {
         let path = self.named_output_board(args)?;
         let engine = self
             .document_state

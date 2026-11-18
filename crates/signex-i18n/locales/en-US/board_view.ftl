@@ -1,0 +1,142 @@
+# The board view configuration in the Layers panel (#2363): the Layers &
+# Colors tab and the View Options tab.
+
+# The two tabs of the Layers panel.
+pcb-layers-tab-layers = Layers & Colors
+pcb-layers-tab-view-options = View Options
+# Placeholder of the field that filters the layer rows by name.
+pcb-layers-search = Search layers
+# The row whose eye shows or hides every layer.
+pcb-layers-all-layers = All Layers
+# Toggle that lists only the layers the board has objects on.
+pcb-layers-used-on = Used On
+pcb-layers-used-on-tip = List only the layers the board has objects on
+# Section headers.
+pcb-layers-signal-plane = Signal and Plane Layers
+pcb-layers-pairs = Component Layer Pairs
+pcb-layers-technical = Other Technical Layers
+pcb-layers-other = Other Layers
+pcb-layers-system-colors = System Colors
+# The type column of a copper row.
+pcb-layers-type-signal = Signal
+pcb-layers-type-plane = Plane
+# The copper number in front of a copper row's name.
+pcb-layers-copper-number = { $number }
+# The column headers of the Component Layer Pairs table.
+pcb-layers-pair-top = Top
+pcb-layers-pair-layer = Layer
+pcb-layers-pair-bottom = Bottom
+# A row of the Component Layer Pairs table. $pair is the row's token.
+pcb-layers-pair = { $pair ->
+    [body_3d] 3D Body
+    [assembly] Assembly
+    [coating] Coating
+    [component_center] Component Center
+    [component_outline] Component Outline
+    [courtyard] Courtyard
+    [designator] Designator
+    [overlay] Overlay
+    [paste] Paste
+    [solder] Solder
+    [tenting] Tenting
+    [value] Value
+    [adhesive] Adhesive
+    [fiducial] Fiducial
+   *[keepout] Keep-Out
+}
+# Tooltip of a greyed-out row: the board has no layer for it.
+pcb-layers-no-layer = No board layer for this row yet
+# The Drill Guide row of Other Layers; there is no layer for it yet.
+pcb-layers-drill-guide = Drill Guide
+# Tooltip of a layer's colour chip.
+pcb-layers-colour-tip = Pick this layer's colour in this view
+# Label of the colour row that opens under a chip.
+pcb-layers-colour = Colour
+# Caption of a chip that shows the board palette's colour.
+pcb-layers-colour-palette = Palette
+# The layer set dropdown and its name field.
+pcb-layers-sets = Layer Sets
+# The active layer dropdown.
+pcb-layers-active-layer = Active Layer
+# Mirrors the board view, as if seen from below.
+pcb-layers-view-from-bottom = View From Bottom Side
+# Import and export of the colour and visibility configuration.
+pcb-layers-import = Import...
+pcb-layers-export = Export...
+# Tooltip of a control the board view cannot honour yet.
+pcb-layers-not-yet = The board view cannot do this yet
+# A row of System Colors. $row is the row's token.
+pcb-layers-system = { $row ->
+    [connection_lines] Connection Lines
+    [selection] Selection/Highlight
+    [pad_holes] Pad Holes
+    [via_holes] Via Holes
+    [origin_marker] Origin Marker
+    [component_reference] Component Reference Point
+    [body_reference] 3D Body Reference Point
+    [snap_points] Custom Snap Points
+    [drc_markers] DRC Error / Waived DRC Error Markers
+    [violation_markers] Violation / Waived Violation Markers
+    [board] Board Line/Area
+    [sheet] Sheet Line/Area
+    [workspace_start] Workspace Start Color
+   *[workspace_end] Workspace End Color
+}
+# View Options: section headers.
+pcb-view-general = General Settings
+pcb-view-objects = Object Visibility
+pcb-view-mask-dim = Mask and Dim Settings
+pcb-view-additional = Additional Options
+# The configuration preset dropdown, and its one entry so far.
+pcb-view-preset = Configuration
+pcb-view-preset-default = Default
+# The 3D switch and the Single Layer Mode switch, and their states.
+pcb-view-3d = 3D
+pcb-view-single-layer = Single Layer Mode
+pcb-view-off = Off
+pcb-view-on = On
+pcb-view-mono = Mono
+# The grid checkbox.
+pcb-view-show-grid = Show Grid
+# A row of Object Visibility. $kind is the kind's token.
+pcb-view-object = { $kind ->
+    [all] All Objects
+    [pads] Pads
+    [vias] Vias
+    [arcs] Arcs
+    [tracks] Tracks
+    [polygons] Polygons
+    [regions] Regions
+    [fills] Fills
+    [texts] Texts
+    [rooms] Rooms
+    [dimensions] Dimensions
+    [keepouts] Keepouts
+    [coordinates] Coordinates
+   *[body_3d] 3D Body
+}
+# The Draft column (outline only) and the Transparency column.
+pcb-view-draft = Draft
+pcb-view-transparency = Transparency
+# The All Objects row while the rows differ.
+pcb-view-mixed = Mixed
+# A transparency or dim value. $percent is a whole number.
+pcb-view-percent = { $percent } %
+# The sliders of Mask and Dim Settings.
+pcb-view-dimmed = Dimmed Objects
+pcb-view-highlighted = Highlighted Objects
+pcb-view-masked = Masked Objects
+# A toggle chip of Additional Options. $option is the chip's token.
+pcb-view-option = { $option ->
+    [test_points] Test Points
+    [status_info] Status Info
+    [pad_nets] Pad Nets
+    [pad_numbers] Pad Numbers
+    [via_nets] Via Nets
+    [via_span] Via Span
+    [all_connections] All Connections in Single Layer Mode
+    [net_color_override] Net Color Override
+    [layer_colors_for_connections] Use Layer Colors for Connection Drawing
+    [repeated_net_names] Repeated Net Names on Tracks
+   *[special_strings] Special Strings
+}

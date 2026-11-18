@@ -614,6 +614,7 @@ impl Signex {
                     projects_view: Default::default(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),
+                    pcb_layers_ui: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -804,6 +805,7 @@ impl Signex {
             },
             native_menu: Default::default(),
             agent: crate::app::agent::AgentState::new(),
+            pan_zoom_bench: None,
         };
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).

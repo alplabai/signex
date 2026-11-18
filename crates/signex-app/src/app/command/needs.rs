@@ -428,6 +428,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
+        // #2368: a footprint text on the board `document` names.
+        "set_footprint_text" => Needs::Pcb,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
@@ -436,7 +438,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "lock_board_items"
         | "unlock_board_items"
         | "set_via_span"
-        | "set_layer_sizes" => Needs::Pcb,
+        | "set_layer_sizes"
+        | "set_pad_shape" => Needs::Pcb,
         // #2408: with nothing selected these act on every pour or net.
         "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
         // #2408, #2409: these act on the selection only.
@@ -480,7 +483,14 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "show_layer_group"
         | "set_layer_tab_names"
         | "toggle_layer_numbers"
-        | "flip_board_view" => Needs::Pcb,
+        | "flip_board_view"
+        // #2363: the Layers panel's board view configuration.
+        | "set_layer_visible"
+        | "set_active_layer"
+        | "set_layer_color"
+        | "show_used_layers_only"
+        | "set_object_visible"
+        | "set_object_transparency" => Needs::Pcb,
         // At 0° Reset has nothing to do, so it is greyed.
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,

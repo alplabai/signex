@@ -20,6 +20,7 @@ signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-output
 signex-app -> signex-renderer
+signex-app -> signex-req
 signex-app -> signex-sketch
 signex-app -> signex-types
 signex-app -> signex-widgets
@@ -59,6 +60,8 @@ signex-renderer -> pcb-geom
 signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
 signex-renderer -> signex-types
+signex-req -> signex-bom
+signex-req -> signex-types
 signex-sketch -> signex-types
 signex-widgets -> signex-i18n
 signex-widgets -> signex-types

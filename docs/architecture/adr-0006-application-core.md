@@ -263,7 +263,7 @@ ADR-0001 A2 stays. This record names the layer above the engines and makes the e
 | DDD element | In signex |
 |---|---|
 | Aggregate (root and its commands) and consistency boundary | A document and its `signex-engine` engine: `Command` → `DocumentPatch`, history, revision. `AppCore` never pokes document fields. This holds for schematics today; symbol, footprint and Component rows join as #661's `History<S>` lands. Until then, their app-local history moves with them. |
-| Domain services | `signex-net`, `signex-erc`/`-dsl`, `signex-drc`/`-dsl`, `signex-sketch`, `signex-bake`, `signex-bom`, `signex-output`, `pcb-geom`, and the domain part of `signex-library`. Every UI-free domain crate is listed in `DOMAIN` in `scripts/check_arch_guard.sh`. |
+| Domain services | `signex-net`, `signex-erc`/`-dsl`, `signex-drc`/`-dsl`, `signex-req`, `signex-sketch`, `signex-bake`, `signex-bom`, `signex-output`, `pcb-geom`, and the domain part of `signex-library`. Every UI-free domain crate is listed in `DOMAIN` in `scripts/check_arch_guard.sh`. |
 | Value objects | `coord`, `rotation2d`, `anchor2d`, … (unchanged) |
 | Common domain types | `signex-types`, the whole model's data shared inside one team. "Shared kernel" is kept for the one real context seam, the schematic-to-PCB `Netlist` contract of ADR-0001 A3.1. The crate keeps its name. |
 | Application layer (use cases) | the `AppCore` command handlers: load, run a command, save, run ERC/DRC, journal an agent edit. A command that touches several documents (ECO, back-annotation) records one undo group. |

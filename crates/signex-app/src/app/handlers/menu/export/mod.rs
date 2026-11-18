@@ -15,7 +15,7 @@ mod erc_report;
 mod loose_bom;
 mod page_setup;
 mod pdf_netlist;
-mod placements;
+pub(crate) mod placements;
 mod print_preview;
 mod raster_job;
 mod sheet_numbers;

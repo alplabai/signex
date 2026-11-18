@@ -2,6 +2,7 @@
 
 use signex_types::format::mm_as_stored_nm;
 use signex_types::pcb::Point;
+use signex_types::pcb_pad_shape::PadShapeFault;
 
 /// Nanometres in one millimetre.
 pub const NM_PER_MM: i64 = 1_000_000;
@@ -18,12 +19,15 @@ pub enum GeomError {
     Unrepresentable(&'static str),
     /// Two items of one board share an identity; the later one is left out.
     DuplicateItem,
+    /// A trapezoid or custom pad whose parameters make no copper (#2242).
+    PadShape(PadShapeFault),
 }
 
 impl std::fmt::Display for GeomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GeomError::DuplicateItem => write!(f, "another item on the board has this identity"),
+            GeomError::PadShape(fault) => write!(f, "pad.{}: {fault}", fault.field()),
             GeomError::Unrepresentable(field) => {
                 write!(
                     f,

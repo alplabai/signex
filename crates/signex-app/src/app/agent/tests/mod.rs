@@ -4,6 +4,7 @@
 
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 #[cfg(unix)]
 mod client;
 mod deferred;
@@ -86,6 +87,7 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

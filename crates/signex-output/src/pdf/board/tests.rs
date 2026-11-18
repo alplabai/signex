@@ -293,6 +293,34 @@ fn a_text_frame_prints_its_box_and_lines() {
     );
 }
 
+/// #2368: a footprint's shown designator prints on its overlay; a hidden
+/// one does not.
+#[test]
+fn a_designator_prints_on_its_overlay_unless_hidden() {
+    let board = fixture();
+    let designator = |hidden: bool| {
+        let mut with = board.clone();
+        let part = with
+            .footprints
+            .iter_mut()
+            .find(|f| f.reference == "R1")
+            .expect("R1");
+        part.properties.push(signex_types::property::PcbProperty {
+            key: "Reference".into(),
+            value: "R1".into(),
+            hidden,
+            justify: signex_types::schematic::HAlign::Left,
+            ..Default::default()
+        });
+        with
+    };
+    let before = top_page_ops(&board).matches("BT\n").count();
+    let shown = top_page_ops(&designator(false)).matches("BT\n").count();
+    let hidden = top_page_ops(&designator(true)).matches("BT\n").count();
+    assert_eq!(shown, before + 1);
+    assert_eq!(hidden, before);
+}
+
 #[test]
 fn a_one_to_one_board_larger_than_the_page_is_flagged() {
     let mut board = fixture();

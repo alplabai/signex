@@ -350,7 +350,13 @@ fn committed_footprints_equal_the_generator_output() {
         .collect();
     assert_eq!(chips.len(), 14, "seven sizes, plain and polarised");
     for file in chips {
-        let committed = read_lf(&stock_dir().join(&file.file_name));
+        // The committed files stay `snxfpt/1`, which is still read; the
+        // generator saves the current token (#2242).
+        let committed = read_lf(&stock_dir().join(&file.file_name)).replacen(
+            "format = \"snxfpt/1\"\n",
+            "format = \"snxfpt/1.1\"\n",
+            1,
+        );
         assert_eq!(
             committed,
             file.text.replace("\r\n", "\n"),

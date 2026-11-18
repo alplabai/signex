@@ -219,6 +219,12 @@ impl Signex {
             RuleKind::Clearance => "0.2mm",
             RuleKind::Track => "0.15mm",
             RuleKind::Via => "0.45mm",
+            RuleKind::Hole => "0.2mm",
+            RuleKind::Edge => "0.3mm",
+            RuleKind::Silk => "0.15mm",
+            RuleKind::Mask => "0.1mm",
+            RuleKind::Paste => "0mm",
+            RuleKind::Courtyard => "0mm",
         };
         if draft.set_values(first).is_err() {
             return;

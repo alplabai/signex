@@ -164,7 +164,7 @@ fn paint(
                 .with_line_cap(LineCap::Round);
             frame.stroke(&path, stroke);
         }
-        Shape::Rect { .. } | Shape::RoundRect { .. } => {
+        Shape::Rect { .. } | Shape::RoundRect { .. } | Shape::Polygon { .. } => {
             let points = shape.outline(CORNER_STEPS);
             let path = Path::new(|b| {
                 let mut ring = points.iter().map(|p| screen(camera, *p));

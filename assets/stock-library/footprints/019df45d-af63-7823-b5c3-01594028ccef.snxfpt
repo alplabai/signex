@@ -24,6 +24,7 @@ released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
 schema_version = 3
+description = "0805 chip land, two pads."
 
 [footprints.courtyard]
 points = [

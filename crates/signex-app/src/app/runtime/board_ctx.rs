@@ -17,7 +17,18 @@ impl Signex {
             .active_tab_path()
             .map(|path| self.pcb_layer_view(&path))
             .unwrap_or_default();
-        crate::panels::PcbLayersPanel::new(&board.layers, &view, self.ui_state.i18n.clone())
+        crate::panels::PcbLayersPanel {
+            saved_sets: self
+                .ui_state
+                .layer_strip
+                .saved_sets
+                .iter()
+                .map(|set| set.name.clone())
+                .collect(),
+            grid_visible: self.ui_state.grid_visible,
+            board_3d: self.board_3d_in_view().is_some(),
+            ..crate::panels::PcbLayersPanel::new(board, &view, self.ui_state.i18n.clone())
+        }
     }
 
     /// The Properties panel's board summary for the active tab. The selection

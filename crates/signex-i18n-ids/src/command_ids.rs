@@ -20,6 +20,7 @@ define_ids! {
         CMD_CENTER_VIEW_AT_CURSOR = "cmd-center-view-at-cursor";
         CMD_CHECK_DRC = "cmd-check-drc";
         CMD_CHECK_ERC = "cmd-check-erc";
+        CMD_CHECK_REQUIREMENTS = "cmd-check-requirements";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";
         CMD_MENU_CLOSE_ACTIVE_DOCUMENT = "cmd-menu-close-active-document";
         CMD_CLOSE_ALL_DOCUMENTS = "cmd-close-all-documents";
@@ -258,6 +259,11 @@ define_ids! {
         CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
         CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
         CMD_PROJECT_SET_VERSION_CONTROL = "cmd-project-set-version-control";
+        CMD_PROJECT_ADD_REQUIREMENT = "cmd-project-add-requirement";
+        CMD_PROJECT_SET_REQUIREMENT = "cmd-project-set-requirement";
+        CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
+        CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
+        CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";
@@ -457,6 +463,18 @@ define_ids! {
         CMD_MENU_HIDE_LAYER_GROUP = "cmd-menu-hide-layer-group";
         CMD_SHOW_LAYER_GROUP = "cmd-show-layer-group";
         CMD_MENU_SHOW_LAYER_GROUP = "cmd-menu-show-layer-group";
+        CMD_SET_LAYER_VISIBLE = "cmd-set-layer-visible";
+        CMD_MENU_SET_LAYER_VISIBLE = "cmd-menu-set-layer-visible";
+        CMD_SET_ACTIVE_LAYER = "cmd-set-active-layer";
+        CMD_MENU_SET_ACTIVE_LAYER = "cmd-menu-set-active-layer";
+        CMD_SET_LAYER_COLOR = "cmd-set-layer-color";
+        CMD_MENU_SET_LAYER_COLOR = "cmd-menu-set-layer-color";
+        CMD_SHOW_USED_LAYERS_ONLY = "cmd-show-used-layers-only";
+        CMD_MENU_SHOW_USED_LAYERS_ONLY = "cmd-menu-show-used-layers-only";
+        CMD_SET_OBJECT_VISIBLE = "cmd-set-object-visible";
+        CMD_MENU_SET_OBJECT_VISIBLE = "cmd-menu-set-object-visible";
+        CMD_SET_OBJECT_TRANSPARENCY = "cmd-set-object-transparency";
+        CMD_MENU_SET_OBJECT_TRANSPARENCY = "cmd-menu-set-object-transparency";
         CMD_SET_LAYER_TAB_NAMES = "cmd-set-layer-tab-names";
         CMD_MENU_SET_LAYER_TAB_NAMES = "cmd-menu-set-layer-tab-names";
         CMD_TOGGLE_LAYER_NUMBERS = "cmd-toggle-layer-numbers";
@@ -503,6 +521,7 @@ define_ids! {
         CMD_MENU_UNLOCK_BOARD_ITEMS = "cmd-menu-unlock-board-items";
         CMD_SET_VIA_SPAN = "cmd-set-via-span";
         CMD_SET_LAYER_SIZES = "cmd-set-layer-sizes";
+        CMD_SET_PAD_SHAPE = "cmd-set-pad-shape";
         CMD_STITCH_VIAS = "cmd-stitch-vias";
         CMD_MENU_STITCH_VIAS = "cmd-menu-stitch-vias";
         CMD_ADD_TEARDROPS = "cmd-add-teardrops";
@@ -542,6 +561,7 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_TEXT_FRAME = "cmd-menu-place-board-text-frame";
         CMD_ADD_BOARD_GRAPHIC = "cmd-add-board-graphic";
         CMD_SET_BOARD_GRAPHIC = "cmd-set-board-graphic";
+        CMD_SET_FOOTPRINT_TEXT = "cmd-set-footprint-text";
         CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
         CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
         CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";

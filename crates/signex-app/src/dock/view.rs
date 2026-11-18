@@ -201,7 +201,19 @@ impl DockArea {
                 .on_release(DockMessage::TabClick(position, i))
                 .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
-                tab_row = tab_row.push(tab.boxed());
+                // A squeezed tab ends its label in an ellipsis; the whole
+                // name shows in a tooltip (#2468).
+                if squeezed.is_some() {
+                    let tip = container(text(t!(ctx.i18n, panel.message())).size(tab_size))
+                        .padding([SP.xs, SP.s]);
+                    tab_row = tab_row.push(
+                        signex_widgets::tooltip(tab, tip, iced::widget::tooltip::Position::Bottom)
+                            .style(styles::context_menu(&ctx.tokens))
+                            .boxed(),
+                    );
+                } else {
+                    tab_row = tab_row.push(tab.boxed());
+                }
             }
             tab_row.boxed()
         })

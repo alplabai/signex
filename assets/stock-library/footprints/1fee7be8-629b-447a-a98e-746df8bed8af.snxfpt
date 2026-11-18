@@ -1,0 +1,177 @@
+format = "snxfpt/1"
+file_uuid = "6fb3666c-71f4-4c78-bf12-6535674eb12d"
+display_name = "SOT-23"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[footprints]]
+uuid = "1fee7be8-629b-447a-a98e-746df8bed8af"
+name = "SOT-23"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	0.8	0.9	-0.95	-1	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	0.8	0.9	0.95	-1	0	Top Layer|Top Solder|Top Paste			0.05	0
+3	Smd	rect	0.8	0.9	0	1	0	Top Layer|Top Solder|Top Paste			0.05	0
+'''
+silk_f = []
+silk_b = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+schema_version = 3
+description = "SOT-23, three leads, 0.95 mm pitch."
+default_designator = "Q?"
+
+[footprints.courtyard]
+points = [
+    [
+    -1.7,
+    -1.7,
+],
+    [
+    1.7,
+    -1.7,
+],
+    [
+    1.7,
+    1.7,
+],
+    [
+    -1.7,
+    1.7,
+],
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "rectangle"
+from = [
+    -1.45,
+    -0.65,
+]
+to = [
+    1.45,
+    0.65,
+]
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.1100000143051147
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "9b7fa1e5-063f-4555-9d00-efa5f2f8b171"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "a962386a-5ef1-4a3c-b047-d342b0bd6a76"
+plane = "9b7fa1e5-063f-4555-9d00-efa5f2f8b171"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-pad_pitch"
+offset_y_expr = "-row_half"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "392771c9-7439-4707-885f-513ff01da7fa"
+plane = "9b7fa1e5-063f-4555-9d00-efa5f2f8b171"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "pad_pitch"
+offset_y_expr = "-row_half"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "7805c96b-4387-435b-9ccb-39736ee85fea"
+plane = "9b7fa1e5-063f-4555-9d00-efa5f2f8b171"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "3"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "0mm"
+offset_y_expr = "row_half"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "1.3mm"
+body_w = "2.9mm"
+pad_h = "0.9mm"
+pad_pitch = "0.95mm"
+pad_w = "0.8mm"
+row_half = "1.0mm"

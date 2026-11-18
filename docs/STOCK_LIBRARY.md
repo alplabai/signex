@@ -114,3 +114,24 @@ footprint loads by name get the new 0805 land, but a part already placed
 keeps its footprint and an existing PCB keeps its copper, and Library
 Updates shows no entry. (Stock is Personal mode, so a version bump would
 be applied silently on open and dirty every design using a stock part.)
+
+## Polarised capacitor, transistors and Values (#2468)
+
+`C_Polarized` defaults to `Chip-0805-Polarised` with the polarised sizes as
+alternates: its pin 1 is the positive plate, which the land's pad 1 marks
+(the band a polarised chip capacitor carries). Q_NPN, Q_PNP, Q_NMOS and
+Q_PMOS pair with the new `SOT-23` land, whose pins 1, 2, 3 are the B, E, C
+and G, S, D of the stock symbols. The land is from the onsemi SOT-23 (Case
+318-08) package drawing's mounting footprint: 0.8 x 0.9 mm pads, 0.95 mm
+pitch, 2.0 mm row to row; body 2.9 x 1.3 mm, 1.11 mm high; the courtyard
+holds body and land plus 0.25 per side. Numbers in
+`crates/signex-app/examples/build_stock_library/sot23.rs`.
+
+Every stock footprint carries a Description, and the single-use ones a
+Default Designator (SOIC-8 and QFN-16 `U?`, SOT-23 `Q?`, the mounting hole
+`H?`, the fiducial `FID?`); a chip land serves several kinds of part and
+names none. The 74HC rows carry their part number as `value`; the generic
+parts leave Value, Manufacturer and MPN empty for the designer.
+
+The other symbol-only rows (Crystal, the connectors and screw terminals,
+the 74HC parts) still have no footprint.

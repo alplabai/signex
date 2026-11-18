@@ -235,6 +235,12 @@ impl Signex {
                 all.extend(part);
             }
         }
+        // #2339: the Requirements section.
+        if let (Value::Object(all), Value::Object(part)) =
+            (&mut answer, self.project_requirements_json(id))
+        {
+            all.extend(part);
+        }
         Ok(answer)
     }
 

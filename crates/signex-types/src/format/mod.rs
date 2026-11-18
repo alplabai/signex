@@ -40,6 +40,7 @@ mod extras;
 mod finite_toml;
 mod header_id;
 mod load_repair;
+mod pad_shape_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
@@ -170,9 +171,12 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 /// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
 /// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
 /// shapes are gone, and an unknown shape token or a roundrect ratio outside
-/// `0..=0.5` is a load error. Builds that predate the policy refuse 1.1
-/// outright; a build opens a file one minor newer than itself read-only.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.3";
+/// `0..=0.5` is a load error. 1.4: the `trapezoid` and `custom` pad shapes
+/// return with their parameters in the optional `trapezoid_delta` and
+/// `custom_outline` pad columns, and a parameter that cannot make copper is
+/// a load error. Builds that predate the policy refuse 1.1 outright; a build
+/// opens a file one minor newer than itself read-only.
+pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
 
 // ---------------------------------------------------------------------------
 // Error type

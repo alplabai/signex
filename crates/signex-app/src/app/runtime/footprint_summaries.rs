@@ -23,6 +23,7 @@ pub(super) fn footprint_pad_shape_label(
         PadShape::Oval => "Oval",
         PadShape::RoundRect { .. } => "RoundRect",
         PadShape::Chamfered { .. } => "Chamfered",
+        PadShape::Trapezoid { .. } => "Trapezoid",
         PadShape::Custom(_) => "Custom",
     }
 }

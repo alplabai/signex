@@ -15,6 +15,7 @@ use super::super::state::Signex;
 use crate::library::drift::split_lib_id;
 use crate::library::place::lib_id_of;
 use crate::panels::FootprintChoiceItem;
+use signex_library::part_footprint::chosen_footprint;
 use signex_library::primitive::PrimitiveRef;
 
 impl Signex {
@@ -36,7 +37,7 @@ impl Signex {
         if bindings.len() < 2 {
             return Vec::new();
         }
-        let current = chosen_binding(symbol).or(row.footprint_ref);
+        let current = chosen_footprint(symbol).or(row.footprint_ref);
         let mut items: Vec<FootprintChoiceItem> = bindings
             .iter()
             .map(|b| FootprintChoiceItem {
@@ -88,7 +89,7 @@ impl Signex {
         symbol: &signex_types::schematic::Symbol,
     ) -> Option<PrimitiveRef> {
         let (_, _, row) = self.row_of_placed_symbol(symbol)?;
-        chosen_binding(symbol).or(row.footprint_ref)
+        chosen_footprint(symbol).or(row.footprint_ref)
     }
 
     /// Build `symbol_id` with the footprint `binding` names.
@@ -185,12 +186,4 @@ impl Signex {
 pub(crate) struct FootprintChoiceRefusal {
     pub(crate) reference: String,
     pub(crate) why: &'static str,
-}
-
-/// The alternate footprint a part is built with, from its valid stamp; `None`
-/// for the row's default.
-fn chosen_binding(symbol: &signex_types::schematic::Symbol) -> Option<PrimitiveRef> {
-    let key = symbol.valid_stamp()?.footprint_ref.as_deref()?;
-    let (library, footprint) = split_lib_id(key)?;
-    Some(PrimitiveRef::new(library, footprint))
 }

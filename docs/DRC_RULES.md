@@ -60,11 +60,25 @@ The language has no comments yet.
 |---|---|
 | `clearance` | `clearance >= <length>` |
 | `track` | `width >= <length>`, `width <= <length>` |
-| `via` | `diameter >= <length>`, `drill >= <length>` |
+| `via` | `diameter >= <length>`, `drill >= <length>`, `pad_gap >= <length>` (via in pad) |
+| `hole` | `diameter >= <length>`, `diameter <= <length>` (hole size), `annular >= <length>` (annular ring), `spacing >= <length>` (hole to hole) |
+| `edge` | `clearance >= <length>` (copper to the board outline) |
+| `silk` | `pad_clearance >= <length>`, `spacing >= <length>` (to other silkscreen) |
+| `mask` | `sliver >= <length>`, `expansion >= <length>`, `expansion <= <length>` |
+| `paste` | `expansion >= <length>`, `expansion <= <length>` |
+| `courtyard` | `spacing >= <length>` |
+
+A `silk`, `mask`, `paste` or `courtyard` rule is board-wide: it takes no
+`when` condition. What each one measures is under [The base rules](#the-base-rules).
 
 A length is a number with its unit: `0.2mm` or `0.2 mm`, `8mil`, `150um`
 (or `150µm`), `125000nm`. A limit of 0 is reported: a minimum of 0 checks
-nothing, and `width <= 0mm` reports every track in scope. A
+nothing, `width <= 0mm` reports every track in scope and `diameter <= 0mm`
+every hole. A gap of 0
+(`pad_gap`, a hole, silkscreen or courtyard `spacing`, `pad_clearance`, an
+edge `clearance`) still finds objects that touch or overlap, a minimum
+expansion of 0 finds negative ones and a maximum expansion of 0 finds
+positive ones, so those are not reported. A
 clearance over 10 mm is reported as a likely wrong unit, and one over 100 mm
 is not applied.
 
@@ -87,7 +101,54 @@ a clearance rule.
 `between <object> and <object>` limits a clearance rule to two kinds of
 object, in either order: `track`, `pad`, `via`. `hole` and `edge` are
 accepted but not checked yet: such a rule is reported in Messages and not
-applied.
+applied. Hole to hole is `on hole require spacing`, and copper to the board
+outline is `on edge require clearance`.
+
+## The base rules
+
+The PCB Design scope of [`ROADMAP.md`](ROADMAP.md) names 15 base rules
+(#2474). Twelve are written as rule text; the last three are always checked.
+A test runs each one on a board that passes it and one that breaks it,
+through `check_drc` and Run DRC. Only a limit a rule sets is checked: a board
+with no rule text is checked for clearance, shorts, unconnected links and
+keepouts alone.
+
+| Base rule | Written as | What is measured |
+|---|---|---|
+| Clearance | `on clearance require clearance >= …` | copper of two nets, edge to edge |
+| Track width | `on track require width >= … and width <= …` | each track and copper arc |
+| Annular ring | `on hole require annular >= …` | (smallest copper size − drill) / 2 of each via and plated pad; an unplated hole has none |
+| Hole size | `on hole require diameter >= … and diameter <= …` | the drill of each via and pad hole; the minimum skips a via a via `drill` rule covers, so a too-small via drill is one finding |
+| Hole to hole | `on hole require spacing >= …` | two holes, edge to edge, whatever their nets; the pair needs the larger of its two holes' limits |
+| Via in pad | `on via require pad_gap >= 0mm` | a via's copper against each surface-mount pad of its own net (or of no net) on a shared layer; `0mm` finds a via in a pad, a larger value also one too near it |
+| Silkscreen to pad | `on silk require pad_clearance >= …` | silkscreen against each pad with copper on that side's outer layer |
+| Silkscreen to silkscreen | `on silk require spacing >= …` | the silkscreen of two parts, or of a part and a board drawing or string; two board drawings or strings are not checked against each other |
+| Mask sliver and expansion | `on mask require sliver >= … and expansion <= …` | the mask strip between two openings on one side (openings that touch leave none); the manual mask expansion of vias and tracks |
+| Paste expansion | `on paste require expansion >= … and expansion <= …` | the manual paste expansion of tracks |
+| Board outline clearance | `on edge require clearance >= …` | each netted copper item against the board outline, at its closest point |
+| Courtyard overlap | `on courtyard require spacing >= 0mm` | the courtyards of two parts on one side |
+| Keepout | always | the board sketch's keepouts |
+| Unrouted net | always | the links the ratsnest still shows |
+| Short circuit | always | copper of two nets that touches |
+
+What each measurement leaves out for now: a part's silkscreen is the strokes
+of its drawings, and a part's own texts are not measured; a board string is
+the box its glyphs fill. A mask opening is a pad's copper (a pad has no
+expansion of its own), a via not tented on that side grown by its manual
+expansion, or a track with a manual mask expansion. A courtyard is the turned
+box of the part's courtyard drawings; a part without any is not checked. The
+board outline is the saved outline; cutouts inside the board are not edges
+yet, and copper wholly outside the outline is not reported. Unnetted copper
+is not checked against the edge.
+
+The DRC panel lists the base rules before the first run. A finding of each
+kind is a row of the DRC panel and a `check_drc` finding filed under its
+written rule (`user::<name>`), with the kind's built-in id
+(`builtin::hole_size`, `builtin::annular_ring`, `builtin::hole_to_hole`,
+`builtin::edge_clearance`, `builtin::via_in_pad`, `builtin::silk_to_pad`,
+`builtin::silk_to_silk`, `builtin::mask_sliver`, `builtin::mask_expansion`,
+`builtin::paste_expansion`, `builtin::courtyard_overlap`) for its severity
+and waiver key.
 
 ## Which rule applies
 
@@ -192,12 +253,15 @@ While the project stores no rules, the tab shows this machine's rules (what
 Run DRC reads) and says so; the first edit stores them in the project, in the
 same undo step.
 
-- **Sub-tabs.** Clearance (clearance rules, object pairs included) and Routing
-  (track width, via diameter and drill), each with the findings of its rules
-  in the last run. Only what Run DRC checks has a column.
-- **Columns.** On, Name, Kind (Routing), Scope, Layer, Objects (Clearance),
-  one column per limit, Severity, Actual, Margin, Violations and Flags. A
-  length is written as typed (`0.2mm`, `8mil`).
+- **Sub-tabs.** Clearance (clearance rules, object pairs included, and board
+  edge rules), Routing (track width, via diameter, drill and pad gap), Holes
+  (hole size, annular ring, hole spacing), Mask & paste, and Silkscreen &
+  courtyard, each with the findings of its rules in the last run. Only what
+  Run DRC checks has a column.
+- **Columns.** On, Name, Kind (a sub-tab of several kinds), Scope and Layer
+  (not on the board-wide Mask & paste and Silkscreen & courtyard sub-tabs),
+  Objects (Clearance), one column per limit, Severity, Actual, Margin,
+  Violations and Flags. A length is written as typed (`0.2mm`, `8mil`).
 - **Scope cell.** `net == "GND"`, `class == "HV"` or `net matches "USB_*"`;
   empty for every net. While it is typed in, the board's nets and the
   project's classes are offered, and a scope that takes in no net is said.
@@ -209,8 +273,9 @@ same undo step.
   with no finding.
 - **Flags.** A rule that never applies on the board (another rule always
   wins, "shadowed"), two equally specific rules that ask different values of
-  the same nets ("conflict"), a rule that lowers a net class's clearance, and
-  a scope that matches no net. Found by the check's own resolution over the
+  the same nets ("conflict"), a rule that lowers a net class's clearance, a
+  scope that matches no net, and a rule below the fab floor ([Fab
+  profiles](#fab-profiles)). Found by the check's own resolution over the
   board's nets, copper layers and object pairs.
 - **Detail.** The selected rule's text, its problems and flags, how many board
   objects it applies to (Show on board opens the board and selects them), and
@@ -234,21 +299,21 @@ step each and answer with data; refusals say why.
 
 | Command | Answer |
 |---|---|
-| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (by column id: `min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`, `min_pad_gap`, `min_hole`, `max_hole`, `min_annular`, `min_hole_spacing`, `min_edge_clearance`, `min_silk_pad`, `min_silk_spacing`, `min_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_spacing`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
 | `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
-| `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
+| `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `kind` is a target (`clearance`, `track`, `via`, `hole`, `edge`, `silk`, `mask`, `paste`, `courtyard`); `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
 | `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |
 | `rules_remove id` | `removed` |
 | `rules_enable id on` | `id`, `enabled` |
-| `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`) |
+| `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is a limit id: `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`, `min_hole_size`, `max_hole_size`, `min_annular_ring`, `min_hole_to_hole`, `min_edge_clearance`, `min_via_pad_gap`, `min_silk_to_pad`, `min_silk_to_silk`, `min_mask_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_gap`) |
 | `rules_explain violation` | for finding `violation` of the last run: `required_mm`, `rule` and one `sides` entry per net, as `rules_effective` answers |
-| `rules_conflicts` | `flags`: `shadowed` (`by`), `conflict` (`with`), `lowers_class` (`class`, `from_mm`, `to_mm`), `no_nets` |
+| `rules_conflicts` | `flags`: `shadowed` (`by`), `conflict` (`with`), `lowers_class` (`class`, `from_mm`, `to_mm`), `no_nets`, `below_fab_floor` (`floor`, `limit`, `from_mm`, `to_mm`) |
 | `rules_matrix_get` | `classes`, `cells` (each `class_a`, `class_b`, `object_pair`, `layer`, `value`, `rule`, `enabled`), `defaults` (each `class_a`, `class_b`, `object_pair`, `value_mm`) and `defaults_from_board` |
 | `rules_matrix_set class_a class_b [object_pair] [layer] [value]` | `change` (`added`, `changed`, `removed`, `unchanged`), `rule` and `cell`; no `value` clears the cell |
 | `rules_set_create name values [severity]` | `set`: `name`, `limits`, `severity`, `uses` (each `scope` and `rules`) |
 | `rules_set_edit set values [severity]` | `set`; every rule the set wrote follows; no `severity` keeps the set's |
 | `rules_set_apply set scope` | `set` and the `rules` written for `scope` |
-| `rules_preset_diff preset` | `preset`, `label`, `mode` (`merge` or `replace`), the counts `added`, `changed`, `removed`, `changes` (each `rule`, `change`, `from`, `to`) and `other` (severity and rule-set lines) |
+| `rules_preset_diff preset` | `preset`, `label`, `mode` (`merge` or `replace`), the counts `added`, `changed`, `removed`, `changes` (each `rule`, `change`, `from`, `to`), `other` (severity and rule-set lines) and `fab` (`manufacturer`, `process`, `source`, `published`, or null) |
 | `rules_preset_apply preset` | as `rules_preset_diff`, applied |
 
 ### Class matrix
@@ -280,7 +345,9 @@ differential-pair class to name.
 
 A named rule set holds limits written once (`min_clearance=0.8mm,
 min_width=0.3mm`) and a severity. It is stored beside the rule text in
-`rules.drc.sets` and is not a rule itself. Apply writes, for one scope (a
+`rules.drc.sets` and is not a rule itself. It takes clearance, track, via,
+hole and edge limits only; a board-wide limit (silkscreen, mask, paste,
+courtyard) has no scope to apply to and is refused. Apply writes, for one scope (a
 class, a net, a pattern or a class pair), one ordinary rule per kind the set
 limits, named `<set>_<scope>_<kind>`; applying it again to the same scope
 writes those rules anew. Giving the set new limits rewrites every rule it
@@ -300,19 +367,68 @@ project does not have is flagged like a one-class scope.
 The Presets panel lists the generic manufacturing tiers (Standard, Advanced
 and HDI, the minimums the new-project setup offers; no fabricator is named)
 and, once read, the rule profiles of this machine that hold DRC rules. A
-tier merges three board-wide rules, `fab_clearance`, `fab_track` and
-`fab_via`, into the text by name: a rule of that name is replaced, the rest
-stay. A profile replaces the project's DRC rules (text, severity entries and
-rule sets) as "Update from profile" does. Picking one lists the rules it
-adds, changes and removes (spacing alone is not a change) and the other
-lines; Apply stores it as one undo step, and is refused when the rules
-changed since the list was made.
+tier merges seven board-wide rules, `fab_clearance`, `fab_track`, `fab_via`,
+`fab_hole`, `fab_edge`, `fab_mask` and `fab_silk`, into the text by name: a
+rule of that name is replaced, the rest stay. A profile replaces the
+project's DRC rules (text, severity entries and rule sets) as "Update from
+profile" does. Picking one lists the rules it adds, changes and removes
+(spacing alone is not a change) and the other lines; Apply stores it as one
+undo step, and is refused when the rules changed since the list was made.
+
+## Fab profiles
+
+A board is built by one maker, whose published limits are the floor of
+what can be built (#2311). A fab profile is a rule profile (`.snxrules`)
+whose `drc.dsl` writes those limits as rules named `fab_*`, one per base
+rule the maker limits, with an optional `fab` block saying whose limits they
+are:
+
+```json
+{ "schema": 1, "name": "Two-layer standard", "version": "1",
+  "fab": { "manufacturer": "", "process": "2 layers, 1 oz copper",
+           "source": "the maker's capability page", "published": "2026-11-17" },
+  "drc": { "dsl": "rule fab_clearance on clearance require clearance >= 0.15mm then error\n" } }
+```
+
+Every `fab` field is free text and may be left out; `rules_preset_diff`
+answers it as `fab`, leaving out an empty field as the file does (a generic
+tier's `fab` has no `manufacturer` key). Picking the profile (Presets, or "Update from profile")
+sets the project's DRC rules from it, with the same drift check as any rule
+profile. The generic tiers are fab profiles shipped with Signex: their
+`fab` block names no maker, says which process class they stand for, and
+dates the numbers; they are starting points, not one maker's limits.
+
+| Tier | Clearance | Track | Via / drill | Hole | Annular ring | Hole to hole | Edge | Mask sliver | Silkscreen to pad |
+|---|---|---|---|---|---|---|---|---|---|
+| Standard | 0.15 | 0.15 | 0.5 / 0.25 | 0.25 | 0.125 | 0.5 | 0.3 | 0.1 | 0.15 |
+| Advanced | 0.1 | 0.1 | 0.4 / 0.2 | 0.2 | 0.1 | 0.4 | 0.25 | 0.075 | 0.1 |
+| HDI | 0.075 | 0.075 | 0.3 / 0.15 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
+
+All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
+Picking a tier in project setup (New Project, the Project tab's Project
+setup, New PCB) writes the same seven rules as the tier preset: see
+`docs/PROJECT_SETUP.md`, "Rule templates".
+
+The annular ring and the via diameter are separate limits: the ring is
+measured from the drill, the diameter across the copper, so a via under
+both minimums is two findings.
+
+Project rules can be stricter than the floor. A written rule that is not a
+`fab_*` rule and asks less than the strictest `fab_*` rule of the same limit
+whose scope it shares (a net, a copper layer, an object pair: a floor for
+inner layers says nothing of a rule for the outer layers) is still applied (the most specific rule wins, as everywhere), but Run DRC
+and `check_drc` say so in Messages, `DRC rule 'tight' asks min_clearance
+0.1 mm, past the fab floor 'fab_clearance' of 0.15 mm`, and the Rules tab
+flags it. A `fab_*` rule more specific than the written rule (one for inner
+layers against a board-wide rule) is left out of that comparison: it wins
+on its own scope, so the broad rule loosens nothing there.
 
 ## Not in this version
 
-Region-scoped rules, clearance to holes and the board edge, annular ring,
-differential pairs and their classes, arithmetic in lengths, the what-if
-preview of a rule edit, and checking the board setup's
-minimum track width and via sizes without a written rule. The DRC panel's
-summary counts clearance, shorts, unconnected links and keepouts only; width
-and via findings are listed as rows.
+Region-scoped rules, clearance between copper and holes, differential pairs
+and their classes, arithmetic in lengths, the what-if preview of a rule
+edit, a fab profile that varies by layer count or copper weight inside one
+file, and checking the board setup's minimum track width and via sizes
+without a written rule. The DRC panel's summary counts clearance, shorts,
+unconnected links and keepouts only; the findings of the other rules are
+listed as rows, and Run DRC's Messages count them by kind.

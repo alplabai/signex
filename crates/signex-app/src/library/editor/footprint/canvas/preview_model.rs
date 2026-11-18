@@ -151,7 +151,7 @@ impl PreviewFootprint {
             selected_pads_extra: &[],
             selected_silk_f: None,
             pad_labels: PadLabels::MinPadPx(MIN_LABELLED_PAD_PX),
-            palette: LayerPalette::Legacy,
+            palette: LayerPalette::Board,
         }
     }
 }

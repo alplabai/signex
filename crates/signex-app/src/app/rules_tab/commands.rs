@@ -77,7 +77,8 @@ pub(crate) fn rules_add(app: &mut Signex, args: &CommandArgs) -> Ran {
         Err(reason) => return refused(reason),
     };
     let Some(kind) = text(args, "kind").and_then(RuleKind::from_keyword) else {
-        return refused("`kind` is clearance, track or via");
+        let kinds: Vec<&str> = RuleKind::ALL.iter().map(|k| k.keyword()).collect();
+        return refused(format!("`kind` is one of {}", kinds.join(", ")));
     };
     let mut draft = RuleDraft::new(kind, text(args, "name").unwrap_or_default());
     let fields = [

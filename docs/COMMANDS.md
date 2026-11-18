@@ -40,6 +40,10 @@ runs ERC on the sheet's project, answers with a check report once the run
 lands and writes nothing to the ERC panel or Messages;
 `check_drc document=<board> [baseline=<run>]` does the same for DRC on
 one board. Rules in [CLI.md](CLI.md), "Checks on demand".
+`check_requirements document=<project or one of its documents>
+[baseline=<run>]` runs the project's requirements list as checks and
+answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
+checks".
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -78,6 +82,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
 | `check_drc` | Check design rules | validation | — | — |
 | `check_erc` | Check electrical rules | validation | — | — |
+| `check_requirements` | Check project requirements | validation | — | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
@@ -142,13 +147,18 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Mod+P` | `Mod+P` |
+| `project_add_requirement` | Add a requirement to the project | design | — | — |
 | `project_add_variant` | Add a variant to the project | design | — | — |
+| `project_enable_requirement` | Turn a project requirement on or off | design | — | — |
 | `project_move_library` | Move a library in the library order of the project | design | — | — |
 | `project_move_sheet` | Move a sheet in the page order of the project | design | — | — |
+| `project_remove_requirement` | Remove a requirement from the project | design | — | — |
 | `project_remove_variant` | Remove a variant of the project | design | — | — |
 | `project_rename_variant` | Rename a variant of the project | design | — | — |
+| `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_pins` | Query pins | file | — | — |
@@ -411,17 +421,25 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
+| `set_active_layer` | Make one layer the active layer | view | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
+| `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
+| `set_layer_color` | Give one layer its own colour in the board view, or the palette colour again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
+| `set_layer_visible` | Show or hide one layer of the board view | view | — | — |
 | `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_object_transparency` | Set how transparent one kind of object is drawn | view | — | — |
+| `set_object_visible` | Show or hide one kind of object in the board view | view | — | — |
+| `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |
 | `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
+| `show_used_layers_only` | List only the layers the board uses in the Layers panel | view | — | — |
 | `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
 | `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |

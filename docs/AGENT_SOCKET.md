@@ -97,10 +97,10 @@ The session token is never written. See `docs/AGENT_JOURNALS.md`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
-  (#2199), each answered once its run lands, like an edit waiting for its
-  reads
-  ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
+  `read_document`, `query_pins`, the checks `check_erc` and `check_drc`
+  (#2199) and `check_requirements` (#2339), each answered once its run lands,
+  like an edit waiting for its reads
+  ([CLI.md](CLI.md), "Checks on demand" and "Requirement checks"), and the Rules manager reads
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
@@ -120,7 +120,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
+  person's preferences), the Layers panel's board view commands
+  `set_layer_visible`, `set_active_layer`, `set_layer_color`,
+  `show_used_layers_only`, `set_object_visible` and `set_object_transparency`
+  (#2363; view state of the named board, no undo step), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
   `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
   `document` is the project or any document of it), the board's DRC
@@ -131,14 +134,19 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `assign_board_net_class`, each answering with what it did, the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
   `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
-  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), and the board
+  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), the pad edit
+  `set_pad_shape` (#2242: a trapezoid with its `delta` or a custom pad with
+  its `corners`, pad-local mm; one undo step), and the board
   Tools edits (#2408, #2409) `stitch_vias`, `add_teardrops`,
   `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
   `keepout_from_selection` and `arrange_in_box`, each one board undo step
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
-  each, answered with the drawing as JSON), and the length tuning commands
+  each, answered with the drawing as JSON), and `set_footprint_text` (#2368;
+  a component's designator or comment placed, turned, sized or justified on
+  its own, one board undo step, answered with the text as JSON), and the
+  length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
@@ -152,7 +160,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`
-  (#1689-#1693; `document` is the project or any document of it). A test
+  (#1689-#1693; `document` is the project or any document of it), and the
+  Requirements section's `project_add_requirement`,
+  `project_set_requirement`, `project_remove_requirement`,
+  `project_enable_requirement` and `project_run_requirements` (#2339). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

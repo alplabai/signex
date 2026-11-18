@@ -1000,6 +1000,8 @@ impl Signex {
             net_hover_tick,
             library_poll,
             autosave_tick,
+            // None unless started with SIGNEX_BENCH_PAN_ZOOM (#2472).
+            self.pan_zoom_bench_subscription(),
         ])
     }
 }

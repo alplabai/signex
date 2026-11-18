@@ -45,22 +45,40 @@ pub enum RulesDomain {
     #[default]
     Clearance,
     Routing,
+    /// Hole size, annular ring and hole spacing (#2435).
+    Holes,
+    /// Solder mask and paste.
+    Mask,
+    /// Silkscreen and courtyards.
+    Assembly,
 }
 
 impl RulesDomain {
-    pub const ALL: [RulesDomain; 2] = [RulesDomain::Clearance, RulesDomain::Routing];
+    pub const ALL: [RulesDomain; 5] = [
+        RulesDomain::Clearance,
+        RulesDomain::Routing,
+        RulesDomain::Holes,
+        RulesDomain::Mask,
+        RulesDomain::Assembly,
+    ];
 
     pub fn of(kind: RuleKind) -> Self {
         match kind {
-            RuleKind::Clearance => RulesDomain::Clearance,
+            RuleKind::Clearance | RuleKind::Edge => RulesDomain::Clearance,
             RuleKind::Track | RuleKind::Via => RulesDomain::Routing,
+            RuleKind::Hole => RulesDomain::Holes,
+            RuleKind::Mask | RuleKind::Paste => RulesDomain::Mask,
+            RuleKind::Silk | RuleKind::Courtyard => RulesDomain::Assembly,
         }
     }
 
     pub const fn kinds(self) -> &'static [RuleKind] {
         match self {
-            RulesDomain::Clearance => &[RuleKind::Clearance],
+            RulesDomain::Clearance => &[RuleKind::Clearance, RuleKind::Edge],
             RulesDomain::Routing => &[RuleKind::Track, RuleKind::Via],
+            RulesDomain::Holes => &[RuleKind::Hole],
+            RulesDomain::Mask => &[RuleKind::Mask, RuleKind::Paste],
+            RulesDomain::Assembly => &[RuleKind::Silk, RuleKind::Courtyard],
         }
     }
 
@@ -69,6 +87,9 @@ impl RulesDomain {
         match self {
             RulesDomain::Clearance => "clearance",
             RulesDomain::Routing => "routing",
+            RulesDomain::Holes => "holes",
+            RulesDomain::Mask => "mask",
+            RulesDomain::Assembly => "assembly",
         }
     }
 }
@@ -152,6 +173,9 @@ pub struct PresetPreview {
     pub changes: Vec<RowChange>,
     /// Severity, rule-set and other changes, one line each.
     pub other: Vec<String>,
+    /// Whose limits the preset copies and from where (#2311): a tier's
+    /// own, or a fab profile's; `None` for a profile that names none.
+    pub fab: Option<signex_types::project::FabProfileInfo>,
     /// The project's DRC rules the preview was computed from.
     pub base: DrcRuleSet,
     /// The DRC rules after Apply.

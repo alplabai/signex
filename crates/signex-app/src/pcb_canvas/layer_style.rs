@@ -5,7 +5,7 @@
 use iced::Color;
 use signex_gfx::style::ColorSlot;
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
-use signex_renderer::pcb::LayerRow;
+use signex_renderer::pcb::{BoardPaint, LayerRow};
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
@@ -123,6 +123,38 @@ pub fn board_layer_colour(layer: PcbLayer) -> Color {
     let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
         .board_layer_color(layer);
     Color { r, g, b, a }
+}
+
+/// The colour of `layer` in a board view: the colour the view gave it
+/// (#2363), at the palette colour's alpha, else the palette's. The Layers
+/// panel chip and the board text layer read it; the scene takes the same
+/// override through `ResolvedTheme::with_paint`.
+pub fn painted_layer_colour(paint: &BoardPaint, layer: PcbLayer) -> Color {
+    let palette = board_layer_colour(layer);
+    match paint.colour(layer) {
+        Some([r, g, b]) => Color {
+            a: palette.a,
+            ..Color::from_rgb8(r, g, b)
+        },
+        None => palette,
+    }
+}
+
+/// The colour the ratsnest (Connection Lines) is drawn in.
+pub fn ratsnest_colour() -> Color {
+    let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+        .color(ColorSlot::Ratsnest);
+    Color { r, g, b, a }
+}
+
+/// The colour the board grid is drawn in.
+pub fn grid_colour() -> Color {
+    crate::render_config::to_iced(&crate::styles::board_canvas_colors().grid)
+}
+
+/// The colour the board origin marker is drawn in.
+pub fn origin_marker_colour() -> Color {
+    crate::render_config::to_iced(&crate::styles::board_canvas_colors().cursor)
 }
 
 /// The colour the Multi-Layer row is listed with: the slot vias and
@@ -321,6 +353,7 @@ mod tests {
                 net: 1,
                 dimmed: false,
                 ink: CopperInk::Layer(CopperLayer::Top),
+                object: signex_renderer::pcb::BoardObject::Tracks,
             }],
             pads: vec![pad(CopperLayer::Top), pad(CopperLayer::Bottom)],
             ..PcbSnapshot::default()

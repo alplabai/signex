@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{
-    BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet, board_copper_layers,
-    board_layers, builtin_set_layers, kind_layers, listed_layers, signal_layers,
+    BoardObject, BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet,
+    board_copper_layers, board_layers, builtin_set_layers, kind_layers, listed_layers,
+    signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -223,9 +224,6 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         }
         PcbViewMsg::ActiveLayerPicked(layer) => view.set_active(layer),
         PcbViewMsg::SingleLayerModeToggled => view.toggle_single_layer(),
-        PcbViewMsg::LayerGroupVisibilitySet { group, visible } => {
-            view.set_group_visible(layers, group, visible);
-        }
         PcbViewMsg::LayerVisibilityToggled(layer) => view.toggle_visibility(layer),
         PcbViewMsg::ActiveLayerVisibilityToggled => view.toggle_visibility(view.active()),
         PcbViewMsg::MultiLayerVisibilityToggled => view.toggle_multi_layer(),
@@ -245,6 +243,26 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
             view.show_set(&listed_layers(layers), shown);
         }
         PcbViewMsg::BoardFlipToggled => view.toggle_flipped(),
+        PcbViewMsg::LayerVisibilitySet { layer, visible } => {
+            view.set_layers_visible(&[layer], visible);
+        }
+        PcbViewMsg::LayerColourSet { layer, colour } => view.set_layer_colour(layer, colour),
+        PcbViewMsg::UsedLayersOnlySet(on) => view.set_used_only(on),
+        PcbViewMsg::ObjectVisibilitySet { kind, visible } => {
+            let kinds = match kind {
+                Some(kind) => vec![kind],
+                None => BoardObject::ALL
+                    .into_iter()
+                    .filter(|k| k.can_hide())
+                    .collect(),
+            };
+            for kind in kinds {
+                view.set_object_visible(kind, visible);
+            }
+        }
+        PcbViewMsg::ObjectTransparencySet { kind, percent } => {
+            view.set_object_transparency(kind, percent);
+        }
     }
 }
 

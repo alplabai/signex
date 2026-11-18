@@ -1,0 +1,61 @@
+//! Ids of `locales/en-US/requirements.ftl`: the Project tab's Requirements
+//! section (#2339).
+
+define_ids! {
+    REQUIREMENTS;
+    PROJECT_SECTION_REQUIREMENTS = "project-section-requirements";
+    REQUIREMENTS_HELP = "requirements-help";
+    REQUIREMENTS_EMPTY = "requirements-empty";
+    REQUIREMENTS_LIST_UNREADABLE = "requirements-list-unreadable";
+    REQUIREMENTS_ADD = "requirements-add";
+    REQUIREMENTS_ENABLED = "requirements-enabled";
+    REQUIREMENTS_REMOVE = "requirements-remove";
+    REQUIREMENTS_RUN = "requirements-run";
+    REQUIREMENTS_RUNNING = "requirements-running";
+    REQUIREMENTS_LAST_RUN = "requirements-last-run";
+    REQUIREMENTS_NEVER_RUN = "requirements-never-run";
+    REQUIREMENTS_RUN_FAILED = "requirements-run-failed";
+    REQUIREMENTS_RUN_NOTES = "requirements-run-notes";
+    REQUIREMENTS_PASSED = "requirements-passed";
+    REQUIREMENTS_FAILED = "requirements-failed";
+    REQUIREMENTS_NOT_CHECKED = "requirements-not-checked";
+    REQUIREMENTS_UNREADABLE = "requirements-unreadable";
+    REQUIREMENTS_NOT_SET = "requirements-not-set";
+    REQUIREMENTS_KIND_ERC_CLEAN = "requirements-kind-erc-clean";
+    REQUIREMENTS_KIND_DRC_CLEAN = "requirements-kind-drc-clean";
+    REQUIREMENTS_KIND_BOARD_SIZE = "requirements-kind-board-size";
+    REQUIREMENTS_KIND_PARTS_STATE = "requirements-kind-parts-state";
+    REQUIREMENTS_KIND_NET_CLASS = "requirements-kind-net-class";
+    REQUIREMENTS_KIND_BOM_COST = "requirements-kind-bom-cost";
+    REQUIREMENTS_FIELD_ID = "requirements-field-id";
+    REQUIREMENTS_FIELD_SEVERITY = "requirements-field-severity";
+    REQUIREMENTS_FIELD_ALLOW_WARNINGS = "requirements-field-allow-warnings";
+    REQUIREMENTS_FIELD_MAX_WIDTH = "requirements-field-max-width";
+    REQUIREMENTS_FIELD_MAX_HEIGHT = "requirements-field-max-height";
+    REQUIREMENTS_FIELD_STATES = "requirements-field-states";
+    REQUIREMENTS_FIELD_NETS = "requirements-field-nets";
+    REQUIREMENTS_FIELD_CLASS = "requirements-field-class";
+    REQUIREMENTS_FIELD_MIN_TRACE = "requirements-field-min-trace";
+    REQUIREMENTS_FIELD_MIN_CLEARANCE = "requirements-field-min-clearance";
+    REQUIREMENTS_FIELD_QUANTITY = "requirements-field-quantity";
+    REQUIREMENTS_FIELD_CURRENCY = "requirements-field-currency";
+    REQUIREMENTS_FIELD_MAX_UNIT_COST = "requirements-field-max-unit-cost";
+    REQUIREMENTS_PROBLEM_LIST_UNREADABLE = "requirements-problem-list-unreadable";
+    REQUIREMENTS_PROBLEM_NO_ENTRY = "requirements-problem-no-entry";
+    REQUIREMENTS_PROBLEM_UNKNOWN_ID = "requirements-problem-unknown-id";
+    REQUIREMENTS_PROBLEM_AMBIGUOUS_ID = "requirements-problem-ambiguous-id";
+    REQUIREMENTS_PROBLEM_ENTRY_UNREADABLE = "requirements-problem-entry-unreadable";
+    REQUIREMENTS_PROBLEM_UNKNOWN_KIND = "requirements-problem-unknown-kind";
+    REQUIREMENTS_PROBLEM_NOT_A_FIELD = "requirements-problem-not-a-field";
+    REQUIREMENTS_PROBLEM_ID_EMPTY = "requirements-problem-id-empty";
+    REQUIREMENTS_PROBLEM_ID_TOO_LONG = "requirements-problem-id-too-long";
+    REQUIREMENTS_PROBLEM_ID_INVALID = "requirements-problem-id-invalid";
+    REQUIREMENTS_PROBLEM_ID_TAKEN = "requirements-problem-id-taken";
+    REQUIREMENTS_PROBLEM_UNKNOWN_SEVERITY = "requirements-problem-unknown-severity";
+    REQUIREMENTS_PROBLEM_NOT_YES_NO = "requirements-problem-not-yes-no";
+    REQUIREMENTS_PROBLEM_NOT_POSITIVE = "requirements-problem-not-positive";
+    REQUIREMENTS_PROBLEM_NOT_A_COUNT = "requirements-problem-not-a-count";
+    REQUIREMENTS_PROBLEM_EMPTY = "requirements-problem-empty";
+    REQUIREMENTS_PROBLEM_UNKNOWN_STATE = "requirements-problem-unknown-state";
+    REQUIREMENTS_PROBLEM_NET_CLASS_ASKS_NOTHING = "requirements-problem-net-class-asks-nothing";
+}

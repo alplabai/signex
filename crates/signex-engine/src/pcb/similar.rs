@@ -38,6 +38,8 @@ fn shape_name(shape: PadShape) -> &'static str {
         PadShape::Rect => "Rectangle",
         PadShape::Oval => "Oval",
         PadShape::RoundRect => "Rounded rectangle",
+        PadShape::Trapezoid => "Trapezoid",
+        PadShape::Custom => "Custom",
     }
 }
 

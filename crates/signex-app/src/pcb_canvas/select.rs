@@ -6,10 +6,10 @@ use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use pcb_geom::{
-    BoardIndex, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
-    turned_marquee_select,
+    BoardIndex, BoardTextField, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
+    pick_under_texts, turned_marquee_select,
 };
-use signex_renderer::pcb::PcbLayerView;
+use signex_renderer::pcb::{BoardObject, PcbLayerView, zone_object};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
@@ -146,6 +146,27 @@ impl PcbSelectionState {
         self.pick_at(board, at, tolerance_mm).map(|(item, _)| item)
     }
 
+    /// [`Self::click`] for a tool that acts on parts (Move): a designator
+    /// or comment is passed over for what lies under it (#2368).
+    pub fn click_part(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+        mode: ClickMode,
+    ) -> bool {
+        let hit = self.part_at(board, at, tolerance_mm);
+        self.selection.apply_click(hit, mode)
+    }
+
+    /// [`Self::item_at`] passing over designators and comments (Measure).
+    pub fn part_at(&mut self, board: &PcbBoard, at: Point, tolerance_mm: f64) -> Option<ItemRef> {
+        let p = PointNm::from_mm(at, "pointer").ok()?;
+        let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
+        self.ensure_index(board);
+        pick_under_texts(self.index.as_ref()?, p, tol, &self.filter).map(|i| i.item)
+    }
+
     /// A box from `from` to `to`, drawn along the screen of a view turned
     /// `view_rotation_deg` (#2316). Whether the selection changed.
     pub fn box_select(
@@ -217,6 +238,8 @@ impl PcbSelectionState {
             .items()
             .map(|i| i.item)
             .filter(|item| !matches!(item, ItemRef::Pad { footprint, .. } if bodies.contains(footprint)))
+            // A designator or comment comes with its footprint (#2368).
+            .filter(|item| !matches!(item, ItemRef::FootprintText { .. }))
             .collect();
         self.selection.apply_marquee(&all, ClickMode::Replace)
     }
@@ -253,12 +276,14 @@ impl PcbSelectionState {
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
-                    highlight.bodies.push(indexed.shape);
+                    highlight.bodies.push(indexed.shape.clone());
                 }
                 ItemRef::Pad { footprint, .. } if whole.contains(&footprint) => {
-                    highlight.selected.push(indexed.shape);
+                    highlight.selected.push(indexed.shape.clone());
                 }
-                item if self.selection.contains(item) => highlight.selected.push(indexed.shape),
+                item if self.selection.contains(item) => {
+                    highlight.selected.push(indexed.shape.clone())
+                }
                 _ => {}
             }
         }
@@ -266,8 +291,8 @@ impl PcbSelectionState {
             && let Some(found) = index.items().find(|i| i.item == hovered)
         {
             match hovered {
-                ItemRef::Footprint(_) => highlight.hover_body = Some(found.shape),
-                _ => highlight.hover = Some(found.shape),
+                ItemRef::Footprint(_) => highlight.hover_body = Some(found.shape.clone()),
+                _ => highlight.hover = Some(found.shape.clone()),
             }
         }
         highlight
@@ -292,14 +317,24 @@ impl PcbSelectionState {
         let grab = if waiting {
             Vec::new()
         } else {
-            self.shapes_of_footprints(board, |_| true)
+            let mut grab = self.shapes_of_footprints(board, |_| true);
+            // A designator or comment is grabbed to move on its own (#2368),
+            // unless the filter turns texts off: a press there then starts a
+            // box, as before texts were picked.
+            if self.filter.is_on(pcb_geom::PickKind::Texts) {
+                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
+            }
+            grab
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
         {
-            let shapes = match &carry.paste {
-                Some(load) => load.ghost.clone(),
-                None => self.footprint_shapes(board, &carry.footprints),
+            let shapes = match (&carry.paste, carry.text) {
+                (Some(load), _) => load.ghost.clone(),
+                (None, Some((footprint, field))) => {
+                    self.shapes_of(|item| item == ItemRef::FootprintText { footprint, field })
+                }
+                (None, None) => self.footprint_shapes(board, &carry.footprints),
             };
             highlight.ghost = shapes
                 .into_iter()
@@ -364,6 +399,35 @@ impl PcbSelectionState {
         BTreeSet::from([id])
     }
 
+    /// The designator or comment a press at `at` grabs to move on its own
+    /// (#2368): the one a click there picks. It becomes the selection.
+    pub fn grab_text_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> Option<(Uuid, BoardTextField)> {
+        let (item, _) = self.pick_at(board, at, tolerance_mm)?;
+        let ItemRef::FootprintText { footprint, field } = item else {
+            return None;
+        };
+        if !self.selection.contains(item) {
+            self.selection.apply_click(Some(item), ClickMode::Replace);
+        }
+        Some((footprint, field))
+    }
+
+    /// The shapes of the indexed items `keep` accepts; the index must be
+    /// built.
+    fn shapes_of(&self, keep: impl Fn(ItemRef) -> bool) -> Vec<pcb_geom::Shape> {
+        self.index
+            .iter()
+            .flat_map(|index| index.items())
+            .filter(|i| keep(i.item))
+            .map(|i| i.shape.clone())
+            .collect()
+    }
+
     /// The body and pads of each footprint `keep` accepts.
     fn shapes_of_footprints(
         &mut self,
@@ -380,7 +444,7 @@ impl PcbSelectionState {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
                 _ => false,
             })
-            .map(|i| i.shape)
+            .map(|i| i.shape.clone())
             .collect()
     }
 
@@ -399,7 +463,7 @@ impl PcbSelectionState {
         let p = PointNm::from_mm(at, "pointer").ok()?;
         let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
         self.ensure_index(board);
-        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape))
+        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape.clone()))
     }
 
     fn ensure_index(&mut self, board: &PcbBoard) {
@@ -427,7 +491,7 @@ impl PcbSelectionState {
 impl PcbSelectionState {
     /// `index` without the items on a layer the view hides.
     fn without_hidden(&self, index: BoardIndex, board: &PcbBoard) -> BoardIndex {
-        if !self.view.has_hidden() {
+        if !self.view.has_hidden() && !self.view.hides_objects() {
             return index;
         }
         let hidden = hidden_items(board, &self.view);
@@ -436,7 +500,8 @@ impl PcbSelectionState {
 }
 
 /// The pads, tracks, vias, footprint bodies and drawn areas of `board` that
-/// sit only on hidden layers. A footprint body follows the side the footprint is on.
+/// sit only on hidden layers, or whose kind the View Options hide (#2363).
+/// A footprint body follows the side the footprint is on.
 fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
     let mut hidden = HashSet::new();
     for footprint in &board.footprints {
@@ -444,27 +509,38 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             hidden.insert(ItemRef::Footprint(footprint.uuid));
         }
         for pad in &footprint.pads {
-            if !view.shows_pad(footprint, pad) {
+            if !view.shows_object(BoardObject::Pads) || !view.shows_pad(footprint, pad) {
                 hidden.insert(ItemRef::Pad {
                     footprint: footprint.uuid,
                     pad: pad.uuid,
                 });
             }
         }
+        for text in pcb_geom::footprint_texts(footprint) {
+            if !view.is_visible(text.layer) {
+                hidden.insert(ItemRef::FootprintText {
+                    footprint: footprint.uuid,
+                    field: text.field,
+                });
+            }
+        }
     }
+    let tracks = view.shows_object(BoardObject::Tracks);
     for segment in &board.segments {
-        if !view.shows_any(std::slice::from_ref(&segment.layer)) {
+        if !tracks || !view.shows_any(std::slice::from_ref(&segment.layer)) {
             hidden.insert(ItemRef::Track(segment.uuid));
         }
     }
     for via in &board.vias {
-        if !view.shows_via(&via.layers) {
+        if !view.shows_object(BoardObject::Vias) || !view.shows_via(&via.layers) {
             hidden.insert(ItemRef::Via(via.uuid));
         }
     }
     for zone in &board.zones {
         let kind = pcb_geom::PickKind::of_zone(zone);
-        if let Some(kind) = kind.filter(|_| !view.shows_any(std::slice::from_ref(&zone.layer))) {
+        let off = !view.shows_object(zone_object(zone))
+            || !view.shows_any(std::slice::from_ref(&zone.layer));
+        if let Some(kind) = kind.filter(|_| off) {
             hidden.insert(ItemRef::Zone {
                 zone: zone.uuid,
                 kind,
@@ -476,7 +552,10 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
         let Some(kind) = graphic.kind() else {
             continue;
         };
-        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+        // A text frame is a text: hidden with Texts.
+        let text_off = kind == signex_types::pcb_graphic::BoardGraphicKind::TextFrame
+            && !view.shows_object(BoardObject::Texts);
+        if text_off || !view.shows_any(std::slice::from_ref(&graphic.layer)) {
             hidden.insert(ItemRef::Graphic {
                 graphic: graphic.uuid,
                 kind: pcb_geom::PickKind::of_graphic(kind),
@@ -489,22 +568,39 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
 /// The strings, free arcs, free pads and dimensions on layers `view` hides
 /// (#2373): not picked, as they are not drawn.
 fn hidden_free_items(board: &PcbBoard, view: &PcbLayerView, hidden: &mut HashSet<ItemRef>) {
-    let off = |layer: &String| !view.shows_any(std::slice::from_ref(layer));
-    for text in board.texts.iter().filter(|t| off(&t.layer)) {
+    let off = |layer: &String, kind| {
+        !view.shows_object(kind) || !view.shows_any(std::slice::from_ref(layer))
+    };
+    for text in board
+        .texts
+        .iter()
+        .filter(|t| off(&t.layer, BoardObject::Texts))
+    {
         hidden.insert(ItemRef::Text(text.uuid));
     }
-    for arc in board.free.arcs.iter().filter(|a| off(&a.layer)) {
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| off(&a.layer, BoardObject::Arcs))
+    {
         hidden.insert(ItemRef::Arc(arc.uuid));
     }
-    for dimension in board.free.dimensions.iter().filter(|d| off(&d.layer)) {
+    for dimension in board
+        .free
+        .dimensions
+        .iter()
+        .filter(|d| off(&d.layer, BoardObject::Dimensions))
+    {
         hidden.insert(ItemRef::Dimension(dimension.uuid));
     }
     let frame = signex_types::pcb_free::free_pad_frame();
+    let pads = view.shows_object(BoardObject::Pads);
     for pad in board
         .free
         .pads
         .iter()
-        .filter(|p| !view.shows_pad(&frame, p))
+        .filter(|p| !pads || !view.shows_pad(&frame, p))
     {
         hidden.insert(ItemRef::FreePad(pad.uuid));
     }
@@ -547,6 +643,9 @@ fn describe(item: ItemRef) -> String {
         ItemRef::FreePad(id) => format!("free pad {id}"),
         ItemRef::Dimension(id) => format!("dimension {id}"),
         ItemRef::Graphic { graphic, .. } => format!("drawing {graphic}"),
+        ItemRef::FootprintText { footprint, field } => {
+            format!("{} of footprint {footprint}", field.id())
+        }
     }
 }
 
@@ -687,6 +786,57 @@ mod tests {
         assert!(state.click(&board, on_bottom, 0.1, ClickMode::Replace));
     }
 
+    /// #2363: a kind the View Options hide is not picked, on any layer, and
+    /// can be picked again once shown.
+    #[test]
+    fn a_hidden_object_kind_cannot_be_hit() {
+        let board = two_layer_board();
+        let on_top = Point::new(2.0, 0.0);
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Tracks, false);
+        state.set_view(&view);
+        assert!(!state.click(&board, on_top, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+
+        view.set_object_visible(BoardObject::Tracks, true);
+        state.set_view(&view);
+        assert!(state.click(&board, on_top, 0.1, ClickMode::Replace));
+    }
+
+    /// #2363: hiding Texts hides a text frame, drawing and all; a plain
+    /// drawing on the same layer stays pickable.
+    #[test]
+    fn hiding_texts_hides_a_text_frame_but_not_a_drawing() {
+        let drawing = |n: u128, kind: &str| signex_types::pcb::BoardGraphic {
+            uuid: Uuid::from_u128(n),
+            graphic_type: kind.to_owned(),
+            layer: "TopSilkscreen".to_owned(),
+            width: 0.1,
+            start: Some(Point::new(0.0, 0.0)),
+            end: Some(Point::new(4.0, 2.0)),
+            center: None,
+            radius: 0.0,
+            points: Vec::new(),
+            text: "NOTE".to_owned(),
+            font_size: 1.0,
+        };
+        let mut board = board();
+        board.graphics = vec![drawing(20, "text_frame"), drawing(21, "line")];
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Texts, false);
+        let hidden = hidden_items(&board, &view);
+        let ids: Vec<Uuid> = hidden
+            .iter()
+            .filter_map(|item| match item {
+                ItemRef::Graphic { graphic, .. } => Some(*graphic),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [Uuid::from_u128(20)]);
+    }
+
     /// Review finding 4 / S1 on #2271: selecting a list of items (a DRC pick,
     /// a cross selection) leaves out those on a hidden layer and counts them.
     #[test]
@@ -800,6 +950,53 @@ mod tests {
         state.build_index(&broken);
         assert_eq!(state.take_report().len(), 1);
         assert_eq!(state.index_builds(), 1);
+    }
+
+    /// #899: a click inside a pour's hole selects nothing; a click on the
+    /// copper around the hole selects the pour.
+    #[test]
+    fn a_click_inside_a_zone_hole_does_not_select_the_zone() {
+        let square = |x: f64, y: f64, side: f64| {
+            vec![
+                Point::new(x, y),
+                Point::new(x + side, y),
+                Point::new(x + side, y + side),
+                Point::new(x, y + side),
+            ]
+        };
+        let mut board = board();
+        board.zones = vec![signex_types::pcb::Zone {
+            uuid: Uuid::from_u128(20),
+            net: 0,
+            net_name: String::new(),
+            layer: "TopCopper".into(),
+            outline: square(10.0, 10.0, 10.0),
+            holes: vec![square(14.0, 14.0, 2.0)],
+            priority: 0,
+            fill_type: "pour".into(),
+            thermal_relief: false,
+            thermal_gap: 0.0,
+            thermal_width: 0.0,
+            clearance: 0.0,
+            min_thickness: 0.0,
+            min_island_area: 0.0,
+            remove_dead_islands: false,
+            unknown: Default::default(),
+        }];
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let in_hole = Point::new(15.0, 15.0);
+        assert!(!state.click(&board, in_hole, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+        assert_eq!(state.item_at(&board, in_hole, 0.1), None);
+        assert!(state.click(&board, Point::new(12.0, 12.0), 0.1, ClickMode::Replace));
+        assert!(matches!(
+            state.selection().items().collect::<Vec<_>>()[..],
+            [ItemRef::Zone { zone, .. }] if zone == Uuid::from_u128(20)
+        ));
+        // A click in the hole is a click on empty board: it clears.
+        assert!(state.click(&board, in_hole, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
     }
 
     #[test]

@@ -248,6 +248,9 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         let label = match domain {
             RulesDomain::Clearance => ids::RULES_DOMAIN_CLEARANCE,
             RulesDomain::Routing => ids::RULES_DOMAIN_ROUTING,
+            RulesDomain::Holes => ids::RULES_DOMAIN_HOLES,
+            RulesDomain::Mask => ids::RULES_DOMAIN_MASK,
+            RulesDomain::Assembly => ids::RULES_DOMAIN_ASSEMBLY,
         };
         let count = domain_findings(frame, domain);
         let face = row![
@@ -338,6 +341,12 @@ fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                 RuleKind::Clearance => ids::RULES_ADD_CLEARANCE,
                 RuleKind::Track => ids::RULES_ADD_TRACK,
                 RuleKind::Via => ids::RULES_ADD_VIA,
+                RuleKind::Hole => ids::RULES_ADD_HOLE,
+                RuleKind::Edge => ids::RULES_ADD_EDGE,
+                RuleKind::Silk => ids::RULES_ADD_SILK,
+                RuleKind::Mask => ids::RULES_ADD_MASK,
+                RuleKind::Paste => ids::RULES_ADD_PASTE,
+                RuleKind::Courtyard => ids::RULES_ADD_COURTYARD,
             };
             let msg = up(RulesTabMsg::RuleAdded {
                 project_id: id,

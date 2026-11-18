@@ -161,3 +161,49 @@ fn placed_stock_parts_show_the_pin_text_a_schematic_expects() {
     let ic = kinds("STOCK-IC_Generic");
     assert!(ic.contains(&PinLabelKind::Number) && ic.contains(&PinLabelKind::Name));
 }
+
+/// #2468 — the polarised capacitor and the four transistors place with a
+/// footprint, the transistors on SOT-23, and a logic part shows its value.
+#[test]
+fn discrete_stock_parts_have_a_footprint_and_logic_parts_a_value() {
+    use signex_library::ParamValue;
+    let adapter = open_stock();
+    let rows = stock_rows(&adapter);
+    let row = |pn: &str| {
+        rows.iter()
+            .find(|r| r.internal_pn.as_str() == pn)
+            .unwrap_or_else(|| panic!("{pn} row"))
+    };
+    let footprint_name = |pn: &str| {
+        let fp_ref = row(pn)
+            .footprint_ref
+            .as_ref()
+            .unwrap_or_else(|| panic!("{pn} has no footprint"));
+        adapter.get_footprint(fp_ref.uuid).expect("footprint").name
+    };
+    assert_eq!(footprint_name("STOCK-C_Polarized"), "Chip-0805-Polarised");
+    for pn in ["STOCK-Q_NPN", "STOCK-Q_PNP", "STOCK-Q_NMOS", "STOCK-Q_PMOS"] {
+        assert_eq!(footprint_name(pn), "SOT-23", "{pn}");
+    }
+    assert_eq!(
+        row("STOCK-74HC00").parameters.get("value"),
+        Some(&ParamValue::Text("74HC00".into()))
+    );
+    assert!(!row("STOCK-R").parameters.contains_key("value"), "generic");
+}
+
+/// #2468 — a stock footprint opens described: SOIC-8 names itself and the
+/// designator a part on it takes.
+#[test]
+fn stock_soic8_is_described() {
+    let adapter = open_stock();
+    let soic = adapter
+        .list_footprints()
+        .expect("list footprints")
+        .into_iter()
+        .find(|s| s.name == "SOIC-8")
+        .expect("SOIC-8");
+    let fp = adapter.get_footprint(soic.uuid).expect("SOIC-8 loads");
+    assert!(!fp.description.is_empty(), "SOIC-8 has no description");
+    assert_eq!(fp.default_designator, "U?");
+}

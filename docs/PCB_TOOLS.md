@@ -563,6 +563,20 @@ move the footprint alone and leave its tracks where they were. Turn and Mirror
 need the track ends turned about the footprint, not shifted, so they need more
 than the shift a move applies.
 
+## Moving a designator or comment on its own
+
+A press on a component's designator or comment drags that text alone
+(#2368); the component and its tracks stay. The text follows the pointer
+without snapping and the release is one undo step. A locked component, or
+one that locks its strings, keeps its text where it is and Messages says
+why. A click selects the text; a box or Select All takes the component, not
+its text. The text keeps its place relative to the component, so it still
+follows a later move, turn or flip. Agents use `set_footprint_text
+document=<board> designator=<ref> text=designator|comment field=<field>
+value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
+`rotation`, `height` and `justify` (`left`, `center`, `right`). Rules:
+`docs/RENDERING_RULES.md`, "pcb-footprint-text".
+
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394):
@@ -619,6 +633,62 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
 View menu rows. See `docs/COMMANDS.md`.
+
+## Board view configuration
+
+The Layers panel configures the board view (#2363). It has a search field,
+which keeps the rows whose name holds the text, and two tabs.
+
+**Layers & Colors**, top to bottom:
+
+- Layer Sets: the set dropdown (the built-in sets, then the saved ones), a
+  name field with Save, and Delete for the saved set in view. They do what
+  the layer set button does.
+- Active Layer: the same choice as the layer tabs.
+- View From Bottom Side: the flip of the layer tab menu.
+- Import... and Export...: greyed until a view can be saved to a file.
+- All Layers: its eye hides every layer, or shows them all while one is
+  hidden. Used On lists only the layers the board has objects on.
+- Signal and Plane Layers: the copper layers, each with its number in the
+  stack and its type.
+- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
+  side. The rows map onto the named technical layers: 3D Body, Assembly,
+  Component Outline (the fabrication layers), Courtyard, Designator,
+  Overlay (silkscreen), Paste, Solder (solder mask), Adhesive, Fiducial and
+  Keep-Out. Coating, Component Center, Tenting and Value have no layer and
+  are greyed.
+- Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
+  and ECO 2. Other Layers: Drill Drawing, Drill Guide (no layer yet,
+  greyed) and Multi-Layer (vias and through-hole pads).
+- System Colors: the eyes of Connection Lines (the ratsnest) and the Origin
+  Marker work; the other rows and the system colours are greyed.
+
+A click on a layer's name makes it the active layer. A click on a chip opens
+the colours under the row: twelve presets, Custom... and the palette colour
+again. The colour is an override on top of the one board palette for this
+board view only; the canvas (the Board Outline colour draws the board edge
+too), the chip and the board texts draw it. The Keep-Out chips are greyed:
+the board's keepout regions keep the palette colour.
+
+**View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
+Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All
+Objects (Mixed while the rows differ) and one row per kind of object, each
+with an eye, Draft (greyed) and a Transparency slider. Pads, Vias, Arcs,
+Tracks, Polygons, Regions, Fills, Texts, Dimensions and Keepouts can be
+hidden; a hidden kind is neither drawn nor picked. Texts covers footprint
+texts, board strings and text frames, box and all. Pads, Vias, Arcs (copper
+arcs; Tracks never fades them), Tracks, Polygons, Regions and Fills can be
+drawn transparent. Mask and Dim Settings and the Additional Options chips
+are greyed until the view can draw them.
+
+All of this is the board view's state, for the session; nothing touches the
+board file. Saving the view, presets and every greyed control are tracked in
+#2480. Every control has a catalog command that names its board with
+`document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
+(without `color`, the palette colour again), `show_used_layers_only`,
+`set_object_visible` (`kind=all` for All Objects) and
+`set_object_transparency` (`value` in percent), next to the layer strip's
+commands above.
 
 ## Reading a board
 

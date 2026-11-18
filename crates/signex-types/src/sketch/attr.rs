@@ -368,6 +368,13 @@ pub enum PadShape {
         chamfer_ratio_expr: String,
         corners: ChamferedCorners,
     },
+    /// Trapezoid (#2242): how much longer the +y edge is than the −y edge
+    /// (`delta_x_expr`) or the +x edge than the −x edge (`delta_y_expr`),
+    /// as lengths; at most one is non-zero.
+    Trapezoid {
+        delta_x_expr: String,
+        delta_y_expr: String,
+    },
     /// Arbitrary polygon outline.
     Custom(CustomPadShape),
 }

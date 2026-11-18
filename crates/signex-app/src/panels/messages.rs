@@ -72,6 +72,9 @@ pub enum PanelMsg {
     FpEditorSetNextPadDrillDiameter(String),
     FpEditorSetNextPadDrillSlotLength(String),
     FpEditorSetNextPadCornerRadiusPct(String),
+    /// A trapezoid pad's Delta X / Delta Y (#2242), as typed.
+    FpEditorSetNextPadTrapezoidDeltaX(String),
+    FpEditorSetNextPadTrapezoidDeltaY(String),
     FpEditorSetNextPadTemplate(String),
     FpEditorSetNextPadTemplateLibrary(String),
     FpEditorSetNextPadPasteMarginTop(String),
@@ -127,6 +130,14 @@ pub enum PanelMsg {
         value: String,
     },
     FpEditorSetSelectedPadCornerRadiusPct {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaX {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaY {
         idx: usize,
         value: String,
     },
@@ -656,6 +667,9 @@ pub enum PanelMsg {
     /// A Layers panel row: an eye, or the row itself to make a copper layer
     /// active (#2223). The board-view event the dispatcher applies.
     PcbLayers(crate::app::PcbViewMsg),
+    /// The Layers panel's own controls: its tabs, search, colour chips and
+    /// layer set row (#2363).
+    LayersPanel(super::LayersPanelMsg),
     /// The selected board footprint's Designator or Value field (#1312).
     PcbFootprintText(super::PcbFootprintTextMsg),
     /// The board Properties panel with nothing selected (#2353).

@@ -11,6 +11,9 @@ use uuid::Uuid;
 
 use super::FormatError;
 use super::finite_toml;
+use super::pad_shape_cells::{
+    check_shape, delta_cell, outline_cell, read_delta, read_outline, refuse_unreadable_shape,
+};
 use super::pcb_cells::{LAYER_SIZES_COLUMN, layer_sizes_cell, read_layer_sizes};
 use super::pcb_rows::row_field_error;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
@@ -81,6 +84,12 @@ struct PadRaw {
     /// cell form; absent for one size on every layer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     layer_sizes: Option<String>,
+    /// A trapezoid's delta and a custom pad's outline (#2242), in the
+    /// `pads` rows' cell forms; absent when the pad has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    trapezoid_delta: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    custom_outline: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,7 +171,7 @@ fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
             )
         })?),
     };
-    Ok(Pad {
+    let pad = Pad {
         uuid: p.uuid,
         number: p.number,
         pad_type: p.pad_type,
@@ -180,11 +189,15 @@ fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
         }),
         roundrect_ratio: p.roundrect_ratio,
         rotation: p.rotation,
+        trapezoid_delta: read_delta(p.trapezoid_delta.as_deref(), PADS, row)?,
+        custom_outline: read_outline(p.custom_outline.as_deref(), PADS, row)?,
         net_locked: p.net_locked,
         layer_sizes,
         unknown: Default::default(),
         unknown_columns: Default::default(),
-    })
+    };
+    check_shape(&pad, PADS, row)?;
+    Ok(pad)
 }
 
 /// Append `[free]` to `out`; nothing for a board without free primitives.
@@ -250,6 +263,7 @@ fn write_arc(a: &TrackArc) -> Result<ArcRaw, NonFiniteField> {
 }
 
 fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
+    refuse_unreadable_shape(p)?;
     let drill = p
         .drill
         .as_ref()
@@ -277,6 +291,8 @@ fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
         rotation: p.rotation,
         net_locked: p.net_locked,
         layer_sizes: p.layer_sizes.as_ref().map(layer_sizes_cell).transpose()?,
+        trapezoid_delta: delta_cell(p)?,
+        custom_outline: outline_cell(p)?,
     })
 }
 

@@ -9,7 +9,7 @@ use signex_types::pcb_stack::board_copper_layers;
 use pcb_geom::{ItemRef, PointNm, layer_mask, mm_to_nm, via_layers};
 
 use super::user_rules::LimitKind;
-use super::{DrcRules, Violation, ViolationKind};
+use super::{DrcRules, Violation};
 
 /// Every width and via-size violation of `board`, unsorted.
 pub(super) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
@@ -98,34 +98,38 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
     }
 }
 
-/// A track or via with what a limit is checked against.
-struct Object {
-    item: ItemRef,
-    net: u32,
-    layers: u32,
-    at: PointNm,
+/// One object with what a limit is checked against: a track, via or pad
+/// hole for a size, or any item a value of its own is read from.
+pub(crate) struct Object {
+    pub(crate) item: ItemRef,
+    pub(crate) net: u32,
+    /// Copper layers it reaches; for an object off copper (a mask
+    /// opening's item) every layer, so a board-wide rule applies.
+    pub(crate) layers: u32,
+    pub(crate) at: PointNm,
 }
 
 impl Object {
-    fn check(&self, rules: &DrcRules, kind: LimitKind, measured: i64, found: &mut Vec<Violation>) {
+    /// Push a finding when `measured` breaks the limit of `kind` the
+    /// written rules set for this object.
+    pub(crate) fn check(
+        &self,
+        rules: &DrcRules,
+        kind: LimitKind,
+        measured: i64,
+        found: &mut Vec<Violation>,
+    ) {
         if self.layers == 0 {
             return;
         }
         let Some((limit, rule)) = rules.object_limit(kind, self.net, self.layers) else {
             return;
         };
-        let (broken, violation_kind) = match kind {
-            LimitKind::MinTrackWidth => (measured < limit, ViolationKind::TrackWidth),
-            LimitKind::MaxTrackWidth => (measured > limit, ViolationKind::TrackWidth),
-            LimitKind::MinViaDiameter => (measured < limit, ViolationKind::ViaDiameter),
-            LimitKind::MinViaDrill => (measured < limit, ViolationKind::ViaDrill),
-            LimitKind::MinClearance => return,
-        };
-        if !broken {
+        if !kind.is_broken(measured, limit) {
             return;
         }
         found.push(Violation {
-            kind: violation_kind,
+            kind: kind.violation(),
             items: vec![self.item],
             nets: (self.net, self.net),
             layers: self.layers,

@@ -465,3 +465,56 @@ fn the_agent_journal_line_cap_is_kept_in_range_and_an_unchanged_pick_records_not
     let unchanged = data.agent_journal;
     assert!(!history.apply(&mut data, journal(unchanged, false)));
 }
+
+/// #2311: a fab tier pick is one step over the defaults and the rules; an
+/// undo of any other step leaves the rules as another writer left them.
+#[test]
+fn a_fab_tier_step_undoes_its_rules_and_no_other_step_touches_them() {
+    use signex_types::project::{DrcRuleSet, ProjectRules, ProjectSetup, SetupProfile};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    let seeded = ProjectRules {
+        drc: DrcRuleSet {
+            dsl: Some("rule fab_track on track require width >= 0.075mm then error\n".into()),
+            ..DrcRuleSet::default()
+        },
+        ..ProjectRules::default()
+    };
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(seeded.clone()),
+        },
+    ));
+    assert_eq!(data.rules.as_ref(), Some(&seeded));
+    assert!(history.apply(&mut data, set_description("after")));
+
+    // Another writer (the Rules tab) edits the rules.
+    let mut other = seeded.clone();
+    other.drc.dsl = Some("rule mine on track require width >= 0.3mm then error\n".into());
+    data.rules = Some(other.clone());
+
+    assert!(history.undo(&mut data), "the description step");
+    assert_eq!(data.rules.as_ref(), Some(&other), "untouched by that undo");
+    assert!(history.undo(&mut data), "the tier step");
+    assert_eq!(data.rules, None);
+    assert_eq!(data.project_defaults, Default::default());
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.rules.as_ref(),
+        Some(&other),
+        "redo restores what undo found"
+    );
+    assert_eq!(data.project_defaults, hdi.defaults());
+
+    // The same tier with the same rules again is no step.
+    assert!(!history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(other),
+        },
+    ));
+}

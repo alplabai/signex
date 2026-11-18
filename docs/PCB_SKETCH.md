@@ -85,7 +85,7 @@ board area (the renderer, Update PCB staging, export) uses it with no change.
 
 A new optional section, written only for a board that has a sketch. A board
 without one writes no byte of it and re-saves byte-identical; a file written
-before it loads unchanged. The format token stays `snxpcb/1.3`: a build that
+before it loads unchanged. The section did not change the format token (`snxpcb/1.3` then): a build that
 predates the section keeps it as a foreign top-level key and writes it back.
 
 ```toml

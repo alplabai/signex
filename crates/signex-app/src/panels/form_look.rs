@@ -79,6 +79,23 @@ pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
     (l.field, l.line, PROPERTY_FIELD_RADIUS)
 }
 
+/// The tooltip that shows a field's whole value: a raised card with the
+/// field's ink and hairline.
+pub(in crate::panels) fn value_tip(theme: &Theme) -> container::Style {
+    let l = FormLook::of(theme);
+    container::Style {
+        background: Some(Background::Color(l.raised)),
+        text_color: Some(l.ink),
+        border: Border {
+            width: 1.0,
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            color: l.line_strong,
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// `text_input` style for a form field.
 pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
     let l = FormLook::of(theme);

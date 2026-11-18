@@ -70,6 +70,7 @@ exceptions = [
     { crate = "signex-net", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-output", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-renderer", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-req", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-sketch", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-types", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-widgets", allow = ["FSL-1.1-ALv2"] },

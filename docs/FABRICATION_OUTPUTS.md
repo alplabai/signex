@@ -72,7 +72,9 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
 
 - Pads are flashed: a circle, an axis-aligned rectangle or stadium as a
   standard aperture, a turned rectangle or stadium and every round-rect as a
-  macro (primitives 21 and 1, turned about the aperture origin). The shape,
+  macro (primitives 21 and 1, turned about the aperture origin), and a
+  trapezoid or custom pad (#2242) as an outline macro (primitive 4) holding
+  the corners `pcb_geom::pad_shape` places, already turned. The shape,
   centre and turn come from `pcb_geom` (`pad_world_center`,
   `pad_world_rotation_deg`), the same transform the canvas and DRC read. A
   pad with per-layer sizes (#2401) is flashed at its size on each copper
@@ -99,12 +101,14 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
   crosses. When no zone has any copper to write (a pour that fills nothing),
   the dialog and Messages note how many zones were left out. A keepout (a
   zone with `fill_type` `keepout`, #2373) has no copper and is not counted.
-
-### Not drawn yet
-
-- **Text (#2387).** Board and footprint text needs the stroke font board text
-  drawing brings; stroked glyphs enter through `FabExtras::strokes`. Until
-  then the dialog notes how many texts were not drawn.
+- Text on a fabrication layer is written in the board stroke font
+  (`pcb_geom::text_strokes`, `docs/RENDERING_RULES.md`, "pcb-stroke-font")
+  as strokes with a round aperture of `TEXT_STROKE_EM` of the text height
+  (#2368): each footprint's shown designator and comment, placed and
+  justified as the canvas places it (mirrored on the bottom side), a
+  footprint's text drawings, board strings and text frame lines. A dot is a
+  stroke of no length. A text the geometry cannot hold is counted with the
+  skipped items.
 
 ## V-score lines and panels (#2410)
 

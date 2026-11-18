@@ -314,11 +314,7 @@ impl ApplyStamp {
     /// The alternate footprint the part was built with, from its stamp;
     /// `None` for the row's default (#1234).
     pub(crate) fn chosen_footprint(&self) -> Option<signex_library::primitive::PrimitiveRef> {
-        let key = self.stamp.as_ref()?.footprint_ref.as_deref()?;
-        let (library, footprint) = split_lib_id(key)?;
-        Some(signex_library::primitive::PrimitiveRef::new(
-            library, footprint,
-        ))
+        signex_library::part_footprint::stamped_footprint(self.stamp.as_ref()?)
     }
 }
 
@@ -785,9 +781,10 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
     }
 }
 
+/// The `(library, primitive)` uuids of a `<library uuid>:<primitive uuid>`
+/// key, read by the one parser (`PrimitiveRef::parse_key`).
 pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
-    let (lib, sym) = lib_id.split_once(':')?;
-    Some((Uuid::parse_str(lib).ok()?, Uuid::parse_str(sym).ok()?))
+    signex_library::primitive::PrimitiveRef::parse_key(lib_id).map(|r| (r.library_id, r.uuid))
 }
 
 /// The library uuid a `"<library uuid>:<symbol uuid>"` key belongs to.

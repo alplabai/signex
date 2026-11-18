@@ -12,6 +12,7 @@ mod grid;
 mod library;
 mod pad;
 mod pad_stack;
+mod pad_trapezoid;
 mod props;
 mod shape;
 mod silk;

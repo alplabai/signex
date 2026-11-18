@@ -70,6 +70,9 @@ pub enum PrimitiveEditRefusal {
     NotPositive,
     #[error("a drawing goes on a non-copper layer other than a keep-out")]
     GraphicLayerNotAllowed,
+    /// A trapezoid or custom pad the edit would leave with no copper (#2242).
+    #[error("{0}")]
+    PadShape(signex_types::pcb_pad_shape::PadShapeFault),
 }
 
 fn finite(value: f64) -> Result<f64, PrimitiveEditRefusal> {

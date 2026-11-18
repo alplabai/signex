@@ -9,7 +9,7 @@ use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
-use super::layers::{FpLayer, FpSide, LayerPalette};
+use super::layers::{FpLayer, FpSide};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::{Radii, Spacing, TypeScale, ti, tokens::resolve};
 
@@ -37,7 +37,6 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .boxed();
     };
-    let palette = LayerPalette::for_tokens(tokens);
     let radius = Radii::GRAPHITE.control;
 
     let actions = row![
@@ -72,7 +71,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
         for layer in FpLayer::ORDER.iter().filter(|l| l.side() == *side) {
             let visible = fp.layer_visibility.get(*layer);
-            col = col.push(layer_row(*layer, visible, palette, tokens, i18n));
+            col = col.push(layer_row(*layer, visible, tokens, i18n));
         }
     }
     col.boxed()
@@ -82,13 +81,12 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 fn layer_row<'a>(
     layer: FpLayer,
     visible: bool,
-    palette: LayerPalette,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let ink = ti(tokens.text);
     let muted = resolve(tokens).ink3;
-    let swatch_colour = layer.color_in(palette);
+    let swatch_colour = layer.color();
     let label_ink = if visible { ink } else { muted };
     let radius = Radii::GRAPHITE.control;
 

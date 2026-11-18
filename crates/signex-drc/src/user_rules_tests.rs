@@ -599,6 +599,17 @@ fn position(kind: ViolationKind) -> usize {
         ViolationKind::TrackWidth => 4,
         ViolationKind::ViaDiameter => 5,
         ViolationKind::ViaDrill => 6,
+        ViolationKind::HoleSize => 7,
+        ViolationKind::AnnularRing => 8,
+        ViolationKind::HoleToHole => 9,
+        ViolationKind::EdgeClearance => 10,
+        ViolationKind::ViaInPad => 11,
+        ViolationKind::SilkToPad => 12,
+        ViolationKind::SilkToSilk => 13,
+        ViolationKind::MaskSliver => 14,
+        ViolationKind::MaskExpansion => 15,
+        ViolationKind::PasteExpansion => 16,
+        ViolationKind::CourtyardOverlap => 17,
     }
 }
 
@@ -612,6 +623,17 @@ fn all_lists_every_kind_in_declaration_order() {
         ViolationKind::TrackWidth,
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
+        ViolationKind::HoleSize,
+        ViolationKind::AnnularRing,
+        ViolationKind::HoleToHole,
+        ViolationKind::EdgeClearance,
+        ViolationKind::ViaInPad,
+        ViolationKind::SilkToPad,
+        ViolationKind::SilkToSilk,
+        ViolationKind::MaskSliver,
+        ViolationKind::MaskExpansion,
+        ViolationKind::PasteExpansion,
+        ViolationKind::CourtyardOverlap,
     ];
     assert_eq!(ViolationKind::ALL.len(), every.len());
     for (i, kind) in every.into_iter().enumerate() {

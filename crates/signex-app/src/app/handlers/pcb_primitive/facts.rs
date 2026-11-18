@@ -145,7 +145,7 @@ impl Signex {
                     board, common, &graphics, i18n,
                 ))
             }
-            ItemRef::Footprint(_) => return None,
+            ItemRef::Footprint(_) | ItemRef::FootprintText { .. } => return None,
         })
     }
 
@@ -279,7 +279,10 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
         ItemRef::Arc(id) => board.free.arcs.iter().any(|a| a.uuid == id),
         ItemRef::FreePad(id) => board.free.pads.iter().any(|p| p.uuid == id),
         ItemRef::Dimension(id) => board.free.dimensions.iter().any(|d| d.uuid == id),
-        ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => false,
+        ItemRef::Footprint(_)
+        | ItemRef::Zone { .. }
+        | ItemRef::Graphic { .. }
+        | ItemRef::FootprintText { .. } => false,
     }
 }
 
@@ -408,6 +411,8 @@ pub(super) fn pad_facts(
             PadShape::Rect => ids::PCB_PRIM_SHAPE_RECT,
             PadShape::RoundRect => ids::PCB_PRIM_SHAPE_ROUNDRECT,
             PadShape::Oval => ids::PCB_PRIM_SHAPE_OVAL,
+            PadShape::Trapezoid => ids::PCB_PRIM_SHAPE_TRAPEZOID,
+            PadShape::Custom => ids::PCB_PRIM_SHAPE_CUSTOM,
         };
         ShapeChoice {
             shape,

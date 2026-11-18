@@ -685,9 +685,20 @@ impl FootprintDocument {
             &mut baseline,
             log_repairs,
         );
-        let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-            &file.footprints[active_idx],
-        );
+        if log_repairs {
+            crate::library::editor::footprint::pad_shape_warnings::warn_trapezoid_faults(
+                &path, &file,
+            );
+        }
+        let mut state =
+            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                &file.footprints[active_idx],
+            );
+        // The sketch is solved for display off the UI thread (#2468):
+        // `finish_update` starts it.
+        if file.footprints[active_idx].sketch.is_some() {
+            state.sketch_solve.owe_open_solve();
+        }
         if log_repairs && state.legacy_pad_stack_offered {
             crate::diagnostics::log_warning(format!(
                 "{}: every sketch pad has paste disabled and direct connect (the stack builds before #1052 wrote), so none gets a paste stencil opening; the Properties panel offers to restore it",
