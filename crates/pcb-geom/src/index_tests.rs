@@ -491,7 +491,11 @@ fn a_box_never_takes_a_footprint_text_and_a_point_does() {
         footprint: id(1),
         field: BoardTextField::Designator,
     };
-    assert!(index.hit_point(PointNm::new(10 * MM, 8 * MM), 0).contains(&text));
+    assert!(
+        index
+            .hit_point(PointNm::new(10 * MM, 8 * MM), 0)
+            .contains(&text)
+    );
     let rect = RectNm::new(PointNm::new(0, 0), PointNm::new(20 * MM, 20 * MM));
     let square = [
         PointNm::new(0, 0),
