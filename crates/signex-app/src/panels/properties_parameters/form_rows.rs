@@ -51,9 +51,13 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
 }
 
 /// Section header: bold label + separator line.
-pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Element<'a, M> {
+pub fn section_hdr<'a, M: 'a>(
+    title: signex_i18n::Localized,
+    text_c: Color,
+    border_c: Color,
+) -> Element<'a, M> {
     column![
-        container(text(raw(title.to_string())).size(TS.label).color(text_c))
+        container(text(title).size(TS.label).color(text_c))
             .padding([6.0, SP.m])
             .width(Length::Fill),
         thin_sep(border_c),
@@ -64,16 +68,19 @@ pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> El
 
 /// Form row: label | styled input-like value display.
 pub fn form_input_row<'a, M: 'a>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
     label_c: Color,
     input_bg: Color,
 ) -> Element<'a, M> {
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             container(
                 container(
+                    // raw: the value as the caller gives it; each caller marks
+                    // what it is (design data, a reading, catalog text or an
+                    // engine word with its own issue).
                     text(raw(value.to_string()))
                         .size(TS.body)
                         .color(text_on(input_bg))
@@ -137,7 +144,7 @@ pub struct PaperEdgeDraft {
 /// Shows `draft` while one is being typed, else the model `value`; typing
 /// only reports the text, and Enter commits it.
 pub fn form_mm_edit_row<'a>(
-    label: &str,
+    label: signex_i18n::Localized,
     value: f32,
     draft: Option<&str>,
     edge: PaperEdge,
@@ -148,7 +155,7 @@ pub fn form_mm_edit_row<'a>(
     let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             signex_widgets::text_input(signex_i18n::UserText::new(String::new()), text_value)
                 .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
                 .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
@@ -167,7 +174,7 @@ pub fn form_mm_edit_row<'a>(
 
 /// Form row: label | pick_list (dropdown).
 pub fn form_pick_row<'a, T>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     options: Vec<T>,
     selected: T,
     on_change: impl Fn(T) -> PanelMsg + 'a,
@@ -178,7 +185,7 @@ where
 {
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
                 .graphite()
                 .on_select(on_change)
@@ -193,9 +200,89 @@ where
     .boxed()
 }
 
+/// Form row: label | pick_list of typed choices, each named from the
+/// catalog; picking one reports its value, never its text.
+pub(crate) fn form_choice_row<'a, T>(
+    label: signex_i18n::Localized,
+    choices: Vec<crate::choice::Choice<T>>,
+    selected: crate::choice::Choice<T>,
+    on_change: impl Fn(T) -> PanelMsg + 'a,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: Clone + PartialEq + 'static,
+{
+    container(
+        row![
+            property_label(label, label_c),
+            iced::widget::pick_list(Some(selected), choices, |c: &crate::choice::Choice<T>| c
+                .label
+                .clone())
+            .graphite()
+            .on_select(move |c: crate::choice::Choice<T>| on_change(c.value))
+            .padding([SP.xs, 6.0])
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
+}
+
+/// The quarter turns a rotation pick list offers, in degrees.
+const ROTATION_STEPS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
+
+/// A rotation pick-list choice: `degrees`, named "{n} Degrees" with the
+/// number as `{:.0}` writes it.
+pub(crate) fn rotation_choice(
+    i18n: &signex_i18n::I18n,
+    degrees: f64,
+) -> crate::choice::Choice<f64> {
+    crate::choice::Choice {
+        value: degrees,
+        label: i18n.message_plain(
+            ids::PANELS_PLACED_DEGREES,
+            &[("degrees", format!("{degrees:.0}").into())],
+        ),
+    }
+}
+
+/// The step whose `{:.0}` name `current` shares (89.9999 is the 90 entry),
+/// as the string-matched list highlighted it; else `current` itself.
+fn shown_rotation_step(current: f64) -> f64 {
+    let shown = format!("{current:.0}");
+    ROTATION_STEPS
+        .into_iter()
+        .find(|step| format!("{step:.0}") == shown)
+        .unwrap_or(current)
+}
+
+/// Form row: the Rotation pick list over [`ROTATION_STEPS`], showing
+/// `current` even when it is not a quarter turn; picking reports degrees.
+pub fn form_rotation_row<'a>(
+    i18n: &signex_i18n::I18n,
+    current: f64,
+    on_change: impl Fn(f64) -> PanelMsg + 'a,
+    label_c: Color,
+) -> Element<'a, PanelMsg> {
+    let choices = ROTATION_STEPS
+        .iter()
+        .map(|&degrees| rotation_choice(i18n, degrees))
+        .collect();
+    form_choice_row(
+        t!(i18n, ids::PANELS_PLACED_ROTATION),
+        choices,
+        rotation_choice(i18n, shown_rotation_step(current)),
+        on_change,
+        label_c,
+    )
+}
+
 /// Checkbox form row: label, then the checkbox.
 pub fn form_check_row<'a>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     checked: bool,
     msg: PanelMsg,
     label_c: Color,
@@ -203,7 +290,7 @@ pub fn form_check_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             container(
                 signex_widgets::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
@@ -229,7 +316,7 @@ pub fn form_check_row<'a>(
     reason = "a generic form-row builder: label, value, bounds, styling and the message constructor are all independent"
 )]
 pub fn form_grid_row(
-    label: &'static str,
+    label: signex_i18n::Localized,
     current_mm: f32,
     unit: Unit,
     has_checkbox: bool,
@@ -252,6 +339,7 @@ pub fn form_grid_row(
         .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
         .map(|(_, lbl)| *lbl);
 
+    // raw: grid pitches with their unit symbol (mm, mil), not language.
     let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
         .graphite()
         .on_select(move |lbl: &'static str| {
@@ -267,7 +355,7 @@ pub fn form_grid_row(
         })
         .width(Length::Fill);
 
-    let label_widget = property_label(label.to_string(), label_c);
+    let label_widget = property_label(label, label_c);
 
     let content: Element<PanelMsg> = if has_checkbox {
         // Snap Grid row: checkbox before pick_list
@@ -302,7 +390,7 @@ pub fn form_grid_row(
 
 /// Form row: checkbox with a keyboard shortcut hint on the right.
 pub fn form_check_row_shortcut<'a>(
-    label: &'a str,
+    label: signex_i18n::Localized,
     value: bool,
     on_toggle: PanelMsg,
     shortcut: &'a str,
@@ -311,7 +399,7 @@ pub fn form_check_row_shortcut<'a>(
     let shortcut_owned = shortcut.to_string();
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             row![
                 signex_widgets::checkbox(value)
                     .on_toggle(move |_| on_toggle.clone())
@@ -319,6 +407,7 @@ pub fn form_check_row_shortcut<'a>(
                     .spacing(SP.s)
                     .style(form_look::checkbox_style),
                 Space::new().width(Length::Fill),
+                // raw: a key chord, as the caller spells it.
                 text(raw(shortcut_owned))
                     .size(TS.caption)
                     .color(label_c)
@@ -337,7 +426,7 @@ pub fn form_check_row_shortcut<'a>(
 }
 
 pub fn form_font_link_row<'a>(
-    label: &'static str,
+    label: signex_i18n::Localized,
     current_family: &str,
     current_size_px: f32,
     _bold: bool,
@@ -480,14 +569,14 @@ pub fn canvas_font_popup<'a>(
 
 /// Form row: label | editable text_input that emits a PanelMsg on input.
 pub fn form_edit_row<'a>(
-    label: &str,
+    label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
     label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             signex_widgets::text_input(
                 signex_i18n::UserText::new(String::new()),
                 value.to_string()
@@ -535,6 +624,7 @@ pub fn font_style_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let btn = |glyph: &'static str, style: iced::font::Weight| -> Element<'static, PanelMsg> {
         signex_widgets::button(
+            // raw: a font-style glyph (B, I, U, T), drawn in its own style.
             text(raw(glyph.to_string()))
                 .size(TS.label)
                 .color(primary)

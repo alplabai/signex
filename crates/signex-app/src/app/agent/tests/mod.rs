@@ -14,6 +14,7 @@ mod journal;
 mod live;
 mod opened;
 mod origin;
+mod owed_repaint;
 #[cfg(unix)]
 mod presence;
 mod refusals;

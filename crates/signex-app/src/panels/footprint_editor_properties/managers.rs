@@ -196,7 +196,7 @@ pub(super) fn render_other_section<'a>(
         container(
             row![
                 super::super::seg_btn(
-                    "mm",
+                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_UNIT_MM),
                     unit == Unit::Mm,
                     PanelMsg::SetUnit(Unit::Mm),
                     input_bg,
@@ -204,7 +204,7 @@ pub(super) fn render_other_section<'a>(
                     muted,
                 ),
                 super::super::seg_btn(
-                    "mils",
+                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_UNIT_MILS),
                     unit == Unit::Mil,
                     PanelMsg::SetUnit(Unit::Mil),
                     input_bg,

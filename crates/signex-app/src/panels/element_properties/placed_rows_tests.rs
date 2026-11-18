@@ -164,3 +164,20 @@ fn a_locked_part_shows_the_reason_and_read_only_values() {
         assert!(texts.iter().any(|t| t == value), "lacks {value}: {texts:?}");
     }
 }
+
+/// #2059: each read-only position value follows its own label, X then Y.
+#[test]
+fn each_position_label_heads_its_own_value() {
+    let (_dir, mut app) = app(true);
+    let texts = shown(
+        &mut app,
+        SelectedItem::new(Uuid::from_u128(PART), SelectedKind::Symbol),
+        Unit::Mm,
+    );
+    let after = |label: &str| {
+        let at = texts.iter().position(|t| t == label);
+        at.and_then(|i| texts.get(i + 1)).map(String::as_str)
+    };
+    assert_eq!(after("X (mm)"), Some("10.000"), "{texts:?}");
+    assert_eq!(after("Y (mm)"), Some("200.000"), "{texts:?}");
+}

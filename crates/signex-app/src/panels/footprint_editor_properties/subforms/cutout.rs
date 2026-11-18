@@ -58,7 +58,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
     );
 
     col = col.push(super::super::super::form_check_row(
-        "Through (full board depth)",
+        // raw: footprint-editor labels move with #2060.
+        signex_widgets::raw("Through (full board depth)"),
         c.through,
         PanelMsg::FpEditorSetCutoutThrough {
             id,

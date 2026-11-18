@@ -89,8 +89,7 @@ impl<'a> Form<'a> {
         title: MessageId,
         rows: Vec<Shown<'a>>,
     ) -> Option<Element<'a, PanelMsg>> {
-        let title = self.t(title).into_string();
-        let whole = self.matches(&title);
+        let whole = self.matches(&self.t(title).into_string());
         let kept: Vec<Element<'a, PanelMsg>> = rows
             .into_iter()
             .filter(|r| whole || self.matches(&r.key))
@@ -106,7 +105,7 @@ impl<'a> Form<'a> {
                 .width(Length::Fill)
         };
         Some(
-            ctx.collapsible(key, &title, &ctx.collapsed_sections, body)
+            ctx.collapsible(key, title, &ctx.collapsed_sections, body)
                 .boxed(),
         )
     }

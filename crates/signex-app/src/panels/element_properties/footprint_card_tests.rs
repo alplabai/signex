@@ -38,7 +38,7 @@ fn facts() -> Arc<FootprintCardFacts> {
 fn the_summary_states_pitch_and_pad_count_like_the_mock() {
     let facts = FootprintCardFacts::of(&sot23_5());
     assert_eq!(facts.name, "SOT-23-5");
-    assert_eq!(facts.summary(), "0.95 mm pitch, 5 pads");
+    assert_eq!(facts.summary(&en()), "0.95 mm pitch, 5 pads");
     assert!(!facts.has_3d_body, "no STEP model, no 3D line");
 }
 
@@ -47,9 +47,14 @@ fn a_part_without_a_pitch_states_only_its_pads() {
     let mut fp = sot23_5();
     fp.pads.truncate(2);
     fp.pads[1].position = [0.0, -1.1];
-    assert_eq!(FootprintCardFacts::of(&fp).summary(), "2 pads");
+    assert_eq!(FootprintCardFacts::of(&fp).summary(&en()), "2 pads");
     fp.pads.truncate(1);
-    assert_eq!(FootprintCardFacts::of(&fp).summary(), "1 pad");
+    assert_eq!(FootprintCardFacts::of(&fp).summary(&en()), "1 pad");
+}
+
+/// The summary is English text in en-US.
+fn en() -> std::sync::Arc<signex_i18n::I18n> {
+    signex_i18n::I18n::en_us()
 }
 
 #[test]

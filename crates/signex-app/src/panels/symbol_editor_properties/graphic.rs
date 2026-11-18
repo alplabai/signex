@@ -64,6 +64,7 @@ pub(super) fn view_graphic_selection<'a>(
                 muted,
                 border_c,
                 fill_picker,
+                i18n,
             ));
         }
         GraphicKindSummary::Line { from, to } => {
@@ -82,6 +83,7 @@ pub(super) fn view_graphic_selection<'a>(
                 muted,
                 border_c,
                 fill_picker,
+                i18n,
             ));
         }
         GraphicKindSummary::Arc {
@@ -159,6 +161,7 @@ pub(super) fn view_graphic_selection<'a>(
                 muted,
                 border_c,
                 fill_picker,
+                i18n,
             ));
         }
     }
@@ -181,6 +184,7 @@ fn graphic_fill_field<'a>(
     muted: Color,
     border_c: Color,
     picker: Option<crate::app::GraphicFillPicker>,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use std::rc::Rc;
 
@@ -194,18 +198,23 @@ fn graphic_fill_field<'a>(
         .is_some()
         .then_some(PanelMsg::SymEditorClearGraphicFill { idx });
 
-    color_field(ColorFieldProps {
-        label: "Fill",
-        current: fill,
-        none_label: "None",
-        show_palette,
-        show_advanced,
-        muted,
-        border_c,
-        on_toggle: PanelMsg::SymEditorToggleGraphicFillPicker { idx },
-        on_advanced: PanelMsg::SymEditorOpenGraphicFillAdvanced { idx },
-        on_cancel: PanelMsg::SymEditorCancelGraphicFillPicker,
-        on_pick,
-        on_clear,
-    })
+    color_field(
+        ColorFieldProps {
+            // raw: symbol-editor labels move with #2060.
+            label: raw("Fill"),
+            current: fill,
+            // raw: symbol-editor labels move with #2060.
+            none_label: raw("None"),
+            show_palette,
+            show_advanced,
+            muted,
+            border_c,
+            on_toggle: PanelMsg::SymEditorToggleGraphicFillPicker { idx },
+            on_advanced: PanelMsg::SymEditorOpenGraphicFillAdvanced { idx },
+            on_cancel: PanelMsg::SymEditorCancelGraphicFillPicker,
+            on_pick,
+            on_clear,
+        },
+        i18n,
+    )
 }

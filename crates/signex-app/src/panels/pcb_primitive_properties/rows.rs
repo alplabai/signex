@@ -77,10 +77,10 @@ impl<'a> Section<'a> {
         if self.rows.is_empty() {
             return None;
         }
-        let title = self.look.t(self.title).into_string();
+        let title = self.look.t(self.title);
         let mut col: Column<Element<'a, PanelMsg>> = column![
             container(crate::panels::widgets::section_title(
-                &title,
+                title,
                 self.look.tokens(),
                 &self.look.ctx.i18n
             ))

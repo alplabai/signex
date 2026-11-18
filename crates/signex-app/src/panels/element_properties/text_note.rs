@@ -4,6 +4,7 @@ use super::super::*;
 use super::font_row::font_family_row;
 use super::rows::{PanelStyle, info_row, justify_h_row, justify_v_row};
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 pub(super) fn push_text_note_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
@@ -13,6 +14,7 @@ pub(super) fn push_text_note_sections<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelStyle { muted, palette, .. } = st;
     let PanelPalette { input_bg, .. } = palette;
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let note_text = get("Text");
     let rotation = get("Rotation");
@@ -29,13 +31,16 @@ pub(super) fn push_text_note_sections<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_basic",
-                "Basic Properties",
+                ids::PROPERTIES_SECTION_BASIC,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
-                        PanelMsg::EditTextNoteText(id, s)
-                    }));
+                    c = c.push(form_edit_row(
+                        t!(i18n, ids::PROPERTIES_TEXT),
+                        &note_text,
+                        muted,
+                        move |s| PanelMsg::EditTextNoteText(id, s),
+                    ));
                     c
                 },
             )
@@ -45,16 +50,22 @@ pub(super) fn push_text_note_sections<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_text",
-                "Text Properties",
+                ids::PROPERTIES_SECTION_TEXT,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row("Rotation", &rotation, muted, input_bg));
-                    c = c.push(form_input_row("Justify H", &justify_h, muted, input_bg));
-                    c = c.push(form_input_row("Justify V", &justify_v, muted, input_bg));
-                    c = c.push(form_input_row("Text Size", &text_size, muted, input_bg));
+                    // The engine's values; Position moved to the Location section.
+                    let rows = [
+                        (ids::PANELS_PLACED_ROTATION, &rotation),
+                        (ids::PROPERTIES_JUSTIFY_H, &justify_h),
+                        (ids::PROPERTIES_JUSTIFY_V, &justify_v),
+                        (ids::PROPERTIES_TEXT_SIZE, &text_size),
+                    ];
+                    for (label, value) in rows {
+                        c = c.push(form_input_row(t!(i18n, label), value, muted, input_bg));
+                    }
                     c = c.push(font_family_row(
-                        "Font",
+                        t!(i18n, ids::PROPERTIES_FONT),
                         note_font_family.as_deref(),
                         muted,
                         move |family| {
@@ -63,6 +74,7 @@ pub(super) fn push_text_note_sections<'a>(
                                 family,
                             )
                         },
+                        i18n,
                     ));
                     c
                 },

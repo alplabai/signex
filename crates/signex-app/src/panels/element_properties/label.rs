@@ -5,6 +5,7 @@ use super::font_row::font_family_row;
 use super::rows::{PanelStyle, h_align_from_row, info_row, justify_h_row, rotation_degrees};
 use crate::styles::Spacing;
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 const SP: Spacing = Spacing::DEFAULT;
 
@@ -48,30 +49,40 @@ pub(super) fn push_label_sections<'a>(
         // The picker works on the net the project netlist puts this
         // label on (a child sheet's local `LOCAL` is `/LOCAL`), in the
         // table of the project the label's sheet belongs to.
+        let named = |choice: crate::panels::NetClassChoice| crate::choice::Choice {
+            label: choice.label(i18n),
+            value: choice,
+        };
         let net_class_picker = ctx.net_classes.label.as_ref().map(|pick| {
             (
                 pick.project,
                 pick.net.clone(),
-                crate::panels::net_class_choices(&pick.classes),
-                crate::panels::net_class_choice(&pick.classes, &pick.net),
+                crate::panels::net_class_choices(&pick.classes)
+                    .into_iter()
+                    .map(named)
+                    .collect::<Vec<_>>(),
+                named(crate::panels::net_class_choice(&pick.classes, &pick.net)),
             )
         });
         col = col.push(
             ctx.collapsible(
                 "sel_props",
-                "Properties",
+                ids::PANELS_PLACED_PROPERTIES,
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
-                        PanelMsg::EditLabelText(id, s)
-                    }));
+                    c = c.push(form_edit_row(
+                        t!(i18n, ids::PROPERTIES_NET_NAME),
+                        &net_name,
+                        muted,
+                        move |s| PanelMsg::EditLabelText(id, s),
+                    ));
                     if let Some((project, net, choices, current)) = net_class_picker {
-                        c = c.push(form_pick_row(
-                            "Net Class",
+                        c = c.push(form_choice_row(
+                            t!(i18n, ids::PROPERTIES_NET_CLASS),
                             choices,
                             current,
-                            move |choice| {
+                            move |choice: crate::panels::NetClassChoice| {
                                 PanelMsg::NetClass(NetClassMsg::AssignNet {
                                     project,
                                     net: net.clone(),
@@ -83,7 +94,7 @@ pub(super) fn push_label_sections<'a>(
                     }
                     // Font family (stored on the label; size is below, colour is cosmetic for now)
                     c = c.push(font_family_row(
-                        "Font",
+                        t!(i18n, ids::PROPERTIES_FONT),
                         label_font_family.as_deref(),
                         muted,
                         move |family| {
@@ -92,13 +103,14 @@ pub(super) fn push_label_sections<'a>(
                                 family,
                             )
                         },
+                        i18n,
                     ));
                     let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
                         .iter()
                         .map(|n| n.to_string())
                         .collect();
                     c = c.push(form_pick_row(
-                        "Font Size",
+                        t!(i18n, ids::PROPERTIES_FONT_SIZE),
                         size_opts,
                         text_size_pt.to_string(),
                         move |s| {

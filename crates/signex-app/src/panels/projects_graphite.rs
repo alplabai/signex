@@ -119,6 +119,42 @@ fn regroup(roots: &[TreeNode], view: &ProjectsView) -> Vec<TreeNode> {
         .collect()
 }
 
+/// The rows of the grouped tree as the view shows them: the branches and the
+/// missing / unreadable marks named from the catalog. Keys are untouched, so
+/// routing and navigation still see the cached tree.
+fn shown_labels(i18n: &I18n, roots: &mut [TreeNode]) {
+    fn walk(i18n: &I18n, node: &mut TreeNode, depth: usize) {
+        let branch = match node.key.as_str() {
+            SCHEMATICS => Some(ids::PANELS_PROJECTS_GROUP_SCHEMATICS),
+            PCB => Some(ids::PANELS_PROJECTS_GROUP_PCB),
+            BOM => Some(ids::PANELS_PROJECTS_GROUP_BOM),
+            OUTPUTS => Some(ids::PANELS_PROJECTS_GROUP_OUTPUTS),
+            super::projects::LIBRARIES_KEY => Some(ids::PANELS_PROJECTS_GROUP_LIBRARIES),
+            super::projects::SETTINGS_KEY => Some(ids::PANELS_PROJECTS_GROUP_SETTINGS),
+            _ => None,
+        };
+        if depth == 1
+            && let Some(id) = branch
+        {
+            node.label = i18n.message_plain(id, &[]);
+        } else if let Some(name) = node.label.strip_suffix(super::projects::MISSING_MARK) {
+            node.label =
+                i18n.message_plain(ids::PANELS_PROJECTS_FILE_MISSING, &[("name", name.into())]);
+        } else if let Some(name) = node.label.strip_suffix(super::projects::UNREADABLE_MARK) {
+            node.label = i18n.message_plain(
+                ids::PANELS_PROJECTS_FILE_UNREADABLE,
+                &[("name", name.into())],
+            );
+        }
+        for child in &mut node.children {
+            walk(i18n, child, depth + 1);
+        }
+    }
+    for root in roots {
+        walk(i18n, root, 0);
+    }
+}
+
 fn group_path(project: &str, group: &str) -> String {
     format!("{project}/{group}")
 }
@@ -350,6 +386,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     let needle = i18n.fold_for_search(ctx.projects_view.filter.trim());
     let mut roots = regroup(&ctx.project_tree, &ctx.projects_view);
+    shown_labels(i18n, &mut roots);
     if !needle.is_empty() {
         roots = filtered(i18n, &roots, &needle);
     }
@@ -420,3 +457,7 @@ mod filter_tests {
         assert!(filtered(&en, &nodes, &en.fold_for_search("pcb")).is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "projects_graphite_tests.rs"]
+mod label_tests;

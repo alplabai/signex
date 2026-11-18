@@ -167,6 +167,7 @@ pub fn numeric_input<'a>(
     value: f64,
     draft: Option<&NumericDraft>,
 ) -> TextInput<'a, PanelMsg> {
+    // raw: the placeholder is empty or a unit symbol (mm).
     text_input(raw(placeholder.to_string()), shown_text(draft, key, value))
         .on_input(move |s| PanelMsg::NumericFieldTyped(key, s))
         .on_submit(PanelMsg::NumericFieldSubmitted(key))

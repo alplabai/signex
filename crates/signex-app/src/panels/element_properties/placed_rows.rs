@@ -9,9 +9,10 @@ use super::super::*;
 use crate::panels::{PlacedEditMsg, PlacedField, PlacedPanel};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_i18n::{ids, t};
+use signex_i18n::{Translatable, UserText, ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::schematic::{SelectedItem, SelectedKind};
+use signex_widgets::Label;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -27,7 +28,7 @@ pub(super) struct RowLook {
 /// One editable box: the draft while typed, else the shown value. Enter
 /// commits it; a locked object gets the read-only value box instead.
 fn edit_box<'a>(
-    label: String,
+    label: Label<'a>,
     item: SelectedItem,
     field: PlacedField,
     shown: String,
@@ -35,7 +36,7 @@ fn edit_box<'a>(
     look: RowLook,
 ) -> Element<'a, PanelMsg> {
     if placed.locked.is_some() {
-        return form_input_row(&label, &shown, look.muted, look.input_bg);
+        return form_input_row(label, &shown, look.muted, look.input_bg);
     }
     let value = placed.text(item, &field, shown);
     let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::Submitted {
@@ -103,8 +104,8 @@ pub(super) fn push_position_rows<'a>(
         (ids::PANELS_PLACED_X, ids::PANELS_PLACED_Y)
     };
     let at = geometry.position;
-    let x_label = t!(ctx.i18n, x_id, "unit" => unit_name.as_str()).to_string();
-    let y_label = t!(ctx.i18n, y_id, "unit" => unit_name.as_str()).to_string();
+    let x_label = t!(ctx.i18n, x_id, "unit" => unit_name.as_str()).into();
+    let y_label = t!(ctx.i18n, y_id, "unit" => unit_name.as_str()).into();
     let x = length_field_text(at.x, unit);
     let y = length_field_text(ctx.shown_y(at.y), unit);
     c = c.push(edit_box(x_label, item, PlacedField::X, x, placed, look));
@@ -123,8 +124,8 @@ pub(super) fn push_size_rows<'a>(
     };
     let unit = ctx.unit;
     let unit_name = unit.to_string();
-    let w_label = t!(ctx.i18n, ids::PANELS_PLACED_WIDTH, "unit" => unit_name.as_str()).to_string();
-    let h_label = t!(ctx.i18n, ids::PANELS_PLACED_HEIGHT, "unit" => unit_name.as_str()).to_string();
+    let w_label = t!(ctx.i18n, ids::PANELS_PLACED_WIDTH, "unit" => unit_name.as_str()).into();
+    let h_label = t!(ctx.i18n, ids::PANELS_PLACED_HEIGHT, "unit" => unit_name.as_str()).into();
     let (w, h) = (length_field_text(w, unit), length_field_text(h, unit));
     c = c.push(edit_box(w_label, item, PlacedField::Width, w, placed, look));
     c.push(edit_box(
@@ -171,17 +172,17 @@ pub(super) fn push_rotation_row<'a>(
         .collect();
     let nearest = ((rotation.rem_euclid(360.0) / 90.0).round() as usize) % 4;
     let current = choices[nearest].clone();
-    let label = t!(ctx.i18n, ids::PANELS_PLACED_ROTATION).to_string();
+    let label = t!(ctx.i18n, ids::PANELS_PLACED_ROTATION);
     if placed.locked.is_some() {
         return c.push(form_input_row(
-            &label,
+            label,
             &current.label,
             look.muted,
             look.input_bg,
         ));
     }
     c.push(form_pick_row(
-        &label,
+        label,
         choices,
         current,
         move |choice: RotationChoice| {
@@ -203,15 +204,15 @@ pub(super) fn push_parameters_section<'a>(
     look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let header = if params.is_empty() {
-        t!(ctx.i18n, ids::PANELS_PLACED_PARAMETERS_NONE).to_string()
+        Translatable::new(ids::PANELS_PLACED_PARAMETERS_NONE)
     } else {
-        t!(ctx.i18n, ids::PANELS_PLACED_PARAMETERS, "count" => params.len()).to_string()
+        Translatable::new(ids::PANELS_PLACED_PARAMETERS).arg("count", params.len())
     };
     let placed = &ctx.placed;
     col.push(
         ctx.collapsible(
             "sel_parameters",
-            &header,
+            header,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -225,13 +226,15 @@ pub(super) fn push_parameters_section<'a>(
                 }
                 let Some(item) = placed.item.filter(|i| i.kind == SelectedKind::Symbol) else {
                     for (name, value) in &params {
+                        let name = UserText::new(name.clone());
                         c = c.push(form_input_row(name, value, look.muted, look.input_bg));
                     }
                     return c;
                 };
                 for (name, value) in params {
                     let field = PlacedField::Parameter(name.clone());
-                    c = c.push(edit_box(name, item, field, value, placed, look));
+                    let label = UserText::new(name).into();
+                    c = c.push(edit_box(label, item, field, value, placed, look));
                 }
                 c
             },
@@ -250,15 +253,19 @@ pub(super) fn push_location_section<'a>(
     if ctx.placed.item.is_none() {
         return col;
     }
-    let title = t!(ctx.i18n, ids::PANELS_PLACED_LOCATION).to_string();
     col.push(
-        ctx.collapsible("sel_location", &title, &ctx.collapsed_sections, move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = push_lock_note(c, ctx, look);
-            c = push_position_rows(c, ctx, look);
-            c = push_rotation_row(c, ctx, look);
-            push_size_rows(c, ctx, look)
-        })
+        ctx.collapsible(
+            "sel_location",
+            ids::PANELS_PLACED_LOCATION,
+            &ctx.collapsed_sections,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = push_lock_note(c, ctx, look);
+                c = push_position_rows(c, ctx, look);
+                c = push_rotation_row(c, ctx, look);
+                push_size_rows(c, ctx, look)
+            },
+        )
         .boxed(),
     )
 }

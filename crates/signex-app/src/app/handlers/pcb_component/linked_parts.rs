@@ -34,7 +34,7 @@ pub(super) struct LinkedPlan {
 /// A sheet edited by the swap, and the redraw it needs when it is in view.
 pub(super) struct ChangedSheet {
     pub path: PathBuf,
-    pub invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    pub patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -136,9 +136,7 @@ impl Signex {
             match outcome {
                 Ok(result) if result.changed => changed.push(ChangedSheet {
                     path,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => {}
                 Err(error) => crate::diagnostics::log_error(
@@ -189,7 +187,7 @@ impl Signex {
         let mut in_view = None;
         for sheet in changed {
             if active.as_ref() == Some(&sheet.path) {
-                in_view = sheet.invalidation;
+                in_view = sheet.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&sheet.path);
             }
@@ -197,8 +195,8 @@ impl Signex {
         }
         self.set_undo_group_sheets(group, recorded);
         match in_view {
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, true);
+            Some(patch) => {
+                self.finish_schematic_mutation(patch, true, true);
             }
             None => self.document_state.note_sheet_edit(),
         }
