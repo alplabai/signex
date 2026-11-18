@@ -82,6 +82,8 @@ mod symbol_drag_local_tests;
 #[cfg(test)]
 mod id_source_tests;
 #[cfg(test)]
+mod pin_junction_tests;
+#[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;
@@ -156,6 +158,8 @@ pub use sheet_sync::{
 };
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub use transform::bare_pin_taps;
+pub use transform::pin_junction_repairs;
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, WireContact, before_nets,

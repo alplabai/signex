@@ -1340,6 +1340,11 @@
     "category": "design"
   },
   {
+    "id": "repair_pin_junctions",
+    "group": "Schematic",
+    "category": "validation"
+  },
+  {
     "id": "repeat_last_item",
     "group": "General",
     "category": "edit"

@@ -224,6 +224,8 @@ define_ids! {
         CMD_MENU_RUN_ERC = "cmd-menu-run-erc";
         CMD_OPEN_ERC_DIALOG = "cmd-open-erc-dialog";
         CMD_MENU_OPEN_ERC_DIALOG = "cmd-menu-open-erc-dialog";
+        CMD_REPAIR_PIN_JUNCTIONS = "cmd-repair-pin-junctions";
+        CMD_MENU_REPAIR_PIN_JUNCTIONS = "cmd-menu-repair-pin-junctions";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
         CMD_OPEN_RULES = "cmd-open-rules";

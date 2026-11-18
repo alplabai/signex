@@ -528,11 +528,14 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::PlaceSymbol { symbol } => {
+                let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
                 self.document.symbols.push(symbol);
+                // A pin end placed inside a wire joins it through a dot.
+                let document = self.reconciled_patch(&[item]);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
-                    document: DocumentPatch::SYMBOLS,
+                    document,
                 };
 
                 self.record_history(before, patch_pair);

@@ -310,6 +310,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
+        "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
         // Design ▸ Rules (#2398): the active document's project.
         "open_rules" => {

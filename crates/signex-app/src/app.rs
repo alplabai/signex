@@ -42,6 +42,7 @@ pub(crate) mod new_project;
 pub mod parent_reference_disk;
 pub mod path_op_jobs;
 pub mod path_ops;
+pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
 mod rules_tab;

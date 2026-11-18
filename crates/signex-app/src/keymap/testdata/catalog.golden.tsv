@@ -215,6 +215,7 @@ back_annotate_schematics	pcb_sync	Back-annotate the board's designators and valu
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
 check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:document,baseline:text?
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Repair Pin Junctions	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
 check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?

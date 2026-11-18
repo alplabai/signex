@@ -220,10 +220,21 @@ impl Engine {
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
         }
+        // A pin end the edit put inside a wire joins it through a dot; the
+        // dot is the connection, as #107 has it (see `pin_junctions`).
+        let pin_dots = pin_junctions::pin_dots_for(&self.document, items);
+        changed |= !pin_dots.is_empty();
+        self.document.junctions.extend(pin_dots);
 
         // Every minted dot is revalidated, not only those near `touched`: a
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
+        // A dot no wire meeting holds stays while a pin end inside a wire does.
+        let pin_taps = std::cell::OnceCell::new();
+        let pin_holds = |at: &signex_types::schematic::Point| {
+            let taps = pin_taps.get_or_init(|| pin_junctions::pin_taps(&self.document));
+            taps.contains(&signex_net::pt_key(at))
+        };
         let stale: std::collections::HashSet<uuid::Uuid> = self
             .document
             .junctions
@@ -233,6 +244,7 @@ impl Engine {
             .filter(|(at, junction)| {
                 !verdict.get(*at).copied().flatten().unwrap_or_else(|| {
                     autoplace::wire_meeting_justifies_junction(junction.position, &index)
+                        || pin_holds(&junction.position)
                 })
             })
             .map(|(_, junction)| junction.uuid)
@@ -615,6 +627,7 @@ mod autoplace_request;
 mod bus_entry;
 mod dot_verdicts;
 mod merge;
+mod pin_junctions;
 mod region_wires;
 pub(crate) mod rubber_band;
 mod wire_index;
@@ -622,6 +635,7 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
+pub use pin_junctions::{bare_pin_taps, pin_junction_repairs};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
