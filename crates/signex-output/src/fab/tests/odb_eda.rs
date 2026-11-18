@@ -71,8 +71,16 @@ fn a_panels_copies_each_list_their_pins_under_their_own_net() {
     let whole = pcb_geom::panel::panel_board(&board, &BoardPanel::default()).expect("panel");
     let job = job(&whole, &FabExtras::default(), "fab");
     let all = resolve(&job);
-    let r1 = toeprints_of(&all, "R1");
+    // Each copy has its own designator: R1, R1_2, R1_3, R1_4.
+    let copies = ["R1", "R1_2", "R1_3", "R1_4"];
+    let r1: Vec<&Resolved> = all
+        .iter()
+        .filter(|t| copies.contains(&t.part.as_str()))
+        .collect();
     assert_eq!(r1.len(), 8, "four copies of two pins: {all:?}");
+    for copy in copies {
+        assert_eq!(toeprints_of(&all, copy).len(), 2, "{copy}: {all:?}");
+    }
     for toeprint in &r1 {
         assert_ne!(toeprint.net, "$NONE$", "{toeprint:?}");
         assert_eq!(toeprint.fids, 1, "{toeprint:?}");

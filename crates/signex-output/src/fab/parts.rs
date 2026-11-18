@@ -8,24 +8,35 @@ use signex_types::pcb::{Footprint, Pad, PcbBoard, Point};
 use super::collect::pad_aperture;
 use super::frame::FabFrame;
 use super::marks::ApertureShape;
+use super::naming::Namer;
 
 /// One pin of a package: its pad, its shape and its centre in the
 /// footprint's own frame (unturned, top side, y up).
 pub(crate) type PackagePin<'a> = (&'a Pad, ApertureShape, PointNm);
 
+/// One placed part with a designator.
+pub(crate) struct Placed<'a> {
+    /// Its index in the board's footprints.
+    pub(crate) index: usize,
+    pub(crate) footprint: &'a Footprint,
+    pub(crate) package: Option<String>,
+    /// Its designator as the export writes it, unique in the job: a
+    /// repeated one (a panel's copies) takes `_2`, `_3`, ...
+    pub(crate) designator: String,
+}
+
 /// The board's parts.
 pub(crate) struct Parts<'a> {
-    /// Placed parts with a designator, in board order: each one's index in
-    /// the board's footprints, the footprint and its package.
-    pub(crate) placed: Vec<(usize, &'a Footprint, Option<String>)>,
+    /// Placed parts with a designator, in board order.
+    pub(crate) placed: Vec<Placed<'a>>,
     /// Each package's name and the footprint that shapes it.
     pub(crate) packages: Vec<(String, &'a Footprint)>,
 }
 
 impl<'a> Parts<'a> {
-    /// The parts of `board`, packages named by `name` from the footprint
-    /// name. A part with no designator has no component: its pads are
-    /// still copper, but nothing names them.
+    /// The parts of `board`, packages and designators named by `name`. A
+    /// part with no designator has no component: its pads are still
+    /// copper, but nothing names them.
     pub(crate) fn of(board: &'a PcbBoard, name: fn(&str) -> String) -> Self {
         let mut packages: Vec<(String, &Footprint)> = Vec::new();
         let mut placed = Vec::new();
@@ -34,13 +45,47 @@ impl<'a> Parts<'a> {
                 continue;
             }
             let package = package_of(&mut packages, footprint, name);
-            placed.push((index, footprint, package));
+            placed.push(Placed {
+                index,
+                footprint,
+                package,
+                designator: String::new(),
+            });
         }
+        name_designators(&mut placed, name);
         Self { placed, packages }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
         self.placed.is_empty()
+    }
+
+    /// The designator of the part at `index` in the board's footprints.
+    pub(crate) fn designator(&self, index: usize) -> Option<&str> {
+        self.placed
+            .iter()
+            .find(|p| p.index == index)
+            .map(|p| p.designator.as_str())
+    }
+}
+
+/// Each part's unique designator: the first part whose designator `name`
+/// leaves alone keeps it, then every other takes its mapped name or the
+/// first free `_2`, `_3`, ...
+fn name_designators(placed: &mut [Placed<'_>], name: fn(&str) -> String) {
+    let mut namer = Namer::default();
+    let mut pending = Vec::new();
+    let mut kept = std::collections::BTreeSet::new();
+    for (i, part) in placed.iter_mut().enumerate() {
+        let reference = &part.footprint.reference;
+        if name(reference) == *reference && kept.insert(reference.clone()) {
+            part.designator = namer.claim(reference.clone());
+        } else {
+            pending.push(i);
+        }
+    }
+    for i in pending {
+        placed[i].designator = namer.claim(name(&placed[i].footprint.reference));
     }
 }
 
@@ -114,26 +159,32 @@ pub(crate) fn package_pins(footprint: &Footprint) -> Vec<PackagePin<'_>> {
 }
 
 /// The box round the pins' shapes (each reaching half its longer side from
-/// its centre) as its low and high corners; a 1 mm box at the origin for a
-/// package with no pin the geometry holds.
+/// its centre, a polygon its farthest corner on either axis) as its low and
+/// high corners; a 1 mm box at the origin for a package with no pin the
+/// geometry holds.
 pub(crate) fn pin_box(pins: &[PackagePin<'_>]) -> (PointNm, PointNm) {
-    let reach = |shape: ApertureShape| -> i64 {
-        match shape {
+    let reach = |shape: &ApertureShape| -> i64 {
+        match *shape {
             ApertureShape::Circle { diameter } => diameter / 2,
             ApertureShape::Rect { w, h }
             | ApertureShape::Obround { w, h }
             | ApertureShape::TurnedRect { w, h, .. }
             | ApertureShape::TurnedObround { w, h, .. }
             | ApertureShape::RoundRect { w, h, .. } => w.max(h) / 2,
+            ApertureShape::Outline { ref corners } => corners
+                .iter()
+                .map(|c| c.x.abs().max(c.y.abs()))
+                .max()
+                .unwrap_or(0),
         }
     };
     let (mut lo, mut hi) = ((-500_000, -500_000), (500_000, 500_000));
     if let Some((_, shape, at)) = pins.first() {
-        let r = reach(*shape);
+        let r = reach(shape);
         (lo, hi) = ((at.x - r, at.y - r), (at.x + r, at.y + r));
     }
     for (_, shape, at) in pins {
-        let r = reach(*shape);
+        let r = reach(shape);
         lo = (lo.0.min(at.x - r), lo.1.min(at.y - r));
         hi = (hi.0.max(at.x + r), hi.1.max(at.y + r));
     }

@@ -1,18 +1,20 @@
 //! The marks of one layer as an IPC-2581 `LayerFeature`, and the standard
 //! shapes they flash, collected into the `DictionaryStandard`.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use pcb_geom::PointNm;
 
-use super::xml::{Xml, qualified};
+use super::names::Names;
+use super::xml::Xml;
 use crate::fab::frame::millionths;
 use crate::fab::marks::{ApertureShape, Function, Mark, Shape, Step};
 
 /// The dictionary id of a shape: the kind and sizes in mm, so it reads on
-/// its own. The turn goes on the feature's `Xform`.
-fn shape_id(shape: Shape) -> String {
-    match shape {
+/// its own; a polygon pad is `CONTOUR_<n>`, numbered in the order the
+/// file first flashes one. The turn goes on the feature's `Xform`.
+fn shape_id(shape: &Shape, contours: usize) -> String {
+    match *shape {
         Shape::Circle { diameter } => format!("CIRCLE_{}", millionths(diameter)),
         Shape::Rect { w, h } => format!("RECT_{}x{}", millionths(w), millionths(h)),
         Shape::Oval { w, h } => format!("OVAL_{}x{}", millionths(w), millionths(h)),
@@ -22,27 +24,39 @@ fn shape_id(shape: Shape) -> String {
             millionths(h),
             millionths(r)
         ),
+        Shape::Outline { .. } => format!("CONTOUR_{}", contours + 1),
     }
 }
 
-/// Every shape a feature flashes, written once in the content section.
+/// Every shape a feature flashes with its id, written once in the content
+/// section.
 #[derive(Debug, Default)]
 pub(crate) struct Dictionary {
-    shapes: BTreeSet<Shape>,
+    shapes: BTreeMap<Shape, String>,
+    contours: usize,
 }
 
 impl Dictionary {
     /// The id of `shape`, adding it.
     pub(crate) fn reference(&mut self, shape: Shape) -> String {
-        self.shapes.insert(shape);
-        shape_id(shape)
+        if let Some(id) = self.shapes.get(&shape) {
+            return id.clone();
+        }
+        let id = shape_id(&shape, self.contours);
+        if matches!(shape, Shape::Outline { .. }) {
+            self.contours += 1;
+        }
+        self.shapes.insert(shape, id.clone());
+        id
     }
 
     pub(crate) fn write(&self, xml: &mut Xml) {
         xml.open("DictionaryStandard", &[("units", "MILLIMETER".into())]);
-        for shape in &self.shapes {
-            xml.open("EntryStandard", &[("id", shape_id(*shape))]);
+        for (shape, id) in &self.shapes {
+            xml.open("EntryStandard", &[("id", id.clone())]);
             match *shape {
+                // The pad's polygon about its flash point, filled.
+                Shape::Outline { ref corners } => contour(xml, "Contour", corners, &[]),
                 Shape::Circle { diameter } => {
                     xml.leaf("Circle", &[("diameter", millionths(diameter))]);
                 }
@@ -90,7 +104,7 @@ pub(crate) fn xy(p: PointNm) -> [(&'static str, String); 2] {
 pub(crate) fn placed_shape(
     xml: &mut Xml,
     dictionary: &mut Dictionary,
-    aperture: ApertureShape,
+    aperture: &ApertureShape,
     at: PointNm,
 ) {
     let (shape, udeg) = Shape::of(aperture);
@@ -108,6 +122,7 @@ pub(crate) fn placed_shape(
 pub(crate) fn layer_feature(
     xml: &mut Xml,
     dictionary: &mut Dictionary,
+    names: &Names<'_>,
     layer: &str,
     marks: &[Mark],
 ) {
@@ -116,12 +131,15 @@ pub(crate) fn layer_feature(
     }
     xml.open("LayerFeature", &[("layerRef", layer.to_string())]);
     for mark in marks {
-        write_mark(xml, dictionary, mark);
+        write_mark(xml, dictionary, names, mark);
     }
     xml.close();
 }
 
-fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
+fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, names: &Names<'_>, mark: &Mark) {
+    let net_attr = |net: Option<&String>| -> Vec<(&'static str, String)> {
+        net.map(|n| vec![("net", names.net(n))]).unwrap_or_default()
+    };
     match mark {
         Mark::Flash {
             shape,
@@ -129,17 +147,19 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
             at,
             attributes,
         } => {
-            let mut set = net_attr(attributes.net.as_deref());
+            let mut set = net_attr(attributes.net.as_ref());
             match pad_usage(*function) {
                 Some(usage) => {
                     set.push(("padUsage", usage.to_string()));
                     xml.open("Set", &set);
                     xml.open("Pad", &[]);
-                    placed_shape(xml, dictionary, *shape, *at);
-                    if let Some((component, pin)) = &attributes.pin {
+                    placed_shape(xml, dictionary, shape, *at);
+                    if let (Some(component), Some((_, pin))) =
+                        (names.component(attributes), &attributes.pin)
+                    {
                         xml.leaf(
                             "PinRef",
-                            &[("componentRef", qualified(component)), ("pin", pin.clone())],
+                            &[("componentRef", component), ("pin", pin.clone())],
                         );
                     }
                     xml.close();
@@ -147,7 +167,7 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
                 None => {
                     xml.open("Set", &set);
                     xml.open("Features", &[]);
-                    placed_shape(xml, dictionary, *shape, *at);
+                    placed_shape(xml, dictionary, shape, *at);
                     xml.close();
                 }
             }
@@ -160,7 +180,7 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
             attributes,
             ..
         } => {
-            xml.open("Set", &net_attr(attributes.net.as_deref()));
+            xml.open("Set", &net_attr(attributes.net.as_ref()));
             xml.open("Features", &[]);
             xml.leaf("Location", &xy(PointNm::new(0, 0)));
             polyline(xml, *start, steps, *width);
@@ -175,7 +195,7 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
             if outline.len() < 3 {
                 return;
             }
-            xml.open("Set", &net_attr(attributes.net.as_deref()));
+            xml.open("Set", &net_attr(attributes.net.as_ref()));
             xml.open("Features", &[]);
             xml.leaf("Location", &xy(PointNm::new(0, 0)));
             contour(xml, "Contour", outline, holes);
@@ -183,10 +203,6 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
             xml.close();
         }
     }
-}
-
-fn net_attr(net: Option<&str>) -> Vec<(&'static str, String)> {
-    net.map(|n| vec![("net", qualified(n))]).unwrap_or_default()
 }
 
 /// The `padUsage` of a flash that is a pad; `None` for a drawing.
@@ -289,6 +305,7 @@ pub(crate) fn closed_polygon(xml: &mut Xml, tag: &'static str, ring: &[PointNm])
 mod tests {
     use super::*;
     use crate::fab::marks::Attributes;
+    use crate::fab::parts::Parts;
 
     #[test]
     fn a_turned_pad_flashes_its_upright_shape_with_a_turn() {
@@ -308,7 +325,9 @@ mod tests {
                 pad: None,
             },
         };
-        layer_feature(&mut xml, &mut dictionary, "TopCopper", &[pad]);
+        let parts = no_parts();
+        let names = Names::of(&parts, std::iter::once(&pad));
+        layer_feature(&mut xml, &mut dictionary, &names, "TopCopper", &[pad]);
         let text = xml.finish();
         assert!(
             text.contains("<Set net=\"A_B\" padUsage=\"TERMINATION\">"),
@@ -331,6 +350,80 @@ mod tests {
                 .finish()
                 .contains("<RectCenter width=\"1\" height=\"0.5\"/>")
         );
+    }
+
+    fn no_parts() -> Parts<'static> {
+        Parts {
+            placed: Vec::new(),
+            packages: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_polygon_pad_is_one_contour_entry_placed_at_each_flash() {
+        let corners = vec![
+            PointNm::new(-500_000, -300_000),
+            PointNm::new(500_000, -300_000),
+            PointNm::new(300_000, 300_000),
+            PointNm::new(-300_000, 300_000),
+        ];
+        let flash = |x: i64| Mark::Flash {
+            shape: ApertureShape::Outline {
+                corners: corners.clone(),
+            },
+            function: Function::SmdPad,
+            at: PointNm::new(x, 0),
+            attributes: Attributes::default(),
+        };
+        let marks = [flash(0), flash(2_000_000)];
+        let mut dictionary = Dictionary::default();
+        let mut xml = Xml::fragment(0);
+        let parts = no_parts();
+        let names = Names::of(&parts, marks.iter());
+        layer_feature(&mut xml, &mut dictionary, &names, "TopCopper", &marks);
+        let text = xml.finish();
+        assert_eq!(
+            text.matches("<StandardPrimitiveRef id=\"CONTOUR_1\"/>")
+                .count(),
+            2,
+            "{text}"
+        );
+        assert!(text.contains("<Location x=\"2\" y=\"0\"/>"), "{text}");
+        assert!(!text.contains("<Xform"), "{text}");
+        let mut entries = Xml::fragment(0);
+        dictionary.write(&mut entries);
+        let entries = entries.finish();
+        assert_eq!(entries.matches("<EntryStandard").count(), 1, "{entries}");
+        assert!(
+            entries.contains("<EntryStandard id=\"CONTOUR_1\">"),
+            "{entries}"
+        );
+        assert!(entries.contains("<Contour>"), "{entries}");
+        assert!(
+            entries.contains("<PolyBegin x=\"-0.5\" y=\"-0.3\"/>"),
+            "{entries}"
+        );
+        assert_eq!(entries.matches("<PolyStepSegment").count(), 4, "{entries}");
+    }
+
+    #[test]
+    fn two_nets_one_qualified_name_apart_stay_apart() {
+        let stroke = |net: &str| Mark::Stroke {
+            width: 100_000,
+            function: Function::Conductor,
+            start: PointNm::new(0, 0),
+            steps: vec![Step::Line(PointNm::new(1_000_000, 0))],
+            attributes: Attributes::net(Some(net.into())),
+        };
+        let marks = [stroke("A:B"), stroke("A_B")];
+        let mut dictionary = Dictionary::default();
+        let mut xml = Xml::fragment(0);
+        let parts = no_parts();
+        let names = Names::of(&parts, marks.iter());
+        layer_feature(&mut xml, &mut dictionary, &names, "TopCopper", &marks);
+        let text = xml.finish();
+        assert!(text.contains("<Set net=\"A_B\">"), "{text}");
+        assert!(text.contains("<Set net=\"A_B_2\">"), "{text}");
     }
 
     #[test]

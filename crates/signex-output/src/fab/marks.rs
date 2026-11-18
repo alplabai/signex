@@ -48,24 +48,46 @@ pub(crate) enum ApertureShape {
 
 /// An unturned flash shape, in nm, for the whole-job exports that name a
 /// shape once and turn each flash of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Shape {
-    Circle { diameter: i64 },
-    Rect { w: i64, h: i64 },
-    Oval { w: i64, h: i64 },
-    RoundRect { w: i64, h: i64, r: i64 },
+    Circle {
+        diameter: i64,
+    },
+    Rect {
+        w: i64,
+        h: i64,
+    },
+    Oval {
+        w: i64,
+        h: i64,
+    },
+    RoundRect {
+        w: i64,
+        h: i64,
+        r: i64,
+    },
+    /// A polygon pad's corners about its flash point, already turned.
+    Outline {
+        corners: Vec<PointNm>,
+    },
 }
 
 impl Shape {
     /// The shape of an aperture and its turn in micro-degrees.
-    pub(crate) fn of(aperture: ApertureShape) -> (Shape, i64) {
-        match aperture {
+    pub(crate) fn of(aperture: &ApertureShape) -> (Shape, i64) {
+        match *aperture {
             ApertureShape::Circle { diameter } => (Shape::Circle { diameter }, 0),
             ApertureShape::Rect { w, h } => (Shape::Rect { w, h }, 0),
             ApertureShape::Obround { w, h } => (Shape::Oval { w, h }, 0),
             ApertureShape::TurnedRect { w, h, udeg } => (Shape::Rect { w, h }, udeg),
             ApertureShape::TurnedObround { w, h, udeg } => (Shape::Oval { w, h }, udeg),
             ApertureShape::RoundRect { w, h, r, udeg } => (Shape::RoundRect { w, h, r }, udeg),
+            ApertureShape::Outline { ref corners } => (
+                Shape::Outline {
+                    corners: corners.clone(),
+                },
+                0,
+            ),
         }
     }
 }

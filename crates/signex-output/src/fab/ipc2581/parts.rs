@@ -9,23 +9,22 @@ use pcb_geom::{Placement, PointNm, Side};
 use signex_types::pcb::{Footprint, PadType};
 
 use super::features::{Dictionary, placed_shape, xy};
+use super::names::Names;
 use super::xml::{Xml, qualified};
 use crate::fab::frame::{FabFrame, fab_angle_udeg, millionths};
 use crate::fab::marks::Mark;
-use crate::fab::parts::{Parts, oem_number, package_pins, pin_box};
+use crate::fab::parts::{Parts, Placed, oem_number, package_pins, pin_box};
 
 impl Parts<'_> {
-    /// The `Bom`: one item per value and footprint, one designator once.
+    /// The `Bom`: one item per value and footprint, listing every placed
+    /// part by its unique designator, as the components are.
     pub(crate) fn write_bom(&self, xml: &mut Xml, bom: &str, step: &str) {
-        let mut items: BTreeMap<String, Vec<(&Footprint, &Option<String>)>> = BTreeMap::new();
-        let mut named = BTreeSet::new();
-        for (_, footprint, package) in &self.placed {
-            if named.insert(qualified(&footprint.reference)) {
-                items
-                    .entry(oem_number(footprint))
-                    .or_default()
-                    .push((footprint, package));
-            }
+        let mut items: BTreeMap<String, Vec<&Placed<'_>>> = BTreeMap::new();
+        for placed in &self.placed {
+            items
+                .entry(oem_number(placed.footprint))
+                .or_default()
+                .push(placed);
         }
         xml.open("Bom", &[("name", bom.to_string())]);
         xml.open(
@@ -35,7 +34,7 @@ impl Parts<'_> {
         xml.leaf("StepRef", &[("name", step.to_string())]);
         xml.close();
         for (number, parts) in &items {
-            let category = if parts[0].0.component.component_type.in_bom() {
+            let category = if parts[0].footprint.component.component_type.in_bom() {
                 "ELECTRICAL"
             } else {
                 "MECHANICAL"
@@ -48,9 +47,10 @@ impl Parts<'_> {
                     ("category", category.into()),
                 ],
             );
-            for (footprint, package) in parts {
-                let mut attrs = vec![("name", qualified(&footprint.reference))];
-                if let Some(package) = package {
+            for placed in parts {
+                let footprint = placed.footprint;
+                let mut attrs = vec![("name", placed.designator.clone())];
+                if let Some(package) = &placed.package {
                     attrs.push(("packageRef", package.clone()));
                 }
                 attrs.push((
@@ -78,13 +78,14 @@ impl Parts<'_> {
         for (name, footprint) in &self.packages {
             write_package(xml, dictionary, name, footprint);
         }
-        for (_, footprint, package) in &self.placed {
+        for placed in &self.placed {
+            let footprint = placed.footprint;
             let Ok(placement) = Placement::of_footprint(footprint) else {
                 *skipped += 1;
                 continue;
             };
-            let mut attrs = vec![("refDes", qualified(&footprint.reference))];
-            if let Some(package) = package {
+            let mut attrs = vec![("refDes", placed.designator.clone())];
+            if let Some(package) = &placed.package {
                 attrs.push(("packageRef", package.clone()));
             }
             attrs.push(("part", oem_number(footprint)));
@@ -108,15 +109,20 @@ impl Parts<'_> {
 
 /// One `LogicalNet` per net, listing the designated pins its copper pads
 /// carry, from the copper images' pad flashes.
-pub(crate) fn write_nets<'m>(xml: &mut Xml, copper: impl Iterator<Item = &'m Mark>) {
+pub(crate) fn write_nets<'m>(
+    xml: &mut Xml,
+    copper: impl Iterator<Item = &'m Mark>,
+    names: &Names<'_>,
+) {
     let mut nets: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     for mark in copper {
         if let Mark::Flash { attributes, .. } = mark
-            && let (Some(net), Some((component, pin))) = (&attributes.net, &attributes.pin)
+            && let (Some(net), Some((_, pin))) = (&attributes.net, &attributes.pin)
+            && let Some(component) = names.component(attributes)
         {
-            nets.entry(qualified(net))
+            nets.entry(names.net(net))
                 .or_default()
-                .insert((qualified(component), pin.clone()));
+                .insert((component, pin.clone()));
         }
     }
     for (net, pins) in nets {
@@ -164,7 +170,7 @@ fn write_package(xml: &mut Xml, dictionary: &mut Dictionary, name: &str, footpri
                 ("electricalType", electrical.into()),
             ],
         );
-        placed_shape(xml, dictionary, *shape, *at);
+        placed_shape(xml, dictionary, shape, *at);
         xml.close();
     }
     xml.close();

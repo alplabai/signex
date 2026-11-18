@@ -26,6 +26,7 @@ mod ipc2581;
 mod ipc356;
 mod job;
 mod layers;
+mod naming;
 mod marks;
 mod notes;
 mod odb;
@@ -256,14 +257,12 @@ pub fn generate(
             kind: FabFileKind::Ipc2581,
             contents: ipc2581::write_ipc2581(board, extras, &stack, name, &mut own),
         });
-        tally.texts = tally.texts.max(own.texts);
         skipped = skipped.max(own.skipped);
     }
     if let Some(form) = options.odb {
         let mut own = Tally::default();
         let job = odb::write_odb(board, extras, &stack, name, &mut own);
         odb_files(form, name, job, &mut files);
-        tally.texts = tally.texts.max(own.texts);
         skipped = skipped.max(own.skipped);
     }
     let facts = job::JobFacts {

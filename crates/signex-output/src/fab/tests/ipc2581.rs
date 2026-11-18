@@ -150,3 +150,33 @@ fn one_board_gives_the_same_bytes_and_a_well_nested_file() {
     }
     assert!(open.is_empty(), "{open:?}");
 }
+
+#[test]
+fn a_panels_copies_are_components_and_bom_rows_with_their_own_designators() {
+    let board = fixture_board();
+    let panel = signex_types::pcb_panel::BoardPanel::default();
+    let whole = pcb_geom::panel::panel_board(&board, &panel).expect("panel");
+    let xml = ipc2581(&whole, &FabExtras::default(), "fab");
+    let values = |prefix: &str| -> Vec<String> {
+        xml.split(prefix)
+            .skip(1)
+            .map(|rest| rest.split('"').next().unwrap_or_default().to_string())
+            .collect()
+    };
+    let components = values("<Component refDes=\"");
+    let mut unique = components.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), components.len(), "{components:?}");
+    for copy in ["R1", "R1_2", "R1_3", "R1_4"] {
+        assert!(
+            components.iter().any(|c| c == copy),
+            "{copy}: {components:?}"
+        );
+    }
+    let mut listed = values("<RefDes name=\"");
+    listed.sort_unstable();
+    assert_eq!(listed, unique, "the BOM lists every component once");
+    let wired = values("componentRef=\"");
+    assert!(wired.iter().any(|c| c == "R1_4"), "{wired:?}");
+}

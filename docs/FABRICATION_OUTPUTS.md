@@ -232,7 +232,8 @@ It holds:
   images: pads as `Pad` with their pin (`padUsage` `TERMINATION`, `VIA`,
   `MASK` for a mask or paste opening), tracks and drawings as round-pen
   polylines, zone fills as contours with cutouts. Flashed shapes are written
-  once in the standard dictionary, unturned, with the turn on the feature.
+  once in the standard dictionary, unturned, with the turn on the feature;
+  a polygon pad (trapezoid or custom) is a `Contour` entry `CONTOUR_<n>`.
   Drawings on layers no Gerber image carries (fab, assembly, courtyard,
   documentation, mechanical) are written on their document layers.
 - **Holes.** Each drill layer's holes and slots (`SlotCavity`, an oval from
@@ -242,6 +243,9 @@ It holds:
   footprint's own frame, a component per part with a designator (rotation as
   in the pick-and-place file, mirrored on the bottom), a BOM item per value
   and footprint, and a logical net per net with the pins its pads carry.
+  Names are qualified names (a `:` becomes `_`); a net or designator whose
+  name another one already has takes `_2`, `_3`, ..., so a panel's copies of
+  one part are each a component and a BOM row under their own designator.
 
 No person, company or date is recorded. The dialog writes it while its
 IPC-2581 box is ticked (#2489).
@@ -260,7 +264,8 @@ mechanical layer's own name such as `fold_lines`), and a name another layer
 already has falls back to the layer's token, then takes `_2`, `_3`, ...
 Record words (nets, designators, parts, pins) turn spaces, `;` and
 non-ASCII characters into `_`; a net whose word another net already has
-takes `_2`, `_3`, ..., since net names are unique. The job holds:
+takes `_2`, `_3`, ..., since net names are unique; a repeated designator
+(a panel's copies) does the same. The job holds:
 
 - **Matrix.** The layers in physical order: `comp_+_top` when parts sit on
   the top, top legend, paste and mask, the stack's copper and dielectric
@@ -280,7 +285,9 @@ takes `_2`, `_3`, ..., since net names are unique. The job holds:
   unturned with the clockwise turn on the record, SMD copper pads with the
   `.smd` attribute, tracks and drawings as lines and arcs, zone fills as
   surfaces (island clockwise, holes counter-clockwise). A full circle is two
-  half arcs.
+  half arcs. A polygon pad (trapezoid or custom) has no standard symbol:
+  its copper is a surface of its corners with the pad's attribute, and its
+  package pin outline a `CT` contour.
 - **Drills.** Each drill layer's holes as pads and slots as lines, with a
   `tools` file listing each size, plated or not, hole or slot.
 - **Profile.** The outline as one surface with the through cutouts as
