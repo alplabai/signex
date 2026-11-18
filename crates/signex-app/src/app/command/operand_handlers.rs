@@ -145,6 +145,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("unlock_board_items", board_edit::unlock_board_items),
     ("set_via_span", board_edit::set_via_span),
     ("set_layer_sizes", board_edit::set_layer_sizes),
+    ("set_pad_shape", board_edit::set_pad_shape),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
     // #2408, #2409: the board Tools edits on the board `document` names.
@@ -404,6 +405,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_sizes" => Some(
             "`set_layer_sizes` needs the operands `document`, `ids` and `sizes` — \
              use the stack rows of the Via or Pad panel in Properties",
+        ),
+        "set_pad_shape" => Some(
+            "`set_pad_shape` needs the operands `document`, `ids` and `shape`, \
+             with `delta` for a trapezoid or `corners` for a custom pad — \
+             trapezoid and custom pads are drawn in the footprint editor",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

@@ -244,6 +244,9 @@ fn pad_shape_token_round_trip_each_variant() {
         },
         PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.5, 0.0], [0.75, 1.0]])),
         PadShape::Custom(Polygon::new(Vec::new())),
+        PadShape::Trapezoid {
+            delta: [0.0, -0.35],
+        },
     ];
     for s in cases {
         let token = pad_shape_to_token(&s, "t").unwrap();
@@ -556,6 +559,8 @@ fn pad_shape_from_token_refuses_a_non_finite_number() {
         "custom:inf,0|1,1",
         "custom:0,0|1,nan|1,1",
         "custom:0,0|1,-inf",
+        "trapezoid:nan,0",
+        "trapezoid:0.5",
     ] {
         assert!(
             matches!(

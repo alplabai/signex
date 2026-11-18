@@ -44,6 +44,8 @@ fn pad(number: &str, kind: PadType, shape: PadShape, at: Point, size: Point) -> 
         layers: layers.iter().map(|l| l.to_string()).collect(),
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -56,6 +58,8 @@ fn pad(number: &str, kind: PadType, shape: PadShape, at: Point, size: Point) -> 
 fn smd(number: &str, x: f64, y: f64, w: f64, h: f64) -> Pad {
     Pad {
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         ..pad(number, PadType::Smd, PadShape::RoundRect, p(x, y), p(w, h))
     }
 }

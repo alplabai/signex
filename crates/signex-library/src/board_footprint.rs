@@ -19,6 +19,7 @@ use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::part::FootprintResolveError;
 use signex_types::pcb::{self, DrillDef, PadType, Point};
 use signex_types::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer};
+use signex_types::pcb_pad_shape::pad_shape_fault;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
@@ -186,7 +187,12 @@ fn board_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
 
 /// The board pad of `pad`'s copper: shape, place, size, drill and layers.
 fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
-    let (shape, roundrect_ratio) = pad_shape(&pad.shape)?;
+    let BoardShape {
+        shape,
+        roundrect_ratio,
+        trapezoid_delta,
+        custom_outline,
+    } = pad_shape(&pad.shape)?;
     let offset = (pad.copper_offset_x_mm, pad.copper_offset_y_mm);
     if offset.0.unwrap_or(0.0) != 0.0 || offset.1.unwrap_or(0.0) != 0.0 {
         return Err(unconvertible(
@@ -194,7 +200,7 @@ fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
             format!("{:?}, {:?}", offset.0, offset.1),
         ));
     }
-    Ok(pcb::Pad {
+    let board = pcb::Pad {
         uuid: Uuid::now_v7(),
         number: pad.number.clone(),
         pad_type: pad_type(pad.kind),
@@ -205,12 +211,23 @@ fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
         layers: board_layers(&pad.layers)?,
         net: None,
         roundrect_ratio,
+        trapezoid_delta,
+        custom_outline,
         rotation: pad.rotation,
         layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
-    })
+    };
+    // A trapezoid or outline the board could not save is refused here,
+    // naming the pad, rather than placed and lost on the next save.
+    match pad_shape_fault(&board) {
+        Some(fault) => Err(unconvertible(
+            fault.field(),
+            format!("pad {}: {fault}", pad.number),
+        )),
+        None => Ok(board),
+    }
 }
 
 /// Pad settings the board has no field for: refused when not the default, so
@@ -245,19 +262,48 @@ fn pad_type(kind: PadKind) -> PadType {
     }
 }
 
-fn pad_shape(shape: &PadShape) -> Result<(pcb::PadShape, f64), FootprintResolveError> {
+/// A board pad's shape and the parameters it reads.
+struct BoardShape {
+    shape: pcb::PadShape,
+    roundrect_ratio: f64,
+    trapezoid_delta: Point,
+    custom_outline: Vec<Point>,
+}
+
+impl BoardShape {
+    fn plain(shape: pcb::PadShape) -> Self {
+        BoardShape {
+            shape,
+            roundrect_ratio: 0.0,
+            trapezoid_delta: Point::ZERO,
+            custom_outline: Vec::new(),
+        }
+    }
+}
+
+fn pad_shape(shape: &PadShape) -> Result<BoardShape, FootprintResolveError> {
     match shape {
-        PadShape::Round => Ok((pcb::PadShape::Circle, 0.0)),
-        PadShape::Rect => Ok((pcb::PadShape::Rect, 0.0)),
-        PadShape::Oval => Ok((pcb::PadShape::Oval, 0.0)),
+        PadShape::Round => Ok(BoardShape::plain(pcb::PadShape::Circle)),
+        PadShape::Rect => Ok(BoardShape::plain(pcb::PadShape::Rect)),
+        PadShape::Oval => Ok(BoardShape::plain(pcb::PadShape::Oval)),
         PadShape::RoundRect { radius_ratio } if (0.0..=0.5).contains(radius_ratio) => {
-            Ok((pcb::PadShape::RoundRect, *radius_ratio))
+            Ok(BoardShape {
+                roundrect_ratio: *radius_ratio,
+                ..BoardShape::plain(pcb::PadShape::RoundRect)
+            })
         }
         PadShape::RoundRect { radius_ratio } => {
             Err(unconvertible("pad corner ratio", radius_ratio.to_string()))
         }
+        PadShape::Trapezoid { delta } => Ok(BoardShape {
+            trapezoid_delta: point(*delta),
+            ..BoardShape::plain(pcb::PadShape::Trapezoid)
+        }),
+        PadShape::Custom(polygon) => Ok(BoardShape {
+            custom_outline: polygon.points.iter().map(|&p| point(p)).collect(),
+            ..BoardShape::plain(pcb::PadShape::Custom)
+        }),
         PadShape::Chamfered { .. } => Err(unconvertible("pad shape", "chamfered")),
-        PadShape::Custom(_) => Err(unconvertible("pad shape", "custom")),
     }
 }
 

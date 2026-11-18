@@ -267,6 +267,7 @@ toggle_layer_numbers	view	Show or hide the numbers on the layer tabs	Show Layer 
 board_layer_stack	design	Open the layer stack manager of the board	Layer Stack Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_layer_stack	design	Replace the layer stack of a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,stack:text
 set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,sizes:text
+set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,shape:text,delta:text?,corners:text?
 highlight_net_under_cursor	select	Highlight net under cursor	Highlight Net	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 highlight_related_net_objects	select	Highlight/select related net objects across sheets	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 clear_net_highlighting	select	Clear net highlighting	Clear Filter	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-

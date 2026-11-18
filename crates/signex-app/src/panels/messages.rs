@@ -72,6 +72,9 @@ pub enum PanelMsg {
     FpEditorSetNextPadDrillDiameter(String),
     FpEditorSetNextPadDrillSlotLength(String),
     FpEditorSetNextPadCornerRadiusPct(String),
+    /// A trapezoid pad's Delta X / Delta Y (#2242), as typed.
+    FpEditorSetNextPadTrapezoidDeltaX(String),
+    FpEditorSetNextPadTrapezoidDeltaY(String),
     FpEditorSetNextPadTemplate(String),
     FpEditorSetNextPadTemplateLibrary(String),
     FpEditorSetNextPadPasteMarginTop(String),
@@ -127,6 +130,14 @@ pub enum PanelMsg {
         value: String,
     },
     FpEditorSetSelectedPadCornerRadiusPct {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaX {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaY {
         idx: usize,
         value: String,
     },

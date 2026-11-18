@@ -58,6 +58,9 @@ pub(super) fn pad_shape_to_token(
             }
             format!("custom:{}", parts.join("|"))
         }
+        PadShape::Trapezoid { delta } => {
+            format!("trapezoid:{},{}", num(delta[0])?, num(delta[1])?)
+        }
     })
 }
 
@@ -101,6 +104,12 @@ pub(super) fn pad_shape_from_token(s: &str) -> Result<PadShape, FootprintFileErr
         return Ok(PadShape::Chamfered {
             chamfer_ratio,
             corners,
+        });
+    }
+    if let Some(rest) = s.strip_prefix("trapezoid:") {
+        let (x, y) = rest.split_once(',').ok_or_else(invalid)?;
+        return Ok(PadShape::Trapezoid {
+            delta: [finite(x)?, finite(y)?],
         });
     }
     if let Some(rest) = s.strip_prefix("custom:") {

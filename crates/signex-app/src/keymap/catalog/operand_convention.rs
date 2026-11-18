@@ -92,6 +92,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("preset", OperandKind::Text),
     ("pins", OperandKind::Text),
     ("units", OperandKind::Text),
+    ("shape", OperandKind::Text),
+    ("delta", OperandKind::Text),
+    ("corners", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

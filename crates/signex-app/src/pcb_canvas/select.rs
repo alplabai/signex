@@ -253,12 +253,14 @@ impl PcbSelectionState {
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
-                    highlight.bodies.push(indexed.shape);
+                    highlight.bodies.push(indexed.shape.clone());
                 }
                 ItemRef::Pad { footprint, .. } if whole.contains(&footprint) => {
-                    highlight.selected.push(indexed.shape);
+                    highlight.selected.push(indexed.shape.clone());
                 }
-                item if self.selection.contains(item) => highlight.selected.push(indexed.shape),
+                item if self.selection.contains(item) => {
+                    highlight.selected.push(indexed.shape.clone())
+                }
                 _ => {}
             }
         }
@@ -266,8 +268,8 @@ impl PcbSelectionState {
             && let Some(found) = index.items().find(|i| i.item == hovered)
         {
             match hovered {
-                ItemRef::Footprint(_) => highlight.hover_body = Some(found.shape),
-                _ => highlight.hover = Some(found.shape),
+                ItemRef::Footprint(_) => highlight.hover_body = Some(found.shape.clone()),
+                _ => highlight.hover = Some(found.shape.clone()),
             }
         }
         highlight
@@ -380,7 +382,7 @@ impl PcbSelectionState {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
                 _ => false,
             })
-            .map(|i| i.shape)
+            .map(|i| i.shape.clone())
             .collect()
     }
 
@@ -399,7 +401,7 @@ impl PcbSelectionState {
         let p = PointNm::from_mm(at, "pointer").ok()?;
         let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
         self.ensure_index(board);
-        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape))
+        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape.clone()))
     }
 
     fn ensure_index(&mut self, board: &PcbBoard) {

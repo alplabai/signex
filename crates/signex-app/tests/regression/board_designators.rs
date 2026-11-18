@@ -42,6 +42,8 @@ fn pad(n: u128, x: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -132,7 +134,7 @@ fn open_board_as(newer: bool) -> Fixture {
     let path = tmp.path().join("board.snxpcb");
     let mut text = SnxPcb::new(board()).write_string().unwrap();
     if newer {
-        text = text.replacen("snxpcb/1.3", "snxpcb/1.9", 1);
+        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.9", 1);
     }
     std::fs::write(&path, text).unwrap();
     let (mut app, _boot) = Signex::new();

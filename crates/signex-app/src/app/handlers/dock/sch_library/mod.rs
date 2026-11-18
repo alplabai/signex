@@ -147,6 +147,12 @@ impl Signex {
             PanelMsg::FpEditorSetNextPadCornerRadiusPct(v) => {
                 self.fp_editor_set_next_pad_corner_radius_pct(v.clone())
             }
+            PanelMsg::FpEditorSetNextPadTrapezoidDeltaX(v) => {
+                self.fp_editor_set_next_pad_trapezoid_delta(0, v.clone())
+            }
+            PanelMsg::FpEditorSetNextPadTrapezoidDeltaY(v) => {
+                self.fp_editor_set_next_pad_trapezoid_delta(1, v.clone())
+            }
             PanelMsg::FpEditorSetNextPadTemplate(v) => {
                 self.fp_editor_set_next_pad_template(v.clone())
             }
@@ -227,6 +233,12 @@ impl Signex {
             }
             PanelMsg::FpEditorSetSelectedPadCornerRadiusPct { idx, value } => {
                 self.fp_editor_set_selected_pad_corner_radius_pct(*idx, value.clone())
+            }
+            PanelMsg::FpEditorSetSelectedPadTrapezoidDeltaX { idx, value } => {
+                self.fp_editor_set_selected_pad_trapezoid_delta(*idx, 0, value.clone())
+            }
+            PanelMsg::FpEditorSetSelectedPadTrapezoidDeltaY { idx, value } => {
+                self.fp_editor_set_selected_pad_trapezoid_delta(*idx, 1, value.clone())
             }
             PanelMsg::FpEditorSetSelectedPadTemplate { idx, value } => {
                 self.fp_editor_set_selected_pad_template(*idx, value.clone())

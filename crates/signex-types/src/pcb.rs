@@ -87,6 +87,11 @@ pub enum PadShape {
     Rect,
     Oval,
     RoundRect,
+    /// A rectangle with one pair of opposite edges of different lengths,
+    /// set by [`Pad::trapezoid_delta`] (#2242).
+    Trapezoid,
+    /// A polygon of the pad's own, [`Pad::custom_outline`] (#2242).
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -204,6 +209,19 @@ pub struct Pad {
     /// `rotation` pad column (`snxpcb/1.3`).
     #[serde(default)]
     pub rotation: f64,
+    /// How much longer, in mm, the pad's +y edge is than its −y edge
+    /// (`x`), or its +x edge than its −x edge (`y`); at most one is
+    /// non-zero. Read only for [`PadShape::Trapezoid`]; see
+    /// [`crate::pcb_pad_shape`]. Saved in the optional `trapezoid_delta`
+    /// pad column (`snxpcb/1.4`).
+    #[serde(default)]
+    pub trapezoid_delta: Point,
+    /// The copper outline in the pad's own frame, mm, about
+    /// [`Self::position`]: a simple polygon that turns with the pad. Read
+    /// only for [`PadShape::Custom`]. Saved in the optional
+    /// `custom_outline` pad column (`snxpcb/1.4`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_outline: Vec<Point>,
     /// The net was set by hand and the schematic never changes it.
     /// Saved in the optional `net_locked` pad column.
     #[serde(default)]

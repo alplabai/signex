@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use pcb_geom::{
     GeomError, Placement, PointNm, Polygon, Side, layer_bit, layer_mask, mm_to_nm, pad_layers,
-    pad_world_center, pad_world_rotation_deg, via_layers,
+    pad_shape, pad_world_center, pad_world_rotation_deg, via_layers,
 };
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via};
 use signex_types::pcb_graphic::BoardGraphicKind;
@@ -331,6 +331,19 @@ pub(crate) fn pad_aperture(
             ApertureShape::Rect { w, h }
         }
         PadShape::Rect | PadShape::RoundRect => ApertureShape::TurnedRect { w, h, udeg },
+        // The outline `pad_shape` places, about the flash point (#2242).
+        PadShape::Trapezoid | PadShape::Custom => {
+            let sized = Pad {
+                size,
+                ..pad.clone()
+            };
+            let corners = pad_shape(footprint, &sized)?
+                .outline(0)
+                .into_iter()
+                .map(|p| frame.point(p).minus(at))
+                .collect();
+            ApertureShape::Outline { corners }
+        }
     };
     Ok((shape, at))
 }

@@ -785,3 +785,14 @@ pub const SET_LAYER_SIZES: &[Operand] = &[
     required("ids", OperandKind::Text),
     required("sizes", OperandKind::Text),
 ];
+/// `set_pad_shape` (#2242): pads by uuid and their `shape` (`circle`, `rect`,
+/// `oval`, `roundrect`, `trapezoid` or `custom`); a trapezoid's `delta`
+/// `<x>,<y>` and a custom pad's `corners` `<x>,<y>;<x>,<y>;..`, in mm in the
+/// pad's own frame.
+pub const SET_PAD_SHAPE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Text),
+    required("shape", OperandKind::Text),
+    optional("delta", OperandKind::Text),
+    optional("corners", OperandKind::Text),
+];

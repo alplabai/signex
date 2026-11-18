@@ -310,6 +310,7 @@ set_layer_tab_names
 set_net_class_rules
 set_object_position
 set_object_rotation
+set_pad_shape
 set_selection_filters
 set_sheet_symbol_size
 set_symbol_parameter

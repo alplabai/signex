@@ -16,6 +16,8 @@ fn pad(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation,
         layer_sizes: None,
         net_locked: false,

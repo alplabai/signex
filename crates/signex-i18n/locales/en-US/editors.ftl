@@ -315,6 +315,8 @@ editors-pad-shape = Shape
 editors-pad-size-x = X-Size
 editors-pad-size-y = Y-Size
 editors-pad-corner-radius = Corner radius %
+editors-pad-trapezoid-delta-x = Delta X
+editors-pad-trapezoid-delta-y = Delta Y
 # Thermal relief toggle of the Simple pad stack.
 editors-pad-relief = Relief
 # Read-only position of the selected pad, one row per axis.

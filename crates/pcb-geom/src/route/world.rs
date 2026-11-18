@@ -30,7 +30,7 @@ pub enum NewKind {
 }
 
 /// Copper the router is about to add, or a track it is moving.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NewCopper {
     pub kind: NewKind,
     pub net: u32,
@@ -60,7 +60,7 @@ impl NewCopper {
             item,
             net: self.net,
             layers: self.layers,
-            shape: self.shape,
+            shape: self.shape.clone(),
             pad_center: None,
         }
     }
@@ -356,7 +356,7 @@ impl<'a> RouteWorld<'a> {
             kind,
             net: item.net,
             layers: item.layers,
-            shape: item.shape,
+            shape: item.shape.clone(),
         };
         self.in_keepout(&new)
             || !self

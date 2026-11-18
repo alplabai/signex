@@ -228,4 +228,17 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         operands: super::operands::SET_LAYER_SIZES,
         ..CommandMetadata::DEFAULT
     },
+    // #2242: a pad's copper shape with its trapezoid delta or custom
+    // outline, the Pad panel's Shape row in agent form. One undo step.
+    CommandMetadata {
+        id: "set_pad_shape",
+        category: "modify",
+        label: command_ids::CMD_SET_PAD_SHAPE,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_PAD_SHAPE,
+        ..CommandMetadata::DEFAULT
+    },
 ];

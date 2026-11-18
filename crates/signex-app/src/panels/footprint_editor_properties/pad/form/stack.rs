@@ -150,6 +150,25 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             muted,
         ));
     }
+    // A trapezoid's delta, a shape modifier like the corner radius (#2242).
+    if let signex_library::PadShape::Trapezoid { delta } = values.shape {
+        col = col.push(pad_input_row_w(
+            fw,
+            t!(i18n, ids::EDITORS_PAD_TRAPEZOID_DELTA_X),
+            "0",
+            pad_size_buf(delta[0]),
+            move |v| pad_trapezoid_delta_x_msg(target, v),
+            muted,
+        ));
+        col = col.push(pad_input_row_w(
+            fw,
+            t!(i18n, ids::EDITORS_PAD_TRAPEZOID_DELTA_Y),
+            "0",
+            pad_size_buf(delta[1]),
+            move |v| pad_trapezoid_delta_y_msg(target, v),
+            muted,
+        ));
+    }
     // Simple's thermal relief toggle, the table's Relief column.
     if is_simple {
         col = col.push(pad_check_row_w(

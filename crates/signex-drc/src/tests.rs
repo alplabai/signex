@@ -60,6 +60,8 @@ pub(super) fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -570,4 +572,57 @@ fn a_track_beside_the_middle_of_an_arc_is_one_clearance_finding() {
             .items
             .contains(&pcb_geom::ItemRef::Arc(id(4000)))
     );
+}
+
+#[test]
+fn a_trapezoid_pad_is_measured_to_its_long_edge_corner() {
+    // #2242. A 1 x 1 mm pad at (5, 0) whose +y edge is 1 mm longer: its
+    // corner (5.75, 0.5) is 0.25 mm from a track along x = 6, so 0.125 mm
+    // of air; a plain 1 x 1 mm rectangle leaves 0.375 mm.
+    let rules = DrcRules::new(RULE);
+    let beside = vec![track(1, (6.0, -2.0), (6.0, 2.0), 2, "TopCopper")];
+    let rect = board(
+        vec![pad_sized((1.0, 1.0), PadShape::Rect)],
+        beside.clone(),
+        vec![],
+    );
+    assert!(run(&rect, &rules).is_clean());
+    let mut trapezoid = pad_sized((1.0, 1.0), PadShape::Trapezoid);
+    trapezoid.pads[0].trapezoid_delta = Point::new(1.0, 0.0);
+    let report = run(&board(vec![trapezoid], beside, vec![]), &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance], "{report:?}");
+    assert_eq!(report.violations[0].measured_nm, 125_000);
+}
+
+#[test]
+fn a_custom_pad_keeps_clear_of_copper_in_its_notch() {
+    // #2242. An L-shaped pad, (5, 0) to (6, 1) with the corner square
+    // above (5.4, 0.4) cut away. A 0.6 mm via centred in the notch is
+    // 0.35 mm from both inner edges: 0.05 mm of air, a clearance finding
+    // where the L's bounding box would be a short.
+    let rules = DrcRules::new(RULE);
+    let mut l_pad = pad_sized((1.0, 1.0), PadShape::Custom);
+    l_pad.pads[0].custom_outline = [
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (1.0, 0.4),
+        (0.4, 0.4),
+        (0.4, 1.0),
+        (0.0, 1.0),
+    ]
+    .map(|(x, y)| Point::new(x, y))
+    .to_vec();
+    l_pad.pads[0].position = Point::new(5.0, 0.0);
+    let report = run(
+        &board(vec![l_pad.clone()], vec![], vec![via(1, (5.75, 0.75), 2)]),
+        &rules,
+    );
+    assert_eq!(kinds(&report), [ViolationKind::Clearance], "{report:?}");
+    assert_eq!(report.violations[0].measured_nm, 50_000);
+
+    // An outline that makes no copper is skipped, not read as a box.
+    let mut broken = l_pad;
+    broken.pads[0].custom_outline.truncate(2);
+    let report = run(&board(vec![broken], vec![], vec![]), &rules);
+    assert_eq!(report.skipped.len(), 1);
 }

@@ -83,6 +83,8 @@ pub(crate) fn pad_part(n: u128, at: (f64, f64), size: f64, net: u32) -> Footprin
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,

@@ -145,6 +145,16 @@ impl FootprintCanvas<'_> {
                         b.close();
                     })
                 }
+                PS::Trapezoid { delta } => super::pad::trapezoid_path(
+                    centre,
+                    (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05)),
+                    *delta,
+                    cstate.scale,
+                )
+                .unwrap_or_else(|| {
+                    let p0 = Point::new(centre.x - half_w, centre.y - half_h);
+                    Path::rectangle(p0, iced::Size::new(half_w * 2.0, half_h * 2.0))
+                }),
                 _ => {
                     let p0 = Point::new(centre.x - half_w, centre.y - half_h);
                     let size = iced::Size::new(half_w * 2.0, half_h * 2.0);

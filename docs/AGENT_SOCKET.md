@@ -131,7 +131,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `assign_board_net_class`, each answering with what it did, the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
   `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
-  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), and the board
+  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), the pad edit
+  `set_pad_shape` (#2242: a trapezoid with its `delta` or a custom pad with
+  its `corners`, pad-local mm; one undo step), and the board
   Tools edits (#2408, #2409) `stitch_vias`, `add_teardrops`,
   `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
   `keepout_from_selection` and `arrange_in_box`, each one board undo step

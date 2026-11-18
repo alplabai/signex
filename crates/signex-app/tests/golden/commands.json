@@ -1545,6 +1545,11 @@
     "category": "edit"
   },
   {
+    "id": "set_pad_shape",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "set_selection_filters",
     "group": "Schematic",
     "category": "select"

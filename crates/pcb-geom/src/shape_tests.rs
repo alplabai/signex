@@ -173,7 +173,7 @@ fn inflating_grows_every_side_and_rounds_a_rectangle() {
         rotation_deg: 0.0,
     };
     assert_eq!(
-        rect.inflated(MM / 4),
+        rect.clone().inflated(MM / 4),
         Shape::RoundRect {
             center: p(0, 0),
             half_w: MM + MM / 4,
@@ -182,7 +182,7 @@ fn inflating_grows_every_side_and_rounds_a_rectangle() {
             rotation_deg: 0.0,
         }
     );
-    assert_eq!(rect.inflated(-5), rect);
+    assert_eq!(rect.clone().inflated(-5), rect);
     assert_eq!(
         track().inflated(MM),
         Shape::Capsule {
