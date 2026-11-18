@@ -1317,6 +1317,12 @@ pub(crate) fn check_closure_oracle(
         }
     }
     let (bi, pi, ri) = (net_index(&b), net_index(&p), net_index(&r));
+    // What rides on a carried wire in the plain move (the wire, a co-selected
+    // label on it) goes where the wire's kept joins go.
+    let riding: std::collections::HashSet<Item> = (p.iter())
+        .filter(|net| carried.iter().any(|id| net.contains(&Item::Wire(*id))))
+        .flat_map(|net| net.iter().cloned())
+        .collect();
     for net in &b {
         let live: Vec<&Item> = net
             .iter()
@@ -1343,9 +1349,10 @@ pub(crate) fn check_closure_oracle(
                     nets[*i]
                         .iter()
                         .filter(|m| !moved_pins.contains(m))
-                        // A carried wire joins what it carries; the warned pin
-                        // is judged on what it joins itself.
-                        .filter(|m| !matches!(m, Item::Wire(id) if carried.contains(id)))
+                        // A carried wire and what rides on it join what the
+                        // wire carries; the warned pin is judged on what it
+                        // joins itself.
+                        .filter(|m| !riding.contains(m))
                         .cloned()
                         .collect()
                 })
