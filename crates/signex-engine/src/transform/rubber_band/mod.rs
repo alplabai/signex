@@ -56,11 +56,18 @@
 //! Which items drag wires: pins of moved symbols (power ports included,
 //! unit-filtered), pins of moved child sheets and individually moved sheet
 //! pins. Labels, junctions, no-connects and text never drag wires on their
-//! own; wires that are themselves selected move as they always did.
+//! own. A selected wire carries what joins it (its ends, and the dots and
+//! sheet pins on its span) by the same rules, see [`wire_contacts`].
 
 mod env;
 mod guard;
 mod guard_local;
+mod wire_contacts;
+
+pub use wire_contacts::{
+    WireContact, follow_moved_wires, follow_wire_grip, moved_wire_contacts, wire_axis,
+    wire_contact_points,
+};
 
 pub use guard::{BeforeNets, Guard, Policy, before_nets};
 #[cfg(test)]
@@ -226,6 +233,28 @@ pub(super) struct Move {
     pub(super) new: Point,
     /// A child-sheet pin: it also connects through a wire's interior.
     pub(super) sheet_pin: bool,
+    /// A point a selected wire carries, rather than a pin.
+    pub(super) wire: Option<WireJoin>,
+}
+
+/// How a point a selected wire carries treats what holds its old place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WireJoin {
+    /// The wire was dragged whole: a pin, label or wire it joined there keeps
+    /// the connection through a new path.
+    Carried(Uuid),
+    /// One end was dragged by its grip: it leaves the pin or wire it sat on;
+    /// only the wire ends attached there follow it.
+    Grip(Uuid),
+}
+
+impl WireJoin {
+    /// The dragged wire; a new path copies its stroke and colour.
+    pub(super) fn wire(self) -> Uuid {
+        match self {
+            Self::Carried(wire) | Self::Grip(wire) => wire,
+        }
+    }
 }
 
 fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, HashSet<Uuid>) {
@@ -254,6 +283,7 @@ fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, Hash
             old: tip.old,
             new,
             sheet_pin: matches!(tip.source, TipSource::SheetPin),
+            wire: None,
         });
     }
     (moves, owners)

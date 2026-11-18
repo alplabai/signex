@@ -165,6 +165,10 @@ pub fn build_renderer_snapshot(
         &mut wire_line_styles,
     );
 
+    // A dot takes the colour most of its wires share, else its own rule.
+    let from_wires = signex_types::schematic::junction_wire_colors(snapshot, |wire| {
+        wire_color(overrides.wire_styling, wire)
+    });
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));
         if !point_visible(center, bounds, 6.0) {
@@ -175,7 +179,8 @@ pub fn build_renderer_snapshot(
             center: [junction.position.x as f32, junction.position.y as f32],
             radius_mm: overrides.defaults.junction_radius_mm(junction.diameter) as f32,
             color: to_rgba(focus_color(
-                junction_color(overrides.wire_styling, junction.uuid)
+                (from_wires.get(&junction.uuid).copied())
+                    .or_else(|| junction_color(overrides.wire_styling, junction.uuid))
                     .as_ref()
                     .map(to_iced)
                     .unwrap_or_else(|| to_iced(&colors.junction)),

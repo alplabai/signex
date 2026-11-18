@@ -138,6 +138,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         },
         Command::UpdateLabelProps { label_id, .. } => (vec![*label_id], "edited"),
         Command::BreakWire { wire, .. } => (vec![*wire], "broken"),
+        Command::MoveWireEnd { wire, .. } => (vec![*wire], "moved"),
         Command::UpdateSchDrawing { drawing } => (vec![drawing.uuid()], "edited"),
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }

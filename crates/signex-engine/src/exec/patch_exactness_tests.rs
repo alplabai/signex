@@ -389,7 +389,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 65] = [
+const ALL_KINDS: [CommandKind; 66] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -413,6 +413,7 @@ const ALL_KINDS: [CommandKind; 65] = [
     CommandKind::UpdateSymbolFields,
     CommandKind::PlaceWireSegment,
     CommandKind::BreakWire,
+    CommandKind::MoveWireEnd,
     CommandKind::PlaceWireSegmentAsIs,
     CommandKind::PlaceBus,
     CommandKind::PlaceLabel,
@@ -485,6 +486,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateSymbolFields
         | CommandKind::PlaceWireSegment
         | CommandKind::BreakWire
+        | CommandKind::MoveWireEnd
         | CommandKind::PlaceWireSegmentAsIs
         | CommandKind::PlaceBus
         | CommandKind::PlaceLabel
@@ -852,6 +854,17 @@ fn samples() -> Vec<(String, Command)> {
             new_wire: uuid::Uuid::now_v7(),
         },
     );
+    for keep_wires in [false, true] {
+        add(
+            &format!("MoveWireEnd keep_wires {keep_wires}"),
+            Command::MoveWireEnd {
+                wire: uid(WIRE, 1),
+                start: false,
+                to: pt(7.5, 20.0),
+                keep_wires,
+            },
+        );
+    }
     add(
         "PlaceBus",
         Command::PlaceBus {

@@ -461,8 +461,9 @@ impl SchematicCanvas<'_> {
             .collect()
     }
 
-    /// What the selection layer draws over the halos: the clicked pin, the
-    /// padlocks of locked items and the ERC markers.
+    /// What the selection layer draws over the halos: the clicked pin, the end
+    /// grips of selected wires, the padlocks of locked items and the ERC
+    /// markers.
     pub(in crate::canvas) fn draw_selection_extras(
         &self,
         frame: &mut canvas::Frame,
@@ -471,6 +472,7 @@ impl SchematicCanvas<'_> {
         transform: &crate::schematic_runtime::ScreenTransform,
     ) {
         self.draw_focused_pin(frame, snapshot, bounds);
+        self.draw_wire_grips(frame, snapshot, bounds);
         crate::schematic_runtime::lock_indicator::draw_lock_indicators(
             frame,
             snapshot,

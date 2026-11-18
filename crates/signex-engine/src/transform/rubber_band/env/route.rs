@@ -7,7 +7,7 @@ use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
 use uuid::Uuid;
 
 use super::{Env, key, same_delta, zero_length};
-use crate::transform::rubber_band::{Follow, Move};
+use crate::transform::rubber_band::{Follow, Move, WireJoin};
 
 impl Env {
     /// A wire whose two ends sit on moved pins that move alike translates
@@ -82,21 +82,40 @@ impl Env {
         let attached = self.attached(at);
         let skip: Vec<usize> = attached.iter().map(|(index, _)| *index).collect();
         let mut probe = self.probe(at, &skip);
+        let wire = group.iter().find_map(|m| m.wire);
+        if matches!(wire, Some(WireJoin::Grip(_))) {
+            // A grip drags its end off whatever it sat on; only the wires
+            // attached there come along.
+            probe.stationary_pin = false;
+            probe.label = false;
+            probe.interior = false;
+        }
         let single_target = group.iter().all(|m| key(&m.new) == key(&group[0].new));
         let plain = self.policy.plain.contains(&at);
         if single_target && !plain && !probe.stationary_pin {
             self.carry_no_connects(at, group[0].new, &mut probe, out);
         }
-        // A child-sheet pin is anchored to the wire it sits on, interior or end.
-        let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin);
-        let connected =
-            !attached.is_empty() || probe.label || !probe.junctions.is_empty() || on_wire;
+        // A child-sheet pin is anchored to the wire it sits on, interior or end,
+        // and so is a point a dragged wire carries.
+        let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin || m.wire.is_some());
+        // A wire end on a pin is a connection; a pin tip on a pin tip is not.
+        let pin_held = probe.stationary_pin && wire.is_some();
+        // A locked wire is never stretched: it keeps its place and the carried
+        // point gets a new path.
+        let locked = wire.is_some() && attached.iter().any(|(i, _)| self.wires[*i].locked);
+        let connected = !attached.is_empty()
+            || probe.label
+            || !probe.junctions.is_empty()
+            || on_wire
+            || pin_held;
         if !connected || plain {
             return;
         }
         let new = group[0].new;
-        let anchored =
-            on_wire || !single_target || self.holds_the_tip(at, &probe, !attached.is_empty());
+        let anchored = on_wire
+            || locked
+            || !single_target
+            || self.holds_the_tip(at, &probe, !attached.is_empty());
         if !anchored && single_target && self.try_follow(at, &attached, new, out) {
             self.carry_dots(&probe.junctions, new, out);
             return;
@@ -161,11 +180,14 @@ impl Env {
         out: &mut Follow,
     ) {
         // New wires copy the attached wire's stroke and unknown columns, like
-        // the segments a bend adds.
-        let template = attached
+        // the segments a bend adds; with none attached, the dragged wire's.
+        let attached_wire = attached
             .first()
             .map(|(index, _)| self.wires[*index].clone());
-        let orientation = template.as_ref().map(|w| key(&w.start).1 == key(&w.end).1);
+        let orientation = attached_wire
+            .as_ref()
+            .map(|w| key(&w.start).1 == key(&w.end).1);
+        let template = attached_wire.or_else(|| self.carrier(group));
         let mut targets: Vec<Point> = Vec::new();
         for mv in group {
             if !targets.iter().any(|p| key(p) == key(&mv.new)) {
@@ -182,6 +204,12 @@ impl Env {
                 out,
             );
         }
+    }
+
+    /// The selected wire whose drag carries the points of `group`, if any.
+    fn carrier(&self, group: &[&Move]) -> Option<Wire> {
+        let id = group.iter().find_map(|m| m.wire)?.wire();
+        self.wires.iter().find(|w| w.uuid == id).cloned()
     }
 
     /// Add `old -> corner -> new` as fresh wires; the old tip stays wired.

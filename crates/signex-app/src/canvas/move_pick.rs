@@ -89,6 +89,7 @@ impl CanvasState {
         self.move_current = None;
         self.move_float = None;
         self.select_drag_start = None;
+        self.wire_grip = None;
     }
 }
 

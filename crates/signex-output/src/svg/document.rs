@@ -187,6 +187,9 @@ impl SvgRenderContext {
             });
         }
 
+        let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
+            wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
+        });
         for j in &sheet.schematic.junctions {
             // The canvas size, floor included (#2026).
             let radius =
@@ -195,6 +198,7 @@ impl SvgRenderContext {
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
                 j,
+                &from_wires,
                 &sheet.schematic.net_colors,
                 &opts.net_class_styles,
                 palette.junction,

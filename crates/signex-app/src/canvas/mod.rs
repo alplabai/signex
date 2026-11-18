@@ -41,6 +41,7 @@ mod tool_click_tests;
 mod value_widths;
 mod viewport_resize;
 mod wheel;
+mod wire_grip;
 pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
@@ -106,6 +107,8 @@ pub struct CanvasState {
     move_float: Option<move_pick::Float>,
     /// The rubber-banded drag ghost, filled from `update`, read by `draw`.
     ghost: drag_preview::GhostState,
+    /// Set while the drag holds one end of a selected wire by its grip.
+    wire_grip: Option<wire_grip::WireGrip>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -722,6 +725,11 @@ impl<'a> SchematicCanvas<'a> {
         if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
             return Some(frame);
         }
+        // A grip moves one end, never the whole selection: until its ghost is
+        // ready the sheet is drawn as it stands.
+        if state.held_grip().is_some() {
+            return None;
+        }
         // Locked items stay in place in the ghost, as on commit (#1918).
         let moved = state.ghost.plain_selection(revision, &self.selected);
         Some(drag_layers::DragFrame {
@@ -743,6 +751,9 @@ impl<'a> SchematicCanvas<'a> {
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
         if !self.is_moving(state) {
             return None;
+        }
+        if let Some(grip) = state.held_grip() {
+            return self.grip_delta(state, grip);
         }
         state
             .move_origin
@@ -779,6 +790,10 @@ impl<'a> SchematicCanvas<'a> {
             self.hotspot_cache.borrow_mut().clear();
             return;
         };
+        if let Some(grip) = state.held_grip() {
+            self.refresh_grip_ghost(state, grip, (dx, dy));
+            return;
+        }
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
         if self.selected.is_empty() {
             return;
@@ -958,6 +973,16 @@ pub enum CanvasEvent {
         world_x: f64,
         world_y: f64,
     },
+    /// A grip drag dropped one end of a selected wire (its start when
+    /// `start`) at `(x, y)`, snapped (world coords).
+    WireEndDragged {
+        wire: uuid::Uuid,
+        start: bool,
+        x: f64,
+        y: f64,
+        /// How this gesture treats wires (#1266).
+        connections: MoveConnections,
+    },
 }
 
 mod gesture;
@@ -1002,6 +1027,8 @@ mod rotated_label_pixel_tests;
 mod sheet_color_tests;
 #[cfg(test)]
 mod view_gesture_tests;
+#[cfg(test)]
+mod wire_grip_tests;
 
 #[cfg(test)]
 mod tests {
