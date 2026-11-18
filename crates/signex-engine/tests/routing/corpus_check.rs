@@ -22,7 +22,12 @@ fn unknown_layer(board: &PcbBoard) -> Option<String> {
         .segments
         .iter()
         .map(|s| s.layer.as_str())
-        .chain(board.vias.iter().flat_map(|v| v.layers.iter().map(String::as_str)))
+        .chain(
+            board
+                .vias
+                .iter()
+                .flat_map(|v| v.layers.iter().map(String::as_str)),
+        )
         .chain(board.free.arcs.iter().map(|a| a.layer.as_str()))
         .chain(board.zones.iter().map(|z| z.layer.as_str()));
     let other_items = board
@@ -30,7 +35,11 @@ fn unknown_layer(board: &PcbBoard) -> Option<String> {
         .iter()
         .flat_map(|f| {
             std::iter::once(f.layer.as_str())
-                .chain(f.pads.iter().flat_map(|p| p.layers.iter().map(String::as_str)))
+                .chain(
+                    f.pads
+                        .iter()
+                        .flat_map(|p| p.layers.iter().map(String::as_str)),
+                )
                 .chain(f.graphics.iter().map(|g| g.layer.as_str()))
                 .chain(f.properties.iter().filter_map(|p| p.layer.as_deref()))
         })
@@ -123,7 +132,10 @@ fn fault(fixture: &Fixture) -> Option<String> {
     }
     match ends_on_other_nets(&fixture.board) {
         0 => None,
-        n => Some(format!("{}: {n} track ends on another net's pad", fixture.name)),
+        n => Some(format!(
+            "{}: {n} track ends on another net's pad",
+            fixture.name
+        )),
     }
 }
 

@@ -217,11 +217,15 @@ pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Ve
         let touched: Vec<&Wire> = (sheet.wires.iter())
             .filter(|wire| wires.contains(&wire.uuid))
             .collect();
-        candidates.extend(safe_taps(sheet, &lines, |_| true).into_iter().filter(|tip| {
-            touched
-                .iter()
-                .any(|wire| strictly_inside(pt_key(tip), wire))
-        }));
+        candidates.extend(
+            safe_taps(sheet, &lines, |_| true)
+                .into_iter()
+                .filter(|tip| {
+                    touched
+                        .iter()
+                        .any(|wire| strictly_inside(pt_key(tip), wire))
+                }),
+        );
     }
     let mut taken = dot_keys(sheet);
     candidates
