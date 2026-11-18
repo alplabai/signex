@@ -1,0 +1,67 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "riscv-fpga-badge",
+  "net_classes": [
+    {
+      "clearance": 0.3,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.1,
+      "name": "DIFF",
+      "patterns": [
+        "USB_D+",
+        "USB_D-"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.3,
+      "name": "GND",
+      "patterns": [
+        "GND"
+      ],
+      "trace_width": 0.3,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "PWR",
+      "patterns": [
+        "+3v3",
+        "+1v2",
+        "VCC03_1V8",
+        "VCC00_1_2_3V3",
+        "+1v1"
+      ],
+      "trace_width": 0.2,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.1,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "riscv-fpga-badge.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}
