@@ -36,16 +36,34 @@ pub struct Pushed {
 /// round before (with their index, which never pushes itself).
 type Pusher = (Option<usize>, CopperItem);
 
+/// What one shove did: the tracks to move ([`shove`]'s answer) and how
+/// many rounds of pushing it ran, whether it cleared the way or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShoveRun {
+    pub pushed: Option<Vec<Pushed>>,
+    /// Rounds that pushed tracks: 0 when nothing was in the way.
+    pub rounds: usize,
+}
+
 /// The tracks to move so that `legs` keep the clearance, each with its
 /// new ends, sorted by id; empty when nothing is in the way. `None` when
 /// the way cannot be cleared by pushing.
 pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
+    shove_run(world, legs).pushed
+}
+
+/// [`shove`], with the rounds of pushing it took (#2483).
+pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
+    let given_up = |rounds| ShoveRun {
+        pushed: None,
+        rounds,
+    };
     if legs.iter().any(|leg| world.in_keepout(leg)) {
-        return None;
+        return given_up(0);
     }
     let mut moved: HashMap<usize, Shape> = HashMap::new();
     let mut pushers: Vec<Pusher> = legs.iter().map(|leg| (None, leg.as_item())).collect();
-    for _ in 0..=ROUNDS {
+    for round in 0..=ROUNDS {
         let mut blockers: Vec<usize> = pushers
             .iter()
             .flat_map(|(own, item)| world.conflicts(item, &moved, *own))
@@ -53,7 +71,10 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
         blockers.sort_unstable();
         blockers.dedup();
         if blockers.is_empty() {
-            return finish(world, legs, &moved);
+            return ShoveRun {
+                pushed: finish(world, legs, &moved),
+                rounds: round,
+            };
         }
         let mut next = Vec::new();
         for index in blockers {
@@ -62,14 +83,17 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
             if next.contains(&index) {
                 continue;
             }
-            next.extend(push_one(world, index, &pushers, &mut moved)?);
+            match push_one(world, index, &pushers, &mut moved) {
+                Some(touched) => next.extend(touched),
+                None => return given_up(round + 1),
+            }
         }
         pushers = next
             .into_iter()
             .map(|index| (Some(index), with_shape(world, index, moved[&index])))
             .collect();
     }
-    None
+    given_up(ROUNDS + 1)
 }
 
 /// Move track `index` clear of `pushers`, stretching the tracks joined at
