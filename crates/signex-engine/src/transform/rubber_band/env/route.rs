@@ -110,11 +110,9 @@ impl Env {
         if !connected || plain {
             return;
         }
-        // An attached wire whose far end sits inside another wire with no dot
-        // is left alone: the reconcile would dot that T once the wire is edited,
-        // a connection that was not there (#107). The point stays as the move
-        // left it.
-        if wire.is_some() && self.far_end_on_undotted_t(&attached) {
+        // An attached wire that editing would get a T dot it never had is left
+        // alone (see `edit_would_dot`): the point stays as the move left it.
+        if wire.is_some() && self.carried_point_bails(at) {
             return;
         }
         let new = group[0].new;
@@ -136,21 +134,48 @@ impl Env {
     }
 
     /// Whether a point a dragged wire carries from `at` must be left as the
-    /// move left it: a wire attached there has its far end inside another
-    /// wire with no dot (see `reroute_tip`).
+    /// move left it: editing a wire attached there, or the elbow leg at its
+    /// far end that a slide would edit, could make the reconcile dot a
+    /// contact that was there before (see [`Self::edit_would_dot`]).
     pub(in crate::transform::rubber_band) fn carried_point_bails(&self, at: Key) -> bool {
-        self.far_end_on_undotted_t(&self.attached(at))
+        self.attached(at).into_iter().any(|(index, at_start)| {
+            let wire = &self.wires[index];
+            let far = key(if at_start { &wire.end } else { &wire.start });
+            self.edit_would_dot(index, far) || self.elbow_leg_would_dot(index, far)
+        })
     }
 
-    /// Whether the far end of one of the `attached` wires lies inside another
-    /// wire with no dot there.
-    fn far_end_on_undotted_t(&self, attached: &[(usize, bool)]) -> bool {
-        attached.iter().any(|&(index, at_start)| {
-            let wire = &self.wires[index];
-            let far = if at_start { wire.end } else { wire.start };
-            let probe = self.probe(key(&far), &[index]);
-            probe.interior && probe.junctions.is_empty()
-        })
+    /// Whether editing wire `index`, whose end `far` stays put, could make the
+    /// reconcile dot a T that had no dot (#107: no connection): `far` inside
+    /// another wire, or another wire's end inside this one.
+    fn edit_would_dot(&self, index: usize, far: Key) -> bool {
+        let undotted = |k: Key| self.probe(k, &[index]).junctions.is_empty();
+        let probe = self.probe(far, &[index]);
+        if probe.interior && probe.junctions.is_empty() {
+            return true;
+        }
+        let wire = &self.wires[index];
+        let (a, b) = (key(&wire.start), key(&wire.end));
+        let inside = |k: Key| k != a && k != b && signex_net::point_on_segment(k, a, b);
+        (self.wires_near(a, b).into_iter())
+            .filter(|(other, _)| *other != index)
+            .flat_map(|(_, w)| [key(&w.start), key(&w.end)])
+            .any(|k| inside(k) && undotted(k))
+    }
+
+    /// Whether the plain two-wire elbow at `far`, which a slide of wire
+    /// `index` would also edit, could get such a dot.
+    fn elbow_leg_would_dot(&self, index: usize, far: Key) -> bool {
+        (self.wires_near(far, far).into_iter())
+            .filter(|(other, w)| *other != index && (key(&w.start) == far || key(&w.end) == far))
+            .any(|(leg, w)| {
+                let other_end = if key(&w.start) == far {
+                    key(&w.end)
+                } else {
+                    key(&w.start)
+                };
+                self.edit_would_dot(leg, other_end)
+            })
     }
 
     /// A no-connect marks the pin: it moves with the tip.

@@ -159,6 +159,9 @@ pub struct Follow {
     /// Old-tip keys whose handling edited something; the only tips the pass
     /// can be blamed for when a net difference names no moved pin.
     pub edited_tips: Vec<Key>,
+    /// The selected wires the carry pass could not carry whole: they moved
+    /// plainly at every point (`wire_contacts`).
+    pub bailed: Vec<Uuid>,
 }
 
 /// Pin tips carried by `items`, read before they move.

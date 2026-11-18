@@ -1413,6 +1413,14 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
         total.add(&property_run(seed, 2000));
     }
+    // Under `RUBBER_BAND_ALL` every failing case, one line each.
+    let failures = COLLECTED.with(|all| std::mem::take(&mut *all.borrow_mut()));
+    assert!(
+        failures.is_empty(),
+        "{} failing cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
     let exercised = total.symbols_only.cases + total.co_selected.cases;
     assert!(exercised > 4000, "only {exercised} cases");
     assert!(
@@ -1438,132 +1446,159 @@ fn random_rubber_band_moves_never_change_the_netlist() {
 /// zero-length checks, and (unless user edits are co-selected) strict net
 /// equality.
 fn property_run(seed: u64, cases: usize) -> RunCounts {
+    // `RUBBER_BAND_ALL=1` runs every case and collects the failures instead of
+    // stopping at the first; the test prints them all at the end.
+    let collect = std::env::var_os("RUBBER_BAND_ALL").is_some();
     let mut rng = Lcg(seed);
     let mut counts = RunCounts::default();
     for index in 0..cases {
-        let Some(Case {
-            sheet,
-            moves,
-            selects_wire,
-        }) = random_case(&mut rng)
-        else {
+        let Some(case) = random_case(&mut rng) else {
             continue;
         };
-        let described = describe(&sheet);
-        let overlaps_before = overlap_pairs(&sheet);
-        let wires_before: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+        if !collect {
+            property_case(seed, index, case, &mut counts);
+            continue;
+        }
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            property_case(seed, index, case, &mut counts);
+        }));
+        if let Err(cause) = run {
+            let text = (cause.downcast_ref::<String>().cloned())
+                .or_else(|| cause.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_default();
+            let line = text.lines().next().unwrap_or_default().to_string();
+            COLLECTED.with(|all| all.borrow_mut().push(line));
+        }
+    }
+    counts
+}
 
-        // Pins the netlist did not see before are the user's to place.
-        let mut skip_terminals = std::collections::BTreeSet::new();
-        let mut skip_pins = std::collections::BTreeSet::new();
-        let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
-        let tips = crate::moved_pin_tips(&sheet, &items);
-        let seen = crate::Guard::new(&sheet, &sheet, &tips, None);
-        for tip in tips.iter().filter(|t| !seen.was_connected(t)) {
-            match tip.ident() {
-                crate::PinIdent::Terminal(symbol, pin) => {
-                    skip_terminals.insert((*symbol, pin.clone()));
-                }
-                crate::PinIdent::SheetPin(uuid) => {
-                    skip_pins.insert(*uuid);
-                }
+thread_local! {
+    /// The failures `property_run` collected under `RUBBER_BAND_ALL`.
+    static COLLECTED: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// One case of [`property_run`]: case `index` of `seed`.
+fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
+    let Case {
+        sheet,
+        moves,
+        selects_wire,
+    } = case;
+    let described = describe(&sheet);
+    let overlaps_before = overlap_pairs(&sheet);
+    let wires_before: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+
+    // Pins the netlist did not see before are the user's to place.
+    let mut skip_terminals = std::collections::BTreeSet::new();
+    let mut skip_pins = std::collections::BTreeSet::new();
+    let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
+    let tips = crate::moved_pin_tips(&sheet, &items);
+    let seen = crate::Guard::new(&sheet, &sheet, &tips, None);
+    for tip in tips.iter().filter(|t| !seen.was_connected(t)) {
+        match tip.ident() {
+            crate::PinIdent::Terminal(symbol, pin) => {
+                skip_terminals.insert((*symbol, pin.clone()));
+            }
+            crate::PinIdent::SheetPin(uuid) => {
+                skip_pins.insert(*uuid);
             }
         }
+    }
 
-        let run = |keep_wires: bool| {
-            let mut engine = Engine::new(sheet.clone()).expect("engine");
-            engine
-                .execute(Command::MoveEach {
-                    moves: moves.clone(),
-                    keep_wires,
-                })
-                .expect("move");
-            engine
-        };
-        let plain = run(false);
-        let mut engine = run(true);
-        let warnings = engine.take_warnings();
-        let unkept = engine.take_unkept_pins();
-        let share = if selects_wire {
-            &mut counts.co_selected
-        } else {
-            &mut counts.symbols_only
-        };
-        share.cases += 1;
-        share.warned += usize::from(!warnings.is_empty());
-        let after = engine.document();
-        counts.rerouted += usize::from(
-            after
-                .wires
-                .iter()
-                .map(|w| (w.start, w.end))
-                .collect::<Vec<_>>()
-                != wires_before,
-        );
-
-        for w in &after.wires {
-            assert_ne!(
-                signex_net::pt_key(&w.start),
-                signex_net::pt_key(&w.end),
-                "seed {seed:#x} case {index}: zero-length wire\n{described}"
-            );
-        }
-        assert!(
-            overlap_pairs(after) <= overlaps_before.max(overlap_pairs(plain.document())),
-            "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
-            describe(after)
-        );
-        // A pin end the plain move put inside a wire joins it through a new
-        // dot (2026-11-18): the user's placement, which may join two nets,
-        // not the pass's doing. Such a case is held to the checks above only.
-        let pin_joined = (plain.document().junctions.iter())
-            .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
-        let oracle = if pin_joined {
-            Ok(())
-        } else {
-            check_closure_oracle(
-                &sheet,
-                plain.document(),
-                after,
-                &warned_items(&sheet, &unkept),
-                &moved_pin_items(&tips),
-            )
-        };
-        if let Err(why) = oracle {
-            panic!(
-                "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
-                describe(after)
-            );
-        }
-        let moves_power = sheet
-            .symbols
+    let run = |keep_wires: bool| {
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        engine
+            .execute(Command::MoveEach {
+                moves: moves.clone(),
+                keep_wires,
+            })
+            .expect("move");
+        engine
+    };
+    let plain = run(false);
+    let mut engine = run(true);
+    let warnings = engine.take_warnings();
+    let unkept = engine.take_unkept_pins();
+    let share = if selects_wire {
+        &mut counts.co_selected
+    } else {
+        &mut counts.symbols_only
+    };
+    share.cases += 1;
+    share.warned += usize::from(!warnings.is_empty());
+    let after = engine.document();
+    counts.rerouted += usize::from(
+        after
+            .wires
             .iter()
-            .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
-        if selects_wire || moves_power || pin_joined {
-            // Co-selected items move plainly, wherever the user puts them, and
-            // a power port landing on a net merges it by name: the closure
-            // oracle above is the check for these cases (for a pin join, the
-            // overlap and zero-length checks).
-            continue;
-        }
-        // A warned pin keeps the old plain behaviour; every other net stays.
-        let (warned_terminals, warned_pins) = warned_skips(&sheet, &unkept);
-        skip_terminals.extend(warned_terminals);
-        skip_pins.extend(warned_pins);
-        let want: std::collections::BTreeSet<_> =
-            signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
-                .iter()
-                .filter_map(|n| n.without(&skip_terminals, &skip_pins))
-                .collect();
-        let got = projected(after, &skip_terminals, &skip_pins);
-        assert_eq!(
-            got,
-            want,
-            "seed {seed:#x} case {index}: nets changed (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+            .map(|w| (w.start, w.end))
+            .collect::<Vec<_>>()
+            != wires_before,
+    );
+
+    for w in &after.wires {
+        assert_ne!(
+            signex_net::pt_key(&w.start),
+            signex_net::pt_key(&w.end),
+            "seed {seed:#x} case {index}: zero-length wire\n{described}"
+        );
+    }
+    assert!(
+        overlap_pairs(after) <= overlaps_before.max(overlap_pairs(plain.document())),
+        "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
+    // A pin end the plain move put inside a wire joins it through a new
+    // dot (2026-11-18): the user's placement, which may join two nets,
+    // not the pass's doing. Such a case is held to the checks above only.
+    let pin_joined = (plain.document().junctions.iter())
+        .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
+    let oracle = if pin_joined {
+        Ok(())
+    } else {
+        check_closure_oracle(
+            &sheet,
+            plain.document(),
+            after,
+            &warned_items(&sheet, &unkept),
+            &moved_pin_items(&tips),
+        )
+    };
+    if let Err(why) = oracle {
+        panic!(
+            "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
             describe(after)
         );
     }
-    counts
+    let moves_power = sheet
+        .symbols
+        .iter()
+        .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
+    if selects_wire || moves_power || pin_joined {
+        // Co-selected items move plainly, wherever the user puts them, and
+        // a power port landing on a net merges it by name: the closure
+        // oracle above is the check for these cases (for a pin join, the
+        // overlap and zero-length checks).
+        return;
+    }
+    // A warned pin keeps the old plain behaviour; every other net stays.
+    let (warned_terminals, warned_pins) = warned_skips(&sheet, &unkept);
+    skip_terminals.extend(warned_terminals);
+    skip_pins.extend(warned_pins);
+    let want: std::collections::BTreeSet<_> =
+        signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
+            .iter()
+            .filter_map(|n| n.without(&skip_terminals, &skip_pins))
+            .collect();
+    let got = projected(after, &skip_terminals, &skip_pins);
+    assert_eq!(
+        got,
+        want,
+        "seed {seed:#x} case {index}: nets changed (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
 }
 
 /// No exact duplicates and no collinear overlaps among the document's wires.

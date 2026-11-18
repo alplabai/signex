@@ -90,11 +90,14 @@ pub fn wire_contact_points(document: &SchematicSheet, items: &[SelectedItem]) ->
 }
 
 /// Carry the contacts of the selected wires after the move has been applied
-/// to `document`. See the module docs for the rules.
+/// to `document`. See the module docs for the rules. The old points in
+/// `pin_owned` belong to the pin pass (a pin moving by another delta keeps
+/// them) and are left alone.
 pub fn follow_moved_wires(
     document: &mut SchematicSheet,
     contacts: &[WireContact],
     items: &[SelectedItem],
+    pin_owned: &HashSet<Key>,
 ) -> Follow {
     let selected: HashSet<Uuid> = items.iter().map(|item| item.uuid).collect();
     let mut starts: HashMap<Uuid, Point> = HashMap::new();
@@ -116,8 +119,9 @@ pub fn follow_moved_wires(
             contact.old.y + start.y - contact.wire_start.y,
         );
         let old = pt_key(&contact.old);
-        // Unmoved, or a selected wire still ends there: still joined.
-        if pt_key(&new) == old || held.contains(&old) {
+        // Unmoved, or a selected wire still ends there: still joined. A point
+        // a pin pass owns is not the carry's.
+        if pt_key(&new) == old || held.contains(&old) || pin_owned.contains(&old) {
             continue;
         }
         moves.push(Move {
@@ -198,7 +202,7 @@ pub fn follow_wire_grip(
         out.touched.extend(square.iter().copied());
         let mut items = square;
         items.push(SelectedItem::new(wire, SelectedKind::Wire));
-        let carried = follow_moved_wires(document, &contacts, &items);
+        let carried = follow_moved_wires(document, &contacts, &items, &HashSet::new());
         out.touched.extend(carried.touched);
         selected.extend(ids);
     }
@@ -239,6 +243,8 @@ fn carry(document: &mut SchematicSheet, moves: &[Move], selected: HashSet<Uuid>)
         .filter(|mv| env.carried_point_bails(pt_key(&mv.old)))
         .filter_map(|mv| mv.wire.map(WireJoin::wire))
         .collect();
+    out.bailed = bailing.iter().copied().collect();
+    out.bailed.sort_unstable();
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
     for mv in moves {
         if mv.wire.is_some_and(|join| bailing.contains(&join.wire())) {

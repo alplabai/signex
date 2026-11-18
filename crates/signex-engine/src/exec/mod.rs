@@ -14,6 +14,7 @@ mod directives;
 mod drawings;
 mod edits;
 mod font_family;
+mod ownership;
 pub(crate) mod pin_changes;
 mod place;
 mod replace_lib_symbol;
