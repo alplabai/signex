@@ -2,7 +2,8 @@
 //! read from the cached stitched project net index (`signex_net::NetIndex`),
 //! with its net class and pin count. A net expands to its pins, labels, power
 //! ports and sheet entries, each with its sheet; clicking one goes to it
-//! (`handlers/net_nav/inspector.rs`). A pure view over data the panel
+//! (`handlers/net_nav/inspector.rs`). The By Component tab (#1274) lists
+//! the same index by part (`components.rs`). A pure view over data the panel
 //! context copies from the index; nothing here re-derives a net.
 
 use std::collections::BTreeSet;
@@ -16,6 +17,9 @@ use signex_widgets::{text, text_input};
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
 
+mod components;
+pub use components::{ComponentPinRow, ComponentRow};
+
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
@@ -26,22 +30,40 @@ const CLASS_W: f32 = TS.body * 7.0;
 /// Width of the Pins column.
 const PINS_W: f32 = TS.body * 3.5;
 
-/// The panel's own state: the filter text and the nets shown expanded, by
-/// name. Kept in `UiState`; the panel context carries a copy.
+/// Which list the panel shows for a schematic project.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum NetInspectorTab {
+    /// Every net with its members.
+    #[default]
+    ByNet,
+    /// Every part with the net on each pin (#1274).
+    ByComponent,
+}
+
+/// The panel's own state: the tab, the filter text, and the nets and parts
+/// shown expanded, by name and by part key. Kept in `UiState`; the panel
+/// context carries a copy.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct NetInspectorState {
+    pub tab: NetInspectorTab,
     pub filter: String,
     pub expanded: BTreeSet<String>,
+    pub expanded_parts: BTreeSet<String>,
 }
 
 /// What happened in the Net Inspector panel.
 #[derive(Debug, Clone)]
 pub enum NetInspectorMsg {
+    /// A tab of the tab strip was clicked.
+    TabSelected(NetInspectorTab),
     FilterChanged(String),
     /// A net row was clicked: expand or fold it.
     NetToggled(String),
-    /// A member row was clicked: go to it and highlight its net. `net` is the
-    /// name it was listed under; `anchor` finds it again in a rebuilt index.
+    /// A part row was clicked: expand or fold it. Carries the row's key.
+    ComponentToggled(String),
+    /// A member row, or a pin row of a part, was clicked: go to it and
+    /// highlight its net. `net` is the name it was listed under; `anchor`
+    /// finds it again in a rebuilt index.
     MemberClicked {
         net: String,
         anchor: NetAnchor,
@@ -120,12 +142,19 @@ pub struct NetRow {
 /// What the panel shows.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NetInspectorView {
+    pub tab: NetInspectorTab,
     pub filter: String,
     pub status: NetListStatus,
-    /// The nets the filter keeps, named nets first, then by name.
+    /// The nets the filter keeps, named nets first, then by name. Filled
+    /// only on the By Net tab.
     pub nets: Vec<NetRow>,
     /// Every net of the project.
     pub total: usize,
+    /// The parts the filter keeps, by designator. Filled only on the By
+    /// Component tab.
+    pub components: Vec<ComponentRow>,
+    /// Every part of the project; counted only on the By Component tab.
+    pub component_total: usize,
     /// With a board in view, its nets instead of the project's (#2403).
     pub board: Option<BoardNetView>,
 }
@@ -141,8 +170,15 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     let muted = r.ink3;
     let view = &ctx.net_inspector;
+    // A board in view lists its own nets and has no tabs (#2403).
+    let by_component = view.board.is_none() && view.tab == NetInspectorTab::ByComponent;
+    let placeholder = if by_component {
+        ids::PANELS_NET_INSPECTOR_FILTER_PARTS
+    } else {
+        ids::PANELS_NET_INSPECTOR_FILTER
+    };
     let filter = container(
-        text_input(t!(i18n, ids::PANELS_NET_INSPECTOR_FILTER), &view.filter)
+        text_input(t!(i18n, placeholder), &view.filter)
             .on_input(|s| msg(NetInspectorMsg::FilterChanged(s)))
             .style(super::form_look::text_input_style)
             .size(TS.body)
@@ -162,6 +198,9 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         (None, NetListStatus::NoProject) => note(ids::PANELS_NET_INSPECTOR_NO_PROJECT),
         (None, NetListStatus::Reading) => note(ids::PANELS_NET_INSPECTOR_READING),
         (None, NetListStatus::Unavailable) => note(ids::PANELS_NET_INSPECTOR_UNAVAILABLE),
+        (None, NetListStatus::Ready) if by_component => {
+            components::component_table(ctx, &view.components)
+        }
         (None, NetListStatus::Ready) => table(ctx, view),
     };
     let summary = match &view.board {
@@ -170,6 +209,12 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ids::BOARD_NETS_SUMMARY,
             "shown" => board.nets.len(),
             "total" => board.total
+        ),
+        None if by_component => t!(
+            i18n,
+            ids::PANELS_NET_INSPECTOR_PARTS_SUMMARY,
+            "shown" => view.components.len(),
+            "total" => view.component_total
         ),
         None => t!(
             i18n,
@@ -181,10 +226,62 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let footer = container(text(summary).size(TS.caption).color(muted))
         .padding([SP.m, SP.l])
         .width(Length::Fill);
-    column![filter, body, rule(ctx), footer]
-        .width(Length::Fill)
-        .height(Length::Fill)
+    let mut panel = column![].width(Length::Fill).height(Length::Fill);
+    if view.board.is_none() {
+        panel = panel.push(tab_strip(ctx, view.tab));
+    }
+    panel
+        .push(filter)
+        .push(body)
+        .push(rule(ctx))
+        .push(footer)
         .boxed()
+}
+
+/// The By Net / By Component tabs, as a segmented control.
+fn tab_strip<'a>(ctx: &'a PanelContext, current: NetInspectorTab) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let tab = |id: MessageId, target: NetInspectorTab| -> Element<'a, PanelMsg> {
+        let active = current == target;
+        signex_widgets::button(
+            text(t!(i18n, id))
+                .size(TS.caption)
+                .width(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .width(Length::Fill)
+        .padding([SP.xs, SP.l])
+        .on_press(msg(NetInspectorMsg::TabSelected(target)))
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            super::form_look::segment_cell(theme, active, hovered)
+        })
+        .boxed()
+    };
+    container(
+        container(
+            row![
+                tab(ids::PANELS_NET_INSPECTOR_TAB_NETS, NetInspectorTab::ByNet),
+                tab(
+                    ids::PANELS_NET_INSPECTOR_TAB_COMPONENTS,
+                    NetInspectorTab::ByComponent
+                ),
+            ]
+            .spacing(SP.xs)
+            .align_y(Alignment::Center),
+        )
+        .padding(2.0)
+        .width(Length::Fill)
+        .style(super::form_look::segmented_frame),
+    )
+    .padding(iced::Padding {
+        top: SP.m,
+        right: SP.l,
+        bottom: 0.0,
+        left: SP.l,
+    })
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// A one-pixel soft rule across the panel.

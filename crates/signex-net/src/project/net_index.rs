@@ -13,6 +13,7 @@ use signex_types::schematic::{InstancePath, Point};
 use uuid::Uuid;
 
 use super::SheetKey;
+use super::components::PlacedSymbol;
 use super::members::{NetMember, NetMemberKind, NetMembers};
 
 /// The element a navigation or highlight started from: stable across a
@@ -80,10 +81,16 @@ pub struct NetIndex {
     /// The placements the walk reaches each sheet through.
     placements: HashMap<SheetKey, Vec<InstancePath>>,
     by_name: HashMap<String, usize>,
+    /// Every non-power symbol per placement, for the parts view (#1274).
+    symbols: Vec<PlacedSymbol>,
 }
 
 impl NetIndex {
-    pub(super) fn from_members(nets: Vec<NetMembers>, walk: Vec<(SheetKey, InstancePath)>) -> Self {
+    pub(super) fn from_members(
+        nets: Vec<NetMembers>,
+        walk: Vec<(SheetKey, InstancePath)>,
+        symbols: Vec<PlacedSymbol>,
+    ) -> Self {
         let mut by_element: HashMap<ElementKey, Vec<usize>> = HashMap::new();
         let mut placements: HashMap<SheetKey, Vec<InstancePath>> = HashMap::new();
         for (sheet, placement) in walk {
@@ -106,11 +113,18 @@ impl NetIndex {
             by_element,
             placements,
             by_name,
+            symbols,
         }
     }
 
     pub fn net_count(&self) -> usize {
         self.nets.len()
+    }
+
+    /// Every non-power symbol of the walk, once per placement, in walk then
+    /// document order.
+    pub fn placed_symbols(&self) -> &[PlacedSymbol] {
+        &self.symbols
     }
 
     pub fn net(&self, index: usize) -> Option<&NetMembers> {

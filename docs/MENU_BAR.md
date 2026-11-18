@@ -525,6 +525,16 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   each with its sheet. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
+- Two tabs at the top (#1274): By Net, the list above, and By Component.
+  By Component lists every part of the project by designator, with its value,
+  footprint and connected pin count, from `NetIndex::components` (the same
+  index). The units of one designator are one part; a part not annotated yet
+  is listed per symbol. Clicking a part expands it to its connected pins, each
+  with its net and sheet; a pin wired to nothing is on no net and is not
+  listed. Clicking a pin goes to it and highlights its net, as a member click
+  does. The filter matches the designator, value or footprint. The tab is
+  panel state in the Model and is not saved. With a board in view there are
+  no tabs.
 - With a board in view (#2403) the panel lists the board's nets instead,
   from `pcb_geom::net_reports`: routed length, vias, pads and whether the
   net is routed (or how many connections are still open). Each row's Select
