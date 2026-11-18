@@ -85,10 +85,11 @@ impl IndexedItem {
     /// Refuses a shape beyond [`MAX_ABS_NM`], like the model boundary does.
     pub fn new(item: ItemRef, shape: Shape) -> Result<Self, GeomError> {
         shape.check_limits()?;
+        let envelope = envelope_of(&shape.aabb());
         Ok(IndexedItem {
             item,
             shape,
-            envelope: envelope_of(&shape.aabb()),
+            envelope,
         })
     }
 }

@@ -374,6 +374,10 @@ pub(super) fn map_shape(s: &LibPadShape) -> SkPadShape {
                 points: poly.points.clone(),
             })
         }
+        LibPadShape::Trapezoid { delta } => SkPadShape::Trapezoid {
+            delta_x_expr: mm_expr(delta[0]),
+            delta_y_expr: mm_expr(delta[1]),
+        },
     }
 }
 

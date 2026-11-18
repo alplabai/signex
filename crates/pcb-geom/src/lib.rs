@@ -40,6 +40,7 @@ mod selection;
 mod shape;
 mod shape_gap;
 mod shape_overlap;
+mod shape_polygon;
 mod staging;
 mod stats;
 mod stitch;

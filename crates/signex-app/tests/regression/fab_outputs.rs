@@ -30,6 +30,8 @@ fn pad(n: u128, x: f64) -> Pad {
         ],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,

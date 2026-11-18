@@ -523,6 +523,7 @@ cmd-unlock-board-items = Unlock the selected tracks and vias
 cmd-menu-unlock-board-items = Unlock
 cmd-set-via-span = Set the copper layers vias span
 cmd-set-layer-sizes = Set the per-layer copper sizes of vias or pads
+cmd-set-pad-shape = Set the copper shape of pads, with a trapezoid's delta or a custom outline
 cmd-stitch-vias = Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets
 cmd-menu-stitch-vias = Via Stitching
 cmd-add-teardrops = Add teardrops where tracks of the selected nets, or of every net, enter a pad or via

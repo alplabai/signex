@@ -1,6 +1,6 @@
 //! The board edits an agent or the CLI runs by naming the board (#2401,
 //! #2407): `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
-//! `set_via_span` and `set_layer_sizes`. Each acts on the board `document`
+//! `set_via_span`, `set_layer_sizes` and `set_pad_shape`. Each acts on the board `document`
 //! names, never on the active tab, runs the same step as its GUI surface (the
 //! Layer Stack manager, the board menu's Lock rows, the Via and Pad panels)
 //! and answers with what the board then holds. One undo step each.
@@ -12,7 +12,7 @@ use serde_json::json;
 use signex_engine::pcb::primitive_edit::{PadEdit, ViaEdit};
 use signex_i18n::ids;
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PadShape, PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_stack::{LayerStack, StackLayer, parse_layer_sizes};
 use uuid::Uuid;
@@ -233,5 +233,102 @@ pub(super) fn set_layer_sizes(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// A pad size typed as `<x>x<y>` in mm.
 fn pad_size(text: &str) -> Option<Point> {
     let (x, y) = text.split_once('x')?;
+    Some(Point::new(parse_number(x)?, parse_number(y)?))
+}
+
+/// `set_pad_shape document=.. ids=.. shape=.. [delta=<x>,<y>] [corners=<x>,<y>;..]`
+/// (#2242): footprint pads take the shape with the parameters it reads, in
+/// pad-local mm. A trapezoid needs `delta`, a custom pad `corners`; the
+/// board's rule (`signex_types::pcb_pad_shape`) refuses ones that make no
+/// copper.
+pub(super) fn set_pad_shape(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let path = match named_board(app, args, "`set_pad_shape`") {
+        Ok(path) => path,
+        Err(reason) => return refused(reason),
+    };
+    let targets = match uuids(args) {
+        Ok(targets) => targets,
+        Err(reason) => return refused(reason),
+    };
+    let edit = match pad_geometry(args) {
+        Ok(edit) => edit,
+        Err(reason) => return refused(reason),
+    };
+    let Some(b) = board(app, &path) else {
+        return refused("the board is no longer open");
+    };
+    let pads: Option<Vec<(Uuid, Uuid)>> = targets
+        .iter()
+        .map(|id| {
+            b.footprints
+                .iter()
+                .find(|fp| fp.pads.iter().any(|p| p.uuid == *id))
+                .map(|fp| (fp.uuid, *id))
+        })
+        .collect();
+    let Some(pads) = pads.filter(|p| !p.is_empty()) else {
+        return refused("`ids` names pads of the board's footprints and nothing else");
+    };
+    if let Err(why) = app.edit_pads(&path, &pads, &edit, ids::PCB_PRIM_SHAPE) {
+        return refused(why);
+    }
+    let held = board(app, &path).map(|b| {
+        b.footprints
+            .iter()
+            .flat_map(|fp| fp.pads.iter())
+            .filter(|p| targets.contains(&p.uuid))
+            .map(|p| {
+                json!({
+                    "id": p.uuid,
+                    "shape": p.shape,
+                    "trapezoid_delta": p.trapezoid_delta,
+                    "custom_outline": p.custom_outline,
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    answered(json!({ "document": path, "pads": held.unwrap_or_default() }))
+}
+
+/// The `shape`, `delta` and `corners` operands as one pad edit.
+fn pad_geometry(args: &CommandArgs) -> Result<PadEdit, String> {
+    let shape = match text(args, "shape").map(str::trim) {
+        Some("circle") => PadShape::Circle,
+        Some("rect") => PadShape::Rect,
+        Some("oval") => PadShape::Oval,
+        Some("roundrect") => PadShape::RoundRect,
+        Some("trapezoid") => PadShape::Trapezoid,
+        Some("custom") => PadShape::Custom,
+        Some(other) => {
+            return Err(format!(
+                "`{other}` is not a pad shape (circle, rect, oval, roundrect, trapezoid, custom)"
+            ));
+        }
+        None => return Err("`set_pad_shape` needs the operand `shape`".to_string()),
+    };
+    let trapezoid_delta = match text(args, "delta") {
+        None => Point::ZERO,
+        Some(raw) => {
+            mm_point(raw).ok_or_else(|| format!("`delta` must be <x>,<y> in mm, not `{raw}`"))?
+        }
+    };
+    let custom_outline = match text(args, "corners") {
+        None => Vec::new(),
+        Some(raw) => raw
+            .split(';')
+            .map(mm_point)
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| format!("`corners` must be <x>,<y>;<x>,<y>;.. in mm, not `{raw}`"))?,
+    };
+    Ok(PadEdit::Geometry {
+        shape,
+        trapezoid_delta,
+        custom_outline,
+    })
+}
+
+/// A point typed as `<x>,<y>` in mm.
+fn mm_point(text: &str) -> Option<Point> {
+    let (x, y) = text.split_once(',')?;
     Some(Point::new(parse_number(x)?, parse_number(y)?))
 }

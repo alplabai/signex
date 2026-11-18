@@ -156,7 +156,9 @@ impl Signex {
     // so the form re-reads the new value.
     pub(crate) fn fp_editor_set_next_pad_shape(&mut self, shape: signex_library::PadShape) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.shape = shape;
+            let defaults = &mut editor.state.next_pad_defaults;
+            defaults.shape =
+                super::pad_trapezoid::seeded_trapezoid(shape, &defaults.shape, defaults.size_x_mm);
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
@@ -489,7 +491,9 @@ impl Signex {
         idx: usize,
         shape: signex_library::PadShape,
     ) -> bool {
-        self.with_selected_pad(idx, |pad| pad.shape = shape);
+        self.with_selected_pad(idx, |pad| {
+            pad.shape = super::pad_trapezoid::seeded_trapezoid(shape, &pad.shape, pad.size_mm.0);
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_kind(

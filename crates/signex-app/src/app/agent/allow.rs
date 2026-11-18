@@ -167,6 +167,7 @@ mod tests {
                 "set_layer_sizes",
                 "set_layer_stack",
                 "set_net_class_rules",
+                "set_pad_shape",
                 "set_via_span",
                 "show_drc_violation",
                 "show_layer_group",

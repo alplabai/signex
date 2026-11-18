@@ -44,7 +44,8 @@ fn reach(shape: &Shape) -> i64 {
     match *shape {
         Shape::Disc { radius, .. }
         | Shape::Capsule { radius, .. }
-        | Shape::RoundRect { radius, .. } => radius.max(0),
+        | Shape::RoundRect { radius, .. }
+        | Shape::Polygon { radius, .. } => radius.max(0),
         Shape::Rect { .. } => 0,
     }
 }
@@ -89,7 +90,7 @@ pub fn edge_gap(board: &PcbBoard, a: ItemRef, b: ItemRef) -> Option<Span> {
         index
             .items()
             .filter(|indexed| indexed.item == item)
-            .map(|indexed| indexed.shape)
+            .map(|indexed| indexed.shape.clone())
             .collect()
     };
     let (shapes_a, shapes_b) = (shapes_of(a), shapes_of(b));

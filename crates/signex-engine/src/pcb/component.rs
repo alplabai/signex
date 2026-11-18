@@ -282,6 +282,11 @@ pub fn body_area_mm2(footprint: &Footprint) -> Option<f64> {
                 * pcb_geom::nm_to_mm(half_h.saturating_mul(2)),
         ),
         pcb_geom::Shape::Disc { .. } | pcb_geom::Shape::Capsule { .. } => Some(0.0),
+        // A body is never built as a polygon; its bounds would stand in.
+        body @ pcb_geom::Shape::Polygon { .. } => {
+            let bounds = body.aabb();
+            Some(pcb_geom::nm_to_mm(bounds.width()) * pcb_geom::nm_to_mm(bounds.height()))
+        }
     }
 }
 

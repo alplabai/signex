@@ -64,7 +64,7 @@ decided for the snap options. They are not written to the board.
 
 `[board_options]`, written after `[board_sketch]` and only when the options
 differ from the default, so a board without any re-saves byte-identical. The
-format token stays `snxpcb/1.3`. Lengths are integer nm, colours `#rrggbbaa`.
+section did not change the format token (it was `snxpcb/1.3` then). Lengths are integer nm, colours `#rrggbbaa`.
 
 ```toml
 [board_options]

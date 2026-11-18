@@ -27,6 +27,29 @@ impl PadLabels {
     }
 }
 
+/// A trapezoid pad's outline about `centre`, `scale` px per mm, from the
+/// board's own corner rule (`signex_types::pcb_pad_shape`); `None` for a
+/// delta that makes no copper (#2242).
+pub(super) fn trapezoid_path(
+    centre: Point,
+    size_mm: (f64, f64),
+    delta: [f64; 2],
+    scale: f32,
+) -> Option<Path> {
+    use signex_types::pcb::Point as Mm;
+    let corners = signex_types::pcb_pad_shape::trapezoid_corners(
+        Mm::new(size_mm.0, size_mm.1),
+        Mm::new(delta[0], delta[1]),
+    )
+    .ok()?;
+    let at = |c: Mm| Point::new(centre.x + c.x as f32 * scale, centre.y + c.y as f32 * scale);
+    Some(Path::new(|b| {
+        b.move_to(at(corners[0]));
+        corners[1..].iter().for_each(|c| b.line_to(at(*c)));
+        b.close();
+    }))
+}
+
 /// Render a single pad — copper outline and drilled hole. The number is
 /// [`draw_pad_number`], drawn after all pads.
 pub(super) fn draw_pad(
@@ -138,6 +161,8 @@ pub(super) fn draw_pad(
                 b.close();
             })
         }
+        PS::Trapezoid { delta } => trapezoid_path(centre, pad.size_mm, *delta, cstate.scale)
+            .unwrap_or_else(|| Path::rectangle(p0, size)),
         PS::Custom(poly) => Path::new(|b| {
             // Polygon points are already pad-local offsets in mm; scale
             // them into the local pixel frame the transform places.

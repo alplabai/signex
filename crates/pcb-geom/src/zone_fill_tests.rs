@@ -23,6 +23,8 @@ fn pad(n: u128, x: f64, net: u32) -> Pad {
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -138,7 +140,7 @@ fn copper_of_another_net_is_cut_out_with_the_clearance_and_no_closer() {
     let pad_copper = pad_shape(&b.footprints[0], &b.footprints[0].pads[0]).unwrap();
     let clearance = MM / 2;
     let (near, far) = (
-        pad_copper.inflated(clearance - 1),
+        pad_copper.clone().inflated(clearance - 1),
         pad_copper.inflated(clearance + MM / 50),
     );
     for p in &fill[0].holes[0] {

@@ -41,6 +41,8 @@ fn pad() -> Pad {
             name: "GND".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 45.0,
         net_locked: true,
         layer_sizes: None,
@@ -158,4 +160,35 @@ fn a_free_pad_with_per_layer_sizes_round_trips() {
 
     let broken = text.replacen("top=", "nowhere=", 1);
     assert!(SnxPcb::parse(&broken).is_err(), "{broken}");
+}
+
+#[test]
+fn free_trapezoid_and_custom_pads_round_trip_and_bad_ones_fail() {
+    // #2242: the `[free]` pads carry the same shape cells as the `pads` rows.
+    let mut board = empty_board();
+    let mut trapezoid = pad();
+    trapezoid.shape = PadShape::Trapezoid;
+    trapezoid.trapezoid_delta = Point::new(0.5, 0.0);
+    let mut custom = pad();
+    custom.uuid = Uuid::from_u128(14);
+    custom.shape = PadShape::Custom;
+    custom.custom_outline = vec![
+        Point::new(0.0, 0.0),
+        Point::new(1.0, 0.0),
+        Point::new(0.0, 1.0),
+    ];
+    board.free.pads.extend([trapezoid, custom]);
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("trapezoid_delta = \"500000,0\""), "{text}");
+    assert!(
+        text.contains("custom_outline = \"0,0;1000000,0;0,1000000\""),
+        "{text}"
+    );
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.free, board.free);
+
+    let err = SnxPcb::parse(&text.replacen("0,0;1000000,0;0,1000000", "0,0;1000000,0", 1))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("\"custom_outline\""), "{err}");
 }

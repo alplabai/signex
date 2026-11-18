@@ -446,6 +446,15 @@ fn bake_shape(
                 corners: map_corners(corners),
             }
         }
+        PadShape::Trapezoid {
+            delta_x_expr,
+            delta_y_expr,
+        } => LibPadShape::Trapezoid {
+            delta: [
+                eval_length(delta_x_expr, ctx)?,
+                eval_length(delta_y_expr, ctx)?,
+            ],
+        },
         PadShape::Custom(CustomPadShape::StaticPoints { points }) => {
             LibPadShape::Custom(LibPolygon {
                 points: points.clone(),

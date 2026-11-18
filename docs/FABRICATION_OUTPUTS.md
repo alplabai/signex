@@ -72,7 +72,9 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
 
 - Pads are flashed: a circle, an axis-aligned rectangle or stadium as a
   standard aperture, a turned rectangle or stadium and every round-rect as a
-  macro (primitives 21 and 1, turned about the aperture origin). The shape,
+  macro (primitives 21 and 1, turned about the aperture origin), and a
+  trapezoid or custom pad (#2242) as an outline macro (primitive 4) holding
+  the corners `pcb_geom::pad_shape` places, already turned. The shape,
   centre and turn come from `pcb_geom` (`pad_world_center`,
   `pad_world_rotation_deg`), the same transform the canvas and DRC read. A
   pad with per-layer sizes (#2401) is flashed at its size on each copper

@@ -48,16 +48,30 @@ impl Separation {
 }
 
 impl Shape {
-    /// How far apart the two shapes are.
+    /// How far apart the two shapes are. A polygon pad is measured piece by
+    /// piece and the nearest pair wins; the pieces of one shape share their
+    /// radius, so every pair has the same reach.
     pub fn separation(&self, other: &Shape) -> Separation {
-        let (a, b) = (self.core(), other.core());
-        let reach = radius(&a).max(0) + radius(&b).max(0);
-        let (dist_sq, between) = core_distance(&a, &b);
-        Separation {
-            dist_sq,
-            reach,
-            between,
+        let theirs = other.cores();
+        let mut nearest: Option<Separation> = None;
+        for a in self.cores() {
+            for b in &theirs {
+                let reach = radius(&a).max(0) + radius(b).max(0);
+                let (dist_sq, between) = core_distance(&a, b);
+                if nearest.is_none_or(|n| dist_sq < n.dist_sq) {
+                    nearest = Some(Separation {
+                        dist_sq,
+                        reach,
+                        between,
+                    });
+                }
+            }
         }
+        nearest.unwrap_or(Separation {
+            dist_sq: 0,
+            reach: 0,
+            between: (PointNm::ORIGIN, PointNm::ORIGIN),
+        })
     }
 }
 

@@ -207,7 +207,7 @@ fn round_rect_hit_overlap_and_window_agree_near_the_corner_arc() {
     for rotation in [0.0, 30.0, 45.0] {
         let pad = round_rect(rotation);
         let index = BoardIndex::from_items(vec![
-            IndexedItem::new(ItemRef::Via(Uuid::from_u128(1)), pad).unwrap(),
+            IndexedItem::new(ItemRef::Via(Uuid::from_u128(1)), pad.clone()).unwrap(),
         ]);
         let step = MM / 25;
         let mut seen = (false, false);

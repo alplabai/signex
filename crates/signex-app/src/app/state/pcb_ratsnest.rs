@@ -141,6 +141,8 @@ mod tests {
                 name: "N1".into(),
             }),
             roundrect_ratio: 0.0,
+            trapezoid_delta: Default::default(),
+            custom_outline: Vec::new(),
             rotation: 0.0,
             layer_sizes: None,
             net_locked: false,

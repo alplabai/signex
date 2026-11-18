@@ -408,6 +408,8 @@ pub(super) fn pad_facts(
             PadShape::Rect => ids::PCB_PRIM_SHAPE_RECT,
             PadShape::RoundRect => ids::PCB_PRIM_SHAPE_ROUNDRECT,
             PadShape::Oval => ids::PCB_PRIM_SHAPE_OVAL,
+            PadShape::Trapezoid => ids::PCB_PRIM_SHAPE_TRAPEZOID,
+            PadShape::Custom => ids::PCB_PRIM_SHAPE_CUSTOM,
         };
         ShapeChoice {
             shape,

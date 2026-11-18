@@ -73,7 +73,7 @@ impl Obstacle {
         }
         match &self.copper {
             Copper::Shape(own) => shape.overlaps(own) || shape.separation(own).is_under(gap),
-            Copper::Area(area) => area_meets(area, &shape.inflated(gap)),
+            Copper::Area(area) => area_meets(area, &shape.clone().inflated(gap)),
         }
     }
 
@@ -82,7 +82,7 @@ impl Obstacle {
     fn near_ring(&self, ring: &[PointNm], gap: i64) -> bool {
         let gap = gap.max(0);
         match &self.copper {
-            Copper::Shape(own) => own.inflated(gap).overlaps_polygon(ring),
+            Copper::Shape(own) => own.clone().inflated(gap).overlaps_polygon(ring),
             Copper::Area(area) => {
                 area.outer.len() >= 3
                     && (polygons_meet(ring, &area.outer)

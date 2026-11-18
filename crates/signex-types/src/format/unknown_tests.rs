@@ -224,6 +224,8 @@ pub(super) fn plain_board() -> PcbBoard {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,

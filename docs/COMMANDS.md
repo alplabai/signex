@@ -417,6 +417,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |
 | `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
