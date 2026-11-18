@@ -23,7 +23,7 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
         .filter(|f| has_courtyard(f))
         .filter_map(|f| Some((f, Side::of_layer(&f.layer), footprint_body(f).ok()?)))
         .collect();
-    let shapes: Vec<Shape> = parts.iter().map(|p| p.2).collect();
+    let shapes: Vec<Shape> = parts.iter().map(|p| p.2.clone()).collect();
     let pairs = near_pairs(&shapes, limit, |i, j| parts[i].1 == parts[j].1);
     let mut found = Vec::new();
     for (i, j) in pairs {

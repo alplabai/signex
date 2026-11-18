@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use signex_types::check::finding_waiver_json;
 // Every number, angles and ratios too, quantised as the file stores a length.
 use signex_types::format::{mm_as_stored_nm, parse_pcb_layer};
-use signex_types::pcb::{Footprint, FpGraphic, Pad, PcbBoard};
+use signex_types::pcb::{Footprint, FpGraphic, Pad, PadShape, PcbBoard};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_options::DrcWaiver;
 use uuid::Uuid;
@@ -166,17 +166,33 @@ fn item_geometry(board: &PcbBoard, item: &ItemRef) -> Value {
             .iter()
             .find(|g| g.uuid == graphic)
             .map(|g| json!(g)),
+        ItemRef::FootprintText { footprint, field } => board
+            .footprints
+            .iter()
+            .find(|f| f.uuid == footprint)
+            .and_then(|fp| {
+                let text = fp.properties.iter().find(|p| p.key == field.key())?;
+                Some(json!({"placement": placement(fp), "field": field.id(), "text": text}))
+            }),
     };
     found.unwrap_or_else(|| json!(format!("missing:{}", item_id(item))))
 }
 
 /// A pad in its own frame (a footprint pad) or on the board (a free pad),
-/// with its per-layer sizes (#2401); its net by name.
+/// with its per-layer sizes (#2401); its net by name. The trapezoid delta
+/// and custom outline (#2242) join only for the shape that reads them, so
+/// the fingerprint of every other pad stays as it was.
 fn pad_geometry(p: &Pad) -> Value {
-    json!({"pad": p.uuid, "type": p.pad_type, "shape": p.shape, "position": p.position,
-        "size": p.size, "rotation": p.rotation, "roundrect_ratio": p.roundrect_ratio,
-        "drill": p.drill, "layers": p.layers, "layer_sizes": p.layer_sizes,
-        "net": p.net.as_ref().map(|n| n.name.as_str())})
+    let mut geometry = json!({"pad": p.uuid, "type": p.pad_type, "shape": p.shape,
+        "position": p.position, "size": p.size, "rotation": p.rotation,
+        "roundrect_ratio": p.roundrect_ratio, "drill": p.drill, "layers": p.layers,
+        "layer_sizes": p.layer_sizes, "net": p.net.as_ref().map(|n| n.name.as_str())});
+    match p.shape {
+        PadShape::Trapezoid => geometry["trapezoid_delta"] = json!(p.trapezoid_delta),
+        PadShape::Custom => geometry["custom_outline"] = json!(p.custom_outline),
+        _ => {}
+    }
+    geometry
 }
 
 /// Whether a footprint graphic is something DRC sees: copper or courtyard

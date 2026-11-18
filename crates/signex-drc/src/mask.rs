@@ -33,7 +33,7 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
 /// wider than nothing and narrower than `limit`; openings that touch or
 /// overlap leave no strip.
 fn slivers(openings: &[Piece], (limit, rule): &(i64, String)) -> Vec<Violation> {
-    let shapes: Vec<Shape> = openings.iter().map(|p| p.shape).collect();
+    let shapes: Vec<Shape> = openings.iter().map(|p| p.shape.clone()).collect();
     let pairs = near_pairs(&shapes, *limit, |i, j| {
         openings[i].side == openings[j].side && openings[i].owner != openings[j].owner
     });

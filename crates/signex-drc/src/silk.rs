@@ -55,9 +55,9 @@ fn between(
     (limit, rule): &(i64, String),
 ) -> Vec<Violation> {
     let same = std::ptr::eq(a, b);
-    let mut shapes: Vec<Shape> = a.iter().map(|p| p.shape).collect();
+    let mut shapes: Vec<Shape> = a.iter().map(|p| p.shape.clone()).collect();
     if !same {
-        shapes.extend(b.iter().map(|p| p.shape));
+        shapes.extend(b.iter().map(|p| p.shape.clone()));
     }
     let n = a.len();
     let piece = |i: usize| if same || i < n { &a[i] } else { &b[i - n] };
@@ -176,7 +176,7 @@ pub(crate) fn exposed_pads(board: &PcbBoard) -> Vec<Piece> {
                         owner,
                         net,
                         side,
-                        shape,
+                        shape: shape.clone(),
                     });
                 }
             }

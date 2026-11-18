@@ -23,7 +23,7 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
     }
     let copper = collect_copper(board);
     let mut shapes: Vec<Shape> = edges.clone();
-    shapes.extend(copper.iter().map(|c| c.shape));
+    shapes.extend(copper.iter().map(|c| c.shape.clone()));
     let limits: Vec<_> = copper
         .iter()
         .map(|c| rules.object_limit(LimitKind::MinEdgeClearance, c.net, c.layers))
