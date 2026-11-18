@@ -202,9 +202,10 @@ impl Signex {
         // The highlighted net and the Measure ruler (#2403).
         highlight.net = self.board_net_shapes();
         highlight.measure = self.board_measure_line();
-        let ghost = self
-            .pcb_part_ghost(carry.as_ref())
-            .or_else(|| self.board_tool_ghost());
+        let part = self.pcb_part_ghost(carry.as_ref());
+        // A route or track run being drawn is drawn whole, never dimmed.
+        let whole = part.is_none() && self.is_routing_board_track();
+        let ghost = part.or_else(|| self.board_tool_ghost());
         // A tool, or a Move, paste or part waiting on the cursor, takes
         // every press as a click: never a drag or a box (#2396).
         let tool_armed = self.own_board_tool().is_some() || self.own_board_measure().is_some();
@@ -223,7 +224,11 @@ impl Signex {
         canvas.set_highlight(highlight);
         canvas.set_grab(if tool_armed { Vec::new() } else { grab });
         canvas.set_clicks_only(clicks_only);
-        canvas.set_part_ghost(ghost.as_ref());
+        if whole {
+            canvas.set_route_ghost(ghost.as_ref());
+        } else {
+            canvas.set_part_ghost(ghost.as_ref());
+        }
         let ratsnest = view
             .ratsnest_visible()
             .then_some((&interaction.pcb_ratsnest, path.as_path()));

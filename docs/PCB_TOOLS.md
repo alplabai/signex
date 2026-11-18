@@ -38,6 +38,17 @@ through via (top to bottom copper) with the board's via size
 the active copper layer; with a non-copper layer active the tool says so and
 draws nothing.
 
+Board tools draw on the active layer (maintainer 2026-11-18). While one is
+armed the status bar says how to use it, that Tab paused it, that it needs
+another kind of layer, or why the last click added nothing; Messages keeps
+the same lines.
+
+- A run started on netted copper that does not reach the active copper
+  layer (a surface pad on Top with an inner layer active) takes that
+  copper's net and starts with a via there (the via of a layer change, in
+  the same undo step as the first legs). A pad that reaches the active
+  layer (through-hole) starts directly.
+
 - The first click starts the run on the net of the copper under it. A run
   started over bare board takes the net of the copper its next point lands
   on.
@@ -65,7 +76,16 @@ clearance the design rules ask from other nets' copper (#2389).
 
 - **Start.** The first click starts the route on the net of the copper under
   it (a pad or a track end), or no net over bare board, which then takes the
-  net of the copper its next point lands on.
+  net of the copper its next point lands on. Copper that does not reach the
+  active layer (a surface pad on Top with an inner layer active) gives the
+  route its net and a via there with the first leg, as for a Track run
+  (`signex_engine::pcb::route::copper_under`). Quick Route starts the same
+  way.
+- **Ends.** A leg aimed at a pad of another net is refused; the status bar
+  and Messages name the pad and both nets ("U1.1 is on net B, the route is
+  on net A"). A leg aimed at a pad of no net is refused the same way until
+  it is decided whether a route may give the pad its net
+  (`signex_engine::pcb::route::end_refusal`).
 - **Rules.** The route reads the rules the Design Rule Check of this board
   reads (`DrcRules`, the same project layers and net classes, compiled once
   when the route starts): the clearance between each pair of items
@@ -88,7 +108,10 @@ clearance the design rules ask from other nets' copper (#2389).
   depends on (the pointer's grid point, a leg, the board revision, the
   corner rule, the mode, the layer), not per repaint, with a smaller search
   budget than a click (`PREVIEW_BUDGET`); a leg the preview gives up on
-  still routes on the click.
+  still routes on the click. A leg with no way, or aimed at a pad it may
+  not end on, is drawn straight to the pointer instead of vanishing, and
+  the status bar says why. The route on the cursor is drawn at the full
+  colour of its layer, never dimmed.
 - **Push and shove.** `cycle_route_mode` (the palette; no default key)
   switches between walking around (the default) and pushing. In push mode
   the rule's legs go straight to the point and other nets' tracks in the
@@ -268,8 +291,10 @@ non-copper layer active the tool says so and draws nothing.
 
 - **Fill:** the first click is one corner, the second the opposite corner of
   the rectangle.
-- **Solid Region:** each click adds a corner. A click on the first corner,
-  or a right-click once there are three, closes it; Esc drops it.
+- **Solid Region:** each click adds a corner. A click on the first corner
+  (or within half a grid step of it), or a right-click once there are
+  three, closes it; Esc drops it. Polygon Pour and Keepout close the same
+  way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
 

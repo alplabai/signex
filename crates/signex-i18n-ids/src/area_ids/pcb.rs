@@ -101,6 +101,10 @@ define_ids! {
     PCB_ROUTE_NO_PAIR = "pcb-route-no-pair";
     PCB_ROUTE_MEMBER_NO_COPPER = "pcb-route-member-no-copper";
     PCB_ROUTE_BUS_NEEDS_NETS = "pcb-route-bus-needs-nets";
+    PCB_ROUTE_END_OTHER_NET = "pcb-route-end-other-net";
+    PCB_ROUTE_END_NO_NET = "pcb-route-end-no-net";
+    PCB_ROUTE_AIM_BLOCKED = "pcb-route-aim-blocked";
+    PCB_TOOL_PAUSED = "pcb-tool-paused";
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";
     PCB_TUNE_REFUSED = "pcb-tune-refused";
     PCB_TUNE_DONE = "pcb-tune-done";
