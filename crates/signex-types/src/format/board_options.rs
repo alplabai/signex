@@ -40,7 +40,8 @@ pub(in crate::format) struct BoardOptionsRaw {
     grids: Vec<GridRaw>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     origin: Option<OriginRaw>,
-    /// Waived design-rule findings (#2399): no geometry, stored as held.
+    /// Waived design-rule findings (#2399), stored as held: the fingerprint
+    /// is a hash, not geometry (#2307).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     drc_waivers: Vec<DrcWaiver>,
     /// The panel (#2410), `format::board_panel`.

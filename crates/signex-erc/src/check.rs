@@ -7,7 +7,7 @@
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use signex_types::check::{Finding, Severity as CheckSeverity};
+use signex_types::check::{Finding, Severity as CheckSeverity, finding_waiver_json};
 use signex_types::project::ErcWaiver;
 
 use crate::{LocationSpace, Severity, Violation, waivers};
@@ -37,18 +37,15 @@ pub fn net_waiver(rule_id: &str, net: &str) -> Value {
     json!({"kind": "net", "rule_id": rule_id, "net": net})
 }
 
-/// A per-finding waiver as a waiver object of a report.
+/// A per-finding waiver as a waiver object of a report, in the shared shape
+/// (`signex_types::check::finding_waiver_json`).
 pub fn finding_waiver(waiver: &ErcWaiver) -> Value {
-    json!({
-        "kind": "finding",
-        "rule_id": waiver.rule_id,
-        "objects": waiver.objects,
-        "fingerprint": waiver.fingerprint,
-        "reason": waiver.reason,
-        "author": waiver.author,
-        "date": waiver.date,
-        "message": waiver.message,
-    })
+    let mut extra = Map::new();
+    extra.insert("objects".into(), json!(waiver.objects));
+    extra.insert("author".into(), json!(waiver.author));
+    extra.insert("date".into(), json!(waiver.date));
+    extra.insert("message".into(), json!(waiver.message));
+    finding_waiver_json(&waiver.rule_id, &waiver.fingerprint, &waiver.reason, extra)
 }
 
 /// A run never reports a rule that is off (`apply_overrides` drops it).

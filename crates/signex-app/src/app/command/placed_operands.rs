@@ -13,7 +13,7 @@ use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::mutation_gateway::MutationOutcome as Applied;
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);

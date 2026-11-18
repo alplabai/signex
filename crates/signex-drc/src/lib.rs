@@ -35,7 +35,7 @@ pub use severity::{
 };
 use user_rules::USER_RULE_ID_PREFIX;
 pub use user_rules::{CopperObject, Limit, LimitKind, NetScope, UserRule};
-pub use waiver::{rule_id, waiver_key, waiver_of};
+pub use waiver::{WaiverState, fingerprint, rule_id, waiver_json, waiver_key, waiver_state};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
 /// kind, so a capped list of rows keeps the shorts. A new kind goes after

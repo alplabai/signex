@@ -341,7 +341,7 @@ synced automatically on merge to `trunk`. Five families plus a few signal labels
 |---|---|---|
 | `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
 | `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
-| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (Advanced Schematic through PCB Viewer), `p2` (PCB Routing through Pro Release), `p3` (after the Pro Release, Signex AI Core onward) | Triager |
+| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (PCB Design, then Schematic Refinement), `p2` (PCB Routing through the Community Release), `p3` (after the Community Release) | Triager |
 | `priority:` | `critical` / `high` / `medium` / `low` | Triager |
 | `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
 
@@ -587,9 +587,10 @@ MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
 neither list: ask.
 
 **Why "no resale" is fatal here in particular.** Signex Community is
-FSL-1.1-ALv2 and free; **Signex Pro is a paid commercial edition built on top
-of this tree** from a separate private workspace. A field-of-use restriction on any code in `crates/` would
-be violated the day Pro ships, and would break the Apache-2.0 conversion we
+FSL-1.1-ALv2 and free; **code in this tree also ships in a paid commercial
+edition** ([docs/ROADMAP.md](docs/ROADMAP.md) §3, "Signex Pro"). A
+field-of-use restriction on any code in `crates/` would be violated by that
+edition, and would break the Apache-2.0 conversion we
 promise every downstream user two years after each release. Plenty of projects
 could live with a non-commercial clause. We cannot. That's a property of
 our business model, not a judgement about the licence.
