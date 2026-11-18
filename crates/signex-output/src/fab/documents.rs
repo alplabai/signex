@@ -1,16 +1,57 @@
 //! The drawings on layers no Gerber image carries (fab, assembly,
 //! courtyard, documentation, mechanical, ...), for the whole-job exports
-//! that keep them as document layers.
+//! that keep them as document layers, and the board-layer view of every
+//! mark those exports write.
 
 use pcb_geom::{GeomError, Placement, PointNm, Side};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::PcbLayer;
 
+use super::collect::Images;
 use super::draw::{Drawing, Drawn, Pen, draw};
 use super::frame::FabFrame;
 use super::layers::FabLayer;
 use super::marks::{Function, Mark};
+use super::roles::image_layer;
+
+/// The board layers that carry marks or that the layer table lists.
+pub(crate) fn used_layers(
+    board: &PcbBoard,
+    images: &Images,
+    documents: &[(PcbLayer, Vec<Mark>)],
+) -> Vec<PcbLayer> {
+    images
+        .keys()
+        .filter_map(|image| image_layer(*image))
+        .chain(documents.iter().map(|(layer, _)| *layer))
+        .chain(
+            board
+                .layers
+                .iter()
+                .filter_map(|def| parse_pcb_layer(&def.name)),
+        )
+        .collect()
+}
+
+/// The marks drawn on a board layer: its image's, or its drawings'.
+pub(crate) fn board_marks<'a>(
+    images: &'a Images,
+    documents: &'a [(PcbLayer, Vec<Mark>)],
+    layer: PcbLayer,
+) -> &'a [Mark] {
+    let image = images
+        .iter()
+        .find(|(image, _)| image_layer(**image) == Some(layer))
+        .map(|(_, marks)| marks.as_slice());
+    let drawing = || {
+        documents
+            .iter()
+            .find(|(l, _)| *l == layer)
+            .map(|(_, marks)| marks.as_slice())
+    };
+    image.or_else(drawing).unwrap_or(&[])
+}
 
 /// Each drawing layer's marks, in `PcbLayer::all` order. Texts wait for
 /// the stroke font (#2387) here as on the images; they and the graphics the

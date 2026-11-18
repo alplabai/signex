@@ -10,22 +10,20 @@ mod stack;
 mod xml;
 
 use pcb_geom::PointNm;
-use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_layer::PcbLayer;
 
 use super::FabExtras;
-use super::collect::{self, Images};
-use super::documents::collect_documents;
+use super::collect;
+use super::documents::{board_marks, collect_documents, used_layers};
 use super::drill::{self, DrillFile, Hole};
 use super::frame::{FabFrame, millionths};
 use super::layers::{CopperStack, FabLayer};
-use super::marks::Mark;
 use super::notes::Tally;
+use super::parts::Parts;
 use super::roles::board_stack;
 use features::{Dictionary, contour, layer_feature, xy};
-use parts::{Parts, write_nets};
-use stack::{Declared, LayerPlan, Source, image_layer, write_layers};
+use parts::write_nets;
+use stack::{Declared, LayerPlan, Source, write_layers};
 use xml::{Xml, qualified};
 
 /// The schema's namespace.
@@ -60,7 +58,7 @@ pub(crate) fn write_ipc2581(
     let declared = plan.declare();
     let step = qualified(name);
     let bom = format!("{step}_BOM");
-    let parts = Parts::of(board);
+    let parts = Parts::of(board, qualified);
     let mut dictionary = Dictionary::default();
 
     // The CAD data first: it fills the dictionary the content lists.
@@ -118,44 +116,6 @@ pub(crate) fn write_ipc2581(
     debug_assert_eq!(doc.depth(), 1, "the CAD data is spliced under the root");
     doc.splice(ecad);
     doc.finish()
-}
-
-/// The board layers that carry marks or that the layer table lists.
-fn used_layers(
-    board: &PcbBoard,
-    images: &Images,
-    documents: &[(PcbLayer, Vec<Mark>)],
-) -> Vec<PcbLayer> {
-    images
-        .keys()
-        .filter_map(|image| image_layer(*image))
-        .chain(documents.iter().map(|(layer, _)| *layer))
-        .chain(
-            board
-                .layers
-                .iter()
-                .filter_map(|def| parse_pcb_layer(&def.name)),
-        )
-        .collect()
-}
-
-/// The marks drawn on a board layer: its image's, or its drawings'.
-fn board_marks<'a>(
-    images: &'a Images,
-    documents: &'a [(PcbLayer, Vec<Mark>)],
-    layer: PcbLayer,
-) -> &'a [Mark] {
-    let image = images
-        .iter()
-        .find(|(image, _)| image_layer(**image) == Some(layer))
-        .map(|(_, marks)| marks.as_slice());
-    let drawing = || {
-        documents
-            .iter()
-            .find(|(l, _)| *l == layer)
-            .map(|(_, marks)| marks.as_slice())
-    };
-    image.or_else(drawing).unwrap_or(&[])
 }
 
 /// The header sections: who sent the file and with what. No person or

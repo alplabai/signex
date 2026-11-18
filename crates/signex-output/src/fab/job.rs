@@ -34,6 +34,14 @@ pub(crate) fn write_job(facts: &JobFacts, files: &[FabFile]) -> String {
             | FabFileKind::Ipc2581 => {
                 others.push(json!({ "Path": file.name, "Content": file.kind.content() }));
             }
+            // The ODB++ folder is listed once, by its name.
+            FabFileKind::Odb => {
+                let path = file.name.split('/').next().unwrap_or(&file.name);
+                let listed = others.iter().any(|o| o["Path"] == path);
+                if !listed {
+                    others.push(json!({ "Path": path, "Content": file.kind.content() }));
+                }
+            }
             FabFileKind::Job => {}
         }
     }

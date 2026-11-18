@@ -2,16 +2,18 @@
 //! first, and the `Stackup` that gives their thicknesses.
 
 use pcb_geom::mm_to_nm;
-use signex_types::format::{parse_pcb_layer, pcb_layer_token};
+use signex_types::format::pcb_layer_token;
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
-use signex_types::pcb_stack::{LayerStack, StackLayerKind};
+use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_stack::LayerStack;
 
 use super::xml::{Xml, qualified};
 use crate::fab::drill::DrillFile;
 use crate::fab::frame::millionths;
-use crate::fab::layers::{CopperStack, FabLayer, Face};
-use crate::fab::roles::{LayerPlace, LayerRole, layer_label, plane_layers};
+use crate::fab::layers::CopperStack;
+use crate::fab::roles::{
+    LayerPlace, LayerRole, StackRow, layer_label, plane_layers, stack_rows,
+};
 
 /// What a declared layer is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,10 +69,10 @@ impl LayerPlan<'_> {
             });
         };
         let mut dielectrics = 0;
-        for (row, _) in self.stack_rows() {
+        for (row, _) in stack_rows(self.stack) {
             match row {
-                Row::Layer(layer) => add(&mut out, layer),
-                Row::Dielectric => {
+                StackRow::Layer(layer) => add(&mut out, layer),
+                StackRow::Dielectric => {
                     dielectrics += 1;
                     out.push(Declared {
                         name: format!("Dielectric{dielectrics}"),
@@ -123,40 +125,15 @@ impl LayerPlan<'_> {
         out
     }
 
-    /// The stack's rows as layers with their thickness in mm, a face's
-    /// rows on the top until the first copper row, on the bottom after it.
-    /// A copper row naming no copper layer is left out.
-    fn stack_rows(&self) -> Vec<(Row, f64)> {
-        let mut seen_copper = false;
-        let mut rows = Vec::new();
-        for row in &self.stack.layers {
-            let face = if seen_copper { Face::Bottom } else { Face::Top };
-            let layer = match row.kind {
-                StackLayerKind::Signal | StackLayerKind::Plane => {
-                    seen_copper = true;
-                    match parse_pcb_layer(&row.layer).and_then(PcbLayer::copper) {
-                        Some(copper) => Row::Layer(PcbLayer::Copper(copper)),
-                        None => continue,
-                    }
-                }
-                StackLayerKind::Dielectric => Row::Dielectric,
-                StackLayerKind::Overlay => Row::Layer(face_layer(face, FabLayer::Legend)),
-                StackLayerKind::SolderMask => Row::Layer(face_layer(face, FabLayer::Mask)),
-                StackLayerKind::Paste => Row::Layer(face_layer(face, FabLayer::Paste)),
-            };
-            rows.push((layer, row.thickness_mm));
-        }
-        rows
-    }
 
     /// The `Stackup`: one group holding every stack row in order.
     pub(crate) fn write_stackup(&self, xml: &mut Xml, declared: &[Declared]) {
         let mut layers = Vec::new();
         let mut dielectrics = 0;
-        for (row, thickness_mm) in self.stack_rows() {
+        for (row, thickness_mm) in stack_rows(self.stack) {
             let source = match row {
-                Row::Layer(layer) => Source::Board(layer),
-                Row::Dielectric => {
+                StackRow::Layer(layer) => Source::Board(layer),
+                StackRow::Dielectric => {
                     dielectrics += 1;
                     Source::Dielectric(dielectrics)
                 }
@@ -207,11 +184,6 @@ impl LayerPlan<'_> {
     }
 }
 
-enum Row {
-    Layer(PcbLayer),
-    Dielectric,
-}
-
 /// The `Layer` elements.
 pub(crate) fn write_layers(xml: &mut Xml, declared: &[Declared]) {
     for layer in declared {
@@ -233,26 +205,6 @@ pub(crate) fn write_layers(xml: &mut Xml, declared: &[Declared]) {
             None => xml.leaf("Layer", &attrs),
         }
     }
-}
-
-/// The board layer an image is drawn on; `None` for the V-score image.
-pub(crate) fn image_layer(image: FabLayer) -> Option<PcbLayer> {
-    use TechnicalLayer as T;
-    let face = |face: Face, top: T, bottom: T| {
-        PcbLayer::Technical(if face == Face::Top { top } else { bottom })
-    };
-    Some(match image {
-        FabLayer::Copper(copper) => PcbLayer::Copper(copper),
-        FabLayer::Legend(f) => face(f, T::SilkscreenTop, T::SilkscreenBottom),
-        FabLayer::Mask(f) => face(f, T::SolderMaskTop, T::SolderMaskBottom),
-        FabLayer::Paste(f) => face(f, T::PasteTop, T::PasteBottom),
-        FabLayer::Profile => PcbLayer::Technical(T::EdgeCuts),
-        FabLayer::VScore => return None,
-    })
-}
-
-fn face_layer(face: Face, image: fn(Face) -> FabLayer) -> PcbLayer {
-    image_layer(image(face)).unwrap_or(PcbLayer::Copper(CopperLayer::Top))
 }
 
 fn side_word(place: LayerPlace) -> &'static str {

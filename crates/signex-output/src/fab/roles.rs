@@ -1,5 +1,5 @@
-//! The role every board layer plays in a whole-job export (IPC-2581, and
-//! ODB++ next, #2485), keyed by the typed layer id: one table both writers
+//! The role every board layer plays in a whole-job export (IPC-2581
+//! #2484, ODB++ #2485), keyed by the typed layer id: one table both writers
 //! read, so renaming a layer row never changes an output. The mapping:
 //! `docs/FABRICATION_OUTPUTS.md`, "Layer roles".
 
@@ -7,6 +7,8 @@ use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::pcb_stack::{LayerStack, StackLayerKind};
+
+use super::layers::{FabLayer, Face};
 
 /// What a layer is for in a whole-job export.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,10 +70,6 @@ impl LayerRole {
 
     /// The ODB++ matrix layer type; `None` for the board outline, which is
     /// the step profile there, not a matrix layer.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the ODB++ writer (#2485) reads it")
-    )]
     pub(crate) fn odb_matrix_type(self) -> Option<&'static str> {
         Some(match self {
             LayerRole::Signal => "SIGNAL",
@@ -135,6 +133,59 @@ pub(crate) fn board_stack(board: &PcbBoard) -> LayerStack {
         .stackup
         .clone()
         .unwrap_or_else(|| LayerStack::derived(&board.layers, board.thickness))
+}
+
+/// One row of the stack, as the exports read it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StackRow {
+    Layer(PcbLayer),
+    Dielectric,
+}
+
+/// The stack's rows as layers with their thickness in mm, a face's rows on
+/// the top until the first copper row, on the bottom after it. A copper
+/// row naming no copper layer is left out.
+pub(crate) fn stack_rows(stack: &LayerStack) -> Vec<(StackRow, f64)> {
+    let mut seen_copper = false;
+    let mut rows = Vec::new();
+    for row in &stack.layers {
+        let face = if seen_copper { Face::Bottom } else { Face::Top };
+        let layer = match row.kind {
+            StackLayerKind::Signal | StackLayerKind::Plane => {
+                seen_copper = true;
+                match parse_pcb_layer(&row.layer).and_then(PcbLayer::copper) {
+                    Some(copper) => StackRow::Layer(PcbLayer::Copper(copper)),
+                    None => continue,
+                }
+            }
+            StackLayerKind::Dielectric => StackRow::Dielectric,
+            StackLayerKind::Overlay => StackRow::Layer(face_layer(face, FabLayer::Legend)),
+            StackLayerKind::SolderMask => StackRow::Layer(face_layer(face, FabLayer::Mask)),
+            StackLayerKind::Paste => StackRow::Layer(face_layer(face, FabLayer::Paste)),
+        };
+        rows.push((layer, row.thickness_mm));
+    }
+    rows
+}
+
+/// The board layer an image is drawn on; `None` for the V-score image.
+pub(crate) fn image_layer(image: FabLayer) -> Option<PcbLayer> {
+    use TechnicalLayer as T;
+    let face = |face: Face, top: T, bottom: T| {
+        PcbLayer::Technical(if face == Face::Top { top } else { bottom })
+    };
+    Some(match image {
+        FabLayer::Copper(copper) => PcbLayer::Copper(copper),
+        FabLayer::Legend(f) => face(f, T::SilkscreenTop, T::SilkscreenBottom),
+        FabLayer::Mask(f) => face(f, T::SolderMaskTop, T::SolderMaskBottom),
+        FabLayer::Paste(f) => face(f, T::PasteTop, T::PasteBottom),
+        FabLayer::Profile => PcbLayer::Technical(T::EdgeCuts),
+        FabLayer::VScore => return None,
+    })
+}
+
+fn face_layer(face: Face, image: fn(Face) -> FabLayer) -> PcbLayer {
+    image_layer(image(face)).unwrap_or(PcbLayer::Copper(CopperLayer::Top))
 }
 
 /// The copper layers `stack` pours as planes.

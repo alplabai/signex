@@ -7,43 +7,21 @@ use pcb_geom::PointNm;
 
 use super::xml::{Xml, qualified};
 use crate::fab::frame::millionths;
-use crate::fab::marks::{ApertureShape, Function, Mark, Step};
+use crate::fab::marks::{ApertureShape, Function, Mark, Shape, Step};
 
-/// An unturned flash shape, in nm; the turn goes on the feature's `Xform`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Shape {
-    Circle { diameter: i64 },
-    Rect { w: i64, h: i64 },
-    Oval { w: i64, h: i64 },
-    RoundRect { w: i64, h: i64, r: i64 },
-}
-
-impl Shape {
-    /// The shape of an aperture and its turn in micro-degrees.
-    pub(crate) fn of(aperture: ApertureShape) -> (Shape, i64) {
-        match aperture {
-            ApertureShape::Circle { diameter } => (Shape::Circle { diameter }, 0),
-            ApertureShape::Rect { w, h } => (Shape::Rect { w, h }, 0),
-            ApertureShape::Obround { w, h } => (Shape::Oval { w, h }, 0),
-            ApertureShape::TurnedRect { w, h, udeg } => (Shape::Rect { w, h }, udeg),
-            ApertureShape::TurnedObround { w, h, udeg } => (Shape::Oval { w, h }, udeg),
-            ApertureShape::RoundRect { w, h, r, udeg } => (Shape::RoundRect { w, h, r }, udeg),
-        }
-    }
-
-    /// The dictionary id: the kind and sizes in mm, so it reads on its own.
-    pub(crate) fn id(self) -> String {
-        match self {
-            Shape::Circle { diameter } => format!("CIRCLE_{}", millionths(diameter)),
-            Shape::Rect { w, h } => format!("RECT_{}x{}", millionths(w), millionths(h)),
-            Shape::Oval { w, h } => format!("OVAL_{}x{}", millionths(w), millionths(h)),
-            Shape::RoundRect { w, h, r } => format!(
-                "RRECT_{}x{}_R{}",
-                millionths(w),
-                millionths(h),
-                millionths(r)
-            ),
-        }
+/// The dictionary id of a shape: the kind and sizes in mm, so it reads on
+/// its own. The turn goes on the feature's `Xform`.
+fn shape_id(shape: Shape) -> String {
+    match shape {
+        Shape::Circle { diameter } => format!("CIRCLE_{}", millionths(diameter)),
+        Shape::Rect { w, h } => format!("RECT_{}x{}", millionths(w), millionths(h)),
+        Shape::Oval { w, h } => format!("OVAL_{}x{}", millionths(w), millionths(h)),
+        Shape::RoundRect { w, h, r } => format!(
+            "RRECT_{}x{}_R{}",
+            millionths(w),
+            millionths(h),
+            millionths(r)
+        ),
     }
 }
 
@@ -57,13 +35,13 @@ impl Dictionary {
     /// The id of `shape`, adding it.
     pub(crate) fn reference(&mut self, shape: Shape) -> String {
         self.shapes.insert(shape);
-        shape.id()
+        shape_id(shape)
     }
 
     pub(crate) fn write(&self, xml: &mut Xml) {
         xml.open("DictionaryStandard", &[("units", "MILLIMETER".into())]);
         for shape in &self.shapes {
-            xml.open("EntryStandard", &[("id", shape.id())]);
+            xml.open("EntryStandard", &[("id", shape_id(*shape))]);
             match *shape {
                 Shape::Circle { diameter } => {
                     xml.leaf("Circle", &[("diameter", millionths(diameter))]);

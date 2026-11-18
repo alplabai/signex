@@ -1,7 +1,7 @@
 //! Fabrication outputs (#2388): Gerber RS-274X images with X2 attributes,
 //! Excellon drill files and their table, the pick-and-place CSV, the
-//! IPC-D-356 test netlist, the IPC-2581 file (#2484) and a job file
-//! listing them.
+//! IPC-D-356 test netlist, the IPC-2581 file (#2484), the ODB++ job
+//! (#2485) and a job file listing them.
 //!
 //! [`generate`] is pure: it reads the board and returns the files' bytes,
 //! and the app writes them only when the user presses Generate. One board
@@ -27,6 +27,8 @@ mod job;
 mod layers;
 mod marks;
 mod notes;
+mod odb;
+mod parts;
 mod roles;
 
 #[cfg(test)]
@@ -54,10 +56,23 @@ pub struct FabOptions {
     pub test_netlist: bool,
     /// The IPC-2581 file: the whole job in one file (#2484).
     pub ipc2581: bool,
+    /// The ODB++ job (#2485), and whether it is a folder or one archive;
+    /// `None` writes none.
+    pub odb: Option<OdbForm>,
+}
+
+/// How the ODB++ job is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OdbForm {
+    /// A folder `<name>-odb/` holding the job tree; each file's name is
+    /// its path under the output folder, `/` separated.
+    Directory,
+    /// One uncompressed tar archive, `<name>-odb.tar`.
+    Archive,
 }
 
 impl FabOptions {
-    /// Every output, named `name`.
+    /// Every output, named `name`; the ODB++ job as one archive.
     pub fn all(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -66,11 +81,17 @@ impl FabOptions {
             centroid: true,
             test_netlist: true,
             ipc2581: true,
+            odb: Some(OdbForm::Archive),
         }
     }
 
     fn any(&self) -> bool {
-        self.gerber || self.drill || self.centroid || self.test_netlist || self.ipc2581
+        self.gerber
+            || self.drill
+            || self.centroid
+            || self.test_netlist
+            || self.ipc2581
+            || self.odb.is_some()
     }
 }
 
@@ -118,6 +139,8 @@ pub enum FabFileKind {
     TestNetlist,
     /// The IPC-2581 file (#2484).
     Ipc2581,
+    /// The ODB++ archive, or one file of the ODB++ folder (#2485).
+    Odb,
     Job,
 }
 
@@ -129,6 +152,7 @@ impl FabFileKind {
             FabFileKind::Centroid => "PickAndPlace",
             FabFileKind::TestNetlist => "TestNetlist",
             FabFileKind::Ipc2581 => "IPC2581",
+            FabFileKind::Odb => "ODB++",
             FabFileKind::Gerber { .. } | FabFileKind::Drill { .. } | FabFileKind::Job => "",
         }
     }
@@ -145,7 +169,8 @@ pub struct FabFile {
 /// Everything one generation produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FabSet {
-    /// Images top to bottom, then drill, table, centroid, test netlist, job.
+    /// Images top to bottom, then drill, table, centroid, test netlist,
+    /// IPC-2581, ODB++, job.
     pub files: Vec<FabFile>,
     pub notes: Vec<FabNote>,
 }
@@ -224,6 +249,13 @@ pub fn generate(
         tally.texts = tally.texts.max(own.texts);
         skipped = skipped.max(own.skipped);
     }
+    if let Some(form) = options.odb {
+        let mut own = Tally::default();
+        let job = odb::write_odb(board, extras, &stack, name, &mut own);
+        odb_files(form, name, job, &mut files);
+        tally.texts = tally.texts.max(own.texts);
+        skipped = skipped.max(own.skipped);
+    }
     let facts = job::JobFacts {
         name: name.to_string(),
         extent: outline_extent(board),
@@ -248,7 +280,8 @@ pub fn generate(
         .filter(|z| z.fill_type != KEEPOUT_FILL)
         .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
         .count();
-    let zones_not_filled = if (options.gerber || options.ipc2581) && extras.zone_fills.is_empty() {
+    let pours = options.gerber || options.ipc2581 || options.odb.is_some();
+    let zones_not_filled = if pours && extras.zone_fills.is_empty() {
         copper_zones
     } else {
         0
@@ -309,6 +342,23 @@ fn drill_files(
             kind: FabFileKind::DrillTable,
             contents: drill::write_table(&holes, &drill_files, layers),
         });
+    }
+}
+
+/// The ODB++ job as one archive, or as one file per job file under the
+/// `<name>-odb/` folder.
+fn odb_files(form: OdbForm, name: &str, job: Vec<odb::JobFile>, files: &mut Vec<FabFile>) {
+    match form {
+        OdbForm::Archive => files.push(FabFile {
+            name: format!("{name}-odb.tar"),
+            kind: FabFileKind::Odb,
+            contents: odb::archive(&odb::job_name(name), &job),
+        }),
+        OdbForm::Directory => files.extend(job.into_iter().map(|(path, contents)| FabFile {
+            name: format!("{name}-odb/{path}"),
+            kind: FabFileKind::Odb,
+            contents,
+        })),
     }
 }
 

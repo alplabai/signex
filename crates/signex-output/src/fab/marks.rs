@@ -41,6 +41,30 @@ pub(crate) enum ApertureShape {
     },
 }
 
+/// An unturned flash shape, in nm, for the whole-job exports that name a
+/// shape once and turn each flash of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Shape {
+    Circle { diameter: i64 },
+    Rect { w: i64, h: i64 },
+    Oval { w: i64, h: i64 },
+    RoundRect { w: i64, h: i64, r: i64 },
+}
+
+impl Shape {
+    /// The shape of an aperture and its turn in micro-degrees.
+    pub(crate) fn of(aperture: ApertureShape) -> (Shape, i64) {
+        match aperture {
+            ApertureShape::Circle { diameter } => (Shape::Circle { diameter }, 0),
+            ApertureShape::Rect { w, h } => (Shape::Rect { w, h }, 0),
+            ApertureShape::Obround { w, h } => (Shape::Oval { w, h }, 0),
+            ApertureShape::TurnedRect { w, h, udeg } => (Shape::Rect { w, h }, udeg),
+            ApertureShape::TurnedObround { w, h, udeg } => (Shape::Oval { w, h }, udeg),
+            ApertureShape::RoundRect { w, h, r, udeg } => (Shape::RoundRect { w, h, r }, udeg),
+        }
+    }
+}
+
 /// The X2 `.AperFunction` of an aperture: what its marks are for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Function {
