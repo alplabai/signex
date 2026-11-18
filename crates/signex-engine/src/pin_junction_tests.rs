@@ -8,6 +8,7 @@ use crate::rubber_band_tests::{
 };
 use crate::test_support::test_sheet;
 use crate::{Command, Engine, bare_pin_taps, pin_junction_repairs};
+use signex_types::object_id::SequentialIds;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
@@ -131,7 +132,7 @@ fn an_old_bare_contact_is_reported_untouched_and_repaired_in_one_step() {
     assert!(dots(&engine).is_empty());
     assert!(!one_net(engine.document(), &[j1, tp1]));
 
-    let repairs = pin_junction_repairs(engine.document());
+    let repairs = pin_junction_repairs(engine.document(), &mut SequentialIds::default());
     engine.execute_batch(repairs).unwrap();
     assert_eq!(dots(&engine), vec![Point::new(50.0, 40.0)]);
     assert!(one_net(engine.document(), &[j1, tp1]));

@@ -40,7 +40,8 @@ impl Signex {
         let Some(engine) = self.document_state.active_engine() else {
             return;
         };
-        let repairs = signex_engine::pin_junction_repairs(engine.document());
+        let mut ids = signex_types::object_id::UuidV7Ids;
+        let repairs = signex_engine::pin_junction_repairs(engine.document(), &mut ids);
         if repairs.is_empty() {
             crate::diagnostics::log_info("No pin touches a wire without a junction");
             return;
