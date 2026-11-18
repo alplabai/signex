@@ -1,0 +1,124 @@
+# Rule file for scripts/check_uifree_state.sh (ADR-0006, "Enforcement": core-bound
+# state stays UI-free before its slice). Owned by the maintainers (CODEOWNERS):
+# a new `module` line needs Caner's or Hakan's approval.
+#
+#   struct <path> <Struct> [<field globs>]  scan these fields (comma-separated
+#                                           `*` globs, `!glob` excludes; all
+#                                           fields when omitted)
+#   enum <path> <Enum> [<variant globs>]    scan the fields of these variants
+#                                           (same glob syntax; all variants
+#                                           when omitted)
+#   module <path>                           a signex-app module accepted as
+#                                           UI-free; its types become allowed
+#                                           field origins and it must pass the
+#                                           closure check
+#   crate <ident>                           a third-party data crate allowed as
+#                                           a field origin
+#
+# `#` starts a comment. A signex-app struct or enum named by a counted field
+# of a scanned type is scanned too when it holds core-bound data; GUI types
+# are not (they leave with their field).
+
+# Documents (slice 4a).
+struct crates/signex-app/src/app/state/mod.rs DocumentState
+struct crates/signex-app/src/app/state/mod.rs LoadedProject
+# The PCB board engine still held by its tab (moves to DocumentState before 4a).
+struct crates/signex-app/src/app/documents.rs TabInfo cached_document
+enum crates/signex-app/src/app/documents.rs TabDocument
+struct crates/signex-app/src/app/document_ids/mod.rs DocumentIds
+struct crates/signex-app/src/app/document_ids/mod.rs HeaderRecord
+# Each project's design reuse blocks and their writes (#2410).
+struct crates/signex-app/src/app/board_reuse/store.rs ReuseBlockStore
+struct crates/signex-app/src/app/board_reuse/store.rs ProjectBlocks
+enum crates/signex-app/src/app/board_reuse/store.rs ReadState
+struct crates/signex-app/src/app/board_reuse/mod.rs SavedBlock
+# Drafts: the symbol and footprint drafts (split before 4a) and their history steps.
+struct crates/signex-app/src/app/documents.rs SymbolDocument
+struct crates/signex-app/src/app/symbol_history.rs SymbolHistorySnapshot
+struct crates/signex-app/src/app/documents.rs FootprintDocument
+struct crates/signex-app/src/app/documents.rs FootprintHistorySnapshot
+# Dirty state, and the disk facts a document's dirty and changed-on-disk
+# answers rest on.
+struct crates/signex-app/src/app/state/dirty.rs DirtyDocuments
+struct crates/signex-app/src/persist/disk_baseline.rs ContentHash
+enum crates/signex-app/src/persist/disk_baseline.rs DiskDrift
+struct crates/signex-app/src/app/handlers/document_files/disk_poll.rs DiskPoll
+# Histories: project rules, project General history, undo groups.
+struct crates/signex-app/src/app/state/rules_history.rs RulesHistory
+struct crates/signex-app/src/app/project_tab/mod.rs ProjectTabState
+struct crates/signex-app/src/app/undo_groups.rs UndoGroupSheets
+enum crates/signex-app/src/app/undo_groups.rs UndoGroupKind
+# Owed and in-flight work (ADR-0003 D1): the agent's owed refresh, its reads
+# and outcomes, git commits waiting to run, reads, path operations, case
+# probes and imports in flight, a parked Save All settle, recovery sidecars.
+struct crates/signex-app/src/app/state/agent_edits.rs AgentEdits
+struct crates/signex-app/src/app/command/edit_reads.rs EditReads
+struct crates/signex-app/src/app/project_sheets.rs ProjectSheetSet
+struct crates/signex-app/src/app/project_sheets.rs RefusedChild
+enum crates/signex-app/src/app/command/outcome.rs CommandOutcome
+struct crates/signex-app/src/app/state/mod.rs PendingGitCommit
+struct crates/signex-app/src/app/state/mod.rs DeferredGitCommit
+struct crates/signex-app/src/app/state/mod.rs AltiumImportRun
+struct crates/signex-app/src/app/document_read.rs InFlightReads
+struct crates/signex-app/src/app/document_read.rs Claim
+struct crates/signex-app/src/app/path_ops.rs PendingPathOps
+struct crates/signex-app/src/app/path_ops.rs PendingPathOp
+struct crates/signex-app/src/app/path_ops.rs PathOpId
+enum crates/signex-app/src/app/path_ops.rs PathOpKind
+struct crates/signex-app/src/app/state/dir_case.rs DirCases
+enum crates/signex-app/src/app/state/project_case.rs CaseProbeOutcome
+struct crates/signex-app/src/app/contracts/state.rs SaveAllSettle
+enum crates/signex-app/src/app/contracts/state.rs SaveAllNext
+struct crates/signex-app/src/app/contracts/state.rs CaseVariants
+struct crates/signex-app/src/app/contracts/state.rs PinnedSpelling
+struct crates/signex-app/src/app/state/sheet_refs.rs SheetRefs
+enum crates/signex-app/src/app/contracts/state.rs SaveAllWrite
+struct crates/signex-app/src/autosave/mod.rs AutosaveState
+struct crates/signex-app/src/autosave/mod.rs DocStamp
+struct crates/signex-app/src/autosave/mod.rs RecoveryOffer
+struct crates/signex-app/src/autosave/mod.rs Ledger
+struct crates/signex-app/src/autosave/moves.rs SidecarMove
+# Ledgers: the per-path write order of #997, the project folders moved.
+struct crates/signex-app/src/persist/document_save.rs DocumentSaves
+struct crates/signex-app/src/persist/document_save.rs Ledger
+struct crates/signex-app/src/persist/document_save.rs Newest
+struct crates/signex-app/src/persist/document_save.rs DocumentSaveJob
+struct crates/signex-app/src/persist/document_save.rs InFlight
+struct crates/signex-app/src/app/state/mod.rs MovedProjectDir
+# Check results and profiles (slice 4b): kept ERC runs, the ERC outcome, the
+# board DRC, the profile file writes waiting their turn, and from UiState the
+# ERC/profile/machine/io fields plus the listed extras (`pin_matrix_overrides`,
+# ERC configuration persisted beside `erc_severity_override`). Every new
+# `erc_*`, `profile_*` or `machine_*` field of UiState is scanned; the
+# exclusions are GUI state: the waiver being typed, the dialog flag, the
+# diagnostics cursor and the Preferences profile manager (selection, name
+# input, confirmations). `pending_profile_update` is an "Update from profile"
+# confirmation waiting on the person, so it stays out.
+struct crates/signex-app/src/app/state/check_runs.rs CheckRuns
+struct crates/signex-app/src/app/state/check_runs.rs KeptRun
+struct crates/signex-app/src/app/handlers/erc/erc_job.rs ErcRunOutcome
+struct crates/signex-app/src/app/handlers/erc/erc_job.rs WaivedFinding
+struct crates/signex-app/src/app/state/pcb_drc.rs PcbDrc
+struct crates/signex-app/src/app/state/pcb_drc.rs DrcDone
+struct crates/signex-app/src/app/state/pcb_drc.rs DrcInput
+struct crates/signex-app/src/app/state/rule_profile_ui.rs ProfileWriteQueue
+struct crates/signex-app/src/app/state/rule_profile_ui.rs Dispatch
+struct crates/signex-app/src/app/state/rule_profile_ui.rs WriteGate
+enum crates/signex-app/src/app/state/rule_profile_ui.rs QueuedWrite
+enum crates/signex-app/src/rule_profiles/manage.rs RuleEdit
+struct crates/signex-app/src/app/state/ui.rs UiState erc_*,!erc_waive_draft,!erc_dialog_open,!erc_focus_global_index,profile_*,!profile_manager,machine_*,io,pin_matrix_overrides
+# The agent journal (slice 5a).
+struct crates/signex-app/src/app/agent/journal/queue.rs JournalQueue
+struct crates/signex-app/src/app/agent/journal/queue.rs ProjectQueue
+struct crates/signex-app/src/app/agent/journal/queue.rs Queued
+struct crates/signex-app/src/app/agent/journal/queue.rs Gate
+struct crates/signex-app/src/app/agent/journal/queue.rs Lines
+struct crates/signex-app/src/app/agent/journal/queue.rs Running
+struct crates/signex-app/src/app/agent/journal/queue.rs JournalMark
+enum crates/signex-app/src/app/agent/journal/append.rs Journal
+
+# Third-party data crates.
+crate uuid  # `Uuid` ids: symbol/footprint `cascade_owed`, LoadedProject.pending_libraries
+crate serde_json  # `Value` payloads: CommandOutcome::Answered (Hakan, 2026-11-18)
+
+# UI-free modules: none yet (ADR-0006).
