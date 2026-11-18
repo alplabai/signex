@@ -135,6 +135,13 @@ impl Env {
         self.add_paths(group, &attached, &skip, out);
     }
 
+    /// Whether a point a dragged wire carries from `at` must be left as the
+    /// move left it: a wire attached there has its far end inside another
+    /// wire with no dot (see `reroute_tip`).
+    pub(in crate::transform::rubber_band) fn carried_point_bails(&self, at: Key) -> bool {
+        self.far_end_on_undotted_t(&self.attached(at))
+    }
+
     /// Whether the far end of one of the `attached` wires lies inside another
     /// wire with no dot there.
     fn far_end_on_undotted_t(&self, attached: &[(usize, bool)]) -> bool {

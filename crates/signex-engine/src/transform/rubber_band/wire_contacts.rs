@@ -230,8 +230,20 @@ fn carry(document: &mut SchematicSheet, moves: &[Move], selected: HashSet<Uuid>)
     }
     let mut env = Env::new(document, selected, moving, old_tips, Policy::default());
     let mut out = Follow::default();
+    // A wire one of whose points cannot be carried without making a T dot
+    // (`carried_point_bails`) moves plainly at every point: carrying only its
+    // other points could reroute a wire both share and part a net the plain
+    // move keeps. Decided before any edit, while the attachments are the
+    // sheet's own.
+    let bailing: HashSet<Uuid> = (moves.iter())
+        .filter(|mv| env.carried_point_bails(pt_key(&mv.old)))
+        .filter_map(|mv| mv.wire.map(WireJoin::wire))
+        .collect();
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
     for mv in moves {
+        if mv.wire.is_some_and(|join| bailing.contains(&join.wire())) {
+            continue;
+        }
         by_tip.entry(pt_key(&mv.old)).or_default().push(mv);
     }
     let translated = env.translate_whole_wires(&by_tip, &mut out);
