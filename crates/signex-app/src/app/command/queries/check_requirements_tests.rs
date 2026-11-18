@@ -246,7 +246,11 @@ fn erc_clean_runs_the_projects_erc() {
     assert_eq!(findings[0]["rule"], "req::erc");
     assert_eq!(evidence["check"], "erc");
     assert_eq!(
-        (&evidence["errors"], &evidence["warnings"], &evidence["info"]),
+        (
+            &evidence["errors"],
+            &evidence["warnings"],
+            &evidence["info"]
+        ),
         (&json!(0), &json!(4), &json!(2)),
         "{value}"
     );
