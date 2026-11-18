@@ -186,6 +186,24 @@ pub(super) fn symbol_field_text(
     }
 }
 
+/// A symbol's drawn value: an `=` expression evaluated through the parts of
+/// its sheet and the variables (#1986), with its unit; else
+/// [`symbol_field_text`]. A power port's value is a net name and is never
+/// evaluated.
+pub(super) fn symbol_value_text(
+    symbols: &[Symbol],
+    sym: &Symbol,
+    eval_ctx: &ExpressionEvalContext<'_>,
+    special: Option<&crate::SubstitutionContext<'_>>,
+) -> String {
+    if !sym.is_power
+        && let Some(value) = crate::resolve_part_field(symbols, sym, "Value", special)
+    {
+        return value;
+    }
+    symbol_field_text(&sym.value, sym.is_power, eval_ctx, special)
+}
+
 pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
     let mut vars = sym.fields.clone();
     for prop in &sym.custom_properties {

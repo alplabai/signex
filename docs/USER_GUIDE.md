@@ -668,6 +668,15 @@ or two variables that refer to each other) is drawn as typed, shows its error
 under the field, and is reported in the **Messages** panel when you press
 `Enter`. To start a plain value with `=`, type `==`.
 
+A part's value and its fields take expressions too. A bare name is the
+part's own field first (`= Rbase * 2`), then a variable; `R1.Value` is the
+value of part R1 on the same sheet. The sheet, PDF and SVG show the result
+with its unit (`20kΩ`); the **Properties** panel shows the expression in the
+**Value** row and the result, or the error, under it. When annotation
+renumbers R1, `= R1.Value` follows it. An expression that cannot be
+calculated is drawn as typed and listed in **Messages** when you save the
+sheet.
+
 Any text note, the title block and a part's value can use these special
 strings. They resolve the same way on the canvas, in the PDF and in the SVG
 page; the field itself keeps the string. A text note that starts with `=` is

@@ -86,6 +86,8 @@ mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
+mod part_field_expression_tests;
+#[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
 mod pcb_component_tests;

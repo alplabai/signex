@@ -13,6 +13,7 @@ mod navigator;
 mod net_classes;
 mod panel_controls;
 mod panel_open;
+mod part_field_issues;
 mod placed_edit;
 pub(crate) mod project_navigation;
 mod property_editor;

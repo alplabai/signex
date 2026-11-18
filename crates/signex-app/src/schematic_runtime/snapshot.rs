@@ -251,11 +251,14 @@ pub fn build_renderer_snapshot(
         {
             reference_value_texts.push(text);
         }
-        // The value shows its special strings resolved; the stored value,
-        // which the editor shows, keeps the tokens (#1596).
+        // The value shows its special strings resolved and an `=` expression
+        // evaluated; the stored value, which the editor shows, keeps the
+        // source (#1596, #1986).
         let value = match overrides.special_strings {
-            Some(special) => special.resolve_field(&symbol.value, symbol.is_power),
-            None => symbol.value.clone(),
+            Some(special) => special.resolve_value(&snapshot.symbols, symbol),
+            None if symbol.is_power => symbol.value.clone(),
+            None => signex_output::resolve_part_field(&snapshot.symbols, symbol, "Value", None)
+                .unwrap_or_else(|| symbol.value.clone()),
         };
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(

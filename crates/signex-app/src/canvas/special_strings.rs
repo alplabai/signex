@@ -5,6 +5,7 @@
 //! variables (#1987).
 
 use signex_output::{PdfOptions, ProjectMetadata, SubstitutionContext};
+use signex_types::schematic::Symbol;
 
 /// An owned [`SubstitutionContext`]: what the canvas holds between frames.
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +42,17 @@ impl SpecialStrings {
         } else {
             self.resolve(text)
         }
+    }
+
+    /// A symbol's drawn value: an `=` expression evaluated through the parts
+    /// of its sheet (`symbols`) and the variables, with its unit (#1986),
+    /// else [`Self::resolve_field`].
+    pub fn resolve_value(&self, symbols: &[Symbol], symbol: &Symbol) -> String {
+        let context = self.context();
+        let evaluated = (!symbol.is_power)
+            .then(|| signex_output::resolve_part_field(symbols, symbol, "Value", Some(&context)))
+            .flatten();
+        evaluated.unwrap_or_else(|| self.resolve_field(&symbol.value, symbol.is_power))
     }
 
     fn context(&self) -> SubstitutionContext<'_> {
@@ -100,5 +112,33 @@ mod tests {
         let s = special();
         assert_eq!(s.resolve_text("= VCC * 2"), "6.6V");
         assert_eq!(s.resolve_text("VCC is ${VCC}"), "VCC is 3.3V");
+    }
+
+    /// #1986: an `=` value draws its value with its unit, through another
+    /// part and the sheet's variables; a power port's value is never
+    /// evaluated.
+    #[test]
+    fn a_value_expression_draws_its_value() {
+        let s = special();
+        let r1 = Symbol {
+            reference: "R1".to_string(),
+            value: "= VCC / 10mA".to_string(),
+            ..Default::default()
+        };
+        let r2 = Symbol {
+            reference: "R2".to_string(),
+            value: "= R1.Value * 2".to_string(),
+            ..Default::default()
+        };
+        let power = Symbol {
+            reference: "#PWR1".to_string(),
+            value: "= VCC".to_string(),
+            is_power: true,
+            ..Default::default()
+        };
+        let symbols = vec![r1, r2, power];
+        assert_eq!(s.resolve_value(&symbols, &symbols[0]), "330Ω");
+        assert_eq!(s.resolve_value(&symbols, &symbols[1]), "660Ω");
+        assert_eq!(s.resolve_value(&symbols, &symbols[2]), "= VCC");
     }
 }

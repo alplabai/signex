@@ -162,4 +162,6 @@ define_ids! {
     PROPERTIES_SHEET_VARIABLE_SHOWS = "properties-sheet-variable-shows";
     PROPERTIES_SHEET_VARIABLE_ERROR = "properties-sheet-variable-error";
     PROPERTIES_SHEET_VARIABLES_HINT = "properties-sheet-variables-hint";
+    PROPERTIES_VALUE_SHOWS = "properties-value-shows";
+    PROPERTIES_VALUE_ERROR = "properties-value-error";
 }

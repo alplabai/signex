@@ -17,7 +17,7 @@ use super::labels::{
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
 use super::symbols::{
-    push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables, symbol_field_text,
+    push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables, symbol_value_text,
 };
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
@@ -471,7 +471,12 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: symbol_field_text(&sym.value, sym.is_power, &field_eval_ctx, special),
+                    text: symbol_value_text(
+                        &sheet.schematic.symbols,
+                        sym,
+                        &field_eval_ctx,
+                        special,
+                    ),
                 });
             }
         }

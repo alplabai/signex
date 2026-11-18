@@ -97,3 +97,16 @@ fn a_power_port_value_prints_as_stored() {
     assert!(texts.iter().any(|t| t == "${VCC}"), "{texts:?}");
     assert!(!texts.iter().any(|t| t == "5V"), "{texts:?}");
 }
+
+/// #1986: an `=` value prints its value with its unit; one that does not
+/// evaluate prints its source.
+#[test]
+fn a_value_expression_prints_its_value_with_its_unit() {
+    let mut schematic = SchematicSheet::default();
+    schematic.symbols.push(symbol("R1", "10kΩ", false));
+    schematic.symbols.push(symbol("R2", "= 2 * R1.Value", false));
+    schematic.symbols.push(symbol("R3", "= R9.Value", false));
+    let texts = printed_texts(schematic);
+    assert!(texts.iter().any(|t| t == "20kΩ"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "= R9.Value"), "{texts:?}");
+}

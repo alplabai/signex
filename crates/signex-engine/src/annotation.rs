@@ -131,12 +131,34 @@ impl Engine {
             self.connectivity_revision = connectivity;
             return Ok(false);
         }
+        follow_renumbered_parts(&mut self.document.symbols, &before.symbols);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SymbolFieldsUpdated,
             document: DocumentPatch::SYMBOLS,
         };
         self.record_grouped_history(before, patch_pair, scope.undo_group);
         Ok(true)
+    }
+}
+
+/// A field expression naming a renumbered part follows it (#1986):
+/// `= R1.Value` becomes `= R5.Value` when R1 is renumbered to R5 on this
+/// sheet. A designator reset to `R?` names no part, so it renames nothing.
+fn follow_renumbered_parts(symbols: &mut [Symbol], before: &[Symbol]) {
+    let numbered = |reference: &str| !reference.is_empty() && !reference.contains('?');
+    let renames: HashMap<String, String> = symbols
+        .iter()
+        .zip(before)
+        .filter(|(now, was)| {
+            now.reference != was.reference && numbered(&now.reference) && numbered(&was.reference)
+        })
+        .map(|(now, was)| (was.reference.clone(), now.reference.clone()))
+        .collect();
+    if renames.is_empty() {
+        return;
+    }
+    for symbol in symbols.iter_mut() {
+        signex_types::part_fields::rename_part_references_in(symbol, &renames);
     }
 }
 
@@ -493,5 +515,34 @@ mod tests {
         ])];
         annotate_project(AnnotateMode::ResetAndRenumber, &mut engines, &locked);
         assert_eq!(refs_of(&engines[0]), ["U5", "U5"]);
+    }
+
+    /// #1986: a field expression naming a renumbered part follows it, and
+    /// undo restores the expression with the designator.
+    #[test]
+    fn a_field_reference_follows_its_renumbered_part() {
+        let mut sheet = test_sheet();
+        let mut source = symbol("R5", 0.0);
+        source.value = "1kΩ".to_string();
+        let source_id = source.uuid;
+        let mut reader = symbol("R7", 1.0);
+        reader.value = "= R5.Value * 2".to_string();
+        sheet.symbols.push(source);
+        sheet.symbols.push(reader);
+        let mut engine = Engine::new(sheet).unwrap();
+        let changed = engine
+            .annotate_with_seed(
+                AnnotateMode::ResetAndRenumber,
+                &mut HashMap::new(),
+                AnnotateOrder::default(),
+            )
+            .unwrap();
+        assert!(changed);
+        let symbols = &engine.document().symbols;
+        let renamed = &symbols.iter().find(|s| s.uuid == source_id).unwrap().reference;
+        assert_ne!(renamed, "R5");
+        assert_eq!(symbols[1].value, format!("= {renamed}.Value * 2"));
+        engine.undo().unwrap();
+        assert_eq!(engine.document().symbols[1].value, "= R5.Value * 2");
     }
 }

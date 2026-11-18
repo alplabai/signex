@@ -249,3 +249,8 @@ properties-sheet-variable-shows = Shows { $value }
 # Why a variable's `=` expression does not evaluate. $error is the reason.
 properties-sheet-variable-error = Error: { $error }
 properties-sheet-variables-hint = A sheet variable replaces the project variable of the same name. A value starting with = is an expression. Press Enter to apply.
+# What a part value's `=` expression evaluates to. $value is the result,
+# such as 20kΩ.
+properties-value-shows = Shows { $value }
+# Why a part value's `=` expression does not evaluate. $error is the reason.
+properties-value-error = Error: { $error }

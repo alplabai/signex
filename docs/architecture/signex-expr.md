@@ -92,3 +92,16 @@ format"), and a sheet without variables re-saves byte-identical.
   final `2mm * 3mm` is refused with `WrongFamily`.
 - The parameter table reads every value as an expression with an optional
   `=` (`signex_expr::expression_body`); `.snxfpt` does not change.
+
+## Part fields (#1986)
+
+`signex_types::part_fields` evaluates a part's `=` value or field with the
+same evaluator and the same model, one layer further in: the parts of the
+sheet (`PartFields`, names `<designator>.<field>`), then the sheet's and the
+project's variables. Before a part's expression is evaluated, every bare name
+that is one of its own fields is qualified with its key (`Value` in R2
+becomes `R2.Value`; an unannotated `R?` uses its uuid), so a single
+evaluation follows references across parts and a cycle between two parts is
+an `ExprError::Cycle`. Annotation rewrites `R1.` references after it
+renumbers a part (`rename_part_references`). The markup lookups stay text
+substitution over the same resolvers; there is no second evaluator.

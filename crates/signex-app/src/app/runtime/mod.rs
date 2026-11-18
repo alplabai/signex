@@ -21,6 +21,7 @@ mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 mod window_hierarchies;
@@ -302,6 +303,18 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // An `=` value's result or error, under its row (#1986).
+            let project = self
+                .document_state
+                .document_project(&path)
+                .map(|project| project.data.parameters.clone())
+                .unwrap_or_default();
+            let rows = value_evaluation::value_evaluation_rows(
+                engine.document(),
+                details.selected_uuid,
+                &project,
+            );
+            self.document_state.panel_ctx.selection_info.extend(rows);
             if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
                 self.document_state.panel_ctx.selected_wire_style = engine
                     .document()
