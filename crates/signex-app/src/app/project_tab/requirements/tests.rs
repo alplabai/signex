@@ -364,7 +364,11 @@ fn a_catalog_remove_forgets_the_drafts_so_none_lands_on_the_wrong_entry() {
 
     answer(&mut app, "project_remove_requirement", &["requirement=a"]);
     assert!(tab(&app, id).drafts.is_empty(), "the remove forgot it");
-    let _ = send(&mut app, id, RequirementsMsg::FieldSubmitted { index: 1, field });
+    let _ = send(
+        &mut app,
+        id,
+        RequirementsMsg::FieldSubmitted { index: 1, field },
+    );
 
     let entries = stored(&app);
     assert_eq!(entries.len(), 2);
