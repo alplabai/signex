@@ -175,6 +175,7 @@ small boards (a linear regulator, a USB-C power input, a TQFP-32 breakout, a
 four-layer sensor board with inner planes, a mixed through-hole board with a
 board sketch) live in `crates/signex-types/tests/corpus/pcb/real/`.
 `crates/signex-renderer/tests/integration/pcb_real_boards.rs` renders each and
-pins its drawn counts and a geometry hash; DRC and the ratsnest run on them in
+checks it against its render golden in
+`crates/signex-renderer/tests/golden/pcb_real_boards/`; DRC and the ratsnest run on them in
 `crates/signex-drc/tests/real_boards.rs`. What each board covers: the corpus
 README, "Realistic boards".
