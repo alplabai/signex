@@ -106,7 +106,7 @@ pub(super) fn content_schematic_display<'a>(page: DisplayPage<'a>) -> Element<'a
             text(t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP))
                 .size(TS.caption)
                 .style(text_muted)
-                .into(),
+                .boxed(),
         );
     }
     content.padding(SP.xl).boxed()
