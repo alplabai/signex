@@ -189,9 +189,12 @@ jobs:
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
+      # lfs: the routing soak and bench sample the routing corpus boards,
+      # which are stored in Git LFS (#2481).
       - uses: actions/checkout@v5
         with:
           submodules: false
+          lfs: true
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
@@ -531,6 +534,17 @@ jobs:
       - name: Lint-lockstep gate
         if: ${{ !cancelled() }}
         run: bash scripts/check_lint_lockstep.sh
+
+      # The routing corpus (#2481) holds third-party boards: every board has
+      # a manifest row with an allowed licence and its licence text, and
+      # every row a board. Rules: testdata/routing-corpus/README.md.
+      - name: Routing corpus gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_routing_corpus.sh
+
+      - name: Routing corpus gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_routing_corpus.sh
 
       # Fragment names/bodies are validated on every event (PR, merge queue,
       # push). Rule + rationale: changelog.d/README.md (GH #748).
