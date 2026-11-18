@@ -562,6 +562,7 @@ cmd-place-board-text-frame = Place text wrapped in a box on the active non-coppe
 cmd-menu-place-board-text-frame = Text Frame
 cmd-add-board-graphic = Add a line, arc, circle, rectangle or text frame to a board
 cmd-set-board-graphic = Set one field of a board drawing
+cmd-set-footprint-text = Set the place, angle, height or justification of a component's designator or comment
 cmd-place-board-diff-pair = Route a differential pair side by side at its coupled width and gap, around other nets
 cmd-menu-place-board-diff-pair = Differential Pair Routing
 cmd-place-board-quick-route = Route straight to the clicked point at the rule width, without avoiding other nets

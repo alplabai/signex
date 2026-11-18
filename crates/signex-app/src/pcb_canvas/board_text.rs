@@ -13,6 +13,7 @@ use signex_gfx::primitive::text::{
 };
 use signex_renderer::pcb::FootprintTextInput;
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::schematic::HAlign;
 
 use super::layer_style::board_layer_colour;
 use super::{BoardCamera, PcbCanvas};
@@ -102,8 +103,8 @@ impl canvas::Program<Message> for BoardTextLayer<'_> {
 }
 
 /// Paint `texts` at `camera` onto `frame`, leaving out what cannot reach
-/// `view`. Each text is centred on its anchor, turned by its angle and the
-/// view's turn, and mirrored on the bottom side.
+/// `view`. Each text is justified on its anchor in its own frame, turned by
+/// its angle and the view's turn, and mirrored on the bottom side.
 pub(super) fn paint_texts(
     frame: &mut canvas::Frame,
     texts: &[FootprintTextInput],
@@ -127,7 +128,7 @@ pub(super) fn paint_texts(
             size: iced::Pixels(placed.size_px),
             line_height: iced::widget::text::LineHeight::Relative(LINE_HEIGHT_EM),
             font: crate::render_config::IOSEVKA,
-            align_x: advanced_text::Alignment::Center,
+            align_x: align_of(text.justify),
             align_y: alignment::Vertical::Center,
             ..canvas::Text::default()
         };
@@ -178,6 +179,16 @@ pub(super) fn place(
     );
     view.intersects(&extent)
         .then_some(ScreenText { anchor, size_px })
+}
+
+/// The anchor end of a text's line: applied before the mirror, so a
+/// mirrored text runs the other way from its anchor, as its strokes do.
+pub(super) fn align_of(justify: HAlign) -> advanced_text::Alignment {
+    match justify {
+        HAlign::Left => advanced_text::Alignment::Left,
+        HAlign::Center => advanced_text::Alignment::Center,
+        HAlign::Right => advanced_text::Alignment::Right,
+    }
 }
 
 fn colour_of(colours: &mut Vec<(PcbLayer, Color)>, layer: PcbLayer) -> Color {

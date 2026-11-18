@@ -542,6 +542,7 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_TEXT_FRAME = "cmd-menu-place-board-text-frame";
         CMD_ADD_BOARD_GRAPHIC = "cmd-add-board-graphic";
         CMD_SET_BOARD_GRAPHIC = "cmd-set-board-graphic";
+        CMD_SET_FOOTPRINT_TEXT = "cmd-set-footprint-text";
         CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
         CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
         CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";

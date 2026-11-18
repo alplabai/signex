@@ -17,6 +17,7 @@ use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
 use crate::shape::Shape;
 use crate::shape_overlap::point_in_polygon;
+use crate::text::{BoardTextField, footprint_texts};
 use crate::transform::pad_shape;
 use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
 
@@ -58,6 +59,13 @@ pub enum ItemRef {
     Graphic {
         graphic: Uuid,
         kind: PickKind,
+    },
+    /// A footprint's designator or comment (#2368), on the box it fills.
+    /// Only the selection index holds it, and only a click picks it: a box
+    /// or Select All takes the footprint it belongs to.
+    FootprintText {
+        footprint: Uuid,
+        field: BoardTextField,
     },
 }
 
@@ -230,6 +238,16 @@ impl BoardIndex {
                     Ok(indexed) => items.push(indexed),
                     Err(error) => rejected.push(Rejected { item, error }),
                 }
+                for text in footprint_texts(footprint) {
+                    let item = ItemRef::FootprintText {
+                        footprint: footprint.uuid,
+                        field: text.field,
+                    };
+                    match text.box_shape().and_then(|s| IndexedItem::new(item, s)) {
+                        Ok(indexed) => items.push(indexed),
+                        Err(error) => rejected.push(Rejected { item, error }),
+                    }
+                }
             }
             for zone in &board.zones {
                 add_area(zone, &mut areas, &mut items, &mut rejected);
@@ -360,7 +378,8 @@ impl BoardIndex {
             .locate_in_envelope_intersecting(&envelope_of(rect))
     }
 
-    /// Every item `rect` selects under `mode`, sorted by [`ItemRef`].
+    /// Every item `rect` selects under `mode`, sorted by [`ItemRef`]. A
+    /// footprint text is never among them.
     pub fn hit_rect(&self, rect: &RectNm, mode: RectSelect) -> Vec<ItemRef> {
         // Corners are capped at four times MAX_ABS_NM, like `hit_point`'s
         // point: nothing on the board lies beyond, and no input overflows.
@@ -425,6 +444,10 @@ impl BoardIndex {
         let mut edges: BTreeMap<ItemRef, usize> = BTreeMap::new();
         let mut items = Vec::new();
         for item in hits {
+            if matches!(item, ItemRef::FootprintText { .. }) {
+                // A box takes the footprint, not its texts on their own.
+                continue;
+            }
             if item.is_multi_part() {
                 *edges.entry(item).or_default() += 1;
             } else {

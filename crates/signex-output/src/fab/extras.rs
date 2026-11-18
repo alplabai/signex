@@ -9,8 +9,8 @@ use signex_types::pcb_layer::PcbLayer;
 use super::{FabExtras, FilledRegion};
 
 impl FabExtras {
-    /// The extras of `board`: its zones' copper. Board text strokes (#2387)
-    /// are not drawn yet, so `strokes` is empty.
+    /// The extras of `board`: its zones' copper. Its text is written from
+    /// the board itself (#2368), so `strokes` is empty.
     pub fn of_board(board: &PcbBoard) -> Self {
         FabExtras {
             zone_fills: zone_regions(board, &zone_fills(board)),

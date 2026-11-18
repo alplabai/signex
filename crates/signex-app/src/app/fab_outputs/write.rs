@@ -28,7 +28,7 @@ pub struct FabWritten {
 /// Build `board`'s files and write them into `folder`, creating it. A file
 /// of the same name is replaced. The copper images hold the zones' copper,
 /// pour fills included (#2216), as the canvas and the board PDF draw it;
-/// board text strokes (#2387) are not drawn yet, and the notes say so.
+/// board and footprint text is written in the board stroke font (#2368).
 pub(crate) fn write_fab_outputs(
     board: &PcbBoard,
     options: &FabOptions,

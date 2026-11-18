@@ -304,6 +304,7 @@ send_to_back
 send_to_back_of
 set_board_graphic
 set_board_panel
+set_footprint_text
 set_layer_sizes
 set_layer_stack
 set_layer_tab_names

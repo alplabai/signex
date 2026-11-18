@@ -313,8 +313,13 @@ fn the_test_netlist_has_a_record_per_pad_and_via() {
     assert_eq!(&via[72..74], "S3");
 }
 
+/// The strokes (`D01` moves) an image draws.
+fn strokes_in(set: &FabSet, name: &str) -> usize {
+    file(set, name).map_or(0, |f| f.matches("D01*").count())
+}
+
 #[test]
-fn board_text_is_counted_until_it_can_be_drawn() {
+fn board_text_is_written_on_its_legend_in_the_stroke_font() {
     let mut board = fixture_board();
     board.texts.push(signex_types::pcb::BoardText {
         uuid: Uuid::from_u128(90),
@@ -325,7 +330,33 @@ fn board_text_is_counted_until_it_can_be_drawn() {
         rotation: 0.0,
     });
     let set = generated(&board);
-    assert_eq!(set.notes, vec![FabNote::TextsNotDrawn { count: 1 }]);
+    assert!(set.notes.is_empty(), "{:?}", set.notes);
+    assert!(strokes_in(&set, "fab-legend-top.gbr") > 0);
+    assert_eq!(strokes_in(&set, "fab-legend-bottom.gbr"), 0);
+}
+
+fn with_designator(layer: &str, hidden: bool) -> signex_types::pcb::PcbBoard {
+    let mut board = fixture_board();
+    let part = &mut board.footprints[0];
+    part.layer = layer.into();
+    part.properties.push(signex_types::property::PcbProperty {
+        key: "Reference".into(),
+        value: "R1".into(),
+        hidden,
+        ..Default::default()
+    });
+    board
+}
+
+#[test]
+fn a_designator_is_written_on_its_sides_legend_unless_hidden() {
+    let set = generated(&with_designator("TopCopper", false));
+    assert!(strokes_in(&set, "fab-legend-top.gbr") > 0);
+    let set = generated(&with_designator("BottomCopper", false));
+    assert!(strokes_in(&set, "fab-legend-bottom.gbr") > 0);
+    assert_eq!(strokes_in(&set, "fab-legend-top.gbr"), 0);
+    let set = generated(&with_designator("TopCopper", true));
+    assert_eq!(strokes_in(&set, "fab-legend-top.gbr"), 0);
 }
 
 #[test]

@@ -40,10 +40,6 @@ fab-outputs-note-zones = { $count ->
     [one] One copper zone is not filled and is left out of the copper.
    *[other] { $count } copper zones are not filled and are left out of the copper.
 }
-fab-outputs-note-texts = { $count ->
-    [one] One text is not drawn yet.
-   *[other] { $count } texts are not drawn yet.
-}
 fab-outputs-note-skipped = { $count ->
     [one] One item with a size or position out of range was left out.
    *[other] { $count } items with a size or position out of range were left out.

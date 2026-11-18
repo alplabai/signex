@@ -181,7 +181,8 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
         ItemRef::Footprint(_)
         | ItemRef::Text(_)
         | ItemRef::Dimension(_)
-        | ItemRef::Graphic { .. } => {
+        | ItemRef::Graphic { .. }
+        | ItemRef::FootprintText { .. } => {
             return None;
         }
     };

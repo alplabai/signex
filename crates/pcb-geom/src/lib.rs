@@ -43,6 +43,7 @@ mod shape_overlap;
 mod staging;
 mod stats;
 mod stitch;
+mod stroke_font;
 mod teardrop;
 mod text;
 mod text_frame;
@@ -96,8 +97,15 @@ pub use shape_gap::Separation;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
 pub use stitch::{StitchSpec, stitch_points, stitch_spec_mm};
+pub use stroke_font::{
+    TEXT_STROKE_EM, justify_start_mm, stroke_text_width_mm, text_stroke_width_mm, text_strokes,
+};
 pub use teardrop::{Teardrop, TeardropPlan, teardrops};
-pub use text::{TextPlacement, is_board_text_key, property_text_placement};
+pub use text::{
+    BoardTextField, FootprintText, TextPlacement, footprint_text, footprint_texts,
+    is_board_text_key, justified_centre, local_text_position, local_text_rotation, property_index,
+    property_text_layer, property_text_placement, property_text_size_mm, text_box,
+};
 pub use text_frame::{
     FrameLine, TEXT_FRAME_ADVANCE_EM, TEXT_FRAME_LINE_PITCH_EM, TEXT_FRAME_MARGIN_EM,
     text_frame_lines, text_frame_size_mm, wrap as wrap_text_frame,

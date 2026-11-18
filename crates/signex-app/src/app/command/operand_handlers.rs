@@ -18,6 +18,7 @@ use super::board_operands as board;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
 use super::part_operands as part;
@@ -122,6 +123,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_board_pdf", output::export_board_pdf),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
+    ("set_footprint_text", fp_text::set_footprint_text),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -371,6 +373,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_board_graphic" => Some(
             "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
              select the drawing and use Properties",
+        ),
+        // #2368: a person drags the text on the board.
+        "set_footprint_text" => Some(
+            "`set_footprint_text` needs the operands `document`, `designator`, `text`, \
+             `field` and `value` — drag the designator or comment on the board",
         ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(

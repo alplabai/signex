@@ -413,6 +413,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
+| `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |

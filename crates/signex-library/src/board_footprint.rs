@@ -460,6 +460,7 @@ fn text_property(key: &str, layer: TechnicalLayer) -> PcbProperty {
         layer: Some(pcb_layer_token(PcbLayer::Technical(layer))),
         font_size: None,
         hidden: false,
+        justify: Default::default(),
     }
 }
 

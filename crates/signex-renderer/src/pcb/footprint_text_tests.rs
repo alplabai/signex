@@ -1,6 +1,7 @@
 use super::*;
 use crate::pcb::{PcbLayerView, PcbSnapshot};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard, Point};
+use signex_types::pcb_layer::TechnicalLayer;
 
 const TOP_OVERLAY: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
 const BOTTOM_OVERLAY: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
@@ -128,4 +129,18 @@ fn the_text_moves_with_its_footprint() {
     board.footprints[0].position = Point::new(30.0, 5.0);
     let shown = texts(&board, &PcbLayerView::default());
     assert_eq!(designator(&shown).map(|t| t.position), Some([30.0, 6.0]));
+}
+
+#[test]
+fn the_text_keeps_its_justification() {
+    let mut board = board();
+    assert_eq!(
+        designator(&texts(&board, &PcbLayerView::default())).map(|t| t.justify),
+        Some(HAlign::Center)
+    );
+    board.footprints[0].properties[0].justify = HAlign::Left;
+    assert_eq!(
+        designator(&texts(&board, &PcbLayerView::default())).map(|t| t.justify),
+        Some(HAlign::Left)
+    );
 }

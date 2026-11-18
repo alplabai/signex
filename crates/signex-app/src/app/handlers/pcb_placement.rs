@@ -162,6 +162,12 @@ impl Signex {
             let Some(path) = self.active_tab_path() else {
                 return;
             };
+            if let Some(reach) = pick
+                && self.start_text_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
             let mut footprints = match pick {
                 Some(reach) => self
                     .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
@@ -297,14 +303,19 @@ impl Signex {
         else {
             return;
         };
-        let delta = carry_delta(
-            board,
-            &carry.footprints,
-            from,
-            to,
-            &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
-        );
+        let delta = if carry.text.is_some() {
+            // A text follows the pointer exactly (#2368).
+            Point::new(to.x - from.x, to.y - from.y)
+        } else {
+            carry_delta(
+                board,
+                &carry.footprints,
+                from,
+                to,
+                &self.ui_state.pcb_snap,
+                self.pcb_active_layer(),
+            )
+        };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta
         {
@@ -322,6 +333,11 @@ impl Signex {
         else {
             return;
         };
+        if carry.text.is_some() {
+            self.end_pcb_carry();
+            self.drop_text_carry(&carry);
+            return;
+        }
         if carry.footprints.is_empty() {
             // A drag refused at its start: the notice is already out.
             self.end_pcb_carry();
@@ -497,7 +513,8 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
         ItemRef::FreePad(id) => Some(BoardItemId::FreePad(id)),
         ItemRef::Dimension(id) => Some(BoardItemId::Dimension(id)),
         ItemRef::Graphic { graphic, .. } => Some(BoardItemId::Graphic(graphic)),
-        ItemRef::Pad { .. } | ItemRef::Footprint(_) => None,
+        // A designator or comment is hidden with its eye, never deleted.
+        ItemRef::Pad { .. } | ItemRef::Footprint(_) | ItemRef::FootprintText { .. } => None,
     }));
     items
 }

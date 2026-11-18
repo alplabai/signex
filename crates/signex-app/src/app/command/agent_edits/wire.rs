@@ -240,6 +240,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_graphic",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "set_footprint_text",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",

@@ -563,6 +563,20 @@ move the footprint alone and leave its tracks where they were. Turn and Mirror
 need the track ends turned about the footprint, not shifted, so they need more
 than the shift a move applies.
 
+## Moving a designator or comment on its own
+
+A press on a component's designator or comment drags that text alone
+(#2368); the component and its tracks stay. The text follows the pointer
+without snapping and the release is one undo step. A locked component, or
+one that locks its strings, keeps its text where it is and Messages says
+why. A click selects the text; a box or Select All takes the component, not
+its text. The text keeps its place relative to the component, so it still
+follows a later move, turn or flip. Agents use `set_footprint_text
+document=<board> designator=<ref> text=designator|comment field=<field>
+value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
+`rotation`, `height` and `justify` (`left`, `center`, `right`). Rules:
+`docs/RENDERING_RULES.md`, "pcb-footprint-text".
+
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394):

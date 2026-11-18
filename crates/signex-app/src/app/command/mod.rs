@@ -37,6 +37,9 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_text_operand_tests;
+mod footprint_text_operands;
+#[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]
 mod hierarchy_operand_tests;

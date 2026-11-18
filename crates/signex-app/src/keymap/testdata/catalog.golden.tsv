@@ -168,6 +168,7 @@ place_board_rectangle	place	Draw a rectangle by two corners on the active non-co
 place_board_text_frame	place	Place text wrapped in a box on the active non-copper layer	Text Frame	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 add_board_graphic	place	Add a line, arc, circle, rectangle or text frame to a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,kind:text,at:point/mm?,start:point/mm?,end:point/mm?,layer:text?,text:text?
 set_board_graphic	edit	Set one field of a board drawing	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,field:text,value:text
+set_footprint_text	edit	Set the place, angle, height or justification of a component's designator or comment	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,designator:text,text:text,field:text,value:text
 import_dxf	file	Import a DXF drawing onto the active layer of the board	DXF to Current Layer...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,layer:text?,document:document?
 import_dxf_outline	file	Import the largest closed shape of a DXF drawing as the board outline	DXF as Board Outline...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	path:path,document:document?
 cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	General	-	-	Always	gui_only	-

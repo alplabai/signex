@@ -164,6 +164,7 @@ mod tests {
                 "save_layer_set",
                 "set_board_graphic",
                 "set_board_panel",
+                "set_footprint_text",
                 "set_layer_sizes",
                 "set_layer_stack",
                 "set_net_class_rules",

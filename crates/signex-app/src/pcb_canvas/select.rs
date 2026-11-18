@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use pcb_geom::{
-    BoardIndex, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
+    BoardIndex, BoardTextField, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
     turned_marquee_select,
 };
 use signex_renderer::pcb::PcbLayerView;
@@ -217,6 +217,8 @@ impl PcbSelectionState {
             .items()
             .map(|i| i.item)
             .filter(|item| !matches!(item, ItemRef::Pad { footprint, .. } if bodies.contains(footprint)))
+            // A designator or comment comes with its footprint (#2368).
+            .filter(|item| !matches!(item, ItemRef::FootprintText { .. }))
             .collect();
         self.selection.apply_marquee(&all, ClickMode::Replace)
     }
@@ -292,14 +294,20 @@ impl PcbSelectionState {
         let grab = if waiting {
             Vec::new()
         } else {
-            self.shapes_of_footprints(board, |_| true)
+            let mut grab = self.shapes_of_footprints(board, |_| true);
+            // A designator or comment is grabbed to move on its own (#2368).
+            grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
+            grab
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
         {
-            let shapes = match &carry.paste {
-                Some(load) => load.ghost.clone(),
-                None => self.footprint_shapes(board, &carry.footprints),
+            let shapes = match (&carry.paste, carry.text) {
+                (Some(load), _) => load.ghost.clone(),
+                (None, Some((footprint, field))) => {
+                    self.shapes_of(|item| item == ItemRef::FootprintText { footprint, field })
+                }
+                (None, None) => self.footprint_shapes(board, &carry.footprints),
             };
             highlight.ghost = shapes
                 .into_iter()
@@ -362,6 +370,35 @@ impl PcbSelectionState {
         self.selection
             .apply_click(Some(ItemRef::Footprint(id)), ClickMode::Replace);
         BTreeSet::from([id])
+    }
+
+    /// The designator or comment a press at `at` grabs to move on its own
+    /// (#2368): the one a click there picks. It becomes the selection.
+    pub fn grab_text_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> Option<(Uuid, BoardTextField)> {
+        let (item, _) = self.pick_at(board, at, tolerance_mm)?;
+        let ItemRef::FootprintText { footprint, field } = item else {
+            return None;
+        };
+        if !self.selection.contains(item) {
+            self.selection.apply_click(Some(item), ClickMode::Replace);
+        }
+        Some((footprint, field))
+    }
+
+    /// The shapes of the indexed items `keep` accepts; the index must be
+    /// built.
+    fn shapes_of(&self, keep: impl Fn(ItemRef) -> bool) -> Vec<pcb_geom::Shape> {
+        self.index
+            .iter()
+            .flat_map(|index| index.items())
+            .filter(|i| keep(i.item))
+            .map(|i| i.shape)
+            .collect()
     }
 
     /// The body and pads of each footprint `keep` accepts.
@@ -448,6 +485,14 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
                 hidden.insert(ItemRef::Pad {
                     footprint: footprint.uuid,
                     pad: pad.uuid,
+                });
+            }
+        }
+        for text in pcb_geom::footprint_texts(footprint) {
+            if !view.is_visible(text.layer) {
+                hidden.insert(ItemRef::FootprintText {
+                    footprint: footprint.uuid,
+                    field: text.field,
                 });
             }
         }
@@ -547,6 +592,9 @@ fn describe(item: ItemRef) -> String {
         ItemRef::FreePad(id) => format!("free pad {id}"),
         ItemRef::Dimension(id) => format!("dimension {id}"),
         ItemRef::Graphic { graphic, .. } => format!("drawing {graphic}"),
+        ItemRef::FootprintText { footprint, field } => {
+            format!("{} of footprint {footprint}", field.id())
+        }
     }
 }
 

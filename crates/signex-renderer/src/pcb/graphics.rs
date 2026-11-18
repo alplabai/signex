@@ -18,6 +18,7 @@ use signex_types::pcb::{
     PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard,
 };
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::schematic::HAlign;
 
 use super::board_features::{line, push_loop};
 use super::emit::{dim_if, mm_with_floor, point_to_xy};
@@ -183,6 +184,7 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
             size_mm: text_size_mm(dimension.text_height),
             mirrored: false,
             layer,
+            justify: HAlign::Center,
         });
     }
 }
@@ -250,6 +252,7 @@ fn text_graphic(
         size_mm: text_size_mm(graphic.font_size),
         mirrored: at.mirrored,
         layer,
+        justify: HAlign::Center,
     })
 }
 
@@ -267,6 +270,7 @@ fn frame_lines(graphic: &BoardGraphic, layer: PcbLayer) -> Vec<FootprintTextInpu
             size_mm,
             mirrored: line.placement.mirrored,
             layer,
+            justify: HAlign::Center,
         })
         .collect()
 }
@@ -283,6 +287,7 @@ fn board_text(text: &BoardText, layer: PcbLayer) -> Option<FootprintTextInput> {
         size_mm: text_size_mm(text.font_size),
         mirrored: at.mirrored,
         layer,
+        justify: HAlign::Center,
     })
 }
 

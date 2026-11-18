@@ -101,7 +101,9 @@ impl Selection {
                 | ItemRef::Arc(_)
                 | ItemRef::FreePad(_)
                 | ItemRef::Dimension(_)
-                | ItemRef::Graphic { .. } => None,
+                | ItemRef::Graphic { .. }
+                // A text moves on its own (#2368).
+                | ItemRef::FootprintText { .. } => None,
             })
             .collect()
     }
@@ -137,7 +139,12 @@ fn rank(item: ItemRef) -> u8 {
         // Board strings, dimensions and drawings sit over the copper they
         // label (#2373), and a drawing's thin stroke over a part's body takes
         // the click (#2424).
-        ItemRef::Text(_) | ItemRef::Dimension(_) | ItemRef::Graphic { .. } => 3,
+        // A designator or comment over its part's body takes the click too
+        // (#2368).
+        ItemRef::Text(_)
+        | ItemRef::Dimension(_)
+        | ItemRef::Graphic { .. }
+        | ItemRef::FootprintText { .. } => 3,
         // The body is under its own pads: a click on copper takes the copper.
         ItemRef::Footprint(_) => 4,
         // A drawn area is under everything on it (#2383).

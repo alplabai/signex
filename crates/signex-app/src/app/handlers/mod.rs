@@ -86,6 +86,7 @@ pub(crate) mod pcb_query;
 pub mod pcb_select;
 #[cfg(test)]
 mod pcb_select_tests;
+mod pcb_text_move;
 pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
