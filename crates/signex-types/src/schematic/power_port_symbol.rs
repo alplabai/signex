@@ -37,14 +37,13 @@ const GROUND_BAR_HALVES_MM: [f64; 3] = [1.27, 0.762, 0.254];
 const GROUND_BAR_STEP_MM: f64 = 0.508;
 /// Depth of an arrow or signal-ground triangle, mm.
 const TRIANGLE_DEPTH_MM: f64 = 1.27;
-/// Half width of the signal-ground triangle and the earth bar, mm.
+/// Half width of the signal-ground triangle and the chassis bar, mm.
 const GROUND_HALF_MM: f64 = 1.27;
-/// Depth of the earth hatch, mm.
-const EARTH_HATCH_MM: f64 = 0.762;
 /// Depth of the chassis tines, mm.
 const CHASSIS_TINE_MM: f64 = 0.762;
-/// Sideways splay of the two outer chassis tines, mm.
-const CHASSIS_SPLAY_MM: f64 = 0.4572;
+/// Half widths of the three earth bars (IEC 60417-5017), widest first, mm:
+/// even thirds, so the earth reads apart from the GND bars.
+const EARTH_BAR_HALVES_MM: [f64; 3] = [1.27, 0.847, 0.423];
 /// Height of the wave head's offset and swing, mm.
 const WAVE_OFFSET_MM: f64 = 0.508;
 const WAVE_SWING_MM: f64 = 0.4;
@@ -202,32 +201,25 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
             width: 0.0,
             fill: FillType::None,
         }],
+        // IEC 60417-5017 earth: three bars, shorter downward, centred.
         PowerPortStyle::Earth => {
+            let mut out = Vec::new();
+            for (i, half) in EARTH_BAR_HALVES_MM.into_iter().enumerate() {
+                let y = -top - GROUND_BAR_STEP_MM * i as f64;
+                out.push(line((-half, y), (half, y)));
+            }
+            out
+        }
+        // IEC 60417-5020 frame/chassis: a bar with three slanted tines.
+        PowerPortStyle::Chassis => {
             let mut out = vec![line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top))];
             for x in [-GROUND_HALF_MM, 0.0, GROUND_HALF_MM] {
                 out.push(line(
                     (x, -top),
-                    (x - 0.6 * EARTH_HATCH_MM, -top - EARTH_HATCH_MM),
+                    (x - 0.6 * CHASSIS_TINE_MM, -top - CHASSIS_TINE_MM),
                 ));
             }
             out
-        }
-        // A bar with three tines: the outer two splay out, the middle one
-        // drops straight, so it never reads as the earth rake.
-        PowerPortStyle::Chassis => {
-            let tip = -top - CHASSIS_TINE_MM;
-            vec![
-                line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top)),
-                line(
-                    (-GROUND_HALF_MM, -top),
-                    (-GROUND_HALF_MM - CHASSIS_SPLAY_MM, tip),
-                ),
-                line((0.0, -top), (0.0, tip)),
-                line(
-                    (GROUND_HALF_MM, -top),
-                    (GROUND_HALF_MM + CHASSIS_SPLAY_MM, tip),
-                ),
-            ]
         }
         PowerPortStyle::Wave => {
             let y = top + WAVE_OFFSET_MM;
@@ -257,10 +249,9 @@ fn head_reach_mm(style: PowerPortStyle) -> f64 {
     match style {
         PowerPortStyle::Bar => stem,
         PowerPortStyle::Arrow | PowerPortStyle::SignalGround => stem + TRIANGLE_DEPTH_MM,
-        PowerPortStyle::PowerGround => stem + GROUND_BAR_STEP_MM * 2.0,
+        PowerPortStyle::PowerGround | PowerPortStyle::Earth => stem + GROUND_BAR_STEP_MM * 2.0,
         PowerPortStyle::Circle => stem + 2.0 * HEAD_HALF_MM,
         PowerPortStyle::Wave => stem + WAVE_OFFSET_MM + WAVE_SWING_MM,
-        PowerPortStyle::Earth => stem + EARTH_HATCH_MM,
         PowerPortStyle::Chassis => stem + CHASSIS_TINE_MM,
     }
 }
@@ -440,38 +431,66 @@ mod tests {
         assert!(PowerPortStyle::Chassis.hangs_down());
     }
 
-    /// #1284 - the chassis head is a bar with three tines, the outer two
-    /// splayed outward, so it differs from the earth rake.
-    #[test]
-    fn the_chassis_head_is_a_bar_with_splayed_tines() {
-        let head = power_port_head(PowerPortStyle::Chassis);
-        let segs: Vec<((f64, f64), (f64, f64))> = head
+    type Segment = ((f64, f64), (f64, f64));
+
+    /// The head of `style` as two-point line segments.
+    fn head_segments(style: PowerPortStyle) -> Vec<Segment> {
+        power_port_head(style)
             .iter()
             .map(|g| match g {
                 Graphic::Polyline { points, .. } => {
-                    assert_eq!(points.len(), 2);
+                    assert_eq!(points.len(), 2, "{style:?}");
                     ((points[0].x, points[0].y), (points[1].x, points[1].y))
                 }
-                other => panic!("unexpected {other:?}"),
+                other => panic!("{style:?}: unexpected {other:?}"),
             })
-            .collect();
+            .collect()
+    }
+
+    /// #1284 - chassis is the IEC 60417-5020 rake: a bar with three tines
+    /// slanted the same way.
+    #[test]
+    fn the_chassis_head_is_a_bar_with_slanted_tines() {
         let top = -GROUND_STEM_MM;
         let tip = top - CHASSIS_TINE_MM;
         let half = GROUND_HALF_MM;
-        let splay = CHASSIS_SPLAY_MM;
+        let slant = 0.6 * CHASSIS_TINE_MM;
         let want = [
             ((-half, top), (half, top)),
-            ((-half, top), (-half - splay, tip)),
-            ((0.0, top), (0.0, tip)),
-            ((half, top), (half + splay, tip)),
+            ((-half, top), (-half - slant, tip)),
+            ((0.0, top), (-slant, tip)),
+            ((half, top), (half - slant, tip)),
         ];
-        assert_eq!(segs, want);
-        assert_ne!(
-            format!("{head:?}"),
-            format!("{:?}", power_port_head(PowerPortStyle::Earth))
-        );
+        assert_eq!(head_segments(PowerPortStyle::Chassis), want);
         let reach = head_reach_mm(PowerPortStyle::Chassis);
         assert!((reach - GROUND_STEM_MM - CHASSIS_TINE_MM).abs() < 1e-12);
+    }
+
+    /// #1284 - earth is the IEC 60417-5017 symbol: three bars getting
+    /// shorter downward, centred under the stem.
+    #[test]
+    fn the_earth_head_is_three_shrinking_bars() {
+        let top = -GROUND_STEM_MM;
+        let step = GROUND_BAR_STEP_MM;
+        let want = [
+            ((-1.27, top), (1.27, top)),
+            ((-0.847, top - step), (0.847, top - step)),
+            ((-0.423, top - 2.0 * step), (0.423, top - 2.0 * step)),
+        ];
+        assert_eq!(head_segments(PowerPortStyle::Earth), want);
+        let reach = head_reach_mm(PowerPortStyle::Earth);
+        assert!((reach - GROUND_STEM_MM - 2.0 * step).abs() < 1e-12);
+    }
+
+    /// #1284 - earth, chassis and power ground each draw their own head.
+    #[test]
+    fn earth_chassis_and_power_ground_differ() {
+        let earth = head_segments(PowerPortStyle::Earth);
+        let chassis = head_segments(PowerPortStyle::Chassis);
+        let ground = head_segments(PowerPortStyle::PowerGround);
+        assert_ne!(earth, chassis);
+        assert_ne!(earth, ground);
+        assert_ne!(chassis, ground);
     }
 
     /// #1284 - a chassis port saves as `power:Chassis` and reloads as the
