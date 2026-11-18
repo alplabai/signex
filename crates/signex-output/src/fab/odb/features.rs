@@ -7,7 +7,7 @@ use std::ops::Range;
 use pcb_geom::PointNm;
 
 use super::text::{cw_degrees, mm, um};
-use crate::fab::marks::{Function, Mark, Shape, Step, doubled_area};
+use crate::fab::marks::{ApertureShape, Function, Mark, Shape, Step, doubled_area};
 
 /// The `.smd` attribute: a copper pad for surface mounting.
 const SMD: &str = ".smd";
@@ -30,9 +30,22 @@ impl Features {
                 at,
                 ..
             } => {
-                let (shape, udeg) = Shape::of(*shape);
                 let smd = (*function == Function::SmdPad).then(|| self.attribute(SMD));
-                self.pad(*at, shape_symbol(shape), udeg, smd);
+                let (standard, udeg) = Shape::of(shape);
+                match shape_symbol(&standard) {
+                    Some(symbol) => self.pad(*at, symbol, udeg, smd),
+                    // A polygon pad has no standard symbol: its copper is
+                    // a surface of its corners, with the pad's attribute.
+                    None => {
+                        if let ApertureShape::Outline { corners } = shape {
+                            let outline: Vec<PointNm> = corners
+                                .iter()
+                                .map(|c| PointNm::new(at.x + c.x, at.y + c.y))
+                                .collect();
+                            self.filled(&outline, &[], smd);
+                        }
+                    }
+                }
             }
             Mark::Stroke {
                 width,
@@ -76,10 +89,16 @@ impl Features {
     /// A filled outline with polygon holes: the island clockwise, the
     /// holes counter-clockwise, each ring closed.
     pub(crate) fn surface(&mut self, outline: &[PointNm], holes: &[Vec<PointNm>]) {
+        self.filled(outline, holes, None);
+    }
+
+    /// A surface with an optional attribute; nothing under three points.
+    fn filled(&mut self, outline: &[PointNm], holes: &[Vec<PointNm>], attribute: Option<usize>) {
         if outline.len() < 3 {
             return;
         }
-        let mut record = String::from("S P 0\n");
+        let attributes = attribute.map(|a| format!(";{a}")).unwrap_or_default();
+        let mut record = format!("S P 0{attributes}\n");
         ring(&mut record, outline, false);
         for hole in holes.iter().filter(|h| h.len() >= 3) {
             ring(&mut record, hole, true);
@@ -167,13 +186,15 @@ impl Features {
 }
 
 /// The standard symbol of an unturned shape, sizes in micrometres.
-pub(crate) fn shape_symbol(shape: Shape) -> String {
-    match shape {
+/// `None` for a polygon, which no standard symbol draws.
+fn shape_symbol(shape: &Shape) -> Option<String> {
+    Some(match *shape {
         Shape::Circle { diameter } => round_symbol(diameter),
         Shape::Rect { w, h } => format!("rect{}x{}", um(w), um(h)),
         Shape::Oval { w, h } => format!("oval{}x{}", um(w), um(h)),
         Shape::RoundRect { w, h, r } => format!("rect{}x{}xr{}", um(w), um(h), um(r)),
-    }
+        Shape::Outline { .. } => return None,
+    })
 }
 
 /// The round symbol of `diameter` nm.
@@ -183,7 +204,7 @@ pub(crate) fn round_symbol(diameter: i64) -> String {
 
 /// One closed ring of a surface: `OB` at the first point, `OS` to each
 /// next and back to the first, `OE`. `hole` picks the winding.
-fn ring(record: &mut String, points: &[PointNm], hole: bool) {
+pub(super) fn ring(record: &mut String, points: &[PointNm], hole: bool) {
     let mut points = points.to_vec();
     if points.first() == points.last() {
         points.pop();

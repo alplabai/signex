@@ -9,6 +9,7 @@ use std::ops::Range;
 use pcb_geom::{Placement, PointNm, Side, mm_to_nm};
 use signex_types::pcb::{Footprint, PadType};
 
+use super::features::ring;
 use super::text::{cw_degrees, mm, word};
 use crate::fab::collect::pad_aperture;
 use crate::fab::frame::{FabFrame, fab_angle_udeg};
@@ -359,7 +360,7 @@ fn write_package(out: &mut String, name: &str, footprint: &Footprint) {
             mm(at.y),
             mm(hole)
         ));
-        out.push_str(&pin_outline(*shape, *at));
+        out.push_str(&pin_outline(shape, *at));
     }
 }
 
@@ -375,13 +376,25 @@ fn pitch(pins: &[PackagePin<'_>]) -> Option<i64> {
     closest
 }
 
-/// A pin's outline: a circle for a round pin, else its box (a turned
-/// pin's square reaching its longer side).
-fn pin_outline(shape: ApertureShape, at: PointNm) -> String {
-    let (w, h) = match shape {
+/// A pin's outline: a circle for a round pin, a contour for a polygon
+/// pin, else its box (a turned pin's square reaching its longer side).
+fn pin_outline(shape: &ApertureShape, at: PointNm) -> String {
+    let (w, h) = match *shape {
         ApertureShape::Circle { diameter } => {
             return format!("CR {} {} {}\n", mm(at.x), mm(at.y), mm(diameter / 2));
         }
+        ApertureShape::Outline { ref corners } if corners.len() >= 3 => {
+            let points: Vec<PointNm> = corners
+                .iter()
+                .map(|c| PointNm::new(at.x + c.x, at.y + c.y))
+                .collect();
+            let mut out = String::from("CT\n");
+            ring(&mut out, &points, false);
+            out.push_str("CE\n");
+            return out;
+        }
+        // Fewer than three corners: a point, as the copper writes none.
+        ApertureShape::Outline { .. } => (0, 0),
         ApertureShape::Rect { w, h } | ApertureShape::Obround { w, h } => (w, h),
         ApertureShape::RoundRect { w, h, udeg, .. } if udeg % 180_000_000 == 0 => (w, h),
         ApertureShape::TurnedRect { w, h, .. }

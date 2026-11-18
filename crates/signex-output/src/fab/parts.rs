@@ -114,26 +114,32 @@ pub(crate) fn package_pins(footprint: &Footprint) -> Vec<PackagePin<'_>> {
 }
 
 /// The box round the pins' shapes (each reaching half its longer side from
-/// its centre) as its low and high corners; a 1 mm box at the origin for a
-/// package with no pin the geometry holds.
+/// its centre, a polygon its farthest corner on either axis) as its low and
+/// high corners; a 1 mm box at the origin for a package with no pin the
+/// geometry holds.
 pub(crate) fn pin_box(pins: &[PackagePin<'_>]) -> (PointNm, PointNm) {
-    let reach = |shape: ApertureShape| -> i64 {
-        match shape {
+    let reach = |shape: &ApertureShape| -> i64 {
+        match *shape {
             ApertureShape::Circle { diameter } => diameter / 2,
             ApertureShape::Rect { w, h }
             | ApertureShape::Obround { w, h }
             | ApertureShape::TurnedRect { w, h, .. }
             | ApertureShape::TurnedObround { w, h, .. }
             | ApertureShape::RoundRect { w, h, .. } => w.max(h) / 2,
+            ApertureShape::Outline { ref corners } => corners
+                .iter()
+                .map(|c| c.x.abs().max(c.y.abs()))
+                .max()
+                .unwrap_or(0),
         }
     };
     let (mut lo, mut hi) = ((-500_000, -500_000), (500_000, 500_000));
     if let Some((_, shape, at)) = pins.first() {
-        let r = reach(*shape);
+        let r = reach(shape);
         (lo, hi) = ((at.x - r, at.y - r), (at.x + r, at.y + r));
     }
     for (_, shape, at) in pins {
-        let r = reach(*shape);
+        let r = reach(shape);
         lo = (lo.0.min(at.x - r), lo.1.min(at.y - r));
         hi = (hi.0.max(at.x + r), hi.1.max(at.y + r));
     }

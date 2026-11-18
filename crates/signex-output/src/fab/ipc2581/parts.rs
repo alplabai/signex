@@ -164,7 +164,7 @@ fn write_package(xml: &mut Xml, dictionary: &mut Dictionary, name: &str, footpri
                 ("electricalType", electrical.into()),
             ],
         );
-        placed_shape(xml, dictionary, *shape, *at);
+        placed_shape(xml, dictionary, shape, *at);
         xml.close();
     }
     xml.close();

@@ -1,7 +1,7 @@
 //! The marks of one layer as an IPC-2581 `LayerFeature`, and the standard
 //! shapes they flash, collected into the `DictionaryStandard`.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use pcb_geom::PointNm;
 
@@ -10,9 +10,10 @@ use crate::fab::frame::millionths;
 use crate::fab::marks::{ApertureShape, Function, Mark, Shape, Step};
 
 /// The dictionary id of a shape: the kind and sizes in mm, so it reads on
-/// its own. The turn goes on the feature's `Xform`.
-fn shape_id(shape: Shape) -> String {
-    match shape {
+/// its own; a polygon pad is `CONTOUR_<n>`, numbered in the order the
+/// file first flashes one. The turn goes on the feature's `Xform`.
+fn shape_id(shape: &Shape, contours: usize) -> String {
+    match *shape {
         Shape::Circle { diameter } => format!("CIRCLE_{}", millionths(diameter)),
         Shape::Rect { w, h } => format!("RECT_{}x{}", millionths(w), millionths(h)),
         Shape::Oval { w, h } => format!("OVAL_{}x{}", millionths(w), millionths(h)),
@@ -22,27 +23,39 @@ fn shape_id(shape: Shape) -> String {
             millionths(h),
             millionths(r)
         ),
+        Shape::Outline { .. } => format!("CONTOUR_{}", contours + 1),
     }
 }
 
-/// Every shape a feature flashes, written once in the content section.
+/// Every shape a feature flashes with its id, written once in the content
+/// section.
 #[derive(Debug, Default)]
 pub(crate) struct Dictionary {
-    shapes: BTreeSet<Shape>,
+    shapes: BTreeMap<Shape, String>,
+    contours: usize,
 }
 
 impl Dictionary {
     /// The id of `shape`, adding it.
     pub(crate) fn reference(&mut self, shape: Shape) -> String {
-        self.shapes.insert(shape);
-        shape_id(shape)
+        if let Some(id) = self.shapes.get(&shape) {
+            return id.clone();
+        }
+        let id = shape_id(&shape, self.contours);
+        if matches!(shape, Shape::Outline { .. }) {
+            self.contours += 1;
+        }
+        self.shapes.insert(shape, id.clone());
+        id
     }
 
     pub(crate) fn write(&self, xml: &mut Xml) {
         xml.open("DictionaryStandard", &[("units", "MILLIMETER".into())]);
-        for shape in &self.shapes {
-            xml.open("EntryStandard", &[("id", shape_id(*shape))]);
+        for (shape, id) in &self.shapes {
+            xml.open("EntryStandard", &[("id", id.clone())]);
             match *shape {
+                // The pad's polygon about its flash point, filled.
+                Shape::Outline { ref corners } => contour(xml, "Contour", corners, &[]),
                 Shape::Circle { diameter } => {
                     xml.leaf("Circle", &[("diameter", millionths(diameter))]);
                 }
@@ -90,7 +103,7 @@ pub(crate) fn xy(p: PointNm) -> [(&'static str, String); 2] {
 pub(crate) fn placed_shape(
     xml: &mut Xml,
     dictionary: &mut Dictionary,
-    aperture: ApertureShape,
+    aperture: &ApertureShape,
     at: PointNm,
 ) {
     let (shape, udeg) = Shape::of(aperture);
@@ -135,7 +148,7 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
                     set.push(("padUsage", usage.to_string()));
                     xml.open("Set", &set);
                     xml.open("Pad", &[]);
-                    placed_shape(xml, dictionary, *shape, *at);
+                    placed_shape(xml, dictionary, shape, *at);
                     if let Some((component, pin)) = &attributes.pin {
                         xml.leaf(
                             "PinRef",
@@ -147,7 +160,7 @@ fn write_mark(xml: &mut Xml, dictionary: &mut Dictionary, mark: &Mark) {
                 None => {
                     xml.open("Set", &set);
                     xml.open("Features", &[]);
-                    placed_shape(xml, dictionary, *shape, *at);
+                    placed_shape(xml, dictionary, shape, *at);
                     xml.close();
                 }
             }
