@@ -8,9 +8,10 @@
 //!
 //! Environment: `SIGNEX_SOAK_SEED` (default 0x2482), `SIGNEX_SOAK_ACTIONS`
 //! (default 10 000), `SIGNEX_SOAK_BOARD` (one board by name, searched in
-//! the whole routing corpus even for a short run). The short runs take the
-//! smallest few routing corpus boards, the scheduled ones all of them. A
-//! failure prints the line that replays it. How it fits together:
+//! the whole routing corpus even for a short run). The short runs take a
+//! fixed sample of six routing corpus boards (`fixtures::SHORT_SAMPLE`)
+//! with a few actions each, the scheduled ones every board. A failure
+//! prints the line that replays it. How it fits together:
 //! `docs/PCB_TOOLS.md`, "Router soak and bench".
 
 mod bench;
@@ -20,9 +21,48 @@ mod session;
 mod soak;
 
 use bench::{BoardBench, MEDIAN_LIMIT, P95_LIMIT, ROUNDS_LIMIT, ROUNDS_SHARE};
-use fixtures::{CORPUS_SAMPLE, Corpus};
+use fixtures::{Corpus, Fixture};
 
 const DEFAULT_SEED: u64 = 0x2482;
+
+/// Actions per board: one count for the fixed boards, one for the routing
+/// corpus boards, whose size makes each action dearer.
+#[derive(Debug, Clone, Copy)]
+struct Actions {
+    fixed: usize,
+    corpus: usize,
+}
+
+impl Actions {
+    fn same(n: usize) -> Self {
+        Self {
+            fixed: n,
+            corpus: n,
+        }
+    }
+
+    fn for_board(self, fixture: &Fixture) -> usize {
+        if fixture.from_corpus {
+            self.corpus
+        } else {
+            self.fixed
+        }
+    }
+}
+
+/// The per-PR soak: 150 actions on the fixed boards, 8 on each sampled
+/// corpus board. A count, not a clock, so the run is the same every time.
+const SOAK_SHORT: Actions = Actions {
+    fixed: 150,
+    corpus: 8,
+};
+
+/// The per-PR bench: 30 actions on the fixed boards, 4 on each sampled
+/// corpus board.
+const BENCH_SHORT: Actions = Actions {
+    fixed: 30,
+    corpus: 4,
+};
 
 fn env_number(name: &str) -> Option<u64> {
     let text = std::env::var(name).ok()?;
@@ -46,20 +86,20 @@ fn boards(corpus: Corpus) -> Vec<fixtures::Fixture> {
     boards
 }
 
-fn soak_all(seed: u64, actions: usize, corpus: Corpus) {
+fn soak_all(seed: u64, actions: Actions, corpus: Corpus) {
     for fixture in boards(corpus) {
-        match soak::run(&fixture, seed, actions) {
-            Ok((tally, _)) => println!("soak {:<24} {actions} actions: {tally:?}", fixture.name),
+        let count = actions.for_board(&fixture);
+        match soak::run(&fixture, seed, count) {
+            Ok((tally, _)) => println!("soak {:<24} {count} actions: {tally:?}", fixture.name),
             Err(failure) => panic!("{failure}"),
         }
     }
 }
 
-/// Per-PR: a short soak on the fixed boards and the smallest few routing
-/// corpus boards.
+/// Per-PR: a short soak on the fixed boards and the short corpus sample.
 #[test]
 fn soak_short() {
-    soak_all(DEFAULT_SEED, 150, Corpus::Smallest(CORPUS_SAMPLE));
+    soak_all(DEFAULT_SEED, SOAK_SHORT, Corpus::Short);
 }
 
 /// Scheduled: 10 000 actions on every board, or a replay of a failure.
@@ -68,7 +108,7 @@ fn soak_short() {
 fn soak_long() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
     let actions = env_number("SIGNEX_SOAK_ACTIONS").unwrap_or(10_000);
-    soak_all(seed, actions as usize, Corpus::All);
+    soak_all(seed, Actions::same(actions as usize), Corpus::All);
 }
 
 /// A seed replays exactly: the same actions give the same board.
@@ -88,10 +128,10 @@ fn a_soak_seed_replays_exactly() {
     assert_eq!(run(), first);
 }
 
-fn bench_all(seed: u64, actions: usize, corpus: Corpus) -> Vec<BoardBench> {
+fn bench_all(seed: u64, actions: Actions, corpus: Corpus) -> Vec<BoardBench> {
     let benches: Vec<BoardBench> = boards(corpus)
         .iter()
-        .map(|fixture| bench::bench(fixture, seed, actions))
+        .map(|fixture| bench::bench(fixture, seed, actions.for_board(fixture)))
         .collect();
     for b in &benches {
         println!("bench {}", b.line());
@@ -216,7 +256,7 @@ fn the_drc_delta_check_tells_a_side_effect_from_the_route_own() {
 /// routing corpus sampled as in `soak_short`.
 #[test]
 fn bench_short() {
-    let benches = bench_all(DEFAULT_SEED, 30, Corpus::Smallest(CORPUS_SAMPLE));
+    let benches = bench_all(DEFAULT_SEED, BENCH_SHORT, Corpus::Short);
     assert!(
         benches.iter().any(|b| b.landed > 0 && !b.shoves.is_empty()),
         "the bench routed and shoved something"
@@ -230,7 +270,7 @@ fn bench_short() {
 #[ignore = "latency is only meaningful in release: the scheduled job runs it"]
 fn bench_thresholds() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
-    let mut benches = bench_all(seed, 300, Corpus::All);
+    let mut benches = bench_all(seed, Actions::same(300), Corpus::All);
     assert_delta_and_convergence(&benches);
     benches.sort_by_key(|b| b.copper);
     let median = &benches[benches.len() / 2];
