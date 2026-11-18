@@ -2,12 +2,14 @@
 //! project net index, and a member click, which goes to the member through
 //! the same path a net step uses and highlights its net.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use iced::Task;
 use signex_net::{NetAnchor, NetMemberKind};
 
 use super::super::super::*;
+use super::component_rows::component_rows;
 use super::highlight::bright_elements;
 use super::messages;
 use super::navigate::describe_member;
@@ -15,7 +17,7 @@ use crate::app::runtime::net_class_styles::plan_projects;
 use crate::app::state::ProjectId;
 use crate::app::state::net_nav::{NetHighlight, ProjectNetData};
 use crate::panels::net_inspector::{
-    NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
+    NetInspectorTab, NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
 };
 use crate::panels::{NetInspectorMsg, NetInspectorState, PanelKind};
 
@@ -93,18 +95,31 @@ fn members_of(data: &ProjectNetData, net: usize) -> Vec<NetMemberRow> {
         .collect()
 }
 
+/// Fold `key` when it is shown expanded, else expand it.
+fn toggle(expanded: &mut BTreeSet<String>, key: String) {
+    if !expanded.remove(&key) {
+        expanded.insert(key);
+    }
+}
+
 impl Signex {
     pub(crate) fn handle_net_inspector_message(&mut self, msg: NetInspectorMsg) -> Task<Message> {
         match msg {
+            NetInspectorMsg::TabSelected(tab) => {
+                self.ui_state.net_inspector.tab = tab;
+                Task::none()
+            }
             NetInspectorMsg::FilterChanged(filter) => {
                 self.ui_state.net_inspector.filter = filter;
                 Task::none()
             }
             NetInspectorMsg::NetToggled(name) => {
-                let expanded = &mut self.ui_state.net_inspector.expanded;
-                if !expanded.remove(&name) {
-                    expanded.insert(name);
-                }
+                toggle(&mut self.ui_state.net_inspector.expanded, name);
+                Task::none()
+            }
+            // A part row (#1274); its pin rows send `MemberClicked`.
+            NetInspectorMsg::ComponentToggled(key) => {
+                toggle(&mut self.ui_state.net_inspector.expanded_parts, key);
                 Task::none()
             }
             NetInspectorMsg::MemberClicked { net, anchor } => self.inspect_member(&net, &anchor),
@@ -201,9 +216,9 @@ impl Signex {
             self.document_state.panel_ctx.net_inspector = NetInspectorView {
                 filter: self.ui_state.net_inspector.filter.clone(),
                 status: NetListStatus::Ready,
-                nets: Vec::new(),
                 total: rows.total,
                 board: Some(rows),
+                ..NetInspectorView::default()
             };
             return Task::none();
         }
@@ -219,17 +234,23 @@ impl Signex {
         if same_source && self.document_state.panel_ctx.net_inspector.status == status {
             return warm;
         }
-        let (nets, total) = match &data {
-            Some(data) => (net_rows(data, &state), data.index.net_count()),
-            None => (Vec::new(), 0),
-        };
-        self.document_state.panel_ctx.net_inspector = NetInspectorView {
+        // Only the tab shown is built: a project's parts or its nets.
+        let mut view = NetInspectorView {
+            tab: state.tab,
             filter: state.filter.clone(),
             status,
-            nets,
-            total,
-            board: None,
+            ..NetInspectorView::default()
         };
+        if let Some(data) = &data {
+            view.total = data.index.net_count();
+            match state.tab {
+                NetInspectorTab::ByNet => view.nets = net_rows(data, &state),
+                NetInspectorTab::ByComponent => {
+                    (view.components, view.component_total) = component_rows(data, &state);
+                }
+            }
+        }
+        self.document_state.panel_ctx.net_inspector = view;
         self.document_state.net_nav.inspector_source = data.map(|data| (data, state));
         warm
     }
