@@ -291,6 +291,12 @@ mod tests {
                 (1.0, 1.0, 1.0),
                 "{id:?} body_fill would print black"
             );
+            let tint = palette.symbol_body_tint.expect("a body tint");
+            assert_eq!(
+                map_black_and_white(tint, palette.paper),
+                (1.0, 1.0, 1.0),
+                "{id:?} body_tint would print black"
+            );
         }
     }
 

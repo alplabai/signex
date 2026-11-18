@@ -12,11 +12,60 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
-    FillType, LibSymbol, PinLabelKind, Point, SchematicDefaults, Symbol, SymbolPrimitive,
-    lower_pin_labels, lower_placed_symbol,
+    BodyFillShape, FillType, LibSymbol, PinLabelKind, Point, SchematicDefaults, SchematicSheet,
+    Symbol, SymbolPrimitive, default_body_fill_shapes, lower_pin_labels, lower_placed_symbol,
 };
 use signex_types::variables::{Resolver, TextTable};
 use std::collections::HashMap;
+
+/// The default body fill of every symbol on the sheet
+/// (`default_body_fill_shapes`), fill only, in `palette.symbol_body_tint`.
+/// Emitted before the wires and the symbols, as the canvas draws fills under
+/// every stroke; nothing when the tint is `None`.
+pub(super) fn push_symbol_body_fills(
+    out: &mut Vec<SvgElement>,
+    sheet: &SchematicSheet,
+    xform: &PageTransform,
+    palette: &SchematicPalette,
+) {
+    let Some(tint) = palette.symbol_body_tint else {
+        return;
+    };
+    let style = SvgStyle {
+        stroke_alpha: 1.0,
+        stroke_rgb: None,
+        fill_rgb: Some(tint),
+        stroke_width: 0.0,
+    };
+    let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
+    for sym in &sheet.symbols {
+        for shape in default_body_fill_shapes(sheet.body_of(sym), sym) {
+            out.push(match shape {
+                BodyFillShape::Polygon(points) => {
+                    let mut commands: Vec<SvgPathCommand> = points
+                        .iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            if i == 0 {
+                                SvgPathCommand::MoveTo(px(p))
+                            } else {
+                                SvgPathCommand::LineTo(px(p))
+                            }
+                        })
+                        .collect();
+                    commands.push(SvgPathCommand::Close);
+                    SvgElement::Path { commands, style }
+                }
+                BodyFillShape::Circle { center, radius } => circle_path(
+                    xform.x(center.x),
+                    xform.px_y(center.y),
+                    (radius * xform.mm_to_unit) as f32,
+                    style,
+                ),
+            });
+        }
+    }
+}
 
 /// Emit one `SvgElement` per primitive of the symbol's shared lowering
 /// (`lower_placed_symbol`): body graphics and pin stubs. The canvas draws the same

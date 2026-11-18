@@ -370,3 +370,74 @@ fn pins_stroke_at_the_symbols_library_width() {
     assert_eq!(pin.1, 0.254);
     assert_eq!(pin.1, body.1);
 }
+
+/// A sheet holding one symbol whose body is a rectangle with `fill`.
+fn body_sheet(fill: FillType) -> SchematicSheet {
+    let mut lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "L:BODY" })).expect("lib symbol");
+    lib.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 1,
+        graphic: Graphic::Rectangle {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 5.0),
+            width: 0.25,
+            fill,
+        },
+    });
+    let mut sheet = SchematicSheet::default();
+    sheet.lib_symbols.insert(lib.id.clone(), lib);
+    sheet.symbols.push(Symbol {
+        lib_id: "L:BODY".into(),
+        ..Symbol::default()
+    });
+    sheet
+}
+
+/// The fill colours of the body-fill pass for `sheet` under `tint`.
+fn body_fills(sheet: &SchematicSheet, tint: Option<(f32, f32, f32)>) -> Vec<(f32, f32, f32)> {
+    let xform = PageTransform {
+        mm_to_unit: 1.0,
+        translate_x: 0.0,
+        translate_y: 0.0,
+    };
+    let palette = SchematicPalette {
+        symbol_body_tint: tint,
+        ..SchematicPalette::classic()
+    };
+    let mut out = Vec::new();
+    push_symbol_body_fills(&mut out, sheet, &xform, &palette);
+    out.iter()
+        .map(|e| match e {
+            SvgElement::Path { style, .. } => {
+                assert_eq!(style.stroke_rgb, None, "the fill pass draws no outline");
+                style.fill_rgb.expect("a body fill")
+            }
+            SvgElement::Text { .. } => panic!("the fill pass draws no text"),
+        })
+        .collect()
+}
+
+#[test]
+fn an_unfilled_body_takes_the_tint_and_none_when_the_preference_is_off() {
+    let tint = (0.9, 0.9, 0.9);
+    let sheet = body_sheet(FillType::None);
+    assert_eq!(body_fills(&sheet, Some(tint)), vec![tint]);
+    assert!(body_fills(&sheet, None).is_empty());
+}
+
+#[test]
+fn a_body_with_its_own_fill_keeps_it_over_the_tint() {
+    let tint = (0.9, 0.9, 0.9);
+    let sheet = body_sheet(FillType::Background);
+    assert!(body_fills(&sheet, Some(tint)).is_empty());
+    let lib = &sheet.lib_symbols["L:BODY"];
+    let own: Vec<Option<(f32, f32, f32)>> = emit(lib, &sheet.symbols[0])
+        .iter()
+        .filter_map(|e| match e {
+            SvgElement::Path { style, .. } => Some(style.fill_rgb),
+            SvgElement::Text { .. } => None,
+        })
+        .collect();
+    assert_eq!(own, vec![Some(SchematicPalette::classic().symbol_fill)]);
+}

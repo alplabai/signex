@@ -163,6 +163,7 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
@@ -367,6 +368,10 @@ impl Signex {
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                symbol_body_fill,
+                preferences_draft_symbol_body_fill: symbol_body_fill,
+                preferences_body_fill_palette_open: false,
+                preferences_body_fill_picker_open: false,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
