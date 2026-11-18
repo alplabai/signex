@@ -435,9 +435,15 @@ uses the symbol's own letters. EN IEC 81346-2 uses its single-letter main
 classes. EN IEC 81346-2 (full codes) uses the three-letter class codes, for
 example `QAC` for a transistor, and each code is numbered on its own
 (`QAC1`, `QAC2`). The project stores `QAC1`; the schematic and PCB canvases,
-the BOM, the netlist, the PDF and the board and fabrication outputs show it
-with the product-aspect sign, `-QAC1`. Typing `-QAC9` as a reference stores
-`QAC9`. The letters and the pages of the standards they
+the BOM, the netlist, the PDF and the board and fabrication outputs
+(IPC-2581, ODB++ and the board STEP model included) show it with the
+product-aspect sign, `-QAC1`. The IPC-D-356 test netlist is the exception: it
+writes `QAC1`, because its 6-character field would cut `-QAC100` into
+`-QAC10`. Typing `-QAC9` as a reference stores `QAC9`. A spreadsheet program
+may read a pick-and-place or BOM CSV cell that starts with `-` as a formula;
+import the file as text, or set the designator column to text, to keep
+`-QAC1`. The codes for display (`PH`), sensor (`B`) and battery (`GBA`) are
+provisional and may change. The letters and the pages of the standards they
 come from are listed in
 `docs/architecture/designator-standards.md`. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.

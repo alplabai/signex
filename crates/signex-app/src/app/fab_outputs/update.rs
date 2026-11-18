@@ -178,6 +178,7 @@ impl Signex {
                 step,
             },
             folder: PathBuf::from(state.folder.trim()),
+            designator_standard: self.document_state.designator_standard_for(&state.board),
         }
     }
 

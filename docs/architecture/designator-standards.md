@@ -108,17 +108,38 @@ is shown or exported, by one helper,
 - the PCB canvas designators (`PcbSnapshot::with_designator_standard`);
 - the board outputs, written from a copy of the board whose footprint
   references and designator texts are signed
-  (`signex_output::show_board_references`): pick and place, IPC-D-356, the
-  legend text on the Gerbers, the board PDF and the board reports. An
-  IPC-D-356 designator field holds 6 characters, so `-QAC123` is cut there.
-  The IPC-2581 and ODB++ writers (PR #2499) are not on trunk yet and do not
-  sign yet.
+  (`signex_output::show_board_references`): pick and place, the legend text
+  on the Gerbers, IPC-2581 (`refDes`), the ODB++ components, the board STEP
+  model, the board PDF and the board reports.
+
+**The IPC-D-356 test netlist is written unsigned** (maintainer decision,
+2026-11-18). Its designator field holds 6 characters, so a signed `-CAA100`
+would be cut to `-CAA10` and read as a second `CAA10`. The test netlist
+writes the stored designator (`CAA100`), even though Fabrication Outputs
+generates it from the signed copy: `FabOptions::designator_standard` names
+the standard the copy was signed under, and the writer turns each
+designator back with `stored_reference`.
 
 The PCB selection index still boxes a designator on its stored text.
 
-Going the other way, `stored_reference` drops a `-` the user types in front of
-a reference (as it is shown) when the edit is committed, so `-QAC9` is stored
-as `QAC9` and annotation keeps working.
+**Spreadsheets.** A pick-and-place or BOM CSV cell that starts with `-`
+(`-QAC1`) can be read as a formula by a spreadsheet program, which then shows
+an error or a number instead of the designator. Signex writes the cell
+unchanged; import the file as text, or set the designator column to text,
+when you open it in a spreadsheet.
+
+Going the other way, `stored_reference` drops a `-` typed in front of a
+designator, as it is shown, wherever one is entered or named: the schematic
+reference edit (Properties and in place), the PCB designator edit in
+Properties, and the automation operands that take a designator
+(`place_component designator=`, `set_footprint_text designator=`,
+`place_board_reuse_block designator=`, the part-swap commands). So `-QAC9`
+is stored, or found, as `QAC9`, and annotation keeps working.
+
+**Provisional codes.** Three entries of the table are provisional (maintainer
+accepted 2026-11-18): display `PH`, sensor `B` and battery `GBA`. They ship
+as listed and may change once they are checked against the text of the
+standard.
 
 Re-prefix counts a full code and its main-class letter as issued for each
 other, so a project can move between the single-letter and the full-code

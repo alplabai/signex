@@ -46,6 +46,14 @@ impl DocumentState {
         Some(Cow::Owned(shown))
     }
 
+    /// `typed` as the sheet or board at `path` stores a designator: under
+    /// EN IEC 81346-2 full class codes a `-` typed in front of it, as it is
+    /// shown, is dropped (#1416). Every place a person, agent or CLI enters
+    /// or names a designator goes through this.
+    pub(crate) fn stored_reference_for<'a>(&self, path: &Path, typed: &'a str) -> &'a str {
+        signex_types::designator::stored_reference(self.designator_standard_for(path), typed)
+    }
+
     /// The board engine of the PCB at `path`: its tab's, else the parked one.
     pub(crate) fn board_engine(&self, path: &Path) -> Option<&BoardEngine> {
         if self.has_pcb_tab(path) {
