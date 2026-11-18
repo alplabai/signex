@@ -62,9 +62,11 @@ impl Signex {
     }
 
     /// The snapshot of `board` as the view of `path` shows it, without the
-    /// ratsnest.
+    /// ratsnest. Designators draw as the project's standard shows them
+    /// (#1416).
     pub(crate) fn pcb_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         PcbSnapshot::from_board_with_view(board, &self.pcb_layer_view(path))
+            .with_designator_standard(self.document_state.designator_standard_for(path))
     }
 
     /// The snapshot an undocked window draws of the board at `path`: its

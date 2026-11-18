@@ -353,6 +353,11 @@ impl Signex {
         crate::schematic_runtime::WireWidths {
             class_styles: Some(self.active_class_styles()),
             defaults: self.document_state.active_schematic_defaults(),
+            designator_standard: self
+                .document_state
+                .active_path
+                .as_deref()
+                .and_then(|path| self.document_state.designator_standard_for(path)),
         }
     }
 

@@ -3,6 +3,7 @@
 
 use crate::schematic_runtime::hit_index::HitIndex;
 use crate::schematic_runtime::{Designators, WireWidths};
+use signex_types::designator::DesignatorStandard;
 use signex_types::schematic::{SchematicDefaults, SelectedItem};
 
 use super::CanvasSlot;
@@ -15,6 +16,7 @@ pub(super) struct SheetKey {
     revision: u64,
     class_revision: u64,
     defaults: SchematicDefaults,
+    designator_standard: Option<DesignatorStandard>,
     designators: Designators,
 }
 
@@ -22,13 +24,14 @@ impl SheetKey {
     pub(super) fn new(
         revision: u64,
         class_revision: u64,
-        defaults: SchematicDefaults,
+        widths: &WireWidths<'_>,
         designators: &Designators,
     ) -> Self {
         Self {
             revision,
             class_revision,
-            defaults,
+            defaults: widths.defaults,
+            designator_standard: widths.designator_standard,
             designators: designators.clone(),
         }
     }
@@ -39,12 +42,13 @@ impl SheetKey {
         &self,
         revision: u64,
         class_revision: u64,
-        defaults: &SchematicDefaults,
+        widths: &WireWidths<'_>,
         designators: &Designators,
     ) -> bool {
         self.revision == revision
             && self.class_revision == class_revision
-            && self.defaults == *defaults
+            && self.defaults == widths.defaults
+            && self.designator_standard == widths.designator_standard
             && self.designators == *designators
     }
 }
@@ -82,13 +86,13 @@ impl CanvasSlot {
             c.key.matches(
                 revision,
                 class_revision,
-                &widths.defaults,
+                &widths,
                 &self.designators,
             )
         });
         if !fresh {
             *slot = Some(HitCache {
-                key: SheetKey::new(revision, class_revision, widths.defaults, &self.designators),
+                key: SheetKey::new(revision, class_revision, &widths, &self.designators),
                 index: HitIndex::build(snapshot, &self.designators, widths),
             });
         }

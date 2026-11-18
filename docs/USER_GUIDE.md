@@ -426,13 +426,19 @@ annotate (section 5).
 By default a placed part takes its reference letters from the library symbol
 (`U?`, `R?`). A project can instead follow a designator standard: right-click
 the project in the Projects panel, choose **Project Options...** and pick a
-**Designator standard** (IEEE 315, DIN 40719-2 or EN IEC 81346-2). New parts
-then get the standard's letters for their component class, for example a diode
-is `D` under IEEE 315 and `V` under DIN 40719-2. Power ports and flags keep
-their `#` references, and a class the standard does not name (such as Generic,
-or a crystal under EN IEC 81346-2) uses the symbol's own letters. EN IEC
-81346-2 uses its single-letter main classes. The letters and the pages of the
-standards they come from are listed in
+**Designator standard** (IEEE 315, DIN 40719-2, EN IEC 81346-2 or EN IEC
+81346-2 (full codes)). New parts then get the standard's letters for their
+component class, for example a diode is `D` under IEEE 315 and `V` under DIN
+40719-2. Power ports and flags keep their `#` references, and a class the
+standard does not name (such as Generic, or a crystal under EN IEC 81346-2)
+uses the symbol's own letters. EN IEC 81346-2 uses its single-letter main
+classes. EN IEC 81346-2 (full codes) uses the three-letter class codes, for
+example `QAC` for a transistor, and each code is numbered on its own
+(`QAC1`, `QAC2`). The project stores `QAC1`; the schematic and PCB canvases,
+the BOM, the netlist, the PDF and the board and fabrication outputs show it
+with the product-aspect sign, `-QAC1`. Typing `-QAC9` as a reference stores
+`QAC9`. The letters and the pages of the standards they
+come from are listed in
 `docs/architecture/designator-standards.md`. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.
 The choice is saved in the project file when you save the project.

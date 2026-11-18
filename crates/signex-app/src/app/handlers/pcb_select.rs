@@ -211,6 +211,7 @@ impl Signex {
         let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
+        let standard = self.document_state.designator_standard_for(&path);
         let docs = &self.document_state;
         let board = docs
             .tabs
@@ -227,7 +228,9 @@ impl Signex {
             .ratsnest_visible()
             .then_some((&interaction.pcb_ratsnest, path.as_path()));
         match board {
-            Some(board) => sync_drag_preview(canvas, board, &view, ratsnest, carry.as_ref()),
+            Some(board) => {
+                sync_drag_preview(canvas, board, &view, standard, ratsnest, carry.as_ref())
+            }
             None => canvas.end_drag_preview(),
         }
         // The Properties panel switches between the board and the selection.
@@ -262,6 +265,7 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         let view = self.pcb_layer_view(path);
+        let standard = self.document_state.designator_standard_for(path);
         let ghost = self
             .interaction_state
             .pcb_carry
@@ -294,7 +298,7 @@ impl Signex {
                 let ratsnest = view
                     .ratsnest_visible()
                     .then_some((&interaction.pcb_ratsnest, path));
-                sync_drag_preview(canvas, board, &view, ratsnest, carry);
+                sync_drag_preview(canvas, board, &view, standard, ratsnest, carry);
             }
         }
     }
@@ -311,6 +315,7 @@ fn sync_drag_preview(
     canvas: &mut PcbCanvas,
     board: &PcbBoard,
     view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
     ratsnest: Option<(&PcbRatsnest, &std::path::Path)>,
     carry: Option<&PcbCarry>,
 ) {
@@ -325,13 +330,16 @@ fn sync_drag_preview(
         let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
         let rest = board_without(board, &carry.footprints, &following);
         let fills = pcb_geom::zone_fills(&rest);
-        let base = PcbSnapshot::from_board_with_view(&rest, view).with_zone_fills(&fills);
+        let base = PcbSnapshot::from_board_with_view(&rest, view)
+            .with_designator_standard(standard)
+            .with_zone_fills(&fills);
         canvas.begin_drag_preview(carry.footprints.clone(), following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let moved = carried_board(board, &carry.footprints, &following, carry.delta);
-        let snapshot = PcbSnapshot::from_board_with_view(&moved, view);
+        let snapshot = PcbSnapshot::from_board_with_view(&moved, view)
+            .with_designator_standard(standard);
         match ratsnest {
             Some((cache, path)) => {
                 let after = board_after_move(board, &carry.footprints, &following, carry.delta);

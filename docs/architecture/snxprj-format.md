@@ -218,8 +218,12 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
 "annotation": { "designator_standard": "din40719_2" }
 ```
 
-- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
-  means the library symbol's own designator letters decide. The section is
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`,
+  `iec81346_2_full` (#1416); absent means the library symbol's own designator
+  letters decide. Under `iec81346_2_full` a reference is stored without the
+  product-aspect sign (`QAC1`); display and export add it (`-QAC1`). A build
+  that does not know a value keeps the section unchanged and applies none. The
+  section is
   omitted entirely when nothing is set, so an untouched project re-saves
   byte-identical.
 - Placement derives the reference prefix from the part's component class under

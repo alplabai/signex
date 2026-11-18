@@ -8,11 +8,13 @@
 //! [`DocumentState::clear_document_dirty`] drops it, so a save that lands or
 //! a discard never leaves a stale one.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use super::DocumentState;
 use crate::app::{TabDocument, TabKind};
 use signex_engine::pcb::BoardEngine;
+use signex_types::designator::DesignatorStandard;
 use signex_types::pcb::PcbBoard;
 
 /// The engines of closed dirty PCB tabs, by path.
@@ -28,6 +30,20 @@ impl DocumentState {
     /// `None` for a tab whose board a failed History restore dropped.
     pub(crate) fn pcb_board(&self, path: &Path) -> Option<&PcbBoard> {
         self.board_engine(path).map(BoardEngine::board)
+    }
+
+    /// [`Self::pcb_board`] as the board outputs print it: a copy with the
+    /// designators the project's standard shows (`-QAC1`, #1416), else the
+    /// board itself.
+    pub(crate) fn pcb_board_shown(&self, path: &Path) -> Option<Cow<'_, PcbBoard>> {
+        let board = self.pcb_board(path)?;
+        let standard = self.designator_standard_for(path);
+        if !standard.is_some_and(DesignatorStandard::shows_product_aspect_sign) {
+            return Some(Cow::Borrowed(board));
+        }
+        let mut shown = board.clone();
+        signex_output::show_board_references(&mut shown, standard);
+        Some(Cow::Owned(shown))
     }
 
     /// The board engine of the PCB at `path`: its tab's, else the parked one.

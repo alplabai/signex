@@ -379,6 +379,28 @@ mod tests {
         assert_eq!(refs, ["R1", "R2"]);
     }
 
+    /// EN IEC 81346-2 class codes (#1416): each code numbers on its own
+    /// counter, apart from its one-letter main class.
+    #[test]
+    fn each_class_code_numbers_on_its_own_counter() {
+        let refs = annotated(
+            AnnotateMode::Incremental,
+            vec![
+                symbol("QAC?", 0.0),
+                symbol("Q5", 10.0),
+                symbol("QAC?", 20.0),
+                symbol("RAC?", 30.0),
+                symbol("RAA?", 40.0),
+            ],
+        );
+        assert_eq!(refs, ["QAC1", "Q5", "QAC2", "RAC1", "RAA1"]);
+        let refs = annotated(
+            AnnotateMode::ResetAndRenumber,
+            vec![symbol("QAC7", 0.0), symbol("Q3", 10.0)],
+        );
+        assert_eq!(refs, ["QAC1", "Q1"]);
+    }
+
     fn annotated(mode: AnnotateMode, symbols: Vec<Symbol>) -> Vec<String> {
         let mut document = test_sheet();
         document.symbols = symbols;

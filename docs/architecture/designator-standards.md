@@ -9,8 +9,9 @@ than memory.
 
 - **One letter class per standard, as the standard names it.** For EN IEC
   81346-2 that is the main class, the first letter. The 2019 edition also defines
-  two- and three-letter subclasses (for example `QAC`), which Signex does not
-  use.
+  two- and three-letter class codes (for example `QAC`); those are a standard
+  of their own, **EN IEC 81346-2 (full codes)** (`iec81346_2_full`, #1416),
+  listed under [Full class codes](#full-class-codes).
 - **No guessing.** If a standard does not name a class, the table holds `None`
   for it. A part of that class then keeps its library symbol's own letters,
   exactly as with no standard selected.
@@ -58,3 +59,67 @@ than memory.
 Under EN IEC 81346-2, resistors and diodes share `R`, and inductors, capacitors
 and memory share `C`. Annotation numbers each letter with one counter, so they
 never collide.
+
+## Full class codes
+
+The **EN IEC 81346-2 (full codes)** standard (#1416) gives each class the
+three-letter code of EN IEC 81346-2:2019, Table 3. Every code begins with its
+main-class letter from the table above. The short meanings below are written
+in our own words; the page is where the code appears in the standard.
+
+| Class | Code | Meaning | Page |
+|---|---|---|---|
+| resistor | `RAC` | limits current by resistance | p. 53 |
+| capacitor | `CAA` | stores electric charge | p. 32 |
+| inductor | `CBA` | stores energy in a magnetic field | p. 32 |
+| diode | `RAA` | lets current pass one way | p. 53 |
+| led | `PFA` | shows a state by light | p. 49 |
+| transistor (BJT/MOSFET/JFET) | `QAC` | switches or controls current electronically | p. 51 |
+| opamp | `TFA` | amplifies a signal | p. 57 |
+| regulator_switching | `TAB` | converts one DC voltage to another | p. 57 |
+| mcu / logic | `KEB` | processes information (processor) | p. 44 |
+| memory | `CFA` | stores information | p. 32 |
+| connector | `XDB` | connects by plug and socket | p. 65 |
+| switch | `SJA` | switch operated by hand (push-button) | p. 56 |
+| relay | `KFB` | switches a circuit from a control signal | p. 44 |
+| transformer | `TAA` | transforms an AC voltage, with isolation | p. 56 |
+| fuse | `FCA` | protects against overcurrent by melting | p. 36 |
+| antenna | `TFB` | sends or receives radio waves | p. 57 |
+| display | `PH` | shows information graphically (subclass; the table names no three-letter code) | p. 50 |
+| sensor | `B` | main class only: sensors span several codes (`BTA`, `BLA`, ...), so no one code fits the whole class | - |
+| motor | `MAA` | converts electric energy to rotation | p. 46 |
+| battery | `GBA` | supplies energy from a chemical store | - |
+
+Classes the standard does not name (comparator, regulator_linear, crystal,
+generic) keep the symbol's own letters, as under the single-letter option.
+
+**The product-aspect sign.** The full reference designation is written with
+the product-aspect prefix sign, `-QAC1`. Signex stores the reference without
+it (`QAC1`): annotation, the duplicate-designator ERC check, Re-prefix, Find
+Similar and every other tool work on the stored form, and each code counts on
+its own (`QAC1`, `QAC2` beside `Q1`). The sign is added only where a reference
+is shown or exported, by one helper,
+`signex_types::designator::display_reference`:
+
+- the schematic canvas, where the reference field is also boxed and hit on
+  the drawn text;
+- the schematic outputs built from the export scope (PDF, SVG, print preview,
+  BOM, netlist, ERC report);
+- the PCB canvas designators (`PcbSnapshot::with_designator_standard`);
+- the board outputs, written from a copy of the board whose footprint
+  references and designator texts are signed
+  (`signex_output::show_board_references`): pick and place, IPC-D-356, the
+  legend text on the Gerbers, the board PDF and the board reports. An
+  IPC-D-356 designator field holds 6 characters, so `-QAC123` is cut there.
+  The IPC-2581 and ODB++ writers (PR #2499) are not on trunk yet and do not
+  sign yet.
+
+The PCB selection index still boxes a designator on its stored text.
+
+Going the other way, `stored_reference` drops a `-` the user types in front of
+a reference (as it is shown) when the edit is committed, so `-QAC9` is stored
+as `QAC9` and annotation keeps working.
+
+Re-prefix counts a full code and its main-class letter as issued for each
+other, so a project can move between the single-letter and the full-code
+option and back with **Re-prefix to standard**.

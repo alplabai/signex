@@ -5,6 +5,8 @@
 //! instead of the library symbol's own designator letter. `None` means the
 //! legacy behaviour: the symbol's designator decides.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use super::prefix::{normalize_prefix_override, placement_prefix};
@@ -21,11 +23,21 @@ pub enum DesignatorStandard {
     /// EN IEC 81346-2 purpose letters (`K`, `P`, `R`, `T`, `X`, ...).
     #[serde(rename = "iec81346_2")]
     Iec81346_2,
+    /// EN IEC 81346-2 three-letter class codes (`RAC`, `QAC`, `XDB`, ...).
+    /// The reference is stored without the product-aspect sign; display and
+    /// export add it (see [`display_reference`]).
+    #[serde(rename = "iec81346_2_full")]
+    Iec81346_2Full,
 }
 
 impl DesignatorStandard {
     /// Every standard, in the order a picker lists them.
-    pub const ALL: [Self; 3] = [Self::Ieee315, Self::Din40719_2, Self::Iec81346_2];
+    pub const ALL: [Self; 4] = [
+        Self::Ieee315,
+        Self::Din40719_2,
+        Self::Iec81346_2,
+        Self::Iec81346_2Full,
+    ];
 
     /// Human-readable name for the Project Options picker.
     pub fn label(self) -> &'static str {
@@ -33,8 +45,40 @@ impl DesignatorStandard {
             Self::Ieee315 => "IEEE 315",
             Self::Din40719_2 => "DIN 40719-2",
             Self::Iec81346_2 => "EN IEC 81346-2",
+            Self::Iec81346_2Full => "EN IEC 81346-2 (full codes)",
         }
     }
+
+    /// Whether a designated reference is shown and exported behind the
+    /// product-aspect sign `-`.
+    pub fn shows_product_aspect_sign(self) -> bool {
+        matches!(self, Self::Iec81346_2Full)
+    }
+}
+
+/// A stored reference as the canvas and every output show it: `-QAC1` for
+/// `QAC1` under [`DesignatorStandard::Iec81346_2Full`], unchanged otherwise.
+/// Annotation, ERC and every tool work on the stored form; only display and
+/// export call this. Empty references, `#` net anchors (`#PWR1`) and a
+/// reference that already starts with `-` are left alone.
+pub fn display_reference(standard: Option<DesignatorStandard>, reference: &str) -> Cow<'_, str> {
+    let signed = standard.is_some_and(DesignatorStandard::shows_product_aspect_sign);
+    if !signed || reference.is_empty() || reference.starts_with(['#', '-']) {
+        return Cow::Borrowed(reference);
+    }
+    Cow::Owned(format!("-{reference}"))
+}
+
+/// The reference to store for text a user typed: the inverse of
+/// [`display_reference`]. Under [`DesignatorStandard::Iec81346_2Full`] a
+/// leading product-aspect sign (`-QAC1`, as the reference is shown) is
+/// dropped, so annotation keeps working on `QAC1`; any other standard
+/// stores the text as typed.
+pub fn stored_reference(standard: Option<DesignatorStandard>, typed: &str) -> &str {
+    if !standard.is_some_and(DesignatorStandard::shows_product_aspect_sign) {
+        return typed;
+    }
+    typed.trim_start().strip_prefix('-').unwrap_or(typed)
 }
 
 impl std::fmt::Display for DesignatorStandard {
@@ -43,42 +87,63 @@ impl std::fmt::Display for DesignatorStandard {
     }
 }
 
-/// `(ieee315, din40719_2, iec81346_2)` letters for one class key; `None` where
-/// that standard names no letter for the class. Each entry is checked against
-/// the standard text: sources and page numbers are in
+/// The letters each standard gives one class key; `None` where that standard
+/// names no letter for the class. Each entry is checked against the standard
+/// text: sources and page numbers are in
 /// `docs/architecture/designator-standards.md`.
-type ClassLetters = (
-    Option<&'static str>,
-    Option<&'static str>,
-    Option<&'static str>,
-);
+struct ClassLetters {
+    ieee315: Option<&'static str>,
+    din40719_2: Option<&'static str>,
+    /// EN IEC 81346-2 main class (one letter).
+    iec81346_2: Option<&'static str>,
+    /// EN IEC 81346-2 class code from Table 3.
+    iec81346_2_full: Option<&'static str>,
+}
 
 fn class_letters(class_key: &str) -> Option<ClassLetters> {
-    let all = |ieee, din, iec| Some((Some(ieee), Some(din), Some(iec)));
+    let all = |ieee, din, iec, full| {
+        Some(ClassLetters {
+            ieee315: Some(ieee),
+            din40719_2: Some(din),
+            iec81346_2: Some(iec),
+            iec81346_2_full: Some(full),
+        })
+    };
+    // Classes EN IEC 81346-2 names no code for.
+    let ieee_din = |ieee, din| {
+        Some(ClassLetters {
+            ieee315: Some(ieee),
+            din40719_2: Some(din),
+            iec81346_2: None,
+            iec81346_2_full: None,
+        })
+    };
     match class_key {
-        "resistor" => all("R", "R", "R"),
-        "capacitor" => all("C", "C", "C"),
-        "inductor" => all("L", "L", "C"),
-        "diode" => all("D", "V", "R"),
-        "led" => all("DS", "H", "P"),
-        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => all("Q", "V", "Q"),
-        "opamp" => all("U", "N", "T"),
-        "comparator" => Some((Some("U"), Some("N"), None)),
-        "regulator_linear" => Some((Some("U"), Some("N"), None)),
-        "regulator_switching" => all("U", "U", "T"),
-        "mcu" | "logic" => all("U", "D", "K"),
-        "memory" => all("U", "D", "C"),
-        "connector" => all("J", "X", "X"),
-        "switch" => all("S", "S", "S"),
-        "relay" => all("K", "K", "K"),
-        "crystal" => Some((Some("Y"), Some("G"), None)),
-        "transformer" => all("T", "T", "T"),
-        "fuse" => all("F", "F", "F"),
-        "antenna" => all("E", "W", "T"),
-        "display" => all("DS", "P", "P"),
-        "sensor" => all("U", "B", "B"),
-        "motor" => all("B", "M", "M"),
-        "battery" => all("BT", "G", "G"),
+        "resistor" => all("R", "R", "R", "RAC"),
+        "capacitor" => all("C", "C", "C", "CAA"),
+        "inductor" => all("L", "L", "C", "CBA"),
+        "diode" => all("D", "V", "R", "RAA"),
+        "led" => all("DS", "H", "P", "PFA"),
+        "transistor_bjt" | "transistor_mosfet" | "transistor_jfet" => all("Q", "V", "Q", "QAC"),
+        "opamp" => all("U", "N", "T", "TFA"),
+        "comparator" => ieee_din("U", "N"),
+        "regulator_linear" => ieee_din("U", "N"),
+        "regulator_switching" => all("U", "U", "T", "TAB"),
+        "mcu" | "logic" => all("U", "D", "K", "KEB"),
+        "memory" => all("U", "D", "C", "CFA"),
+        "connector" => all("J", "X", "X", "XDB"),
+        "switch" => all("S", "S", "S", "SJA"),
+        "relay" => all("K", "K", "K", "KFB"),
+        "crystal" => ieee_din("Y", "G"),
+        "transformer" => all("T", "T", "T", "TAA"),
+        "fuse" => all("F", "F", "F", "FCA"),
+        "antenna" => all("E", "W", "T", "TFB"),
+        // The standard gives a graphical display the subclass `PH` only.
+        "display" => all("DS", "P", "P", "PH"),
+        // Sensors span several codes (`BTA`, `BLA`, ...): the main class.
+        "sensor" => all("U", "B", "B", "B"),
+        "motor" => all("B", "M", "M", "MAA"),
+        "battery" => all("BT", "G", "G", "GBA"),
         _ => None,
     }
 }
@@ -87,11 +152,12 @@ fn class_letters(class_key: &str) -> Option<ClassLetters> {
 /// `"generic"`, any key the table does not know, and a class the standard
 /// names no letter for.
 pub fn class_prefix(standard: DesignatorStandard, class_key: &str) -> Option<&'static str> {
-    let (ieee, din, iec) = class_letters(class_key)?;
+    let letters = class_letters(class_key)?;
     match standard {
-        DesignatorStandard::Ieee315 => ieee,
-        DesignatorStandard::Din40719_2 => din,
-        DesignatorStandard::Iec81346_2 => iec,
+        DesignatorStandard::Ieee315 => letters.ieee315,
+        DesignatorStandard::Din40719_2 => letters.din40719_2,
+        DesignatorStandard::Iec81346_2 => letters.iec81346_2,
+        DesignatorStandard::Iec81346_2Full => letters.iec81346_2_full,
     }
 }
 
@@ -182,6 +248,7 @@ mod tests {
             (DesignatorStandard::Ieee315, "\"ieee315\""),
             (DesignatorStandard::Din40719_2, "\"din40719_2\""),
             (DesignatorStandard::Iec81346_2, "\"iec81346_2\""),
+            (DesignatorStandard::Iec81346_2Full, "\"iec81346_2_full\""),
         ] {
             assert_eq!(serde_json::to_string(&standard).unwrap(), text);
             assert_eq!(
@@ -197,6 +264,77 @@ mod tests {
         assert_eq!(DesignatorStandard::Ieee315.to_string(), "IEEE 315");
         assert_eq!(DesignatorStandard::Din40719_2.to_string(), "DIN 40719-2");
         assert_eq!(DesignatorStandard::Iec81346_2.to_string(), "EN IEC 81346-2");
+        assert_eq!(
+            DesignatorStandard::Iec81346_2Full.to_string(),
+            "EN IEC 81346-2 (full codes)"
+        );
+    }
+
+    #[test]
+    fn the_full_codes_standard_gives_three_letter_class_codes() {
+        use DesignatorStandard::Iec81346_2Full as Full;
+        for (class, code) in [
+            ("resistor", "RAC"),
+            ("capacitor", "CAA"),
+            ("inductor", "CBA"),
+            ("diode", "RAA"),
+            ("transistor_mosfet", "QAC"),
+            ("opamp", "TFA"),
+            ("regulator_switching", "TAB"),
+            ("mcu", "KEB"),
+            ("memory", "CFA"),
+            ("connector", "XDB"),
+            ("relay", "KFB"),
+            ("fuse", "FCA"),
+            ("antenna", "TFB"),
+            ("motor", "MAA"),
+            ("battery", "GBA"),
+        ] {
+            assert_eq!(class_prefix(Full, class), Some(code), "{class}");
+            assert_eq!(resolve_prefix(Some(Full), Some(class), None, "U?"), code);
+        }
+        // Each code starts with its main-class letter.
+        for class in ["resistor", "diode", "opamp", "connector", "battery"] {
+            let main = class_prefix(DesignatorStandard::Iec81346_2, class).unwrap();
+            assert!(class_prefix(Full, class).unwrap().starts_with(main), "{class}");
+        }
+    }
+
+    #[test]
+    fn full_codes_and_main_letters_count_as_issued_for_each_other() {
+        assert!(class_letters_ever_issued("transistor_bjt", "QAC"));
+        assert!(class_letters_ever_issued("transistor_bjt", "Q"));
+        assert!(class_letters_ever_issued("diode", "RAA"));
+        assert!(!class_letters_ever_issued("diode", "RAC"));
+    }
+
+    #[test]
+    fn only_the_full_codes_standard_shows_the_product_aspect_sign() {
+        use DesignatorStandard::*;
+        assert_eq!(display_reference(Some(Iec81346_2Full), "QAC1"), "-QAC1");
+        assert_eq!(display_reference(Some(Iec81346_2Full), "QAC?"), "-QAC?");
+        for standard in [None, Some(Ieee315), Some(Din40719_2), Some(Iec81346_2)] {
+            assert_eq!(display_reference(standard, "QAC1"), "QAC1");
+        }
+        // Net anchors, an empty reference and one already signed stay as is.
+        for stored in ["#PWR1", "", "-QAC1"] {
+            assert_eq!(display_reference(Some(Iec81346_2Full), stored), stored);
+        }
+        assert!(matches!(display_reference(Some(Ieee315), "R1"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn a_typed_sign_is_stored_bare_only_under_the_full_codes_standard() {
+        use DesignatorStandard::*;
+        assert_eq!(stored_reference(Some(Iec81346_2Full), "-QAC1"), "QAC1");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), " -QAC1"), "QAC1");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), "QAC1"), "QAC1");
+        for standard in [None, Some(Ieee315), Some(Iec81346_2)] {
+            assert_eq!(stored_reference(standard, "-QAC1"), "-QAC1");
+        }
+        // What is shown is stored back unchanged.
+        let shown = display_reference(Some(Iec81346_2Full), "QAC7");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), &shown), "QAC7");
     }
 
     #[test]
@@ -289,8 +427,13 @@ mod tests {
         use DesignatorStandard::*;
         for class in ["comparator", "regulator_linear", "crystal"] {
             assert_eq!(class_prefix(Iec81346_2, class), None, "{class}");
+            assert_eq!(class_prefix(Iec81346_2Full, class), None, "{class}");
             assert_eq!(
                 resolve_prefix(Some(Iec81346_2), Some(class), None, "U?"),
+                "U"
+            );
+            assert_eq!(
+                resolve_prefix(Some(Iec81346_2Full), Some(class), None, "U?"),
                 "U"
             );
             assert!(class_prefix(Ieee315, class).is_some(), "{class}");

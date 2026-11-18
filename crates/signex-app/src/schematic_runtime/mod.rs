@@ -371,6 +371,9 @@ pub struct SceneOverrides<'a> {
     /// The project's widths and sizes for unset items (#2026); built-in by
     /// default.
     pub defaults: signex_types::schematic::SchematicDefaults,
+    /// The project's designator standard: a reference draws as
+    /// `signex_types::designator::display_reference` shows it (#1416).
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 pub fn render_schematic(
@@ -614,12 +617,17 @@ fn collect_item_bounds_with(
             .as_ref()
             .filter(|p| !p.hidden && symbol.draws_reference())
         {
+            // Boxed on the text the canvas draws (#1200, #1416).
+            let drawn = signex_types::designator::display_reference(
+                widths.designator_standard,
+                designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+            );
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb_with(
                     Some(WidthSources::of(snapshot)),
                     TextField::SymbolReference,
-                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    &drawn,
                     ref_text,
                     symbol,
                     document_family,
@@ -1150,6 +1158,8 @@ mod drawings_tests;
 mod font_geometry_tests;
 #[cfg(test)]
 mod multiline_note_tests;
+#[cfg(test)]
+mod reference_sign_tests;
 #[cfg(test)]
 mod sample_layout_tests;
 #[cfg(test)]

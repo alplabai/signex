@@ -239,10 +239,12 @@ pub fn build_renderer_snapshot(
             .designators
             .and_then(|d| d.get(&symbol.uuid))
             .unwrap_or(&symbol.reference);
+        let reference =
+            signex_types::designator::display_reference(overrides.designator_standard, reference);
         if !reference.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                reference,
+                &reference,
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),

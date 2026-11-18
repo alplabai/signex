@@ -190,10 +190,12 @@ impl Signex {
         if !state.can_generate(&self.fab_output_kinds(state)) {
             return Task::none();
         }
+        // The copy the files are written from: designators as the project's
+        // standard shows them (#1416).
         let job = self
             .document_state
-            .board_engine(&state.board)
-            .map(|engine| engine.board().clone())
+            .pcb_board_shown(&state.board)
+            .map(std::borrow::Cow::into_owned)
             .map(|board| self.generate_job(state, board));
         self.ui_state.fab_outputs_writes += 1;
         let generation = self.ui_state.fab_outputs_writes;

@@ -20,6 +20,7 @@ mod markup_escape;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
+mod reference_display;
 pub mod substitution;
 pub mod svg;
 pub mod template;
@@ -52,6 +53,7 @@ pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
     preview_raster_size,
 };
+pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_part_field, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
