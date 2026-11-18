@@ -320,9 +320,9 @@ mod tests {
     fn the_page_rows_send_their_messages() {
         let [home, projects, libraries] = nav_messages().map(|m| format!("{m:?}"));
         for section in [StartSection::Home, StartSection::Projects] {
-            assert_eq!(nav_click(section, "Home"), [home.clone()]);
-            assert_eq!(nav_click(section, "Projects"), [projects.clone()]);
-            assert_eq!(nav_click(section, "Libraries"), [libraries.clone()]);
+            assert_eq!(nav_click(section, "Home"), std::slice::from_ref(&home));
+            assert_eq!(nav_click(section, "Projects"), std::slice::from_ref(&projects));
+            assert_eq!(nav_click(section, "Libraries"), std::slice::from_ref(&libraries));
         }
         assert!(nav_click(StartSection::Home, "Parts search").is_empty());
     }
