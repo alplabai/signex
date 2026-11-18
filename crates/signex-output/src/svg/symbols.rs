@@ -11,11 +11,11 @@ use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::variables::{Resolver, TextTable};
 use signex_types::schematic::{
     FillType, LibSymbol, PinLabelKind, Point, SchematicDefaults, Symbol, SymbolPrimitive,
     lower_pin_labels, lower_placed_symbol,
 };
+use signex_types::variables::{Resolver, TextTable};
 use std::collections::HashMap;
 
 /// Emit one `SvgElement` per primitive of the symbol's shared lowering

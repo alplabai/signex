@@ -32,7 +32,9 @@ fn value_input<'a>(project: &'a LoadedProject, name: &str) -> iced::widget::Text
             value,
         })
     })
-    .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted { project_id }))
+    .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted {
+        project_id,
+    }))
     .size(ts.label)
     .padding(sp.s)
     .width(Length::Fill)
@@ -58,7 +60,10 @@ fn evaluation_note<'a>(
         ),
         Err(error) => {
             let error = error.to_string();
-            (t!(i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error), tokens.error)
+            (
+                t!(i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error),
+                tokens.error,
+            )
         }
     };
     Some(

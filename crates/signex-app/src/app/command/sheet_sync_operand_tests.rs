@@ -20,7 +20,11 @@ fn app_in(dir: &Path) -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.snap_enabled = true;
     app.ui_state.grid_size_mm = 1.27;
-    add_sheet_with(&mut app, &dir.join("main.snxsch"), SchematicSheet::default());
+    add_sheet_with(
+        &mut app,
+        &dir.join("main.snxsch"),
+        SchematicSheet::default(),
+    );
     app
 }
 
@@ -118,7 +122,10 @@ fn a_file_already_placed_or_missing_is_refused() {
     let mut app = app_in(dir.path());
     answered(create(&mut app, &charger, &[]));
     let again = refusal(create(&mut app, &charger, &[]));
-    assert!(again.contains("already refers to charger.snxsch"), "{again}");
+    assert!(
+        again.contains("already refers to charger.snxsch"),
+        "{again}"
+    );
     // A file that is not there has no ports to make entries for.
     refusal(create(&mut app, &dir.path().join("nope.snxsch"), &[]));
     assert_eq!(doc(&app).child_sheets.len(), 1);

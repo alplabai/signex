@@ -199,7 +199,10 @@ fn sheet_to_symbol_previews_then_applies_as_one_undo_step() {
     assert_eq!(parent_pins(&rig.app), ["GONE"], "a preview changes nothing");
 
     send(&mut rig.app, SheetSyncMsg::ApplyRequested);
-    assert!(rig.app.ui_state.sheet_sync.is_none(), "Apply closes the dialog");
+    assert!(
+        rig.app.ui_state.sheet_sync.is_none(),
+        "Apply closes the dialog"
+    );
     assert_eq!(parent_pins(&rig.app), ["SDA"]);
     rig.app
         .document_state
@@ -242,7 +245,10 @@ fn symbol_to_sheet_changes_the_closed_child_in_memory_only() {
     assert_eq!(preview.renamed.len(), 1);
 
     send(&mut rig.app, SheetSyncMsg::ApplyRequested);
-    assert!(rig.app.ui_state.sheet_sync.is_none(), "Apply closes the dialog");
+    assert!(
+        rig.app.ui_state.sheet_sync.is_none(),
+        "Apply closes the dialog"
+    );
     let child = rig
         .app
         .document_state
@@ -258,7 +264,11 @@ fn symbol_to_sheet_changes_the_closed_child_in_memory_only() {
     assert!(rig.app.document_state.is_document_dirty(&rig.child));
     let on_disk = std::fs::read_to_string(&rig.child).expect("child file");
     assert_eq!(on_disk, rig.child_text, "nothing is written until Save");
-    assert_eq!(parent_pins(&rig.app), ["IN1", "NEW"], "the symbol is left alone");
+    assert_eq!(
+        parent_pins(&rig.app),
+        ["IN1", "NEW"],
+        "the symbol is left alone"
+    );
 }
 
 #[test]
@@ -338,7 +348,11 @@ fn a_grandparent_sheet_is_refused_as_a_loop() {
             ..SchematicSheet::default()
         },
     );
-    let mid = node(&dir, "mid.snxsch", vec![node(&dir, "parent.snxsch", Vec::new())]);
+    let mid = node(
+        &dir,
+        "mid.snxsch",
+        vec![node(&dir, "parent.snxsch", Vec::new())],
+    );
     rig.app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(node(&dir, "top.snxsch", vec![mid])),
         ..Default::default()

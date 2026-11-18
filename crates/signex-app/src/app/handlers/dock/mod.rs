@@ -18,8 +18,8 @@ mod placed_edit;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
-mod sheet_variables;
 mod search_prefs_persist;
+mod sheet_variables;
 #[cfg(test)]
 mod title_block_persist_tests;
 

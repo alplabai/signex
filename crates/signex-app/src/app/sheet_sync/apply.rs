@@ -236,7 +236,9 @@ fn summary(preview: &SheetSyncPreview) -> String {
 fn english(problem: &SheetSyncProblem) -> String {
     match problem {
         SheetSyncProblem::ReadFailed(why) => format!("the sheet could not be read ({why})"),
-        SheetSyncProblem::Stale => "the sheet, the sheet symbol or the open sheets changed".to_string(),
+        SheetSyncProblem::Stale => {
+            "the sheet, the sheet symbol or the open sheets changed".to_string()
+        }
         SheetSyncProblem::Changed => "the sheets changed since the preview".to_string(),
         SheetSyncProblem::Busy(path) => format!("{} is being saved or moved", path.display()),
         SheetSyncProblem::ReadOnly(path) => format!("{} opens read-only", path.display()),

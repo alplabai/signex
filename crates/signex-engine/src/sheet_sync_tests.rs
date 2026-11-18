@@ -10,8 +10,7 @@ use signex_types::schematic::{
 use crate::{
     Command, Engine, SheetEntryRename, SheetPort, SheetSyncPreview, entry_changes_from_sheet,
     exposed_sheet_ports, port_changes_from_symbol, port_sync_commands, ports_for_pin_sync,
-    sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
-    unused_sheet_symbol_name,
+    sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command, unused_sheet_symbol_name,
 };
 
 const FILE: &str = "child.snxsch";
@@ -84,7 +83,11 @@ fn sheet_to_symbol_lists_added_removed_and_a_lone_rename() {
     let preview = entry_changes_from_sheet(&entries, &ports);
     assert_eq!(preview.renamed, vec![rename("OLD", "NEW")]);
     assert_eq!(names(&preview.added), ["X", "Y"]);
-    assert_eq!(names(&preview.removed), ["GONE"], "a hand-placed entry stays");
+    assert_eq!(
+        names(&preview.removed),
+        ["GONE"],
+        "a hand-placed entry stays"
+    );
 }
 
 #[test]
@@ -143,7 +146,10 @@ fn sheet_to_symbol_renames_in_place_adds_and_drops_then_undoes() {
     assert!(result.changed);
 
     let pins = &engine.document().child_sheets[0].pins;
-    let renamed = pins.iter().find(|p| p.name == "NEW").expect("renamed entry");
+    let renamed = pins
+        .iter()
+        .find(|p| p.name == "NEW")
+        .expect("renamed entry");
     assert_eq!(
         (renamed.uuid, renamed.position, renamed.direction.as_str()),
         (old.uuid, old.position, "output"),
@@ -240,10 +246,22 @@ fn symbol_to_sheet_commands_apply_as_one_step_and_undo() {
         .filter(|l| l.text == "IN1" || l.text == "IN2")
         .collect();
     assert_eq!(added.len(), 2);
-    assert!(added.iter().all(|l| l.label_type == LabelType::Hierarchical && l.shape == "input"));
+    assert!(
+        added
+            .iter()
+            .all(|l| l.label_type == LabelType::Hierarchical && l.shape == "input")
+    );
     assert_ne!(added[0].position, added[1].position, "one row each");
-    let global = after.labels.iter().find(|l| l.text == "VCC").expect("global");
-    assert_eq!(global.label_type, LabelType::Global, "a Global label is never touched");
+    let global = after
+        .labels
+        .iter()
+        .find(|l| l.text == "VCC")
+        .expect("global");
+    assert_eq!(
+        global.label_type,
+        LabelType::Global,
+        "a Global label is never touched"
+    );
     let mut ports: Vec<String> = exposed_sheet_ports(after)
         .into_iter()
         .map(|p| p.name)
@@ -269,7 +287,10 @@ fn a_symbol_from_a_sheet_has_an_entry_for_every_port_and_places_as_one_step() {
     };
     let at = Point::new(50.8, 50.8);
     let made = sheet_symbol_from_sheet(&child, FILE, "child", at, &mut SequentialIds::default());
-    assert_eq!((made.name.as_str(), made.filename.as_str()), ("child", FILE));
+    assert_eq!(
+        (made.name.as_str(), made.filename.as_str()),
+        ("child", FILE)
+    );
     assert_eq!(made.position, at);
     let mut entry_names: Vec<&str> = made
         .pins

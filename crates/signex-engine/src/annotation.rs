@@ -561,7 +561,11 @@ mod tests {
             .unwrap();
         assert!(changed);
         let symbols = &engine.document().symbols;
-        let renamed = &symbols.iter().find(|s| s.uuid == source_id).unwrap().reference;
+        let renamed = &symbols
+            .iter()
+            .find(|s| s.uuid == source_id)
+            .unwrap()
+            .reference;
         assert_ne!(renamed, "R5");
         assert_eq!(symbols[1].value, format!("= {renamed}.Value * 2"));
         engine.undo().unwrap();

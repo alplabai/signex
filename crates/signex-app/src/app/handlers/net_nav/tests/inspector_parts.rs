@@ -48,7 +48,10 @@ fn the_tabs_switch_between_the_nets_and_the_parts() {
     inspector(&mut p, NetInspectorMsg::FilterChanged(String::new()));
     assert_eq!(view(&p).tab, NetInspectorTab::ByNet, "nets first");
     assert_eq!(view(&p).nets.len(), 1);
-    assert!(view(&p).components.is_empty(), "only the tab shown is built");
+    assert!(
+        view(&p).components.is_empty(),
+        "only the tab shown is built"
+    );
 
     inspector(
         &mut p,
@@ -74,7 +77,10 @@ fn a_part_row_has_its_value_and_footprint_and_expands_to_the_net_on_each_pin() {
     let designators: Vec<&str> = parts.iter().map(|r| r.designator.as_str()).collect();
     assert_eq!(designators, ["C1", "R1"], "by designator");
     let row = &parts[1];
-    assert_eq!((row.value.as_str(), row.footprint.as_str()), ("10k", "R_0603"));
+    assert_eq!(
+        (row.value.as_str(), row.footprint.as_str()),
+        ("10k", "R_0603")
+    );
     assert_eq!(row.pins, 1);
     assert!(!row.expanded && row.pin_rows.is_empty());
     let key = row.key.clone();

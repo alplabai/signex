@@ -296,7 +296,10 @@ mod tests {
         // Each code starts with its main-class letter.
         for class in ["resistor", "diode", "opamp", "connector", "battery"] {
             let main = class_prefix(DesignatorStandard::Iec81346_2, class).unwrap();
-            assert!(class_prefix(Full, class).unwrap().starts_with(main), "{class}");
+            assert!(
+                class_prefix(Full, class).unwrap().starts_with(main),
+                "{class}"
+            );
         }
     }
 
@@ -320,7 +323,10 @@ mod tests {
         for stored in ["#PWR1", "", "-QAC1"] {
             assert_eq!(display_reference(Some(Iec81346_2Full), stored), stored);
         }
-        assert!(matches!(display_reference(Some(Ieee315), "R1"), Cow::Borrowed(_)));
+        assert!(matches!(
+            display_reference(Some(Ieee315), "R1"),
+            Cow::Borrowed(_)
+        ));
     }
 
     #[test]

@@ -117,7 +117,10 @@ fn a_name_that_is_not_an_identifier_is_refused() {
     let mut f = fixture();
     open_tab(&mut f.app);
     let sheet = open_dirty_root_sheet(&mut f);
-    sheet_variables(&mut f.app, SheetVariableMsg::NewNameTyped("2 bad".to_string()));
+    sheet_variables(
+        &mut f.app,
+        SheetVariableMsg::NewNameTyped("2 bad".to_string()),
+    );
     sheet_variables(&mut f.app, SheetVariableMsg::Added);
     assert!(
         f.app.document_state.engines[&sheet]

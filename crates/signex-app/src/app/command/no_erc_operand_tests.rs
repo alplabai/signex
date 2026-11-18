@@ -76,7 +76,10 @@ fn edit_no_erc_rules_sets_the_list_in_one_undo_step_and_left_out_is_every_rule()
     assert_eq!(rules(&app), vec![UNUSED_PIN]);
 
     let outcome = run(&mut app, "edit_no_erc_rules", &[&id_op]);
-    assert!(matches!(outcome, CommandOutcome::Answered(_)), "{outcome:?}");
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
     assert!(rules(&app).is_empty());
 }
 

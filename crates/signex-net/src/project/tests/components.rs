@@ -54,7 +54,8 @@ fn design() -> SchematicSheet {
     s.symbols.last_mut().unwrap().uuid = id(9);
 
     s.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
-    s.labels.push(label("SIG", pt(0.0, 20.0), LabelType::Global));
+    s.labels
+        .push(label("SIG", pt(0.0, 20.0), LabelType::Global));
     part(&mut s, "U1", "U2", pt(5.0, 20.0), 4);
     part(&mut s, "U1", "U", pt(0.0, 20.0), 3);
 

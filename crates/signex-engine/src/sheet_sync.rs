@@ -252,7 +252,9 @@ pub fn port_sync_commands(
             .pins
             .iter()
             .find(|pin| normalize_port_name(&pin.name) == Some(name.as_str()))
-            .map_or("bidirectional", |pin| normalize_sheet_pin_direction(&pin.direction));
+            .map_or("bidirectional", |pin| {
+                normalize_sheet_pin_direction(&pin.direction)
+            });
         let at = free_port_spot(&contacts, &taken);
         taken.push(at);
         commands.push(Command::PlaceLabel {
@@ -271,8 +273,7 @@ pub fn port_sync_commands(
 /// The first row of the added-port column that connects to nothing and is
 /// not taken by a port added in the same run.
 fn free_port_spot(contacts: &SheetPinContacts, taken: &[Point]) -> Point {
-    let spot =
-        |row: usize| Point::new(COLUMN_START_MM, COLUMN_START_MM + PORT_ROW_MM * row as f64);
+    let spot = |row: usize| Point::new(COLUMN_START_MM, COLUMN_START_MM + PORT_ROW_MM * row as f64);
     (0..MAX_PORT_ROWS)
         .map(spot)
         .find(|p| !contacts.hits(p.x, p.y) && !taken.iter().any(|t| pt_key(t) == pt_key(p)))
@@ -361,11 +362,19 @@ pub fn sheet_symbol_spot(parent: &SchematicSheet) -> Point {
         .flat_map(|wire| [wire.start.y, wire.end.y])
         .chain(parent.symbols.iter().map(|symbol| symbol.position.y))
         .chain(parent.labels.iter().map(|label| label.position.y))
-        .chain(parent.child_sheets.iter().map(|symbol| symbol.position.y + symbol.size.1))
+        .chain(
+            parent
+                .child_sheets
+                .iter()
+                .map(|symbol| symbol.position.y + symbol.size.1),
+        )
         .filter(|y| y.is_finite())
         .reduce(f64::max);
     match lowest {
-        Some(y) => Point::new(COLUMN_START_MM, (y / GRID_MM).ceil() * GRID_MM + BELOW_CONTENT_MM),
+        Some(y) => Point::new(
+            COLUMN_START_MM,
+            (y / GRID_MM).ceil() * GRID_MM + BELOW_CONTENT_MM,
+        ),
         None => Point::new(COLUMN_START_MM, COLUMN_START_MM),
     }
 }

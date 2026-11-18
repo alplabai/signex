@@ -131,12 +131,8 @@ impl SchematicCanvas<'_> {
         let mut halos = self.halo_cache.borrow_mut();
         let base_is_current = halos.base.as_ref().is_some_and(|b| {
             b.selected == self.selected
-                && b.sheet.matches(
-                    revision,
-                    class_revision,
-                    &widths,
-                    &self.designators,
-                )
+                && b.sheet
+                    .matches(revision, class_revision, &widths, &self.designators)
         });
         if !base_is_current {
             halos.generations += 1;

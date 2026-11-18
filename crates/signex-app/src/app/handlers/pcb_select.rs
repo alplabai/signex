@@ -338,8 +338,8 @@ fn sync_drag_preview(
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let moved = carried_board(board, &carry.footprints, &following, carry.delta);
-        let snapshot = PcbSnapshot::from_board_with_view(&moved, view)
-            .with_designator_standard(standard);
+        let snapshot =
+            PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
         match ratsnest {
             Some((cache, path)) => {
                 let after = board_after_move(board, &carry.footprints, &following, carry.delta);

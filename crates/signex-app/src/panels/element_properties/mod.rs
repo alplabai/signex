@@ -35,10 +35,10 @@ pub(crate) use body_row::{
 };
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
-pub use no_erc::NoErcRuleEdit;
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
 pub use footprint_card::{
     FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
 };
+pub use no_erc::NoErcRuleEdit;
 pub(super) use selected::view_selected_element_properties;

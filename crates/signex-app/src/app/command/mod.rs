@@ -83,9 +83,9 @@ mod sheet_entry_ref_tests;
 #[cfg(test)]
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
-mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_sync_operand_tests;
+mod sheet_sync_operands;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;

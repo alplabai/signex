@@ -225,10 +225,16 @@ fn value_note<'a>(
     let (note, color) = if !error.is_empty() {
         let error = error.to_string();
         let color = crate::styles::ti(ctx.tokens.error);
-        (t!(i18n, ids::PROPERTIES_VALUE_ERROR, "error" => error), color)
+        (
+            t!(i18n, ids::PROPERTIES_VALUE_ERROR, "error" => error),
+            color,
+        )
     } else if !shows.is_empty() {
         let value = shows.to_string();
-        (t!(i18n, ids::PROPERTIES_VALUE_SHOWS, "value" => value), muted)
+        (
+            t!(i18n, ids::PROPERTIES_VALUE_SHOWS, "value" => value),
+            muted,
+        )
     } else {
         return None;
     };

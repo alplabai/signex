@@ -15,7 +15,11 @@ pub(super) fn value_evaluation_rows(
     symbol: uuid::Uuid,
     project: &BTreeMap<String, String>,
 ) -> Vec<(String, String)> {
-    let Some(symbol) = sheet.symbols.iter().find(|s| s.uuid == symbol && !s.is_power) else {
+    let Some(symbol) = sheet
+        .symbols
+        .iter()
+        .find(|s| s.uuid == symbol && !s.is_power)
+    else {
         return Vec::new();
     };
     let (sheet_table, project_table) = (TextTable(&sheet.variables), TextTable(project));

@@ -115,7 +115,11 @@ fn qualify(node: ExprNode, symbol: &Symbol, key: &str) -> ExprNode {
         ExprNode::Ternary(cond, then, otherwise) => {
             ExprNode::Ternary(boxed(cond), boxed(then), boxed(otherwise))
         }
-        ExprNode::Lookup { key: lookup, keys, values } => ExprNode::Lookup {
+        ExprNode::Lookup {
+            key: lookup,
+            keys,
+            values,
+        } => ExprNode::Lookup {
             key: boxed(lookup),
             keys: keys.into_iter().map(q).collect(),
             values: values.into_iter().map(q).collect(),

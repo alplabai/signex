@@ -68,11 +68,7 @@ fn a_variable_cycle_is_an_error_not_an_overflow() {
 #[test]
 fn an_unknown_reference_is_reported_for_the_sheet() {
     let project = table(&[("VCC", "3.3V")]);
-    let sheet = table(&[
-        ("HALF", "= VDD / 2"),
-        ("OK", "= VCC * 2"),
-        ("NOTE", "text"),
-    ]);
+    let sheet = table(&[("HALF", "= VDD / 2"), ("OK", "= VCC * 2"), ("NOTE", "text")]);
     let issues = sheet_variable_issues(&sheet, &project);
     assert_eq!(
         issues,

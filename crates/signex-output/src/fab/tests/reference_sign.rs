@@ -29,7 +29,8 @@ fn the_fabrication_files_print_the_signed_designator() {
     let ipc = file(&set, "fab-netlist.ipc").expect("test netlist");
     let designator = |line: &str| line.get(20..26).map(str::to_owned);
     assert!(
-        ipc.lines().any(|l| designator(l).as_deref() == Some("-R1   ")),
+        ipc.lines()
+            .any(|l| designator(l).as_deref() == Some("-R1   ")),
         "{ipc}"
     );
 }

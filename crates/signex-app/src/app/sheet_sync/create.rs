@@ -161,9 +161,10 @@ impl Signex {
                 other.name
             ));
         }
-        let stem = path
-            .file_stem()
-            .map_or_else(|| "sheet".to_string(), |stem| stem.to_string_lossy().into_owned());
+        let stem = path.file_stem().map_or_else(
+            || "sheet".to_string(),
+            |stem| stem.to_string_lossy().into_owned(),
+        );
         let name = signex_engine::unused_sheet_symbol_name(parent, &stem);
         let at = self.symbol_from_sheet_spot(target, parent);
         let symbol = signex_engine::sheet_symbol_from_sheet(

@@ -76,7 +76,10 @@ fn the_reference_box_measures_the_drawn_text() {
         justify_v: VAlign::Bottom,
         hidden: false,
     });
-    let field = [SelectedItem::new(sheet.symbols[0].uuid, SelectedKind::SymbolRefField)];
+    let field = [SelectedItem::new(
+        sheet.symbols[0].uuid,
+        SelectedKind::SymbolRefField,
+    )];
     let width = |standard| {
         let widths = WireWidths {
             designator_standard: standard,

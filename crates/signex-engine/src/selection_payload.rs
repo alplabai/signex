@@ -249,10 +249,8 @@ mod tests {
     #[test]
     fn a_no_erc_directive_copies_and_pastes_with_its_rules() {
         let mut sheet = test_sheet();
-        let mut marker = signex_types::schematic::NoErcDirective::new(
-            Uuid::now_v7(),
-            Point::new(25.4, 25.4),
-        );
+        let mut marker =
+            signex_types::schematic::NoErcDirective::new(Uuid::now_v7(), Point::new(25.4, 25.4));
         marker.rules = vec!["builtin::unused_pin".to_owned()];
         let items = vec![SelectedItem::new(marker.uuid, SelectedKind::NoErcDirective)];
         sheet.no_erc_directives.push(marker);

@@ -61,9 +61,7 @@ impl Signex {
                 dialog_button(
                     t!(i18n, ids::SHEET_SYNC_APPLY),
                     super::graphite::call_to_action(tokens),
-                    state
-                        .can_apply()
-                        .then(|| ss(SheetSyncMsg::ApplyRequested)),
+                    state.can_apply().then(|| ss(SheetSyncMsg::ApplyRequested)),
                     tokens,
                 ),
             ],
@@ -79,11 +77,7 @@ impl Signex {
 
 /// The intro, the direction choice, then the changes (or why there are
 /// none) and the reason Apply refused, if it did.
-fn body<'a>(
-    state: &'a SheetSyncState,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+fn body<'a>(state: &'a SheetSyncState, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
     let muted = tokens::muted_text(tokens);
     let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.l);
     col = col.push(

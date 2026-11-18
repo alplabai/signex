@@ -83,12 +83,8 @@ impl CanvasSlot {
         }
         let mut slot = self.hit_cache.borrow_mut();
         let fresh = slot.as_ref().is_some_and(|c| {
-            c.key.matches(
-                revision,
-                class_revision,
-                &widths,
-                &self.designators,
-            )
+            c.key
+                .matches(revision, class_revision, &widths, &self.designators)
         });
         if !fresh {
             *slot = Some(HitCache {
