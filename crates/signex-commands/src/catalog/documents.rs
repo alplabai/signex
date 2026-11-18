@@ -235,6 +235,46 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #2486: the assembly drawings as SVG files in a folder the person
+    // picks; headless it writes `document`'s drawings into `path`.
+    CommandMetadata {
+        id: "export_assembly_svg",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_ASSEMBLY_SVG,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_ASSEMBLY_SVG),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::ASSEMBLY_SVG_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2486: one assembly drawing of the named board, answered as SVG text;
+    // in a window it opens Board Print / PDF. Read-only, no default key.
+    CommandMetadata {
+        id: "board_assembly_drawing",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_ASSEMBLY_DRAWING,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_ASSEMBLY_DRAWING),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::ASSEMBLY_DRAWING,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2488: File > Export > STEP on a board asks where to save the board
+    // and its parts as a STEP model; headless it writes `document` to
+    // `path`.
+    CommandMetadata {
+        id: "export_board_step",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_STEP,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_STEP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_STEP,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",

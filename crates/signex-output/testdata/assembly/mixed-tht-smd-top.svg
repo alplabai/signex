@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="54mm" height="44mm" viewBox="0 0 54 44">
+<rect x="0" y="0" width="54" height="44" fill="#ffffff"/>
+<g stroke-linecap="round" stroke-linejoin="round">
+<path d="M2.8 26.5 L2.8 17.5 L17.3 17.5 L17.3 26.5 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M23.35 22.8 L20.65 22.8 L20.65 21.2 L23.35 21.2 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M32.4 14 L32.352 14.547 L32.21 15.077 L31.978 15.575 L31.663 16.025 L31.275 16.413 L30.825 16.728 L30.327 16.96 L29.797 17.102 L29.25 17.15 L28.703 17.102 L28.173 16.96 L27.675 16.728 L27.225 16.413 L26.837 16.025 L26.522 15.575 L26.29 15.077 L26.148 14.547 L26.1 14 L26.148 13.453 L26.29 12.923 L26.522 12.425 L26.837 11.975 L27.225 11.587 L27.675 11.272 L28.173 11.04 L28.703 10.898 L29.25 10.85 L29.797 10.898 L30.327 11.04 L30.825 11.272 L31.275 11.587 L31.663 11.975 L31.978 12.425 L32.21 12.923 L32.352 13.453 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M29.54 20.73 L39.54 20.73 L39.54 25.4 L29.54 25.4 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M36.4 33 L36.352 33.547 L36.21 34.077 L35.978 34.575 L35.663 35.025 L35.275 35.413 L34.825 35.728 L34.327 35.96 L33.797 36.102 L33.25 36.15 L32.703 36.102 L32.173 35.96 L31.675 35.728 L31.225 35.413 L30.837 35.025 L30.522 34.575 L30.29 34.077 L30.148 33.547 L30.1 33 L30.148 32.453 L30.29 31.923 L30.522 31.425 L30.837 30.975 L31.225 30.587 L31.675 30.272 L32.173 30.04 L32.703 29.898 L33.25 29.85 L33.797 29.898 L34.327 30.04 L34.825 30.272 L35.275 30.587 L35.663 30.975 L35.978 31.425 L36.21 31.923 L36.352 32.453 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M50.6 24.46 L50.6 34.62 L41.4 34.62 L41.4 24.46 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M42.735 15.851 L44.149 17.265 L43.265 18.149 L41.851 16.735 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<path d="M37.735 15.851 L39.149 17.265 L38.265 18.149 L36.851 16.735 Z" fill="none" stroke="#595959" stroke-width="0.1"/>
+<text x="16.5" y="22" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(90 16.5 22)">J1</text>
+<text x="22" y="22" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(0 22 22)">D1</text>
+<text x="28" y="14" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(0 28 14)">C1</text>
+<text x="32" y="24" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(0 32 24)">U1</text>
+<text x="32" y="33" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(0 32 33)">C2</text>
+<text x="46" y="27" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(90 46 27)">J2</text>
+<text x="43" y="17" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(45 43 17)">R1</text>
+<text x="38" y="17" font-family="Roboto, Arial, sans-serif" font-size="1" text-anchor="middle" dominant-baseline="central" fill="#c71f1f" transform="rotate(45 38 17)">D2</text>
+<path d="M2 2 L42 2 L42.98 2.048 L43.951 2.192 L44.903 2.431 L45.827 2.761 L46.714 3.181 L47.556 3.685 L48.344 4.27 L49.071 4.929 L49.73 5.656 L50.315 6.444 L50.819 7.286 L51.239 8.173 L51.569 9.097 L51.808 10.049 L51.952 11.02 L52 12 L52 42 L2 42 Z" fill="none" stroke="#000000" stroke-width="0.1"/>
+<path d="M2 2 L42 2" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M42 2 L43.736 2.152 L45.42 2.603 L47 3.34 L48.428 4.34 L49.66 5.572 L50.66 7 L51.397 8.58 L51.848 10.264 L52 12" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M52 12 L52 42" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M52 42 L2 42" fill="none" stroke="#000000" stroke-width="0.05"/>
+<path d="M2 42 L2 2" fill="none" stroke="#000000" stroke-width="0.05"/>
+</g>
+</svg>

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
+pub mod assembly;
 pub mod board_report;
 pub mod bom;
 pub mod erc;
@@ -23,6 +24,7 @@ pub mod substitution;
 pub mod svg;
 pub mod template;
 
+pub use assembly::{AssemblyDrawing, AssemblyInk, AssemblyMark, assembly_drawing, assembly_ink};
 pub use board_report::{
     BoardReport, BoardReportKind, ReportCell, ReportColumn, ReportSide, board_report,
 };
@@ -51,6 +53,7 @@ pub use preview::{
     preview_raster_size,
 };
 pub use substitution::{SubstitutionContext, resolve};
+pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 
 /// The universal exporter trait — one impl per output format.

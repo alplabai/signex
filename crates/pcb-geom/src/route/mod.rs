@@ -17,7 +17,7 @@ mod world;
 pub use meander::{accordion, accordion_room};
 pub use parallel::{bus_offsets, offset_path, parallel_paths};
 pub use search::{Walk, rule_legs, walkaround};
-pub use shove::{Pushed, shove};
+pub use shove::{Pushed, ShoveRun, shove, shove_run};
 pub use world::{ClearanceRule, NewCopper, NewKind, RouteWorld};
 
 #[cfg(test)]

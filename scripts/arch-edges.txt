@@ -59,6 +59,7 @@ signex-output -> signex-types
 signex-renderer -> pcb-geom
 signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
+signex-renderer -> signex-mcad
 signex-renderer -> signex-types
 signex-req -> signex-bom
 signex-req -> signex-types

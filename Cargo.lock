@@ -1393,6 +1393,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17f72721db8027a4e96dd6fb50d2a1d32259c9d3da1b63dee612ccd981e14293"
 
 [[package]]
+name = "earcut"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beecb4bee051769371e9fd229b2168782e484bd50fc5f48e9ccce4172a0037d7"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ecb"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5960,6 +5969,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-mcad"
+version = "26.11.0"
+dependencies = [
+ "earcut",
+ "signex-3d-model-importer",
+ "solidcore",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "signex-net"
 version = "26.11.0"
 dependencies = [
@@ -5994,6 +6013,7 @@ dependencies = [
  "serde_json",
  "signex-3d-model-importer",
  "signex-gfx",
+ "signex-mcad",
  "signex-types",
  "tempfile",
  "uuid",
@@ -6223,6 +6243,15 @@ dependencies = [
  "web-sys",
  "windows-sys 0.61.2",
  "x11rb",
+]
+
+[[package]]
+name = "solidcore"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51fbd775ff48a4b0034d1541097f9a3f35b14f53a25bf62a8820c0fe0f6c9823"
+dependencies = [
+ "thiserror 2.0.18",
 ]
 
 [[package]]

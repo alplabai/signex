@@ -518,3 +518,28 @@ fn a_fab_tier_step_undoes_its_rules_and_no_other_step_touches_them() {
         },
     ));
 }
+
+/// #2489: a Fabrication Outputs tick is a step of its own that undoes, and
+/// the same kinds again record nothing.
+#[test]
+fn the_fabrication_output_kinds_are_steps_that_undo() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let step = FabOutputKinds {
+        step: true,
+        ..FabOutputKinds::default()
+    };
+    let both = FabOutputKinds {
+        assembly_svg: true,
+        ..step
+    };
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(step))));
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(!history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step), "each tick is its own step");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, None);
+    assert!(history.redo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step));
+}

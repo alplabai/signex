@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+#
+# Router soak and bench (#2482, #2483). Non-required, scheduled: 10 000
+# random routing and editing actions per board, then the shove convergence,
+# latency and DRC-delta thresholds, in release. Per-PR CI runs the short
+# versions with the workspace tests. The seed is the run number, so each
+# night soaks a new sequence; a failure prints the command that replays it.
+# What it checks: docs/PCB_TOOLS.md, "Router soak and bench". A failed
+# scheduled run opens (or comments on) the issue "Nightly routing soak is
+# failing" with the replay lines, so a red night is not missed.
+
+name: routing-soak
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Soak seed (decimal or 0x hex); empty uses the run number"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  soak:
+    name: routing · soak + bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Soak and bench
+        env:
+          SIGNEX_SOAK_SEED: ${{ inputs.seed || github.run_number }}
+        run: |
+          set -o pipefail
+          cargo test --release -p signex-engine --test routing -- --ignored --nocapture --test-threads 1 \
+            2>&1 | tee soak.log
+
+      - name: Report a failed night
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SEED: ${{ github.run_number }}
+        run: |
+          title="Nightly routing soak is failing"
+          {
+            printf 'The scheduled routing soak failed: %s (seed %s).\n\n' "$RUN_URL" "$SEED"
+            printf 'Failures and the lines that replay them:\n\n```\n'
+            grep -E "panicked at|routing soak on|replay:|^bench |FAILED" soak.log | head -n 60 || true
+            printf '```\n'
+          } > body.md
+          number=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file body.md
+          else
+            gh issue create --title "$title" --label "type: bug" --label "area: pcb" --body-file body.md
+          fi

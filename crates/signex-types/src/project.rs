@@ -13,6 +13,7 @@ use crate::document_id::DocumentId;
 mod annotate_undo;
 mod annotation;
 mod erc_waiver;
+mod fab_outputs;
 mod fab_tier;
 mod order;
 mod requirements;
@@ -34,6 +35,7 @@ mod variants_tests;
 pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;
 pub use order::ListMove;
 pub use requirements::{
@@ -280,6 +282,15 @@ pub struct ProjectData {
     /// build keeps the key in `unknown`. No format token changes.
     #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
     pub agent_journal: AgentJournalSettings,
+    /// The kinds of file Fabrication Outputs writes (#2489). `None` is the
+    /// defaults and is skipped on save, so a project whose ticks were never
+    /// changed re-saves byte-identical. An unreadable value reads as `None`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "fab_outputs::lenient_fab_outputs"
+    )]
+    pub fab_outputs: Option<FabOutputKinds>,
     /// The project's requirements (#2339), run by `check_requirements`. Top
     /// level, outside `rules`: not part of the rule set's hash or a rule
     /// profile. Skipped on save when empty.
@@ -528,6 +539,7 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -564,6 +576,7 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -798,6 +811,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        fab_outputs: None,
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),

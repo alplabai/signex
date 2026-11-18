@@ -78,7 +78,10 @@ Then, after a separator, the board's reports (#2404), greyed without a board
 in view: Board Bill of Materials..., Board Netlist..., Net Lengths...,
 Component Report... (each opens Board Reports on its table) and Export Report
 as CSV... (the table in view, or the BOM). The Board panel's Reports button
-opens the same dialog. Rules: `BOARD_OUTPUT.md`.
+opens the same dialog. Last, Assembly Drawings as SVG... (#2486) writes the
+board's top and bottom assembly drawings into a folder the person picks; the
+PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
+`BOARD_OUTPUT.md`.
 
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
@@ -114,7 +117,8 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
-as the Run DRC button of the Messages panel; no keymap preset binds it.
+as the Run DRC button of the Messages panel. On a board the key is `T D` in
+the default profile and `F7` in Classic.
 
 ## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
 
@@ -311,7 +315,8 @@ sketch mode, where the footprint editor's sketch tools draw its outline,
 keepouts, cutouts and mounting holes; run again, it leaves the mode and
 commits the changes as one undo step. It is greyed while no PCB is open.
 The same command is the PCB Active Bar's Board Sketch button, a row of the
-board canvas menu and a palette row; no keymap preset binds it. The mode:
+board canvas menu and a palette row; on a board both built-in profiles bind
+it to `1`. The mode:
 [PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
 ## Design ▸ Layer Stack Manager {#design-layer-stack}
@@ -343,6 +348,12 @@ On a board (#2402) both rows are live and open Board Print / PDF instead: the
 layer sets, one page per set or one composite page, the bottom side mirrored,
 1:1 or fitted, colour or black, the outline, drill holes and the title block.
 The palette names it `export_board_pdf`. Rules: `BOARD_OUTPUT.md`.
+
+## File ▸ Export ▸ STEP 3D Model {#file-export-step}
+
+On a board (#2488), File ▸ Export ▸ STEP 3D Model... (`export_board_step`)
+asks where to save and writes the board body and its parts as a STEP model;
+greyed without a board in view. Rules: `BOARD_OUTPUT.md`, "STEP export".
 
 Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu

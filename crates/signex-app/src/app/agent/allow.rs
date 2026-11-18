@@ -96,6 +96,7 @@ mod tests {
                 "assign_board_net_class",
                 "assign_net_class",
                 "autoplace_fields",
+                "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
                 "board_report_components",

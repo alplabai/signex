@@ -59,6 +59,8 @@ fi
 # Licenses of the fonts compiled into the binary (#1179). Before codesign,
 # like the stock library, so they are sealed into the bundle.
 bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$RESOURCES/licenses/fonts"
+# Licence, NOTICE and third-party notices (Apache-2.0 §4(d), #2487).
+bash "$SCRIPT_DIR/../copy-notices.sh" "$RESOURCES/licenses"
 
 # Sign the bundle.
 #

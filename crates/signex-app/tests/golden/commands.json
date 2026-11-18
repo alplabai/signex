@@ -100,6 +100,11 @@
     "category": "pcb_sync"
   },
   {
+    "id": "board_assembly_drawing",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "board_layer_stack",
     "group": "Pcb",
     "category": "design"
@@ -465,12 +470,22 @@
     "category": "edit"
   },
   {
+    "id": "export_assembly_svg",
+    "group": "Pcb",
+    "category": "reports"
+  },
+  {
     "id": "export_board_pdf",
     "group": "Pcb",
     "category": "reports"
   },
   {
     "id": "export_board_report",
+    "group": "Pcb",
+    "category": "reports"
+  },
+  {
+    "id": "export_board_step",
     "group": "Pcb",
     "category": "reports"
   },
