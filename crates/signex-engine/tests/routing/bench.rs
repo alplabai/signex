@@ -22,7 +22,7 @@ use crate::session::{Routed, ShoveTry, plan, route, rules_of, shove_rounds};
 
 /// Rounds a shove may take on most actions.
 pub const ROUNDS_LIMIT: usize = 8;
-/// The share of shove actions that must stay within [`ROUNDS_LIMIT`].
+/// The share of shove actions that must settle within [`ROUNDS_LIMIT`].
 pub const ROUNDS_SHARE: f64 = 0.95;
 /// Median and 95th-percentile latency on the median board.
 pub const MEDIAN_LIMIT: Duration = Duration::from_millis(16);
@@ -46,8 +46,9 @@ pub struct BoardBench {
 }
 
 impl BoardBench {
-    /// The share of shove actions that cleared the way within
-    /// [`ROUNDS_LIMIT`]; a shove that gave up never counts. 1 with none.
+    /// The share of shove actions that settled within [`ROUNDS_LIMIT`]: the
+    /// way cleared, or a push found impossible so the router walks around.
+    /// One that ran out of rounds never counts. 1 with none.
     pub fn converged_share(&self) -> f64 {
         if self.shoves.is_empty() {
             return 1.0;
@@ -55,13 +56,13 @@ impl BoardBench {
         let within = self
             .shoves
             .iter()
-            .filter(|s| s.converged && s.rounds <= ROUNDS_LIMIT)
+            .filter(|s| s.settled && s.rounds <= ROUNDS_LIMIT)
             .count();
         within as f64 / self.shoves.len() as f64
     }
 
-    fn gave_up(&self) -> usize {
-        self.shoves.iter().filter(|s| !s.converged).count()
+    fn cleared(&self) -> usize {
+        self.shoves.iter().filter(|s| s.cleared).count()
     }
 
     pub fn percentile(&self, share: f64) -> Duration {
@@ -76,7 +77,7 @@ impl BoardBench {
     pub fn line(&self) -> String {
         format!(
             "{:<24} copper {:>5}  legs {:>4} landed / {:>4} refused  shove {:>4} actions, \
-             {:>5.1}% converged within {ROUNDS_LIMIT} rounds, {} gave up, max {}  \
+             {:>5.1}% converged within {ROUNDS_LIMIT} rounds, {} cleared the way, max {}  \
              latency median {:>7.2?} p95 {:>7.2?}  breaks {}",
             self.name,
             self.copper,
@@ -84,7 +85,7 @@ impl BoardBench {
             self.refused,
             self.shoves.len(),
             self.converged_share() * 100.0,
-            self.gave_up(),
+            self.cleared(),
             self.shoves.iter().map(|s| s.rounds).max().unwrap_or(0),
             self.percentile(0.5),
             self.percentile(0.95),

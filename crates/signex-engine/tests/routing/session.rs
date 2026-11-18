@@ -180,19 +180,22 @@ pub fn route(
     Ok(Routed::Landed(draft))
 }
 
-/// How the push of a leg ended: the rounds run, and whether it cleared the
-/// way. A shove that gave up did not converge, whatever its rounds.
+/// How the push of a leg ended: the rounds run, whether it cleared the way,
+/// and whether it came to an answer at all (a push that cannot be made is
+/// an answer: the router walks around; running out of rounds is not).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShoveTry {
     pub rounds: usize,
-    pub converged: bool,
+    pub cleared: bool,
+    pub settled: bool,
 }
 
 /// The push of `plan`'s first leg on `board`, as the router tries it
 /// (`pushed_way` in `signex_engine::pcb::route`): the corner rule, then the
 /// flipped rule, skipping a rule with no legs. The rounds are those of the
-/// attempt the router keeps; when both give up, the longer one's. `None`
-/// when neither rule has legs, or a point does not convert.
+/// attempt the router keeps; when both give up, the longer one's, settled
+/// only when both settled. `None` when neither rule has legs, or a point
+/// does not convert.
 pub fn shove_rounds(
     board: &PcbBoard,
     rules: &DrcRules,
@@ -207,7 +210,7 @@ pub fn shove_rounds(
     let b = PointNm::from_mm(*plan.points.get(1)?, "to").ok()?;
     let radius = mm_to_nm(style.width_mm, "width").ok()?.abs() / 2;
     let layers = 1 << layer_bit(plan.layer);
-    let mut gave_up: Option<usize> = None;
+    let mut gave_up: Option<ShoveTry> = None;
     for rule in [plan.corner, plan.corner.flipped()] {
         let Some(bends) = rule_legs(rule, a, b) else {
             continue;
@@ -222,13 +225,20 @@ pub fn shove_rounds(
         if run.pushed.is_some() {
             return Some(ShoveTry {
                 rounds: run.rounds,
-                converged: true,
+                cleared: true,
+                settled: run.settled,
             });
         }
-        gave_up = Some(gave_up.unwrap_or(0).max(run.rounds));
+        let earlier = gave_up.unwrap_or(ShoveTry {
+            rounds: 0,
+            cleared: false,
+            settled: true,
+        });
+        gave_up = Some(ShoveTry {
+            rounds: earlier.rounds.max(run.rounds),
+            cleared: false,
+            settled: earlier.settled && run.settled,
+        });
     }
-    gave_up.map(|rounds| ShoveTry {
-        rounds,
-        converged: false,
-    })
+    gave_up
 }

@@ -136,7 +136,7 @@ fn a_shove_reports_the_rounds_it_took() {
     let clear = board(Vec::new(), vec![track_at(1, (2.0, 3.0), (8.0, 3.0), 2)]);
     let world = RouteWorld::new(&clear, &rule);
     let run = shove_run(&world, &[leg()]);
-    assert_eq!((run.pushed, run.rounds), (Some(Vec::new()), 0));
+    assert_eq!((run.pushed, run.rounds, run.settled), (Some(Vec::new()), 0, true));
 
     // Net 2 over the leg, net 3 over net 2: net 2 pushes net 3 in turn.
     let stacked = board(
@@ -155,5 +155,25 @@ fn a_shove_reports_the_rounds_it_took() {
     let crossed = board(Vec::new(), vec![track_at(1, (5.0, -3.0), (5.0, 3.0), 2)]);
     let world = RouteWorld::new(&crossed, &rule);
     let run = shove_run(&world, &[leg()]);
-    assert_eq!((run.pushed, run.rounds), (None, 1), "gave up in round one");
+    assert_eq!(
+        (run.pushed, run.rounds, run.settled),
+        (None, 1, true),
+        "gave up in round one: a push that cannot be made is an answer"
+    );
+
+    // Six nets stacked over the leg, each crowding the next: more pushes in
+    // turn than the rounds allow, so the pushing never settles.
+    let tower = board(
+        Vec::new(),
+        (0..6)
+            .map(|k| {
+                let y = 0.3 + 0.4 * k as f64;
+                track_at(k as u128 + 1, (2.0, y), (8.0, y), k + 2)
+            })
+            .collect(),
+    );
+    let world = RouteWorld::new(&tower, &rule);
+    let run = shove_run(&world, &[leg()]);
+    assert_eq!((run.pushed, run.settled), (None, false), "{run:?}");
+    assert_eq!(run.rounds, super::shove::ROUNDS + 1);
 }

@@ -106,28 +106,34 @@ fn assert_delta_and_convergence(benches: &[BoardBench]) {
     }
 }
 
-/// A shove that gave up never counts as converged, whatever its rounds;
-/// one that cleared the way counts while its rounds stay within the limit.
+/// A shove that ran out of rounds never counts as converged, whatever its
+/// rounds; one that cleared the way or found the push impossible counts
+/// while its rounds stay within the limit.
 #[test]
-fn a_shove_that_gave_up_does_not_converge() {
+fn a_shove_that_never_settled_does_not_converge() {
     use session::ShoveTry;
 
-    let try_of = |rounds, converged| ShoveTry { rounds, converged };
-    let refused = BoardBench {
-        shoves: vec![try_of(1, false), try_of(5, false), try_of(0, false)],
+    let try_of = |rounds, cleared, settled| ShoveTry {
+        rounds,
+        cleared,
+        settled,
+    };
+    let unsettled = BoardBench {
+        shoves: vec![try_of(5, false, false), try_of(0, false, false)],
         ..BoardBench::default()
     };
-    assert_eq!(refused.converged_share(), 0.0);
+    assert_eq!(unsettled.converged_share(), 0.0);
     let mixed = BoardBench {
         shoves: vec![
-            try_of(0, true),
-            try_of(ROUNDS_LIMIT, true),
-            try_of(ROUNDS_LIMIT + 1, true),
-            try_of(1, false),
+            try_of(0, true, true),
+            try_of(ROUNDS_LIMIT, true, true),
+            try_of(1, false, true),
+            try_of(ROUNDS_LIMIT + 1, true, true),
+            try_of(5, false, false),
         ],
         ..BoardBench::default()
     };
-    assert_eq!(mixed.converged_share(), 0.5);
+    assert_eq!(mixed.converged_share(), 0.6);
     assert_eq!(BoardBench::default().converged_share(), 1.0);
 }
 
@@ -149,7 +155,7 @@ fn an_overlap_is_any_shared_stretch_of_one_net_and_layer() {
     let laid = track(1, (0.0, 0.0), (4.0, 0.0), 1);
     let cases = [
         (track(2, (4.0, 0.0), (0.0, 0.0), 1), true, "the same ends"),
-        (track(2, (2.0, 0.0), (9.0, 0.0), 1), true, "part of its line"),
+        (track(2, (2.0, 0.0), (9.0, 0.0), 1), true, "part of it"),
         (track(2, (1.0, 0.0), (3.0, 0.0), 1), true, "inside it"),
         (track(2, (4.0, 0.0), (9.0, 0.0), 1), false, "end to end"),
         (track(2, (0.0, 0.5), (4.0, 0.5), 1), false, "beside it"),

@@ -90,7 +90,7 @@ pub struct Tally {
     pub undos: usize,
     pub redos: usize,
     /// Routed tracks laid over a same-net track already there (the same
-    /// layer, collinear, sharing a stretch): a router defect, #BUG, counted
+    /// layer, collinear, sharing a stretch): a router defect, #2492, counted
     /// until it is fixed instead of failing the soak.
     pub overlapped_tracks: usize,
 }

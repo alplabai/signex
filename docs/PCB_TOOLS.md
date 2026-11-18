@@ -148,14 +148,17 @@ the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
   seed, action index and the command that replays it. A routed track laid
   over a same-net track already there (same layer, on one line, sharing a
   stretch) is counted in the run's report (`overlapped_tracks`), not
-  failed, until the router defect #BUG is fixed. Not checked yet (#2482):
+  failed, until the router defect #2492 is fixed. Not checked yet (#2482):
   dangling track ends and connectivity against the net list. The soak's own
   edits make both on purpose (a stub routed into open board, a track moved
   off its pads or across another net), so these checks must first tell an
   edit's effect from a defect.
 - **Bench.** One-leg routes, half of them shoves: the rounds each shove
-  took (`pcb_geom::route::shove_run`; a shove that gave up, so the router
-  walks around instead, counts as not converged), the time from click to
+  took (`pcb_geom::route::shove_run`). A shove converged when it settled
+  within 8 rounds: it cleared the way, or found a push that cannot be made
+  (a pad in the way, a crossing track), after which the router walks
+  around. One that ran out of rounds did not; the report also counts the
+  shoves that cleared the way. Then the time from click to
   landed step, and the DRC delta: every design rule check finding a route
   adds, other than an unrouted link, names the route's own tracks or vias.
 - **Runs.** `cargo test -p signex-engine --test routing` runs a short soak

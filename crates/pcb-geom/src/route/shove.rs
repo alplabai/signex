@@ -22,7 +22,7 @@ use crate::shape::{Shape, segments_intersect};
 use crate::units::PointNm;
 
 /// How many times a push may cause another.
-const ROUNDS: usize = 4;
+pub(super) const ROUNDS: usize = 4;
 
 /// A track's new ends after a push.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +45,10 @@ pub struct ShoveRun {
     /// Rounds run, counting the round it gave up in: 0 when nothing was in
     /// the way, `ROUNDS + 1` when the pushing never settled.
     pub rounds: usize,
+    /// Whether the pushing came to an answer within its rounds: the way
+    /// cleared, or a push found that cannot be made. `false` only when it
+    /// ran out of rounds with tracks still in the way.
+    pub settled: bool,
 }
 
 /// The tracks to move so that `legs` keep the clearance, each with its
@@ -56,12 +60,13 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
 
 /// [`shove`], with the rounds of pushing it took (#2483).
 pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
-    let given_up = |rounds| ShoveRun {
+    let given_up = |rounds, settled| ShoveRun {
         pushed: None,
         rounds,
+        settled,
     };
     if legs.iter().any(|leg| world.in_keepout(leg)) {
-        return given_up(0);
+        return given_up(0, true);
     }
     let mut moved: HashMap<usize, Shape> = HashMap::new();
     let mut pushers: Vec<Pusher> = legs.iter().map(|leg| (None, leg.as_item())).collect();
@@ -76,6 +81,7 @@ pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
             return ShoveRun {
                 pushed: finish(world, legs, &moved),
                 rounds: round,
+                settled: true,
             };
         }
         let mut next = Vec::new();
@@ -87,7 +93,7 @@ pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
             }
             match push_one(world, index, &pushers, &mut moved) {
                 Some(touched) => next.extend(touched),
-                None => return given_up(round + 1),
+                None => return given_up(round + 1, true),
             }
         }
         pushers = next
@@ -95,7 +101,7 @@ pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
             .map(|index| (Some(index), with_shape(world, index, moved[&index])))
             .collect();
     }
-    given_up(ROUNDS + 1)
+    given_up(ROUNDS + 1, false)
 }
 
 /// Move track `index` clear of `pushers`, stretching the tracks joined at
