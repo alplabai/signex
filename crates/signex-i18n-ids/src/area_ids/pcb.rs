@@ -63,6 +63,10 @@ define_ids! {
     PCB_POUR_NONE_SELECTED = "pcb-pour-none-selected";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
+    PCB_LAYER_TAB_COLOUR = "pcb-layer-tab-colour";
+    PCB_LAYER_TAB_COLOUR_UNAVAILABLE = "pcb-layer-tab-colour-unavailable";
+    PCB_LAYER_TAB_COLOUR_RESET = "pcb-layer-tab-colour-reset";
+    PCB_LAYER_TAB_COLOUR_RESET_ALL = "pcb-layer-tab-colour-reset-all";
     PCB_3D_TITLE = "pcb-3d-title";
     PCB_3D_HINT = "pcb-3d-hint";
     PCB_3D_FLAT = "pcb-3d-flat";

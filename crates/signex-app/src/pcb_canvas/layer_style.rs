@@ -231,16 +231,16 @@ mod tests {
         );
     }
 
-    /// The Altium name of every layer kind (decided 2026-11-10). Courtyard,
-    /// Fab, Assembly, 3D Body, Fiducial and Designator keep descriptive
-    /// names; the edge is the Board Outline row.
-    fn altium_name(layer: PcbLayer) -> String {
+    /// The house name of every layer kind (decided 2026-11-10; Silkscreen
+    /// since 2026-11-18). Courtyard, Fab, Assembly, 3D Body, Fiducial and
+    /// Designator keep descriptive names; the edge is the Board Outline row.
+    fn house_name(layer: PcbLayer) -> String {
         use TechnicalLayer as T;
         let technical = |t: TechnicalLayer| match t {
             T::EdgeCuts => "Board Outline",
             T::Margin => "Margin",
-            T::SilkscreenTop => "Top Overlay",
-            T::SilkscreenBottom => "Bottom Overlay",
+            T::SilkscreenTop => "Top Silkscreen",
+            T::SilkscreenBottom => "Bottom Silkscreen",
             T::SolderMaskTop => "Top Solder",
             T::SolderMaskBottom => "Bottom Solder",
             T::PasteTop => "Top Paste",
@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn every_layer_kind_has_its_altium_name() {
+    fn every_layer_kind_has_its_house_name() {
         let i18n = I18n::en_us();
         let mut seen = std::collections::HashSet::new();
         for layer in PcbLayer::all() {
@@ -287,7 +287,7 @@ mod tests {
                 .chars()
                 .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
                 .collect();
-            assert_eq!(name, altium_name(layer), "{layer:?}");
+            assert_eq!(name, house_name(layer), "{layer:?}");
             assert!(seen.insert(name.clone()), "two layers named {name}");
         }
         assert_eq!(

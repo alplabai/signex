@@ -474,6 +474,10 @@ define_ids! {
         CMD_MENU_SET_ACTIVE_LAYER = "cmd-menu-set-active-layer";
         CMD_SET_LAYER_COLOR = "cmd-set-layer-color";
         CMD_MENU_SET_LAYER_COLOR = "cmd-menu-set-layer-color";
+        CMD_EDIT_LAYER_COLOR = "cmd-edit-layer-color";
+        CMD_MENU_EDIT_LAYER_COLOR = "cmd-menu-edit-layer-color";
+        CMD_RESET_LAYER_COLORS = "cmd-reset-layer-colors";
+        CMD_MENU_RESET_LAYER_COLORS = "cmd-menu-reset-layer-colors";
         CMD_SHOW_USED_LAYERS_ONLY = "cmd-show-used-layers-only";
         CMD_MENU_SHOW_USED_LAYERS_ONLY = "cmd-menu-show-used-layers-only";
         CMD_SET_OBJECT_VISIBLE = "cmd-set-object-visible";

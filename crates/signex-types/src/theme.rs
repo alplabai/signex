@@ -644,21 +644,46 @@ const GRAPHITE_BOARD_LAYERS: BoardLayerColors = BoardLayerColors {
     multi_layer: c(0xC0, 0xC0, 0xC0),
 };
 
-const fn sided(top: Color, bottom: Color) -> SidedColors {
-    SidedColors { top, bottom }
+/// The share of the top colour's channels the bottom layer of a pair keeps,
+/// in fifths: 4/5, the same hue at 80 % of its lightness.
+const PAIR_BOTTOM_FIFTHS: u16 = 4;
+
+/// The colour of the bottom layer of a Top/Bottom pair (silkscreen, solder,
+/// paste, keep-out and the component layers): `top` with every channel
+/// scaled by [`PAIR_BOTTOM_FIFTHS`], so the hue stays and the bottom reads
+/// darker (decided 2026-11-18). Copper is not a pair: Bottom Layer keeps
+/// its own blue.
+#[must_use]
+pub const fn pair_bottom(top: Color) -> Color {
+    const fn dim(v: u8) -> u8 {
+        (v as u16 * PAIR_BOTTOM_FIFTHS / 5) as u8
+    }
+    Color {
+        r: dim(top.r),
+        g: dim(top.g),
+        b: dim(top.b),
+        a: top.a,
+    }
+}
+
+const fn sided(top: Color) -> SidedColors {
+    SidedColors {
+        top,
+        bottom: pair_bottom(top),
+    }
 }
 
 /// Each kind its own hue, apart from copper, overlay, solder, paste, the
 /// outline and keep-out; every colour is at least 3:1 against the board
-/// area and the workspace.
+/// area and the workspace. A bottom layer is its top's [`pair_bottom`].
 const GRAPHITE_TECHNICAL_LAYERS: TechnicalLayerColors = TechnicalLayerColors {
-    adhesive: sided(c(0xF2, 0xA6, 0x49), c(0xC7, 0x84, 0x32)),
-    fab: sided(c(0x6D, 0xD1, 0xF2), c(0x50, 0xA9, 0xC7)),
-    assembly: sided(c(0xA5, 0xF2, 0x6D), c(0x81, 0xC7, 0x50)),
-    courtyard: sided(c(0x6D, 0xF2, 0xC6), c(0x50, 0xC7, 0x9F)),
-    body_3d: sided(c(0x83, 0x6D, 0xF2), c(0x63, 0x50, 0xC7)),
-    fiducial: sided(c(0xF2, 0x91, 0x91), c(0xCC, 0x76, 0x76)),
-    designator: sided(c(0xF7, 0xF1, 0xAD), c(0xC7, 0xC1, 0x81)),
+    adhesive: sided(c(0xF2, 0xA6, 0x49)),
+    fab: sided(c(0x6D, 0xD1, 0xF2)),
+    assembly: sided(c(0xA5, 0xF2, 0x6D)),
+    courtyard: sided(c(0x6D, 0xF2, 0xC6)),
+    body_3d: sided(c(0x83, 0x6D, 0xF2)),
+    fiducial: sided(c(0xF2, 0x91, 0x91)),
+    designator: sided(c(0xF7, 0xF1, 0xAD)),
     dimensions: c(0x9D, 0xB3, 0xF2),
     notes: c(0xDA, 0xA1, 0xE6),
     drill_drawing: c(0x77, 0xD9, 0x87),

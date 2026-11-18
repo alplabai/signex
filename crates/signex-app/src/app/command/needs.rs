@@ -497,6 +497,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "set_layer_visible"
         | "set_active_layer"
         | "set_layer_color"
+        | "edit_layer_color"
+        | "reset_layer_colors"
         | "show_used_layers_only"
         | "set_object_visible"
         | "set_object_transparency" => Needs::Pcb,

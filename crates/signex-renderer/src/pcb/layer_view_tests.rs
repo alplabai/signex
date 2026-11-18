@@ -548,12 +548,12 @@ fn a_hidden_kind_of_object_is_not_drawn() {
     assert!(snapshot.vias.is_empty());
 }
 
-/// #2363: a colour the view gives a copper layer recolours its copper and
-/// leaves the other layers in the palette colour.
+/// #2363, 2026-11-18: a colour the board gives a copper layer recolours its
+/// copper and leaves the other layers in the palette colour.
 #[test]
 fn a_layer_colour_recolours_its_copper() {
-    let board = board();
-    let mut view = PcbLayerView::default();
+    let mut board = board();
+    let view = PcbLayerView::default();
     let (snapshot, before) = lines_of(&board, &view);
     let line = |snapshot: &PcbSnapshot, scene: &Scene, net: u32| {
         let i = snapshot.traces.iter().position(|t| t.net == net).unwrap();
@@ -561,13 +561,14 @@ fn a_layer_colour_recolours_its_copper() {
     };
     let top_before = line(&snapshot, &before, 1);
     let bottom_before = line(&snapshot, &before, 2);
-    view.set_layer_colour(TOP, Some([255, 0, 255]));
+    let magenta = signex_types::theme::Color::new(255, 0, 255, 255);
+    board.options.set_layer_color(TOP, Some(magenta));
     let (snapshot, after) = lines_of(&board, &view);
     let top = line(&snapshot, &after, 1);
     assert_eq!([top[0], top[1], top[2]], [1.0, 0.0, 1.0]);
     assert_eq!(top[3], top_before[3], "the palette's alpha is kept");
     assert_eq!(line(&snapshot, &after, 2), bottom_before);
-    view.set_layer_colour(TOP, None);
+    board.options.set_layer_color(TOP, None);
     let (snapshot, reset) = lines_of(&board, &view);
     assert_eq!(line(&snapshot, &reset, 1), top_before);
 }

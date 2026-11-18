@@ -433,6 +433,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
         // #2394: the board seen from below, and the layer tabs' numbers.
         "flip_board_view" => pcb_view(PcbViewMsg::BoardFlipToggled),
+        // 2026-11-18: the layer colours, saved with the board.
+        "edit_layer_color" => Message::Pcb(PcbMsg::LayerTabMenu(
+            crate::app::LayerTabMenuMsg::ColourEditRequested(None),
+        )),
+        "reset_layer_colors" => pcb_view(PcbViewMsg::LayerColoursReset),
         "toggle_layer_numbers" => Message::Pcb(PcbMsg::LayerStrip(
             crate::app::LayerStripMsg::LayerNumbersToggled,
         )),

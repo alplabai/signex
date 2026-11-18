@@ -260,14 +260,17 @@ impl PcbLayerView {
         self.flipped = !self.flipped;
     }
 
-    /// The view's own layer colours and transparencies (#2363).
+    /// The view's own transparencies (#2363); its layer colours are the
+    /// board's, see [`Self::paint_of`].
     pub fn paint(&self) -> &BoardPaint {
         &self.paint
     }
 
-    /// Give `layer` its own colour in this view, or (`None`) the palette's.
-    pub fn set_layer_colour(&mut self, layer: PcbLayer, colour: Option<[u8; 3]>) {
-        self.paint.set_colour(layer, colour);
+    /// What this view draws `board` with: its transparencies and the
+    /// colours the board gives its layers (saved with the board,
+    /// 2026-11-18).
+    pub fn paint_of(&self, board: &PcbBoard) -> BoardPaint {
+        board_paint(Some(self), board)
     }
 
     /// Draw `kind` this transparent, percent.
@@ -620,7 +623,7 @@ impl PcbSnapshot {
             board_features,
             texts: drawings.texts,
             graphics: drawings.graphics,
-            paint: view.map(|v| v.paint.clone()).unwrap_or_default(),
+            paint: board_paint(view, board),
         }
     }
 }
@@ -667,6 +670,16 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
         }
     }
     pads
+}
+
+/// The paint `board` is drawn with under `view`: the view's transparencies
+/// (none without a view) and the colours the board gives its layers.
+pub fn board_paint(view: Option<&PcbLayerView>, board: &PcbBoard) -> BoardPaint {
+    let mut paint = view.map(|v| v.paint.clone()).unwrap_or_default();
+    for c in &board.options.layer_colors {
+        paint.set_colour(c.layer, Some([c.color.r, c.color.g, c.color.b]));
+    }
+    paint
 }
 
 fn strip<T>(items: Vec<(Emphasis, T)>) -> Vec<T> {

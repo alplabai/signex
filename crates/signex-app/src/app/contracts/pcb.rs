@@ -287,12 +287,17 @@ pub enum PcbViewMsg {
     /// The user showed or hid one layer (an eye of the Layers panel,
     /// `set_layer_visible`, #2363).
     LayerVisibilitySet { layer: PcbLayer, visible: bool },
-    /// The user gave a layer its own colour in this view, or (`None`) the
-    /// board palette's again (a colour chip, `set_layer_color`, #2363).
+    /// The user gave a layer its own colour, or (`None`) the board
+    /// palette's again (a colour chip, Layer colour... and Reset layer
+    /// colour on a tab, `set_layer_color`). Saved with the board as one undo
+    /// step (2026-11-18).
     LayerColourSet {
         layer: PcbLayer,
         colour: Option<[u8; 3]>,
     },
+    /// Reset all layer colours on a tab (`reset_layer_colors`): every layer
+    /// takes the board palette's colour again, as one undo step.
+    LayerColoursReset,
     /// The Layers panel lists only the layers the board uses, or every
     /// layer again (Used On, #2363).
     UsedLayersOnlySet(bool),

@@ -212,15 +212,34 @@ pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
     }
 }
 
-/// `.snxpcb` version policy: a newer minor opens read-only.
+/// Written instead of [`SNXPCB_FORMAT_V1`] when the board carries layer
+/// colours (`[board_options.layer_colors]`, 2026-11-18): a build that knows
+/// only 1.4 would drop them on save, so it opens 1.5 read-only. A board
+/// without layer colours stays 1.4, byte for byte.
+pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
+
+/// The token a save of `board` writes: [`SNXPCB_FORMAT_LAYER_COLORS`] when
+/// a layer has a colour of its own, else [`SNXPCB_FORMAT_V1`]. From content,
+/// so a board whose last colour is reset goes back to 1.4.
+pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
+    if board.options.layer_colors.is_empty() {
+        SNXPCB_FORMAT_V1
+    } else {
+        SNXPCB_FORMAT_LAYER_COLORS
+    }
+}
+
+/// `.snxpcb` version policy: a newer minor opens read-only. A save writes
+/// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1,
+    current: SNXPCB_FORMAT_LAYER_COLORS,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
         "snxpcb/1.2",
         "snxpcb/1.3",
         SNXPCB_FORMAT_V1,
+        SNXPCB_FORMAT_LAYER_COLORS,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
@@ -834,7 +853,7 @@ impl SnxPcb {
 
         // Manifest header.
         let manifest = PcbManifest {
-            format: SNXPCB_FORMAT_V1.to_string(),
+            format: snxpcb_token(&self.board).to_string(),
             pcb_id: self.board.uuid,
             version: self.board.version,
             generator: self.board.generator.clone(),

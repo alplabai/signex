@@ -69,6 +69,13 @@ impl Signex {
                     return self.dispatch_command(&id, args, menu.window);
                 }
             }
+            LayerTabMenuMsg::ColourEditRequested(layer) => {
+                self.interaction_state.pcb_layer_tab_menu = None;
+                let active = self.active_tab_path().map(|p| self.pcb_layer_view(&p).active());
+                if let Some(layer) = layer.or(active) {
+                    return self.open_layer_colour(layer);
+                }
+            }
         }
         Task::none()
     }
