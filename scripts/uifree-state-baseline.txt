@@ -1,6 +1,6 @@
 # UI-free state baseline (scripts/check_uifree_state.sh, ADR-0006). The count may only go down.
 # Regenerate with: bash scripts/check_uifree_state.sh --generate
-count=165
+count=164
 field=crate::app::agent::journal::queue::Gate.lines
 field=crate::app::agent::journal::queue::JournalMark.gate
 field=crate::app::agent::journal::queue::JournalQueue.gate
@@ -14,7 +14,6 @@ field=crate::app::board_reuse::store::ReuseBlockStore.writes
 field=crate::app::command::edit_reads::EditReads.parts
 field=crate::app::command::edit_reads::EditReads.project
 field=crate::app::command::edit_reads::EditReads.subtree
-field=crate::app::command::outcome::CommandOutcome::Answered.0
 field=crate::app::contracts::state::CaseVariants.others
 field=crate::app::contracts::state::SaveAllNext::CloseProject.project_id
 field=crate::app::contracts::state::SaveAllNext::CloseProject.sheet_refs

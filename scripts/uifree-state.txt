@@ -119,5 +119,6 @@ enum crates/signex-app/src/app/agent/journal/append.rs Journal
 
 # Third-party data crates.
 crate uuid  # `Uuid` ids: symbol/footprint `cascade_owed`, LoadedProject.pending_libraries
+crate serde_json  # `Value` payloads: CommandOutcome::Answered (Hakan, 2026-11-18)
 
 # UI-free modules: none yet (ADR-0006).
