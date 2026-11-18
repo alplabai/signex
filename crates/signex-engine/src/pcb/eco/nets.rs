@@ -393,8 +393,8 @@ fn pad_name(board: &PcbBoard, footprint: Uuid, pad: Uuid) -> String {
     format!("{}.{}", reference_of(board, footprint), number)
 }
 
-/// The sync issues worth a line in the dialog; informational ones (a locked
-/// pad, an unlinked footprint, which the rows already cover) are left out.
+/// The sync issues worth a line in the dialog; informational ones (an
+/// unlinked footprint, which the rows already cover) are left out.
 fn issue_text(board: &PcbBoard, issue: &PadNetIssue) -> Option<String> {
     Some(match issue {
         PadNetIssue::TerminalWithoutPad { terminal, .. } => {
@@ -427,8 +427,26 @@ fn issue_text(board: &PcbBoard, issue: &PadNetIssue) -> Option<String> {
         PadNetIssue::NetKeptForCopper { number } => {
             format!("net {number} has no pads but copper still uses it; it is kept")
         }
+        // A net set on the board (a route that ended on a pad of no net,
+        // a hand edit) is kept; the dialog lists it so the board does not
+        // disagree with the schematic silently.
+        PadNetIssue::PadNetLocked { footprint, pad } => format!(
+            "pad {} keeps net {}, set on the board",
+            pad_name(board, *footprint, *pad),
+            pad_net_name(board, *footprint, *pad)
+        ),
         PadNetIssue::FootprintNotInSchematic { .. }
-        | PadNetIssue::FootprintNotLinked { .. }
-        | PadNetIssue::PadNetLocked { .. } => return None,
+        | PadNetIssue::FootprintNotLinked { .. } => return None,
     })
+}
+
+/// The name of the net a pad is on, or "no net".
+fn pad_net_name(board: &PcbBoard, footprint: Uuid, pad: Uuid) -> String {
+    board
+        .footprints
+        .iter()
+        .find(|f| f.uuid == footprint)
+        .and_then(|f| f.pads.iter().find(|p| p.uuid == pad))
+        .and_then(|p| p.net.as_ref())
+        .map_or_else(|| "no net".to_string(), |net| net.name.clone())
 }

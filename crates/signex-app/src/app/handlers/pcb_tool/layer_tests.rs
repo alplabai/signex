@@ -72,7 +72,8 @@ fn all_on_inner(board: &PcbBoard, net: u32) -> bool {
 const NEEDS_COPPER: &str = "make a copper layer active";
 const NEEDS_TEXT_LAYER: &str = "make an overlay, mechanical or documentation layer active";
 const OTHER_NET: &str = "P5.1 is on net B, the route is on net A";
-const NO_NET: &str = "P5.1 is on no net, the route is on net A";
+const JOINED: &str = "P5.1 joined net A";
+const POUR_NO_NET: &str = "Polygon Pour has no net; set it in Properties";
 
 /// The status bar's line for the armed tool, isolation marks removed.
 fn status(app: &Signex) -> String {
@@ -248,12 +249,10 @@ fn a_leg_aimed_at_a_pad_of_another_net_is_drawn_refused_and_named() {
     route_round_u1(&mut app);
     let why = status(&app);
     assert!(why.contains(OTHER_NET), "{why}");
-    let preview = app.board_tool_preview().expect("a preview");
-    let at_pad = |t: &Segment| t.end == Point::new(10.0, 0.0);
+    let blocked = &app.interaction_state.pcb_canvas.highlight().blocked;
     assert!(
-        preview.segments.iter().any(at_pad),
-        "the aimed leg is drawn, not dropped: {:?}",
-        preview.segments
+        !blocked.is_empty(),
+        "the aimed leg is drawn in the violation colour, not dropped"
     );
     click(&mut app, 10.0, 0.0);
     assert_eq!(placed(&app), 4, "the click adds nothing");
@@ -261,13 +260,124 @@ fn a_leg_aimed_at_a_pad_of_another_net_is_drawn_refused_and_named() {
     assert!(why.contains(OTHER_NET), "{why}");
 }
 
+/// Maintainer decision 2026-11-18: a pad of no net joins the route's net,
+/// locked, in the route's undo step.
 #[test]
-fn a_leg_aimed_at_a_pad_of_no_net_is_refused_and_named() {
+fn a_route_ending_on_a_pad_of_no_net_gives_it_the_routes_net() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, _path) = app_with(dir.path(), u1(None));
+    let (mut app, path) = app_with(dir.path(), u1(None));
+    let before = live(&app, &path);
     route_round_u1(&mut app);
+    assert!(app.interaction_state.pcb_canvas.highlight().blocked.is_empty());
     click(&mut app, 10.0, 0.0);
-    assert_eq!(placed(&app), 4, "the click adds nothing");
+    assert_eq!(placed(&app), 5, "the last leg reaches the pad");
     let why = status(&app);
-    assert!(why.contains(NO_NET), "{why}");
+    assert!(why.contains(JOINED), "{why}");
+    escape(&mut app);
+    let board = board_of(&app, &path);
+    let pad = &board.footprints[1].pads[0];
+    assert_eq!(pad.net.as_ref().map(|n| n.number), Some(1), "it took net A");
+    assert!(pad.net_locked, "a connection made on the board is locked");
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "route and net are one step");
+}
+
+/// A leg ending on a top pad while the route runs on an inner layer ends
+/// with a via down to it, in the same step.
+#[test]
+fn a_route_on_an_inner_layer_ends_on_a_top_pad_with_a_via() {
+    let dir = tempfile::tempdir().unwrap();
+    let pads = vec![
+        pad(1, 0.0, 0.0, Some((1, "A"))),
+        pad(2, 10.0, 0.0, Some((1, "A"))),
+    ];
+    let (mut app, path) = app_with(dir.path(), pads);
+    let before = live(&app, &path);
+    make_active(&mut app, inner());
+    run(&mut app, "place_board_route");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    escape(&mut app);
+    let board = board_of(&app, &path);
+    let mut at: Vec<Point> = board.vias.iter().map(|v| v.position).collect();
+    at.sort_by(|a, b| a.x.total_cmp(&b.x));
+    assert_eq!(at, vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)]);
+    assert!(board.vias.iter().all(|v| v.net == 1));
+    assert!(all_on_inner(board, 1), "{:?}", board.segments);
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "vias and tracks are one step");
+}
+
+#[test]
+fn a_track_run_on_an_inner_layer_ends_on_a_top_pad_with_a_via() {
+    let dir = tempfile::tempdir().unwrap();
+    let pads = vec![
+        pad(1, 0.0, 0.0, Some((1, "A"))),
+        pad(2, 10.0, 0.0, Some((1, "A"))),
+    ];
+    let (mut app, path) = app_with(dir.path(), pads);
+    make_active(&mut app, inner());
+    run(&mut app, "place_board_track");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    let board = board_of(&app, &path);
+    assert_eq!(board.vias.len(), 2, "one at each pad");
+    assert!(all_on_inner(board, 1), "{:?}", board.segments);
+}
+
+/// Arming a board tool brings Properties to the front on what the next
+/// click places, Via included.
+#[test]
+fn arming_a_board_tool_brings_properties_to_the_front() {
+    use crate::panels::PanelKind;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), Vec::new());
+    for command in [
+        "place_board_via",
+        "place_board_track",
+        "place_board_polygon_pour",
+        "place_board_string",
+    ] {
+        app.end_board_tool();
+        app.document_state.dock.show_panel(PanelKind::Messages);
+        run(&mut app, command);
+        let front = app.document_state.dock.is_frontmost(PanelKind::Properties);
+        assert!(front, "{command}: Properties is in front");
+    }
+}
+
+/// A pour placed off copper, with no net set in Properties, says so.
+#[test]
+fn a_pour_with_no_net_says_so_in_the_status_bar() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), Vec::new());
+    run(&mut app, "place_board_polygon_pour");
+    for (x, y) in [(20.0, 20.0), (25.0, 20.0), (25.0, 25.0), (20.0, 20.0)] {
+        click(&mut app, x, y);
+    }
+    assert_eq!(board_of(&app, &path).zones.len(), 1);
+    let why = status(&app);
+    assert!(why.contains(POUR_NO_NET), "{why}");
+}
+
+/// A double-click closes a polygon with three corners.
+#[test]
+fn a_double_click_closes_a_polygon_pour() {
+    use crate::pcb_canvas::PcbCanvasMsg;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), Vec::new());
+    run(&mut app, "place_board_polygon_pour");
+    for (x, y) in [(20.0, 20.0), (25.0, 20.0), (25.0, 25.0)] {
+        click(&mut app, x, y);
+    }
+    let double = PcbCanvasMsg::DoubleClicked {
+        at: Point::new(25.0, 25.0),
+        tolerance_mm: 0.05,
+    };
+    let _ = app.update(Message::PcbCanvas(double));
+    let zones = &board_of(&app, &path).zones;
+    assert_eq!(zones.len(), 1, "closed by the double-click");
+    assert_eq!(zones[0].outline.len(), 3);
 }

@@ -102,7 +102,13 @@ define_ids! {
     PCB_ROUTE_MEMBER_NO_COPPER = "pcb-route-member-no-copper";
     PCB_ROUTE_BUS_NEEDS_NETS = "pcb-route-bus-needs-nets";
     PCB_ROUTE_END_OTHER_NET = "pcb-route-end-other-net";
-    PCB_ROUTE_END_NO_NET = "pcb-route-end-no-net";
+    PCB_ROUTE_PAD_JOINED = "pcb-route-pad-joined";
+    PCB_ROUTE_JOIN_GONE = "pcb-route-join-gone";
+    PCB_POUR_NO_NET = "pcb-pour-no-net";
+    PCB_POUR_NOT_FILLED = "pcb-pour-not-filled";
+    PCB_POUR_UNFILLED_NO_LAYER = "pcb-pour-unfilled-no-layer";
+    PCB_POUR_UNFILLED_OUTLINE = "pcb-pour-unfilled-outline";
+    PCB_POUR_UNFILLED_CLEARANCE = "pcb-pour-unfilled-clearance";
     PCB_ROUTE_AIM_BLOCKED = "pcb-route-aim-blocked";
     PCB_TOOL_PAUSED = "pcb-tool-paused";
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";

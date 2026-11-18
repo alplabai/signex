@@ -30,6 +30,7 @@ mod graphic;
 mod pour_cut;
 mod quick;
 mod route;
+mod route_end;
 mod router;
 mod side_by_side;
 mod string;
