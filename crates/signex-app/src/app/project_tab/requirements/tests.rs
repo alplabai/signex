@@ -275,3 +275,28 @@ fn a_save_writes_the_edited_list_and_reads_back_the_same() {
         json!(["released", "in_review"])
     );
 }
+
+#[test]
+fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
+    let (mut app, id, _dir) = app();
+    for kind in signex_types::project::REQUIREMENT_KINDS {
+        add(&mut app, id, kind);
+    }
+    app.document_state.projects[0]
+        .data
+        .requirements
+        .push(serde_json::from_value(json!({"id": "rails", "kind": "rail_budget"})).unwrap());
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: crate::app::ProjectSection::Requirements,
+        },
+    )));
+    let task = send(&mut app, id, RequirementsMsg::RunRequested);
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run settles");
+    type_and_submit(&mut app, id, RequirementField::Id, "");
+    assert!(tab(&app, id).problem.is_some(), "an empty id is refused");
+    let _ = app.view_project_tab(id);
+}
