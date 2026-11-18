@@ -155,7 +155,7 @@ fn a_designator_sits_on_the_part_origin_unless_it_has_its_own_on_the_layer() {
 }
 
 #[test]
-fn the_extent_is_the_outline_else_the_edge_cuts_else_the_marks() {
+fn the_extent_holds_the_outline_the_edge_cuts_and_the_marks() {
     let mut board = board();
     let extent = |board: &PcbBoard| {
         let d = assembly_drawing(board, BoardSide::Top);
