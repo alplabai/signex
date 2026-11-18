@@ -654,6 +654,7 @@ impl Signex {
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
                     sheet_variables: std::collections::BTreeMap::new(),
+                    builtin_parameters: Vec::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,

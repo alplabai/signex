@@ -3,8 +3,10 @@
 //! Extracted from `panels/mod.rs`. Pure view code, zero behaviour change.
 //! Split into concern-sibling submodules:
 //!
-//! - `general`   — the panel views (Custom Selection Filters, General +
-//!   Page Options, document-parameter table) and their button chrome.
+//! - `general`   — the General tab (Custom Selection Filters, General +
+//!   Page Options) and the Properties button chrome.
+//! - `parameters_tab` — the Parameters tab: title-block fields, built-in
+//!   special strings and sheet variables in one table.
 //! - `form_rows` — generic form-field row builders shared by every
 //!   Properties surface.
 //! - `net_params` — net-attribute rows, the Parameters (Net) section
@@ -14,6 +16,7 @@ mod form_rows;
 mod general;
 mod graphite_table;
 mod net_params;
+mod parameters_tab;
 mod sheet_variables;
 mod title_block;
 
@@ -31,10 +34,11 @@ pub use form_rows::{
 #[cfg(test)]
 pub(crate) use general::seg_text;
 pub(crate) use general::{chip_label, graphite_filter_chip};
-pub use general::{props_tab_btn, seg_btn, view_properties_general, view_properties_parameters};
+pub use general::{props_tab_btn, seg_btn, view_properties_general};
 pub use net_params::{
     empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid,
 };
-pub use sheet_variables::{SheetVariableMsg, view_sheet_variables_section};
-pub use title_block::{TitleBlockDraft, TitleBlockField, view_title_block_section};
+pub use parameters_tab::{BuiltinParameter, view_properties_parameters};
+pub use sheet_variables::SheetVariableMsg;
+pub use title_block::{TitleBlockDraft, TitleBlockField, shown_title_block_value};

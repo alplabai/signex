@@ -24,7 +24,6 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_SECTION_NET_PARAMETERS, "Parameters (Net)"),
     (ids::PROPERTIES_SECTION_PARAMETERS, "Parameters"),
     (ids::PROPERTIES_SECTION_PAGE_OPTIONS, "Page Options"),
-    (ids::PROPERTIES_SECTION_TITLE_BLOCK, "Title Block"),
     (
         ids::PROPERTIES_SECTION_SELECTION_FILTERS,
         "Custom Selection Filters",
@@ -688,11 +687,19 @@ fn picking_a_power_port_style_asks_for_its_library_id() {
     assert_eq!(asked, ["power:arrow"]);
 }
 
+/// Document Options open on the Parameters tab.
+fn document_parameters() -> PanelContext {
+    let mut ctx = document_options();
+    ctx.properties_tab = 1;
+    ctx
+}
+
 /// A title-block field the sheet leaves empty names the project's value; one
-/// the sheet fills says it overrides it.
+/// the sheet fills says it overrides it. The fields are rows of the
+/// Parameters tab (maintainer decision 2026-11-18).
 #[test]
 fn a_title_block_label_says_where_its_value_comes_from() {
-    let mut ctx = document_options();
+    let mut ctx = document_parameters();
     ctx.project_parameters
         .insert("drawn_by".into(), "Ann".into());
     let shown = texts(&ctx);
@@ -708,6 +715,68 @@ fn a_title_block_label_says_where_its_value_comes_from() {
             .any(|t| t.text == "Drawn By (overrides project)"),
         "{shown:#?}"
     );
+}
+
+/// Maintainer decision 2026-11-18: the General tab has no title-block
+/// field; the Parameters tab is the one place they are edited.
+#[test]
+fn the_general_tab_has_no_title_block_field() {
+    let mut ctx = document_options();
+    ctx.title_block.insert("drawn_by".into(), "Bob".into());
+    let shown = texts(&ctx);
+    for name in [
+        "Title",
+        "Drawn By",
+        "TITLE BLOCK",
+        "Sheet Variables",
+        "SHEET VARIABLES",
+    ] {
+        let found = shown.iter().any(|t| t.text == name);
+        assert!(!found, "{name:?} in {shown:#?}");
+    }
+    let shown = texts(&document_parameters());
+    for name in ["Title", "Document No.", "Revision", "Sheet Variables"] {
+        let found = shown.iter().any(|t| t.text == name);
+        assert!(found, "{name:?} missing: {shown:#?}");
+    }
+}
+
+/// Maintainer decision 2026-11-18: a Parameters row shows its real value,
+/// never a `*` placeholder, and a long name wraps inside its column instead
+/// of running into the value.
+#[test]
+fn the_parameters_tab_shows_real_values_and_names_clear_of_them() {
+    let mut ctx = document_parameters();
+    ctx.builtin_parameters = vec![
+        (BuiltinParameter::DocumentName, "power.snxsch".into()),
+        (BuiltinParameter::ProjectName, String::new()),
+    ];
+    ctx.project_parameters
+        .insert("approved_by".into(), "Ann".into());
+    ctx.title_block.insert("approved_by".into(), "Bob".into());
+    ctx.sheet_variables
+        .insert("DocumentFullPathAndName".into(), "x".into());
+    let shown = texts(&ctx);
+    assert!(!shown.iter().any(|t| t.text == "*"), "{shown:#?}");
+    assert_eq!(beside(&shown, "Document Name"), "power.snxsch");
+    let value = shown
+        .iter()
+        .find(|t| t.text == "power.snxsch")
+        .expect("the document name");
+    for name in [
+        "Approved By (overrides project)",
+        "DocumentFullPathAndName",
+        "Project Name",
+    ] {
+        let at = shown
+            .iter()
+            .find(|t| t.text == name)
+            .unwrap_or_else(|| panic!("{name:?} missing from {shown:#?}"));
+        assert!(
+            at.bounds.x + at.bounds.width <= value.bounds.x,
+            "{name:?} reaches the value column: {at:?} {value:?}"
+        );
+    }
 }
 
 /// The Tab form of a global port names its text Port Name.
@@ -843,6 +912,7 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
     assert_eq!(same_in_en_xa(document_options()), Vec::<String>::new());
+    assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,
         &[("Type", "Symbol"), ("Footprint", "Probe")],

@@ -43,7 +43,6 @@ properties-section-net-general = General (Net)
 properties-section-net-parameters = Parameters (Net)
 properties-section-parameters = Parameters
 properties-section-page-options = Page Options
-properties-section-title-block = Title Block
 properties-section-selection-filters = Custom Selection Filters
 
 ## Row labels
@@ -250,6 +249,13 @@ properties-sheet-variable-shows = Shows { $value }
 # Why a variable's `=` expression does not evaluate. $error is the reason.
 properties-sheet-variable-error = Error: { $error }
 properties-sheet-variables-hint = A sheet variable replaces the project variable of the same name. A value starting with = is an expression. Press Enter to apply.
+# The read-only rows of Document Options, Parameters: special strings of the
+# sheet that nothing in the panel edits.
+properties-parameter-document-name = Document Name
+properties-parameter-sheet-name = Sheet Name
+properties-parameter-sheet-number = Sheet Number
+properties-parameter-sheet-count = Sheet Count
+properties-parameter-project-name = Project Name
 # What a part value's `=` expression evaluates to. $value is the result,
 # such as 20kΩ.
 properties-value-shows = Shows { $value }

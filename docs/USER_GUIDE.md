@@ -687,16 +687,26 @@ own name/value pairs (the project variables). A name is letters, digits and
 `_`, not starting with a digit. Edits there are undoable with `Ctrl+Z` and are
 saved to the `.snxprj` with `Ctrl+S`.
 
-A sheet can override a value: in the sheet's **Properties** panel, **Title
-Block** section, type the value for that sheet. The label shows `(project)`
-while the field is empty and takes the project's value, and `(overrides
-project)` while the sheet has its own. Clear the field to fall back to the
-project's value.
+A sheet's own parameters are in one list: click an empty spot of the sheet so
+the **Properties** panel shows **Document Options**, and open its
+**Parameters** tab. Each row shows its current value.
 
-A sheet has its own variables too: the **Sheet Variables** section of the
-sheet's **Properties** panel. Type a name, press **Add**, type the value and
-press `Enter`. A sheet variable replaces the project variable of the same name
-on that sheet only; it is saved in the `.snxsch`.
+- **Title**, **Document No.**, **Revision**, **Date**, **Company**, **Drawn
+  By**, **Checked By** and **Approved By** are the sheet's title-block
+  fields. Type a value and press `Enter` to apply it; each applied field is
+  one undo step, and the title block on the sheet shows it. The name shows
+  `(project)` while the field is empty and takes the project's value (shown
+  greyed in the field), and `(overrides project)` while the sheet has its
+  own. Clear the field to fall back to the project's value.
+- **Document Name**, **Sheet Name**, **Sheet Number**, **Sheet Count** and
+  **Project Name** are read-only: they show what `${FILENAME}`,
+  `${SHEETNAME}`, `${SHEETNUMBER}`, `${SHEETCOUNT}` and `${PROJECT_NAME}`
+  print on this sheet. A row with no value is empty.
+
+A sheet has its own variables too, under **Sheet Variables** in the same
+tab. Type a name, press **Add**, type the value and press `Enter`; **Remove**
+deletes a variable. A sheet variable replaces the project variable of the
+same name on that sheet only; it is saved in the `.snxsch`.
 
 A value that starts with `=` is an expression: `= VCC / 2` with `VCC` set to
 `3.3V` shows `1.65V`. An expression may use other variables, units and the
