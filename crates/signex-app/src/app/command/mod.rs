@@ -58,6 +58,8 @@ mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
+mod parity;
+#[cfg(test)]
 mod part_operand_tests;
 mod part_operands;
 #[cfg(test)]
