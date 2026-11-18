@@ -286,7 +286,7 @@ impl Signex {
             own: board.options.layer_color(menu.layer).is_some(),
             any: !board.options.layer_colors.is_empty(),
         });
-        let layers: &[LayerDef] = board.map_or(&[], |board| board.layers.as_slice());
+        let layers: &[LayerDef] = board.map(|b| b.layers.as_slice()).unwrap_or_default();
         let state = TabMenuState {
             layer: menu.layer,
             view: &view,

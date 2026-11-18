@@ -910,18 +910,23 @@ above them.
 
 **Layer tabs and the Layers panel**
 
-The tabs under the board list its layers. Click a tab to make that layer
-active; new tracks, pours and text go on the active layer. `+` and `-` step
+The tabs under the board list every layer the Layers panel shows, and
+scroll sideways when they do not fit; a hidden layer has no tab. Click a tab
+to make that layer active; new tracks, pours and text go on the active
+layer. `+` and `-` step
 to the next and previous layer, `*` to the next signal layer. A right-click
-on a tab hides, highlights or shows layers, and its **Layer stack...** row
+on a tab hides, highlights or shows layers, sets the layer's colour
+(**Layer colour...**, saved with the board) and its **Layer stack...** row
 opens the Layer Stack panel.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
 has an eye per layer to show or hide it and a colour chip to change its
-colour in this view. **Used On** lists only the layers the board uses, and
-**Layer Sets** switches between sets of layers. The **View Options** tab
+colour (saved with the board, one undo step). **Used On** lists only the
+layers the board uses, and **Layer Sets** switches between sets of layers.
+The **View Options** tab
 shows or hides each kind of object and switches 3D and **Single Layer Mode**.
-These are view settings; they never change the board file.
+Apart from the colours, these are view settings; they never change the board
+file.
 
 <!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
 

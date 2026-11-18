@@ -99,6 +99,14 @@ non_components = false
 
 The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
 
+Layer colours (2026-11-18) are `[board_options.layer_colors]`: one key per
+layer the user gave a colour, its `.snxpcb` token, to `#rrggbbaa`, sorted by
+token and written only when some layer has one. A board with layer colours
+is written as `snxpcb/1.5` (`docs/FORMAT_VERSIONS.md`); a token or colour
+this build cannot read refuses the file. Layer colour... and the reset rows
+of a layer tab, the Layers panel's colour chips and `set_layer_color` /
+`reset_layer_colors` set them, each as one `SetBoardOptions` undo step.
+
 Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
 table per waiver with `key` (`signex_drc::waiver_key`), `rule`, `note` and
 `fingerprint`, written only when the board waives one. The DRC results panel

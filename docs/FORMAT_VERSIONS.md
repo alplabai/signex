@@ -31,7 +31,7 @@ format declares only its own table row below.
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
 | `.snxsch` | `snxsch/1.1`, or `1.2` with a No-ERC rule list | `snxsch/1`, `1.1`, `1.2` | opens read-only | refused |
-| `.snxpcb` | `snxpcb/1.4` | `snxpcb/1` to `snxpcb/1.4` | opens read-only | refused |
+| `.snxpcb` | `snxpcb/1.4`, or `1.5` with layer colours | `snxpcb/1` to `snxpcb/1.5` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1` | `snxfpt/1`, `snxfpt/1.1` | refused | refused |
