@@ -175,6 +175,8 @@ impl Env {
     fn elbow_leg_would_dot(&self, index: usize, far: Key) -> bool {
         (self.wires_near(far, far).into_iter())
             .filter(|(other, w)| *other != index && (key(&w.start) == far || key(&w.end) == far))
+            // A slide never edits a selected wire (`elbow_leg`).
+            .filter(|(_, w)| !self.selected.contains(&w.uuid))
             .any(|(leg, w)| {
                 let other_end = if key(&w.start) == far {
                     key(&w.end)
