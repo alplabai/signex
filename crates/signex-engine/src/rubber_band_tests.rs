@@ -2160,6 +2160,25 @@ fn diagnose_seed_5eed0963_case_364() {
     diagnose_case(0x5EED_0963, 364);
 }
 
+/// Any case: `DIAG_SEED` (hex with `0x`, or decimal) and `DIAG_CASE`.
+#[test]
+#[ignore = "diagnostic: prints the case DIAG_SEED and DIAG_CASE name"]
+fn diagnose_case_from_env() {
+    let number = |name: &str| -> Option<u64> {
+        let text = std::env::var(name).ok()?;
+        let text = text.trim();
+        match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            Some(hex) => u64::from_str_radix(&hex.replace('_', ""), 16).ok(),
+            None => text.replace('_', "").parse().ok(),
+        }
+    };
+    let (Some(seed), Some(case)) = (number("DIAG_SEED"), number("DIAG_CASE")) else {
+        eprintln!("set DIAG_SEED and DIAG_CASE");
+        return;
+    };
+    diagnose_case(seed, case as usize);
+}
+
 /// Rebuild case `wanted` of `seed` as `property_run` does, run the plain and
 /// the keep-wires move, and print the sheet and what each run changed.
 fn diagnose_case(seed: u64, wanted: usize) {

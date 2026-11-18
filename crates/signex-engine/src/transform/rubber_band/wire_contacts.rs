@@ -219,13 +219,16 @@ fn carry(document: &mut SchematicSheet, moves: &[Move], selected: HashSet<Uuid>)
         return Follow::default();
     }
     let old_tips = moves.iter().map(|mv| pt_key(&mv.old)).collect();
-    let mut env = Env::new(
-        document,
-        selected,
-        HashSet::new(),
-        old_tips,
-        Policy::default(),
-    );
+    // The pins of moved parts, child sheets and sheet pins are not what holds
+    // a carried point: a group drag can put one where the wire was, and a
+    // path to it would join a pin the wire never touched.
+    let mut moving = selected.clone();
+    for child in &document.child_sheets {
+        if selected.contains(&child.uuid) {
+            moving.extend(child.pins.iter().map(|pin| pin.uuid));
+        }
+    }
+    let mut env = Env::new(document, selected, moving, old_tips, Policy::default());
     let mut out = Follow::default();
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
     for mv in moves {
