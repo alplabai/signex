@@ -28,7 +28,10 @@ pub(crate) fn write_job(facts: &JobFacts, files: &[FabFile]) -> String {
                     "FilePolarity": polarity,
                 }));
             }
-            FabFileKind::DrillTable | FabFileKind::Centroid | FabFileKind::TestNetlist => {
+            FabFileKind::DrillTable
+            | FabFileKind::Centroid
+            | FabFileKind::TestNetlist
+            | FabFileKind::Ipc2581 => {
                 others.push(json!({ "Path": file.name, "Content": file.kind.content() }));
             }
             FabFileKind::Job => {}

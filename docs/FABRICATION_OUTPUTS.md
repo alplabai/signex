@@ -38,6 +38,7 @@ The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 | `<name>-drill-table.csv` | per file and tool: diameter, hole and slot counts |
 | `<name>-centroid.csv` | pick and place |
 | `<name>-netlist.ipc` | IPC-D-356 bare-board test netlist |
+| `<name>-ipc2581.xml` | IPC-2581 revision C: the whole job in one file (#2484) |
 | `<name>-job.gbrjob` | every file written, with its X2 file function |
 
 The copper stack is top and bottom always, every inner layer the board's
@@ -48,16 +49,17 @@ paste images are written only when they hold something.
 
 All files share one frame: x to the right and y up, from the board origin
 (#2384, `BoardOptions::origin`), as seen from the top: the coordinates the
-board shows. Gerber, drill, pick-and-place and IPC-D-356 all read it. The
+board shows. Gerber, drill, pick-and-place, IPC-D-356 and IPC-2581 all read it. The
 board model's y grows down the screen, so every file mirrors y about the
 origin, and an angle that is counter-clockwise in the model is clockwise in
 the files (`FabFrame` in `fab/frame.rs` is the one place this lives). A part
 at model (10, 70) on a board whose origin is at model (0, 80) is written at
 (10, 10). A board saved without an origin counts from the model's zero.
 
-Output is deterministic: no date, no version, no hash-map order. The same
-board gives the same bytes, so a diff of two generations shows only real
-changes.
+Output is deterministic: no date, no version, no hash-map order. The
+IPC-2581 schema requires history dates, so that file carries the epoch
+(`1970-01-01T00:00:00Z`) to mean "not recorded". The same board gives the
+same bytes, so a diff of two generations shows only real changes.
 
 ## Gerber
 
@@ -162,7 +164,63 @@ pad.
 The Gerber job JSON shape: generation software, board size from the outline,
 copper layer count, thickness, and `FilesAttributes` (path, file function,
 polarity) for every image and drill file; the table, centroid and test
-netlist under `OtherFiles`.
+netlist and the IPC-2581 file under `OtherFiles`.
+
+## Layer roles
+
+The whole-job exports (IPC-2581, and ODB++ next, #2485) read one table,
+`fab/roles.rs`, keyed by the typed layer id, never by a display name, so
+renaming a layer row changes no output. Copper is a plane when the board's
+stack (stored, or derived from the layer table's `plane` type) pours it as
+one.
+
+| Typed layer | IPC-2581 `layerFunction` | ODB++ matrix type |
+|---|---|---|
+| Copper | `SIGNAL`, or `PLANE` | `SIGNAL`, or `POWER_GROUND` |
+| Silkscreen top / bottom | `LEGEND` | `SILK_SCREEN` |
+| Solder mask top / bottom | `SOLDERMASK` | `SOLDER_MASK` |
+| Paste top / bottom | `SOLDERPASTE` | `SOLDER_PASTE` |
+| Adhesive top / bottom | `GLUE` | `DOCUMENT` |
+| Board outline (`EdgeCuts`) | `BOARD_OUTLINE` | the step profile |
+| Assembly top / bottom | `ASSEMBLY` | `DOCUMENT` |
+| Courtyard top / bottom | `COURTYARD` | `DOCUMENT` |
+| Mechanical 1–32, and every other layer | `DOCUMENT` | `DOCUMENT` |
+| A drilled span (not a board layer) | `DRILL` | `DRILL` |
+
+A layer's side comes from the typed id too: top, bottom, inner copper
+(`INTERNAL`), or board-wide (`ALL`). A layer is named by its file token
+(`TopCopper`, `Inner1Copper`, `TopSolderMask`); a mechanical layer keeps the
+name its layer table gives it, or `Mechanical<n>` when it has none (and when
+that name is another layer's).
+
+## IPC-2581
+
+Revision C, millimetres, one XML file, one step named after the file stem.
+It holds:
+
+- **Layers and stackup.** Every stack row top to bottom (overlay, paste,
+  mask, copper, dielectric as `Dielectric<k>`, `DIELCORE`), then any other
+  layer that carries a drawing or that the layer table lists, the V-score
+  layer (`V_CUT`) when there are V-scores, and one drill layer per drilled
+  span (`Drill_PTH`, `Drill_NPTH`, `Drill_BLIND_L1_L2`, ...) with its span.
+  The stackup lists each stack row with its thickness.
+- **Features.** Every image's marks, on the same frame as the Gerber
+  images: pads as `Pad` with their pin (`padUsage` `TERMINATION`, `VIA`,
+  `MASK` for a mask or paste opening), tracks and drawings as round-pen
+  polylines, zone fills as contours with cutouts. Flashed shapes are written
+  once in the standard dictionary, unturned, with the turn on the feature.
+  Drawings on layers no Gerber image carries (fab, assembly, courtyard,
+  documentation, mechanical) are written on their document layers.
+- **Holes.** Each drill layer's holes and slots (`SlotCavity`, an oval from
+  end to end) with their plating.
+- **Profile.** The board outline and the board sketch's through cutouts.
+- **Parts.** One package per footprint kind with its pins in the
+  footprint's own frame, a component per part with a designator (rotation as
+  in the pick-and-place file, mirrored on the bottom), a BOM item per value
+  and footprint, and a logical net per net with the pins its pads carry.
+
+No person, company or date is recorded. The file is written with every
+generation; the dialog's own tick box for it is #2489.
 
 ## Refusals
 

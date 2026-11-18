@@ -1,6 +1,7 @@
 //! Fabrication outputs (#2388): Gerber RS-274X images with X2 attributes,
 //! Excellon drill files and their table, the pick-and-place CSV, the
-//! IPC-D-356 test netlist and a job file listing them.
+//! IPC-D-356 test netlist, the IPC-2581 file (#2484) and a job file
+//! listing them.
 //!
 //! [`generate`] is pure: it reads the board and returns the files' bytes,
 //! and the app writes them only when the user presses Generate. One board
@@ -14,16 +15,19 @@
 
 mod centroid;
 mod collect;
+mod documents;
 mod draw;
 mod drill;
 mod extras;
 mod frame;
 mod gerber;
+mod ipc2581;
 mod ipc356;
 mod job;
 mod layers;
 mod marks;
 mod notes;
+mod roles;
 
 #[cfg(test)]
 mod tests;
@@ -48,6 +52,8 @@ pub struct FabOptions {
     pub drill: bool,
     pub centroid: bool,
     pub test_netlist: bool,
+    /// The IPC-2581 file: the whole job in one file (#2484).
+    pub ipc2581: bool,
 }
 
 impl FabOptions {
@@ -59,11 +65,12 @@ impl FabOptions {
             drill: true,
             centroid: true,
             test_netlist: true,
+            ipc2581: true,
         }
     }
 
     fn any(&self) -> bool {
-        self.gerber || self.drill || self.centroid || self.test_netlist
+        self.gerber || self.drill || self.centroid || self.test_netlist || self.ipc2581
     }
 }
 
@@ -109,6 +116,8 @@ pub enum FabFileKind {
     DrillTable,
     Centroid,
     TestNetlist,
+    /// The IPC-2581 file (#2484).
+    Ipc2581,
     Job,
 }
 
@@ -119,6 +128,7 @@ impl FabFileKind {
             FabFileKind::DrillTable => "DrillTable",
             FabFileKind::Centroid => "PickAndPlace",
             FabFileKind::TestNetlist => "TestNetlist",
+            FabFileKind::Ipc2581 => "IPC2581",
             FabFileKind::Gerber { .. } | FabFileKind::Drill { .. } | FabFileKind::Job => "",
         }
     }
@@ -204,6 +214,16 @@ pub fn generate(
         });
         skipped = skipped.max(ipc_skipped);
     }
+    if options.ipc2581 {
+        let mut own = Tally::default();
+        files.push(FabFile {
+            name: format!("{name}-ipc2581.xml"),
+            kind: FabFileKind::Ipc2581,
+            contents: ipc2581::write_ipc2581(board, extras, &stack, name, &mut own),
+        });
+        tally.texts = tally.texts.max(own.texts);
+        skipped = skipped.max(own.skipped);
+    }
     let facts = job::JobFacts {
         name: name.to_string(),
         extent: outline_extent(board),
@@ -228,7 +248,7 @@ pub fn generate(
         .filter(|z| z.fill_type != KEEPOUT_FILL)
         .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
         .count();
-    let zones_not_filled = if options.gerber && extras.zone_fills.is_empty() {
+    let zones_not_filled = if (options.gerber || options.ipc2581) && extras.zone_fills.is_empty() {
         copper_zones
     } else {
         0
