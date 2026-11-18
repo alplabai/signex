@@ -440,6 +440,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1667: fixture names only.
     ("place_design_block", "PlaceDesignBlock"),
     ("import_graphics", "ImportGraphics"),
+    // #1276: fixture names only.
+    ("create_sheet_symbol_from_sheet", "CreateSheetSymbolFromSheet"),
+    ("sync_sheet_entries", "SyncSheetEntries"),
     // #2420: the directive tools, fixture names only.
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),

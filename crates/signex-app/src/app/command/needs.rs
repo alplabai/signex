@@ -375,6 +375,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1276: a sheet symbol lands on, or is synced from, the sheet in
+        // view; with no sheet symbol selected the sync says what to select.
+        | "create_sheet_symbol_from_sheet"
+        | "sync_sheet_entries"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.

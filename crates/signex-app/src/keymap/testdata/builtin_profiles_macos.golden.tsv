@@ -302,6 +302,8 @@ altium	hint	-	-	place_sheet_entry
 altium	hint	-	-	place_device_sheet_symbol
 altium	hint	-	-	create_sheet_from_sheet_symbol
 altium	hint	-	-	sync_sheet_pins
+altium	hint	-	-	create_sheet_symbol_from_sheet
+altium	hint	-	-	sync_sheet_entries
 altium	hint	-	-	number_schematic_sheets
 altium	hint	-	-	open_child_sheet
 altium	hint	-	-	leave_sheet
@@ -796,6 +798,8 @@ classic	hint	-	-	place_sheet_entry
 classic	hint	-	-	place_device_sheet_symbol
 classic	hint	-	-	create_sheet_from_sheet_symbol
 classic	hint	-	-	sync_sheet_pins
+classic	hint	-	-	create_sheet_symbol_from_sheet
+classic	hint	-	-	sync_sheet_entries
 classic	hint	-	-	number_schematic_sheets
 classic	hint	-	-	open_child_sheet
 classic	hint	-	⌥BACKSPACE	leave_sheet

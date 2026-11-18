@@ -369,6 +369,10 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2398: the project's design rules as a document tab; greyed with
         // no project open.
         cmd_item_gated(ctx, cmd("open_rules", "")),
+        SEP,
+        // #1276: bottom-up hierarchy; greyed with no sheet in view.
+        cmd_item_gated(ctx, cmd("create_sheet_symbol_from_sheet", "")),
+        cmd_item_gated(ctx, cmd("sync_sheet_entries", "")),
     ]
 }
 

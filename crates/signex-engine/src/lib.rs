@@ -26,6 +26,9 @@ mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;
 mod sheet_placement;
+mod sheet_sync;
+#[cfg(test)]
+mod sheet_sync_tests;
 mod transform;
 
 mod dxf_plane;
@@ -89,7 +92,7 @@ pub use annotation::{AnnotatePlacement, AnnotateScope};
 pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
-    SelectionTransform, SheetPort, SymbolFlag, SymbolTextField, TextTarget,
+    SelectionTransform, SheetEntryRename, SheetPort, SymbolFlag, SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::change_component::{
@@ -142,6 +145,11 @@ pub use sheet_entry::{
 pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
+};
+pub use sheet_sync::{
+    SheetSyncDirection, SheetSyncPreview, entry_changes_from_sheet, port_changes_from_symbol,
+    port_sync_commands, sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
+    unused_sheet_symbol_name,
 };
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
@@ -1038,6 +1046,7 @@ mod tests {
                         direction: "output".to_string(),
                     },
                 ],
+                renames: Vec::new(),
             })
             .unwrap();
 
@@ -1093,6 +1102,7 @@ mod tests {
                     name: "SDA".to_string(),
                     direction: "output".to_string(),
                 }],
+                renames: Vec::new(),
             })
             .unwrap();
 

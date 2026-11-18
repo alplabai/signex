@@ -473,6 +473,10 @@ pub struct UiState {
     /// Generation of the newest Number Schematic Sheets read. Outside the
     /// dialog's state so a reopened dialog never takes an older read.
     pub sheet_numbering_reads: u64,
+    /// The Synchronize Sheet Entries and Ports dialog, while open (#1276).
+    pub sheet_sync: Option<crate::app::SheetSyncState>,
+    /// Generation of the newest sync dialog read, as `sheet_numbering_reads`.
+    pub sheet_sync_reads: u64,
     /// Tools ▸ Re-Annotate Board (#1312), while open. Execute is one board
     /// undo step; nothing is written to disk.
     pub board_reannotate: Option<crate::app::BoardReannotateState>,

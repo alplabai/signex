@@ -158,6 +158,9 @@ Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes
 Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
+Design/---	separator	-	-	-	-	-	-
+Design/Create Sheet Symbol From Sheet...	item	Create Sheet Symbol From Sheet...	-	-	CreateSheetSymbolFromSheet	01000000	cmd:create_sheet_symbol_from_sheet
+Design/Synchronize Sheet Entries and Ports...	item	Synchronize Sheet Entries and Ports...	-	-	SyncSheetEntries	01000000	cmd:sync_sheet_entries
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-
 Tools/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch

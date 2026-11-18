@@ -271,6 +271,10 @@ define_ids! {
         CMD_SHEET_NAVIGATION_FORWARD = "cmd-sheet-navigation-forward";
         CMD_SYNC_SHEET_PINS = "cmd-sync-sheet-pins";
         CMD_MENU_SYNC_SHEET_PINS = "cmd-menu-sync-sheet-pins";
+        CMD_CREATE_SHEET_SYMBOL_FROM_SHEET = "cmd-create-sheet-symbol-from-sheet";
+        CMD_MENU_CREATE_SHEET_SYMBOL_FROM_SHEET = "cmd-menu-create-sheet-symbol-from-sheet";
+        CMD_SYNC_SHEET_ENTRIES = "cmd-sync-sheet-entries";
+        CMD_MENU_SYNC_SHEET_ENTRIES = "cmd-menu-sync-sheet-entries";
         CMD_CHANGE_COMPONENT = "cmd-change-component";
         CMD_MENU_CHANGE_COMPONENT = "cmd-menu-change-component";
         CMD_OPEN_PROJECT_OPTIONS = "cmd-open-project-options";

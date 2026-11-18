@@ -250,6 +250,11 @@
     "category": "design"
   },
   {
+    "id": "create_sheet_symbol_from_sheet",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "cross_probe",
     "group": "General",
     "category": "select"
@@ -1703,6 +1708,11 @@
     "id": "switch_segment_posture",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "sync_sheet_entries",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "sync_sheet_pins",
