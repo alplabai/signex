@@ -139,6 +139,11 @@ altium	hint	-	-	project_set_active_variant
 altium	hint	-	-	project_move_library
 altium	hint	-	-	project_set_annotate_undo
 altium	hint	-	-	project_set_version_control
+altium	hint	-	-	project_add_requirement
+altium	hint	-	-	project_set_requirement
+altium	hint	-	-	project_remove_requirement
+altium	hint	-	-	project_enable_requirement
+altium	hint	-	-	project_run_requirements
 altium	hint	-	-	document_info
 altium	hint	-	-	list_documents
 altium	hint	-	-	read_document
@@ -628,6 +633,11 @@ classic	hint	-	-	project_set_active_variant
 classic	hint	-	-	project_move_library
 classic	hint	-	-	project_set_annotate_undo
 classic	hint	-	-	project_set_version_control
+classic	hint	-	-	project_add_requirement
+classic	hint	-	-	project_set_requirement
+classic	hint	-	-	project_remove_requirement
+classic	hint	-	-	project_enable_requirement
+classic	hint	-	-	project_run_requirements
 classic	hint	-	-	document_info
 classic	hint	-	-	list_documents
 classic	hint	-	-	read_document

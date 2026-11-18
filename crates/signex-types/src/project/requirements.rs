@@ -10,12 +10,31 @@ use serde_json::Value;
 
 use crate::violation::Severity;
 
+mod edit;
+
+pub use edit::{MAX_REQUIREMENT_ID_CHARS, RequirementField, RequirementProblem};
+
 /// The `.snxprj` key of the requirements list.
 pub const REQUIREMENTS_KEY: &str = "requirements";
 
 /// The lifecycle states a `parts_state` requirement allows when it names
 /// none.
 pub const DEFAULT_PART_STATES: [&str; 1] = ["released"];
+
+/// The lifecycle state names a `parts_state` requirement may list.
+pub const LIFECYCLE_STATES: [&str; 5] =
+    ["draft", "in_review", "released", "deprecated", "obsolete"];
+
+/// Every kind's name, as the file writes it, in the order an editor offers
+/// them.
+pub const REQUIREMENT_KINDS: [&str; 6] = [
+    "erc_clean",
+    "drc_clean",
+    "board_size",
+    "parts_state",
+    "net_class",
+    "bom_cost",
+];
 
 /// One requirement of the project.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -25,12 +44,23 @@ pub struct Requirement {
     /// The severity of the findings this requirement raises.
     #[serde(default = "default_severity")]
     pub severity: Severity,
+    /// A requirement turned off is kept in the list and not checked.
+    #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
+    pub enabled: bool,
     #[serde(flatten)]
     pub kind: RequirementKind,
 }
 
 fn default_severity() -> Severity {
     Severity::Error
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 fn is_false(value: &bool) -> bool {
@@ -104,7 +134,7 @@ impl RequirementKind {
     }
 
     /// The kind's own fields, as the file names them.
-    fn fields(&self) -> &'static [&'static str] {
+    pub fn fields(&self) -> &'static [&'static str] {
         match self {
             Self::ErcClean { .. } | Self::DrcClean { .. } => &["allow_warnings"],
             Self::BoardSize { .. } => &["max_width_mm", "max_height_mm"],
@@ -116,7 +146,7 @@ impl RequirementKind {
 }
 
 /// The fields every requirement has.
-const COMMON_FIELDS: [&str; 3] = ["id", "severity", "kind"];
+const COMMON_FIELDS: [&str; 4] = ["id", "severity", "enabled", "kind"];
 
 /// One entry of the stored list: a requirement, or an entry this build
 /// cannot read (an unknown kind, a missing or mistyped field, a key it does

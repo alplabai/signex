@@ -147,13 +147,18 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Mod+P` | `Mod+P` |
+| `project_add_requirement` | Add a requirement to the project | design | — | — |
 | `project_add_variant` | Add a variant to the project | design | — | — |
+| `project_enable_requirement` | Turn a project requirement on or off | design | — | — |
 | `project_move_library` | Move a library in the library order of the project | design | — | — |
 | `project_move_sheet` | Move a sheet in the page order of the project | design | — | — |
+| `project_remove_requirement` | Remove a requirement from the project | design | — | — |
 | `project_remove_variant` | Remove a variant of the project | design | — | — |
 | `project_rename_variant` | Rename a variant of the project | design | — | — |
+| `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_pins` | Query pins | file | — | — |

@@ -435,3 +435,32 @@ fn keys_hold_across_runs_whatever_was_measured() {
     };
     assert_eq!(run(12.0), run(14.0));
 }
+
+#[test]
+fn a_turned_off_requirement_is_not_checked_needs_nothing_and_says_so() {
+    let mut facts = facts(json!([
+        {"id": "erc", "kind": "erc_clean", "enabled": false},
+        {"id": "size", "kind": "board_size", "max_width_mm": 10, "max_height_mm": 10,
+         "enabled": false},
+        {"id": "size", "kind": "board_size", "max_width_mm": 10, "max_height_mm": 10},
+    ]));
+    assert_eq!(
+        Needs::of(&facts.requirements),
+        Needs {
+            board: true,
+            ..Needs::default()
+        }
+    );
+    facts.board = read_board(board(5.0, 5.0, &[]));
+    let report = check_report(&facts);
+    // Its id is still taken: the second `size` is a finding, never a pass.
+    assert_eq!(rules(&report), ["req::size"]);
+    assert!(report.passed.is_empty(), "{:?}", report.passed);
+    assert!(
+        report
+            .warnings
+            .contains(&"Requirement erc is turned off, so it was not checked".to_string()),
+        "{:?}",
+        report.warnings
+    );
+}

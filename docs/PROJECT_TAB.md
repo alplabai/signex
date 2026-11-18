@@ -39,6 +39,28 @@ history, which the ERC dialog and the Rules tab share.
   when it has none, and "Commit every save" (`enable_git`). Turning it on
   needs a repository; turning it off keeps the repository.
 
+## Requirements (#2339)
+
+The project's requirements list (the `.snxprj` `requirements` key; kinds and
+fields in [CLI.md](CLI.md), "Requirement checks"), one card per entry: the
+Enabled check, the kind, the outcome of the last run, Remove, then the id,
+the severity and the kind's fields. Add requirement… picks a kind and adds
+an entry with starting values (`board_size` 100 × 100 mm, `net_class` all
+nets with 0.15 mm minimums, `bom_cost` 100 boards at 10 USD each) and the
+kind's name as its id, made unique. A field box commits on Enter; a value
+that is not valid (an id that is empty or taken, a length or cost that is no
+number above 0, a count below 1, an unknown lifecycle state, a `net_class`
+with neither a class nor a minimum) stays in its box with the reason and
+changes nothing. An empty box clears an optional field. An entry this build
+cannot read is shown with the reason and can only be removed; a
+`requirements` value that is not a list is not edited at all.
+
+Run checks runs the same job as `check_requirements` over the project as it
+is in memory, off the UI thread, and shows each requirement as passed,
+failed (with each finding's message and measured values) or not checked,
+the run's notes, and when it finished. It writes nothing and says nothing in
+Messages. Edits are General undo steps; a run is not an edit.
+
 ## Preferences and the project
 
 The Preferences values seed a new project (its ERC rules and its Annotate
@@ -55,7 +77,9 @@ section as one object: `sheets` (`page`, `name`, `file`, in page order),
 (`annotate_undo` `project` / `per_sheet` / null for the Preferences
 default, `annotate_undo_effective`, `erc_rules` `project` / `preferences` /
 `unreadable`) and `version_control` (`commit_on_save`, `repository`
-`present` / `absent` / `unknown`, `pending_commits`).
+`present` / `absent` / `unknown`, `pending_commits`) and the requirements:
+`requirements` (each entry as stored), `unreadable` (`index`, `reason` of
+each entry this build cannot read) and `list_unreadable`.
 
 Each edit runs the tab's own commit path and answers with its section plus
 `changed` (false when nothing changed, as for a move at the end of the
@@ -71,6 +95,16 @@ list):
 | `project_move_library` | `library` (path as stored), `direction` |
 | `project_set_annotate_undo` | `value` `project` / `per_sheet`, optional; none follows Preferences |
 | `project_set_version_control` | `on`; on is refused without a repository |
+| `project_add_requirement` | `kind`, `id` optional (the kind's name, made unique) |
+| `project_set_requirement` | `requirement` (its id), `field` (as the file names it), `value` as typed; empty clears an optional field |
+| `project_remove_requirement` | `requirement` |
+| `project_enable_requirement` | `requirement`, `on` |
+
+A requirement edit answers with the requirements (as `project_settings`
+does) plus `changed`; an id that names no entry, or more than one, is
+refused. `project_run_requirements` runs the tab's Run checks and answers at
+once; the results land in the tab. `check_requirements` is the query that
+answers with the report.
 
 A refused edit changes nothing and says why. The edits are on the agent
 channel and refused inside `apply_edits`: they write the project file, which

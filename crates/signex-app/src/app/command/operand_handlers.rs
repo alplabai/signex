@@ -232,6 +232,27 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_set_version_control",
         crate::app::project_tab::project_set_version_control,
     ),
+    // #2339: the Project tab's Requirements section.
+    (
+        "project_add_requirement",
+        crate::app::project_tab::project_add_requirement,
+    ),
+    (
+        "project_set_requirement",
+        crate::app::project_tab::project_set_requirement,
+    ),
+    (
+        "project_remove_requirement",
+        crate::app::project_tab::project_remove_requirement,
+    ),
+    (
+        "project_enable_requirement",
+        crate::app::project_tab::project_enable_requirement,
+    ),
+    (
+        "project_run_requirements",
+        crate::app::project_tab::project_run_requirements,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -458,7 +479,12 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_active_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
-        | "project_set_version_control" => Some(
+        | "project_set_version_control"
+        | "project_add_requirement"
+        | "project_set_requirement"
+        | "project_remove_requirement"
+        | "project_enable_requirement"
+        | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
         ),

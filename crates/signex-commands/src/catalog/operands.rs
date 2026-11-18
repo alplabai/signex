@@ -813,6 +813,32 @@ pub const PROJECT_VERSION_CONTROL: &[Operand] = &[
     required("document", OperandKind::Document),
     required("on", OperandKind::Bool),
 ];
+/// `project_add_requirement` (#2339): a requirement `kind`, and its `id`
+/// (the kind's name made unique when none is given).
+pub const PROJECT_ADD_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    optional("id", OperandKind::Text),
+];
+/// `project_set_requirement`: one `field` of the requirement with id
+/// `requirement`, as typed in `value`; empty clears an optional field.
+pub const PROJECT_SET_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
+/// `project_remove_requirement`: the requirement by id.
+pub const PROJECT_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+];
+/// `project_enable_requirement`: the requirement by id, on or off.
+pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("on", OperandKind::Bool),
+];
 
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the

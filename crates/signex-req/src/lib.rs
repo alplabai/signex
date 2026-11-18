@@ -44,10 +44,14 @@ pub struct Needs {
 }
 
 impl Needs {
-    /// What `entries` need; an unreadable entry needs nothing.
+    /// What `entries` need; an unreadable or turned-off entry needs nothing.
     pub fn of(entries: &[RequirementEntry]) -> Self {
         let mut needs = Self::default();
-        for requirement in entries.iter().filter_map(RequirementEntry::requirement) {
+        let enabled = entries
+            .iter()
+            .filter_map(RequirementEntry::requirement)
+            .filter(|requirement| requirement.enabled);
+        for requirement in enabled {
             match requirement.kind {
                 RequirementKind::ErcClean { .. } => needs.erc = true,
                 RequirementKind::DrcClean { .. } => needs.drc = true,
@@ -149,6 +153,7 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     let mut findings = Vec::new();
     let mut passed = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
+    let mut turned_off = Vec::new();
     if facts.unreadable_list {
         let miss =
             Miss::new("The project's requirements are not a list, so none of them was checked");
@@ -201,6 +206,12 @@ pub fn check_report(facts: &Facts) -> CheckReport {
             findings.push(finding(facts, &rule, severity, "no id", miss));
             continue;
         }
+        if !requirement.enabled {
+            turned_off.push(format!(
+                "Requirement {label} is turned off, so it was not checked"
+            ));
+            continue;
+        }
         let misses = evaluate(requirement, facts);
         if misses.is_empty() {
             passed.push(rule);
@@ -216,6 +227,7 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     if facts.requirements.is_empty() && !facts.unreadable_list {
         warnings.push("The project lists no requirements".to_string());
     }
+    warnings.extend(turned_off);
     warnings.extend(run_warnings("ERC", facts.erc.as_ref()));
     warnings.extend(run_warnings("DRC", facts.drc.as_ref()));
     CheckReport::new(

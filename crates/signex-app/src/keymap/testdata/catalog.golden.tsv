@@ -28,6 +28,11 @@ project_set_active_variant	design	Choose the active variant of the project	-	Gen
 project_move_library	design	Move a library in the library order of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,library:text,direction:text
 project_set_annotate_undo	design	Set how many undo steps an annotate run of the project is	-	General	-	-	Always	mutates_doc,undoable	document:document,value:text?
 project_set_version_control	design	Turn commit on save on or off for the project	-	General	-	-	Always	mutates_doc,undoable	document:document,on:bool
+project_add_requirement	design	Add a requirement to the project	-	General	-	-	Always	mutates_doc,undoable	document:document,kind:text,id:text?
+project_set_requirement	design	Set a field of a project requirement	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text,field:text,value:text
+project_remove_requirement	design	Remove a requirement from the project	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text
+project_enable_requirement	design	Turn a project requirement on or off	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text,on:bool
+project_run_requirements	validation	Run the project's requirement checks in the Project tab	-	General	-	-	Always	-	document:document
 document_info	file	Document info	-	General	-	-	Always	-	document:document
 list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?

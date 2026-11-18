@@ -37,7 +37,9 @@ pub use erc_waiver::ErcWaiver;
 pub use fab_tier::FabCapabilities;
 pub use order::ListMove;
 pub use requirements::{
-    DEFAULT_PART_STATES, REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementKind,
+    DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
+    REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
+    RequirementProblem,
 };
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{

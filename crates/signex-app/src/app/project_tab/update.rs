@@ -12,8 +12,14 @@ impl Signex {
         &mut self,
         msg: ProjectTabMsg,
     ) -> iced::Task<crate::app::Message> {
-        if let ProjectTabMsg::SetupEdited { project_id, msg } = msg {
-            return self.edit_project_setup(project_id, msg);
+        match msg {
+            ProjectTabMsg::SetupEdited { project_id, msg } => {
+                return self.edit_project_setup(project_id, msg);
+            }
+            ProjectTabMsg::Requirements { project_id, msg } => {
+                return self.dispatch_requirements(project_id, msg);
+            }
+            _ => {}
         }
         self.apply_project_tab_message(msg);
         iced::Task::none()
@@ -143,8 +149,8 @@ impl Signex {
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
-            // Routed by `dispatch_project_tab_message`, which returns its task.
-            ProjectTabMsg::SetupEdited { .. } => {}
+            // Routed by `dispatch_project_tab_message`, which returns their task.
+            ProjectTabMsg::SetupEdited { .. } | ProjectTabMsg::Requirements { .. } => {}
             ProjectTabMsg::SheetMoved {
                 project_id,
                 filename,
@@ -257,6 +263,7 @@ impl Signex {
             tab.journal_lines_draft = None;
             tab.variant_rename = None;
             tab.variant_problem = None;
+            tab.requirements.clear_drafts();
         }
     }
 
@@ -288,7 +295,7 @@ impl Signex {
 
     /// A General-history change landed: refresh the panel, and redraw every
     /// schematic window when the schematic defaults moved (#2026).
-    fn after_project_general_change(&mut self, defaults_moved: bool) {
+    pub(super) fn after_project_general_change(&mut self, defaults_moved: bool) {
         if defaults_moved {
             self.clear_schematic_content_caches();
         }
@@ -336,6 +343,7 @@ impl Signex {
         tab.journal_lines_draft = None;
         tab.variant_rename = None;
         tab.variant_problem = None;
+        tab.requirements.clear_drafts();
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

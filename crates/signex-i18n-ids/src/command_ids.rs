@@ -259,6 +259,11 @@ define_ids! {
         CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
         CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
         CMD_PROJECT_SET_VERSION_CONTROL = "cmd-project-set-version-control";
+        CMD_PROJECT_ADD_REQUIREMENT = "cmd-project-add-requirement";
+        CMD_PROJECT_SET_REQUIREMENT = "cmd-project-set-requirement";
+        CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
+        CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
+        CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

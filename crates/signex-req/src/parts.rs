@@ -7,11 +7,9 @@ use std::collections::HashMap;
 use serde_json::json;
 use signex_bom::BomTable;
 
-use crate::Miss;
+pub use signex_types::project::LIFECYCLE_STATES;
 
-/// The lifecycle state names a requirement may list.
-pub const LIFECYCLE_STATES: [&str; 5] =
-    ["draft", "in_review", "released", "deprecated", "obsolete"];
+use crate::Miss;
 
 /// `parts_state`. `parts` is the ungrouped BOM (one row per part).
 pub(crate) fn parts_state(
