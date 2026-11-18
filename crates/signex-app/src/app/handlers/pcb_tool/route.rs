@@ -5,8 +5,12 @@
 //! the corner mode), as one undo step. Making another copper layer active
 //! mid-run puts a via at the run's end in the same step, and the run goes
 //! on there. A click on the run's end, Esc or a right-click ends the run.
+//! A run started on copper that does not reach the active layer (a surface
+//! pad on Top with an inner layer active) takes that copper's net and starts
+//! with a via (`start_on_copper`).
 
 use signex_engine::pcb::draw::{self, TrackStyle};
+use signex_engine::pcb::route::copper_under;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
@@ -53,8 +57,8 @@ impl Signex {
         let classes = self.track_tool_net_classes();
         let Some(anchor) = session.points.last().copied() else {
             let defaults = &self.interaction_state.pcb_tool_defaults;
-            let style = defaults
-                .track_style(board, at, layer)
+            let style = defaults.track_style(board, at, layer);
+            let style = start_on_copper(board, defaults, at, style)
                 .with_class_width(board, form_or_class_widths(defaults, classes));
             self.set_route(vec![at], Some(style));
             return;
@@ -150,6 +154,26 @@ pub(super) fn next_leg_style(
     });
     style.layer = layer;
     (style, via)
+}
+
+/// `style`, started at `at`: with no net on its layer there and none set in
+/// Properties, it takes the layer and net of the netted copper under `at` on
+/// another copper layer (a surface pad off the active layer), so the first
+/// leg adds a via there and runs on the active layer (maintainer
+/// 2026-11-18). Over bare board it stays as it is, of no net.
+pub(super) fn start_on_copper(
+    board: &PcbBoard,
+    defaults: &BoardToolDefaults,
+    at: Point,
+    style: TrackStyle,
+) -> TrackStyle {
+    if style.net != 0 || defaults.track_net.is_some() {
+        return style;
+    }
+    match copper_under(board, at) {
+        Some((layer, net)) => TrackStyle { layer, net, ..style },
+        None => style,
+    }
 }
 
 /// The net classes that size a track: none once the tool's form set a width

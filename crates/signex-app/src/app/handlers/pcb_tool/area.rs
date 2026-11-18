@@ -12,6 +12,7 @@
 //! a right-click once it has three; Esc drops it.
 
 use signex_engine::pcb::draw;
+use signex_engine::pcb::placement::grid_step_mm;
 use signex_i18n::{ids, t};
 use signex_types::pcb::{PcbBoard, Point, Zone};
 use signex_types::pcb_layer::PcbLayer;
@@ -21,6 +22,11 @@ use uuid::Uuid;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
+
+/// Whether `b` lies within `reach` mm of `a`.
+fn near(a: Point, b: Point, reach: f64) -> bool {
+    (a.x - b.x).hypot(a.y - b.y) <= reach
+}
 
 /// The outline the next click at `at` would close: the Fill's rectangle, or
 /// the polygon's corners with `at`.
@@ -73,13 +79,19 @@ impl Signex {
         if self.area_layer(tool).is_none() {
             return;
         }
+        // A click within half a grid step of the first corner closes the
+        // shape, though an object snap moved it off that corner.
+        let reach = self
+            .active_pcb()
+            .map_or(0.0, |board| grid_step_mm(board) / 2.0);
         let Some(session) = self.own_board_tool() else {
             return;
         };
         let points = &session.points;
+        let first = points.first().copied();
         let closes = match tool {
             BoardPlaceTool::Fill => !points.is_empty(),
-            _ => points.len() >= 3 && points.first() == Some(&at),
+            _ => points.len() >= 3 && first.is_some_and(|first| near(first, at, reach)),
         };
         if closes {
             let outline = match tool {

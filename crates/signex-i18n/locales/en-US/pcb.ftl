@@ -157,7 +157,7 @@ pcb-bar-string-tooltip = Place String
 pcb-bar-dimension-tooltip = Place Dimension
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
-pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
+pcb-tool-hint-track = Track: click to start a run on the active copper layer (a pad not on it starts with a via), then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
 pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
 pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
 pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
@@ -209,7 +209,7 @@ pcb-pour-none-selected = Repour Selected: select a polygon pour first
 # Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
 # lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
 pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
-pcb-tool-hint-route = Interactive Routing: click a pad or track end to start on the active copper layer, then click each point; each leg keeps the rule clearance from other nets. Change the layer to add a via. Click the route's end, Esc or a right-click to finish it as one step
+pcb-tool-hint-route = Interactive Routing: click a pad or track end to start on the active copper layer (a pad not on it starts with a via), then click each point; each leg keeps the rule clearance from other nets. Change the layer to add a via. Click the route's end, Esc or a right-click to finish it as one step
 pcb-route-blocked = Interactive Routing: no way to that point keeps the clearance the rules ask, so nothing was added
 pcb-route-via-blocked = Interactive Routing: a via there would not keep the clearance the rules ask, so nothing was added
 pcb-route-unrepresentable = Interactive Routing: a point or the track width is outside what the board geometry can hold
@@ -242,6 +242,15 @@ pcb-route-no-net = click on copper of a net to start
 pcb-route-no-pair = { $net } is in no differential pair; name its nets with _P and _N (or + and -), or give their net class a pair gap
 pcb-route-member-no-copper = { $net } has no copper on the active layer to start from
 pcb-route-bus-needs-nets = select copper of two or more nets first
+# A leg aimed at a pad of another net or of none; $pad names the pad
+# (U1.3), $pad_net its net, $net the route's net.
+pcb-route-end-other-net = { $pad } is on net { $pad_net }, the route is on net { $net }
+pcb-route-end-no-net = { $pad } is on no net, the route is on net { $net }
+# The leg on the pointer found no way; the straight leg drawn shows where
+# it was aimed.
+pcb-route-aim-blocked = the preview found no way to the pointer that keeps the clearance the rules ask; a click searches further and says if there is none
+# The status bar while Tab paused a board tool; $tool is its name.
+pcb-tool-paused = { $tool }: paused, edit in Properties; Enter or Tab goes on placing, Esc goes on with the old values
 # Length tuning from the PCB Active Bar's Tune group, the palette or an
 # agent (#2389). $what is the command's name, $why the reason.
 pcb-tune-needs-tracks = { $what }: select a track of each net to tune
