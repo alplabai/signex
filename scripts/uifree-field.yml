@@ -1,8 +1,9 @@
 # ast-grep rule for scripts/check_uifree_state.sh: every field of every
-# struct, with $STRUCT (the struct name), $NAME (the field name; unset for a
-# tuple field) and $TYPE (the field type). Kept out of ast-grep/rules on
-# purpose: `ast-grep scan --error` would report each field as a lint hit.
-id: uifree-struct-field
+# struct and of every enum variant, with $STRUCT (the struct name) or $ENUM and
+# $VARIANT, $NAME (the field name; unset for a tuple field) and $TYPE (the
+# field type). Kept out of ast-grep/rules on purpose: `ast-grep scan --error`
+# would report each field as a lint hit.
+id: uifree-field
 language: rust
 rule:
   any:
@@ -10,6 +11,8 @@ rule:
       all:
         - has: {field: name, pattern: $NAME}
         - has: {field: type, pattern: $TYPE}
+    # A tuple field: a type whose parent is the `( .. )` list. Not `field: type`,
+    # which matches the first tuple field only.
     - all:
         - any:
             - kind: type_identifier
@@ -27,9 +30,16 @@ rule:
             - kind: never_type
             - kind: bounded_type
             - kind: macro_invocation
-        - inside: {kind: ordered_field_declaration_list, field: type}
+        - inside: {kind: ordered_field_declaration_list}
         - pattern: $TYPE
   inside:
-    kind: struct_item
     stopBy: end
-    has: {field: name, pattern: $STRUCT}
+    any:
+      - kind: struct_item
+        has: {field: name, pattern: $STRUCT}
+      - kind: enum_variant
+        has: {field: name, pattern: $VARIANT}
+        inside:
+          kind: enum_item
+          stopBy: end
+          has: {field: name, pattern: $ENUM}

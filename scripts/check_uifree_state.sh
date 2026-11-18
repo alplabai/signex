@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
 # Core-bound state stays UI-free (ADR-0006, "Enforcement", #2494). The structs
-# whose data the slice table moves into the application core (documents,
-# drafts, dirty state, histories, owed work, ledgers, check results, the agent
-# journal) are named in scripts/uifree-state.txt. Two checks:
+# and enums whose data the slice table moves into the application core
+# (documents, drafts, dirty state, histories, owed work, ledgers, check
+# results, the agent journal) are named in scripts/uifree-state.txt. Two checks:
 #
-#   field ratchet  Each field type of a named struct is resolved to an origin.
+#   field ratchet  Each field type of a named struct, and of each variant of a
+#                  named enum, is resolved to an origin.
 #                  Allowed: std/core/alloc and primitives, the crates in DOMAIN
-#                  of scripts/check_arch_guard.sh (read from that script),
+#                  of scripts/check_arch_guard.sh (read from that script; an
+#                  entry ending in `*` is a prefix),
 #                  signex-commands, signex-i18n-ids, `crate::app::core`, the
 #                  data crates and the UI-free modules the rule file lists.
 #                  Every other origin counts: iced, a GUI module of signex-app
@@ -32,12 +34,13 @@
 # `self::` / `super::` paths, the module-scope items and `mod`s defined in the
 # same file (an item there belongs to that file's module; a `const` / `static`
 # never shadows a path's first segment), the std
-# prelude and primitives, and signex-app's dependencies. A path whose module is
+# prelude (unless a module-scope glob `use` of a non-std path could shadow it)
+# and primitives, and signex-app's dependencies. A path whose module is
 # listed is allowed; a re-export is judged where it is named, not where it is
 # defined. An ident nothing binds (a glob import, a generic parameter of the
 # struct, a macro-made name) is UNRESOLVED and counts: the check fails safe.
-# Fields come from ast-grep (scripts/uifree-struct-field.yml); `#[cfg(test)]`
-# items and fields are skipped (scripts/uifree-test-item.yml); comments and
+# Fields come from ast-grep (scripts/uifree-field.yml); `#[cfg(test)]`
+# items, fields and variants are skipped (scripts/uifree-test-item.yml); comments and
 # strings are dropped and `use` trees flattened by scripts/check_core_guard.awk.
 #
 # Known blind spots: an inline `mod x { .. }` that is not test code resolves
@@ -64,7 +67,7 @@ BASELINE="scripts/uifree-state-baseline.txt"
 APP_SRC="crates/signex-app/src"
 LEXER="$SCRIPTS/check_core_guard.awk"
 RESOLVER="$SCRIPTS/check_uifree_state.awk"
-FIELD_RULE="$SCRIPTS/uifree-struct-field.yml"
+FIELD_RULE="$SCRIPTS/uifree-field.yml"
 TEST_RULE="$SCRIPTS/uifree-test-item.yml"
 AWK="${UIFREE_AWK:-awk}"
 
@@ -148,7 +151,7 @@ feed() {
     return 2
   fi
   jq -r '.[] | .metaVariables.single as $m
-         | "F\t\(.range.start.line + 1)\t\($m.STRUCT.text)\t\($m.NAME.text // "")\t\($m.TYPE.text | gsub("\\s+"; " "))"' <<<"$scan"
+         | "F\t\(.range.start.line + 1)\t\($m.STRUCT.text // "\($m.ENUM.text)::\($m.VARIANT.text)")\t\($m.NAME.text // "")\t\($m.TYPE.text | gsub("\\s+"; " "))"' <<<"$scan"
 }
 
 # resolve <file> <mode> [wanted]
@@ -160,8 +163,9 @@ resolve() {
     -f "$RESOLVER" <<<"$input"
 }
 
-# Field ratchet: one resolver run per file, for the structs listed in it.
-entries struct | awk '{ print $2 }' | sort -u > "$TMP/files"
+# Field ratchet: one resolver run per file, for the structs and enums listed in it.
+scanned() { entries struct; entries enum; }
+scanned | awk '{ print $2 }' | sort -u > "$TMP/files"
 : > "$TMP/counted"
 while IFS= read -r file; do
   [[ -z "$file" ]] && continue
@@ -170,12 +174,20 @@ while IFS= read -r file; do
     status=1
     continue
   fi
-  wanted="$(entries struct | awk -v f="$file" '$2 == f { printf "%s=%s;", $3, ($4 == "" ? "*" : $4) }')"
+  wanted="$(scanned | awk -v f="$file" '$2 == f {
+    printf "%s%s=%s;", ($1 == "enum" ? "enum:" : ""), $3, ($4 == "" ? "*" : $4) }')"
   out="$(resolve "$file" fields "$wanted")" || exit 2
   { grep '^COUNT' <<<"$out" || true; } >> "$TMP/counted"
   for s in $(entries struct | awk -v f="$file" '$2 == f { print $3 }'); do
     if ! grep -qx "SEEN	$s" <<<"$out"; then
       echo "UI-free state: FAIL — $RULES names struct $s in $file; no such struct (or no matching field) there."
+      status=1
+    fi
+  done
+  # An enum of unit variants has no field to see, so its declaration is looked up.
+  for s in $(entries enum | awk -v f="$file" '$2 == f { print $3 }'); do
+    if ! grep -qE "(^|[^A-Za-z0-9_])enum[[:space:]]+$s([^A-Za-z0-9_]|$)" "$file"; then
+      echo "UI-free state: FAIL — $RULES names enum $s in $file; no such enum there."
       status=1
     fi
   done

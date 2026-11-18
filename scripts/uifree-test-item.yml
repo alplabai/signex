@@ -24,6 +24,7 @@ rule:
     - kind: extern_crate_declaration
     - kind: foreign_mod_item
     - kind: field_declaration
+    - kind: enum_variant
   follows:
     stopBy:
       not:

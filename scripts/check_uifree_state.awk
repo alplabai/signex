@@ -6,20 +6,27 @@
 #   L:<line>:<code>                a code line from scripts/check_core_guard.awk
 #                                  (mode=lines: comments and strings gone, each
 #                                  `use` flattened to one `use path;` record)
-#   F<TAB>line<TAB>struct<TAB>field<TAB>type   a struct field from ast-grep
+#   F<TAB>line<TAB>owner<TAB>field<TAB>type   a field from ast-grep; owner is
+#                                  `Struct` or `Enum::Variant`
 # Variables: mode ("fields" or "closure"), file (path to print), modpath (the
 # file's module, `crate::app::state`), allowed (crate idents allowed as an
-# origin, space separated), deps (signex-app's dependency idents), listed (the
-# UI-free module paths), modules (a file of every signex-app module path),
-# wanted (`Struct=glob,glob;Struct=*` for mode=fields).
+# origin, space separated; `prefix*` matches a prefix), deps (signex-app's
+# dependency idents), listed (the UI-free module paths), modules (a file of
+# every signex-app module path), wanted (`Struct=field globs;enum:Enum=variant
+# globs` for mode=fields).
 #
-# mode=fields prints, per counted field, `COUNT<TAB>Struct.field<TAB>report`,
-# and `SEEN<TAB>Struct` per wanted struct found. mode=closure prints
-# `VIOL<TAB>report` per import a listed module may not make.
+# mode=fields prints, per counted field, `COUNT<TAB>key<TAB>report` (key
+# `<modpath>::Struct.field` or `<modpath>::Enum::Variant.field`), and `SEEN<TAB>Struct` per wanted
+# struct with a matching field. mode=closure prints `VIOL<TAB>report` per
+# import a listed module may not make.
 
 BEGIN {
   FS = "\n"
-  split(allowed, a, " "); for (i in a) ok_crate[a[i]] = 1
+  split(allowed, a, " ")
+  for (i in a) {
+    if (a[i] ~ /\*$/) { ok_prefix[++nprefix] = substr(a[i], 1, length(a[i]) - 1); continue }
+    ok_crate[a[i]] = 1
+  }
   split(deps, a, " "); for (i in a) dep[a[i]] = 1
   split(listed, a, " "); for (i in a) if (a[i] != "") is_listed[a[i]] = 1
   while ((getline m < modules) > 0) is_module[m] = 1
@@ -97,13 +104,14 @@ function resolve(p,   h, r) {
   if (h in usemap) return usemap[h] == "@ambiguous" ? "" : usemap[h] r
   if (h in local || (r == "" && h in localval)) return modpath "::" p
   if (r == "" && h in prim) return "@std"
-  if (h in prelude) return "@std"
+  # A glob import may shadow a prelude name, so it no longer resolves to std.
+  if (h in prelude && !has_glob) return "@std"
   if (h in std_root || h in dep) return p
   return ""
 }
 
 # "" when the absolute path's origin is allowed, else the origin to report.
-function classify(full,   h, parent) {
+function classify(full,   h, parent, i) {
   if (full == "") return "unresolved"
   if (full == "@std" || full == "@self") return ""
   h = head_of(full)
@@ -118,6 +126,7 @@ function classify(full,   h, parent) {
     return parent
   }
   if (h in ok_crate) return ""
+  for (i = 1; i <= nprefix; i++) if (index(h, ok_prefix[i]) == 1) return ""
   return h
 }
 
@@ -147,7 +156,11 @@ function collect(   i, c, body, path, bind, k, t, name, kind, depth, opens, clos
       if ((k = index(body, " as ")) > 0) { bind = substr(body, k + 4); path = substr(body, 1, k - 1) }
       else path = body
       gsub(/[[:space:]]/, "", bind)
-      if (path ~ /(^|::)\*$/) continue
+      if (path ~ /(^|::)\*$/) {
+        sub(/(::)?\*$/, "", path)
+        if (!(head_of(use_abs(path)) in std_root)) has_glob = 1
+        continue
+      }
       sub(/::self$/, "", path)
       if (bind == "") bind = last_seg(path)
       if (bind != "_") bind_name(bind, use_abs(path))
@@ -198,16 +211,20 @@ function type_origins(ty,   t, tok, after, o, out, seen) {
   return out
 }
 
-function fields(   i, s, name, o, idx) {
+function fields(   i, s, name, o, idx, owner, sel) {
   for (i = 1; i <= nfld; i++) {
     s = fst[i]
-    if (!(s in globs) || in_test(fln[i])) continue
     name = fnm[i]
     if (name == "") name = idx[s]++
-    if (!glob_match(name, globs[s])) continue
+    # A struct's globs select fields; an enum's select variants.
+    if (index(s, "::")) { owner = "enum:" head_of(s); sel = substr(s, index(s, "::") + 2) }
+    else { owner = s; sel = name }
+    if (!(owner in globs) || in_test(fln[i])) continue
+    if (!glob_match(sel, globs[owner])) continue
     seen_struct[s] = 1
     o = type_origins(fty[i])
-    if (o != "") print "COUNT\t" s "." name "\t" file ":" fln[i] " " s "." name ": " fty[i] " (" o ")"
+    # The key names the module: two scanned structs may share a name (`Ledger`).
+    if (o != "") print "COUNT\t" modpath "::" s "." name "\t" file ":" fln[i] " " s "." name ": " fty[i] " (" o ")"
   }
   for (s in seen_struct) print "SEEN\t" s
 }
