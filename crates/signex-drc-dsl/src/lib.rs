@@ -6,6 +6,8 @@
 
 pub mod ast;
 mod compile;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
 pub mod parser;
 pub mod table;
 
@@ -220,5 +222,7 @@ pub fn compile_layers(profile: Option<&DrcRuleSet>, project: Option<&DrcRuleSet>
     out
 }
 
+#[cfg(test)]
+mod base_rules_tests;
 #[cfg(test)]
 mod tests;

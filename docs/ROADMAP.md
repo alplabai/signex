@@ -324,9 +324,30 @@ title, `AI Design`, so existing issues keep their milestone.
 | Plan | Scope |
 |------|-------|
 | **PCB Layout** | One part identity across library, schematic and board (#663); a new `.snxpcb` in a project; board outline; Update PCB from schematic with a reviewable change list (#1312); component placement (move, rotate, flip); ratsnest; cross-probe in both directions; PCB rendering via `iced::widget::Shader` with 32 copper and the technical layers, and the layer panel (the former PCB Viewer scope) |
-| **PCB Routing** | As in the PCB Routing band below: single-trace routing, vias, net classes, live DRC with the 15 base rules |
+| **PCB Routing** | As in the PCB Routing band below: single-trace routing, vias, net classes, live DRC with the 15 base rules (listed below) |
 | **Router: Walkaround** | As below: obstacle-aware A* routing |
 | **Requirements & Verification** | Can ship on its own, ahead of the rest of this gate. The project requirements list (ERC / DRC rules, net classes, rail budgets, board size, BOM cost and approved parts) as deterministic checks that run like ERC and DRC; pass and fail with the evidence for each requirement |
+
+**The 15 base DRC rules** (maintainer decision, 2026-11-17, #2474). Each
+has a board that passes it and one that breaks it, checked through
+`check_drc` and Run DRC; how to write each is in
+[`DRC_RULES.md`](DRC_RULES.md#the-base-rules):
+
+1. Clearance between copper of two nets.
+2. Minimum and maximum track width.
+3. Annular ring.
+4. Hole size.
+5. Hole to hole.
+6. Via in pad.
+7. Silkscreen to pad.
+8. Silkscreen to silkscreen.
+9. Solder mask sliver and mask expansion.
+10. Paste expansion.
+11. Board outline clearance.
+12. Keepout.
+13. Unrouted net.
+14. Short circuit.
+15. Courtyard overlap.
 
 **Exit criteria:**
 
@@ -593,7 +614,7 @@ orbitable 3D in place, no separate window. See `PCB_3D_RENDER_PLAN.md`.
 |------|-------|
 | **Advanced PCB** | Full layer stack editor (εr, tan δ, copper weight, material library); stackup templates (2 / 4 / 6 / 8 layer, HDI, MCPCB); DRC rule profiles (fab-house and IPC presets, save / load); formal ECO dialog with change review |
 | **Partial & Embedded Heavy Copper** | Copper weight per region, not only per layer: heavy-copper areas (power, high current, heat spreading) beside standard-weight fine-pitch routing on the same layer, and heavy-copper inlays or bars embedded in the stackup. Region copper weight in the stack editor and the `.snxpcb` format; DRC clearance, width and spacing rules that follow the local copper weight (fab-house profiles); current capacity and temperature rise per trace and region; region thickness in the 3D view; fab outputs that carry the regions (separate region layer, stackup report and fab notes). Needs the Advanced PCB stack editor |
-| **Impedance & DRC Rules** | Impedance profile per layer pair + built-in calculator; impedance-controlled routing (Z0 display, width-from-impedance); additional DRC rules (silk-silk, acute angle, component clearance, height) |
+| **Impedance & DRC Rules** | Impedance profile per layer pair + built-in calculator; impedance-controlled routing (Z0 display, width-from-impedance); additional DRC rules (acute angle, component clearance, height; silk to silk is one of the 15 base rules of PCB Design) |
 | **Routing Polish & Geometry** | Route completion (loop removal) and glossing; split planes (negative plane layers); via-in-pad, paste / mask expansion rules; per-layer keepout, board cutouts, castellated holes |
 | **Constraint Manager & HUD** | Constraint Manager (schematic-side spreadsheet rule editor); query-based rule scoping (InNet, InNetClass, OnLayer, boolean); Board Insight HUD (clearance, net name under cursor). **Pulled forward by #2398:** the Rules manager (a table rule editor over the rule text, with net, class and pattern scopes in one Scope cell, "Why this value?", shadow and conflict flags, and Required / Actual / Margin from the last DRC) ships ahead of this band; the same issue later brings the net-class editor of PCB Routing, the DRC rule profiles of Advanced PCB, and rule rows as Requirements & Verification checks |
 

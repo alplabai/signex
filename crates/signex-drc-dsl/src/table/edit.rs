@@ -29,20 +29,29 @@ pub enum RuleField {
 }
 
 impl RuleField {
-    pub const ALL: [RuleField; 12] = [
-        RuleField::Enabled,
-        RuleField::Name,
-        RuleField::Scope,
-        RuleField::Layer,
-        RuleField::Pair,
-        RuleField::Severity,
-        RuleField::Message,
-        RuleField::Limit(LimitField::MinClearance),
-        RuleField::Limit(LimitField::MinWidth),
-        RuleField::Limit(LimitField::MaxWidth),
-        RuleField::Limit(LimitField::MinDiameter),
-        RuleField::Limit(LimitField::MinDrill),
-    ];
+    pub const ALL: [RuleField; 7 + LimitField::ALL.len()] = {
+        let mut out = [RuleField::Enabled; 7 + LimitField::ALL.len()];
+        let named = [
+            RuleField::Enabled,
+            RuleField::Name,
+            RuleField::Scope,
+            RuleField::Layer,
+            RuleField::Pair,
+            RuleField::Severity,
+            RuleField::Message,
+        ];
+        let mut i = 0;
+        while i < named.len() {
+            out[i] = named[i];
+            i += 1;
+        }
+        let mut j = 0;
+        while j < LimitField::ALL.len() {
+            out[named.len() + j] = RuleField::Limit(LimitField::ALL[j]);
+            j += 1;
+        }
+        out
+    };
 
     /// Stable operand and JSON name.
     pub const fn id(self) -> &'static str {

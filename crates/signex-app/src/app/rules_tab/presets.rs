@@ -91,14 +91,14 @@ impl Signex {
         let current = base.dsl.clone().unwrap_or_default();
         let found = self.find_preset(preset)?;
         let merged = matches!(found, Preset::Tier(_));
-        let (key, label, mut result, other) = match found {
+        let (key, label, mut result, other, fab) = match found {
             Preset::Tier(tier) => {
                 let text = preset_result(&current, &tier_text(tier), PresetMode::Merge)
                     .map_err(|e| e.to_string())?;
                 let mut result = base.clone();
                 result.dsl = (!text.trim().is_empty()).then_some(text);
                 let id = tier_id(tier).to_string();
-                (tier_preset(tier), id, result, Vec::new())
+                (tier_preset(tier), id, result, Vec::new(), Some(tier.info()))
             }
             Preset::Profile(profile) => {
                 let other: Vec<String> = diff_drc_against_profile(&base, &profile.drc)
@@ -107,7 +107,14 @@ impl Signex {
                     .map(|c| c.describe())
                     .collect();
                 let result = adopt_profile_drc(&base, &profile.drc);
-                (profile_preset(&profile.name), profile.name, result, other)
+                let fab = profile.fab.clone();
+                (
+                    profile_preset(&profile.name),
+                    profile.name,
+                    result,
+                    other,
+                    fab,
+                )
             }
         };
         let changes = diff_rows(&current, result.dsl.as_deref().unwrap_or_default());
@@ -125,6 +132,7 @@ impl Signex {
             label,
             changes,
             other,
+            fab,
             base,
             result,
         })
@@ -197,6 +205,7 @@ pub(crate) fn preview_json(preview: &PresetPreview) -> Value {
         "removed": count(RowChangeKind::Removed),
         "changes": preview.changes.iter().map(change_json).collect::<Vec<_>>(),
         "other": preview.other,
+        "fab": preview.fab,
     })
 }
 

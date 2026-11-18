@@ -95,42 +95,90 @@ pub(super) fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Loc
 }
 
 pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
-    let kind = match row.kind {
-        ViolationKind::Clearance => t!(i18n, ids::DRC_KIND_CLEARANCE),
-        ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
-        ViolationKind::Unconnected => t!(i18n, ids::DRC_KIND_UNCONNECTED),
-        ViolationKind::Keepout => t!(i18n, ids::DRC_KIND_KEEPOUT),
-        ViolationKind::TrackWidth => t!(i18n, ids::DRC_KIND_TRACK_WIDTH),
-        ViolationKind::ViaDiameter => t!(i18n, ids::DRC_KIND_VIA_DIAMETER),
-        ViolationKind::ViaDrill => t!(i18n, ids::DRC_KIND_VIA_DRILL),
+    let kind = t!(i18n, kind_label(row.kind));
+    // An unnetted object's net cell is empty.
+    let net = |name: &String| {
+        if name.is_empty() {
+            t!(i18n, ids::DRC_DETAIL_NO_NET).into_string()
+        } else {
+            name.clone()
+        }
     };
+    let (a, b) = (net(&row.a), net(&row.b));
     let limit = |id| {
         t!(
-            i18n, id, "net" => row.a.clone(),
+            i18n, id, "net" => a.clone(),
+            "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
+        )
+    };
+    let gap = || {
+        // A gap kind measured at 0 touches or overlaps.
+        let id = if row.measured_mm.trim_start_matches(['0', '.']).is_empty() {
+            ids::DRC_DETAIL_OVERLAP
+        } else {
+            ids::DRC_DETAIL_GAP
+        };
+        t!(
+            i18n, id,
             "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
         )
     };
     let detail = match row.kind {
         ViolationKind::Clearance => t!(
             i18n, ids::DRC_DETAIL_CLEARANCE,
-            "a" => row.a.clone(), "b" => row.b.clone(),
+            "a" => a.clone(), "b" => b.clone(),
             "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
         ),
         ViolationKind::Short => t!(
-            i18n, ids::DRC_DETAIL_SHORT, "a" => row.a.clone(), "b" => row.b.clone()
+            i18n, ids::DRC_DETAIL_SHORT, "a" => a.clone(), "b" => b.clone()
         ),
         ViolationKind::Unconnected => t!(
             i18n, ids::DRC_DETAIL_UNCONNECTED,
-            "net" => row.a.clone(), "length" => row.measured_mm.clone()
+            "net" => a.clone(), "length" => row.measured_mm.clone()
         ),
-        ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => row.a.clone()),
-        ViolationKind::TrackWidth if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
-        ViolationKind::TrackWidth | ViolationKind::ViaDiameter | ViolationKind::ViaDrill => {
-            limit(ids::DRC_DETAIL_AT_LEAST)
-        }
+        ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => a.clone()),
+        ViolationKind::HoleToHole
+        | ViolationKind::EdgeClearance
+        | ViolationKind::ViaInPad
+        | ViolationKind::SilkToPad
+        | ViolationKind::SilkToSilk
+        | ViolationKind::CourtyardOverlap => gap(),
+        _ if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
+        ViolationKind::TrackWidth
+        | ViolationKind::ViaDiameter
+        | ViolationKind::ViaDrill
+        | ViolationKind::HoleSize
+        | ViolationKind::AnnularRing
+        | ViolationKind::MaskSliver
+        | ViolationKind::MaskExpansion
+        | ViolationKind::PasteExpansion => limit(ids::DRC_DETAIL_AT_LEAST),
     };
     let place = t!(i18n, ids::DRC_LOCATION, "x" => row.x_mm.clone(), "y" => row.y_mm.clone());
     (kind, detail, place)
+}
+
+/// The Kind cell of a row.
+pub(super) fn kind_label(kind: ViolationKind) -> signex_i18n::MessageId {
+    match kind {
+        ViolationKind::Clearance => ids::DRC_KIND_CLEARANCE,
+        ViolationKind::Short => ids::DRC_KIND_SHORT,
+        ViolationKind::Unconnected => ids::DRC_KIND_UNCONNECTED,
+        ViolationKind::Keepout => ids::DRC_KIND_KEEPOUT,
+        ViolationKind::TrackWidth => ids::DRC_KIND_TRACK_WIDTH,
+        ViolationKind::ViaDiameter => ids::DRC_KIND_VIA_DIAMETER,
+        ViolationKind::ViaDrill => ids::DRC_KIND_VIA_DRILL,
+        ViolationKind::HoleSize => ids::DRC_KIND_HOLE_SIZE,
+        ViolationKind::AnnularRing => ids::DRC_KIND_ANNULAR_RING,
+        ViolationKind::HoleToHole => ids::DRC_KIND_HOLE_TO_HOLE,
+        ViolationKind::EdgeClearance => ids::DRC_KIND_EDGE_CLEARANCE,
+        ViolationKind::ViaInPad => ids::DRC_KIND_VIA_IN_PAD,
+        ViolationKind::SilkToPad => ids::DRC_KIND_SILK_TO_PAD,
+        ViolationKind::SilkToSilk => ids::DRC_KIND_SILK_TO_SILK,
+        ViolationKind::MaskSliver => ids::DRC_KIND_MASK_SLIVER,
+        ViolationKind::MaskExpansion => ids::DRC_KIND_MASK_EXPANSION,
+        ViolationKind::PasteExpansion => ids::DRC_KIND_PASTE_EXPANSION,
+        ViolationKind::CourtyardOverlap => ids::DRC_KIND_COURTYARD,
+    }
 }
 
 pub(super) type Rows<'a> = Column<Element<'a, PanelMsg>>;
@@ -178,6 +226,35 @@ pub(super) fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -
     )
 }
 
+/// The base rules (#2474), one line each with how to write it; in
+/// `docs/ROADMAP.md`'s PCB Design scope and `docs/DRC_RULES.md`.
+const BASE_RULES: [signex_i18n::MessageId; 15] = [
+    ids::DRC_BASE_CLEARANCE,
+    ids::DRC_BASE_TRACK_WIDTH,
+    ids::DRC_BASE_ANNULAR_RING,
+    ids::DRC_BASE_HOLE_SIZE,
+    ids::DRC_BASE_HOLE_TO_HOLE,
+    ids::DRC_BASE_VIA_IN_PAD,
+    ids::DRC_BASE_SILK_TO_PAD,
+    ids::DRC_BASE_SILK_TO_SILK,
+    ids::DRC_BASE_MASK,
+    ids::DRC_BASE_PASTE,
+    ids::DRC_BASE_EDGE,
+    ids::DRC_BASE_KEEPOUT,
+    ids::DRC_BASE_UNROUTED,
+    ids::DRC_BASE_SHORT,
+    ids::DRC_BASE_COURTYARD,
+];
+
+/// The rule help shown before the first run: the base rules.
+fn base_rules<'a>(i18n: &I18n, muted: Color, mut col: Rows<'a>) -> Rows<'a> {
+    col = col.push(note(t!(i18n, ids::DRC_BASE_RULES), muted));
+    for id in BASE_RULES {
+        col = col.push(note(t!(i18n, id), muted));
+    }
+    col
+}
+
 /// The state line(s) above the rows: running, idle, or what the last run
 /// found. The default-clearance notice comes first among them.
 pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
@@ -188,7 +265,8 @@ pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a
         return col.push(note(t!(i18n, ids::DRC_RUNNING), muted));
     }
     if !drc.ran {
-        return col.push(note(t!(i18n, ids::DRC_IDLE), muted));
+        col = col.push(note(t!(i18n, ids::DRC_IDLE), muted));
+        return base_rules(i18n, muted, col);
     }
     if let Some(mm) = &drc.default_clearance_mm {
         let id = if drc.written_clearance {
@@ -360,6 +438,16 @@ mod tests {
             "Via drill | GND: 0.100 mm, needs at least 0.150 mm"
         );
         assert!(text(ViolationKind::ViaDiameter, false).starts_with("Via diameter | "));
+        let unnetted = DrcRow {
+            a: String::new(),
+            b: String::new(),
+            ..row(ViolationKind::HoleSize, true)
+        };
+        let (_, detail, _) = row_text(&i18n, &unnetted);
+        assert_eq!(
+            detail.into_string().replace(['\u{2068}', '\u{2069}'], ""),
+            "No net: 0.100 mm, needs at most 0.150 mm"
+        );
     }
 
     /// #2300: a board whose only violations are keepouts counts them in the

@@ -13,6 +13,7 @@ use crate::document_id::DocumentId;
 mod annotate_undo;
 mod annotation;
 mod erc_waiver;
+mod fab_tier;
 mod order;
 mod rule_file;
 mod rule_profile;
@@ -32,10 +33,11 @@ mod variants_tests;
 pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use fab_tier::FabCapabilities;
 pub use order::ListMove;
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
 pub use rules::{
     DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
