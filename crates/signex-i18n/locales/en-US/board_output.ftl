@@ -1,6 +1,6 @@
-## Board Reports (#2404), Board Print / PDF (#2402) and the board STEP export (#2488).
+## Board Reports (#2404), Board Print / PDF (#2402), the assembly drawings (#2486) and the board STEP export (#2488).
 
-board-output-no-pcb = Board reports, board printing and STEP export need an open PCB.
+board-output-no-pcb = Board reports, board printing, assembly drawings and STEP export need an open PCB.
 board-output-board-gone = { $board } is no longer open, so nothing was written.
 
 board-reports-title = Board Reports

@@ -72,37 +72,53 @@ the active shortcut profile.
 
 Choose **File ▸ New Project** (or press **New Project** on the start screen).
 
-A save dialog titled **New Signex Project (a folder named after the project
-is created)** opens with the name `Untitled.snxprj`. Pick the place where the
-project should live and a name, and keep the `.snxprj` ending.
+The **New Project** dialog opens. Nothing is written until you press
+**Create project**.
 
-Signex creates a folder named after the project, `<location>/<name>/`, and
-writes these files into it:
+- **Project name** starts as `Untitled`, selected so you can type over it.
+  A name cannot contain `\ / : * ? " < > |` or end with a dot or a space.
+- **Location** is the folder the project goes in: beside the open project's
+  folder, else a `Signex` folder in your documents folder. **Browse…** picks
+  another one; the folder must already exist.
+- **Create "<name>" folder** (on by default) puts the project in a new folder
+  `<location>/<name>/`. Turn it off to create the project directly in a
+  folder you already made.
+- **Start from a profile** sets the board rules and the sheet defaults:
+  **Hobby 2-layer**, **Standard 4-layer** (the default), **HDI 6-layer** or
+  **Custom**. **Customize settings** opens the values behind the profile:
+  the manufacturer rule template (or **Import rules…**), copper layers, board
+  thickness, clearance, track width, via size and drill, and the schematic's
+  sheet size, orientation, title block and designators. The **Preview** shows
+  the stack-up and sheet you will get. You can change all of it later in
+  Project Options.
+
+Press **Create project** (or Enter) to create the project; **Cancel** or Esc
+closes the dialog and writes nothing.
+
+Signex writes these files into the project folder:
 
 | File | What it is |
 |---|---|
-| `<name>.snxprj` | The project file. It is created empty; Signex builds the project from the files in the folder. |
-| `<name>.snxsch` | A blank schematic sheet, A4 paper size. |
+| `<name>.snxprj` | The project file, holding the setup you chose and the project's rules. Signex builds the project from the files in the folder. |
+| `<name>.snxsch` | A blank schematic sheet with the sheet size and title block you chose (A3 by default). |
 | `.gitignore` | A Signex-managed block of patterns for files that should not be versioned. |
 
-If you already made an empty folder with the project's name and pick the file
-inside it, Signex uses that folder instead of creating `<name>/<name>/`. A
-folder that holds only OS files such as `.DS_Store`, `Thumbs.db` or
-`desktop.ini` counts as empty (the name match ignores letter case). If that folder is not empty, Signex creates the project in
-`<name>/<name>/` instead and says so in the Messages panel.
+A folder that holds only OS files such as `.DS_Store`, `Thumbs.db` or
+`desktop.ini` counts as empty. The dialog checks the target while you type,
+and **Create project** stays unavailable, with the reason shown, when:
 
-Signex refuses, and writes nothing, when:
-
-- the folder `<location>/<name>/` already exists and is not empty;
-- that folder already contains a `.snxprj` (open it with **File ▸ Open…**
+- the location is empty or does not exist;
+- the project file is already there;
+- the project folder `<location>/<name>/` already exists and is not empty;
+- the folder already contains a `.snxprj` (open it with **File ▸ Open…**
   instead; the dialog accepts `.snxprj` and `.snxsch`);
-- the new folder would sit inside another project's folder (a folder
-  `<name>/` that holds `<name>.snxprj`; a loose `.snxprj` in your Desktop
-  or home folder does not count).
+- the project would sit inside another project's folder (a folder `<name>/`
+  that holds `<name>.snxprj`; a loose `.snxprj` in your Desktop or home
+  folder does not count).
 
-The reason appears in the error notice and in the Messages panel.
-
-The project loads and the blank schematic opens in a tab, ready to draw on.
+If the write itself fails, the dialog stays open with your setup and says
+why. On success it closes, the project loads and the blank schematic opens in
+a tab, ready to draw on.
 
 **Enable Version Control** refuses to start a git repository in your home
 folder, in Desktop, Documents or Downloads, in a filesystem root, in a folder that holds more than this one project, or in a folder

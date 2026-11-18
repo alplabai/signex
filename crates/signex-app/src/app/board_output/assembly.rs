@@ -42,6 +42,12 @@ fn side_from_id(id: &str) -> Option<BoardSide> {
     }
 }
 
+/// The `side` operand of `board_assembly_drawing`; `None` when it is
+/// missing or not `top` / `bottom`.
+pub(crate) fn side_operand(args: &CommandArgs) -> Option<BoardSide> {
+    text(args, "side").and_then(side_from_id)
+}
+
 /// The sides an export writes: the assembly sets chosen to print, else
 /// both, top first.
 pub(super) fn svg_sides(options: &BoardPrintOptions) -> Vec<BoardSide> {
@@ -271,7 +277,7 @@ pub(crate) fn board_assembly_drawing(app: &mut Signex, args: &CommandArgs) -> Ra
         Ok(board) => board,
         Err(reason) => return refused(reason),
     };
-    let Some(side) = text(args, "side").and_then(side_from_id) else {
+    let Some(side) = side_operand(args) else {
         return refused("`side` is top or bottom");
     };
     let Some(pcb) = app.document_state.pcb_board(&board) else {

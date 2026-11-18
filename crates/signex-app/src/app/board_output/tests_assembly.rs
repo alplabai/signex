@@ -28,15 +28,48 @@ fn answered(outcome: CommandOutcome) -> serde_json::Value {
     }
 }
 
+fn shown_sets(app: &Signex) -> Option<Vec<BoardLayerSet>> {
+    match app.ui_state.board_output.dialog.as_deref()? {
+        BoardOutputDialog::Print(state) => Some(state.options.sets.clone()),
+        BoardOutputDialog::Reports(_) => None,
+    }
+}
+
+/// `board_assembly_drawing` on `board` with `side`, typed in the main window.
+fn in_window(app: &mut Signex, board: &std::path::Path, side: &str) {
+    let document = format!("document={}", board.display());
+    let operands = [document.as_str(), side];
+    let command = AppCommandId::new("board_assembly_drawing").unwrap();
+    let args = CommandArgs::parse_operands(&command, &operands).expect("operands parse");
+    let (outcome, task) = app.dispatch_command_reporting(&command, args, None);
+    assert_eq!(outcome, CommandOutcome::Ran, "{operands:?}");
+    settle(app, task);
+}
+
 #[test]
-fn the_drawing_command_opens_board_print_in_a_window() {
+fn the_drawing_command_opens_board_print_on_its_assembly_side_in_a_window() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, _) = app_with_board(dir.path());
+    let (mut app, board) = app_with_board(dir.path());
     run(&mut app, "board_assembly_drawing");
-    assert!(matches!(
-        app.ui_state.board_output.dialog.as_deref(),
-        Some(BoardOutputDialog::Print(_))
-    ));
+    assert_eq!(
+        shown_sets(&app),
+        Some(vec![BoardLayerSet::AssemblyTop, BoardLayerSet::AssemblyBottom]),
+        "no side: both assembly sets"
+    );
+
+    for (side, set) in [
+        ("side=top", BoardLayerSet::AssemblyTop),
+        ("side=bottom", BoardLayerSet::AssemblyBottom),
+    ] {
+        let _ = output(&mut app, BoardOutputMsg::Closed);
+        in_window(&mut app, &board, side);
+        assert_eq!(shown_sets(&app), Some(vec![set]), "{side}");
+    }
+    assert_eq!(
+        app.ui_state.board_output.print_options,
+        BoardPrintOptions::default(),
+        "opening does not change the remembered options"
+    );
 }
 
 #[test]

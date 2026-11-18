@@ -7,8 +7,9 @@
 //!   [`FaceName`]s that survive booleans, and edges are named by the faces
 //!   they join ([`EdgeName`]), so a later feature can refer to "the wall of
 //!   hole 3" instead of a kernel id that changes with every operation.
-//! - Every kernel call is guarded: a failed operation, or a kernel panic, is a
-//!   [`McadError`] value, never a crash.
+//! - Every kernel call is guarded: a failed operation is a [`McadError`] value.
+//!   On native targets a kernel panic is caught and becomes one too; on
+//!   `wasm32` (panic = abort) a kernel panic still aborts.
 //! - [`tessellate`] turns a solid into a triangle [`Mesh`] for the 3D view.
 //! - [`write_step`] writes solids (exact) and meshes (faceted) as a STEP
 //!   AP214 or AP242 file.
