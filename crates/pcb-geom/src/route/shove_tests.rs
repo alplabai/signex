@@ -136,7 +136,8 @@ fn a_shove_reports_the_rounds_it_took() {
     let clear = board(Vec::new(), vec![track_at(1, (2.0, 3.0), (8.0, 3.0), 2)]);
     let world = RouteWorld::new(&clear, &rule);
     let run = shove_run(&world, &[leg()]);
-    assert_eq!((run.pushed, run.rounds, run.settled), (Some(Vec::new()), 0, true));
+    let answer = (run.pushed, run.rounds, run.settled);
+    assert_eq!(answer, (Some(Vec::new()), 0, true));
 
     // Net 2 over the leg, net 3 over net 2: net 2 pushes net 3 in turn.
     let stacked = board(
@@ -174,6 +175,6 @@ fn a_shove_reports_the_rounds_it_took() {
     );
     let world = RouteWorld::new(&tower, &rule);
     let run = shove_run(&world, &[leg()]);
-    assert_eq!((run.pushed, run.settled), (None, false), "{run:?}");
+    assert_eq!((run.pushed.as_ref(), run.settled), (None, false), "{run:?}");
     assert_eq!(run.rounds, super::shove::ROUNDS + 1);
 }
