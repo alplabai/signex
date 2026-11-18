@@ -149,7 +149,7 @@ pub(super) fn colour_editor<'a>(
         show_palette: true,
         show_advanced: advanced,
         muted: resolve(&ctx.tokens).ink3,
-        border_c: resolve(&ctx.tokens).line,
+        border_c: resolve(&ctx.tokens).line_strong,
         on_toggle: PanelMsg::LayersPanel(LayersPanelMsg::ColourChipToggled(layer)),
         on_advanced: PanelMsg::LayersPanel(LayersPanelMsg::CustomColourOpened),
         on_cancel: PanelMsg::LayersPanel(LayersPanelMsg::CustomColourClosed),

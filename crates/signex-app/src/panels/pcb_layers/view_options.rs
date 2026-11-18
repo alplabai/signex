@@ -217,7 +217,8 @@ fn object_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'a
         all_row = all_row.push(
             text(t!(i18n, ids::PCB_VIEW_MIXED))
                 .size(TS.caption)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     let header = row![
@@ -322,7 +323,7 @@ fn mask_dim_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<
             text(t!(i18n, ids::PCB_VIEW_PERCENT, "percent" => percent))
                 .size(TS.body)
                 .color(resolve(&ctx.tokens).ink4)
-                .into(),
+                .boxed(),
             panel,
             ctx,
         );

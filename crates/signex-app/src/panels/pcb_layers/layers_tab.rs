@@ -142,7 +142,8 @@ fn layer_sets<'a>(panel: &'a PcbLayersPanel, ui: &LayersPanelUi) -> Element<'a, 
         .push(
             row![name, save, delete]
                 .spacing(SP.xs)
-                .align_y(Alignment::Center),
+                .align_y(Alignment::Center)
+                .boxed(),
         )
         .boxed()
 }
