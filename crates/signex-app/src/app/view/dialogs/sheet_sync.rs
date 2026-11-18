@@ -150,10 +150,9 @@ fn changes<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
     let ink = ti(tokens.text);
-    let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.m);
-    let mut section = |heading: Localized, rows: Vec<String>| {
+    let section = |heading: Localized, rows: Vec<String>| -> Option<Element<'a, Message>> {
         if rows.is_empty() {
-            return;
+            return None;
         }
         let mut list: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
         list = list.push(text(heading).size(TS.caption).color(r.ink4).boxed());
@@ -166,17 +165,17 @@ fn changes<'a>(
                     .boxed(),
             );
         }
-        col = col.push(list.boxed());
+        Some(list.boxed())
     };
-    section(
+    let added = section(
         t!(i18n, ids::SHEET_SYNC_ADDED, "count" => preview.added.len()),
         preview.added.clone(),
     );
-    section(
+    let removed = section(
         t!(i18n, ids::SHEET_SYNC_REMOVED, "count" => preview.removed.len()),
         preview.removed.clone(),
     );
-    section(
+    let renamed = section(
         t!(i18n, ids::SHEET_SYNC_RENAMED, "count" => preview.renamed.len()),
         preview
             .renamed
@@ -192,6 +191,9 @@ fn changes<'a>(
             })
             .collect(),
     );
+    let col: Column<Element<'a, Message>> = Column::new()
+        .spacing(SP.m)
+        .extend([added, removed, renamed].into_iter().flatten());
     container(col)
         .padding([SP.m, SP.l])
         .width(Length::Fill)

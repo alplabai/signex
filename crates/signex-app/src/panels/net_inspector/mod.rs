@@ -231,10 +231,10 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         panel = panel.push(tab_strip(ctx, view.tab));
     }
     panel
-        .push(filter)
+        .push(filter.boxed())
         .push(body)
         .push(rule(ctx))
-        .push(footer)
+        .push(footer.boxed())
         .boxed()
 }
 
