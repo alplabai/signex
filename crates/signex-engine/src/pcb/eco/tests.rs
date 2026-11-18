@@ -266,6 +266,27 @@ fn an_unlinked_footprint_with_the_parts_designator_is_linked_not_replaced() {
 }
 
 #[test]
+fn two_unlinked_footprints_with_the_parts_designator_link_neither() {
+    let mut design = synced();
+    design.board.footprints[1].schematic_link = None;
+    let twin = board_fp(0xb2, "R2", "4k7", &[], &r0603(), (40.0, 10.0));
+    design.board.footprints.push(twin);
+    let list = design.diff();
+    for id in [0xa2, 0xb2] {
+        assert!(
+            list.row(&EcoKey::Link(u(id))).is_none(),
+            "{}",
+            report_text(&list)
+        );
+    }
+    assert!(
+        list.row(&add_key(&[0x102])).is_some(),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
 fn a_unit_added_to_a_part_updates_its_link() {
     let mut design = synced();
     design.parts[2].part.units.push(u(0x203));

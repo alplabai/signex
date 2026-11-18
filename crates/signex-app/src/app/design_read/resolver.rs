@@ -13,29 +13,12 @@ use signex_types::part::{FootprintResolveError, ResolvedFootprint};
 use signex_types::schematic::Symbol;
 use uuid::Uuid;
 
-use crate::app::Signex;
-
 /// One open library: its id, `.snxlib` path and rows.
 #[derive(Debug, Clone)]
 pub(crate) struct LibraryRows {
     pub id: Uuid,
     pub root: PathBuf,
     pub rows: Vec<ComponentRow>,
-}
-
-impl Signex {
-    /// Every open library's rows, for a design read to resolve footprints from.
-    pub(crate) fn library_rows(&self) -> Vec<LibraryRows> {
-        self.library
-            .open_libraries
-            .iter()
-            .map(|lib| LibraryRows {
-                id: lib.library_id,
-                root: lib.root.clone(),
-                rows: lib.tables.values().flatten().cloned().collect(),
-            })
-            .collect()
-    }
 }
 
 /// Footprint resolution against the open libraries, with one adapter per
