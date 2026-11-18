@@ -849,6 +849,8 @@ pub use hotspot::{
     MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,
     snap_to_hotspot,
 };
+mod junction_color;
+pub use junction_color::junction_wire_colors;
 mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,

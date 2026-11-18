@@ -389,6 +389,91 @@ fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
     );
 }
 
+/// The dot of a T whose three wires carry `colors` (own colours), drawn with
+/// `styling`.
+fn t_junction_draw_color(
+    colors: [Option<ThemeColor>; 3],
+    styling: Option<WireStyling<'_>>,
+) -> [f32; 4] {
+    let mut sheet = empty_snapshot();
+    let ends = [
+        ((0.0, 10.0), (10.0, 10.0)),
+        ((10.0, 10.0), (20.0, 10.0)),
+        ((10.0, 10.0), (10.0, 20.0)),
+    ];
+    for (i, ((a, b), color)) in ends.into_iter().zip(colors).enumerate() {
+        sheet.wires.push(Wire {
+            uuid: uuid::Uuid::from_u128(100 + i as u128),
+            start: Point::new(a.0, a.1),
+            end: Point::new(b.0, b.1),
+            color,
+            ..Default::default()
+        });
+    }
+    sheet.junctions.push(signex_types::schematic::Junction {
+        uuid: JUNCTION_ID,
+        position: Point::new(10.0, 10.0),
+        ..Default::default()
+    });
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    };
+    let snapshot = build_renderer_snapshot(
+        &sheet,
+        &transform,
+        &canvas_colors(ThemeId::GraphiteLight),
+        Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0)),
+        None,
+        SceneOverrides {
+            wire_styling: styling,
+            ..SceneOverrides::default()
+        },
+    );
+    snapshot.junctions[0].color
+}
+
+#[test]
+fn a_junction_on_coloured_wires_is_drawn_in_their_colour() {
+    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::GraphiteLight).junction));
+    let green = ThemeColor::new(0, 255, 0, 255);
+    let red = ThemeColor::new(255, 0, 0, 255);
+    let green_rgba = [0.0, 1.0, 0.0, 1.0];
+
+    let all_green = [Some(green); 3];
+    assert_eq!(t_junction_draw_color(all_green, None), green_rgba);
+    assert_eq!(
+        t_junction_draw_color([Some(green), Some(green), None], None),
+        green_rgba,
+        "the colour most wires share"
+    );
+    assert_eq!(
+        t_junction_draw_color([Some(green), Some(red), None], None),
+        theme,
+        "no colour leads: the dot's own rule"
+    );
+}
+
+#[test]
+fn a_junction_follows_the_net_colour_of_its_wires() {
+    let green = ThemeColor::new(0, 255, 0, 255);
+    let overrides: HashMap<uuid::Uuid, ThemeColor> = (100..103)
+        .map(|i| (uuid::Uuid::from_u128(i), green))
+        .collect();
+    let classes = WireClassStyles::new();
+    let styling = WireStyling {
+        color_overrides: &overrides,
+        class_styles: &classes,
+        class_revision: 0,
+    };
+    assert_eq!(
+        t_junction_draw_color([None; 3], Some(styling)),
+        [0.0, 1.0, 0.0, 1.0]
+    );
+}
+
 /// Both segments of a bent wire emit the same colour and width (#1654): the
 /// difference seen on screen is pixel thickness, fixed in `scene_line_snap`.
 #[test]

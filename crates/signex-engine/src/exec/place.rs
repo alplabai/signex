@@ -123,14 +123,14 @@ impl Engine {
 
     /// The wires as they are now, ready to tell a later fold what changed: the
     /// drag preview's, built once per drag, else built here.
-    fn pre_wires(&self) -> std::sync::Arc<crate::PreWires> {
+    pub(super) fn pre_wires(&self) -> std::sync::Arc<crate::PreWires> {
         (self.preset_wires.clone())
             .unwrap_or_else(|| std::sync::Arc::new(crate::PreWires::new(&self.document.wires)))
     }
 
     /// [`Self::merge_after_edit`] for a move, weighing only the wires the
     /// move changed (see `Engine::merge_collinear_wires_near`).
-    fn merge_after_move(&mut self, pre: &crate::PreWires) -> DocumentPatch {
+    pub(super) fn merge_after_move(&mut self, pre: &crate::PreWires) -> DocumentPatch {
         if self.merge_collinear_wires_near(pre) {
             DocumentPatch::WIRES
         } else {
@@ -283,6 +283,8 @@ impl Engine {
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
+        // And what joins a selected wire, which it carries along.
+        let contacts = keep_wires.then(|| crate::moved_wire_contacts(&self.document, &items));
         // So must the wires, to tell the pairs already meeting end to end
         // (which a merge leaves) and where the move changed any.
         let pre_wires = self.pre_wires();
@@ -299,7 +301,13 @@ impl Engine {
         // Wires shifted at an entry far end only join the reconcile list: the
         // rubber band must not treat them as selected, or it would skip them
         // and leave their pin end behind.
-        let followed = self.follow_bus_entry_ends(&followers, &items);
+        let mut followed = self.follow_bus_entry_ends(&followers, &items);
+        // A dragged wire keeps its connections before any pin is rerouted, so
+        // the pins' pass and its guard start from the wire's result.
+        if let Some(contacts) = contacts.filter(|c| !c.is_empty()) {
+            let carried = crate::follow_moved_wires(&mut self.document, &contacts, &items);
+            followed.extend(carried.touched);
+        }
 
         // A drag preview's pre-move sheet is the preview's own, shared.
         let preview_sheet = self.preset_sheet.clone();
@@ -489,6 +497,12 @@ impl Engine {
             Command::BreakWire { wire, at, new_wire } => {
                 self.break_wire(before, wire, at, new_wire)
             }
+            Command::MoveWireEnd {
+                wire,
+                start,
+                to,
+                keep_wires,
+            } => self.move_wire_end(before, wire, start, to, keep_wires),
             Command::PlaceBus { bus } => {
                 self.document.buses.push(bus);
 

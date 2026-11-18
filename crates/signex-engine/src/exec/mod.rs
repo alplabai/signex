@@ -20,6 +20,7 @@ mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
 pub(crate) mod transaction;
+mod wire_end;
 
 #[cfg(test)]
 mod change_component_tests;

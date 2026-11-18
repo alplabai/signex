@@ -85,6 +85,8 @@ mod id_source_tests;
 mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;
+#[cfg(test)]
+mod wire_drag_tests;
 
 use std::path::{Path, PathBuf};
 
@@ -156,8 +158,9 @@ use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
-    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
-    moved_pin_tips,
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, WireContact, before_nets,
+    follow_moved_pins, follow_moved_wires, follow_wire_grip, moved_pin_tips, moved_wire_contacts,
+    wire_contact_points,
 };
 
 pub(crate) use transform::{PreWires, TouchingPairs};
@@ -711,6 +714,7 @@ impl Engine {
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
             | Command::BreakWire { .. }
+            | Command::MoveWireEnd { .. }
             | Command::PlaceWireSegmentAsIs { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }

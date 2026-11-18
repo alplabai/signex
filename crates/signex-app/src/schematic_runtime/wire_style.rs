@@ -81,7 +81,8 @@ pub fn wire_color(styling: Option<WireStyling<'_>>, wire: &Wire) -> Option<Theme
 }
 
 /// The colour a junction dot is drawn with, before focus dimming, or `None`
-/// for the theme's junction colour.
+/// for the theme's junction colour, when its wires name no colour (they come
+/// first: `signex_types::schematic::junction_wire_colors`).
 ///
 /// A junction is tinted only by its net's class colour; a per-net colour
 /// override then takes precedence over that, as it does for a wire. An

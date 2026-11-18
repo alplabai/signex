@@ -92,6 +92,7 @@ pub enum CommandKind {
     UpdateSymbolFields,
     PlaceWireSegment,
     BreakWire,
+    MoveWireEnd,
     PlaceWireSegmentAsIs,
     PlaceBus,
     PlaceLabel,
@@ -321,6 +322,18 @@ pub enum Command {
         wire: Uuid,
         at: signex_types::schematic::Point,
         new_wire: Uuid,
+    },
+    /// Move one end of `wire` (its start when `start`) to `to`, as one undo
+    /// step: the grip drag of a selected wire. A horizontal or vertical wire
+    /// keeps its line, so `to` is taken along it. With `keep_wires` the wires
+    /// attached at that end follow it (see `transform::rubber_band`); the end
+    /// leaves a pin or wire it sat on. A move onto the wire's other end
+    /// changes nothing.
+    MoveWireEnd {
+        wire: Uuid,
+        start: bool,
+        to: signex_types::schematic::Point,
+        keep_wires: bool,
     },
     PlaceWireSegment {
         wire: Wire,
@@ -697,6 +710,7 @@ impl Command {
             }
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::BreakWire { .. } => CommandKind::BreakWire,
+            Command::MoveWireEnd { .. } => CommandKind::MoveWireEnd,
             Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
