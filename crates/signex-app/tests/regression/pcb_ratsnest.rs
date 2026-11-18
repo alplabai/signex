@@ -21,7 +21,10 @@ fn pad(n: u128, x: f64) -> Pad {
             name: "N1".into(),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -49,6 +52,7 @@ fn two_pad_board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -65,6 +69,7 @@ fn two_pad_board() -> PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 

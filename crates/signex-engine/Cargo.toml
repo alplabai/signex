@@ -22,6 +22,8 @@ uuid = { workspace = true }
 serde = { workspace = true }
 [dev-dependencies]
 signex-erc = { workspace = true }
+# #2389: the router's results are checked by the design rule check.
+signex-drc = { workspace = true }
 tempfile = "3"
 serde_json = { workspace = true }
 

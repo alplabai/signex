@@ -3,7 +3,7 @@
 //! a selectable table row.
 
 use iced::widget::{button as button_style, container, pick_list};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::Localized;
 use signex_types::measure::length_field_text;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -95,25 +95,6 @@ pub(super) fn dropdown<'a, T: Clone + PartialEq + 'a>(
         .on_select(move |c: Choice<T>| msg(picked(c.value)))
         .padding([SP.xs, SP.s])
         .width(Length::Fill)
-        .boxed()
-}
-
-/// A table row that selects its object when clicked; `selected` tints it.
-pub(super) fn selectable<'a>(
-    form: &Form<'a>,
-    row: Element<'a, PanelMsg>,
-    selected: bool,
-    on_press: PcbBoardMsg,
-) -> Element<'a, PanelMsg> {
-    let tint = resolve(form.tokens()).accent_text;
-    button(row)
-        .padding(0)
-        .width(Length::Fill)
-        .on_press(msg(on_press))
-        .style(move |_: &Theme, _| button_style::Style {
-            background: selected.then_some(Background::Color(Color { a: 0.12, ..tint })),
-            ..button_style::Style::default()
-        })
         .boxed()
 }
 

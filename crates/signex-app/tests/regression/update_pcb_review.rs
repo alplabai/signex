@@ -97,6 +97,7 @@ fn a_failed_disk_check_refuses_new_pcb_with_why() {
             path: f.board.clone(),
             exists: Err("s4-denied-2271".to_string()),
             rules: None,
+            fab: None,
         },
     );
     assert!(f.app.document_state.tabs.iter().all(|t| t.path != f.board));
@@ -106,6 +107,38 @@ fn a_failed_disk_check_refuses_new_pcb_with_why() {
         "demo.snxpcb",
         "s4-denied-2271"
     ]));
+}
+
+/// #2311: a fab tier picked for a new board writes its `fab_*` rules into
+/// the project's rules, one undo step, nothing on disk until Save.
+#[test]
+fn a_new_board_with_a_fab_tier_seeds_its_fab_rules() {
+    use signex_types::project::FabTemplate;
+    let mut f = fixture();
+    let project = f.app.document_state.projects[0].id;
+    let on_disk = std::fs::read(&f.app.document_state.projects[0].path).ok();
+    up(
+        &mut f.app,
+        UpdatePcbMsg::NewPcbPathChecked {
+            project,
+            path: f.board.clone(),
+            exists: Ok(false),
+            rules: None,
+            fab: Some(FabTemplate::Hdi),
+        },
+    );
+    let rules = f.app.document_state.projects[0].data.rules.clone();
+    let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
+    assert!(
+        dsl.contains("rule fab_track on track require width >= 0.075mm then error"),
+        "{dsl}"
+    );
+    assert_eq!(dsl.matches("rule fab_").count(), 7, "{dsl}");
+    assert_eq!(
+        std::fs::read(&f.app.document_state.projects[0].path).ok(),
+        on_disk,
+        "nothing is written before Save"
+    );
 }
 
 /// S5: a sheet edited after the read makes the list stale; Validate and

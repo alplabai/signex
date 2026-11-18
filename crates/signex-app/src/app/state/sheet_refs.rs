@@ -772,6 +772,7 @@ mod tests {
             bus_entries: Vec::new(),
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
+            directives: Vec::new(),
             title_block: HashMap::new(),
             text_widths: Default::default(),
             text_extents: Default::default(),
@@ -989,7 +990,7 @@ mod tests {
 
     fn loaded_project(id: u32, dir: &Path, sheet: &str) -> crate::app::state::LoadedProject {
         crate::app::state::LoadedProject {
-            id: ProjectId(id),
+            id: ProjectId::test_id(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
                 document_id: None,
@@ -1016,6 +1017,8 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                fab_outputs: None,
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

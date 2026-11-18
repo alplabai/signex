@@ -58,15 +58,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 const BROWSER_TEXT_SIZE: f32 = TS.body;
 const BROWSER_HEADER_SIZE: f32 = TS.caption;
 const MAX_PARAM_COLUMNS: usize = 4;
-/// Width reserved at the start of every grid row for the per-row
-/// lifecycle indicator dot (Stage 18). The header row uses an empty
-/// `Space` of the same width so column labels stay aligned with the
-/// row cells beneath them.
-const LIFECYCLE_DOT_GUTTER: f32 = 16.0;
 /// Width of the trailing per-row delete cell; the header keeps a spacer of
 /// the same width so the columns stay aligned.
 const ROW_DELETE_GUTTER: f32 = BROWSER_TEXT_SIZE * 2.5;
-const LIFECYCLE_DOT_SIZE: f32 = 8.0;
 
 /// Render the Library Browser tab body. Returns an empty-state panel
 /// when the library isn't currently mounted (e.g. mount failed) so the
@@ -128,8 +122,6 @@ pub fn view<'a>(
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
     let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, i18n, read_only);
-    let header = view_header(library_path, lib, browser, tokens, i18n, read_only);
-
     // Body — left grid, right preview pane.
     let active_table = active_table(lib, browser);
     let rows: &[ComponentRow] = lib
@@ -165,6 +157,18 @@ pub fn view<'a>(
         }
     };
     let visible: Vec<&ComponentRow> = cache.visible.iter().filter_map(|&i| rows.get(i)).collect();
+    let count = header::ShownCount {
+        shown: visible.len(),
+        total: rows.len(),
+        sorted_by: browser.sort_by.as_ref().and_then(|sort| {
+            cache
+                .columns
+                .iter()
+                .find(|c| c.kind.sort_key() == sort.key)
+                .map(|c| c.label.clone())
+        }),
+    };
+    let header = view_header(library_path, lib, browser, tokens, i18n, read_only, &count);
     let prices = price::PriceView::with_main_currency(
         &lib.pricing,
         library_state.clock,

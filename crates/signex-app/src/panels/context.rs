@@ -74,14 +74,15 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
-    /// Signex AI panel mode; view-only, kept across context rebuilds.
-    pub signal_mode: super::signal::SignalMode,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Layers panel of the active board (#2223).
     pub pcb_layers: PcbLayersPanel,
+    /// The Layers panel's tab, search, open colour chip and set name; kept
+    /// across context rebuilds (#2363).
+    pub pcb_layers_ui: super::LayersPanelUi,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
     /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`
@@ -111,6 +112,8 @@ pub struct PanelContext {
     pub net_inspector: super::NetInspectorView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
+    /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
+    pub layer_stack: Option<super::LayerStackFacts>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -120,6 +123,9 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The editable geometry, lock and draft of the single selected object
+    /// (#2418).
+    pub placed: super::PlacedPanel,
     /// The fields a multi-selection shares, per kind (#1258); empty unless
     /// more than one object is selected.
     pub multi_groups: signex_engine::SelectionGroups,
@@ -215,6 +221,8 @@ pub struct PanelContext {
     pub erc_running: bool,
     /// The document changed after the last ERC run (#1768).
     pub erc_results_stale: bool,
+    /// An ERC run has checked the project; with no findings it was clean.
+    pub erc_ran: bool,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.

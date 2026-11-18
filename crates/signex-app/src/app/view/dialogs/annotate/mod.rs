@@ -436,8 +436,19 @@ impl Signex {
 
         // Re-prefix moved out of the footer to the list's heading row, where
         // it stays visible at any window size; its note stays in the summary.
+        // The mock's count beside the heading: how many listed rows change.
+        let change_count = text(t!(
+            i18n,
+            ids::DIALOG_ANNOTATE_CHANGE_COUNT,
+            "changes" => changes,
+            "total" => proposed.len()
+        ))
+        .size(TS.caption)
+        .color(text_muted)
+        .wrapping(iced::widget::text::Wrapping::None);
         let title_row = row![
             container(right_title).width(Length::Fill),
+            change_count,
             secondary(
                 t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX),
                 (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)

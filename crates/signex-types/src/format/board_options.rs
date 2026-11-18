@@ -1,6 +1,7 @@
 //! The optional `[board_options]` section of a `.snxpcb` (#2374): guides,
-//! extra snap grids, the sheet, the polygon naming scheme and the
-//! designator display.
+//! extra snap grids, the sheet, the polygon naming scheme, the
+//! designator display, the board origin (#2384) and the panel (#2410,
+//! `board_panel`).
 //!
 //! Written only when the options differ from the default, so a board
 //! without any re-saves byte-identical and a file from before the section
@@ -14,13 +15,15 @@ use super::FormatError;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::{PcbBoard, Point};
 use crate::pcb_options::{
-    BoardGrid, BoardGuide, BoardOptions, BoardSheet, DesignatorDisplay, GuideKind, PolygonNaming,
+    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, DrcWaiver,
+    GuideKind, PolygonNaming,
 };
 use crate::theme::Color;
 
 const GUIDES: &str = "board_options.guides";
 const GRIDS: &str = "board_options.grids";
 const SHEET: &str = "board_options.sheet";
+const ORIGIN: &str = "board_options.origin";
 
 /// `[board_options]` as stored.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -35,6 +38,22 @@ pub(in crate::format) struct BoardOptionsRaw {
     guides: Vec<GuideRaw>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     grids: Vec<GridRaw>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin: Option<OriginRaw>,
+    /// Waived design-rule findings (#2399), stored as held: the fingerprint
+    /// is a hash, not geometry (#2307).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    drc_waivers: Vec<DrcWaiver>,
+    /// The panel (#2410), `format::board_panel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    panel: Option<super::board_panel::PanelRaw>,
+}
+
+/// The board origin (#2384), nm.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct OriginRaw {
+    x: i64,
+    y: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +138,12 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
         sheet,
         polygon_naming: raw.polygon_naming,
         designator_display: raw.designator_display,
+        origin: raw
+            .origin
+            .map(|o| BoardOrigin::new(point(o.x, o.y)))
+            .unwrap_or_default(),
+        drc_waivers: raw.drc_waivers,
+        panel: raw.panel.map(super::board_panel::read).transpose()?,
     })
 }
 
@@ -188,6 +213,21 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
             })
         })
         .collect::<Result<_, FormatError>>()?;
+    let at = options.origin.at;
+    let origin = (options.origin != BoardOrigin::default())
+        .then(|| {
+            Ok::<_, NonFiniteField>(OriginRaw {
+                x: mm_to_nm(at.x, "x")?,
+                y: mm_to_nm(at.y, "y")?,
+            })
+        })
+        .transpose()
+        .map_err(|e| refuse(ORIGIN, 0, e))?;
+    let panel = options
+        .panel
+        .as_ref()
+        .map(super::board_panel::write)
+        .transpose()?;
     #[derive(Serialize)]
     struct Wrapper {
         board_options: BoardOptionsRaw,
@@ -199,6 +239,9 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
             sheet,
             guides,
             grids,
+            origin,
+            drc_waivers: options.drc_waivers.clone(),
+            panel,
         },
     };
     out.push('\n');

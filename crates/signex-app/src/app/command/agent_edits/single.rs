@@ -3,12 +3,12 @@
 //! command the agent runs on its own. See `docs/AGENT_EDITS.md`, "Origin".
 
 use iced::Task;
+use signex_engine::DocumentPatch;
 
 use crate::app::command::document_operands::named_sheet;
 use crate::app::command::operand_handlers::OperandHandler;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
-use crate::schematic_runtime::RenderInvalidation;
 
 use super::wire::edit_refusal;
 
@@ -50,7 +50,7 @@ pub(crate) fn run_as_one_step(
     }
     let edits = &mut app.document_state.agent_edits;
     let previous = edits.target.replace(path.clone());
-    edits.owed = RenderInvalidation::NONE;
+    edits.owed = DocumentPatch::NONE;
     let ran = handler(app, args);
     let edits = &mut app.document_state.agent_edits;
     let owed = std::mem::take(&mut edits.owed);
@@ -86,15 +86,15 @@ pub(crate) fn run_as_one_step(
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let label = format!("Agent: {} on {name}", command.as_str());
-        let invalidation = if owed == RenderInvalidation::NONE {
-            RenderInvalidation::FULL
+        let patch = if owed == DocumentPatch::NONE {
+            DocumentPatch::FULL
         } else {
             owed
         };
         app.document_state
             .agent_edits
             .record_step(group, label.clone(), &app.agent.origin);
-        app.after_sheet_change(&path, invalidation);
+        app.after_sheet_change(&path, patch);
         crate::diagnostics::log_info(format!("{label} (undo group {})", group.get()));
     }
     ran

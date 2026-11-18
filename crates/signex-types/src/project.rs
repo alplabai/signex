@@ -10,8 +10,13 @@ use uuid::Uuid;
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
 
+mod annotate_undo;
 mod annotation;
 mod erc_waiver;
+mod fab_outputs;
+mod fab_tier;
+mod order;
+mod requirements;
 mod rule_file;
 mod rule_profile;
 mod rules;
@@ -24,14 +29,27 @@ mod unknown;
 mod user_profile;
 #[cfg(test)]
 mod user_profile_tests;
+mod variants;
+#[cfg(test)]
+mod variants_tests;
+pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use fab_outputs::FabOutputKinds;
+pub use fab_tier::FabCapabilities;
+pub use order::ListMove;
+pub use requirements::{
+    DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
+    REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
+    RequirementProblem,
+};
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
 pub use rules::{
-    DrcRuleSet, ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, rule_set_sha256,
+    DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
+    rule_set_sha256,
 };
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
@@ -48,6 +66,7 @@ pub use user_profile::{
     USER_PROFILE_ID_PREFIX, UserProfile, check_profile_name, find_user_profile, new_profile_id,
     resolve_profile, save_user_profile, user_profiles_from_value,
 };
+pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
 /// a hand-edited key never makes the project unopenable.
@@ -263,6 +282,20 @@ pub struct ProjectData {
     /// build keeps the key in `unknown`. No format token changes.
     #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
     pub agent_journal: AgentJournalSettings,
+    /// The kinds of file Fabrication Outputs writes (#2489). `None` is the
+    /// defaults and is skipped on save, so a project whose ticks were never
+    /// changed re-saves byte-identical. An unreadable value reads as `None`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "fab_outputs::lenient_fab_outputs"
+    )]
+    pub fab_outputs: Option<FabOutputKinds>,
+    /// The project's requirements (#2339), run by `check_requirements`. Top
+    /// level, outside `rules`: not part of the rule set's hash or a rule
+    /// profile. Skipped on save when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requirements: Vec<RequirementEntry>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -311,6 +344,8 @@ mod document_id_tests;
 mod net_class_tests;
 #[cfg(test)]
 mod parameters_tests;
+#[cfg(test)]
+mod requirements_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
 #[cfg(test)]
@@ -504,6 +539,8 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -539,6 +576,8 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -696,7 +735,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let journal = value
             .as_object_mut()
             .and_then(|map| map.remove(crate::agent_journal::AGENT_JOURNAL_KEY));
+        let requirements = value
+            .as_object_mut()
+            .and_then(|map| map.remove(requirements::REQUIREMENTS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = requirements {
+            requirements::take_requirements(&mut data, raw);
+        }
         if let Some(raw) = journal {
             crate::agent_journal::take_agent_journal(&mut data, raw);
         }
@@ -766,6 +811,8 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        fab_outputs: None,
+        requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })

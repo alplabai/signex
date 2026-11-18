@@ -31,6 +31,8 @@ const NETS: [(u32, &str); 8] = [
 
 fn track(n: u128, x: f64, y: f64, net: u32, width: f64) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(x - 5.0, y),
         end: Point::new(x + 5.0, y),
@@ -57,7 +59,10 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
             name: NETS[net as usize - 1].1.into(),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -92,6 +97,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -117,18 +123,22 @@ fn board() -> PcbBoard {
             track(6, 80.0, 0.845, 8, 0.25),
         ],
         vias: vec![Via {
+            attributes: Default::default(),
             uuid: Uuid::from_u128(30),
             position: Point::new(60.0, 0.0),
             diameter: 0.4,
             drill: 0.2,
             layers: vec!["TopCopper".into(), "BottomCopper".into()],
             net: 7,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         }],
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

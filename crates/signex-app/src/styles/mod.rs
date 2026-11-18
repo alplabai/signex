@@ -10,6 +10,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::button;
 
 mod buttons;
+mod dialog_buttons;
 mod dialog_kit;
 mod dialog_shell;
 mod graphite;
@@ -23,7 +24,7 @@ pub use graphite::{
     PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,
     section_label,
 };
-pub use graphite_buttons::{accent_button_rounded, ghost_button, primary_button};
+pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
 pub use radii::Radii;
 

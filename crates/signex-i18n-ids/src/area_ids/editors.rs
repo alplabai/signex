@@ -20,7 +20,13 @@ define_ids! {
     EDITORS_PAD_SIZE_X = "editors-pad-size-x";
     EDITORS_PAD_SIZE_Y = "editors-pad-size-y";
     EDITORS_PAD_CORNER_RADIUS = "editors-pad-corner-radius";
+    EDITORS_PAD_TRAPEZOID_DELTA_X = "editors-pad-trapezoid-delta-x";
+    EDITORS_PAD_TRAPEZOID_DELTA_Y = "editors-pad-trapezoid-delta-y";
     EDITORS_PAD_RELIEF = "editors-pad-relief";
+    EDITORS_PAD_POSITION_X = "editors-pad-position-x";
+    EDITORS_PAD_POSITION_Y = "editors-pad-position-y";
+    EDITORS_PAD_PASTE_ENABLED = "editors-pad-paste-enabled";
+    EDITORS_PAD_TENTED = "editors-pad-tented";
     EDITORS_PAD_HOLE_DETAILS = "editors-pad-hole-details";
     EDITORS_PAD_HOLE_TOLERANCE_PLUS = "editors-pad-hole-tolerance-plus";
     EDITORS_PAD_HOLE_TOLERANCE_MINUS = "editors-pad-hole-tolerance-minus";

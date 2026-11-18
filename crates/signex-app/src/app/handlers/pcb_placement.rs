@@ -38,7 +38,7 @@ impl Signex {
     }
 
     /// Delete the board selection when the active tab is a PCB: its
-    /// footprints (a selected pad's included), tracks and vias.
+    /// footprints (a selected pad's included), tracks, vias and drawn areas.
     pub(crate) fn delete_pcb_selection(&mut self) -> bool {
         if !self.has_active_pcb() {
             return false;
@@ -85,7 +85,9 @@ impl Signex {
         });
         let window = self.interaction_state.acting_window;
         let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
-        self.interaction_state.pcb_tool = None;
+        self.release_board_tool();
+        // Measure would take the Move's clicks (#2403).
+        self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(carry);
         // While a Move waits for its clicks, a press never starts a drag.
         self.refresh_pcb_highlight();
@@ -101,9 +103,10 @@ impl Signex {
         let Some(anchor) = carry.anchor else {
             let mut footprints = carry.footprints;
             if footprints.is_empty() {
-                // The click picks, and selects, what it lands on.
+                // The click picks, and selects, the part it lands on; a
+                // designator or comment stands for nothing here (#2368).
                 self.with_pcb_selection(|state, board| {
-                    state.click(board, at, tolerance_mm, pcb_geom::ClickMode::Replace)
+                    state.click_part(board, at, tolerance_mm, pcb_geom::ClickMode::Replace)
                 });
                 footprints = self.pcb_selected_footprints();
                 if footprints.is_empty() {
@@ -160,6 +163,12 @@ impl Signex {
             let Some(path) = self.active_tab_path() else {
                 return;
             };
+            if let Some(reach) = pick
+                && self.start_text_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
             let mut footprints = match pick {
                 Some(reach) => self
                     .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
@@ -295,14 +304,19 @@ impl Signex {
         else {
             return;
         };
-        let delta = carry_delta(
-            board,
-            &carry.footprints,
-            from,
-            to,
-            &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
-        );
+        let delta = if carry.text.is_some() {
+            // A text follows the pointer exactly (#2368).
+            Point::new(to.x - from.x, to.y - from.y)
+        } else {
+            carry_delta(
+                board,
+                &carry.footprints,
+                from,
+                to,
+                &self.ui_state.pcb_snap,
+                self.pcb_active_layer(),
+            )
+        };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta
         {
@@ -320,6 +334,11 @@ impl Signex {
         else {
             return;
         };
+        if carry.text.is_some() {
+            self.end_pcb_carry();
+            self.drop_text_carry(&carry);
+            return;
+        }
         if carry.footprints.is_empty() {
             // A drag refused at its start: the notice is already out.
             self.end_pcb_carry();
@@ -382,6 +401,20 @@ impl Signex {
 
 pub(crate) use signex_commands::PcbTargets;
 
+/// The footprint and the two pads of a selection that is exactly two pads
+/// of one footprint (#2410).
+pub(crate) fn selected_pad_pair(selection: &pcb_geom::Selection) -> Option<(Uuid, Uuid, Uuid)> {
+    let mut pads = selection.items().filter_map(|item| match item {
+        ItemRef::Pad { footprint, pad } => Some((footprint, pad)),
+        _ => None,
+    });
+    let (Some((footprint, a)), Some((other, b)), None) = (pads.next(), pads.next(), pads.next())
+    else {
+        return None;
+    };
+    (selection.len() == 2 && footprint == other).then_some((footprint, a, b))
+}
+
 impl Signex {
     /// [`PcbTargets`] for a command from `window` (`None`: the main one).
     pub(crate) fn pcb_targets(&self, window: Option<iced::window::Id>) -> PcbTargets {
@@ -422,34 +455,50 @@ impl Signex {
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
-        let pasteable = self.interaction_state.pcb_clipboard.is_some();
+        // A read-only board takes no edit: nothing on it is placeable,
+        // deletable or a paste target (#2405).
+        let read_only = board.unknown.newer_minor_source.is_some();
+        let pasteable = self.interaction_state.pcb_clipboard.is_some() && !read_only;
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
                 pasteable,
                 part_in_hand,
                 routing,
+                read_only,
                 ..PcbTargets::default()
             };
         };
         let footprints = selection.footprints();
-        let unlocked = placement::editable_footprints(board, &footprints).is_ok();
+        let unlocked = !read_only && placement::editable_footprints(board, &footprints).is_ok();
         let copyable = !deletable_items(selection).is_empty();
+        let locks: Vec<bool> = super::pcb_item_edits::lockable_items(selection)
+            .into_iter()
+            .map(|id| signex_engine::pcb::lock::is_locked(board, id))
+            .collect();
+        let any_locked = locks.contains(&true);
         PcbTargets {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked) && copyable,
+            deletable: !read_only && (footprints.is_empty() || unlocked) && copyable && !any_locked,
             copyable,
             pasteable,
             part_in_hand,
             routing,
+            lockable: !read_only && locks.contains(&false),
+            unlockable: !read_only && any_locked,
+            read_only,
+            footprints: footprints.len(),
+            pad_pair: unlocked && selected_pad_pair(selection).is_some(),
+            one_footprint: unlocked && footprints.len() == 1,
         }
     }
 }
 
 /// What Delete removes for `selection`: its footprints (a selected pad's
-/// included), tracks and vias.
+/// included), tracks, vias, drawn areas, strings, free arcs, free pads,
+/// dimensions and drawings (#2424).
 pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemId> {
     let mut items: Vec<BoardItemId> = selection
         .footprints()
@@ -459,7 +508,14 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
     items.extend(selection.items().filter_map(|item| match item {
         ItemRef::Track(id) => Some(BoardItemId::Segment(id)),
         ItemRef::Via(id) => Some(BoardItemId::Via(id)),
-        ItemRef::Pad { .. } | ItemRef::Footprint(_) => None,
+        ItemRef::Zone { zone, .. } => Some(BoardItemId::Zone(zone)),
+        ItemRef::Text(id) => Some(BoardItemId::Text(id)),
+        ItemRef::Arc(id) => Some(BoardItemId::Arc(id)),
+        ItemRef::FreePad(id) => Some(BoardItemId::FreePad(id)),
+        ItemRef::Dimension(id) => Some(BoardItemId::Dimension(id)),
+        ItemRef::Graphic { graphic, .. } => Some(BoardItemId::Graphic(graphic)),
+        // A designator or comment is hidden with its eye, never deleted.
+        ItemRef::Pad { .. } | ItemRef::Footprint(_) | ItemRef::FootprintText { .. } => None,
     }));
     items
 }

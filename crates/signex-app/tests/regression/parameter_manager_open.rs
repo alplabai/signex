@@ -6,7 +6,7 @@
 
 use signex_app::app::command_palette::{CommandAction, build_catalog};
 use signex_app::app::{CommandPaletteMsg, EditMsg, Message, ParameterManagerMsg, Signex};
-use signex_app::keymap::{AppCommandId, all_command_ids, metadata_for};
+use signex_app::keymap::{AppCommandId, CatalogTextExt, all_command_ids, metadata_for};
 
 use crate::dirty_paths_gateway::{app_with, symbol};
 

@@ -85,7 +85,7 @@ board area (the renderer, Update PCB staging, export) uses it with no change.
 
 A new optional section, written only for a board that has a sketch. A board
 without one writes no byte of it and re-saves byte-identical; a file written
-before it loads unchanged. The format token stays `snxpcb/1.3`: a build that
+before it loads unchanged. The section did not change the format token (`snxpcb/1.3` then): a build that
 predates the section keeps it as a foreign top-level key and writes it back.
 
 ```toml
@@ -129,7 +129,8 @@ forbids it; see `docs/architecture/pcb-drc.md`, "Keepouts".
 ## Sketch mode {#sketch-mode}
 
 One command, `board_sketch` (Design ▸ Board Sketch, the PCB Active Bar's
-Board Sketch button, the board canvas menu, the palette; no default key),
+Board Sketch button, the board canvas menu, the palette; `1` on a board in
+both built-in profiles),
 enters sketch mode on the board in view, or leaves it when it is on. Only
 the main window's board can be in sketch mode, one board at a time;
 entering on another board leaves the first one (committing it) first.
@@ -208,8 +209,9 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 
 ## Not done yet
 
-- Exporting cutouts, holes and V-scores (Gerber edge cuts, drill file), and
-  drawing V-scores.
+- Drawing V-scores. (Exporting them is done: through cutouts go to the
+  Gerber profile, mounting holes to the drill files and V-scores to their own
+  Gerber image; see [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).)
 - Sketch mode in an undocked board window.
 - DRC: `no_pours` keepouts, holes in `no_drilling` keepouts, and
   copper-to-edge and copper-to-cutout clearance (the rules have no edge

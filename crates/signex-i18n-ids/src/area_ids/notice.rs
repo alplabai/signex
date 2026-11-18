@@ -106,6 +106,7 @@ define_ids! {
     NOTICE_BOM_SOURCE_CLOSED = "notice-bom-source-closed";
     NOTICE_BOM_EXPORT_FAILED = "notice-bom-export-failed";
     NOTICE_ERC_REPORT_NOT_RUN = "notice-erc-report-not-run";
+    NOTICE_MENU_PATH = "notice-menu-path";
     NOTICE_PDF_SOURCE_CLOSED = "notice-pdf-source-closed";
     NOTICE_PDF_NO_FILES = "notice-pdf-no-files";
     NOTICE_NETLIST_EXPORT_FAILED = "notice-netlist-export-failed";

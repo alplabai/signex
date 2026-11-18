@@ -71,6 +71,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         bus_entries: Vec::new(),
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
+        directives: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
@@ -647,6 +648,7 @@ fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -663,6 +665,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 

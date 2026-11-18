@@ -35,6 +35,7 @@ fn sheet_text(paper: &str) -> String {
 fn board(thickness: f64) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -51,6 +52,7 @@ fn board(thickness: f64) -> PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 
@@ -138,6 +140,8 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                fab_outputs: None,
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

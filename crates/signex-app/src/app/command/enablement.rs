@@ -57,6 +57,9 @@ pub(crate) struct CommandContext {
     pub has_footprint_editor: bool,
     /// The main window's schematic canvas has a selection.
     pub has_selection: bool,
+    /// Every selected object on the sheet is locked, so moving, turning,
+    /// mirroring, cutting or deleting the selection changes nothing (#2419).
+    pub selection_all_locked: bool,
     /// The selection holds at least one schematic drawing, which the
     /// Arrange commands act on (#1583).
     pub has_drawing_selection: bool,
@@ -100,9 +103,13 @@ pub(crate) struct CommandContext {
     /// The active document, or the active project's root sheet, belongs to a
     /// project, whose pages Number Schematic Sheets lists.
     pub has_project_sheet: bool,
-    /// A document tab is undocked into its own window and the main window's
+    /// Two documents can share the main window in tile panes (#2249), or a
+    /// document tab is undocked into its own window and the main window's
     /// screen is known, so Window ▸ Tile has a plan.
     pub can_tile_windows: bool,
+    /// The main window shows its documents in tile panes, so Window ▸
+    /// Untile has something to undo (#2249).
+    pub is_tiled: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
@@ -144,7 +151,9 @@ pub(crate) fn remove_part_menu_enabled(ctx: &CommandContext) -> bool {
 /// menu greys them by [`is_enabled`], but a keystroke still reaches the
 /// handler so the explanation is not lost (Save As in a PCB tab, #671;
 /// Print with no schematic; Up Hierarchy on a top-level sheet, whose handler
-/// also assembles the sheets itself when the Navigator cache is cold).
+/// also assembles the sheets itself when the Navigator cache is cold). Find
+/// Similar with nothing selected still seeds from the object under the
+/// cursor, or says what to hover (#2416).
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -154,21 +163,30 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
             | "navigate_up_hierarchy"
             | "annotate_schematic_quietly"
             | "force_annotate_all_schematics"
+            | "find_similar_objects"
     ) || is_planned_command(command)
 }
 
-/// A board placement command greyed because a selected footprint is locked
-/// (#2240): the menu greys it, but its keystroke still reaches the handler,
-/// which says which footprint is locked instead of doing nothing silently.
+/// A placement command greyed because a selected footprint is locked
+/// (#2240), or because everything selected on a sheet is locked (#2419):
+/// the menu greys it, but its keystroke still reaches the handler, which
+/// says what is locked instead of doing nothing silently.
 pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
     let pastes = matches!(
         super::needs::needs(command),
         Some(super::needs::Needs::PasteTarget)
     );
-    ctx.pcb.shown
-        && ((ctx.pcb.any && super::needs::is_placement_command(command))
-            // A paste with no board objects on the clipboard says why (#2361).
-            || pastes)
+    let placement = super::needs::is_placement_command(command);
+    if !ctx.pcb.shown {
+        // Flip Selection is a board command; on a sheet it stays dropped.
+        let board_only = matches!(
+            super::needs::needs(command),
+            Some(super::needs::Needs::PcbPlacement)
+        );
+        return ctx.selection_all_locked && placement && !board_only;
+    }
+    // A paste with no board objects on the clipboard says why (#2361).
+    (ctx.pcb.any && placement) || pastes
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
@@ -210,9 +228,15 @@ impl Signex {
         let (can_undo, can_redo) = self.undo_availability(&self.undo_target(window));
         // A command typed in an undocked sheet window runs against that
         // window's selection, so it is enabled by it (#1966).
-        let shown_canvas = match window {
-            Some(id) if self.is_document_window(id) => self.interaction_state.canvas_for_window(id),
-            _ => self.interaction_state.active_canvas(),
+        let (shown_canvas, shown_engine) = match window {
+            Some(id) if self.is_document_window(id) => (
+                self.interaction_state.canvas_for_window(id),
+                document.engine_for_window(id, &self.ui_state),
+            ),
+            _ => (
+                self.interaction_state.active_canvas(),
+                document.active_engine(),
+            ),
         };
         let main_has_schematic = document.active_engine().is_some();
         let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
@@ -250,6 +274,8 @@ impl Signex {
             has_symbol_editor,
             has_footprint_editor,
             has_selection: !shown_canvas.selected.is_empty(),
+            selection_all_locked: shown_engine
+                .is_some_and(|engine| engine.all_locked(&shown_canvas.selected)),
             has_drawing_selection: shown_canvas
                 .selected
                 .iter()
@@ -268,7 +294,9 @@ impl Signex {
             has_library_editor: self.active_editor_library_root().is_some(),
             has_open_library: self.library_editor_target().is_some(),
             has_project_sheet: self.sheet_numbering_project().is_some(),
-            can_tile_windows: self.tile_plan(crate::app::TileLayout::SideBySide).is_some(),
+            can_tile_windows: self.can_tile_documents()
+                || self.tile_plan(crate::app::TileLayout::SideBySide).is_some(),
+            is_tiled: self.tiled_panes().is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
             pcb: self.pcb_targets(window),
             turn_in_hand: self.interaction_state.placement.is_some()
@@ -553,6 +581,8 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                fab_outputs: None,
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -717,10 +747,46 @@ mod tests {
             "place_junction",
             "place_port",
             "place_off_sheet_connector",
+            // #2415: the rest of the sheet's Place tools.
+            "place_bus_entry",
+            "place_sheet_symbol",
+            "place_no_connect",
+            "place_no_erc",
+            "place_text_string",
+            "place_text_frame",
+            "place_note",
+            "draw_line",
+            "draw_arc",
+            "draw_full_circle",
+            "draw_rectangle",
+            "draw_polygon",
+            // #2416: the sheet's selection filter and the Net Classes panel.
+            "open_selection_filter",
+            "open_net_classes",
         ] {
             assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
             assert!(is_enabled(&id(name), &on), "{name} with a schematic");
         }
+    }
+
+    /// #2416: Edit ▸ Find Similar Objects is live with a selection on a sheet;
+    /// without one the key still reaches the handler, which seeds from the
+    /// object under the cursor or says what to hover.
+    #[test]
+    fn find_similar_needs_a_selection_on_a_sheet_but_its_key_still_explains() {
+        let command = id("find_similar_objects");
+        let sheet = CommandContext {
+            has_schematic: true,
+            ..CommandContext::default()
+        };
+        let selected = CommandContext {
+            has_selection: true,
+            ..sheet
+        };
+        assert!(!is_enabled(&command, &CommandContext::default()));
+        assert!(!is_enabled(&command, &sheet));
+        assert!(is_enabled(&command, &selected));
+        assert!(explains_when_unavailable(&command));
     }
 
     #[test]
@@ -1043,7 +1109,7 @@ mod tests {
     #[test]
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
-        assert!(ids.contains(&"place_diff_pair"), "{ids:?}");
+        assert!(ids.contains(&"place_signal_harness"), "{ids:?}");
         let with_command = crate::active_bar::PLANNED_TOOLS
             .iter()
             .filter(|(planned, _)| {
@@ -1084,11 +1150,11 @@ mod tests {
     fn a_planned_tool_keystroke_still_logs_the_refusal() {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _t) = Signex::new();
-        let _ = app.dispatch_command(&id("place_diff_pair"), CommandArgs::default(), None);
+        let _ = app.dispatch_command(&id("place_signal_harness"), CommandArgs::default(), None);
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Differential Pair")),
+                .starts_with("Planned, not available yet: Signal Harness")),
             "the refusal must reach the Messages panel, not be dropped"
         );
     }
@@ -1188,5 +1254,42 @@ mod tests {
             .unwrap()
             .active_part = 2;
         assert!(remove_part_menu_enabled(&app.command_context(None)));
+    }
+
+    /// #2419: a sheet selection that is all locked greys the edits that would
+    /// change nothing, but their keys still reach the handler, which names
+    /// the lock; Copy and the board-only Flip Selection keep their own rules.
+    #[test]
+    fn an_all_locked_sheet_selection_greys_the_edits_and_keeps_the_explanation() {
+        let locked = CommandContext {
+            has_schematic: true,
+            has_selection: true,
+            selection_all_locked: true,
+            ..CommandContext::default()
+        };
+        let free = CommandContext {
+            selection_all_locked: false,
+            ..locked
+        };
+        for name in [
+            "rotate_counterclockwise",
+            "mirror_x",
+            "move_selection",
+            "cut",
+            "delete_selection",
+        ] {
+            assert!(
+                !is_enabled(&id(name), &locked),
+                "{name} on a locked selection"
+            );
+            assert!(is_enabled(&id(name), &free), "{name} on a free selection");
+            assert!(explains_refusal_in(&id(name), &locked), "{name} is dropped");
+            assert!(
+                !explains_refusal_in(&id(name), &free),
+                "{name} on a free one"
+            );
+        }
+        assert!(is_enabled(&id("copy"), &locked));
+        assert!(!explains_refusal_in(&id("flip_selection"), &locked));
     }
 }

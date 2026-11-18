@@ -1,5 +1,5 @@
-//! The worker half of Update PCB: assemble the project's sheets, stitch the
-//! netlist, resolve each part's footprint from its library row and diff the
+//! The worker half of Update PCB: stitch the project's design and its
+//! netlist (`app/design_read`), resolve each part's footprint and diff the
 //! board. Everything it reads is owned, so it runs on a blocking thread.
 
 use std::collections::HashMap;
@@ -9,20 +9,13 @@ use std::sync::Arc;
 use signex_engine::pcb::eco::{
     EcoChangeList, EcoInput, EcoPart, Staging, design_eco_parts, diff_board,
 };
-use signex_library::ComponentRow;
-use signex_library::LibraryAdapter as _;
-use signex_library::adapters::local_git::LocalGitAdapter;
-use signex_library::primitive::PrimitiveRef;
 use signex_types::net::Netlist;
-use signex_types::part::{FootprintResolveError, ResolvedFootprint};
 use signex_types::pcb::PcbBoard;
-use signex_types::schematic::{InstancePath, SchematicSheet, Symbol};
-use uuid::Uuid;
+use signex_types::schematic::InstancePath;
 
 use super::Computed;
-use crate::app::project_sheets::{
-    ProjectSheetPlan, ProjectSheetSet, project_graph_with, project_roots, sheet_key_with,
-};
+use crate::app::design_read::{DesignGraph, LibraryRows, Resolver};
+use crate::app::project_sheets::ProjectSheetPlan;
 
 /// The design and board one change list was computed from. Kept for the net
 /// refresh after a tick and for Refresh, which keeps the ticks.
@@ -55,14 +48,6 @@ impl DesignSnapshot {
     }
 }
 
-/// One open library: its id, `.snxlib` path and rows.
-#[derive(Debug, Clone)]
-pub(crate) struct LibraryRows {
-    pub id: Uuid,
-    pub root: PathBuf,
-    pub rows: Vec<ComponentRow>,
-}
-
 /// Everything the worker reads, taken on the update thread.
 pub(crate) struct DesignRequest {
     pub plan: ProjectSheetPlan,
@@ -79,47 +64,19 @@ pub(crate) struct DesignRequest {
 /// Read the design and diff the board. `Err` says why there is no list.
 pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
     let set = request.plan.assemble();
-    let root = set
-        .root
-        .clone()
-        .ok_or_else(|| "the project has no root sheet".to_string())?;
-    let base = Some(request.project_dir.as_path());
-    let graph = project_graph_with(&set.sheets, base, Some(&root), set.fold);
-    let root_key = sheet_key_with(&root, base, set.fold);
-    if !graph.sheets.contains_key(&root_key) {
-        return Err(format!(
-            "the root sheet {} could not be read",
-            root.display()
-        ));
-    }
-    let roots = project_roots(root_key, &set, &graph, base, set.fold);
-    let project = signex_net::ProjectGraph {
-        sheets: &graph.sheets,
-        resolved: &graph.resolved,
-        roots: &roots,
-    };
-    let netlist = signex_net::build_project_netlist(&project).netlist;
-    let occurrences = signex_net::project_occurrences(&project);
-    let sheets: Vec<(InstancePath, &SchematicSheet)> = occurrences
-        .iter()
-        .filter_map(|o| Some((o.instance_path.clone(), graph.sheets.get(&o.key)?)))
-        .collect();
-    let unreadable = unreadable_placements(&set, &graph, &occurrences);
+    let design = DesignGraph::read(&set, &request.project_dir)?;
+    let netlist = signex_net::build_project_netlist(&design.project()).netlist;
+    let sheets = design.sheets();
     let resolver = Resolver::open(&request.libraries);
     let parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
     let open: HashMap<PathBuf, u64> = request.open_revisions.into_iter().collect();
-    let sheet_revisions = graph
-        .paths
-        .values()
-        .map(|path| (path.clone(), open.get(path).copied()))
-        .collect();
     let snapshot = DesignSnapshot {
         board: request.board,
         revision: request.revision,
         parts,
         netlist,
-        unreadable,
-        sheet_revisions,
+        unreadable: design.unreadable.clone(),
+        sheet_revisions: design.sheet_revisions(&open),
         library_errors: resolver.errors,
     };
     let mut list = diff_board(&snapshot.input());
@@ -130,132 +87,4 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         snapshot: Arc::new(snapshot),
         list,
     }))
-}
-
-/// The placements nothing linked under may be removed from: every child
-/// sheet whose file did not assemble, and the root placement when a page
-/// with no parent failed (its parts sit at the root).
-pub(crate) fn unreadable_placements(
-    set: &ProjectSheetSet,
-    graph: &crate::app::project_sheets::AssembledGraph,
-    occurrences: &[signex_net::SheetOccurrence],
-) -> Vec<InstancePath> {
-    let mut out = Vec::new();
-    for occurrence in occurrences {
-        let Some(sheet) = graph.sheets.get(&occurrence.key) else {
-            continue;
-        };
-        let resolved = graph.resolved.get(&occurrence.key);
-        for child in &sheet.child_sheets {
-            let assembled = resolved
-                .and_then(|r| r.get(&child.filename))
-                .is_some_and(|key| graph.sheets.contains_key(key));
-            if !assembled {
-                out.push(occurrence.instance_path.child(child.uuid));
-            }
-        }
-    }
-    let failed = set.unreadable.len() + set.absent.len();
-    if failed > out.len() && !out.contains(&InstancePath::root()) {
-        out.push(InstancePath::root());
-    }
-    out
-}
-
-/// Footprint resolution against the open libraries, with one adapter per
-/// library opened once.
-pub(crate) struct Resolver<'a> {
-    libraries: &'a [LibraryRows],
-    adapters: HashMap<Uuid, LocalGitAdapter>,
-    /// The libraries that did not open, with why.
-    pub(crate) errors: Vec<(PathBuf, String)>,
-}
-
-impl<'a> Resolver<'a> {
-    pub(crate) fn open(libraries: &'a [LibraryRows]) -> Self {
-        let mut adapters = HashMap::new();
-        let mut errors = Vec::new();
-        for lib in libraries {
-            match LocalGitAdapter::open(&lib.root) {
-                Ok(adapter) => {
-                    adapters.insert(lib.id, adapter);
-                }
-                Err(e) => errors.push((lib.root.clone(), e.to_string())),
-            }
-        }
-        Self {
-            libraries,
-            adapters,
-            errors,
-        }
-    }
-
-    /// The board footprint of the part whose first unit is `symbol`: its
-    /// library row, the alternate it was built with, the library footprint.
-    /// A part with no row, or whose row gives no footprint, uses the library
-    /// footprint its own footprint names as `<library uuid>:<footprint
-    /// uuid>`, which Choose footprint sets (#2371).
-    pub(crate) fn resolve(
-        &self,
-        symbol: &Symbol,
-    ) -> Result<ResolvedFootprint, FootprintResolveError> {
-        let from_row = self.resolve_from_row(symbol);
-        let named = crate::library::drift::split_lib_id(symbol.footprint.trim());
-        match (from_row, named) {
-            (Err(_), Some((library, footprint))) => {
-                self.resolve_named(&PrimitiveRef::new(library, footprint))
-            }
-            (resolved, _) => resolved,
-        }
-    }
-
-    fn resolve_named(
-        &self,
-        address: &PrimitiveRef,
-    ) -> Result<ResolvedFootprint, FootprintResolveError> {
-        signex_library::part_footprint::resolve_named_footprint(address, |address, _version| {
-            self.adapters
-                .get(&address.library_id)?
-                .get_footprint(address.uuid)
-                .ok()
-        })
-    }
-
-    fn resolve_from_row(
-        &self,
-        symbol: &Symbol,
-    ) -> Result<ResolvedFootprint, FootprintResolveError> {
-        let (Some(library), Some(row_id)) = (symbol.library_id, symbol.row_id) else {
-            return Err(FootprintResolveError::NoFootprint);
-        };
-        let row = self
-            .libraries
-            .iter()
-            .filter(|lib| lib.id == library)
-            .flat_map(|lib| &lib.rows)
-            .find(|row| row.row_id == row_id)
-            .ok_or(FootprintResolveError::RowNotFound {
-                library,
-                row: row_id,
-            })?;
-        let chosen = chosen_binding(symbol);
-        signex_library::part_footprint::resolve_part_footprint(
-            row,
-            chosen.as_ref(),
-            |address, _version| {
-                self.adapters
-                    .get(&address.library_id)?
-                    .get_footprint(address.uuid)
-                    .ok()
-            },
-        )
-    }
-}
-
-/// The alternate footprint a part was built with, from its valid stamp;
-/// `None` for the row's default.
-fn chosen_binding(symbol: &Symbol) -> Option<PrimitiveRef> {
-    let key = symbol.valid_stamp()?.footprint_ref.as_deref()?;
-    let (library, footprint) = crate::library::drift::split_lib_id(key)?;
-    Some(PrimitiveRef::new(library, footprint))
 }

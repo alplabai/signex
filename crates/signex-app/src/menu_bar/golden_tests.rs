@@ -59,6 +59,12 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 pasteable: true,
                 part_in_hand: false,
                 routing: false,
+                lockable: false,
+                unlockable: false,
+                read_only: false,
+                footprints: 1,
+                pad_pair: false,
+                one_footprint: true,
             },
             ..base
         }),
@@ -78,6 +84,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(CommandContext {
             undocked_has_canvas: true,
             can_tile_windows: true,
+            is_tiled: true,
             ..base
         }),
         with(CommandContext {
@@ -123,9 +130,13 @@ fn rows() -> Vec<Vec<&'static str>> {
 
 /// Place on a board lists the board's rows (#2360), so the sheet's Place
 /// rows are not in that variant's bar; `menu_bar_place_board.golden.tsv`
-/// pins the board's.
+/// pins the board's. Edit ▸ Arrange orders schematic drawings, so a board
+/// has none (#2405).
 fn omits_row(ctx: &MenuContext, path: &str) -> bool {
-    ctx.commands.pcb.shown && path.starts_with("Place/")
+    ctx.commands.pcb.shown
+        && (path.starts_with("Place/")
+            || path == "Edit/Arrange"
+            || path.starts_with("Edit/Arrange/"))
 }
 
 #[test]
@@ -280,12 +291,37 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("update_pcb_from_schematic", "UpdatePcb"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
+    // #2388: File ▸ Fabrication Outputs.
+    ("fabrication_outputs", "FabricationOutputs"),
+    // #2401: Design ▸ Layer Stack Manager.
+    ("board_layer_stack", "BoardLayerStack"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),
     ("place_board_fill", "PlaceBoardFill"),
     ("place_board_region", "PlaceBoardRegion"),
+    ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
+    ("place_board_pour_cutout", "PlaceBoardPourCutout"),
+    ("place_board_slice_pour", "PlaceBoardSlicePour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
+    ("place_board_route", "PlaceBoardRoute"),
+    // #2410: File ▸ Import, fixture names only.
+    ("import_dxf", "ImportDxf"),
+    ("import_dxf_outline", "ImportDxfOutline"),
+    ("place_board_pad", "PlaceBoardPad"),
+    ("place_board_arc", "PlaceBoardArc"),
+    ("place_board_string", "PlaceBoardString"),
+    ("place_board_dimension", "PlaceBoardDimension"),
+    // #2424: Place ▸ Graphics on a board, fixture names only.
+    ("place_board_line", "PlaceBoardLine"),
+    ("place_board_graphic_arc", "PlaceBoardGraphicArc"),
+    ("place_board_circle", "PlaceBoardCircle"),
+    ("place_board_rectangle", "PlaceBoardRectangle"),
+    ("place_board_text_frame", "PlaceBoardTextFrame"),
+    // #2389: the other routing tools.
+    ("place_board_diff_pair", "PlaceBoardDiffPair"),
+    ("place_board_quick_route", "PlaceBoardQuickRoute"),
+    ("place_board_multi_route", "PlaceBoardMultiRoute"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),
@@ -322,10 +358,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_single_layer_mode", "ToggleSingleLayerMode"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),
     ("show_all_layers", "ShowAllLayers"),
+    // #2394: fixture names only.
+    ("toggle_layer_numbers", "ToggleLayerNumbers"),
+    ("flip_board_view", "FlipBoardView"),
     ("view_rotate", "RotateView"),
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),
     ("view_rotate_reset", "ResetViewRotation"),
+    ("view_board_3d", "ViewBoard3d"),
     ("place_wire", "PlaceWire"),
     ("place_bus", "PlaceBus"),
     ("place_net_label", "PlaceLabel"),
@@ -339,21 +379,74 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("number_schematic_sheets", "NumberSchematicSheets"),
     ("tile_windows_horizontally", "TileHorizontally"),
     ("tile_windows_vertically", "TileVertically"),
+    // #2249: fixture name only.
+    ("untile_documents", "UntileDocuments"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
+    ("open_drc_panel", "OpenDrcPanel"),
+    ("open_net_classes_panel", "OpenNetClassesPanel"),
+    ("repour_selected", "RepourSelected"),
+    ("repour_all", "RepourAll"),
     ("reannotate_board", "ReannotateBoard"),
+    // #2410: fixture names only.
+    ("panelize_board", "PanelizeBoard"),
+    ("remove_board_panel", "RemoveBoardPanel"),
+    // #2404: the board reports.
+    ("board_report_bom", "BoardReportBom"),
+    ("board_report_netlist", "BoardReportNetlist"),
+    ("board_report_net_length", "BoardReportNetLength"),
+    ("board_report_components", "BoardReportComponents"),
+    ("export_board_report", "ExportBoardReport"),
+    // #2486: fixture name only.
+    ("export_assembly_svg", "ExportAssemblySvg"),
+    ("export_board_step", "ExportBoardStep"),
     ("back_annotate_schematics", "BackAnnotate"),
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
+    ("open_rules", "OpenRules"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("open_net_inspector", "OpenNetInspector"),
+    // #2408, #2409: fixture names only.
+    ("stitch_vias", "StitchVias"),
+    ("add_teardrops", "AddTeardrops"),
+    ("remove_teardrops", "RemoveTeardrops"),
+    ("gloss_selected_routes", "GlossSelectedRoutes"),
+    ("board_shape_from_selection", "BoardShapeFromSelection"),
+    ("keepout_from_selection", "KeepoutFromSelection"),
+    ("arrange_in_box", "ArrangeInBox"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),
     ("open_preferences", "OpenPreferences"),
     ("show_current_command_hotkeys", "OpenKeyboardShortcuts"),
+    // #2415: the sheet's Place tools, fixture names only.
+    ("place_bus_entry", "PlaceBusEntry"),
+    ("place_text_frame", "PlaceTextFrame"),
+    ("place_note", "PlaceNote"),
+    ("place_port", "PlacePort"),
+    ("place_off_sheet_connector", "PlaceOffSheetConnector"),
+    ("place_sheet_symbol", "PlaceSheetSymbol"),
+    ("place_no_erc", "PlaceNoErc"),
+    ("draw_arc", "DrawArc"),
+    ("draw_full_circle", "DrawFullCircle"),
+    ("draw_line", "DrawLine"),
+    ("draw_rectangle", "DrawRectangle"),
+    ("draw_polygon", "DrawPolygon"),
+    // #2416: No Connect runs its command now, under the name it had.
+    ("place_no_connect", "PlaceNoConnect"),
+    // #2416: fixture names only.
+    ("find_similar_objects", "FindSimilarObjects"),
+    ("open_selection_filter", "OpenSelectionFilter"),
+    ("open_net_classes", "OpenNetClasses"),
+    // #1667: fixture names only.
+    ("place_design_block", "PlaceDesignBlock"),
+    ("import_graphics", "ImportGraphics"),
+    // #2420: the directive tools, fixture names only.
+    ("place_blanket", "PlaceBlanket"),
+    ("place_compile_mask", "PlaceCompileMask"),
+    ("place_diff_pair", "PlaceDiffPair"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
@@ -549,7 +642,14 @@ fn model_shortcuts_follow_the_active_keymap() {
     // View ▸ Next Layer and Previous Layer add two more (#2223).
     // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
     // View ▸ Next Signal Layer and Single Layer Mode add two more (#2357).
-    assert_eq!(checked, 40, "the Altium profile labels 40 menu rows");
+    // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
+    // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
+    // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
+    // Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
+    // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
+    // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
+    // Mask (#2420) add nine.
+    assert_eq!(checked, 58, "the default profile labels 58 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

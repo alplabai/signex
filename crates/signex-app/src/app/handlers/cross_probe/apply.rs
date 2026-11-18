@@ -110,7 +110,7 @@ impl Signex {
     }
 
     /// Frame `items` on the board canvas of `window` showing `path`.
-    pub(super) fn fit_board_items(
+    pub(crate) fn fit_board_items(
         &mut self,
         window: Option<iced::window::Id>,
         path: &Path,
@@ -160,7 +160,8 @@ impl Signex {
 }
 
 /// `[min_x, min_y, max_x, max_y]` in board mm over `items`: a footprint's
-/// origin and pads, a pad's centre, a track's ends, a via's centre.
+/// origin and pads, a pad's centre, a track's ends, a via's centre, an
+/// area's outline.
 fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
     let mut points: Vec<Point> = Vec::new();
     for item in items {
@@ -192,6 +193,53 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                         .filter(|v| v.uuid == id)
                         .map(|v| v.position),
                 );
+            }
+            ItemRef::Zone { zone, .. } => {
+                for z in board.zones.iter().filter(|z| z.uuid == zone) {
+                    points.extend(z.outline.iter().copied());
+                }
+            }
+            ItemRef::Text(id) => {
+                points.extend(
+                    board
+                        .texts
+                        .iter()
+                        .filter(|t| t.uuid == id)
+                        .map(|t| t.position),
+                );
+            }
+            ItemRef::Arc(id) => {
+                for a in board.free.arcs.iter().filter(|a| a.uuid == id) {
+                    points.extend([a.start, a.mid, a.end]);
+                }
+            }
+            ItemRef::FreePad(id) => {
+                points.extend(
+                    board
+                        .free
+                        .pads
+                        .iter()
+                        .filter(|p| p.uuid == id)
+                        .map(|p| p.position),
+                );
+            }
+            ItemRef::Dimension(id) => {
+                for d in board.free.dimensions.iter().filter(|d| d.uuid == id) {
+                    points.extend([d.start, d.end]);
+                }
+            }
+            ItemRef::Graphic { graphic, .. } => {
+                for g in board.graphics.iter().filter(|g| g.uuid == graphic) {
+                    points.extend([g.start, g.end, g.center].into_iter().flatten());
+                }
+            }
+            ItemRef::FootprintText { footprint, field } => {
+                let placed = board
+                    .footprints
+                    .iter()
+                    .filter(|fp| fp.uuid == footprint)
+                    .filter_map(|fp| pcb_geom::footprint_text(fp, field)?.ok());
+                points.extend(placed.map(|text| text.placement.anchor.to_mm()));
             }
         }
     }

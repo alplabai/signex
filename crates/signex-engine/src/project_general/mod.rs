@@ -13,6 +13,14 @@
 //! Text is edited per keystroke. Consecutive edits coalesce into one undo
 //! step (a "run"); the run closes on undo, redo, or
 //! [`ProjectGeneralHistory::close_run`] (a section switch, a save).
+//!
+//! The Sheets, Variants, Libraries, ERC and annotation and Version control
+//! sections (#1689-#1693) edit through the same history; their commands are
+//! in `sections` and each is a step of its own. So do the Requirements
+//! section's edits (#2339, `requirements`).
+
+mod requirements;
+mod sections;
 
 use std::collections::BTreeMap;
 
@@ -21,9 +29,13 @@ use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::agent_journal::AgentJournalSettings;
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
-    AnnotationState, PcbField, ProjectData, ProjectDefaults, SchematicDefaultField,
-    SchematicDefaultOverrides,
+    AnnotationState, FabOutputKinds, PcbField, ProjectData, ProjectDefaults, ProjectRules,
+    SchematicDefaultField, SchematicDefaultOverrides,
 };
+
+pub use requirements::ProjectRequirementCommand;
+pub use sections::ProjectSectionCommand;
+use sections::SectionsSnapshot;
 
 /// How many undo steps are kept unless the `undo_depth` setting says
 /// otherwise.
@@ -74,6 +86,17 @@ pub enum ProjectGeneralCommand {
         settings: AgentJournalSettings,
         typing: bool,
     },
+    /// A fab tier picked in the Project setup section (#2311): the defaults
+    /// it fills and the project's rules with its `fab_*` rules merged in,
+    /// as one step. Only this kind of step puts the rules back on undo, so
+    /// undoing a description never reverts a Rules tab edit.
+    SetFabTier {
+        defaults: ProjectDefaults,
+        rules: Box<ProjectRules>,
+    },
+    /// The kinds of file Fabrication Outputs writes (#2489); `None` is the
+    /// defaults. Always a step of its own.
+    SetFabOutputs(Option<FabOutputKinds>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -102,6 +125,11 @@ struct GeneralSnapshot {
     schematic_defaults: SchematicDefaultOverrides,
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
+    fab_outputs: Option<FabOutputKinds>,
+    sections: SectionsSnapshot,
+    /// The project's rules, held only by the two sides of a
+    /// [`ProjectGeneralCommand::SetFabTier`] step.
+    rules: Option<Option<ProjectRules>>,
 }
 
 impl GeneralSnapshot {
@@ -113,17 +141,34 @@ impl GeneralSnapshot {
             schematic_defaults: data.schematic_defaults.clone(),
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
+            fab_outputs: data.fab_outputs,
+            sections: SectionsSnapshot::of(data),
+            rules: None,
         }
+    }
+
+    /// The snapshot of `data`, holding its rules when `with_rules`.
+    fn of_step(data: &ProjectData, with_rules: bool) -> Self {
+        let mut snapshot = Self::of(data);
+        if with_rules {
+            snapshot.rules = Some(data.rules.clone());
+        }
+        snapshot
     }
 
     /// Put these fields back, leaving every other field as it is now.
     fn restore(self, data: &mut ProjectData) {
+        if let Some(rules) = self.rules {
+            data.rules = rules;
+        }
         data.description = self.description;
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
         data.schematic_defaults = self.schematic_defaults;
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
+        data.fab_outputs = self.fab_outputs;
+        self.sections.restore(data);
     }
 }
 
@@ -196,7 +241,8 @@ impl ProjectGeneralHistory {
     /// change opens a new undo step unless it continues the open run; a
     /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
-        let before = GeneralSnapshot::of(data);
+        let owns_rules = matches!(command, ProjectGeneralCommand::SetFabTier { .. });
+        let before = GeneralSnapshot::of_step(data, owns_rules);
         let is_pick = matches!(
             command,
             ProjectGeneralCommand::SetDesignatorStandard(_)
@@ -204,6 +250,8 @@ impl ProjectGeneralHistory {
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
                 | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
+                | ProjectGeneralCommand::SetFabTier { .. }
+                | ProjectGeneralCommand::SetFabOutputs(_)
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -256,8 +304,13 @@ impl ProjectGeneralHistory {
             ProjectGeneralCommand::SetAgentJournal { settings, .. } => {
                 data.set_agent_journal(settings);
             }
+            ProjectGeneralCommand::SetFabTier { defaults, rules } => {
+                data.project_defaults = defaults;
+                data.rules = Some(*rules);
+            }
+            ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
         }
-        if GeneralSnapshot::of(data) == before {
+        if GeneralSnapshot::of_step(data, owns_rules) == before {
             return false;
         }
         // An open run follows a recorded step, so no redo step exists to cut.
@@ -267,6 +320,46 @@ impl ProjectGeneralHistory {
             self.run_open = !is_pick;
         }
         true
+    }
+
+    /// Apply one section edit (#1689-#1693) as an undo step of its own.
+    /// `Ok(true)` when a field changed, `Ok(false)` when nothing did (a move
+    /// at the end of its list); a refused edit changes nothing and records
+    /// nothing.
+    pub fn apply_section(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectSectionCommand,
+    ) -> Result<bool, signex_types::project::VariantProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one Requirements edit (#2339) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_requirement(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectRequirementCommand,
+    ) -> Result<bool, signex_types::project::RequirementProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Run `edit` as a step of its own: recorded when a field changed,
+    /// nothing recorded when it changed nothing or was refused.
+    fn apply_step<E>(
+        &mut self,
+        data: &mut ProjectData,
+        edit: impl FnOnce(&mut ProjectData) -> Result<(), E>,
+    ) -> Result<bool, E> {
+        let before = GeneralSnapshot::of(data);
+        self.run_open = false;
+        self.run_field = None;
+        edit(data)?;
+        if GeneralSnapshot::of(data) == before {
+            return Ok(false);
+        }
+        self.history.record(before);
+        Ok(true)
     }
 
     /// End the open edit run: the next edit is a new undo step.
@@ -280,7 +373,8 @@ impl ProjectGeneralHistory {
         let Some(previous) = self.history.begin_step(true) else {
             return false;
         };
-        self.history.finish_step(GeneralSnapshot::of(data), true);
+        let current = GeneralSnapshot::of_step(data, previous.rules.is_some());
+        self.history.finish_step(current, true);
         previous.restore(data);
         true
     }
@@ -291,7 +385,8 @@ impl ProjectGeneralHistory {
         let Some(next) = self.history.begin_step(false) else {
             return false;
         };
-        self.history.finish_step(GeneralSnapshot::of(data), false);
+        let current = GeneralSnapshot::of_step(data, next.rules.is_some());
+        self.history.finish_step(current, false);
         next.restore(data);
         true
     }
@@ -305,5 +400,7 @@ impl ProjectGeneralHistory {
     }
 }
 
+#[cfg(test)]
+mod section_tests;
 #[cfg(test)]
 mod tests;

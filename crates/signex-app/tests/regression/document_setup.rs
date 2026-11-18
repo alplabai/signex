@@ -70,6 +70,8 @@ fn add_project(
         schematic_defaults: Default::default(),
         project_defaults: defaults,
         agent_journal: Default::default(),
+        fab_outputs: None,
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

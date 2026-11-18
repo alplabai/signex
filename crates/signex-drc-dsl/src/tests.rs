@@ -127,10 +127,12 @@ fn an_implausible_or_zero_limit_is_said() {
         "rule big on clearance require clearance >= 20mm then error\n\
          rule huge on clearance require clearance >= 200mm then error\n\
          rule none on track require width >= 0mm then error\n\
-         rule all on track require width <= 0mm then error",
+         rule all on track require width <= 0mm then error\n\
+         rule holes on hole require diameter <= 0mm then error\n\
+         rule bare on mask require expansion <= 0mm then warning",
     );
     let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
-    assert_eq!(names, ["big", "none", "all"]);
+    assert_eq!(names, ["big", "none", "all", "holes", "bare"]);
     let said: Vec<_> = got
         .diagnostics
         .iter()
@@ -154,6 +156,10 @@ fn an_implausible_or_zero_limit_is_said() {
             (
                 Level::Warning,
                 "a maximum of 0 reports every track in this rule's scope"
+            ),
+            (
+                Level::Warning,
+                "a maximum of 0 reports every hole in this rule's scope"
             ),
         ]
     );
@@ -190,7 +196,7 @@ fn what_was_not_applied_is_counted() {
 #[test]
 fn an_unknown_target_field_or_condition_drops_only_that_rule() {
     let src = r#"
-rule a on silk require width >= 1mm then error
+rule a on glue require width >= 1mm then error
 rule b on track require gap >= 1mm then error
 rule c on track when colour == "red" require width >= 1mm then error
 rule d on via require drill <= 1mm then error
@@ -202,9 +208,10 @@ rule ok on via require drill >= 0.2mm then error
     assert_eq!(
         messages(&got),
         [
-            "unknown target 'silk' (clearance, track or via)",
+            "unknown target 'glue' (clearance, track, via, hole, edge, silk, mask, paste or \
+             courtyard)",
             "unknown field 'gap' for this target (width)",
-            "unknown condition 'colour' (net, class or layer)",
+            "unknown condition 'colour' (net, class, other_class or layer)",
             "'drill' takes only '>=' (a minimum)",
         ]
     );
@@ -212,7 +219,7 @@ rule ok on via require drill >= 0.2mm then error
     let at = |i: usize| &src[got.diagnostics[i].span.clone()];
     assert_eq!(
         [at(0), at(1), at(2), at(3)],
-        ["silk", "gap", "colour", "drill"]
+        ["glue", "gap", "colour", "drill"]
     );
 }
 

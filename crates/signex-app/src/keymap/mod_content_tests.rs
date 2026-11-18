@@ -147,6 +147,8 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
                 ("next_layer", "Shift++"),
                 ("next_signal_layer", "Shift+*"),
                 ("open_command_palette", "Ctrl+Shift+P"),
+                // `Q` on a board loads first, so `Ctrl+Q` stays the hint (#2406).
+                ("cycle_unit", "Ctrl+Q"),
             ],
         ),
         (
@@ -156,6 +158,7 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
                 ("open_command_palette", "Ctrl+Shift+P"),
                 ("next_layer", "Shift++"),
                 ("next_signal_layer", "Shift+*"),
+                ("cycle_unit", "Ctrl+Q"),
             ],
         ),
     ];
@@ -186,7 +189,8 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
             .filter(|(_, n)| **n > 1)
             .map(|(a, _)| a.as_str())
             .collect();
-        // `*` moved to next_signal_layer, so it has two bindings too (#2357).
-        assert_eq!(multi.len(), 4, "{id}: {multi:?}");
+        // `*` moved to next_signal_layer, so it has two bindings too (#2357);
+        // `Q` on a board gave cycle_unit its second (#2406).
+        assert_eq!(multi.len(), 5, "{id}: {multi:?}");
     }
 }

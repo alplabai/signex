@@ -45,6 +45,8 @@ fn layer(id: u8, name: &str) -> LayerDef {
 
 fn track(n: u128, y: f64, layer: &str, net: u32) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),
@@ -58,6 +60,7 @@ fn track(n: u128, y: f64, layer: &str, net: u32) -> Segment {
 fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -73,6 +76,7 @@ fn empty_board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -276,7 +280,10 @@ fn linked() -> Linked {
         layers: vec!["BottomCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -346,6 +353,8 @@ fn add_project(app: &mut Signex, dir: &Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

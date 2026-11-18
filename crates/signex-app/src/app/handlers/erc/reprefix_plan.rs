@@ -28,6 +28,7 @@ use signex_types::designator::{
 use signex_types::schematic::{AnnotateOrder, LibSymbol, ProjectParts, Symbol};
 use uuid::Uuid;
 
+use crate::library::drift::split_lib_id;
 use crate::library::reprefix_lookup::{ReprefixLookup, RowFacts};
 
 /// One sheet of the project, in the order the annotate pass walks them.
@@ -313,13 +314,7 @@ fn linked_row<'a>(
 
 /// The rows binding the symbol a `lib_id` names, when they agree.
 fn row_by_symbol<'a>(input: &'a PlanInput<'_>, lib_id: &str) -> Result<&'a RowFacts, SkipReason> {
-    let parsed = lib_id.trim().split_once(':').and_then(|(library, symbol)| {
-        Some((
-            Uuid::parse_str(library).ok()?,
-            Uuid::parse_str(symbol).ok()?,
-        ))
-    });
-    let Some(symbol) = parsed else {
+    let Some(symbol) = split_lib_id(lib_id) else {
         return Err(SkipReason::NoRowLink);
     };
     let binds = |facts: &&RowFacts| facts.symbol == symbol;

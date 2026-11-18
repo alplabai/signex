@@ -34,7 +34,7 @@ pub(super) struct LinkedPlan {
 /// A sheet edited by the swap, and the redraw it needs when it is in view.
 pub(super) struct ChangedSheet {
     pub path: PathBuf,
-    pub invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    pub patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -82,7 +82,7 @@ impl Signex {
     /// The open sheet holding the part `link` names, and the unit found
     /// there. Of several files with the unit (a reused sheet), the one the
     /// link's placement shows.
-    fn linked_part_sheet(&self, link: &SymbolLink) -> Option<(PathBuf, Uuid)> {
+    pub(super) fn linked_part_sheet(&self, link: &SymbolLink) -> Option<(PathBuf, Uuid)> {
         let unit_in = |path: &PathBuf| {
             let doc = self.document_state.engines.get(path)?.document();
             link.units
@@ -116,11 +116,13 @@ impl Signex {
     }
 
     /// Run each sheet's commands as a step of `group`. A sheet whose step
-    /// fails is left as it was and named in Messages.
+    /// fails is left as it was and named in Messages under `what`, the
+    /// command's name.
     pub(super) fn run_linked_footprints(
         &mut self,
         sheets: BTreeMap<PathBuf, Vec<signex_engine::Command>>,
         group: signex_engine::UndoGroupId,
+        what: &str,
     ) -> Vec<ChangedSheet> {
         let mut changed = Vec::new();
         for (path, commands) in sheets {
@@ -134,13 +136,11 @@ impl Signex {
             match outcome {
                 Ok(result) if result.changed => changed.push(ChangedSheet {
                     path,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => {}
                 Err(error) => crate::diagnostics::log_error(
-                    &format!("Change Footprint: '{}' was not updated", path.display()),
+                    &format!("{what}: '{}' was not updated", path.display()),
                     &anyhow::Error::new(error),
                 ),
             }
@@ -154,16 +154,14 @@ impl Signex {
         &mut self,
         changed: &[ChangedSheet],
         group: signex_engine::UndoGroupId,
+        what: &str,
     ) {
         for sheet in changed {
             if let Some(engine) = self.document_state.engines.get_mut(&sheet.path)
                 && let Err(error) = engine.discard_undo_group_top(group)
             {
                 crate::diagnostics::log_error(
-                    &format!(
-                        "Change Footprint: could not put back '{}'",
-                        sheet.path.display()
-                    ),
+                    &format!("{what}: could not put back '{}'", sheet.path.display()),
                     &anyhow::Error::new(error),
                 );
             }
@@ -171,23 +169,25 @@ impl Signex {
     }
 
     /// The changed sheets read unsaved, the one in view is redrawn, and the
-    /// group is recorded with the board so one Undo moves them all.
+    /// group is recorded with the board, as a `kind` step, so one Undo moves
+    /// them all.
     pub(super) fn commit_linked_footprints(
         &mut self,
         changed: Vec<ChangedSheet>,
         group: signex_engine::UndoGroupId,
         board: PathBuf,
+        kind: crate::app::UndoGroupKind,
     ) {
         let active = self.document_state.active_path.clone();
         let mut recorded = crate::app::UndoGroupSheets {
-            kind: crate::app::UndoGroupKind::FootprintSwap,
+            kind,
             boards: vec![board],
             ..Default::default()
         };
         let mut in_view = None;
         for sheet in changed {
             if active.as_ref() == Some(&sheet.path) {
-                in_view = sheet.invalidation;
+                in_view = sheet.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&sheet.path);
             }
@@ -195,8 +195,8 @@ impl Signex {
         }
         self.set_undo_group_sheets(group, recorded);
         match in_view {
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, true);
+            Some(patch) => {
+                self.finish_schematic_mutation(patch, true, true);
             }
             None => self.document_state.note_sheet_edit(),
         }

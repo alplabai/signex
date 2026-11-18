@@ -223,12 +223,14 @@ pub(super) fn set_property(
 }
 
 /// Whether `new` puts the text of `old` somewhere else: another position,
-/// angle, layer or size. Lock Strings refuses exactly these (#2365).
+/// angle, layer, size or justification. Lock Strings refuses exactly these
+/// (#2365, #2368).
 fn moves_text(old: &PcbProperty, new: &PcbProperty) -> bool {
     old.position != new.position
         || old.rotation != new.rotation
         || old.layer != new.layer
         || old.font_size != new.font_size
+        || old.justify != new.justify
 }
 
 /// Insert a parameter, see [`BoardCommand::InsertFootprintProperty`].
@@ -414,9 +416,9 @@ pub(crate) fn carry_would_lose(old: &Footprint, new: &Footprint) -> Option<Board
 }
 
 /// The properties of a replaced footprint: each template property takes the
-/// placement (position, rotation, layer, size, hidden flag) of the first old
-/// property of its key not yet matched, so a moved or hidden designator stays
-/// as the user left it; a template-only key comes as the template has it; an
+/// placement (position, rotation, layer, size, hidden flag, justification)
+/// of the first old property of its key not yet matched, so a moved or
+/// hidden designator stays as the user left it; a template-only key comes as the template has it; an
 /// old property left unmatched (a user-added MPN, say) is kept after them.
 /// Runs on the board-side template, after any flip.
 fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbProperty> {
@@ -434,6 +436,7 @@ fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbP
                 property.layer.clone_from(&previous.layer);
                 property.font_size = previous.font_size;
                 property.hidden = previous.hidden;
+                property.justify = previous.justify;
             }
             property
         })

@@ -65,13 +65,19 @@ fn undo_restores_only_the_general_fields() {
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
     history.apply(&mut data, set_description("mine"));
-    // Other writers change fields this history does not own.
+    // Other writers change fields this history does not own. Variants are
+    // its own since the Project tab's Variants section (#1690); the net
+    // classes have their own history.
     data.name = "Renamed".to_string();
-    data.variant_definitions.push("Lite".to_string());
+    data.net_classes.push(signex_types::net_class::NetClass {
+        name: "HV".to_string(),
+        ..Default::default()
+    });
     assert!(history.undo(&mut data));
     assert_eq!(data.description, None);
     assert_eq!(data.name, "Renamed");
-    assert_eq!(data.variant_definitions, ["Lite"]);
+    assert_eq!(data.net_classes.len(), 1);
+    assert_eq!(data.net_classes[0].name, "HV");
     assert!(history.redo(&mut data));
     assert_eq!(data.description.as_deref(), Some("mine"));
     assert_eq!(data.name, "Renamed");
@@ -458,4 +464,82 @@ fn the_agent_journal_line_cap_is_kept_in_range_and_an_unchanged_pick_records_not
     assert_eq!(data.agent_journal.max_lines, MIN_JOURNAL_MAX_LINES);
     let unchanged = data.agent_journal;
     assert!(!history.apply(&mut data, journal(unchanged, false)));
+}
+
+/// #2311: a fab tier pick is one step over the defaults and the rules; an
+/// undo of any other step leaves the rules as another writer left them.
+#[test]
+fn a_fab_tier_step_undoes_its_rules_and_no_other_step_touches_them() {
+    use signex_types::project::{DrcRuleSet, ProjectRules, ProjectSetup, SetupProfile};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    let seeded = ProjectRules {
+        drc: DrcRuleSet {
+            dsl: Some("rule fab_track on track require width >= 0.075mm then error\n".into()),
+            ..DrcRuleSet::default()
+        },
+        ..ProjectRules::default()
+    };
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(seeded.clone()),
+        },
+    ));
+    assert_eq!(data.rules.as_ref(), Some(&seeded));
+    assert!(history.apply(&mut data, set_description("after")));
+
+    // Another writer (the Rules tab) edits the rules.
+    let mut other = seeded.clone();
+    other.drc.dsl = Some("rule mine on track require width >= 0.3mm then error\n".into());
+    data.rules = Some(other.clone());
+
+    assert!(history.undo(&mut data), "the description step");
+    assert_eq!(data.rules.as_ref(), Some(&other), "untouched by that undo");
+    assert!(history.undo(&mut data), "the tier step");
+    assert_eq!(data.rules, None);
+    assert_eq!(data.project_defaults, Default::default());
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.rules.as_ref(),
+        Some(&other),
+        "redo restores what undo found"
+    );
+    assert_eq!(data.project_defaults, hdi.defaults());
+
+    // The same tier with the same rules again is no step.
+    assert!(!history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(other),
+        },
+    ));
+}
+
+/// #2489: a Fabrication Outputs tick is a step of its own that undoes, and
+/// the same kinds again record nothing.
+#[test]
+fn the_fabrication_output_kinds_are_steps_that_undo() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let step = FabOutputKinds {
+        step: true,
+        ..FabOutputKinds::default()
+    };
+    let both = FabOutputKinds {
+        assembly_svg: true,
+        ..step
+    };
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(step))));
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(!history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step), "each tick is its own step");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, None);
+    assert!(history.redo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step));
 }

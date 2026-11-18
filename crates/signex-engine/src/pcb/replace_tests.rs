@@ -271,3 +271,40 @@ fn replacing_a_pad_undoes_exactly_and_refuses_a_stray_net() {
     assert_eq!(error, BoardCommandError::UnknownNet(7));
     assert_eq!(snapshot(&b), before);
 }
+
+#[test]
+fn per_layer_sizes_the_file_cannot_hold_are_refused() {
+    use signex_types::pcb::{LayerSize, LayerSizes};
+    use signex_types::pcb_layer::CopperLayer;
+
+    let b = with_nets();
+    let full = |layers: Vec<LayerSize<f64>>| Some(LayerSizes::Full { layers });
+    let cases = [
+        ("no layer", full(vec![]), BoardCommandError::NoSizeLayers),
+        (
+            "a layer twice",
+            full(vec![
+                LayerSize::new(CopperLayer::Top, 0.6),
+                LayerSize::new(CopperLayer::Top, 0.5),
+            ]),
+            BoardCommandError::DuplicateSizeLayer("TopCopper".into()),
+        ),
+        (
+            "under 1 nm",
+            full(vec![LayerSize::new(CopperLayer::Top, 0.000_000_4)]),
+            BoardCommandError::SizeTooSmall {
+                field: "via diameter",
+            },
+        ),
+    ];
+    for (what, sizes, expected) in cases {
+        let mut v = via(&b);
+        v.layer_sizes = sizes;
+        let mut edited = b.clone();
+        let error = replace(vec![BoardItem::Via(v)])
+            .apply(&mut edited)
+            .unwrap_err();
+        assert_eq!(error, expected, "{what}");
+        assert_eq!(snapshot(&edited), snapshot(&b), "{what}");
+    }
+}

@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "chrome-catalog"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "iced",
  "signex-types",
@@ -1391,6 +1391,15 @@ name = "dtor"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17f72721db8027a4e96dd6fb50d2a1d32259c9d3da1b63dee612ccd981e14293"
+
+[[package]]
+name = "earcut"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beecb4bee051769371e9fd229b2168782e484bd50fc5f48e9ccce4172a0037d7"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "ecb"
@@ -2406,6 +2415,48 @@ dependencies = [
  "tower-service",
  "tracing",
 ]
+
+[[package]]
+name = "i_float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ecaff1ce29bcacd72cdf581ba6fce636ef4c4e0b2da7e7846dd0137d98141e2"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "i_key_sort"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14269ee362009550495e20650ff3c2bca14a8147fe251e216760381ffed90b6f"
+
+[[package]]
+name = "i_overlay"
+version = "9.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913fd692c02408adc76cead636f8e7e07c705f8b995a8b54b454b995e8e197d5"
+dependencies = [
+ "i_float",
+ "i_key_sort",
+ "i_shape",
+ "i_tree",
+]
+
+[[package]]
+name = "i_shape"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa1878f91ef7921feaf1b2346253ebc5e661878b22d5715195c1d5dcf0f20ae5"
+dependencies = [
+ "i_float",
+]
+
+[[package]]
+name = "i_tree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "048af31de955890c62a8506fec511335a5089e91e1c516537add16f96c507d84"
 
 [[package]]
 name = "iana-time-zone"
@@ -4392,9 +4443,11 @@ checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "pcb-geom"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
+ "i_overlay",
  "rstar",
+ "serde",
  "signex-types",
  "uuid",
 ]
@@ -5621,7 +5674,7 @@ dependencies = [
 
 [[package]]
 name = "signex-3d-model-importer"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -5636,7 +5689,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5675,6 +5728,7 @@ dependencies = [
  "signex-net",
  "signex-output",
  "signex-renderer",
+ "signex-req",
  "signex-sketch",
  "signex-types",
  "signex-widgets",
@@ -5693,7 +5747,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bake"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5708,7 +5762,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bom"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "signex-types",
@@ -5716,7 +5770,7 @@ dependencies = [
 
 [[package]]
 name = "signex-cli"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "dirs",
  "serde",
@@ -5731,16 +5785,17 @@ dependencies = [
 
 [[package]]
 name = "signex-commands"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
+ "signex-i18n-ids",
  "signex-types",
 ]
 
 [[package]]
 name = "signex-drc"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "pcb-geom",
  "serde_json",
@@ -5751,7 +5806,7 @@ dependencies = [
 
 [[package]]
 name = "signex-drc-dsl"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chumsky",
  "pcb-geom",
@@ -5762,12 +5817,13 @@ dependencies = [
 
 [[package]]
 name = "signex-engine"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "pcb-geom",
  "serde",
  "serde_json",
+ "signex-drc",
  "signex-erc",
  "signex-history",
  "signex-net",
@@ -5779,7 +5835,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5791,7 +5847,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc-dsl"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chumsky",
  "regex",
@@ -5803,7 +5859,7 @@ dependencies = [
 
 [[package]]
 name = "signex-gfx"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -5824,11 +5880,11 @@ dependencies = [
 
 [[package]]
 name = "signex-history"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 
 [[package]]
 name = "signex-i18n"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chrono",
  "fluent-bundle",
@@ -5851,11 +5907,11 @@ dependencies = [
 
 [[package]]
 name = "signex-i18n-ids"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 
 [[package]]
 name = "signex-library"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5889,7 +5945,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library-server"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5913,8 +5969,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-mcad"
+version = "26.11.0"
+dependencies = [
+ "earcut",
+ "signex-3d-model-importer",
+ "solidcore",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "signex-net"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "signex-types",
  "uuid",
@@ -5922,8 +5988,9 @@ dependencies = [
 
 [[package]]
 name = "signex-output"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
+ "pcb-geom",
  "pdf-writer",
  "rust_xlsxwriter",
  "serde",
@@ -5938,7 +6005,7 @@ dependencies = [
 
 [[package]]
 name = "signex-renderer"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "pcb-geom",
  "regex",
@@ -5946,14 +6013,25 @@ dependencies = [
  "serde_json",
  "signex-3d-model-importer",
  "signex-gfx",
+ "signex-mcad",
  "signex-types",
  "tempfile",
  "uuid",
 ]
 
 [[package]]
+name = "signex-req"
+version = "26.11.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "signex-bom",
+ "signex-types",
+]
+
+[[package]]
 name = "signex-sketch"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "approx",
  "serde",
@@ -5967,7 +6045,7 @@ dependencies = [
 
 [[package]]
 name = "signex-types"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5981,7 +6059,7 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "26.11.0-rc.1"
+version = "26.11.0"
 dependencies = [
  "chrono",
  "iced",
@@ -6165,6 +6243,15 @@ dependencies = [
  "web-sys",
  "windows-sys 0.61.2",
  "x11rb",
+]
+
+[[package]]
+name = "solidcore"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51fbd775ff48a4b0034d1541097f9a3f35b14f53a25bf62a8820c0fe0f6c9823"
+dependencies = [
+ "thiserror 2.0.18",
 ]
 
 [[package]]

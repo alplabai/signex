@@ -15,7 +15,7 @@ mod erc_report;
 mod loose_bom;
 mod page_setup;
 mod pdf_netlist;
-mod placements;
+pub(crate) mod placements;
 mod print_preview;
 mod raster_job;
 mod sheet_numbers;
@@ -212,7 +212,7 @@ impl ExportIssues {
 /// fonts cover (the page shows an empty box for each); `None` when all are
 /// covered. It travels with the export's write outcome and reaches the
 /// Messages panel once the file is written.
-fn uncovered_chars_warning(chars: &[char]) -> Option<String> {
+pub(crate) fn uncovered_chars_warning(chars: &[char]) -> Option<String> {
     if chars.is_empty() {
         return None;
     }

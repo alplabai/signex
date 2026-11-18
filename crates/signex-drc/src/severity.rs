@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
-use crate::{UserRule, ViolationKind};
+use crate::{LimitKind, UserRule, ViolationKind};
 
 impl ViolationKind {
     /// Every kind, most severe first (the report order).
-    pub const ALL: [ViolationKind; 7] = [
+    pub const ALL: [ViolationKind; 18] = [
         ViolationKind::Short,
         ViolationKind::Clearance,
         ViolationKind::Unconnected,
@@ -20,6 +20,17 @@ impl ViolationKind {
         ViolationKind::TrackWidth,
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
+        ViolationKind::HoleSize,
+        ViolationKind::AnnularRing,
+        ViolationKind::HoleToHole,
+        ViolationKind::EdgeClearance,
+        ViolationKind::ViaInPad,
+        ViolationKind::SilkToPad,
+        ViolationKind::SilkToSilk,
+        ViolationKind::MaskSliver,
+        ViolationKind::MaskExpansion,
+        ViolationKind::PasteExpansion,
+        ViolationKind::CourtyardOverlap,
     ];
 
     /// Stable rule id, stored in profiles and projects; never renamed.
@@ -32,6 +43,17 @@ impl ViolationKind {
             ViolationKind::TrackWidth => "builtin::track_width",
             ViolationKind::ViaDiameter => "builtin::via_diameter",
             ViolationKind::ViaDrill => "builtin::via_drill",
+            ViolationKind::HoleSize => "builtin::hole_size",
+            ViolationKind::AnnularRing => "builtin::annular_ring",
+            ViolationKind::HoleToHole => "builtin::hole_to_hole",
+            ViolationKind::EdgeClearance => "builtin::edge_clearance",
+            ViolationKind::ViaInPad => "builtin::via_in_pad",
+            ViolationKind::SilkToPad => "builtin::silk_to_pad",
+            ViolationKind::SilkToSilk => "builtin::silk_to_silk",
+            ViolationKind::MaskSliver => "builtin::mask_sliver",
+            ViolationKind::MaskExpansion => "builtin::mask_expansion",
+            ViolationKind::PasteExpansion => "builtin::paste_expansion",
+            ViolationKind::CourtyardOverlap => "builtin::courtyard_overlap",
         }
     }
 
@@ -43,13 +65,51 @@ impl ViolationKind {
     /// Severity when no profile or project sets one.
     pub const fn default_severity(self) -> Severity {
         match self {
-            ViolationKind::Unconnected => Severity::Warning,
+            ViolationKind::Unconnected
+            | ViolationKind::SilkToPad
+            | ViolationKind::SilkToSilk
+            | ViolationKind::MaskSliver => Severity::Warning,
             ViolationKind::Short
             | ViolationKind::Clearance
             | ViolationKind::Keepout
             | ViolationKind::TrackWidth
             | ViolationKind::ViaDiameter
-            | ViolationKind::ViaDrill => Severity::Error,
+            | ViolationKind::ViaDrill
+            | ViolationKind::HoleSize
+            | ViolationKind::AnnularRing
+            | ViolationKind::HoleToHole
+            | ViolationKind::EdgeClearance
+            | ViolationKind::ViaInPad
+            | ViolationKind::MaskExpansion
+            | ViolationKind::PasteExpansion
+            | ViolationKind::CourtyardOverlap => Severity::Error,
+        }
+    }
+
+    /// The limits whose findings are of this kind; empty for a kind no
+    /// written limit sets (a short, an unconnected link, a keepout).
+    pub const fn limits(self) -> &'static [LimitKind] {
+        match self {
+            ViolationKind::Short | ViolationKind::Clearance => &[LimitKind::MinClearance],
+            ViolationKind::Unconnected | ViolationKind::Keepout => &[],
+            ViolationKind::TrackWidth => &[LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth],
+            ViolationKind::ViaDiameter => &[LimitKind::MinViaDiameter],
+            ViolationKind::ViaDrill => &[LimitKind::MinViaDrill],
+            ViolationKind::HoleSize => &[LimitKind::MinHoleSize, LimitKind::MaxHoleSize],
+            ViolationKind::AnnularRing => &[LimitKind::MinAnnularRing],
+            ViolationKind::HoleToHole => &[LimitKind::MinHoleToHole],
+            ViolationKind::EdgeClearance => &[LimitKind::MinEdgeClearance],
+            ViolationKind::ViaInPad => &[LimitKind::MinViaPadGap],
+            ViolationKind::SilkToPad => &[LimitKind::MinSilkToPad],
+            ViolationKind::SilkToSilk => &[LimitKind::MinSilkToSilk],
+            ViolationKind::MaskSliver => &[LimitKind::MinMaskSliver],
+            ViolationKind::MaskExpansion => {
+                &[LimitKind::MinMaskExpansion, LimitKind::MaxMaskExpansion]
+            }
+            ViolationKind::PasteExpansion => {
+                &[LimitKind::MinPasteExpansion, LimitKind::MaxPasteExpansion]
+            }
+            ViolationKind::CourtyardOverlap => &[LimitKind::MinCourtyardGap],
         }
     }
 }
@@ -158,6 +218,57 @@ pub fn resolve_severities_with(
         out.apply(layer);
     }
     out
+}
+
+/// What an edit did to written rule `name`, so that the layer entry for its
+/// id (`user::<name>`), which outranks the rule's own `then` word, follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WrittenRuleEdit<'a> {
+    /// Its `then` severity was set: its own word governs again.
+    SeveritySet(&'a str),
+    /// Switched on: an `off` entry would keep it off.
+    SwitchedOn(&'a str),
+    Renamed {
+        from: &'a str,
+        to: &'a str,
+    },
+    /// Removed, or newly added: no entry speaks for it.
+    Dropped(&'a str),
+}
+
+fn written_id(name: &str) -> String {
+    format!("{}{name}", crate::USER_RULE_ID_PREFIX)
+}
+
+/// Make `layer`'s entry for the rule `edit` names follow the edit.
+pub fn follow_written_rule_edit(layer: &mut DrcRuleSet, edit: WrittenRuleEdit<'_>) {
+    let map = &mut layer.severity;
+    match edit {
+        WrittenRuleEdit::SeveritySet(name) | WrittenRuleEdit::Dropped(name) => {
+            map.remove(&written_id(name));
+        }
+        WrittenRuleEdit::SwitchedOn(name) => {
+            let id = written_id(name);
+            if map.get(&id).is_some_and(|word| word == "off") {
+                map.remove(&id);
+            }
+        }
+        WrittenRuleEdit::Renamed { from, to } if from != to => {
+            if let Some(word) = map.remove(&written_id(from)) {
+                map.insert(written_id(to), word);
+            }
+        }
+        WrittenRuleEdit::Renamed { .. } => {}
+    }
+}
+
+/// `layer`'s entry for written rule `name`: `Some(None)` for `off`, `None`
+/// with no entry or one this build cannot read.
+pub fn written_rule_override(layer: &DrcRuleSet, name: &str) -> Option<Option<Severity>> {
+    layer
+        .severity
+        .get(&written_id(name))
+        .and_then(|word| parse_severity(word))
 }
 
 /// `Some(None)` for `off`, `None` for a word this build does not know.

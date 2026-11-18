@@ -287,6 +287,10 @@ frame to a fresh one pixel for pixel and to the plain canvas away from the edge.
 
 ## pcb-cpu-content — The CPU board layer (#2321)
 
+A solid line is stroked with round ends, so a track draws as the capsule the
+GPU line shader, hit-testing and DRC take it to be and a bend of any angle is
+filled (#2391; `pcb_canvas::tessellate::track_cap_tests`).
+
 The CPU PCB mount draws the board in a layer of its own,
 `pcb_canvas::BoardContentLayer`, stacked where the GPU mount has its shader:
 the `PcbCanvas` canvas below it draws only the background and grid, the
@@ -327,7 +331,10 @@ pixels, after reused pans, turned, at fractional display scales).
 ## pcb-footprint-text — Designator and comment text on the board (#2368)
 
 A footprint's `Reference` and `Value` properties are drawn; other
-properties are parameters and are not. A property's position and rotation
+properties are parameters and are not. Where each one is drawn comes from
+`pcb_geom::footprint_texts` (#2434), the one answer the canvas, the board
+print, the fabrication outputs and the selection index read: anchor, turn,
+mirror, layer, height and justification. A property's position and rotation
 are footprint-local, placed by `pcb_geom::property_text_placement` with the
 footprint's own transform (mirror on the bottom side, then turn, then move),
 so the text follows a move, a turn and a flip. The angle composes as a pad's
@@ -335,13 +342,30 @@ does: the footprint's turn plus the text's own, minus it on the bottom side.
 
 - **No position:** the designator sits `PCB_FP_TEXT_OFFSET_MM` above the
   footprint origin, the comment that far below it.
-- **No layer:** the overlay of the footprint's side; an unknown size is
-  `PCB_DEFAULT_TEXT_SIZE_MM`. The text is centred on its anchor.
+- **No layer:** the overlay of the footprint's side
+  (`pcb_geom::property_text_layer`); an unknown size is
+  `PCB_DEFAULT_TEXT_SIZE_MM`.
+- **Justification:** the property's `justify` (left, center, right; centred
+  when not saved) says which end of the line sits on the anchor, in the
+  text's own frame. A mirrored text is justified before its mirror, so a
+  left-justified text on the bottom side runs from its anchor towards -x,
+  as its strokes do. Each drawer lays the line with its own glyph widths:
+  the canvas by the font's alignment, the board print by centring its line
+  on `pcb_geom::justified_centre`, the fabrication outputs by the stroke
+  font.
 - **Shown:** not hidden, not empty, and its layer visible in the board view
   (`PcbLayerView::is_visible`, so single-layer mode shows the active layer's
   text only). Colour: `layer_style::board_layer_colour` of its layer.
 - **Size:** true size (cap height in mm through `mm_per_em`), never clamped
   to a readable minimum; a text under half a pixel is not drawn.
+- **Picked and moved on its own:** the selection index holds each shown
+  text as `ItemRef::FootprintText`, on the box the stroke font fills
+  (`pcb_geom::text_box`). A click picks it over its part's body; a box or
+  Select All takes the footprint instead. A press on it drags the text
+  alone, following the pointer without snapping, and the release is one
+  board undo step (`footprint_text_edit`, a `SetFootprintProperty`); a
+  locked footprint refuses. The drag preview is the text's box.
+  `set_footprint_text` does the same for an agent.
 
 The texts travel in `PcbSnapshot::texts`, not in the `Scene`: the GPU glyph
 atlas can neither mirror nor follow a turned view. `pcb_canvas::BoardTextLayer`
@@ -354,9 +378,163 @@ drag the carried footprints' texts are painted by the highlight layer with
 the rest of the drag preview.
 
 Checks: `pcb::footprint_text::tests` (place, flip, eye, layer and
-single-layer visibility), `pcb_geom::text::tests`,
-`pcb_canvas::board_text::tests`, regression
+single-layer visibility, justification), `pcb_geom::text::tests` (the
+bottom-side mirror case among them), `pcb_canvas::board_text::tests`,
+`signex_engine::pcb::footprint_text_edit::tests`,
+`command::footprint_text_operand_tests` (drag and agent move), regression
 `pcb_component_properties::{the_canvas_draws_the_designator_until_the_eye_hides_it, a_flip_puts_the_designator_mirrored_on_the_bottom_overlay}`.
+
+## pcb-stroke-font — Board text as strokes (#2368)
+
+Where a text must be strokes (a Gerber image), it is written in the board
+stroke font, `pcb_geom::text_strokes`: each glyph a few polylines on a grid
+8 units to the cap height, 4 wide, the next glyph 6 units on (so a line is
+`0.75 × height` per glyph, less the last glyph's gap). Lower case reaches 5
+units, descenders 2 below the baseline. The cap height is centred on the
+anchor. The pen is `TEXT_STROKE_EM` (0.15) of the height. A glyph the font
+lacks is drawn as a box, never left out. Printable ASCII, `µ`, `Ω`, `°` and
+`±` have glyphs. The font is Signex's own drawing.
+
+Checks: `pcb_geom::stroke_font::tests`.
+
+## pcb-graphics — Footprint and board drawings on the board (#2387)
+
+A footprint's drawings (`Footprint.graphics`: silkscreen, fab, assembly,
+courtyard, 3D body outline) are footprint-local and are placed by
+`pcb_geom::footprint_graphic_placement` with the footprint's own transform,
+as its pads are. The board's own drawings (`PcbBoard.graphics`) and texts
+(`PcbBoard.texts`) are in board coordinates already
+(`board_graphic_placement`, `board_text_placement`).
+
+- **Kinds:** `line`, `rect` (four corners, so it turns with the footprint),
+  `poly` (a closed outline), `circle`, `arc`, `text`. Another kind, or one
+  missing the points it needs, is not drawn; nor is a value `pcb-geom`
+  refuses.
+- **Arc:** about its centre from its start to its end; with a middle point
+  it runs the way that passes it, without one the way of increasing angle.
+  The bottom-side mirror reverses it. Drawn as chords of at most 6 degrees.
+- **Fill:** `fill = "solid"` draws a circle as a disc and a rectangle or
+  polygon as an area; otherwise the outline. A drawing saved with no width
+  takes `PCB_DEFAULT_GRAPHIC_WIDTH_MM`.
+- **Layer:** drawn only on a layer this build knows and the view shows
+  (`PcbLayerView::is_visible`, so single-layer mode draws the active layer's
+  drawings only). Colour: `ResolvedTheme::board_layer_color`, which the
+  Layers panel swatches read too. A drawing on a copper layer off the active
+  copper layer is dimmed as copper is; other layers are not dimmed.
+- **Text:** a footprint's `text` drawing and a board text join
+  `PcbSnapshot::texts` and draw as the designator does (see
+  "pcb-footprint-text"). A board text on a bottom-side layer is mirrored: it
+  is read from below.
+
+The strokes and areas travel in `PcbSnapshot::graphics` and are emitted
+into the overlay buckets after the board features and before the ratsnest,
+so both mounts draw them from the one scene. A drag preview builds the
+carried footprints' snapshot through the same path, so their drawings move
+with them. The library preview (`PcbSnapshot::from_footprint`) takes the pads
+only and draws the drawings itself in the same palette (#2348).
+
+Checks: `pcb_geom::graphic::tests`, `pcb::graphics::tests` (placement, flip,
+eye, single-layer mode, dimming, board text), `pcb_canvas::drag_preview::tests`.
+
+## pcb-text-frame — A board text frame (#2424)
+
+A text frame is a board drawing (`graphic_type = "text_frame"`) with two
+opposite corners (`start`, `end`), a text and a text height (`font_size`,
+else `PCB_DEFAULT_TEXT_SIZE_MM`). `pcb_geom::board_graphic_placement` places
+its box as a closed outline, drawn like a rectangle with the drawing's line
+width. `pcb_geom::text_frame_lines` places its text:
+
+- **Wrap:** at each `\n`, then between words, to the number of glyphs that
+  fit the box less a margin of a quarter of the text height on each side; a
+  glyph is taken as 0.6 of the text height wide, wider than the board's
+  monospace font, so a line always fits. A word longer than a line is cut.
+- **Place:** lines run down from the top of the box (model y grows down), a
+  line pitch of 1.4 text heights, each line centred across the box, upright.
+  Lines past the bottom of the box are not drawn; one line always is.
+- **Side:** on a bottom-side layer each line is mirrored, read from below.
+
+The lines join `PcbSnapshot::texts` and draw as a board text does; the board
+print (#2402) prints the box and the lines in the same places; fabrication
+outputs (#2388) draw the box on a fabrication layer and write the lines in
+the board stroke font (#2368, "pcb-stroke-font"). That font is wider than
+the wrap's 0.6, so a line longer than the room inside the margins
+(`FrameLine::width_mm`) is condensed along its line to fit
+(`pcb_geom::text_strokes_within`); its height is kept.
+
+Checks: `pcb_geom::text_frame::tests`, `pcb::graphics::tests::a_text_frame_draws_its_box_and_its_lines`,
+`pdf::board::tests::a_text_frame_prints_its_box_and_lines`,
+`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`,
+`fab::tests::a_full_width_text_frame_line_stays_inside_its_box`.
+
+## board-3d — Board 3D view (#2390)
+
+View ▸ 3D View (`view_board_3d`, key `3` on a board) shows the board in view
+in 3D in the main window; the same command, the bar's 2D button or `3` again
+shows it flat. Undocked board windows stay flat. It is view state like pan
+and zoom: no board command, no undo step, no dirty mark.
+
+**Frame.** Millimetres, right-handed, z up out of the top face: a board
+point `(x, y)` (y down, as the flat view draws it) is `(x, -y)`. The bottom
+face is at z = 0, the top face at z = board thickness (the default
+`PCB_DEFAULT_THICKNESS_MM` when the board has none). The Top viewpoint shows
+the board as the flat view does; Bottom mirrors it left to right.
+
+**Lowering** (`signex_renderer::board3d::build_board_scene`, one indexed
+mesh, `signex_gfx::scene3d::Scene3d`):
+
+- **Board.** The outline extruded to the thickness, with every drill hole
+  (pads, vias), cutout and mounting hole that lies inside it cut through;
+  hidden layers do not close a hole. A board with no outline gets the box
+  round its copper, 1 mm wider each side. Faces in the solder mask colour,
+  edge and hole walls a darker shade of it. A hole that meets one cut
+  before it (two vias at one point, a pad drill on a mounting hole, a
+  drill inside a cutout) is left out (`signex_gfx::ring_fill::disjoint_holes`,
+  counted in `BoardScene3d::dropped_holes` and logged), so one such pair
+  cannot make the fill refuse every hole. The fill with holes is the flat
+  view's (`signex_gfx::ring_fill::triangulate_with_holes`).
+- **Single-layer mode does not reach 3D.** It is an editing aid of the flat
+  view; in 3D the copper of every shown layer and the parts of both faces
+  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`).
+- **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
+  hidden layer is hidden in 3D too: top copper on the top face, bottom
+  copper on the bottom face, vias and through-hole pads on both, inner
+  copper not drawn. Copper sits 0.035 mm (1 oz) off its face, zones lowest,
+  then tracks, then pads and vias, so nothing fights in the depth buffer.
+  Silkscreen waits for the board graphics lowering (#2387).
+- **Parts.** One per footprint whose face's 3D Body layer is shown. The
+  model is the library footprint's (`library_ref`), read off the update
+  thread: its attached model file (`step/<hash>.step`; a `.wrl` or `.vrml`
+  name reads VRML), in the file's units taken as mm, the model's y up the
+  board, turned by the attachment's x, y, z angles and moved by its offset;
+  else its 3D Body (outline, height, offset, colours). A footprint with no
+  library footprint, or one that could not be read (Messages says why), is
+  its body box (`pcb_geom::footprint_body`) extruded to its component height
+  (1 mm when unset). Parts are placed by `pcb_geom::Placement`; a bottom part
+  hangs below the bottom face, x mirrored and z flipped, which turns it over.
+  The component's body opacity scales its alpha.
+
+**Camera** (`signex_gfx::camera3d::OrbitCamera`): perspective, orbiting a
+target. Left drag turns it, right or middle drag or Shift left drag slides
+it, the wheel zooms; Top, Bottom, Front, Left, Right and Angled look from
+there and frame the board; Fit and View ▸ Fit All frame it from where it is
+seen. Entering the view looks from the top, framed for an assumed shape;
+the view's first redraw reports its real size and frames it again. A
+gesture never frames it again, so the first drag or wheel step cannot jump.
+The view follows a renamed board and ends when the board's tab closes.
+
+**Selection** is the flat view's: a click casts a ray and selects the
+footprint of the nearest part it meets before the board (on the board or on
+nothing it clears the selection), and selected footprints are washed in the
+selection colour.
+
+**GPU.** `signex_gfx::pipeline::mesh::MeshPipeline` through iced's shader
+widget (`board_3d_shader`), in its own render pass with its own depth buffer
+over the board canvas background; flat shading from the face's slope, both
+faces lit by a head light. The mesh uploads only when its generation
+changes.
+
+Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gfx::camera3d::tests`,
+`signex_renderer::board3d::tests`, regression `pcb_board_3d`.
 
 ## What this document is *not*
 

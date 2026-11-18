@@ -289,6 +289,8 @@ impl Signex {
         let (base, revision) = (engine.base_revision(), engine.revision());
         let windows = &self.ui_state.windows;
         let main = include_main.then_some(&mut self.interaction_state.canvas);
+        // An unfocused tile pane on that sheet draws it too (#2249).
+        let pane = self.interaction_state.tile_panes.schematic.get_mut(path);
         let slots = self
             .interaction_state
             .canvases
@@ -301,7 +303,8 @@ impl Signex {
                 )
             })
             .map(|(_, slot)| slot)
-            .chain(main);
+            .chain(main)
+            .chain(pane);
         for slot in slots {
             if let Some(cache) = slot.render_cache.as_mut() {
                 cache.update_from_sheet(sheet, invalidation, base, revision);
@@ -415,7 +418,9 @@ impl Signex {
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
         canvas.set_board_grid(Some(signex_engine::pcb::placement::grid_step_mm(board)));
         canvas.set_board_marks(crate::pcb_canvas::BoardMarks::of(board));
-        canvas.set_origin_marker_visible(self.pcb_layer_view(path).origin_marker_visible());
+        let view = self.pcb_layer_view(path);
+        canvas.set_origin_marker_visible(view.origin_marker_visible());
+        canvas.set_view_flipped(view.flipped());
         let snapshot = self.undocked_pcb_snapshot(path, board);
         canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
@@ -442,7 +447,9 @@ impl Signex {
         let ratsnest_visible = self.pcb_layer_view(&board_path).ratsnest_visible();
         let renderer_snapshot = self.active_pcb().map(|board| {
             ratsnest.refresh(ratsnest_key, board);
-            let snapshot = self.pcb_snapshot_for(&board_path, board);
+            let snapshot = self
+                .pcb_snapshot_for(&board_path, board)
+                .with_zone_fills(ratsnest.zone_fills());
             if ratsnest_visible {
                 ratsnest.apply(&board_path, snapshot)
             } else {
@@ -453,7 +460,8 @@ impl Signex {
         let board_grid = self
             .active_pcb()
             .map(signex_engine::pcb::placement::grid_step_mm);
-        let origin_marker = self.pcb_layer_view(&board_path).origin_marker_visible();
+        let view = self.pcb_layer_view(&board_path);
+        let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = self
             .active_pcb()
             .map(crate::pcb_canvas::BoardMarks::of)
@@ -477,6 +485,7 @@ impl Signex {
                 canvas.set_board_grid(board_grid);
                 canvas.set_board_marks(marks.clone());
                 canvas.set_origin_marker_visible(origin_marker);
+                canvas.set_view_flipped(flipped);
                 canvas.clear_content_cache();
             }
         }
@@ -485,6 +494,7 @@ impl Signex {
         main.set_board_grid(board_grid);
         main.set_board_marks(marks);
         main.set_origin_marker_visible(origin_marker);
+        main.set_view_flipped(flipped);
         self.note_pcb_board_changed();
     }
 

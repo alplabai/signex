@@ -344,7 +344,7 @@ fn keymap_table_row<'a>(
         color: Some(if state_warn {
             theme.palette().warning.base.color
         } else if state_unbound {
-            theme.palette().secondary.base.color
+            muted_color(theme)
         } else {
             theme.palette().background.base.text
         }),

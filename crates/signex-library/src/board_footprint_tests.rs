@@ -77,9 +77,14 @@ fn shapes_the_board_cannot_hold_are_refused() {
             "chamfered",
         ),
         (
-            PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])),
-            "pad shape",
-            "custom",
+            PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0]])),
+            "custom_outline",
+            "pad 1: a custom pad outline needs at least 3 corners",
+        ),
+        (
+            PadShape::Trapezoid { delta: [3.0, 0.0] },
+            "trapezoid_delta",
+            "pad 1: a trapezoid delta must be less than twice the side it narrows",
         ),
         (
             PadShape::RoundRect { radius_ratio: 0.7 },
@@ -96,6 +101,38 @@ fn shapes_the_board_cannot_hold_are_refused() {
             })
         );
     }
+}
+
+#[test]
+fn a_trapezoid_and_a_custom_pad_keep_their_parameters() {
+    let trapezoid = convert_one(pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Trapezoid { delta: [0.0, 0.4] },
+        &["F.Cu"],
+    ))
+    .unwrap();
+    assert_eq!(
+        (trapezoid.shape, trapezoid.trapezoid_delta),
+        (pcb::PadShape::Trapezoid, Point { x: 0.0, y: 0.4 })
+    );
+    let outline = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
+    let custom = convert_one(pad(
+        "2",
+        PadKind::Smd,
+        PadShape::Custom(Polygon::new(outline)),
+        &["F.Cu"],
+    ))
+    .unwrap();
+    assert_eq!(custom.shape, pcb::PadShape::Custom);
+    assert_eq!(
+        custom.custom_outline,
+        [
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 0.0, y: 1.0 }
+        ]
+    );
 }
 
 #[test]
@@ -487,10 +524,13 @@ fn a_3d_body_and_a_step_model_convert_without_being_copied() {
 fn a_drawn_footprint_keeps_every_pad_the_board_can_hold() {
     let mut tented = pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
     tented.mask_tented_top = true;
-    let custom = PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]));
+    let chamfered = PadShape::Chamfered {
+        chamfer_ratio: 0.2,
+        corners: ChamferedCorners::all(),
+    };
     let mut fp = library(vec![
         tented.clone(),
-        pad("2", PadKind::Smd, custom, &["F.Cu"]),
+        pad("2", PadKind::Smd, chamfered, &["F.Cu"]),
         pad("3", PadKind::Tht, PadShape::Round, &["*.Cu"]),
     ]);
     fp.cutouts.push(FpCutout {

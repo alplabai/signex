@@ -143,7 +143,7 @@ impl canvas::Program<crate::app::Message> for TwoPads {
             selected_pads_extra: &[],
             selected_silk_f: None,
             pad_labels: PadLabels::Editor,
-            palette: LayerPalette::Legacy,
+            palette: LayerPalette::Editor,
         };
         draw_pads(&mut frame, &state, &input);
         vec![frame.into_geometry()]

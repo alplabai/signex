@@ -7,7 +7,7 @@
 //! revision, so it is one undo step and refused once the board moved on.
 
 mod command;
-pub(crate) mod design;
+mod design;
 mod execute;
 mod fix;
 mod new_pcb;
@@ -141,5 +141,8 @@ pub enum UpdatePcbMsg {
         /// The rules the setup dialog or the command chose; `None`: the
         /// project defaults.
         rules: Option<signex_types::project::PcbDefaults>,
+        /// The fab tier picked with them, whose `fab_*` rules the project
+        /// takes when the board is made (#2311).
+        fab: Option<signex_types::project::FabTemplate>,
     },
 }

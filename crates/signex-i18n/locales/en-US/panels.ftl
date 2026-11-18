@@ -174,8 +174,6 @@ panels-kind-filter = Filter
 # Electrical rule check.
 panels-kind-erc = ERC
 panels-kind-messages = Messages
-# The Signex AI assistant; Signex is the product name.
-panels-kind-signex-ai = Signex AI
 # Design rule check.
 panels-kind-drc = DRC
 panels-kind-layer-stack = Layer Stack
@@ -221,29 +219,17 @@ panels-tab-kind-library = LIB
 panels-tab-kind-component = CMP
 panels-tab-kind-project = PRJ
 
-## Empty-state cards and the AI Design shell
+## Empty-state cards
 
 # Selection Filter panel: its title while the panel has no backend.
 panels-selection-filter-title = Selection Filter
 # Selection Filter panel: the line under the title.
 panels-selection-filter-body = All object types enabled
 
-# Tooltip of every Signex AI and Start screen control that has no backend
-# yet. "AI Design" is the name of that coming feature.
-panels-coming-soon = Coming in AI Design
+# Tooltip of every Start screen control that has no backend yet.
+panels-coming-soon = Coming soon
 
-# Signex AI panel, Assistant mode: empty-state title and line.
-panels-signal-assistant-title = Signex AI is not available yet
-panels-signal-assistant-body = Ask about this sheet and review proposed changes before anything is applied.
-# Signex AI panel, Generator mode: empty-state title and line.
-panels-signal-generator-title = The Generator is not available yet
-panels-signal-generator-body = Describe a board and approve each stage before anything is drawn.
-# Placeholder of the (disabled) ask field.
-panels-signal-ask = Ask about this sheet, or describe a change
-# Send button glyph of the ask field.
-panels-signal-send = →
-
-## Start screen. "Signal" is the name of the AI design assistant.
+## Start screen.
 
 start-new-project = New project
 # Button that opens a project; the ellipsis says a file dialog follows.
@@ -266,18 +252,7 @@ start-libraries-summary =
        *[other] { $components } components
     }
 start-hero-title = What are you building?
-start-hero-body = Describe the board. Signal drafts the specification, architecture and parts, and you approve each stage before anything is drawn.
-# Placeholder of the (disabled) specification box.
-start-spec-placeholder = Describe the board: what it does, its size, layers and budget.
-# Specification box buttons (disabled until the AI backend exists).
-start-spec-attach = Attach
-start-spec-import = Import
-start-spec-constraints = Constraints
-start-spec-generate = Generate design
-# Specification box mode switch.
-start-spec-generator = Generator
-start-spec-assistant = Assistant
-start-spec-libraries-first = Signal uses your loaded libraries first
+start-hero-body = Start a new project, open one you have, or begin from the reference design below.
 # Section headings, shown in capitals.
 start-reference-design = START FROM A REFERENCE DESIGN
 start-recent-projects = RECENT PROJECTS
@@ -366,6 +341,9 @@ panels-component-sheet-table = Table
 panels-component-sheet-updated = Updated
 # Shown in place of an empty field.
 panels-component-sheet-no-value = —
+# Section titles of a component row's sheet; shown upper-cased.
+panels-component-sheet-section-component = Component
+panels-component-sheet-section-storage = Storage
 
 ## Projects panel footer summary
 
@@ -375,8 +353,13 @@ panels-summary-erc = ERC
 panels-summary-drc = DRC
 # Caption: how long ago the last git commit was made.
 panels-summary-last-commit = Last commit
-# A value that is not known yet.
-panels-summary-no-value = —
+# The check has not run on this project yet.
+panels-summary-not-run = Not run
+# DRC result: violations in the last run. $count is a whole number.
+panels-summary-drc-violations = { $count ->
+        [one] { $count } violation
+       *[other] { $count } violations
+    }
 # ERC result counts. Both are whole numbers.
 panels-summary-erc-counts =
     { $errors ->
@@ -489,6 +472,14 @@ panels-status-bar-selected-shapes = { $count ->
     }
 # Selected objects that are none of the kinds above.
 panels-status-bar-selected-other = { $count } other
+# A drag in progress that carries the wires along. $key is the modifier key
+# that flips it (Alt).
+panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
+# A drag in progress that leaves the wires. $key is the modifier key.
+panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
+# Measure tool prompts.
+panels-status-bar-measure-first = Click the first point
+panels-status-bar-measure-second = Click the second point
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…
@@ -529,6 +520,22 @@ panels-net-classes-color-hint = #RRGGBB, empty = theme
 panels-net-classes-width-hint = empty = wire's own
 panels-net-classes-nets-hint = GND, +3V3
 panels-net-classes-patterns-hint = VCC*, ?SDA
+# Section title in Document Options; shown upper-cased.
+panels-net-classes-section = Net Classes
+# Row labels of the selected net class.
+panels-net-classes-name = Name
+panels-net-classes-color = Colour
+panels-net-classes-width = Width (mm)
+panels-net-classes-line = Line
+# Line pick-list entries. Default follows the project's line style.
+panels-net-classes-line-default = Default
+# Net Class pick-list entry of a net label: in no class.
+panels-net-classes-no-class = (none)
+panels-net-classes-line-solid = Solid
+panels-net-classes-line-dashed = Dashed
+panels-net-classes-line-dotted = Dotted
+panels-net-classes-nets = Nets
+panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
 panels-child-sheet-line-width = Line Width (mm)
@@ -557,8 +564,14 @@ panels-sch-library-empty = Open a `.snxsym` to see its symbols here. Right-click
 # Stands in for the file name of a symbol file not saved yet.
 panels-sch-library-untitled-file = <untitled>
 # $library is the library name, $file the symbol file; $count is a whole number.
-panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count } symbols)
-panels-sch-library-breadcrumb = { $file }  ({ $count } symbols)
+panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
+panels-sch-library-breadcrumb = { $file }  ({ $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    })
 panels-sch-library-column-design-item-id = Design Item ID
 panels-sch-library-column-description = Description
 panels-sch-library-part-shared = Part 0 (shared)
@@ -580,8 +593,9 @@ panels-footprint-library-breadcrumb = { $file }  ({ $count ->
         [one] { $count } footprint
        *[other] { $count } footprints
     })
-panels-footprint-library-column-name = Name
-panels-footprint-library-column-pads = Pads
+# Column headings of the Footprint Library list, in the section-label case.
+panels-footprint-library-column-name = FOOTPRINT
+panels-footprint-library-column-pads = PADS
 
 ## Library Browser row in the Properties panel
 panels-library-row-title = Library Row
@@ -619,3 +633,52 @@ panels-drawing-start-angle = Start Angle
 panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
+
+## Net Classes table (#2417): column titles and cells.
+
+panels-net-classes-column-name = Name
+panels-net-classes-column-color = Colour
+panels-net-classes-column-width = Width
+panels-net-classes-column-members = Members
+# Colour cell of a class with no colour of its own: the theme's wire colour.
+panels-net-classes-theme-color = Theme
+# Width cell of a class with a width; $width is in millimetres.
+panels-net-classes-width-cell = { $width } mm
+# Width cell of a class with no width: each wire keeps its own.
+panels-net-classes-wire-width = Wire's own
+panels-net-classes-no-members = None
+# SCH Filter panel (#2417), over the chip grid.
+panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.
+
+# Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
+panels-placed-location = Location
+panels-placed-properties = Properties
+panels-placed-x = X ({ $unit })
+panels-placed-y = Y ({ $unit })
+panels-placed-start-x = Start X ({ $unit })
+panels-placed-start-y = Start Y ({ $unit })
+panels-placed-width = Width ({ $unit })
+panels-placed-height = Height ({ $unit })
+panels-placed-rotation = Rotation
+# A rotation choice; $degrees is a whole number of degrees (0, 90, 180 or 270 in a list, any value for the current one).
+panels-placed-degrees = { $degrees } Degrees
+# Shown above the disabled rows of a locked object; $reason is the lock's own words.
+panels-placed-locked = Locked: { $reason }
+panels-placed-parameters = Parameters ({ $count })
+panels-placed-parameters-none = Parameters (none)
+panels-placed-no-parameters = No custom parameters
+# Read-only facts of a wire, bus or sheet entry in Properties (#2418).
+panels-placed-end = End
+panels-placed-length = Length
+panels-placed-name = Name
+panels-placed-direction = Direction
+panels-placed-sheet = Sheet
+panels-placed-sheet-file = Sheet File
+# Properties section of a selected Blanket directive: a drawn region whose
+# parameters apply to every net inside it.
+panels-directive-blanket = Blanket
+panels-directive-net-class = Net Class
+# Section title: the ERC rules a Blanket does not report inside its region.
+panels-directive-erc-exclusions = ERC Exclusions
+# Checkbox: the Blanket reports no ERC rule at all inside its region.
+panels-directive-all-rules = All Rules

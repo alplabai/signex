@@ -60,8 +60,8 @@ pub(super) fn view_grid<'a>(
     let header_ink = look::header_ink(tokens);
     let header_fill = look::header_fill(tokens);
     let header_row = {
-        // 16-px gutter aligns with the per-row lifecycle dot below.
-        let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
+        let mut r: iced::widget::Row<Element<'a, LibraryMessage>> =
+            iced::widget::Row::new().spacing(0);
         let active_sort = browser.sort_by.as_ref();
         for slot in &slots {
             let c = match slot {
@@ -191,29 +191,9 @@ pub(super) fn view_grid<'a>(
                 lifecycle_tint
             };
 
-            // Lifecycle indicator dot — Stage 18. Sits in the
-            // 16-px gutter mirrored on the header row.
-            let dot_color = crate::styles::pill_colors(tokens, look::lifecycle_tone(r.state)).1;
-            let lifecycle_dot = container(Space::new())
-                .width(Length::Fixed(LIFECYCLE_DOT_SIZE))
-                .height(Length::Fixed(LIFECYCLE_DOT_SIZE))
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(dot_color)),
-                    border: Border {
-                        width: 0.0,
-                        radius: (LIFECYCLE_DOT_SIZE / 2.0).into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-            let lifecycle_cell = container(lifecycle_dot)
-                .width(Length::Fixed(LIFECYCLE_DOT_GUTTER))
-                .height(Length::Fill)
-                .center_y(Length::Fill)
-                .padding([0.0, SP.s]);
-
-            let mut data_row = row![lifecycle_cell].spacing(0);
+            // The Lifecycle pill carries the state; no leading dot repeats it.
+            let mut data_row: iced::widget::Row<Element<'a, LibraryMessage>> =
+                iced::widget::Row::new().spacing(0);
             for slot in &slots {
                 let c = match slot {
                     Slot::Column(c) => *c,
@@ -481,7 +461,7 @@ pub(super) fn view_grid<'a>(
             let table_for_msg = table.to_string();
             let row_border = look::row_border(tokens);
             let row_container = container(data_row)
-                .padding([0, 0])
+                .padding([0.0, SP.s])
                 .width(Length::Fill)
                 .height(Length::Fixed(BROWSER_ROW_HEIGHT))
                 .style(move |_: &Theme| iced::widget::container::Style {

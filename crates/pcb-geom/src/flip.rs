@@ -56,7 +56,10 @@ mod tests {
             layers: vec![layer.into(), "Unknown.Layer".into()],
             net: None,
             roundrect_ratio: 0.0,
+            trapezoid_delta: Default::default(),
+            custom_outline: Vec::new(),
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
@@ -105,6 +108,7 @@ mod tests {
             layer: layer.map(String::from),
             font_size: None,
             hidden: false,
+            justify: Default::default(),
         };
         let mut fp = footprint(0.0, "TopCopper");
         fp.properties = vec![

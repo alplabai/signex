@@ -52,6 +52,8 @@ fn add_project(app: &mut Signex, prj_path: &Path, sheet: &str) -> ProjectId {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

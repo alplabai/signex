@@ -255,11 +255,14 @@ fn draw_line<R: geometry::Renderer>(
     if line.is_dashed() {
         draw_dashed_line(frame, p0, p1, width, color, (8.0, 5.0));
     } else {
+        // Round ends: a track is a capsule, as hit-testing, DRC and the GPU
+        // line shader take it, so a bend of any angle is filled (#2391).
         frame.stroke(
             &canvas::Path::line(p0, p1),
             canvas::Stroke::default()
                 .with_width(width)
-                .with_color(color),
+                .with_color(color)
+                .with_line_cap(canvas::LineCap::Round),
         );
     }
 }
@@ -308,3 +311,7 @@ fn draw_polygon<R: geometry::Renderer>(
         );
     }
 }
+
+#[cfg(test)]
+#[path = "track_cap_tests.rs"]
+mod track_cap_tests;

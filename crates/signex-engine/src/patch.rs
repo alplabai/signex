@@ -30,7 +30,8 @@ pub enum SemanticPatch {
     StyleUpdated,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What an edit changed in a document. `Default` is [`Self::NONE`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DocumentPatch(u16);
 
 impl DocumentPatch {
@@ -53,6 +54,10 @@ impl DocumentPatch {
     pub const FONT_FAMILY: Self = Self(1 << 13);
     /// The sheet's net colour overrides changed: wires and junctions repaint.
     pub const NET_COLORS: Self = Self(1 << 14);
+    /// Blankets, Compile Masks and Differential Pair directives (#2420). A
+    /// Compile Mask takes what it covers out of the netlist, so it is
+    /// electrical.
+    pub const DIRECTIVES: Self = Self(1 << 15);
     pub const FULL: Self = Self(u16::MAX);
     /// Every collection a net is derived from: pins (symbols and the library
     /// parts they instantiate), wires, labels, junctions, no-connects, buses
@@ -66,7 +71,8 @@ impl DocumentPatch {
             | Self::JUNCTIONS.0
             | Self::NO_CONNECTS.0
             | Self::CHILD_SHEETS.0
-            | Self::LIB_SYMBOLS.0,
+            | Self::LIB_SYMBOLS.0
+            | Self::DIRECTIVES.0,
     );
 
     pub fn contains(self, other: Self) -> bool {
@@ -75,6 +81,12 @@ impl DocumentPatch {
 
     pub fn intersects(self, other: Self) -> bool {
         (self.0 & other.0) != 0
+    }
+
+    /// Whether the edit changed only how the sheet is shown (its net
+    /// colours), never what ERC finds: no ERC refresh, no new edit epoch.
+    pub fn is_display_only(self) -> bool {
+        self == Self::NET_COLORS
     }
 
     pub fn from_selected_kind(kind: SelectedKind) -> Self {
@@ -93,6 +105,7 @@ impl DocumentPatch {
             SelectedKind::TextNote => Self::TEXT_NOTES,
             SelectedKind::ChildSheet => Self::CHILD_SHEETS,
             SelectedKind::Drawing => Self::DRAWINGS,
+            SelectedKind::Directive => Self::DIRECTIVES,
         }
     }
 
@@ -149,5 +162,29 @@ impl CommandResult {
             changed: false,
             patch_pair: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DocumentPatch as P;
+
+    #[test]
+    fn only_a_net_colour_change_alone_is_display_only() {
+        assert!(P::NET_COLORS.is_display_only());
+        for shift in 0..16 {
+            let bit = P(1 << shift);
+            assert_eq!(bit.is_display_only(), bit == P::NET_COLORS, "{bit:?}");
+            if bit != P::NET_COLORS {
+                assert!(!(bit | P::NET_COLORS).is_display_only(), "{bit:?}");
+            }
+        }
+        assert!(!P::NONE.is_display_only());
+        assert!(!P::FULL.is_display_only());
+    }
+
+    #[test]
+    fn the_default_patch_is_none() {
+        assert_eq!(P::default(), P::NONE);
     }
 }

@@ -25,6 +25,17 @@ impl PrimitiveRef {
     pub fn new(library_id: Uuid, uuid: Uuid) -> Self {
         Self { library_id, uuid }
     }
+
+    /// Parse the `<library uuid>:<primitive uuid>` key a schematic stores
+    /// (a symbol's `lib_id`, a part's footprint, a stamp's footprint
+    /// binding). `None` for anything else.
+    pub fn parse_key(key: &str) -> Option<Self> {
+        let (library, primitive) = key.split_once(':')?;
+        Some(Self::new(
+            Uuid::parse_str(library).ok()?,
+            Uuid::parse_str(primitive).ok()?,
+        ))
+    }
 }
 
 impl std::fmt::Display for PrimitiveRef {
@@ -51,6 +62,16 @@ mod tests {
         let u = Uuid::nil();
         let r = PrimitiveRef::new(lib, u);
         assert_eq!(r.to_string(), format!("{lib}/{u}"));
+    }
+
+    #[test]
+    fn parse_key_reads_the_colon_key_and_refuses_anything_else() {
+        let r = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
+        let key = format!("{}:{}", r.library_id, r.uuid);
+        assert_eq!(PrimitiveRef::parse_key(&key), Some(r));
+        assert_eq!(PrimitiveRef::parse_key(&r.to_string()), None);
+        assert_eq!(PrimitiveRef::parse_key("R0805"), None);
+        assert_eq!(PrimitiveRef::parse_key(""), None);
     }
 
     #[test]

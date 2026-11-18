@@ -1,5 +1,6 @@
 use super::*;
 
+mod board_ctx;
 mod board_sketch_ctx;
 mod body_style_info;
 mod designators;
@@ -14,6 +15,7 @@ pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
+mod placed_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -42,21 +44,6 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
-        self.sync_fp_layer_palette();
-    }
-
-    /// Give every footprint editor the layer colour set of the active
-    /// theme, and redraw an editor whose set changed.
-    fn sync_fp_layer_palette(&mut self) {
-        let palette = crate::library::editor::footprint::layers::LayerPalette::for_tokens(
-            &self.document_state.panel_ctx.tokens,
-        );
-        for editor in self.document_state.footprint_editors.values_mut() {
-            if editor.state.layer_palette != palette {
-                editor.state.layer_palette = palette;
-                editor.canvas_cache.clear();
-            }
-        }
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their
@@ -132,7 +119,13 @@ impl Signex {
         } else {
             Task::none()
         };
+        let open_solves =
+            crate::library::editor::footprint::sketch_solve_task::dispatch_open_solves(
+                &mut self.document_state.footprint_editors,
+            )
+            .map(Message::Library);
         Task::batch([
+            open_solves,
             history,
             dir_probes,
             commits,
@@ -224,6 +217,8 @@ impl Signex {
         // sync_visible_document_from_active_tab took the empty-doc
         // branch (which suppresses the implicit refresh).
         self.refresh_panel_ctx();
+        // The pane left behind draws on its own canvas now (#2249).
+        self.settle_document_tiling();
     }
 
     /// Refresh `panel_ctx` selection fields from the active canvas. While an
@@ -264,6 +259,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

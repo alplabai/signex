@@ -125,6 +125,8 @@ fn rig() -> Rig {
         project_defaults: Default::default(),
         parameters: Default::default(),
         agent_journal: Default::default(),
+        fab_outputs: None,
+        requirements: Default::default(),
         unknown: Default::default(),
     };
     let prj = dir.join("P.snxprj");

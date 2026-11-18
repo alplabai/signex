@@ -12,7 +12,7 @@ use crate::app::{Signex, SymbolDocument};
 
 fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
     LoadedProject {
-        id: ProjectId(id),
+        id: ProjectId::test_id(id),
         path: Path::new(dir).join("p.snxprj"),
         data: signex_types::project::ProjectData {
             document_id: None,
@@ -40,6 +40,8 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

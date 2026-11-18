@@ -217,7 +217,10 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
     let mut nets = std::collections::BTreeSet::new();
     for item in items {
         match *item {
-            ItemRef::Footprint(fp) => footprints.push(fp),
+            // A designator or comment stands for its part (#2368).
+            ItemRef::Footprint(fp) | ItemRef::FootprintText { footprint: fp, .. } => {
+                footprints.push(fp)
+            }
             ItemRef::Pad { footprint, pad } => match cross_probe::pad_net(board, footprint, pad) {
                 Some(net) => {
                     nets.insert(net);
@@ -236,6 +239,16 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
             ItemRef::Via(id) => {
                 nets.extend(board.vias.iter().filter(|v| v.uuid == id).map(|v| v.net));
             }
+            // A copper arc or free pad stands for its net (#2373).
+            ItemRef::Arc(_) | ItemRef::FreePad(_) => {
+                nets.extend(pcb_geom::item_net(board, *item));
+            }
+            // A drawn area, a string, a dimension or a drawing stands for
+            // nothing on the schematic.
+            ItemRef::Zone { .. }
+            | ItemRef::Text(_)
+            | ItemRef::Dimension(_)
+            | ItemRef::Graphic { .. } => {}
         }
     }
     CrossSelection {

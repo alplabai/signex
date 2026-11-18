@@ -18,6 +18,8 @@ mod key_names;
 mod language_switch;
 mod library_window_rows;
 mod place_design_rows;
+mod placement_extras_rows;
+mod sheet_place_rows;
 mod view_rows;
 mod walk;
 mod window_native_rows;
@@ -283,12 +285,20 @@ pub(super) struct Probe {
     pub board_sketch: bool,
     /// Tools ▸ Re-Annotate Board opens its dialog (#1312).
     pub board_reannotate: bool,
+    /// File ▸ Fabrication Outputs opens its dialog (#2388).
+    pub fab_outputs: bool,
     /// Back Annotate opens its dialog (#1312).
     pub back_annotate: bool,
+    /// Board Reports or Board Print / PDF is open (#2404, #2402).
+    pub board_output: bool,
     /// Place on a board arms a board placement tool (#2373).
     pub pcb_tool: bool,
     /// File ▸ New ▸ PCB / Schematic opens its setup dialog (#2232).
     pub document_setup: bool,
+    /// Edit ▸ Find Similar Objects opens its dialog (#2416).
+    pub find_similar: bool,
+    /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
+    pub active_bar_menu: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -364,9 +374,13 @@ pub(super) fn probe(app: &Signex) -> Probe {
         update_pcb: app.ui_state.update_pcb.is_some(),
         board_sketch: app.interaction_state.board_sketch.is_some(),
         board_reannotate: app.ui_state.board_reannotate.is_some(),
+        fab_outputs: app.ui_state.fab_outputs.is_some(),
         back_annotate: app.ui_state.back_annotate.is_some(),
+        board_output: app.ui_state.board_output.dialog.is_some(),
         pcb_tool: app.interaction_state.pcb_tool.is_some(),
         document_setup: app.ui_state.document_setup.is_some(),
+        find_similar: app.ui_state.find_similar.is_some(),
+        active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
     }
 }
 
@@ -456,6 +470,8 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -481,6 +497,7 @@ pub(super) fn loaded_board_app() -> Signex {
     .expect("via");
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),
@@ -497,6 +514,7 @@ pub(super) fn loaded_board_app() -> Signex {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     };
     let _ = app.update(Message::File(crate::app::FileMsg::PcbOpenFinished {
         disk: None,

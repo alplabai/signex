@@ -10,14 +10,38 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         net: segment.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        object: BoardObject::Tracks,
     }
 }
 
-pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
+/// A copper arc as traces along its chords, within the error the copper
+/// list reads it with (#2373).
+pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInput> {
+    let width_mm = mm_with_floor(arc.width, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_TRACK_MIN_MM);
+    arc.points(pcb_geom::ARC_CHORD_ERROR_MM)
+        .windows(2)
+        .map(|pair| TraceInput {
+            p0: point_to_xy(pair[0]),
+            p1: point_to_xy(pair[1]),
+            width_mm,
+            net: arc.net,
+            dimmed: false,
+            ink: CopperInk::Unknown,
+            object: BoardObject::Arcs,
+        })
+        .collect()
+}
+
+/// A via as drawn: its ring on `layer` when it has per-layer sizes (#2401),
+/// else its one diameter.
+pub(super) fn via_from_board_via(
+    via: &Via,
+    layer: Option<signex_types::pcb_layer::CopperLayer>,
+) -> ViaInput {
     ViaInput {
         center: point_to_xy(via.position),
         diameter_mm: mm_with_floor(
-            via.diameter,
+            layer.map_or(via.diameter, |layer| via.diameter_on(layer)),
             PCB_DEFAULT_VIA_DIAMETER_MM,
             PCB_VIA_MIN_DIAMETER_MM,
         ),
@@ -33,13 +57,20 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
 /// footprint is mirrored there, ADR-0005 §7), so a hit-test and a ratsnest end
 /// land on what is drawn. A pad `pcb-geom` refuses (non-finite or beyond
 /// 1 km) is not drawn; `BoardIndex::rejected` reports it.
-pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<PadInput> {
+/// `layer` is the active copper layer: a pad with per-layer sizes (#2401)
+/// shows its size there.
+pub(super) fn pad_from_footprint(
+    footprint: &Footprint,
+    pad: &Pad,
+    layer: Option<signex_types::pcb_layer::CopperLayer>,
+) -> Option<PadInput> {
     let center = pcb_geom::pad_world_center(footprint, pad).ok()?.to_mm();
+    let size = layer.map_or(pad.size, |layer| pad.size_on(layer));
 
     // Size floor is a renderer rule, not geometry (ADR-0005, "Drawn size").
     let size_mm = [
-        mm_with_floor(pad.size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
-        mm_with_floor(pad.size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+        mm_with_floor(size.x, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
+        mm_with_floor(size.y, PCB_DEFAULT_PAD_SIZE_MM, 0.05),
     ];
     let mut drawn = pad.clone();
     drawn.size = signex_types::pcb::Point::new(f64::from(size_mm[0]), f64::from(size_mm[1]));
@@ -93,7 +124,7 @@ pub(super) fn zone_from_board_zone(
     Some(ZonePolygonInput {
         vertices,
         holes,
-        rule_area: is_rule_area_zone(zone),
+        rule_area: zone.is_rule_area(),
         net: zone.net,
         priority: zone.priority,
         layer_rank,
@@ -101,6 +132,8 @@ pub(super) fn zone_from_board_zone(
         source_order,
         dimmed: false,
         ink: CopperInk::Unknown,
+        fill: zone.is_pour().then(Vec::new),
+        object: super::layer_view::zone_object(zone),
     })
 }
 
@@ -132,13 +165,6 @@ pub(super) fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8,
 
 pub(super) fn zone_connected_bucket(net: u32) -> u8 {
     if net == 0 { 0 } else { 1 }
-}
-
-pub(super) fn is_rule_area_zone(zone: &Zone) -> bool {
-    let fill = zone.fill_type.to_ascii_lowercase();
-    let layer = zone.layer.to_ascii_lowercase();
-
-    fill.contains("rule") || fill.contains("keepout") || layer.contains("rule")
 }
 
 pub(super) fn point_to_xy(point: Point) -> [f32; 2] {
@@ -210,7 +236,12 @@ fn pad_drill_mm(pad: &Pad) -> f32 {
 /// The colour of copper drawn in `ink`; `fallback` for copper on no layer
 /// this build knows.
 pub(super) fn copper_color(theme: &ResolvedTheme, ink: CopperInk, fallback: ColorSlot) -> [f32; 4] {
-    theme.color(ink.slot(fallback))
+    theme.copper_ink_color(ink, fallback)
+}
+
+/// `color` faded by the view's transparency of `kind` (#2363).
+fn faded(theme: &ResolvedTheme, kind: BoardObject, color: [f32; 4]) -> [f32; 4] {
+    with_alpha_mul(color, theme.paint().opacity(kind))
 }
 
 pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
@@ -218,7 +249,11 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
     scene.lines.reserve(snapshot.traces.len());
 
     for trace in &snapshot.traces {
-        let color = copper_color(theme, trace.ink, ColorSlot::Wire);
+        let color = faded(
+            theme,
+            trace.object,
+            copper_color(theme, trace.ink, ColorSlot::Wire),
+        );
         scene.lines.push(LineSegment {
             p0: trace.p0,
             p1: trace.p1,
@@ -241,7 +276,11 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     for via in &snapshot.vias {
         let outer = (via.diameter_mm * 0.5).max(0.01);
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
-        let color = copper_color(theme, via.ink, ColorSlot::Junction);
+        let color = faded(
+            theme,
+            BoardObject::Vias,
+            copper_color(theme, via.ink, ColorSlot::Junction),
+        );
 
         // A drill as wide as the via leaves no copper: all of it is hole.
         if hole > 0.0 && hole >= outer {
@@ -325,7 +364,11 @@ pub(super) fn emit_static_polygons(
             });
             continue;
         }
-        let copper = copper_color(theme, pad.ink, ColorSlot::Pin);
+        let copper = faded(
+            theme,
+            BoardObject::Pads,
+            copper_color(theme, pad.ink, ColorSlot::Pin),
+        );
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
             pad.dimmed,
@@ -351,13 +394,41 @@ pub(super) fn emit_static_polygons(
     }
 
     for zone in &snapshot.zones {
-        let fill = with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38);
-        let stroke = copper_color(theme, zone.ink, ColorSlot::Bus);
+        let fill = dim_if(
+            faded(
+                theme,
+                zone.object,
+                with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            ),
+            zone.dimmed,
+        );
+        let stroke = Some(dim_if(
+            faded(
+                theme,
+                zone.object,
+                copper_color(theme, zone.ink, ColorSlot::Bus),
+            ),
+            zone.dimmed,
+        ));
+        // A pour: its fill pieces as copper, then its outline stroked only.
+        for piece in zone.fill.iter().flatten() {
+            scene.polygons.push(GpuPolygon {
+                vertices: piece.vertices.clone(),
+                holes: piece.holes.clone(),
+                fill_color: fill,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+        }
+        let (fill_color, holes) = match zone.fill {
+            Some(_) => (with_alpha_mul(fill, 0.0), Vec::new()),
+            None => (fill, zone.holes.clone()),
+        };
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
-            holes: zone.holes.clone(),
-            fill_color: dim_if(fill, zone.dimmed),
-            stroke_color: Some(dim_if(stroke, zone.dimmed)),
+            holes,
+            fill_color,
+            stroke_color: stroke,
             stroke_width: 0.06,
         });
     }
@@ -505,6 +576,8 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
     // The board's openings and keepouts first, so the ratsnest and DRC
     // markers stay readable on top (#2234).
     super::board_features::emit(&snapshot.board_features, theme, scene);
+    // Footprint and board drawings over the copper, under the ratsnest.
+    super::graphics::emit(&snapshot.graphics, theme, scene);
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Ratsnest), 0.72);
 

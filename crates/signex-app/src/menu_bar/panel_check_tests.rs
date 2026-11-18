@@ -6,14 +6,13 @@ use crate::app::Signex;
 use crate::keymap::AppCommandId;
 use crate::panels::PanelKind;
 
-const PANEL_ROWS: [(&str, PanelKind); 8] = [
+const PANEL_ROWS: [(&str, PanelKind); 7] = [
     ("Projects", PanelKind::Projects),
     ("Components", PanelKind::Components),
     ("Navigator", PanelKind::Navigator),
     ("Properties", PanelKind::Properties),
     ("ERC", PanelKind::Erc),
     ("Messages", PanelKind::Messages),
-    ("Signex AI", PanelKind::SignexAi),
     ("Layers", PanelKind::Layers),
 ];
 

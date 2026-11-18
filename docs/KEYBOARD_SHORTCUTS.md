@@ -48,7 +48,9 @@ context = "global"
 ```
 
 Command labels and categories are not stored in the TOML. They are owned by
-`crates/signex-app/src/keymap/catalog/` (one file per context).
+the command catalog in `crates/signex-commands/src/catalog/` (one file per
+domain area, such as `documents.rs`, `wiring.rs` or `view.rs`), as message ids; the app's `keymap/catalog` only renders them
+(`CatalogTextExt`).
 
 ## Runtime Flow
 
@@ -139,6 +141,17 @@ command's menu hint is its last binding. Respelling `Ctrl+…` as `Mod+…` woul
 reorder that, so the global sections of both profiles are split to keep the
 order the all-`Ctrl` spelling had (redo still shows `Ctrl+Y`, Place Wire `P W`,
 the command palette `Ctrl+Shift+P`). `mod_content_tests.rs` pins those hints.
+
+On a board (the `pcb` context, #2406) both profiles bind `1` Board Sketch,
+`L` Flip Selection (the selection, or the part on the cursor), `F` Change
+Footprint and `Q` the unit toggle; the chord profile adds `N` Toggle
+Ratsnest, `P K` Keepout and `T D` Run DRC, Classic `C` Toggle Ratsnest, `K`
+Keepout, `F7` Run DRC and `Ctrl+M` Measure Distance (the chord profile's
+global `Ctrl+M` already measures on a board). A board binding outranks a global one with the same keys, so
+Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
+`pcb` section of its own before the global sections, so `cycle_unit` keeps
+`Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both
+profiles names a command enabled on a board.
 
 ### One-time macOS prompt for a custom profile
 
@@ -259,7 +272,13 @@ number.
 
 ## Adding A New Shortcut Command
 
-1. Add a stable command id to the matching file under `keymap/catalog/`.
+1. Add a stable command id to the area file it belongs to under
+   `crates/signex-commands/src/catalog/` (for example `placement.rs` or
+   `nets.rs`). The file's place in `TABLES` (`catalog/mod.rs`) and the row's
+   place in the file set where the command lists. Add the id to
+   `scripts/catalog-ids.txt` too: the command-id gate fails on a catalog id
+   that is not listed, and on a listed id that is gone. A command is removed
+   only by removing its line there, with a maintainer decision.
 2. Add default bindings to the relevant built-in TOML profiles.
 3. Map the command id in `core_to_message`'s table (`app/command/bridge.rs`).
 4. Use active-keymap lookup for visible labels instead of hardcoded strings.

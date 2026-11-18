@@ -226,6 +226,11 @@ impl Signex {
             crate::panels::PanelMsg::RunDrc => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
             }
+            crate::panels::PanelMsg::OpenRules => {
+                follow = self.update(Message::Project(ProjectMsg::Rules(
+                    crate::app::RulesTabMsg::OpenRequested { project: None },
+                )));
+            }
             crate::panels::PanelMsg::DrcViolationPicked(index) => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcViolationPicked(*index)));
             }
@@ -260,14 +265,17 @@ impl Signex {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PcbLayers(msg) => {
+                // A picked colour closes the chip's colours.
+                if matches!(msg, crate::app::PcbViewMsg::LayerColourSet { .. }) {
+                    self.document_state.panel_ctx.pcb_layers_ui.picker = None;
+                }
                 self.apply_pcb_view_event(None, *msg);
+            }
+            crate::panels::PanelMsg::LayersPanel(msg) => {
+                follow = self.handle_layers_panel(msg);
             }
             crate::panels::PanelMsg::NetClass(msg) => {
                 self.handle_net_class_message(msg);
-            }
-            crate::panels::PanelMsg::Signal(msg) => {
-                let ctx = &mut self.document_state.panel_ctx;
-                ctx.signal_mode = ctx.signal_mode.after(*msg);
             }
             crate::panels::PanelMsg::Projects(msg) => {
                 self.document_state.panel_ctx.projects_view.apply(msg);
@@ -706,6 +714,9 @@ impl Signex {
             }
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
                 follow = self.handle_select_custom_filter_tab(*idx);
+            }
+            crate::panels::PanelMsg::SchFilter(msg) => {
+                follow = self.handle_sch_filter(*msg);
             }
             _ => return None,
         }

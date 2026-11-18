@@ -15,7 +15,18 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+mod board_edit_operands;
+#[cfg(test)]
+mod board_graphic_operand_tests;
+mod board_graphic_operands;
+mod board_operands;
+#[cfg(test)]
+mod board_view_operand_tests;
+mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod directive_operand_tests;
+mod directive_operands;
 #[cfg(test)]
 mod document_operand_tests;
 mod document_operands;
@@ -29,12 +40,16 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_text_operand_tests;
+mod footprint_text_operands;
+#[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]
 mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
+mod layer_strip_operands;
 mod needs;
 mod opened;
 #[cfg(test)]
@@ -46,12 +61,21 @@ mod outcome;
 mod part_operand_tests;
 mod part_operands;
 #[cfg(test)]
+mod placed_operand_tests;
+mod placed_operands;
+#[cfg(test)]
+mod placement_extras_operand_tests;
+mod placement_extras_operands;
+#[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]
 mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
+#[cfg(test)]
+mod selection_filter_operand_tests;
+mod selection_filter_operands;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
 #[cfg(test)]
@@ -79,6 +103,7 @@ pub(crate) use operand_handlers::runs_headless_without_operands;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;
+pub(crate) use placed_operands::PlacedRefusal;
 
 use iced::Task;
 
@@ -402,7 +427,7 @@ mod tests {
     }
 
     /// `reset_local_coordinates` is a real catalog entry
-    /// (`keymap/catalog`) with no arm in `core_to_message`
+    /// (`signex-commands/src/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
@@ -445,7 +470,7 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_diff_pair").unwrap();
+        let command = AppCommandId::new("place_signal_harness").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
         assert_eq!(
@@ -457,7 +482,7 @@ mod tests {
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Differential Pair")),
+                .starts_with("Planned, not available yet: Signal Harness")),
             "the handler ran and explained"
         );
     }

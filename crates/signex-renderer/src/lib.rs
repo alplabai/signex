@@ -4,6 +4,7 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+pub mod board3d;
 pub mod pcb;
 pub mod pcb3d;
 pub mod schematic;

@@ -157,12 +157,16 @@ impl Builder {
                 0.0,
             );
         }
+        // A new board counts from its area's bottom-left corner (#2384).
+        self.board.options.origin = signex_types::pcb_origin::BoardOrigin::of_new_board(&points);
         self.board.outline = points;
     }
 
     /// The board outline polygon only; the caller draws its `EdgeCuts`
     /// edges with [`Self::edge`] (an arc as one arc, not its chords).
     pub fn outline_polygon(&mut self, points: Vec<Point>) {
+        // A new board counts from its area's bottom-left corner (#2384).
+        self.board.options.origin = signex_types::pcb_origin::BoardOrigin::of_new_board(&points);
         self.board.outline = points;
     }
 
@@ -176,7 +180,12 @@ impl Builder {
         center: Option<Point>,
         radius: f64,
     ) {
+        // An id space of its own (#2424), so the other items keep theirs.
+        let n = self.board.graphics.len() as u128 + 1;
+        let uuid =
+            Uuid::from_u128(0x6a0d_0000_0000_4000_8000_0000_0000_0000 | self.board_no << 80 | n);
         self.board.graphics.push(BoardGraphic {
+            uuid,
             graphic_type: kind.into(),
             layer: "EdgeCuts".into(),
             width: 0.05,
@@ -185,6 +194,8 @@ impl Builder {
             center,
             radius,
             points: Vec::new(),
+            text: String::new(),
+            font_size: 0.0,
         });
     }
 
@@ -283,6 +294,21 @@ impl Builder {
         self.board.footprints[index].locked = true;
     }
 
+    /// Move the designator of footprint `index` to `at` (footprint-local)
+    /// and turn it by `rotation` against the footprint, so it clears the
+    /// parts around it and reads upright.
+    pub fn move_label(&mut self, index: usize, at: Point, rotation: f64) {
+        let fp = &mut self.board.footprints[index];
+        let reference = fp.reference.clone();
+        let label = fp
+            .graphics
+            .iter_mut()
+            .find(|g| g.graphic_type == "text" && g.text == reference)
+            .unwrap_or_else(|| panic!("{reference} has no designator"));
+        label.position = Some(at);
+        label.rotation = rotation;
+    }
+
     /// The board position of pad `pin` of footprint `index`.
     pub fn pad_at(&self, index: usize, pin: &str) -> Point {
         let fp = &self.board.footprints[index];
@@ -300,6 +326,8 @@ impl Builder {
         for leg in points.windows(2) {
             let uuid = self.uuid();
             self.board.segments.push(Segment {
+                locked: false,
+                attributes: Default::default(),
                 uuid,
                 start: leg[0],
                 end: leg[1],
@@ -328,12 +356,15 @@ impl Builder {
         let net = self.net(net);
         let uuid = self.uuid();
         self.board.vias.push(Via {
+            attributes: Default::default(),
             uuid,
             position: at,
             diameter,
             drill,
             layers,
             net,
+            locked: false,
+            layer_sizes: None,
             via_type: ViaType::Through,
             unknown_columns: Default::default(),
         });
@@ -364,6 +395,8 @@ impl Builder {
             thermal_width: 0.3,
             clearance: 0.3,
             min_thickness: 0.254,
+            min_island_area: 0.0,
+            remove_dead_islands: false,
             unknown: Default::default(),
         });
     }

@@ -29,6 +29,8 @@ members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
+    "crates/signex-mcad",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -56,10 +58,12 @@ default-members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
+    "crates/signex-mcad",
 ]
 
 [workspace.package]
-version = "26.11.0-rc.1"
+version = "26.11.0"
 edition = "2024"
 # MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
 # test, and support exactly one toolchain — the pinned stable — so the declared
@@ -121,11 +125,13 @@ signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-drc = { path = "crates/signex-drc" }
 signex-drc-dsl = { path = "crates/signex-drc-dsl" }
+signex-req = { path = "crates/signex-req" }
 signex-net = { path = "crates/signex-net" }
 signex-history = { path = "crates/signex-history" }
 signex-commands = { path = "crates/signex-commands" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
+signex-mcad = { path = "crates/signex-mcad" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }

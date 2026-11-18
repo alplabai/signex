@@ -1,5 +1,6 @@
 //! #1718 — the silk `sketch_entity` marker is optional on the wire: a file
-//! written before it existed round-trips byte for byte, and a build that
+//! written before it existed round-trips byte for byte (but for the format
+//! token, which a save moves to `snxfpt/1.1`, #2242), and a build that
 //! does not know the field still reads a file that has it.
 
 use serde::Deserialize;
@@ -17,7 +18,9 @@ fn a_pre_1718_file_round_trips_byte_identical() {
         file.footprints[0].silk_f.iter().all(|g| !g.is_baked()),
         "no marker is invented on load"
     );
-    assert_eq!(file.to_toml_string().expect("serialise"), PRE_1718);
+    let resaved = PRE_1718.replacen("format = \"snxfpt/1\"\n", "format = \"snxfpt/1.1\"\n", 1);
+    assert_ne!(resaved, PRE_1718, "the fixture is a snxfpt/1 file");
+    assert_eq!(file.to_toml_string().expect("serialise"), resaved);
 }
 
 /// `FpGraphic` as builds before #1718 declared it.

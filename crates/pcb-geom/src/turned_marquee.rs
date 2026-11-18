@@ -78,10 +78,21 @@ impl Shape {
             return false;
         }
         let sign = if doubled_area > 0 { 1.0 } else { -1.0 };
-        let (points, radius) = match self.core() {
-            Core::Stadium { a, b, radius } => (vec![a, b], radius.max(0)),
-            Core::Polygon(points, radius) => (points, radius.max(0)),
-        };
+        // Every piece of one shape has the same radius.
+        let mut points = Vec::new();
+        let mut radius = 0;
+        for core in self.cores() {
+            match core {
+                Core::Stadium { a, b, radius: r } => {
+                    points.extend([a, b]);
+                    radius = r.max(0);
+                }
+                Core::Polygon(corners, r) => {
+                    points.extend(corners);
+                    radius = r.max(0);
+                }
+            }
+        }
         (0..n).all(|i| {
             let (c, d) = (poly[i], poly[(i + 1) % n]);
             let edge = d.minus(c);

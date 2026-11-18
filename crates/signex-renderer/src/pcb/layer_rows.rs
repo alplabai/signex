@@ -71,7 +71,7 @@ fn technical_group(layer: TechnicalLayer) -> LayerGroup {
 }
 
 /// The plane layers a board's stackup lists.
-fn plane_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
+pub fn plane_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
     layers
         .iter()
         .filter(|def| is_plane(def))
@@ -137,16 +137,7 @@ pub fn group_layers(layers: &[LayerDef], group: LayerGroup) -> Vec<PcbLayer> {
 /// The copper layers a board defines, top to bottom; Top and Bottom when
 /// it lists none.
 pub fn board_copper_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
-    let mut copper: Vec<CopperLayer> = layers
-        .iter()
-        .filter_map(|def| parse_pcb_layer(&def.name)?.copper())
-        .collect();
-    copper.sort();
-    copper.dedup();
-    if copper.is_empty() {
-        copper = vec![CopperLayer::Top, CopperLayer::Bottom];
-    }
-    copper
+    signex_types::pcb_stack::board_copper_layers(layers)
 }
 
 /// The layers a board lists, in its own order: the tabs of the strip under

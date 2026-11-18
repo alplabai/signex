@@ -17,6 +17,11 @@ pub struct Word {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuleAst {
+    /// The whole rule, `disabled` keyword included; may take in the
+    /// whitespace after it (see `table::tight`).
+    pub span: Span,
+    /// Written `disabled rule ...`: kept, validated, not applied (#2398).
+    pub disabled: bool,
     pub name: Word,
     /// `clearance`, `track` or `via` in v1.
     pub target: Word,

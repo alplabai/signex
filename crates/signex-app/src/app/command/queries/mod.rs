@@ -1,6 +1,14 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
-//! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
-//! `check_erc` and `check_drc` (#2199, answered once their run lands). Each
+//! `resolve`, `find_items`, `read_document`, `query_pins`, the checks
+//! `check_erc` and `check_drc` (#2199) and `check_requirements` (#2339),
+//! answered once their run lands, and
+//! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
+//! `rules_explain`, `rules_conflicts`, `rules_matrix_get` and
+//! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
+//! rule profile library, read off the update loop first), and the board
+//! queries `measure_board`, `query_board_nets` and `find_similar_items`
+//! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
+//! `project_settings` (#1689-#1693, `app::project_tab`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -10,8 +18,10 @@
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
+mod board;
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 mod check_run;
 pub use check_run::CheckFinished;
 mod documents;
@@ -41,11 +51,24 @@ const QUERY_IDS: &[&str] = &[
     "query_pins",
     "check_erc",
     "check_drc",
+    "check_requirements",
+    "rules_list",
+    "rules_get",
+    "rules_effective",
+    "rules_explain",
+    "rules_conflicts",
+    "measure_board",
+    "query_board_nets",
+    "find_similar_items",
+    "rules_matrix_get",
+    "rules_preset_diff",
+    "board_panel",
+    "project_settings",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
 /// Messages; its report names what it did not read.
-const CHECK_IDS: &[&str] = &["check_erc", "check_drc"];
+const CHECK_IDS: &[&str] = &["check_erc", "check_drc", "check_requirements"];
 
 /// Is `command` one of the checks?
 pub(crate) fn is_check(command: &AppCommandId) -> bool {
@@ -103,6 +126,33 @@ impl Signex {
         match id {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
+            "check_requirements" => return Some(self.check_requirements(command, args)),
+            // The Rules manager's reads (#2398).
+            "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
+            | "rules_conflicts" => {
+                let outcome = match self.rules_query(id, args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            "rules_matrix_get" => {
+                let outcome = match self.rules_matrix_get(args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // The Project tab's sections (#1689-#1693).
+            "project_settings" => {
+                let outcome = match self.project_settings(args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // A profile preset may need the profile library read first.
+            "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
             _ => {}
         }
         let answer = match id {
@@ -111,6 +161,10 @@ impl Signex {
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
+            "measure_board" => self.measure_board(args),
+            "query_board_nets" => self.query_board_nets(args),
+            "find_similar_items" => self.find_similar_items(args),
+            "board_panel" => self.board_panel_query(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,
@@ -143,6 +197,10 @@ pub(in crate::app) mod tests;
 pub(in crate::app) mod pins_tests;
 
 #[cfg(test)]
-mod check_drc_tests;
+mod check_drc_base_rules_tests;
+#[cfg(test)]
+pub(crate) mod check_drc_tests;
 #[cfg(test)]
 mod check_erc_tests;
+#[cfg(test)]
+mod check_requirements_tests;

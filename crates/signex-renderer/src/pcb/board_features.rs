@@ -81,7 +81,8 @@ impl BoardFeaturesInput {
 
 /// Append the board features to the overlay buckets of `scene`.
 pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: &mut Scene) {
-    let edge = theme.color(ColorSlot::BoardEdge);
+    // The Board Outline layer's colour, the one its chip shows (#2363).
+    let edge = theme.board_layer_color(super::BOARD_OUTLINE);
     let opening = theme.color(ColorSlot::BoardOpening);
     let keepout_color = theme.color(ColorSlot::Keepout);
     let keepout_hatch = with_alpha_mul(keepout_color, KEEPOUT_HATCH_ALPHA);
@@ -127,7 +128,7 @@ pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: 
     }
 }
 
-fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment {
+pub(super) fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment {
     LineSegment {
         p0,
         p1,
@@ -139,7 +140,7 @@ fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment 
 }
 
 /// The closed loop through `points` as line segments.
-fn push_loop(scene: &mut Scene, points: &[[f32; 2]], color: [f32; 4], width: f32) {
+pub(super) fn push_loop(scene: &mut Scene, points: &[[f32; 2]], color: [f32; 4], width: f32) {
     for (i, &p0) in points.iter().enumerate() {
         let p1 = points[(i + 1) % points.len()];
         scene.overlay_lines.push(line(p0, p1, color, width));
@@ -276,5 +277,29 @@ mod tests {
         // The openings stay: the cutout fill and the hole disc.
         assert_eq!(hidden.overlay_polygons.len(), 1);
         assert_eq!(hidden.overlay_circles.len(), 1);
+    }
+
+    /// #2363: a colour the view gives the Board Outline draws the edge, as
+    /// its chip shows; without one the edge keeps the palette colour.
+    #[test]
+    fn a_board_outline_colour_draws_the_edge() {
+        let features = BoardFeaturesInput {
+            outline: square(50.0),
+            ..BoardFeaturesInput::default()
+        };
+        let palette = ResolvedTheme::builtin_default();
+        let mut paint = crate::pcb::BoardPaint::default();
+        paint.set_colour(crate::pcb::BOARD_OUTLINE, Some([255, 0, 0]));
+        let painted = palette.clone().with_paint(paint);
+        let mut scene = Scene::default();
+        emit(&features, &painted, &mut scene);
+        assert_eq!(scene.overlay_lines.len(), 4);
+        let edge = palette.color(ColorSlot::BoardEdge);
+        for l in &scene.overlay_lines {
+            assert_eq!(l.color, [1.0, 0.0, 0.0, edge[3]]);
+        }
+        let mut scene = Scene::default();
+        emit(&features, &palette, &mut scene);
+        assert!(scene.overlay_lines.iter().all(|l| l.color == edge));
     }
 }

@@ -1,7 +1,6 @@
-//! Properties surface for a single hierarchical child sheet — editable
-//! Name / File (commit on Enter), read-only geometry, plus the editable
-//! Border/Fill colour swatch rows and stroke-width row. Moved verbatim from the former single-file
-//! `element_properties` module.
+//! Properties surface for a single hierarchical child sheet: editable Name /
+//! File (commit on Enter), editable Position and Size (#2418), the Border /
+//! Fill colour swatch rows and the stroke-width row.
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
@@ -12,22 +11,14 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// Properties section for a single hierarchical child sheet.
-/// Shows editable Name / File (commit on Enter), read-only Position / Size,
+/// Shows editable Name / File (commit on Enter), Position / Size,
 /// plus editable Border Colour, Fill Colour and Line Width with a
 /// Reset-to-default button. Colour edits open an iced_aw
 /// ColorPicker overlay anchored to a swatch button.
-/// The Position row: Y read from the sheet's page origin (#2034).
-pub(in crate::panels) fn child_sheet_position(
-    ctx: &PanelContext,
-    at: &signex_types::schematic::Point,
-) -> String {
-    format!("{:.2}, {:.2}", at.x, ctx.shown_y(at.y))
-}
-
 pub(in crate::panels) fn view_child_sheet_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
-    primary: Color,
+    _primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let Some(child_sheet) = ctx.selected_child_sheet.as_ref() else {
@@ -39,8 +30,6 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let id = child_sheet.uuid;
     let name = buffered_or(&ctx.child_sheet_name_buf, id, &child_sheet.name);
     let filename = buffered_or(&ctx.child_sheet_file_buf, id, &child_sheet.filename);
-    let position = child_sheet_position(ctx, &child_sheet.position);
-    let size = format!("{:.1} x {:.1} mm", child_sheet.size.0, child_sheet.size.1);
 
     let stroke_width = child_sheet.stroke_width;
     let stroke_color = child_sheet.stroke_color;
@@ -55,11 +44,11 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    // ── Properties (editable identity, read-only geometry) ──
+    // ── Properties (identity and geometry, all editable) ──
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_props",
-            "Properties",
+            signex_i18n::ids::PANELS_PLACED_PROPERTIES,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
@@ -80,8 +69,12 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                     move |s| PanelMsg::ChildSheetFileTyping(id, s),
                     PanelMsg::CommitChildSheetFile(id),
                 ));
-                c = c.push(prop_kv_row("Position", &position, muted, primary));
-                c = c.push(prop_kv_row("Size", &size, muted, primary));
+                let look = super::placed_rows::RowLook {
+                    muted,
+                    input_bg: palette.input_bg,
+                };
+                c = super::placed_rows::push_position_rows(c, ctx, look);
+                c = super::placed_rows::push_size_rows(c, ctx, look);
                 c
             },
         )
@@ -92,28 +85,28 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_style",
-            "Style",
+            signex_i18n::ids::PROPERTIES_SECTION_STYLE,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
                 c = c.push(child_sheet_color_row(
-                    "Border Colour",
                     id,
                     stroke_color,
                     border_picker_open,
                     border_advanced_open,
                     palette,
                     /* is_border */ true,
+                    i18n,
                 ));
                 c = c.push(child_sheet_color_row(
-                    "Fill Colour",
                     id,
                     fill_color,
                     fill_picker_open,
                     fill_advanced_open,
                     palette,
                     /* is_border */ false,
+                    i18n,
                 ));
                 c = c.push(child_sheet_stroke_width_row(
                     id,
@@ -163,14 +156,15 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 /// same `EditChildSheet*Color` message so engine command + undo/redo
 /// round-trip is identical for both paths.
 fn child_sheet_color_row<'a>(
-    label: &'a str,
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
     palette: PanelPalette,
     is_border: bool,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
     use std::rc::Rc;
 
     let PanelPalette {
@@ -209,20 +203,28 @@ fn child_sheet_color_row<'a>(
         .is_some()
         .then_some(PanelMsg::ResetChildSheetStyle(sheet_id));
 
-    color_field(ColorFieldProps {
-        label,
-        current: current_rgba,
-        none_label: "Default",
-        show_palette: show_picker,
-        show_advanced,
-        muted,
-        border_c,
-        on_toggle,
-        on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
-        on_cancel: PanelMsg::CancelChildSheetColorPicker,
-        on_pick,
-        on_clear,
-    })
+    let label = if is_border {
+        ids::PROPERTIES_BORDER_COLOUR
+    } else {
+        ids::PROPERTIES_FILL_COLOUR
+    };
+    color_field(
+        ColorFieldProps {
+            label: t!(i18n, label).into(),
+            current: current_rgba,
+            none_label: t!(i18n, ids::PROPERTIES_COLOR_DEFAULT).into(),
+            show_palette: show_picker,
+            show_advanced,
+            muted,
+            border_c,
+            on_toggle,
+            on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
+            on_cancel: PanelMsg::CancelChildSheetColorPicker,
+            on_pick,
+            on_clear,
+        },
+        i18n,
+    )
 }
 
 /// Numeric stroke-width row for the child-sheet Style section.
@@ -303,23 +305,4 @@ fn child_sheet_text_row<'a>(
     .padding([SP.s, SP.m])
     .width(Length::Fill)
     .boxed()
-}
-
-#[cfg(test)]
-mod position_tests {
-    use super::*;
-
-    /// Review of #2034: an A4 sheet at the default Lower Left origin shows a
-    /// child sheet at stored y = 50 as 210 - 50 = 160.
-    #[test]
-    fn the_child_sheet_position_reads_y_from_the_page_origin() {
-        let (mut app, _task) = crate::app::Signex::new();
-        let ctx = &mut app.document_state.panel_ctx;
-        ctx.paper_size = "A4".into();
-        ctx.page_origin = signex_types::schematic::PageOrigin::LowerLeft;
-        let at = signex_types::schematic::Point::new(30.0, 50.0);
-        assert_eq!(child_sheet_position(ctx, &at), "30.00, 160.00");
-        ctx.page_origin = signex_types::schematic::PageOrigin::UpperLeft;
-        assert_eq!(child_sheet_position(ctx, &at), "30.00, 50.00");
-    }
 }

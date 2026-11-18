@@ -8,6 +8,7 @@
 //! (ADR-0001 #163); zero behaviour change.
 
 use super::super::*;
+use super::pad_trapezoid::size_fits_shape;
 
 impl Signex {
     /// v0.16.3 — sibling of [`Self::active_symbol_editor_mut`] for
@@ -68,7 +69,10 @@ impl Signex {
             && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
-            editor.state.next_pad_defaults.size_x_mm = parsed;
+            let defaults = &mut editor.state.next_pad_defaults;
+            if size_fits_shape(&defaults.shape, (parsed, defaults.size_y_mm)) {
+                defaults.size_x_mm = parsed;
+            }
         }
         self.refresh_panel_ctx();
         true
@@ -79,7 +83,10 @@ impl Signex {
             && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
-            editor.state.next_pad_defaults.size_y_mm = parsed;
+            let defaults = &mut editor.state.next_pad_defaults;
+            if size_fits_shape(&defaults.shape, (defaults.size_x_mm, parsed)) {
+                defaults.size_y_mm = parsed;
+            }
         }
         self.refresh_panel_ctx();
         true
@@ -156,7 +163,9 @@ impl Signex {
     // so the form re-reads the new value.
     pub(crate) fn fp_editor_set_next_pad_shape(&mut self, shape: signex_library::PadShape) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.shape = shape;
+            let defaults = &mut editor.state.next_pad_defaults;
+            defaults.shape =
+                super::pad_trapezoid::seeded_trapezoid(shape, &defaults.shape, defaults.size_x_mm);
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
@@ -489,7 +498,9 @@ impl Signex {
         idx: usize,
         shape: signex_library::PadShape,
     ) -> bool {
-        self.with_selected_pad(idx, |pad| pad.shape = shape);
+        self.with_selected_pad(idx, |pad| {
+            pad.shape = super::pad_trapezoid::seeded_trapezoid(shape, &pad.shape, pad.size_mm.0);
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_kind(
@@ -504,7 +515,11 @@ impl Signex {
         if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
-            self.with_selected_pad_field(idx, Some("pad_size_x"), |pad| pad.size_mm.0 = parsed);
+            self.with_selected_pad_field(idx, Some("pad_size_x"), |pad| {
+                if size_fits_shape(&pad.shape, (parsed, pad.size_mm.1)) {
+                    pad.size_mm.0 = parsed;
+                }
+            });
         }
         true
     }
@@ -512,7 +527,11 @@ impl Signex {
         if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
             && parsed > 0.0
         {
-            self.with_selected_pad_field(idx, Some("pad_size_y"), |pad| pad.size_mm.1 = parsed);
+            self.with_selected_pad_field(idx, Some("pad_size_y"), |pad| {
+                if size_fits_shape(&pad.shape, (pad.size_mm.0, parsed)) {
+                    pad.size_mm.1 = parsed;
+                }
+            });
         }
         true
     }

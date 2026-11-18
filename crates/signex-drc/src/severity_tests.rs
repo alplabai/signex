@@ -25,7 +25,18 @@ fn every_kind_has_a_stable_builtin_rule_id() {
             "builtin::keepout",
             "builtin::track_width",
             "builtin::via_diameter",
-            "builtin::via_drill"
+            "builtin::via_drill",
+            "builtin::hole_size",
+            "builtin::annular_ring",
+            "builtin::hole_to_hole",
+            "builtin::edge_clearance",
+            "builtin::via_in_pad",
+            "builtin::silk_to_pad",
+            "builtin::silk_to_silk",
+            "builtin::mask_sliver",
+            "builtin::mask_expansion",
+            "builtin::paste_expansion",
+            "builtin::courtyard_overlap",
         ]
     );
     for kind in ViolationKind::ALL {
@@ -143,4 +154,35 @@ fn a_report_gives_each_violation_its_resolved_severity() {
         report.severity_of(&report.violations[0]),
         Some(Severity::Info)
     );
+}
+
+#[test]
+fn a_written_rule_entry_follows_severity_on_rename_and_remove_edits() {
+    let mut set = layer(&[
+        ("user::a", "off"),
+        ("user::b", "warning"),
+        ("user::c", "info"),
+    ]);
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SwitchedOn("b"));
+    assert_eq!(
+        written_rule_override(&set, "b"),
+        Some(Some(Severity::Warning))
+    );
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SwitchedOn("a"));
+    assert_eq!(written_rule_override(&set, "a"), None);
+    follow_written_rule_edit(
+        &mut set,
+        WrittenRuleEdit::Renamed {
+            from: "b",
+            to: "bb",
+        },
+    );
+    assert_eq!(written_rule_override(&set, "b"), None);
+    assert_eq!(
+        written_rule_override(&set, "bb"),
+        Some(Some(Severity::Warning))
+    );
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::SeveritySet("bb"));
+    follow_written_rule_edit(&mut set, WrittenRuleEdit::Dropped("c"));
+    assert!(set.severity.is_empty(), "{:?}", set.severity);
 }

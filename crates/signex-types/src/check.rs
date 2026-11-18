@@ -1,13 +1,14 @@
 //! The result of a design check run on demand (#2199, decision
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6798772157):
-//! one shape for every check (`check_erc` now, DRC and the requirement checks
-//! later). What only one check knows goes in a finding's `evidence`. Shape and
+//! one shape for every check (`check_erc`, `check_drc` and
+//! `check_requirements`, #2339). What only one check knows goes in a
+//! finding's `evidence`. Shape and
 //! rules: `docs/CLI.md`, "Checks on demand".
 
 use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 pub use crate::violation::Severity;
 
@@ -67,6 +68,10 @@ pub struct CheckReport {
     /// rule set came from, its profile and its hash).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule_set: Option<Value>,
+    /// The rules the run checked that raised no finding, for a check that
+    /// lists them (the requirement checks, #2339); left out when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed: Vec<String>,
     /// Present when the run was compared with an earlier one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline: Option<BaselineDiff>,
@@ -99,8 +104,14 @@ impl CheckReport {
             lapsed,
             warnings,
             rule_set: None,
+            passed: Vec::new(),
             baseline: None,
         }
+    }
+
+    /// This report listing the rules it checked that raised no finding.
+    pub fn with_passed(self, passed: Vec<String>) -> Self {
+        Self { passed, ..self }
     }
 
     /// This report naming the rules its run used.
@@ -137,6 +148,24 @@ impl CheckReport {
             ..self
         }
     }
+}
+
+/// A per-finding waiver as a waiver object of a report, one shape for every
+/// check (#2307): `kind`, `rule_id`, `fingerprint` and `reason`, plus the
+/// check's own fields in `extra` (ERC's objects, DRC's key).
+/// A shared field wins over a same-named key in `extra`.
+pub fn finding_waiver_json(
+    rule_id: &str,
+    fingerprint: &str,
+    reason: &str,
+    extra: Map<String, Value>,
+) -> Value {
+    let mut out = extra;
+    out.insert("kind".into(), "finding".into());
+    out.insert("rule_id".into(), rule_id.into());
+    out.insert("fingerprint".into(), fingerprint.into());
+    out.insert("reason".into(), reason.into());
+    Value::Object(out)
 }
 
 /// Where `finding` goes in a report: see [`CheckReport::new`].

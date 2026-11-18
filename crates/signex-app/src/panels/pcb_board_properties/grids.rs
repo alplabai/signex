@@ -1,66 +1,34 @@
-//! Grid Manager (#2353, #2374): the board's extra snap grids in priority
-//! order above the Global Board Snap Grid (the setup's step, at the
-//! origin). A row selects its grid for Properties and Delete; the Comp and
-//! Non Comp boxes and the swatch edit it at once. Fast Grids set the global
-//! step to one of the fast grid preferences (#1672).
+//! Grid Manager (#2353, #2374, #2386): one card per grid. The board's own
+//! grid (the setup's step, counted from the board origin) comes first, then
+//! the extra grids, highest priority first: the order is the priority. A
+//! card shows its swatch, name, step (typed in place) and a ⋯ menu (Edit,
+//! Move Up, Move Down, Delete; the board's own grid has Edit only), and
+//! under them its origin and the Parts and Other pills. Fast Grids set the
+//! board's step to one of the fast grid preferences (#1672).
 
-use iced::widget::{Row, container};
-use iced::{Element, Widget as _};
+use iced::widget::{Column, container};
+use iced::{Element, Length, Widget as _};
+use iced_aw::Wrap;
 use signex_i18n::{Localized, ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::pcb_options::BoardGrid;
 
 use super::chrome::{Form, Shown};
 use super::info::shown_unit;
-use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, fields};
+use super::{BoardField, GridCard, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, cards, fields};
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
 }
 
-/// The Global Board Snap Grid's priority: below every extra grid.
-const GLOBAL_PRIORITY: usize = 50;
-
 pub(super) fn grid_section<'a>(
     form: &Form<'a>,
     board: &'a PcbBoardSummary,
 ) -> Option<Element<'a, PanelMsg>> {
-    let mut rows: Vec<Shown<'a>> = Vec::new();
-    let title = form.t(ids::PCB_BOARD_SECTION_GRIDS);
-    let headings = [
-        ids::PCB_BOARD_GRID_PRIORITY,
-        ids::PCB_BOARD_GRID_NAME,
-        ids::PCB_BOARD_GRID_COLOR,
-        ids::PCB_BOARD_GRID_ORIGIN,
-        ids::PCB_BOARD_GRID_COMP,
-        ids::PCB_BOARD_GRID_NON_COMP,
-    ];
-    let header = form.table_row(headings.iter().map(|id| form.heading(*id)).collect(), true);
-    rows.push(form.row(&[&title], header));
-    let editable = !board.read_only;
+    let mut rows: Vec<Shown<'a>> = vec![global_card(form, board)];
+    let count = board.options.grids.len();
     for (index, grid) in board.options.grids.iter().enumerate() {
-        rows.push(grid_row(form, board, index, grid, editable));
-    }
-    let name = form.t(ids::PCB_BOARD_GRID_GLOBAL);
-    let global = form.table_row(
-        vec![
-            form.value(t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => GLOBAL_PRIORITY)),
-            form.value(name.clone()),
-            form.value(form.t(ids::PCB_BOARD_UNSET)),
-            form.value(origin_text(form, 0.0, 0.0)),
-            form.value(form.t(ids::PCB_BOARD_GRID_ALWAYS)),
-            form.value(form.t(ids::PCB_BOARD_GRID_ALWAYS)),
-        ],
-        false,
-    );
-    rows.push(form.row(&[&name], global));
-
-    let step = form.t(ids::PCB_BOARD_GRID_STEP);
-    rows.push(form.row(&[&name, &step], form.field(&step, step_field(form, board))));
-    if board.view.grid_editor_open
-        && let Some(grid) = selected(board)
-    {
-        editor_rows(form, board, grid, &mut rows);
+        rows.push(grid_card(form, board, index, count, grid));
     }
 
     let visible = form.t(ids::PCB_BOARD_GRID_VISIBLE);
@@ -75,15 +43,18 @@ pub(super) fn grid_section<'a>(
     let fast = form.t(ids::PCB_BOARD_GRID_FAST);
     rows.push(form.row(&[&fast], form.field(&fast, fast_grids(form, board))));
 
-    rows.push(form.row(&[&title], buttons(form, board)));
+    let add = form.t(ids::PCB_BOARD_GRID_ADD);
+    let press = (!board.read_only)
+        .then_some(PcbBoardMsg::GridAdded)
+        .and_then(msg);
+    let button = container(form.action(add.clone(), press, None))
+        .padding([SP.s, SP.l])
+        .boxed();
+    rows.push(form.row(&[&add], button));
     form.section("pcb_board_grids", ids::PCB_BOARD_SECTION_GRIDS, rows)
 }
 
-fn selected(board: &PcbBoardSummary) -> Option<&BoardGrid> {
-    let id = board.view.selected_grid?;
-    board.options.grids.iter().find(|g| g.uuid == id)
-}
-
+/// `(x, y)` in the panel's unit, as a card's origin line shows it.
 fn origin_text(form: &Form<'_>, x: f64, y: f64) -> Localized {
     let unit = shown_unit(form);
     t!(
@@ -94,84 +65,208 @@ fn origin_text(form: &Form<'_>, x: f64, y: f64) -> Localized {
     )
 }
 
-/// One extra grid's row: priority, name, swatch, origin, Comp, Non Comp.
-fn grid_row<'a>(
+/// The step field and the unit after it, beside a card's name.
+fn step<'a>(form: &Form<'a>, field: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+    let unit = t!(form.i18n, ids::PCB_BOARD_MEASURE, "value" => shown_unit(form).to_string());
+    container(cards::line(vec![field, cards::muted(form, unit)]))
+        .width(Length::FillPortion(2))
+        .boxed()
+}
+
+/// A card's name, taking the room the step leaves.
+fn name<'a>(form: &Form<'a>, label: impl Into<signex_widgets::Label<'a>>) -> Element<'a, PanelMsg> {
+    container(cards::name(form, label))
+        .width(Length::FillPortion(3))
+        .boxed()
+}
+
+/// The Parts and Other pills: what the old Comp and Non Comp columns said.
+fn pills<'a>(
+    form: &Form<'a>,
+    parts: (bool, Option<PanelMsg>),
+    other: (bool, Option<PanelMsg>),
+    why: Option<Localized>,
+) -> Vec<Element<'a, PanelMsg>> {
+    vec![
+        cards::pill(
+            form,
+            form.t(ids::PCB_BOARD_GRID_PARTS),
+            parts.0,
+            parts.1,
+            why.clone(),
+        ),
+        cards::pill(
+            form,
+            form.t(ids::PCB_BOARD_GRID_OTHER),
+            other.0,
+            other.1,
+            why,
+        ),
+    ]
+}
+
+/// The board's own grid: always last in priority, never moved or deleted;
+/// it applies to everything no extra grid claims.
+fn global_card<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
+    let label = form.t(ids::PCB_BOARD_GRID_GLOBAL);
+    let card = GridCard::Global;
+    let menu_msg = (!board.read_only)
+        .then_some(PcbBoardMsg::GridMenuToggled(card))
+        .and_then(msg);
+    let header = cards::line(vec![
+        cards::no_swatch(),
+        name(form, label.clone()),
+        step(form, step_field(form, board)),
+        cards::more(form, menu_msg),
+    ]);
+    let fixed = Some(form.t(ids::PCB_BOARD_GRID_FIXED_TIP));
+    let mut second = vec![
+        container(cards::muted(form, origin_text(form, 0.0, 0.0)))
+            .width(Length::Fill)
+            .boxed(),
+    ];
+    second.extend(pills(form, (true, None), (true, None), fixed));
+    let mut body = Column::new()
+        .spacing(SP.xs)
+        .push(header)
+        .push(cards::line(second));
+    if board.view.grid_menu == Some(card) {
+        let edit = (
+            form.t(ids::PCB_BOARD_EDIT),
+            msg(PcbBoardMsg::GridEditToggled(card)),
+        );
+        body = body.push(cards::menu(form, vec![edit]));
+    }
+    if board.view.grid_editing == Some(card) {
+        let step_label = form.t(ids::PCB_BOARD_GRID_STEP);
+        body = body.push(cards::labelled(form, step_label, step_field(form, board)));
+    }
+    form.row(&[&label], form.card(body.boxed()))
+}
+
+/// An extra grid's card; `index` is its place among `count` extra grids,
+/// highest priority first.
+fn grid_card<'a>(
     form: &Form<'a>,
     board: &PcbBoardSummary,
     index: usize,
-    grid: &'a BoardGrid,
-    editable: bool,
+    count: usize,
+    grid: &BoardGrid,
 ) -> Shown<'a> {
     let id = grid.uuid;
-    let check = |on: bool, toggled: PcbBoardMsg| {
-        let mut b = signex_widgets::checkbox(on).style(super::super::form_look::checkbox_style);
-        if editable {
-            b = b.on_toggle(move |_| PanelMsg::PcbBoard(toggled.clone()));
-        }
-        b.boxed()
-    };
+    let card = GridCard::Extra(id);
+    let editable = !board.read_only;
+    let live = |m: PcbBoardMsg| editable.then_some(m).and_then(msg);
     let swatch = if editable {
         let tip = form.t(ids::PCB_BOARD_SWATCH_TIP);
         fields::swatch(form, grid.color, PcbBoardMsg::GridColorStepped(id), tip)
     } else {
-        form.value(form.t(ids::PCB_BOARD_UNSET))
+        cards::no_swatch()
     };
-    let cells = vec![
-        form.value(t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => index + 1)),
-        form.value(signex_i18n::UserText::new(grid.name.clone())),
+    let step_value = if editable {
+        let label = form.t(ids::PCB_BOARD_GRID_STEP);
+        fields::length(form, board, BoardField::GridStep(id), label, grid.step_mm)
+    } else {
+        form.value(fields::measure(form, grid.step_mm))
+    };
+    let header = cards::line(vec![
         swatch,
-        form.value(origin_text(form, grid.origin.x, grid.origin.y)),
-        check(grid.components, PcbBoardMsg::GridComponentsToggled(id)),
-        check(
-            grid.non_components,
-            PcbBoardMsg::GridNonComponentsToggled(id),
-        ),
+        name(form, signex_i18n::UserText::new(grid.name.clone())),
+        step(form, step_value),
+        cards::more(form, live(PcbBoardMsg::GridMenuToggled(card))),
+    ]);
+    let origin = board.options.origin;
+    let at = origin_text(
+        form,
+        origin.user_x(grid.origin.x),
+        origin.user_y(grid.origin.y),
+    );
+    let mut second = vec![
+        container(cards::muted(form, at))
+            .width(Length::Fill)
+            .boxed(),
     ];
-    let line = form.table_row(cells, false);
-    let picked = board.view.selected_grid == Some(id);
-    let line = fields::selectable(form, line, picked, PcbBoardMsg::GridSelected(id));
-    form.row(&[&form.t(ids::PCB_BOARD_SECTION_GRIDS)], line)
+    second.extend(pills(
+        form,
+        (
+            grid.components,
+            live(PcbBoardMsg::GridComponentsToggled(id)),
+        ),
+        (
+            grid.non_components,
+            live(PcbBoardMsg::GridNonComponentsToggled(id)),
+        ),
+        None,
+    ));
+    let mut body = Column::new()
+        .spacing(SP.xs)
+        .push(header)
+        .push(cards::line(second));
+    if board.view.grid_menu == Some(card) {
+        let actions = vec![
+            (
+                form.t(ids::PCB_BOARD_EDIT),
+                msg(PcbBoardMsg::GridEditToggled(card)),
+            ),
+            (
+                form.t(ids::PCB_BOARD_MOVE_UP),
+                (index > 0)
+                    .then_some(PcbBoardMsg::GridMoved(id, true))
+                    .and_then(msg),
+            ),
+            (
+                form.t(ids::PCB_BOARD_MOVE_DOWN),
+                (index + 1 < count)
+                    .then_some(PcbBoardMsg::GridMoved(id, false))
+                    .and_then(msg),
+            ),
+            (
+                form.t(ids::PCB_BOARD_DELETE),
+                msg(PcbBoardMsg::GridDeleted(id)),
+            ),
+        ];
+        body = body.push(cards::menu(form, actions));
+    }
+    if editable && board.view.grid_editing == Some(card) {
+        body = body.push(editor(form, board, grid));
+    }
+    let title = form.t(ids::PCB_BOARD_SECTION_GRIDS);
+    let key = t!(form.i18n, ids::PCB_BOARD_MEASURE, "value" => grid.name.clone());
+    form.row(&[&title, &key], form.card(body.boxed()))
 }
 
-/// The selected grid's Name, Step and Origin fields (Properties).
-fn editor_rows<'a>(
-    form: &Form<'a>,
-    board: &PcbBoardSummary,
-    grid: &BoardGrid,
-    rows: &mut Vec<Shown<'a>>,
-) {
+/// Edit: the grid's Name, then Origin X and Y as a pair.
+fn editor<'a>(form: &Form<'a>, board: &PcbBoardSummary, grid: &BoardGrid) -> Element<'a, PanelMsg> {
     let id = grid.uuid;
-    let name = form.t(ids::PCB_BOARD_GRID_NAME);
-    let field = fields::text(
+    let name_label = form.t(ids::PCB_BOARD_GRID_NAME);
+    let name = fields::text(
         form,
         board,
         BoardField::GridName(id),
-        name.clone(),
+        name_label.clone(),
         grid.name.clone(),
     );
-    rows.push(form.row(&[&name], form.field(&name, field)));
-    let lengths = [
-        (
-            ids::PCB_BOARD_GRID_STEP,
-            BoardField::GridStep(id),
-            grid.step_mm,
-        ),
-        (
-            ids::PCB_BOARD_GRID_ORIGIN_X,
-            BoardField::GridOriginX(id),
-            grid.origin.x,
-        ),
-        (
-            ids::PCB_BOARD_GRID_ORIGIN_Y,
-            BoardField::GridOriginY(id),
-            grid.origin.y,
-        ),
-    ];
-    for (label, field, mm) in lengths {
+    let origin = board.options.origin;
+    let pair = |label, field, mm| {
         let label = form.t(label);
         let input = fields::length(form, board, field, label.clone(), mm);
-        rows.push(form.row(&[&label], form.field(&label, input)));
-    }
+        cards::labelled(form, label, input)
+    };
+    let x = pair(
+        ids::PCB_BOARD_GRID_ORIGIN_X,
+        BoardField::GridOriginX(id),
+        origin.user_x(grid.origin.x),
+    );
+    let y = pair(
+        ids::PCB_BOARD_GRID_ORIGIN_Y,
+        BoardField::GridOriginY(id),
+        origin.user_y(grid.origin.y),
+    );
+    Column::new()
+        .spacing(SP.s)
+        .push(cards::labelled(form, name_label, name))
+        .push(cards::line(vec![x, y]))
+        .boxed()
 }
 
 /// The snap grid step: a field in the panel's unit that Enter applies as
@@ -205,50 +300,23 @@ fn step_field<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, Panel
     )
 }
 
-/// One button per fast grid preference; each sets the global step to it.
+/// One chip per fast grid preference; a click sets the board's step to it,
+/// and the chip of the step in use is lit.
 fn fast_grids<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
     let unit = shown_unit(form);
     let usable = board.grid_mm.is_some() && !board.read_only;
-    let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.s);
+    let mut chips = Wrap::new().spacing(SP.s).line_spacing(SP.xs);
     for (index, mm) in board.fast_grids_mm.iter().enumerate() {
+        let mm = f64::from(*mm);
         let label = t!(
             form.i18n,
             ids::PCB_BOARD_MEASURE,
-            "value" => length_field_text(f64::from(*mm), unit)
+            "value" => length_field_text(mm, unit)
         );
+        let in_use = board.grid_mm.is_some_and(|step| (step - mm).abs() < 1e-6);
         let press = usable.then_some(PanelMsg::PcbBoard(PcbBoardMsg::FastGridApplied(index)));
         let why = (!usable).then(|| form.t(ids::PCB_BOARD_GRID_NO_SETUP));
-        line = line.push(form.action(label, press, why));
+        chips = chips.push(form.chip(label, in_use, press, why));
     }
-    line.boxed()
-}
-
-/// Add, Properties and Delete. Properties and Delete act on the selected
-/// grid; with none selected they say so.
-fn buttons<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
-    let picked = selected(board).is_some() && !board.read_only;
-    let why = || (!picked).then(|| form.t(ids::PCB_BOARD_SELECT_ROW_FIRST));
-    let line = iced::widget::row![
-        form.action(
-            form.t(ids::PCB_BOARD_ADD),
-            (!board.read_only)
-                .then_some(PcbBoardMsg::GridAdded)
-                .and_then(msg),
-            None,
-        ),
-        form.action(
-            form.t(ids::PCB_BOARD_PROPERTIES),
-            picked
-                .then_some(PcbBoardMsg::GridPropertiesToggled)
-                .and_then(msg),
-            why(),
-        ),
-        form.action(
-            form.t(ids::PCB_BOARD_DELETE),
-            picked.then_some(PcbBoardMsg::GridDeleted).and_then(msg),
-            why(),
-        ),
-    ]
-    .spacing(SP.s);
-    container(line).padding([SP.s, SP.l]).boxed()
+    chips.into()
 }

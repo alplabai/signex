@@ -4,9 +4,10 @@
 //! A disc and a track are a segment with a radius. A rectangle is a convex
 //! polygon; a rounded rectangle is its rectangle inset by the corner radius
 //! plus that radius, so the test is exact integer nm and agrees with
-//! [`Shape::contains`].
+//! [`Shape::contains`]. A polygon pad (#2242) is its convex pieces.
 
 use crate::shape::{Shape, closest_on_segment, orientation, segments_intersect, within};
+use crate::shape_polygon::convex_pieces;
 use crate::units::PointNm;
 
 /// A shape reduced to what the overlap test needs.
@@ -21,45 +22,17 @@ pub(crate) enum Core {
 impl Shape {
     /// Whether the two shapes share a point; touching counts.
     pub fn overlaps(&self, other: &Shape) -> bool {
-        match (self.core(), other.core()) {
-            (
-                Core::Stadium { a, b, radius },
-                Core::Stadium {
-                    a: c,
-                    b: d,
-                    radius: s,
-                },
-            ) => segment_gap_within(a, b, c, d, radius.max(0) + s.max(0)),
-            (Core::Stadium { a, b, radius }, Core::Polygon(poly, r))
-            | (Core::Polygon(poly, r), Core::Stadium { a, b, radius }) => {
-                stadium_meets_polygon(a, b, radius.max(0) + r, &poly)
-            }
-            (Core::Polygon(p, r), Core::Polygon(q, s)) => {
-                !(separated(&p, &q) || separated(&q, &p)) || {
-                    // Disjoint convex polygons: the gap runs edge to edge.
-                    let limit = r + s;
-                    limit > 0
-                        && (0..p.len()).any(|i| {
-                            (0..q.len()).any(|j| {
-                                segment_gap_within(
-                                    p[i],
-                                    p[(i + 1) % p.len()],
-                                    q[j],
-                                    q[(j + 1) % q.len()],
-                                    limit,
-                                )
-                            })
-                        })
-                }
-            }
-        }
+        let theirs = other.cores();
+        self.cores()
+            .iter()
+            .any(|own| theirs.iter().any(|their| cores_overlap(own, their)))
     }
 
     /// Whether the shape shares a point with the simple polygon `poly`
     /// (corners in order, either winding, convex or not); touching counts.
-    /// The shape is a stadium or a convex polygon, so it meets `poly`
-    /// exactly when an edge of `poly` reaches it, or it lies wholly inside
-    /// `poly`, or `poly` lies wholly inside it. Integer nm; no floats
+    /// Each convex piece of the shape (a stadium or a convex polygon) meets
+    /// `poly` exactly when an edge of `poly` reaches it, or it lies wholly
+    /// inside `poly`, or `poly` lies wholly inside it. Integer nm; no floats
     /// beyond the rotated corners.
     ///
     /// A `poly` with no area (fewer than 3 distinct corners, or all
@@ -73,43 +46,29 @@ impl Shape {
         if let Some((a, b)) = flat_segment(poly) {
             return self.overlaps(&Shape::Capsule { a, b, radius: 0 });
         }
-        let edges = (0..poly.len()).map(|i| (poly[i], poly[(i + 1) % poly.len()]));
-        match self.core() {
-            Core::Stadium { a, b, radius } => {
-                point_in_polygon(poly, a)
-                    || edges
-                        .into_iter()
-                        .any(|(c, d)| segment_gap_within(a, b, c, d, radius.max(0)))
-            }
-            Core::Polygon(own, radius) => {
-                own.len() >= 3
-                    && (own.iter().any(|&p| point_in_polygon(poly, p))
-                        || inside_convex(&own, poly[0])
-                        || edges.into_iter().any(|(c, d)| {
-                            (0..own.len()).any(|i| {
-                                segment_gap_within(own[i], own[(i + 1) % own.len()], c, d, radius)
-                            })
-                        }))
-            }
-        }
+        self.cores()
+            .iter()
+            .any(|core| core_meets_polygon(core, poly))
     }
 
-    pub(crate) fn core(&self) -> Core {
+    /// The shape as convex pieces: one for every shape but a polygon that is
+    /// not convex, which is its ear-clipped triangles.
+    pub(crate) fn cores(&self) -> Vec<Core> {
         match *self {
-            Shape::Disc { center, radius } => Core::Stadium {
+            Shape::Disc { center, radius } => vec![Core::Stadium {
                 a: center,
                 b: center,
                 radius,
-            },
-            Shape::Capsule { a, b, radius } => Core::Stadium { a, b, radius },
-            Shape::Rect { .. } => flat_to_stadium(self.outline(0), 0),
+            }],
+            Shape::Capsule { a, b, radius } => vec![Core::Stadium { a, b, radius }],
+            Shape::Rect { .. } => vec![flat_to_stadium(self.outline(0), 0)],
             Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
                 radius,
                 rotation_deg,
-            } => flat_to_stadium(
+            } => vec![flat_to_stadium(
                 Shape::Rect {
                     center,
                     half_w: half_w - radius,
@@ -118,7 +77,76 @@ impl Shape {
                 }
                 .outline(0),
                 radius,
-            ),
+            )],
+            Shape::Polygon { ref ring, radius } => {
+                let pieces = convex_pieces(ring);
+                if pieces.is_empty() {
+                    return vec![flat_to_stadium(ring.to_vec(), radius)];
+                }
+                pieces
+                    .into_iter()
+                    .map(|piece| flat_to_stadium(piece, radius))
+                    .collect()
+            }
+        }
+    }
+}
+
+/// Whether two convex pieces share a point; touching counts.
+fn cores_overlap(own: &Core, their: &Core) -> bool {
+    match (own, their) {
+        (
+            &Core::Stadium { a, b, radius },
+            &Core::Stadium {
+                a: c,
+                b: d,
+                radius: s,
+            },
+        ) => segment_gap_within(a, b, c, d, radius.max(0) + s.max(0)),
+        (&Core::Stadium { a, b, radius }, Core::Polygon(poly, r))
+        | (Core::Polygon(poly, r), &Core::Stadium { a, b, radius }) => {
+            stadium_meets_polygon(a, b, radius.max(0) + r, poly)
+        }
+        (Core::Polygon(p, r), Core::Polygon(q, s)) => {
+            !(separated(p, q) || separated(q, p)) || {
+                // Disjoint convex polygons: the gap runs edge to edge.
+                let limit = r + s;
+                limit > 0
+                    && (0..p.len()).any(|i| {
+                        (0..q.len()).any(|j| {
+                            segment_gap_within(
+                                p[i],
+                                p[(i + 1) % p.len()],
+                                q[j],
+                                q[(j + 1) % q.len()],
+                                limit,
+                            )
+                        })
+                    })
+            }
+        }
+    }
+}
+
+/// Whether one convex piece meets the simple polygon `poly` (with area).
+fn core_meets_polygon(core: &Core, poly: &[PointNm]) -> bool {
+    let edges = (0..poly.len()).map(|i| (poly[i], poly[(i + 1) % poly.len()]));
+    match core {
+        &Core::Stadium { a, b, radius } => {
+            point_in_polygon(poly, a)
+                || edges
+                    .into_iter()
+                    .any(|(c, d)| segment_gap_within(a, b, c, d, radius.max(0)))
+        }
+        Core::Polygon(own, radius) => {
+            own.len() >= 3
+                && (own.iter().any(|&p| point_in_polygon(poly, p))
+                    || inside_convex(own, poly[0])
+                    || edges.into_iter().any(|(c, d)| {
+                        (0..own.len()).any(|i| {
+                            segment_gap_within(own[i], own[(i + 1) % own.len()], c, d, *radius)
+                        })
+                    }))
         }
     }
 }
@@ -223,7 +251,7 @@ pub(crate) fn polygons_meet(a: &[PointNm], b: &[PointNm]) -> bool {
 }
 
 /// Whether `p` lies in or on a simple polygon (even-odd crossing count).
-fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
+pub(crate) fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
     let mut inside = false;
     for i in 0..poly.len() {
         let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);

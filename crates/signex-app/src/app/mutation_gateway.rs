@@ -3,7 +3,7 @@ use super::*;
 
 /// What an engine command did to the active document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommandOutcome {
+pub(crate) enum MutationOutcome {
     /// The document changed.
     Changed,
     /// The command ran and found nothing to change.
@@ -14,69 +14,6 @@ pub(crate) enum CommandOutcome {
 }
 
 impl Signex {
-    pub(super) fn render_invalidation_for_patch(
-        patch: signex_engine::DocumentPatch,
-    ) -> crate::schematic_runtime::RenderInvalidation {
-        use crate::schematic_runtime::RenderInvalidation;
-
-        if patch.contains(signex_engine::DocumentPatch::FULL) {
-            return RenderInvalidation::FULL;
-        }
-
-        let mut invalidation = RenderInvalidation::NONE;
-        if patch.contains(signex_engine::DocumentPatch::SYMBOLS) {
-            invalidation |= RenderInvalidation::SYMBOLS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::WIRES) {
-            invalidation |= RenderInvalidation::WIRES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::LABELS) {
-            invalidation |= RenderInvalidation::LABELS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::TEXT_NOTES) {
-            invalidation |= RenderInvalidation::TEXT_NOTES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::BUSES) {
-            invalidation |= RenderInvalidation::BUSES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::BUS_ENTRIES) {
-            invalidation |= RenderInvalidation::BUS_ENTRIES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::JUNCTIONS) {
-            invalidation |= RenderInvalidation::JUNCTIONS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
-            invalidation |= RenderInvalidation::NO_CONNECTS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
-            invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
-            invalidation |= RenderInvalidation::CHILD_SHEETS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::DRAWINGS) {
-            invalidation |= RenderInvalidation::DRAWINGS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::LIB_SYMBOLS) {
-            invalidation |= RenderInvalidation::LIB_SYMBOLS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::PAPER) {
-            invalidation |= RenderInvalidation::PAPER;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NET_COLORS) {
-            invalidation |= RenderInvalidation::NET_COLORS;
-        }
-        // The sheet default font is inherited by every kind of text.
-        if patch.contains(signex_engine::DocumentPatch::FONT_FAMILY) {
-            invalidation |= RenderInvalidation::SYMBOLS
-                | RenderInvalidation::LABELS
-                | RenderInvalidation::TEXT_NOTES
-                | RenderInvalidation::CHILD_SHEETS;
-        }
-
-        invalidation
-    }
-
     /// Surface the notices a command raised (a rubber-band pin that could
     /// not be kept connected) in the Messages panel.
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
@@ -122,7 +59,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_commands`] that says whether the batch changed
@@ -133,7 +70,7 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_commands_reporting(commands, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -146,21 +83,21 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+            return (MutationOutcome::Unchanged, None);
         }
 
         let engine = match self.prepare_active_engine() {
             Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
+            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
         };
 
         // A locked symbol is skipped, not allowed to cancel the batch.
         let (commands, skipped) = Self::without_locked_items(engine, commands);
         crate::diagnostics::log_locked_skips(&skipped);
         if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+            return (MutationOutcome::Unchanged, None);
         }
 
         // One engine history entry for the whole batch, with the patches
@@ -168,28 +105,24 @@ impl Signex {
         // encode, now owned by the engine that holds the history.
         let batch = engine.execute_batch(commands);
         Self::report_engine_warnings(engine);
-        let invalidation = match batch {
+        let patch = match batch {
             Ok(result) => result
                 .patch_pair
-                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
+                .map_or(signex_engine::DocumentPatch::NONE, |pair| pair.document),
             Err(error) => {
                 let reason = error.to_string();
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command execution failed", &error);
-                return (CommandOutcome::Failed, Some(reason));
+                return (MutationOutcome::Failed, Some(reason));
             }
         };
 
-        let changed = self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
-            update_selection_info,
-        );
+        let changed =
+            self.finish_schematic_mutation(patch, clear_overlay_cache, update_selection_info);
         if changed {
-            (CommandOutcome::Changed, None)
+            (MutationOutcome::Changed, None)
         } else {
-            (CommandOutcome::Unchanged, None)
+            (MutationOutcome::Unchanged, None)
         }
     }
 
@@ -200,7 +133,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_command`] that says whether the command changed
@@ -211,7 +144,7 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -224,7 +157,7 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         self.apply_engine_command_recording(
             command,
             true,
@@ -239,7 +172,7 @@ impl Signex {
     pub(crate) fn apply_engine_command_unrecorded(
         &mut self,
         command: signex_engine::Command,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         self.apply_engine_command_recording(command, false, true, true)
     }
 
@@ -249,10 +182,10 @@ impl Signex {
         record_history: bool,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
+    ) -> (MutationOutcome, Option<String>) {
         let engine = match self.prepare_active_engine() {
             Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
+            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
         };
         let mut failed = None;
 
@@ -273,7 +206,7 @@ impl Signex {
                 None if names_locked => command,
                 None => {
                     crate::diagnostics::log_locked_skips(&skipped);
-                    return (CommandOutcome::Unchanged, None);
+                    return (MutationOutcome::Unchanged, None);
                 }
             }
         } else {
@@ -286,12 +219,11 @@ impl Signex {
             engine.execute_unrecorded(command)
         };
         Self::report_engine_warnings(engine);
-        let invalidation = match executed {
+        let patch = match executed {
             Ok(result) if result.changed => result
                 .patch_pair
-                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
-            Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
+                .map_or(signex_engine::DocumentPatch::NONE, |pair| pair.document),
+            Ok(_) => signex_engine::DocumentPatch::NONE,
             Err(error) => {
                 failed = Some(error.to_string());
                 if matches!(error, signex_engine::EngineError::ItemLocked { .. }) {
@@ -301,21 +233,18 @@ impl Signex {
                     let error = anyhow::Error::new(error);
                     crate::diagnostics::log_error("Engine command failed", &error);
                 }
-                crate::schematic_runtime::RenderInvalidation::NONE
+                signex_engine::DocumentPatch::NONE
             }
         };
 
-        let changed = self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
-            update_selection_info,
-        );
+        let changed =
+            self.finish_schematic_mutation(patch, clear_overlay_cache, update_selection_info);
         let outcome = if failed.is_some() {
-            CommandOutcome::Failed
+            MutationOutcome::Failed
         } else if changed {
-            CommandOutcome::Changed
+            MutationOutcome::Changed
         } else {
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         };
         (outcome, failed)
     }
@@ -390,13 +319,13 @@ impl Signex {
             }
             return stepped;
         }
-        let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
+        let patch = if let Some(engine) = self.document_state.active_engine_mut() {
             let (stepped, failure) = match direction {
                 StepDirection::Undo => (engine.undo(), "Engine undo failed"),
                 StepDirection::Redo => (engine.redo(), "Engine redo failed"),
             };
             match stepped {
-                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
+                Ok(Some(patch_pair)) => patch_pair.document,
                 Ok(None) => return false,
                 Err(error) => {
                     let error = anyhow::Error::new(error);
@@ -405,12 +334,12 @@ impl Signex {
                 }
             }
         } else {
-            crate::schematic_runtime::RenderInvalidation::NONE
+            signex_engine::DocumentPatch::NONE
         };
 
         // Undo/redo can bring back an older embedded library symbol.
         self.library.drift.check_pending = true;
-        self.finish_schematic_mutation(invalidation, true, update_selection_info)
+        self.finish_schematic_mutation(patch, true, update_selection_info)
     }
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
@@ -432,32 +361,31 @@ impl Signex {
 
     pub(super) fn finish_schematic_mutation(
         &mut self,
-        invalidation: crate::schematic_runtime::RenderInvalidation,
+        patch: signex_engine::DocumentPatch,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        if invalidation == crate::schematic_runtime::RenderInvalidation::NONE {
+        if patch == signex_engine::DocumentPatch::NONE {
             return false;
         }
         // An agent's edit list refreshes the sheet once, when it ends, and
         // never through the person's canvas (docs/AGENT_EDITS.md).
         if self.document_state.agent_edit_running() {
-            self.document_state.agent_edits.owed |= invalidation;
+            self.document_state.agent_edits.owed |= patch;
             return true;
         }
 
-        // A colour changes how the sheet is shown, never what ERC finds.
-        let display_only = invalidation == crate::schematic_runtime::RenderInvalidation::NET_COLORS;
+        let display_only = patch.is_display_only();
         if !display_only {
             self.document_state.note_sheet_edit();
         }
         if !self.sync_active_history_dirty() {
             return false;
         }
-        self.sync_canvas_from_visible_schematic(invalidation);
+        self.sync_canvas_from_visible_schematic(patch.into());
         // The sheet's paper changed (a Page Options edit, or its undo or
         // redo): the panel context and the drawn page follow the document.
-        if invalidation.intersects(crate::schematic_runtime::RenderInvalidation::PAPER)
+        if patch.intersects(signex_engine::DocumentPatch::PAPER)
             && let Some(token) = self
                 .active_render_snapshot()
                 .map(|snapshot| super::load_gateway::effective_paper_size(&snapshot.paper_size))
@@ -511,7 +439,7 @@ mod tests {
         let (mut bare, _task) = Signex::new();
         assert_eq!(
             bare.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Failed
+            MutationOutcome::Failed
         );
 
         let top = std::path::PathBuf::from("/w/gw/top.snxsch");
@@ -536,16 +464,16 @@ mod tests {
         // A file no sheet symbol references: nothing to reconcile.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("other.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Changed
+            MutationOutcome::Changed
         );
         // The same port again is already in place.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
     }
 

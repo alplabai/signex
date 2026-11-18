@@ -106,6 +106,8 @@ mod tests {
             .expect("parses")
             .board;
         let track = |end_x: f64| signex_types::pcb::Segment {
+            locked: false,
+            attributes: Default::default(),
             uuid: uuid::Uuid::from_u128(7),
             start: signex_types::pcb::Point { x: 0.0, y: 0.0 },
             end: signex_types::pcb::Point { x: end_x, y: 0.0 },

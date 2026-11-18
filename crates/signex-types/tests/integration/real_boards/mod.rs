@@ -192,6 +192,11 @@ fn the_mixed_board_carries_its_board_sketch() {
     assert_eq!(sketch.holes.len(), 4);
     assert_eq!(sketch.holes.iter().filter(|h| h.plated).count(), 2);
     assert_eq!(sketch.keepouts.len(), 1);
+    assert_eq!(sketch.cutouts.len(), 1);
+    let slot = &sketch.cutouts[0];
+    assert!(slot.through, "the cable-tie slot goes through the board");
+    assert_eq!(slot.edge_radius, 1.0);
+    assert_eq!(slot.boundary.len(), 4);
     assert!(!sketch.owns_outline(), "the board keeps its own outline");
     // Every baked item names the sketch entity it came from.
     let ids: Vec<Uuid> = sketch.sketch.entities.iter().map(|e| e.id.0).collect();
@@ -199,6 +204,14 @@ fn the_mixed_board_carries_its_board_sketch() {
         assert!(ids.contains(&uuid), "hole {uuid} has no circle");
     }
     assert!(ids.contains(&sketch.keepouts[0].uuid));
+    assert!(ids.contains(&slot.uuid));
+    let tagged = sketch
+        .sketch
+        .entities
+        .iter()
+        .find(|e| e.id.0 == slot.uuid)
+        .expect("the slot's edge");
+    assert!(tagged.board_cutout.is_some(), "the slot edge is a cutout");
     // Slots, a bottom-side part and parts turned off the axes.
     let slots = board
         .footprints
@@ -267,9 +280,16 @@ fn every_item_lies_inside_the_board_outline() {
         for t in &board.texts {
             points.push((format!("text {}", t.text), t.position));
         }
+        // A cutout is no board: an item in one is as outside as past the edge.
+        let cutouts: Vec<&[Point]> = board
+            .sketch
+            .iter()
+            .flat_map(|s| &s.cutouts)
+            .map(|c| c.boundary.as_slice())
+            .collect();
         let outside: Vec<&String> = points
             .iter()
-            .filter(|(_, q)| !inside(&board.outline, *q))
+            .filter(|(_, q)| !inside(&board.outline, *q) || cutouts.iter().any(|c| inside(c, *q)))
             .map(|(what, _)| what)
             .collect();
         assert!(
@@ -329,6 +349,27 @@ fn courtyards_on_one_side_do_not_overlap() {
             clashes.is_empty(),
             "{name}: courtyards overlap: {clashes:?}"
         );
+    }
+}
+
+#[test]
+fn no_courtyard_reaches_into_a_board_cutout() {
+    for (name, ..) in COUNTS {
+        let (_, board) = load(name);
+        let Some(sketch) = board.sketch.as_ref() else {
+            continue;
+        };
+        for cutout in &sketch.cutouts {
+            let c = cutout.boundary.iter().fold(
+                (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
+                |(x0, y0, x1, y1), q| (x0.min(q.x), y0.min(q.y), x1.max(q.x), y1.max(q.y)),
+            );
+            for fp in &board.footprints {
+                let a = courtyard_box(fp);
+                let apart = a.2 <= c.0 || c.2 <= a.0 || a.3 <= c.1 || c.3 <= a.1;
+                assert!(apart, "{name}: {} reaches into a cutout", fp.reference);
+            }
+        }
     }
 }
 

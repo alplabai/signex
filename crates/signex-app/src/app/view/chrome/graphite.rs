@@ -1,6 +1,6 @@
 //! Graphite title and menu bar: 38 px strip with the mark and menus, a
-//! centred search field, the Signex AI button, a light/dark toggle and the
-//! window controls. Legacy themes keep `view_main_window_chrome`.
+//! centred search field, a light/dark toggle and the window controls. Legacy
+//! themes keep `view_main_window_chrome`.
 
 use std::sync::LazyLock;
 
@@ -14,23 +14,19 @@ use crate::app::view::{
     CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_LEFT_GAP, CHROME_SEARCH_RIGHT_GAP,
 };
 use crate::app::{CommandPaletteMsg, Message, Signex, UiMsg, WindowMsg};
-use crate::menu_bar::MenuMessage;
 use crate::styles::{self, ChromeMetrics, Radii, ti, tokens::resolve};
 
-/// Width of the Signex AI button, in px.
-const SIGNAL_W: f32 = 96.0;
 /// Side of the square theme toggle.
 const THEME_W: f32 = 28.0;
-/// Gap between the two buttons and padding after them.
-const CLUSTER_GAP: f32 = 4.0;
+/// Padding after the theme toggle.
 const CLUSTER_PAD: f32 = 6.0;
 /// Widest the search field gets (the mock's 380 px).
 const SEARCH_MAX_W: f32 = 380.0;
 /// Height of the "Ctrl K" key cap.
 const KEY_CAP_H: f32 = 18.0;
 
-/// Room the Signex AI and theme buttons take left of the window controls.
-pub(super) const RIGHT_CLUSTER_W: f32 = SIGNAL_W + CLUSTER_GAP + THEME_W + CLUSTER_PAD;
+/// Room the theme toggle takes left of the window controls.
+pub(super) const RIGHT_CLUSTER_W: f32 = THEME_W + CLUSTER_PAD;
 
 static MOON: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(
@@ -75,7 +71,7 @@ impl Signex {
     ) -> Element<'a, Message> {
         let theme_id = self.ui_state.effective_theme_id();
         let r = resolve(tokens);
-        let (ink, ink3, line) = (ti(tokens.text), r.ink3, ti(tokens.border));
+        let ink3 = r.ink3;
         let palette = buttons::Palette {
             theme_id,
             text: ink3,
@@ -108,20 +104,13 @@ impl Signex {
             .boxed()
         };
         let dark = is_dark(tokens.toolbar_bg);
-        let cluster = container(
-            row![
-                signal_button(tokens, &self.ui_state.i18n, ink, line),
-                theme_toggle(
-                    tokens,
-                    &self.ui_state.i18n,
-                    theme_id.light_dark_counterpart(),
-                    dark,
-                    ink3,
-                ),
-            ]
-            .spacing(CLUSTER_GAP)
-            .align_y(Alignment::Center),
-        )
+        let cluster = container(theme_toggle(
+            tokens,
+            &self.ui_state.i18n,
+            theme_id.light_dark_counterpart(),
+            dark,
+            ink3,
+        ))
         .padding(iced::Padding {
             right: CLUSTER_PAD,
             ..iced::Padding::ZERO
@@ -225,58 +214,6 @@ impl Signex {
             .style(styles::field(tokens, false))
             .boxed()
     }
-}
-
-/// "Signex AI": copper dot and label; opens the Signex AI panel like View ▸ Signex AI.
-fn signal_button(
-    tokens: &signex_types::theme::ThemeTokens,
-    i18n: &I18n,
-    ink: Color,
-    line: Color,
-) -> Element<'static, Message> {
-    let r = resolve(tokens);
-    let (raised, hover, accent) = (r.raised, ti(tokens.hover), ti(tokens.accent));
-    let dot = container(Space::new())
-        .width(7)
-        .height(7)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(accent)),
-            border: Border {
-                radius: Radii::GRAPHITE.pill.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
-    button(
-        row![
-            dot,
-            text(t!(i18n, ids::PANELS_KIND_SIGNEX_AI)).size(TS.dense)
-        ]
-        .spacing(SP.l)
-        .align_y(Alignment::Center),
-    )
-    .width(SIGNAL_W)
-    .height(ChromeMetrics::DEFAULT.field)
-    .padding([0.0, 10.0])
-    .on_press(Message::Menu(MenuMessage::OpenSignexAiPanel))
-    .style(move |_: &iced::Theme, status| button::Style {
-        background: Some(Background::Color(
-            if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                hover
-            } else {
-                raised
-            },
-        )),
-        text_color: ink,
-        border: Border {
-            width: 1.0,
-            color: line,
-            radius: Radii::GRAPHITE.control.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    })
-    .boxed()
 }
 
 /// Light/dark toggle: sends the existing `ThemeChanged` with the Graphite

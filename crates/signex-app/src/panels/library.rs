@@ -65,18 +65,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let border_c = theme_ext::border_color(&ctx.tokens);
     let i18n = &*ctx.i18n;
 
+    // The dock tab already reads "SCH Library": no title row repeats it.
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(
-        container(
-            text(t!(i18n, PanelKind::SchLibrary.message()))
-                .size(TS.body)
-                .color(primary),
-        )
-        .padding([6.0, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
 
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         col = col.push(
@@ -210,7 +200,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         if is_active && (sym.active_max_part > 1 || sym.active_has_part_zero) {
             if sym.active_has_part_zero {
                 col = col.push(part_tree_row(
-                    &t!(i18n, ids::PANELS_SCH_LIBRARY_PART_SHARED).into_string(),
+                    t!(i18n, ids::PANELS_SCH_LIBRARY_PART_SHARED),
                     0,
                     sym.active_part == 0,
                     primary,
@@ -220,8 +210,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             }
             for part in 1..=sym.active_max_part {
                 col = col.push(part_tree_row(
-                    &t!(i18n, ids::PANELS_SCH_LIBRARY_PART, "part" => u32::from(part))
-                        .into_string(),
+                    t!(i18n, ids::PANELS_SCH_LIBRARY_PART, "part" => u32::from(part)),
                     part,
                     sym.active_part == part,
                     primary,
@@ -449,11 +438,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         container(
             row![
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_NAME))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted)
                     .width(Length::Fill),
                 text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_PADS))
-                    .size(TS.body)
+                    .size(TS.section)
                     .color(muted),
             ]
             .spacing(SP.m)
@@ -774,7 +763,11 @@ pub fn view_component_sheet<'a>(
             .boxed()
         };
     let body: Column<Element<'a, PanelMsg>> = column![
-        super::form_look::section_label("Component", tokens, i18n),
+        super::form_look::section_label(
+            t!(i18n, ids::PANELS_COMPONENT_SHEET_SECTION_COMPONENT),
+            tokens,
+            i18n
+        ),
         line(
             ids::PANELS_COMPONENT_SHEET_INTERNAL_PN,
             &sheet.internal_pn,
@@ -792,7 +785,11 @@ pub fn view_component_sheet<'a>(
             false
         ),
         line(ids::PANELS_COMPONENT_SHEET_VERSION, &sheet.version, true),
-        super::form_look::section_label("Storage", tokens, i18n),
+        super::form_look::section_label(
+            t!(i18n, ids::PANELS_COMPONENT_SHEET_SECTION_STORAGE),
+            tokens,
+            i18n
+        ),
         line(ids::PANELS_COMPONENT_SHEET_LIBRARY, &sheet.library, true),
         line(ids::PANELS_COMPONENT_SHEET_TABLE, &sheet.table, true),
         line(ids::PANELS_COMPONENT_SHEET_UPDATED, &sheet.updated, false),
@@ -804,3 +801,7 @@ pub fn view_component_sheet<'a>(
         .style(super::form_look::scrollbar_style)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "sch_library_tests.rs"]
+mod sch_library_tests;

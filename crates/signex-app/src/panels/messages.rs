@@ -72,6 +72,9 @@ pub enum PanelMsg {
     FpEditorSetNextPadDrillDiameter(String),
     FpEditorSetNextPadDrillSlotLength(String),
     FpEditorSetNextPadCornerRadiusPct(String),
+    /// A trapezoid pad's Delta X / Delta Y (#2242), as typed.
+    FpEditorSetNextPadTrapezoidDeltaX(String),
+    FpEditorSetNextPadTrapezoidDeltaY(String),
     FpEditorSetNextPadTemplate(String),
     FpEditorSetNextPadTemplateLibrary(String),
     FpEditorSetNextPadPasteMarginTop(String),
@@ -127,6 +130,14 @@ pub enum PanelMsg {
         value: String,
     },
     FpEditorSetSelectedPadCornerRadiusPct {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaX {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTrapezoidDeltaY {
         idx: usize,
         value: String,
     },
@@ -617,6 +628,8 @@ pub enum PanelMsg {
     FpLibraryPlaceInternal(usize),
     /// Run the design-rule check of the board in view (#2222).
     RunDrc,
+    /// Open the project's Rules tab from the DRC section (#2398).
+    OpenRules,
     /// A DRC violation row was clicked: select its items.
     DrcViolationPicked(usize),
     /// Clear the current ERC violations list and canvas markers.
@@ -647,22 +660,29 @@ pub enum PanelMsg {
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    /// Signex AI panel: the Assistant / Generator switch (view-only state).
-    Signal(super::signal::SignalMsg),
     /// Graphite Projects panel: file filter and group chevrons (view-only).
     Projects(super::ProjectsMsg),
     /// A Layers panel row: an eye, or the row itself to make a copper layer
     /// active (#2223). The board-view event the dispatcher applies.
     PcbLayers(crate::app::PcbViewMsg),
+    /// The Layers panel's own controls: its tabs, search, colour chips and
+    /// layer set row (#2363).
+    LayersPanel(super::LayersPanelMsg),
     /// The selected board footprint's Designator or Value field (#1312).
     PcbFootprintText(super::PcbFootprintTextMsg),
     /// The board Properties panel with nothing selected (#2353).
     PcbBoard(super::PcbBoardMsg),
+    /// The DRC results panel (#2399).
+    Drc(super::DrcPanelMsg),
+    /// The board Net Classes panel (#2400).
+    BoardNetClass(super::BoardNetClassMsg),
     /// The board Component view: its search and every edit of the selected
     /// footprints (#2354). One nested message so the view adds one leaf.
     PcbComponent(super::PcbComponentMsg),
     /// The selected tracks', vias' or pads' panel (#2355).
     PcbPrimitive(super::PcbPrimitiveMsg),
+    /// The Layer Stack manager (#2401).
+    LayerStack(super::LayerStackMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -710,8 +730,6 @@ pub enum PanelMsg {
     /// The Body row of a symbol's Properties picked a body (normal or
     /// alternate / De Morgan).
     SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
-    /// Set absolute rotation on a symbol (degrees).
-    EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
     EditSymbolValueFontSizePt(uuid::Uuid, u32),
     /// Swap a power-port's style: change lib_id and preserve visual direction
@@ -727,12 +745,12 @@ pub enum PanelMsg {
     EditLabelJustifyH(uuid::Uuid, signex_types::schematic::HAlign),
     /// Edit a label direction preset (rotation + horizontal justify).
     EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
-    /// Edit a label's rotation (degrees).
-    EditLabelRotation(uuid::Uuid, f64),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
     EditTextNoteText(uuid::Uuid, String),
+    /// Edit a Blanket's net class or ERC exclusions (#2420).
+    EditBlanket(uuid::Uuid, super::BlanketEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of the selected text item.
     EditTextFontFamily(signex_engine::TextTarget, Option<String>),
@@ -1047,6 +1065,8 @@ pub enum PanelMsg {
     CaptureCustomFilterPreset(usize),
     /// Switch the Properties-panel preset editor to the given tab.
     SelectCustomFilterTab(usize),
+    /// The SCH Filter panel's chip grid (#2417).
+    SchFilter(super::SchFilterMsg),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
     /// Page Options: choose paper size (a bare picker token). A named size
@@ -1071,6 +1091,9 @@ pub enum PanelMsg {
     Noop,
     /// The multi-selection form of the Properties panel (#1258).
     MultiEdit(super::MultiEditMsg),
+    /// The Position, Rotation, Size and Parameters rows of one placed
+    /// object (#2418).
+    PlacedEdit(super::PlacedEditMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

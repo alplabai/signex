@@ -17,7 +17,7 @@ use signex_types::schematic::{ChildSheet, normalize_port_name};
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
-use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::mutation_gateway::MutationOutcome as Applied;
 use crate::app::sheet_hierarchy::{
     CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
 };

@@ -265,7 +265,8 @@ pub(crate) fn write_new_project_files_with(
         created.roll_back(&target.folder);
     }
     if result.is_ok() {
-        seed_project_rules(&target.project_path, seed);
+        let tier = plan.setup.as_ref().and_then(|setup| setup.fab);
+        seed_project_rules(&target.project_path, seed, tier);
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -292,13 +293,21 @@ pub(crate) struct RuleSeed {
     /// them before it reads the library, so an edit made a moment ago is in
     /// the profile the new project copies.
     pub pending: Vec<crate::app::rule_profile_ui::Dispatch>,
+    /// This machine's Annotate undo preference, stored in the new project as
+    /// its own choice (#1692); `None` stores none.
+    pub annotate_undo: Option<crate::annotate_undo::AnnotateUndo>,
 }
 
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
-/// the user stores some.
-fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+/// the user stores some. A fab tier picked in the setup adds its `fab_*`
+/// rules to the copy (#2311).
+fn seed_project_rules(
+    project_path: &Path,
+    seed: &RuleSeed,
+    tier: Option<signex_types::project::FabTemplate>,
+) {
     if let Some(dir) = seed.dir.as_deref()
         && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
     {
@@ -306,13 +315,25 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
             "[new project] a queued profile change was not saved first: {why}"
         ));
     }
-    let (rules, notes) =
+    let (mut rules, mut notes) =
         crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
+    if let Some(tier) = tier {
+        match signex_drc_dsl::table::presets::with_tier(&rules.drc, tier) {
+            Ok(drc) => rules.drc = drc,
+            Err(why) => notes.push(format!(
+                "the {} fab tier rules were not added, the profile's rule text has an error: {why}",
+                tier.token()
+            )),
+        }
+    }
     for note in notes {
         crate::diagnostics::log_warning(format!("[new project] {note}"));
     }
     let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
         data.rules = Some(rules);
+        if let Some(choice) = seed.annotate_undo {
+            data.set_annotate_undo(Some(choice));
+        }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
         signex_types::project::write_project(project_path, &data)
@@ -445,6 +466,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Company".into()),
             pending: Vec::new(),
+            annotate_undo: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
@@ -482,6 +504,7 @@ mod tests {
             dir: Some(tmp.path().join("no-library-yet")),
             selected: None,
             pending: Vec::new(),
+            annotate_undo: None,
         };
         let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -508,6 +531,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: Some("Missing".into()),
             pending: Vec::new(),
+            annotate_undo: None,
         };
         let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -545,6 +569,7 @@ mod tests {
             dir: Some(lib.path().to_path_buf()),
             selected: None,
             pending: queue.pending(),
+            annotate_undo: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Queued.snxprj"), &seed).unwrap();
@@ -680,5 +705,73 @@ mod tests {
             NewProjectLayout::Picked,
         );
         assert!(err.is_err_and(|e| e.to_string().contains("inside the project")));
+    }
+
+    /// #1692: this machine's Annotate undo preference seeds a new project as
+    /// the project's own choice.
+    #[test]
+    fn a_new_project_stores_the_annotate_undo_preference() {
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            selected: None,
+            pending: Vec::new(),
+            annotate_undo: Some(crate::annotate_undo::AnnotateUndo::PerSheet),
+        };
+        let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(
+            data.annotate_undo(),
+            Some(crate::annotate_undo::AnnotateUndo::PerSheet)
+        );
+    }
+
+    /// #2311: a fab tier picked in the setup adds its `fab_*` rules to the
+    /// stored rules, beside the profile's, and they read back as written.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_fab_rules() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        let mut setup = ProjectSetup::default();
+        setup.apply_fab(FabTemplate::Advanced);
+        let plan = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(setup),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Fab.snxprj"), &seed, &plan).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        let rules = data.rules.clone().expect("rules stored");
+        let shipped = signex_erc::project_rules::profile::builtin_profile();
+        assert_eq!(rules.erc, shipped.erc, "the profile's rules are kept");
+        let expected =
+            signex_drc_dsl::table::presets::with_tier(&shipped.drc, FabTemplate::Advanced).unwrap();
+        assert_eq!(rules.drc, expected);
+        let dsl = rules.drc.dsl.unwrap_or_default();
+        assert!(
+            dsl.contains("rule fab_clearance on clearance require clearance >= 0.1mm then error"),
+            "{dsl}"
+        );
+        // Saved again, the project reads back the same.
+        signex_types::project::write_project(&written, &data).unwrap();
+        let again = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(again.rules, data.rules);
+
+        // No tier picked: no fab rule.
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules;
+        let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
+        assert!(!dsl.contains("fab_"), "{dsl}");
     }
 }

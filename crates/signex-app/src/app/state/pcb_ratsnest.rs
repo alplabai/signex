@@ -1,12 +1,15 @@
 //! The PCB ratsnest the canvas shows (#2192): the lines for the active
-//! board, kept until the board changes, and the nets the user hid.
+//! board, kept until the board changes, and the nets the user hid. The
+//! board's pour fills (#2216) are kept with them: the lines are computed
+//! through the fills, and the canvas draws the same fills.
 //!
-//! The lines come from `pcb-geom`; drawing them is `signex-renderer`'s.
+//! The lines and fills come from `pcb-geom`; drawing them is
+//! `signex-renderer`'s.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::RatLine;
+use pcb_geom::{RatLine, ZoneFills};
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::PcbBoard;
 
@@ -17,23 +20,44 @@ pub(crate) type RatsnestKey = (PathBuf, u64);
 pub struct PcbRatsnest {
     key: Option<RatsnestKey>,
     lines: Vec<RatLine>,
+    /// The pour fills of the board the lines were computed for.
+    fills: ZoneFills,
     /// Hidden net numbers per board: a net number means nothing off its board.
     hidden_nets: BTreeMap<PathBuf, BTreeSet<u32>>,
 }
 
 impl PcbRatsnest {
-    /// Recompute the lines unless `key` is the board they were computed for.
-    /// A `None` key (a board with no revision) always recomputes.
+    /// Recompute the pour fills and the lines unless `key` is the board they
+    /// were computed for. A `None` key (a board with no revision) always
+    /// recomputes. The one place a board's fills are refreshed.
     pub(crate) fn refresh(&mut self, key: Option<RatsnestKey>, board: &PcbBoard) {
         if key.is_some() && key == self.key {
             return;
         }
-        self.lines = pcb_geom::ratsnest(board);
+        self.fills = pcb_geom::zone_fills(board);
+        self.lines = pcb_geom::ratsnest_with_fills(board, &self.fills);
         self.key = key;
     }
 
     pub fn lines(&self) -> &[RatLine] {
         &self.lines
+    }
+
+    /// The pour fills of the board last refreshed.
+    pub fn zone_fills(&self) -> &ZoneFills {
+        &self.fills
+    }
+
+    /// The pour fills held, if they are those of `key` (that board at that
+    /// revision); `None` before they are computed for it.
+    pub(crate) fn fills_for(&self, key: &RatsnestKey) -> Option<&ZoneFills> {
+        (self.key.as_ref() == Some(key)).then_some(&self.fills)
+    }
+
+    /// Forget which board revision the lines and fills are of, so the next
+    /// refresh computes them again (Repour, #2216).
+    pub(crate) fn invalidate(&mut self) {
+        self.key = None;
     }
 
     /// How many nets still have a ratsnest line, if the lines held are the
@@ -72,14 +96,16 @@ impl PcbRatsnest {
 
     /// `snapshot` of a board the cache does not hold (an undocked window's
     /// board that is not the active tab), with its ratsnest as the active
-    /// tab draws it. Computes the lines without replacing the cache.
+    /// tab draws it. Computes the lines through `fills` (the board's) without
+    /// replacing the cache.
     pub(crate) fn apply_uncached(
         &self,
         path: &Path,
         board: &PcbBoard,
+        fills: &ZoneFills,
         snapshot: PcbSnapshot,
     ) -> PcbSnapshot {
-        let lines = pcb_geom::ratsnest(board);
+        let lines = pcb_geom::ratsnest_with_fills(board, fills);
         let none = BTreeSet::new();
         let hidden = self.hidden_nets.get(path).unwrap_or(&none);
         snapshot.with_ratsnest(&lines, hidden)
@@ -115,7 +141,10 @@ mod tests {
                 name: "N1".into(),
             }),
             roundrect_ratio: 0.0,
+            trapezoid_delta: Default::default(),
+            custom_outline: Vec::new(),
             rotation: 0.0,
+            layer_sizes: None,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
@@ -147,6 +176,7 @@ mod tests {
         };
         PcbBoard {
             sketch: None,
+            stackup: None,
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
@@ -162,6 +192,7 @@ mod tests {
             zones: Vec::new(),
             graphics: Vec::new(),
             texts: Vec::new(),
+            free: Default::default(),
             unknown: Default::default(),
         }
     }

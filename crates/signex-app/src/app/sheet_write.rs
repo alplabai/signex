@@ -47,7 +47,7 @@ pub(crate) struct SheetWrite<'a> {
 struct Changed {
     path: PathBuf,
     tabless: bool,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -101,9 +101,7 @@ impl Signex {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
                     tabless,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => self.drop_unchanged_tabless(&path, tabless),
                 Err(error) => {
@@ -156,21 +154,21 @@ impl Signex {
             kind,
             ..Default::default()
         };
-        let mut active_invalidation = None;
+        let mut active_patch = None;
         for done in &changed {
             recorded.live.push(done.path.clone());
             if done.tabless {
                 recorded.parked.push(done.path.clone());
             }
             if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
+                active_patch = done.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&done.path);
             }
         }
         self.set_undo_group_sheets(group, recorded);
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
+        if let Some(patch) = active_patch {
+            self.finish_schematic_mutation(patch, true, true);
         }
         self.refresh_panel_ctx();
     }

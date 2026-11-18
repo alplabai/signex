@@ -205,6 +205,16 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                         }
                         pts
                     }
+                    // The board's corner rule, at this layer's extents.
+                    PS::Trapezoid { delta } => {
+                        use signex_types::pcb::Point as Mm;
+                        signex_types::pcb_pad_shape::trapezoid_corners(
+                            Mm::new(f64::from(hw) * 2.0, f64::from(hh) * 2.0),
+                            Mm::new(delta[0], delta[1]),
+                        )
+                        .map(|c| c.iter().map(|p| (p.x as f32, p.y as f32)).collect())
+                        .unwrap_or_else(|_| vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)])
+                    }
                     _ => vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)],
                 }
             };
@@ -460,8 +470,9 @@ pub(super) fn pad_stack_tab_strip<'a>(
                 .color(if active { primary } else { muted })
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([SP.s, 10.0])
-        .width(Length::FillPortion(1))
+        .padding([SP.s, SP.xs])
+        // Width by label length, so the long label wraps no more than the mock.
+        .width(Length::FillPortion(u16::try_from(label.len()).unwrap_or(1)))
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -487,7 +498,8 @@ pub(super) fn pad_stack_tab_strip<'a>(
 /// v0.20 — pick_list-friendly proxy for `signex_library::PadShape`.
 /// Mirrors Altium's COPPER → Shape dropdown minus "Custom Shape"
 /// (sketch mode owns freeform geometry):
-///   Round / Rectangular / Rounded Rectangle / Chamfered Rectangle.
+///   Round / Rectangular / Rounded Rectangle / Chamfered Rectangle /
+///   Trapezoid.
 /// Schema-mapping notes:
 ///   - Octagonal and Donut are deliberately not offered: neither has
 ///     a variant on `signex_library::PadShape`, the sketch pad
@@ -503,6 +515,8 @@ pub(super) enum PadShapeChoice {
     Rectangular,
     RoundedRectangle,
     ChamferedRectangle,
+    /// A trapezoid (#2242); the pad form shows its Delta X / Delta Y.
+    Trapezoid,
 }
 
 impl PadShapeChoice {
@@ -511,6 +525,7 @@ impl PadShapeChoice {
         PadShapeChoice::Rectangular,
         PadShapeChoice::RoundedRectangle,
         PadShapeChoice::ChamferedRectangle,
+        PadShapeChoice::Trapezoid,
     ];
 
     pub(super) fn from_lib(s: &signex_library::PadShape) -> Self {
@@ -519,6 +534,7 @@ impl PadShapeChoice {
             signex_library::PadShape::Rect => PadShapeChoice::Rectangular,
             signex_library::PadShape::RoundRect { .. } => PadShapeChoice::RoundedRectangle,
             signex_library::PadShape::Chamfered { .. } => PadShapeChoice::ChamferedRectangle,
+            signex_library::PadShape::Trapezoid { .. } => PadShapeChoice::Trapezoid,
             // Oval / Custom have no picker entry; the picker shows
             // Round for them and only rewrites the pad when the user
             // actually picks a shape. Custom Shape is intentionally
@@ -538,6 +554,8 @@ impl PadShapeChoice {
                 chamfer_ratio: 0.25,
                 corners: ChamferedCorners::all(),
             },
+            // The pad form seeds a visible delta from the pad size.
+            PadShapeChoice::Trapezoid => signex_library::PadShape::Trapezoid { delta: [0.0, 0.0] },
         }
     }
 }
@@ -549,6 +567,7 @@ impl std::fmt::Display for PadShapeChoice {
             PadShapeChoice::Rectangular => "Rectangular",
             PadShapeChoice::RoundedRectangle => "Rounded Rectangle",
             PadShapeChoice::ChamferedRectangle => "Chamfered Rectangle",
+            PadShapeChoice::Trapezoid => "Trapezoid",
         })
     }
 }

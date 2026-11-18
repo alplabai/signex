@@ -101,6 +101,23 @@ pub(super) fn unavailable(ctx: &MenuContext, label: MessageId) -> MenuEntry {
     plain(text(ctx, label), ItemState::Unavailable)
 }
 
+/// A placement tool row (#2415): gated by its command like
+/// [`cmd_item_gated`], or greyed with the planned tooltip while the command
+/// is a planned placeholder (#1249), so the row and the Active Bar agree.
+pub(super) fn tool_item(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
+    let planned = AppCommandId::new(cmd.id)
+        .is_ok_and(|id| crate::app::command::enablement::is_planned_command(&id));
+    if !planned {
+        return cmd_item_gated(ctx, cmd);
+    }
+    plain(
+        cmd_label(&ctx.i18n, cmd.id, cmd.id),
+        ItemState::Placeholder {
+            reason: Some(text(ctx, signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP)),
+        },
+    )
+}
+
 fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> MenuEntry {
     let shortcut = AppCommandId::new(cmd.id).ok().and_then(|command_id| {
         shortcut_for(ctx, cmd.id, cmd.shortcut).map(|text| Shortcut { command_id, text })

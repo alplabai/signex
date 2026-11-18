@@ -6,7 +6,10 @@
 
 pub mod ast;
 mod compile;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
 pub mod parser;
+pub mod table;
 
 use std::collections::BTreeSet;
 
@@ -64,6 +67,9 @@ pub struct Compiled {
     pub not_applied: usize,
     /// The text has a syntax error, so none of it is applied.
     pub unparsed: bool,
+    /// Valid rules written `disabled` (#2398): kept, not applied, not
+    /// counted in `not_applied`.
+    pub disabled: usize,
 }
 
 /// Parse, validate and compile `src`. A syntax error applies no rule of
@@ -90,36 +96,87 @@ pub fn compile(src: &str) -> Compiled {
         }
     };
     let mut out = Compiled::default();
-    // Only a valid rule takes its name; an invalid one leaves it free.
+    for judged in judge(&asts) {
+        out.not_applied += usize::from(judged.not_applied);
+        out.disabled += usize::from(judged.disabled);
+        out.diagnostics.extend(judged.said);
+        if judged.applied
+            && let Some(rule) = judged.rule
+        {
+            out.rules.push(rule);
+        }
+    }
+    out
+}
+
+/// What one parsed rule came to, in written order.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Judged {
+    /// The compiled rule, also for a disabled one; `None` when invalid,
+    /// repeated or not checked yet.
+    pub(crate) rule: Option<UserRule>,
+    /// Run DRC applies it.
+    pub(crate) applied: bool,
+    /// Written, meant to apply, and not applied.
+    pub(crate) not_applied: bool,
+    /// Written `disabled` and valid.
+    pub(crate) disabled: bool,
+    pub(crate) said: Vec<Diagnostic>,
+}
+
+/// Judge each rule: only a valid rule takes its name, so an invalid one
+/// leaves it free; a second rule of a taken name is an error. A disabled
+/// rule takes its name and is checked like any other, but never applied.
+pub(crate) fn judge(asts: &[ast::RuleAst]) -> Vec<Judged> {
     let mut names = BTreeSet::new();
-    for ast in &asts {
+    let mut out = Vec::with_capacity(asts.len());
+    for ast in asts {
         let name = ast.name.text.as_str();
         if names.contains(name) {
-            out.not_applied += 1;
-            out.diagnostics.push(Diagnostic {
-                level: Level::Error,
-                rule: Some(name.to_string()),
-                span: ast.name.span.clone(),
-                message: "a rule of this name is already defined".to_string(),
+            out.push(Judged {
+                rule: None,
+                applied: false,
+                not_applied: true,
+                disabled: false,
+                said: vec![Diagnostic {
+                    level: Level::Error,
+                    rule: Some(name.to_string()),
+                    span: ast.name.span.clone(),
+                    message: "a rule of this name is already defined".to_string(),
+                }],
             });
             continue;
         }
-        match compile::compile_rule(ast) {
+        let judged = match compile::compile_rule(ast) {
             compile::Outcome::Rule(rule, said) => {
                 names.insert(name);
-                out.rules.push(rule);
-                out.diagnostics.extend(said);
+                Judged {
+                    rule: Some(rule),
+                    applied: !ast.disabled,
+                    not_applied: false,
+                    disabled: ast.disabled,
+                    said,
+                }
             }
             compile::Outcome::NotChecked(said) => {
                 names.insert(name);
-                out.not_applied += 1;
-                out.diagnostics.extend(said);
+                Judged {
+                    rule: None,
+                    applied: false,
+                    not_applied: !ast.disabled,
+                    disabled: ast.disabled,
+                    said,
+                }
             }
-            compile::Outcome::Dropped(said) => {
-                out.not_applied += 1;
-                out.diagnostics.extend(said);
-            }
-        }
+            compile::Outcome::Dropped(said) => Judged {
+                rule: None,
+                applied: false,
+                not_applied: true,
+                disabled: false,
+                said,
+            },
+        };
+        out.push(judged);
     }
     out
 }
@@ -165,5 +222,7 @@ pub fn compile_layers(profile: Option<&DrcRuleSet>, project: Option<&DrcRuleSet>
     out
 }
 
+#[cfg(test)]
+mod base_rules_tests;
 #[cfg(test)]
 mod tests;

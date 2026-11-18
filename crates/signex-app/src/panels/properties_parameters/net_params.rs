@@ -14,7 +14,7 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Net-attribute row: label | checkbox | text value | unit. Used for
 /// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".
 pub fn net_numeric_row<'a>(
-    label: &str,
+    label: signex_i18n::Localized,
     value: &str,
     unit: &str,
     label_c: Color,
@@ -23,11 +23,12 @@ pub fn net_numeric_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            property_label(label.to_string(), label_c),
+            property_label(label, label_c),
             signex_widgets::checkbox(false)
                 .on_toggle(|_| PanelMsg::Noop)
                 .size(TS.label)
                 .spacing(SP.s),
+            // raw: a number, not language.
             container(text(raw(value.to_string())).size(TS.body).color(label_c),)
                 .padding([3, 6])
                 .width(Length::Fill)
@@ -41,6 +42,7 @@ pub fn net_numeric_row<'a>(
                     },
                     ..container::Style::default()
                 }),
+            // raw: an SI unit symbol (V, Hz), not language.
             text(raw(unit.to_string())).size(TS.caption).color(label_c),
         ]
         .spacing(6.0)
@@ -53,16 +55,17 @@ pub fn net_numeric_row<'a>(
 
 /// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
 pub fn net_params_tabs<'a>(
+    i18n: &signex_i18n::I18n,
     primary: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
-    let tab = |label: &'static str, active: bool| -> Element<'static, PanelMsg> {
+    let tab = |label: signex_i18n::MessageId, active: bool| -> Element<'static, PanelMsg> {
         let bg_active = input_bdr;
         let fg_active = Color::WHITE;
         let fg_inactive = primary;
         signex_widgets::button(
-            text(raw(label.to_string()))
+            text(signex_i18n::t!(i18n, label))
                 .size(TS.body)
                 .color(if active { fg_active } else { fg_inactive })
                 .align_x(iced::alignment::Horizontal::Center),
@@ -93,10 +96,10 @@ pub fn net_params_tabs<'a>(
     };
     container(
         row![
-            tab("All", true),
-            tab("Parameters", false),
-            tab("Rules", false),
-            tab("Classes", false),
+            tab(signex_i18n::ids::PROPERTIES_TAB_ALL, true),
+            tab(signex_i18n::ids::PROPERTIES_TAB_PARAMETERS, false),
+            tab(signex_i18n::ids::PROPERTIES_TAB_RULES, false),
+            tab(signex_i18n::ids::PROPERTIES_TAB_CLASSES, false),
         ]
         .spacing(SP.s),
     )
@@ -106,14 +109,19 @@ pub fn net_params_tabs<'a>(
 }
 
 /// Two-column Name / Value header for the Parameters (Net) table.
-pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
+pub fn net_params_header<'a>(
+    i18n: &signex_i18n::I18n,
+    label_c: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
     container(
         row![
-            text(raw("Name".to_string()))
+            text(t!(i18n, ids::PROPERTIES_NET_PARAMS_NAME))
                 .size(TS.body)
                 .color(label_c)
                 .width(PROPERTY_LABEL_COLUMN),
-            text(raw("Value".to_string()))
+            text(t!(i18n, ids::PROPERTIES_NET_PARAMS_VALUE))
                 .size(TS.body)
                 .color(label_c)
                 .width(Length::Fill),
@@ -136,12 +144,12 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
 
 /// Empty-state row — centered muted text spanning the whole row.
 pub fn empty_section_row<'a>(
-    label: &str,
+    label: signex_i18n::Localized,
     label_c: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
-        container(text(raw(label.to_string())).size(TS.caption).color(label_c))
+        container(text(label).size(TS.caption).color(label_c))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
     )
@@ -161,11 +169,13 @@ pub fn empty_section_row<'a>(
 
 /// Add / edit / delete toolbar at the bottom of the Parameters table.
 pub fn net_params_add_bar<'a>(
+    i18n: &signex_i18n::I18n,
     label_c: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
+        // raw: an edit or delete glyph, not language.
         signex_widgets::button(text(raw(label.to_string())).size(TS.caption).color(label_c))
             .padding([SP.s, SP.m])
             .on_press(PanelMsg::Noop)
@@ -186,9 +196,12 @@ pub fn net_params_add_bar<'a>(
         row![
             Space::new().width(Length::Fill),
             signex_widgets::button(
-                text(raw("Add \u{25BE}".to_string()))
-                    .size(TS.body)
-                    .color(Color::WHITE)
+                text(signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::PROPERTIES_NET_PARAMS_ADD
+                ))
+                .size(TS.body)
+                .color(Color::WHITE)
             )
             .padding([SP.s, SP.l])
             .on_press(PanelMsg::Noop)

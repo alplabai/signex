@@ -390,7 +390,7 @@ impl Signex {
     /// Drop the pending update because the rules changed under it: its diff
     /// no longer describes what Apply would do. Tells the user, since the
     /// panel disappears.
-    pub(super) fn invalidate_pending_profile_update(&mut self) {
+    pub(crate) fn invalidate_pending_profile_update(&mut self) {
         if let Some(pending) = self.ui_state.pending_profile_update.take() {
             crate::diagnostics::log_info(format!(
                 "The comparison with profile \"{}\" was closed because the project's ERC \

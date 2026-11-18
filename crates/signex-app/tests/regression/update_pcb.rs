@@ -194,6 +194,8 @@ fn add_project(
             schematic_defaults: Default::default(),
             project_defaults: defaults,
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -255,7 +257,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen("snxpcb/1.3", "snxpcb/1.9", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.9", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }
@@ -379,6 +381,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         thickness: 1.6,
         outline: Vec::new(),
         sketch: None,
+        stackup: None,
         options: Default::default(),
         layers: Vec::new(),
         setup: None,
@@ -389,6 +392,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -410,7 +414,10 @@ fn board_footprint(
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: locked,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -915,3 +922,6 @@ mod dialog;
 
 #[path = "update_pcb_swap.rs"]
 mod swap;
+
+#[path = "update_pcb_e2e.rs"]
+mod e2e;

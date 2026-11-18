@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::panels::components_panel::global_prefs;
 
 use super::{CopyTarget, StockPrimitiveKind};
-use crate::library::state::NewLibraryDefaults;
+use crate::app::core::new_library_defaults::NewLibraryDefaults;
 
 /// Where the stock file to copy comes from.
 pub enum StockSource {

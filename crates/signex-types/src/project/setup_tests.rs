@@ -23,6 +23,8 @@ fn blank_project() -> ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        fab_outputs: None,
+        requirements: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -308,4 +310,35 @@ fn a_new_board_has_a_real_grid() {
     let grid = board.setup.unwrap().grid_size;
     assert_eq!(grid, NEW_BOARD_GRID_MM);
     assert!(grid > 0.0);
+}
+
+/// #2384: a new board's origin is the bottom-left corner of its board area,
+/// whatever rules it starts from.
+#[test]
+fn a_new_board_counts_from_the_bottom_left_of_its_area() {
+    let board = SetupProfile::Standard.pcb(2).new_board();
+    let corner = crate::pcb_origin::board_area_bottom_left(&board.outline);
+    assert_eq!(board.options.origin.at, corner);
+    assert_eq!(corner, crate::pcb::Point::new(0.0, 80.0));
+}
+
+/// #2311: `fab=<tier>` in the overrides picks a tier as the dialog's chip
+/// does, in written order with the other keys.
+#[test]
+fn a_fab_override_picks_the_tier() {
+    let mut setup = ProjectSetup::default();
+    setup.apply_overrides("fab=hdi, clearance=0.2").unwrap();
+    assert_eq!(setup.fab, Some(FabTemplate::Hdi));
+    assert_eq!(setup.pcb.track_width_mm, 0.075);
+    assert_eq!(setup.pcb.clearance_mm, 0.2, "a later key wins");
+    let err = ProjectSetup::default()
+        .apply_overrides("fab=fancy")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        "override `fab`: fancy is not standard, advanced or hdi"
+    );
+    for tier in FabTemplate::ALL {
+        assert_eq!(FabTemplate::from_token(tier.token()), Some(tier));
+    }
 }

@@ -17,11 +17,13 @@ use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::LOOSE_BOARD_WARNING;
 use crate::keymap::AppCommandId;
 
-const BOARD: &str = "board.snxpcb";
+pub(super) const BOARD: &str = "board.snxpcb";
 
 /// Track `n` (a fixed uuid, so a rewritten board keeps its items) of `net`.
 fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x2000 + n),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
@@ -55,7 +57,7 @@ fn sample_board() -> PcbBoard {
     board
 }
 
-fn write_board(path: &Path, board: PcbBoard) {
+pub(super) fn write_board(path: &Path, board: PcbBoard) {
     let text = SnxPcb::new(board).write_string().expect("encode");
     std::fs::write(path, text).expect("write board");
 }
@@ -89,7 +91,7 @@ fn check(app: &mut Signex, document: &Path, extra: &[&str]) -> CommandOutcome {
     }
 }
 
-fn report(app: &mut Signex, document: &Path, extra: &[&str]) -> Value {
+pub(super) fn report(app: &mut Signex, document: &Path, extra: &[&str]) -> Value {
     match check(app, document, extra) {
         CommandOutcome::Answered(value) => value,
         other => panic!("not answered: {other:?}"),
@@ -108,7 +110,7 @@ fn findings(report: &Value) -> &Vec<Value> {
 }
 
 /// `(rule, items)` of each finding, sorted.
-fn rules_and_items(report: &Value) -> Vec<(String, Vec<String>)> {
+pub(super) fn rules_and_items(report: &Value) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = findings(report)
         .iter()
         .map(|f| {
@@ -135,15 +137,15 @@ fn warnings(report: &Value) -> Vec<String> {
 }
 
 /// Run DRC on the open board at `path`, to its end: what it reported.
-/// Held by every Run DRC here (the lib binary's only one) and across each
-/// read of the shared diagnostics ring, so a parallel run never logs its
-/// Messages lines between another test's mark and its read.
-fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+/// Held by every Run DRC of the lib binary (here and in the DRC results
+/// tests) and across each read of the shared diagnostics ring, so a parallel
+/// run never logs its Messages lines between another test's mark and its read.
+pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn run_drc(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
+pub(super) fn run_drc(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
     let _serial = drc_serial();
     run_drc_held(app, path)
 }
@@ -159,7 +161,9 @@ fn run_drc_held(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
 }
 
 /// What Run DRC found, as `(rule, items)` in the check's words, sorted.
-fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<String>)> {
+pub(super) fn run_drc_rules_and_items(
+    report: &signex_drc::DrcReport,
+) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = report
         .violations
         .iter()
@@ -172,7 +176,16 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
                     pcb_geom::ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
                     pcb_geom::ItemRef::Track(id)
                     | pcb_geom::ItemRef::Via(id)
-                    | pcb_geom::ItemRef::Footprint(id) => id.to_string(),
+                    | pcb_geom::ItemRef::Footprint(id)
+                    | pcb_geom::ItemRef::Zone { zone: id, .. }
+                    | pcb_geom::ItemRef::Text(id)
+                    | pcb_geom::ItemRef::Arc(id)
+                    | pcb_geom::ItemRef::FreePad(id)
+                    | pcb_geom::ItemRef::Dimension(id)
+                    | pcb_geom::ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+                    pcb_geom::ItemRef::FootprintText { footprint, field } => {
+                        format!("{footprint}/{}", field.id())
+                    }
                 })
                 .collect();
             (rule, items)
@@ -182,18 +195,18 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
     out
 }
 
-fn open_board(app: &mut Signex, path: &Path) {
+pub(super) fn open_board(app: &mut Signex, path: &Path) {
     let board = SnxPcb::parse(&std::fs::read_to_string(path).unwrap())
         .unwrap()
         .board;
     app.open_pcb_tab(path.to_path_buf(), BOARD.into(), board);
 }
 
-fn set_rules(app: &mut Signex, rules: ProjectRules) {
+pub(super) fn set_rules(app: &mut Signex, rules: ProjectRules) {
     app.document_state.projects[0].data.rules = Some(rules);
 }
 
-fn dsl(text: &str) -> DrcRuleSet {
+pub(super) fn dsl(text: &str) -> DrcRuleSet {
     DrcRuleSet {
         dsl: Some(text.into()),
         ..DrcRuleSet::default()
@@ -568,4 +581,66 @@ fn a_board_that_cannot_be_read_is_refused_with_the_reason() {
             .keys_of(1, "drc", &path)
             .is_err()
     );
+}
+
+/// The clearance finding of `report` (GND and VCC tracks).
+fn clearance_finding(report: &Value) -> &Value {
+    findings(report)
+        .iter()
+        .find(|f| f["rule"] == "builtin::clearance")
+        .unwrap_or_else(|| panic!("no clearance finding: {report}"))
+}
+
+/// #2307: `check_drc` reads the board-file waivers the DRC panel writes.
+/// A finding's `evidence.waiver_key` is the id `waive_drc_violation`
+/// takes; the waived finding moves to `waived`, and moving one of its
+/// tracks by 0.05 mm lapses the waiver and brings the finding back.
+#[test]
+fn a_board_file_waiver_is_applied_and_lapses_when_its_track_moves() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    open_board(&mut app, &path);
+    run_drc(&mut app, &path);
+    let before = report(&mut app, &path, &[]);
+    let finding = clearance_finding(&before).clone();
+    let waiver_key = finding["evidence"]["waiver_key"].as_str().unwrap();
+    let id = AppCommandId::new("waive_drc_violation").expect("a catalog id");
+    let operands = [
+        format!("document={}", path.display()),
+        format!("id={waiver_key}"),
+        "text=reviewed".to_string(),
+    ];
+    let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = CommandArgs::parse_operands(&id, &operands).expect("operands parse");
+    let outcome = app.run_operands_settled(&id, &args).0;
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+
+    let waived = report(&mut app, &path, &[]);
+    assert!(
+        !findings(&waived)
+            .iter()
+            .any(|f| f["rule"] == "builtin::clearance"),
+        "{waived}"
+    );
+    assert_eq!(waived["waived"][0]["finding"]["key"], finding["key"]);
+    assert_eq!(waived["waived"][0]["waiver"]["key"], waiver_key);
+    assert_eq!(waived["waived"][0]["waiver"]["reason"], "reviewed");
+    assert!(waived["lapsed"].as_array().unwrap().is_empty());
+
+    let moved = track(2, 2, (0.0, 0.30), (10.0, 0.30));
+    let command = signex_engine::pcb::BoardCommand::ReplaceItems {
+        items: vec![signex_engine::pcb::BoardItem::Segment(moved)],
+    };
+    app.execute_board_commands(&path, vec![command], None)
+        .expect("the track moves");
+    let lapsed = report(&mut app, &path, &[]);
+    assert_eq!(
+        clearance_finding(&lapsed)["evidence"]["waiver_key"],
+        waiver_key
+    );
+    assert!(lapsed["waived"].as_array().unwrap().is_empty(), "{lapsed}");
+    assert_eq!(lapsed["lapsed"][0]["key"], waiver_key, "{lapsed}");
 }

@@ -93,7 +93,10 @@ fn pad(number: &str) -> Pad {
         layers: Vec::new(),
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -149,6 +152,7 @@ fn link_footprints(pcb: &mut PcbBoard, netlist: &Netlist) {
 fn board(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 0,
@@ -164,6 +168,7 @@ fn board(footprints: Vec<Footprint>) -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -499,6 +504,8 @@ fn divider_netlists() -> (Netlist, Netlist) {
 
 fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
     pcb.segments.push(Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(1.0, 0.0),
@@ -508,12 +515,15 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         unknown_columns: Default::default(),
     });
     pcb.vias.push(Via {
+        attributes: Default::default(),
         uuid: Uuid::now_v7(),
         position: pt(1.0, 0.0),
         diameter: 0.6,
         drill: 0.3,
         layers: Vec::new(),
         net: number,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     });
@@ -531,6 +541,8 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
 }

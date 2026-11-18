@@ -4,11 +4,12 @@
 //! nothing here.
 
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_stack::board_copper_layers;
 
 use pcb_geom::{ItemRef, PointNm, layer_mask, mm_to_nm, via_layers};
 
 use super::user_rules::LimitKind;
-use super::{DrcRules, Violation, ViolationKind};
+use super::{DrcRules, Violation};
 
 /// Every width and via-size violation of `board`, unsorted.
 pub(super) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
@@ -42,9 +43,34 @@ fn track_widths(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) 
             object.check(rules, kind, width, found);
         }
     }
+    // A copper arc is a track of its net (#2373), checked at its middle.
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| pcb_geom::arc_is_copper(a))
+    {
+        let layers = layer_mask(std::iter::once(arc.layer.as_str()));
+        let (Ok(width), Ok(at)) = (
+            mm_to_nm(arc.width, "arc width"),
+            PointNm::from_mm(arc.mid, "arc middle"),
+        ) else {
+            continue;
+        };
+        let object = Object {
+            item: ItemRef::Arc(arc.uuid),
+            net: arc.net,
+            layers,
+            at,
+        };
+        for kind in [LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth] {
+            object.check(rules, kind, width, found);
+        }
+    }
 }
 
 fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
+    let copper = board_copper_layers(&board.layers);
     for via in &board.vias {
         let Ok(at) = PointNm::from_mm(via.position, "via position") else {
             continue;
@@ -56,7 +82,12 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
             at,
         };
         let sizes = [
-            (LimitKind::MinViaDiameter, via.diameter, "via diameter"),
+            // Its smallest copper ring on a layer it passes (#2401).
+            (
+                LimitKind::MinViaDiameter,
+                via.min_diameter(&copper),
+                "via diameter",
+            ),
             (LimitKind::MinViaDrill, via.drill, "via drill"),
         ];
         for (kind, mm, field) in sizes {
@@ -67,34 +98,38 @@ fn via_sizes(board: &PcbBoard, rules: &DrcRules, found: &mut Vec<Violation>) {
     }
 }
 
-/// A track or via with what a limit is checked against.
-struct Object {
-    item: ItemRef,
-    net: u32,
-    layers: u32,
-    at: PointNm,
+/// One object with what a limit is checked against: a track, via or pad
+/// hole for a size, or any item a value of its own is read from.
+pub(crate) struct Object {
+    pub(crate) item: ItemRef,
+    pub(crate) net: u32,
+    /// Copper layers it reaches; for an object off copper (a mask
+    /// opening's item) every layer, so a board-wide rule applies.
+    pub(crate) layers: u32,
+    pub(crate) at: PointNm,
 }
 
 impl Object {
-    fn check(&self, rules: &DrcRules, kind: LimitKind, measured: i64, found: &mut Vec<Violation>) {
+    /// Push a finding when `measured` breaks the limit of `kind` the
+    /// written rules set for this object.
+    pub(crate) fn check(
+        &self,
+        rules: &DrcRules,
+        kind: LimitKind,
+        measured: i64,
+        found: &mut Vec<Violation>,
+    ) {
         if self.layers == 0 {
             return;
         }
         let Some((limit, rule)) = rules.object_limit(kind, self.net, self.layers) else {
             return;
         };
-        let (broken, violation_kind) = match kind {
-            LimitKind::MinTrackWidth => (measured < limit, ViolationKind::TrackWidth),
-            LimitKind::MaxTrackWidth => (measured > limit, ViolationKind::TrackWidth),
-            LimitKind::MinViaDiameter => (measured < limit, ViolationKind::ViaDiameter),
-            LimitKind::MinViaDrill => (measured < limit, ViolationKind::ViaDrill),
-            LimitKind::MinClearance => return,
-        };
-        if !broken {
+        if !kind.is_broken(measured, limit) {
             return;
         }
         found.push(Violation {
-            kind: violation_kind,
+            kind: kind.violation(),
             items: vec![self.item],
             nets: (self.net, self.net),
             layers: self.layers,

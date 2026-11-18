@@ -774,7 +774,7 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
             Some(RestoreKind::Library)
         }
-        crate::app::TabKind::Project(_) => None,
+        crate::app::TabKind::Project(_) | crate::app::TabKind::Rules(_) => None,
     }
 }
 

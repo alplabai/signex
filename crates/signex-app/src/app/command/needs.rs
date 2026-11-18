@@ -42,6 +42,11 @@ pub(crate) enum Needs {
     FitTarget,
     FootprintEditor,
     Pcb,
+    /// A board edit tool (Place, Board Sketch): a board in view that is not
+    /// read-only (#2405).
+    EditablePcb,
+    /// Measure Distance: a sheet or a board in view (#2403).
+    MeasureTarget,
     /// Reset View Rotation: a board in view that is turned (#2316).
     TurnedPcbView,
     /// Rotate and mirror: on a board, an unlocked footprint selected
@@ -52,10 +57,29 @@ pub(crate) enum Needs {
     MoveSelection,
     /// Move: a sheet or a board to pick from.
     MoveObject,
+    /// Find Similar Objects: a selection on a sheet to seed from (#2416), or
+    /// one on the board in view (#2403). A key or the sheet's canvas menu
+    /// may seed from the object under the cursor, so they still reach the
+    /// handler (`explains_when_unavailable`).
+    SimilarSeed,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
     /// Change Footprint: a board with unlocked footprints selected (#2366).
     SwapFootprints,
+    /// The board Tools edits that act on a selection (#2408, #2409):
+    /// something selected on the board in view.
+    PcbSelection,
+    /// Swap Pins and Swap Gates: two pads of one unlocked footprint selected
+    /// on a board (#2410).
+    PadPair,
+    /// Save as Reuse Block: board objects selected (#2410).
+    ReuseSource,
+    /// Place Reuse Block: one unlocked footprint selected, the anchor.
+    ReuseAnchor,
+    /// The Net Classes panel (#2400, #2416): the project net-class table of a
+    /// sheet or a board. Design ▸ Net Classes and Tools ▸ Net Classes open
+    /// the same panel, so they share this gate.
+    NetClassTable,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -66,6 +90,8 @@ pub(crate) enum Needs {
     Library,
     ProjectSheet,
     TileableWindows,
+    /// Untile: the main window shows its documents in tile panes (#2249).
+    Tiled,
 }
 
 impl Needs {
@@ -79,14 +105,15 @@ impl Needs {
                     || (ctx.document_has_file && ctx.project_dirty)
             }
             Self::SaveAsTarget => ctx.document_is_schematic || ctx.document_is_editor,
-            Self::PrintTarget => ctx.document_is_schematic,
+            // A board prints through Board Print / PDF (#2402).
+            Self::PrintTarget => ctx.document_is_schematic || ctx.pcb.shown,
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
             Self::CopyTarget if ctx.pcb.shown => ctx.pcb.copyable,
             Self::CopyTarget => ctx.has_selection,
             Self::CutTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::CutTarget => ctx.has_selection,
+            Self::CutTarget => editable_selection(ctx),
             Self::PasteTarget if ctx.pcb.shown => ctx.pcb.pasteable,
             Self::PasteTarget => ctx.has_schematic,
             Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
@@ -111,7 +138,7 @@ impl Needs {
             // the schematic canvas's; with none it is a no-op. A board
             // deletes its own selection, never a locked footprint.
             Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::DeleteTarget => ctx.has_selection || ctx.has_footprint_editor,
+            Self::DeleteTarget => editable_selection(ctx) || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
             Self::DrawInProgress => ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
@@ -126,18 +153,28 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            Self::NetClassTable => ctx.has_schematic || ctx.has_pcb,
+            Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
+            Self::MeasureTarget => ctx.has_schematic || ctx.pcb.shown,
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected; on a board too (#2364).
             Self::Turn if ctx.pcb.shown => {
                 ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
             }
-            Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
+            Self::Turn => ctx.has_schematic && (editable_selection(ctx) || ctx.turn_in_hand),
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
-            Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
+            Self::MoveSelection => ctx.has_schematic && editable_selection(ctx),
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
+            Self::SimilarSeed => {
+                (ctx.has_schematic && ctx.has_selection) || (ctx.pcb.shown && ctx.pcb.any)
+            }
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::PcbSelection => ctx.pcb.shown && ctx.pcb.any,
+            Self::PadPair => ctx.pcb.shown && ctx.pcb.pad_pair,
+            Self::ReuseSource => ctx.pcb.shown && ctx.pcb.copyable,
+            Self::ReuseAnchor => ctx.pcb.shown && ctx.pcb.one_footprint,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
@@ -153,10 +190,12 @@ impl Needs {
             Self::Library => ctx.has_open_library,
             // Sheet numbers are the project's; a loose sheet has none.
             Self::ProjectSheet => ctx.has_project_sheet,
-            // Tile arranges the main window with the undocked document
+            // Tile shows the main window's documents in panes (#2249) and
+            // arranges the main window with the undocked document
             // windows; alone, or before the main window's screen is known,
             // it has nothing to do.
             Self::TileableWindows => ctx.can_tile_windows,
+            Self::Tiled => ctx.is_tiled,
         }
     }
 
@@ -168,12 +207,12 @@ impl Needs {
                 "Save needs a schematic or editor document, or a project with unsaved changes"
             }
             Self::SaveAsTarget => "Save As needs a schematic, symbol or footprint document",
-            Self::PrintTarget => "Print needs an open schematic",
+            Self::PrintTarget => "Print needs an open schematic or PCB",
             Self::Document => "No document is open",
             Self::Undo => "Nothing to undo",
             Self::Redo => "Nothing to redo",
             Self::CopyTarget => "Nothing is selected to copy",
-            Self::CutTarget => "Nothing is selected to cut, or a selected footprint is locked",
+            Self::CutTarget => "Nothing is selected to cut, or the selection is locked",
             Self::PasteTarget => {
                 "Nothing to paste here: no schematic is open, or the clipboard holds no board objects"
             }
@@ -182,9 +221,7 @@ impl Needs {
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
             Self::ParentSheet => "The active sheet has no parent sheet",
-            Self::DeleteTarget => {
-                "Nothing is selected to delete, or a selected footprint is locked"
-            }
+            Self::DeleteTarget => "Nothing is selected to delete, or the selection is locked",
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
             Self::DrawInProgress => "No wire, bus or polyline is being drawn",
             Self::Sheets => "No schematic or project is open",
@@ -193,25 +230,44 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::NetClassTable => "No schematic or PCB is open",
+            Self::EditablePcb => "No PCB is open, or the board is read-only",
+            Self::MeasureTarget => "No schematic or PCB is in view",
             Self::TurnedPcbView => "The board view is not rotated",
-            Self::Turn => {
-                "Nothing is selected or in hand to turn, or a selected footprint is locked"
-            }
-            Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
+            Self::Turn => "Nothing is selected or in hand to turn, or the selection is locked",
+            Self::MoveSelection => "Nothing is selected to move, or the selection is locked",
             Self::MoveObject => "No schematic or PCB is open",
+            Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
             Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
+            Self::PcbSelection => "Nothing is selected on the PCB in view",
+            Self::PadPair => "Select two pads of one unlocked component on a PCB",
+            Self::ReuseSource => "Nothing is selected on a PCB to save as a reuse block",
+            Self::ReuseAnchor => {
+                "Select one unlocked component of the channel to place the block on"
+            }
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
             Self::Library => "No library is open",
             Self::ProjectSheet => "No sheet of a project is open",
-            Self::TileableWindows => "No document is in its own window",
+            Self::TileableWindows => {
+                "Tile needs two documents in the main window, or a document in its own window"
+            }
+            Self::Tiled => "The documents are not tiled",
         }
     }
 }
 
-/// The commands that move, turn, flip or delete a board selection (#2240).
+/// A sheet selection an edit can change: something is selected and not all
+/// of it is locked (#2419). The engine skips locked objects, so a selection
+/// that is all locked leaves an edit nothing to do.
+fn editable_selection(ctx: &CommandContext) -> bool {
+    ctx.has_selection && !ctx.selection_all_locked
+}
+
+/// The commands that move, turn, flip or delete a board selection (#2240),
+/// or a sheet selection.
 pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
     matches!(
         needs(command),
@@ -262,8 +318,12 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "flip_selected_y" => Needs::Turn,
         "move_selection" => Needs::MoveSelection,
         "move_object" => Needs::MoveObject,
+        "find_similar_objects" => Needs::SimilarSeed,
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
+        "swap_pins" | "swap_gates" => Needs::PadPair,
+        "save_board_reuse_block" => Needs::ReuseSource,
+        "place_board_reuse_block" => Needs::ReuseAnchor,
         "remove_last_vertex" => Needs::VertexTarget,
         "undo_last_segment" => Needs::DrawInProgress,
         "paste_array"
@@ -282,25 +342,119 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_port"
         | "place_off_sheet_connector"
         | "place_sheet_entry"
+        // #2415: the rest of the Place menu's tools on a sheet, with the
+        // ids that run the same message (`draw_graphic_line` is `draw_line`,
+        // `draw_hierarchical_sheet` is `place_sheet_symbol`, `place_text`
+        // is `place_text_string`).
+        | "place_bus_entry"
+        | "place_sheet_symbol"
+        | "draw_hierarchical_sheet"
+        | "place_no_connect"
+        | "place_no_erc"
+        | "place_text"
+        | "place_text_string"
+        | "place_text_frame"
+        | "place_note"
+        | "draw_line"
+        | "draw_graphic_line"
+        | "draw_arc"
+        | "draw_full_circle"
+        | "draw_rectangle"
+        | "draw_polygon"
+        // #2416: the selection filter acts on the
+        // sheet in view.
+        | "open_selection_filter"
         | "open_components_panel"
         | "place_symbol"
-        | "measure_distance"
         | "break_wire"
+        // #2420: the directive tools and the Blanket edit.
+        | "place_blanket"
+        | "place_compile_mask"
+        | "place_diff_pair"
+        | "edit_blanket"
+        // #1667: the file rows place onto the sheet in view.
+        | "place_design_block"
+        | "import_graphics"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
-        "run_drc" | "reannotate_board" => Needs::Pcb,
-        // #2373: the board placement tools.
+        "run_drc"
+        | "reannotate_board"
+        | "fabrication_outputs"
+        | "open_drc_panel" => Needs::Pcb,
+        "open_net_classes" | "open_net_classes_panel" => Needs::NetClassTable,
+        // #2216: the pours of the board in view.
+        "repour_selected" | "repour_all" => Needs::Pcb,
+        // #2404, #2402, #2488: the board reports, Board Print / PDF and STEP.
+        "board_report_bom"
+        | "board_report_netlist"
+        | "board_report_net_length"
+        | "board_report_components"
+        | "export_board_report"
+        | "export_board_pdf"
+        | "export_assembly_svg"
+        | "board_assembly_drawing"
+        | "export_board_step" => Needs::Pcb,
+        "measure_distance" => Needs::MeasureTarget,
+        // #2410: panelisation acts on the board in view.
+        "panelize_board" | "remove_board_panel" | "set_board_panel" => Needs::Pcb,
+        // #2373: the board placement tools, and Board Sketch; greyed on a
+        // read-only board (#2405).
         "place_board_via"
         | "place_board_track"
         | "place_board_fill"
         | "place_board_region"
-        | "place_board_keepout" => Needs::Pcb,
+        | "place_board_polygon_pour"
+        | "place_board_pour_cutout"
+        | "place_board_slice_pour"
+        | "place_board_keepout"
+        // #2389: Interactive Routing and the other routing tools.
+        | "place_board_diff_pair"
+        | "place_board_quick_route"
+        | "place_board_multi_route"
+        | "place_board_route"
+        // #2373: free pads, arcs, strings and dimensions.
+        | "place_board_pad"
+        | "place_board_arc"
+        | "place_board_string"
+        | "place_board_dimension"
+        // #2424: the Graphics tools.
+        | "place_board_line"
+        | "place_board_graphic_arc"
+        | "place_board_circle"
+        | "place_board_rectangle"
+        | "place_board_text_frame"
+        | "board_sketch" => Needs::EditablePcb,
+        // #2389, #2373: the routing and arc modes change no board.
+        "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
+        // #2424: a drawing's edits on the board `document` names.
+        "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
+        // #2368: a footprint text on the board `document` names.
+        "set_footprint_text" => Needs::Pcb,
+        // #2389: length tuning of the selected tracks' nets.
+        "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
+        // #2401, #2407: the layer stack and the track and via edits.
+        "board_layer_stack"
+        | "set_layer_stack"
+        | "lock_board_items"
+        | "unlock_board_items"
+        | "set_via_span"
+        | "set_layer_sizes"
+        | "set_pad_shape" => Needs::Pcb,
+        // #2408: with nothing selected these act on every pour or net.
+        "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
+        // #2408, #2409: these act on the selection only.
+        "gloss_selected_routes" | "board_shape_from_selection" | "keepout_from_selection" => {
+            Needs::PcbSelection
+        }
+        "arrange_in_box" => Needs::SwapFootprints,
+        // #2410: DXF import onto the board in view.
+        "import_dxf" | "import_dxf_outline" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
-        "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,
+        "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.
@@ -310,7 +464,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
         | "toggle_origin_marker"
-        | "board_sketch"
+        | "select_board_net"
+        | "highlight_board_net"
+        | "view_board_3d"
         | "next_layer"
         | "prev_layer"
         | "next_signal_layer"
@@ -319,12 +475,31 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "show_all_layers"
         | "view_rotate"
         | "view_rotate_ccw"
-        | "view_rotate_180" => Needs::Pcb,
+        | "view_rotate_180"
+        // #2394: the layer strip under the board.
+        | "show_layer_set"
+        | "save_layer_set"
+        | "delete_layer_set"
+        | "hide_layer"
+        | "highlight_layer"
+        | "hide_layer_group"
+        | "show_layer_group"
+        | "set_layer_tab_names"
+        | "toggle_layer_numbers"
+        | "flip_board_view"
+        // #2363: the Layers panel's board view configuration.
+        | "set_layer_visible"
+        | "set_active_layer"
+        | "set_layer_color"
+        | "show_used_layers_only"
+        | "set_object_visible"
+        | "set_object_transparency" => Needs::Pcb,
         // At 0° Reset has nothing to do, so it is greyed.
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
+        "untile_documents" => Needs::Tiled,
         _ => return None,
     })
 }

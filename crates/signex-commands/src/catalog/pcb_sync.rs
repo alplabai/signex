@@ -1,0 +1,43 @@
+//! Schematic-to-board sync commands: update the board from the schematic,
+//! assign footprints and change a placed footprint.
+
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use signex_i18n_ids::command_ids;
+
+pub(super) const PCB_SYNC: &[CommandMetadata] = &[
+    // #1312: the Update PCB dialog, from a schematic or (Import Changes) a
+    // board of a project. Execute is one undo step on the board.
+    CommandMetadata {
+        id: "update_pcb_from_schematic",
+        category: "pcb_sync",
+        label: command_ids::CMD_UPDATE_PCB_FROM_SCHEMATIC,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::APPLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "assign_footprints",
+        category: "design",
+        label: command_ids::CMD_ASSIGN_FOOTPRINTS,
+        menu_label: Some(command_ids::CMD_MENU_ASSIGN_FOOTPRINTS),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2366: pick a library footprint for the selected footprints; the swap
+    // is one board undo step. No default key.
+    CommandMetadata {
+        id: "change_footprint",
+        category: "modify",
+        label: command_ids::CMD_CHANGE_FOOTPRINT,
+        menu_label: Some(command_ids::CMD_MENU_CHANGE_FOOTPRINT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+];

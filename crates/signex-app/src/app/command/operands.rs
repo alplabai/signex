@@ -34,6 +34,8 @@ pub enum OperandValue {
     Color(u8, u8, u8),
     /// The document a command names: its id or its path (#2172).
     Document(DocumentTarget),
+    /// A length in mm, above zero (#2408).
+    Length(f64),
 }
 
 /// Why operands were refused; every variant names the operand.
@@ -211,6 +213,11 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
         OperandKind::Document => DocumentTarget::parse(text)
             .map(OperandValue::Document)
             .map_err(invalid),
+        // A length the document cannot store as nm would be unusable.
+        OperandKind::Length => number(text)
+            .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())
+            .map(OperandValue::Length)
+            .ok_or_else(|| invalid("a length in mm above zero")),
     }
 }
 
@@ -506,7 +513,10 @@ mod tests {
                     op.kind.unit().is_some(),
                     matches!(
                         op.kind,
-                        OperandKind::Point | OperandKind::Angle | OperandKind::Turn
+                        OperandKind::Point
+                            | OperandKind::Angle
+                            | OperandKind::Turn
+                            | OperandKind::Length
                     )
                 );
             }

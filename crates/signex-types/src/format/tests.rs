@@ -30,6 +30,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
 pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
@@ -46,6 +47,7 @@ pub(super) fn empty_board() -> PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 
@@ -442,7 +444,10 @@ fn snxpcb_round_trip_with_data() {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     };
     let pad2 = Pad {
@@ -461,7 +466,10 @@ fn snxpcb_round_trip_with_data() {
             name: "GND".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     };
 
@@ -509,7 +517,9 @@ fn snxpcb_round_trip_with_data() {
         ),
     ] {
         board.segments.push(Segment {
+            attributes: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
             uuid: Uuid::parse_str(uuid).unwrap(),
             start: PcbPoint { x: sx, y: sy },
             end: PcbPoint { x: ex, y: ey },
@@ -520,6 +530,7 @@ fn snxpcb_round_trip_with_data() {
     }
 
     board.vias.push(Via {
+        attributes: Default::default(),
         unknown_columns: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0030-7000-8000-000000000001").unwrap(),
         position: PcbPoint { x: 100.0, y: 200.0 },
@@ -527,6 +538,8 @@ fn snxpcb_round_trip_with_data() {
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
     });
 
@@ -553,6 +566,8 @@ fn snxpcb_round_trip_with_data() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
 
@@ -606,6 +621,8 @@ fn zone_without_holes_writes_no_holes_key() {
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     });
     let text = SnxPcb::new(board).write_string().expect("serialise");

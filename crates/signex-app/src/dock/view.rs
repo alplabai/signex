@@ -70,6 +70,7 @@ impl DockArea {
         };
 
         if region.panels.is_empty() {
+            // raw: an empty spacer, no text.
             return container(text(raw(""))).width(0).boxed();
         }
 
@@ -200,7 +201,19 @@ impl DockArea {
                 .on_release(DockMessage::TabClick(position, i))
                 .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
-                tab_row = tab_row.push(tab.boxed());
+                // A squeezed tab ends its label in an ellipsis; the whole
+                // name shows in a tooltip (#2468).
+                if squeezed.is_some() {
+                    let tip = container(text(t!(ctx.i18n, panel.message())).size(tab_size))
+                        .padding([SP.xs, SP.s]);
+                    tab_row = tab_row.push(
+                        signex_widgets::tooltip(tab, tip, iced::widget::tooltip::Position::Bottom)
+                            .style(styles::context_menu(&ctx.tokens))
+                            .boxed(),
+                    );
+                } else {
+                    tab_row = tab_row.push(tab.boxed());
+                }
             }
             tab_row.boxed()
         })
@@ -275,6 +288,7 @@ impl DockArea {
                         .boxed(),
                 }
             } else {
+                // raw: an empty spacer, no text.
                 text(raw("")).boxed()
             };
 
@@ -347,7 +361,7 @@ impl DockArea {
             );
 
             for (i, panel) in region.panels.iter().enumerate() {
-                let label = panel.label().to_string();
+                let label = rail_label(*panel, &ctx.i18n);
                 let is_active = i == region.active;
                 let text_c = if is_active {
                     styles::ti(ctx.tokens.text)
@@ -483,6 +497,12 @@ impl DockArea {
     }
 }
 
+/// The name of a collapsed panel on the side rail, in `i18n`'s language.
+/// Drawn rotated on a canvas, so it is plain text, measured as drawn.
+fn rail_label(panel: PanelKind, i18n: &signex_i18n::I18n) -> String {
+    i18n.message_plain(panel.message(), &[])
+}
+
 /// Width a dock tab takes when nothing squeezes it: label, count chip and
 /// side padding, measured in the UI font. One `SP.xs` of slack covers the
 /// shaping difference between this measurement and the drawn text.
@@ -550,6 +570,23 @@ impl canvas::Program<DockMessage> for RotatedLabel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #2059: a collapsed panel's rail name reads as `PanelKind::label` in
+    /// en-US and follows the interface language.
+    #[test]
+    fn the_rail_names_follow_the_language() {
+        let en = signex_i18n::I18n::en_us();
+        let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        for panel in [
+            PanelKind::Projects,
+            PanelKind::Properties,
+            PanelKind::Messages,
+            PanelKind::NetInspector,
+        ] {
+            assert_eq!(rail_label(panel, &en), panel.label());
+            assert_ne!(rail_label(panel, &xa), panel.label());
+        }
+    }
 
     #[test]
     fn the_project_summary_shows_under_projects_with_a_project_open_only() {

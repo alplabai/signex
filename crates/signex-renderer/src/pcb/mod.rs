@@ -38,6 +38,9 @@ pub struct TraceInput {
     pub dimmed: bool,
     /// Whose colour it is drawn in.
     pub ink: CopperInk,
+    /// The View Options row it belongs to, Tracks or Arcs: its
+    /// transparency (#2363).
+    pub object: BoardObject,
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +83,12 @@ pub struct ZonePolygonInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// A pour's computed copper, drawn instead of filling the outline
+    /// (which is then only stroked); `None` for a zone whose copper is its
+    /// outline. Set by [`PcbSnapshot::with_zone_fills`].
+    pub fill: Option<Vec<ZoneFillPiece>>,
+    /// The View Options row it belongs to: its transparency (#2363).
+    pub object: BoardObject,
 }
 
 /// Whose colour copper is drawn in: the colour the Layers panel lists that
@@ -144,9 +153,15 @@ pub struct PcbSnapshot {
     pub drc_markers: Vec<DrcMarkerInput>,
     /// The outline, cutouts, mounting holes and keepouts (#2234).
     pub board_features: BoardFeaturesInput,
-    /// Footprint designator and comment texts (#2368). Not in the `Scene`:
+    /// Footprint and board texts (#2368, #2387). Not in the `Scene`:
     /// the app draws them on a canvas layer of their own on both mounts.
     pub texts: Vec<FootprintTextInput>,
+    /// Footprint silkscreen, fab, assembly and courtyard drawings and the
+    /// board's own drawings (#2387), drawn in the overlay buckets.
+    pub graphics: Vec<GraphicInput>,
+    /// The view's own layer colours and transparencies (#2363); the board
+    /// text layer reads its colours too.
+    pub paint: BoardPaint,
 }
 
 impl PcbSnapshot {
@@ -166,20 +181,36 @@ impl PcbSnapshot {
 }
 
 mod board_features;
+mod board_paint;
 mod emit;
 mod footprint_text;
+mod graphics;
+mod layer_colour;
+mod layer_pairs;
 mod layer_rows;
+mod layer_sets;
 mod layer_view;
 mod ratsnest;
+mod used_layers;
+mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
+pub use board_paint::{BoardObject, BoardPaint};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
+pub use graphics::{GraphicInput, GraphicShapeInput};
+pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
-    signal_layers,
+    plane_layers, signal_layers,
 };
-pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
+pub use layer_sets::{
+    BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
+    listed_layers,
+};
+pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView, zone_object};
 pub use ratsnest::ratsnest_inputs;
+pub use used_layers::used_layers;
+pub use zone_fill::ZoneFillPiece;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {
@@ -190,6 +221,8 @@ pub enum PcbSliceFamily {
     RuleAreas,
     Ratsnest,
     Drc,
+    /// Footprint and board drawings (#2387).
+    Graphics,
     Theme,
     Camera,
 }
@@ -216,7 +249,11 @@ const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceF
 // the table feeds real `DirtyFlags` (Traces -> LINES), not just an
 // is-empty check. Pads alone would leave stale trace lines on screen.
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
-const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
+const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[
+    PcbSliceFamily::Pads,
+    PcbSliceFamily::Traces,
+    PcbSliceFamily::Graphics,
+];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];
 const FAMILIES_RULE_AREA_UPDATED: &[PcbSliceFamily] =
     &[PcbSliceFamily::RuleAreas, PcbSliceFamily::Drc];
@@ -250,7 +287,9 @@ pub fn dirty_flags_for_families(families: &[PcbSliceFamily]) -> DirtyFlags {
             PcbSliceFamily::Pads | PcbSliceFamily::Zones | PcbSliceFamily::RuleAreas => {
                 DirtyFlags::POLYGONS
             }
-            PcbSliceFamily::Ratsnest | PcbSliceFamily::Drc => DirtyFlags::OVERLAY,
+            PcbSliceFamily::Ratsnest | PcbSliceFamily::Drc | PcbSliceFamily::Graphics => {
+                DirtyFlags::OVERLAY
+            }
             PcbSliceFamily::Theme => DirtyFlags::THEME,
             PcbSliceFamily::Camera => DirtyFlags::empty(),
         };
@@ -284,6 +323,14 @@ impl ViewRenderer for PcbRenderer {
         dirty: DirtyFlags,
         scene: &mut Scene,
     ) {
+        // The view's own colours and transparencies over the palette.
+        let painted;
+        let theme = if snapshot.paint.is_default() {
+            theme
+        } else {
+            painted = theme.clone().with_paint(snapshot.paint.clone());
+            &painted
+        };
         if dirty.contains(DirtyFlags::LINES) {
             emit_traces(snapshot, theme, scene);
         }
@@ -508,6 +555,7 @@ mod tests {
                     net,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    object: super::BoardObject::Tracks,
                 })
                 .collect(),
             ..PcbSnapshot::default()
@@ -681,6 +729,8 @@ mod tests {
                 source_order: 2,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -693,6 +743,8 @@ mod tests {
                 source_order: 1,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -705,6 +757,8 @@ mod tests {
                 source_order: 0,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
+                object: super::BoardObject::Polygons,
             },
         ];
 

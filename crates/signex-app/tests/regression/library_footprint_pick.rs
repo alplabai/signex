@@ -113,7 +113,7 @@ fn the_stock_resistor_offers_its_default_and_six_alternates() {
         .loaded
         .as_deref()
         .expect("details loaded");
-    let choices = loaded.footprint_choices();
+    let choices = loaded.footprint_choices(&signex_i18n::I18n::en_us());
     assert_eq!(choices.len(), 7);
     assert!(choices[0].label.ends_with("(default)"), "{choices:?}");
 }
@@ -152,7 +152,13 @@ fn the_details_preview_follows_the_picker_and_a_new_row_resets_it() {
         alt_name,
         "the preview shows the picked footprint"
     );
-    assert_eq!(loaded.shown_footprint(pick_ref).unwrap().reference, alt);
+    assert_eq!(
+        loaded
+            .shown_footprint(pick_ref, &signex_i18n::I18n::en_us())
+            .unwrap()
+            .reference,
+        alt
+    );
 
     // Another row starts from its own default.
     let other = key_of(&app, "STOCK-IC_Generic");

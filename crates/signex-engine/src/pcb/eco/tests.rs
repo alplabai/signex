@@ -266,6 +266,27 @@ fn an_unlinked_footprint_with_the_parts_designator_is_linked_not_replaced() {
 }
 
 #[test]
+fn two_unlinked_footprints_with_the_parts_designator_link_neither() {
+    let mut design = synced();
+    design.board.footprints[1].schematic_link = None;
+    let twin = board_fp(0xb2, "R2", "4k7", &[], &r0603(), (40.0, 10.0));
+    design.board.footprints.push(twin);
+    let list = design.diff();
+    for id in [0xa2, 0xb2] {
+        assert!(
+            list.row(&EcoKey::Link(u(id))).is_none(),
+            "{}",
+            report_text(&list)
+        );
+    }
+    assert!(
+        list.row(&add_key(&[0x102])).is_some(),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
 fn a_unit_added_to_a_part_updates_its_link() {
     let mut design = synced();
     design.parts[2].part.units.push(u(0x203));
@@ -580,4 +601,35 @@ fn new_footprints_are_staged_apart_off_the_board_and_the_same_every_time() {
     pads.dedup();
     assert_eq!(pads.len(), total, "every pad uuid is unique board-wide");
     assert_eq!(list, design.diff(), "the same staging every time");
+}
+
+/// #2384: on a board with no outline and no parts, new parts stage inside
+/// the board area from its bottom-left corner, up the screen.
+#[test]
+fn new_parts_on_an_empty_board_stage_inside_its_area_from_the_bottom_left() {
+    let mut empty = board(Vec::new());
+    empty.outline.clear();
+    let design = Design::new(empty, design_parts(), design_netlist());
+    let list = design.diff();
+    let (corner, far) = signex_types::pcb_origin::EMPTY_BOARD_AREA;
+    let mut staged = 0;
+    for row in &list.rows {
+        let EcoChange::AddFootprint { footprint } = &row.change else {
+            continue;
+        };
+        staged += 1;
+        let e = pcb_geom::footprint_extent(footprint).unwrap();
+        let o = pcb_geom::PointNm::from_mm(footprint.position, "p").unwrap();
+        let (lo, hi) = (o.plus(e.min).to_mm(), o.plus(e.max).to_mm());
+        assert!(
+            lo.x >= corner.x && hi.x <= far.x,
+            "{footprint:?} off the area"
+        );
+        assert!(
+            lo.y >= corner.y && hi.y <= far.y,
+            "{footprint:?} off the area"
+        );
+        assert!(far.y - hi.y < 5.0, "{footprint:?} not on the bottom row");
+    }
+    assert_eq!(staged, 3);
 }

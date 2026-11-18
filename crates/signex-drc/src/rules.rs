@@ -104,6 +104,12 @@ impl DrcRules {
         self.remarks.extend(infos);
         let lowered = crate::rule_notes::lowered_classes(&self, board, classes);
         self.notes.extend(lowered);
+        for below in crate::fab_floor::below_floor(&self.user) {
+            let note = crate::fab_floor::note(&below);
+            if !self.notes.contains(&note) {
+                self.notes.push(note);
+            }
+        }
         self
     }
 
@@ -143,18 +149,116 @@ impl DrcRules {
         let mut most: (i64, Option<&ScopedRule>) = (i64::MIN, None);
         let layers = self.on_board(layers);
         for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
-            for net in [first.net, second.net] {
-                let side =
-                    user_rules::pick(&self.user, LimitKind::MinClearance, net, 1 << bit, objects)
-                        .map_or((self.required(net, net), None), |(nm, rule)| {
-                            (nm, Some(rule))
-                        });
+            for (net, other) in [(first.net, second.net), (second.net, first.net)] {
+                let side = user_rules::pick_between(
+                    &self.user,
+                    LimitKind::MinClearance,
+                    net,
+                    Some(other),
+                    1 << bit,
+                    objects,
+                )
+                .map_or((self.required(net, net), None), |(nm, rule)| {
+                    (nm, Some(rule))
+                });
                 if side.0 > most.0 || (side.0 == most.0 && self.wins_tie(side.1, most.1)) {
                     most = side;
                 }
             }
         }
         (most.0, most.1.map(|s| s.rule.id()))
+    }
+
+    /// The clearance copper items `a` and `b` of different nets need where
+    /// they share copper layers: what a run asks of the pair, so the
+    /// interactive router (#2389) keeps exactly this gap. 0 when they share
+    /// no layer.
+    pub fn clearance_between(&self, a: &CopperItem, b: &CopperItem) -> i64 {
+        let shared = a.layers & b.layers;
+        if shared == 0 {
+            return 0;
+        }
+        self.required_between(a, b, shared).0
+    }
+
+    /// The clearance copper of nets `a` and `b` needs when only the nets are
+    /// known: each side by its written rule (a class-pair rule included)
+    /// or its implicit value, the stricter side on the strictest copper
+    /// layer of the board. What a tool that lays copper keeps, so the next
+    /// run finds nothing it wrote. A rule for an object pair takes no part.
+    pub fn net_pair_clearance(&self, a: u32, b: u32) -> i64 {
+        if !user_rules::sets(&self.user, LimitKind::MinClearance) {
+            return self.required(a, b);
+        }
+        let layers = self.on_board(u32::MAX);
+        let mut most = i64::MIN;
+        for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
+            for (net, other) in [(a, b), (b, a)] {
+                let side = user_rules::pick_between(
+                    &self.user,
+                    LimitKind::MinClearance,
+                    net,
+                    Some(other),
+                    1 << bit,
+                    [None, None],
+                )
+                .map_or_else(|| self.required(net, net), |(nm, _)| nm);
+                most = most.max(side);
+            }
+        }
+        most
+    }
+
+    /// The narrowest and widest track the written rules allow for `net` on
+    /// `layers`, in nm; `None` where no rule sets one.
+    pub fn track_width_limits(&self, net: u32, layers: u32) -> (Option<i64>, Option<i64>) {
+        let limit = |kind| self.object_limit(kind, net, layers).map(|(nm, _)| nm);
+        (
+            limit(LimitKind::MinTrackWidth),
+            limit(LimitKind::MaxTrackWidth),
+        )
+    }
+
+    /// The smallest via copper diameter and drill the written rules allow
+    /// for `net` on `layers`, in nm; `None` where no rule sets one.
+    pub fn via_size_limits(&self, net: u32, layers: u32) -> (Option<i64>, Option<i64>) {
+        let limit = |kind| self.object_limit(kind, net, layers).map(|(nm, _)| nm);
+        (
+            limit(LimitKind::MinViaDiameter),
+            limit(LimitKind::MinViaDrill),
+        )
+    }
+
+    /// The most clearance any pair of copper items can need here: the
+    /// board value, every net class's and every written rule's, whatever
+    /// nets, layers or object kinds the rule names. How far a search from
+    /// one item must look so that no pair is missed, whichever side's rule
+    /// asks it (the interactive router's broad phase, #2389).
+    pub fn widest_clearance(&self) -> i64 {
+        let classes = self.net_clearance.values().copied().max().unwrap_or(0);
+        let written = user_rules::widest_written_clearance(&self.user);
+        self.clearance.max(classes).max(written).min(MAX_ABS_NM)
+    }
+
+    /// What a clearance between nets `a` and `b` needs with no class-pair
+    /// rule (#2398, a matrix cell's default): each side by the most
+    /// specific other rule, else its implicit value; the stricter side on
+    /// the strictest copper layer of the board.
+    pub fn pair_default(&self, a: u32, b: u32, objects: [Option<CopperObject>; 2]) -> i64 {
+        let mut most = i64::MIN;
+        for bit in (0..32).filter(|bit| self.copper & (1 << bit) != 0) {
+            for net in [a, b] {
+                let side =
+                    user_rules::pick(&self.user, LimitKind::MinClearance, net, 1 << bit, objects)
+                        .map_or_else(|| self.required(net, net), |(nm, _)| nm);
+                most = most.max(side);
+            }
+        }
+        if most == i64::MIN {
+            self.required(a, b)
+        } else {
+            most
+        }
     }
 
     /// Between two sides asking the same clearance: the more severe one
@@ -242,6 +346,23 @@ impl DrcRules {
 
     pub(crate) fn sets(&self, kind: LimitKind) -> bool {
         user_rules::sets(&self.user, kind)
+    }
+
+    /// The largest value any written rule sets for `kind`, whatever it
+    /// covers; 0 with none. How far a search for pairs must look.
+    pub(crate) fn widest_limit(&self, kind: LimitKind) -> i64 {
+        self.user
+            .iter()
+            .filter_map(|s| s.rule.limit(kind))
+            .max()
+            .unwrap_or(0)
+            .clamp(0, MAX_ABS_NM)
+    }
+
+    /// The limit of `kind` a board-wide rule sets for objects off copper
+    /// (silkscreen, mask openings, courtyards), and the rule's id.
+    pub(crate) fn board_limit(&self, kind: LimitKind) -> Option<(i64, String)> {
+        self.object_limit(kind, 0, u32::MAX)
     }
 }
 

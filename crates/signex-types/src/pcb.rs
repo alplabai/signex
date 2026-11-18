@@ -3,11 +3,13 @@ use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
 use crate::part::FootprintSourceRef;
-use crate::pcb_layer::PcbLayer;
+use crate::pcb_layer::{CopperLayer, PcbLayer};
+pub use crate::pcb_stack::{LayerSize, LayerSizes, LayerStack};
 use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
 
 pub use crate::pcb_component::{ComponentAttributes, ComponentType};
+pub use crate::pcb_route_attrs::{MaskExpansion, TrackAttributes, ViaAttributes, ViaMaskSide};
 pub use crate::schematic::Point;
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,11 @@ pub enum PadShape {
     Rect,
     Oval,
     RoundRect,
+    /// A rectangle with one pair of opposite edges of different lengths,
+    /// set by [`Pad::trapezoid_delta`] (#2242).
+    Trapezoid,
+    /// A polygon of the pad's own, [`Pad::custom_outline`] (#2242).
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -99,7 +106,7 @@ pub enum ViaType {
 // Layer definition
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayerDef {
     pub id: u8,
     pub name: String,
@@ -202,10 +209,27 @@ pub struct Pad {
     /// `rotation` pad column (`snxpcb/1.3`).
     #[serde(default)]
     pub rotation: f64,
+    /// How much longer, in mm, the pad's +y edge is than its −y edge
+    /// (`x`), or its +x edge than its −x edge (`y`); at most one is
+    /// non-zero. Read only for [`PadShape::Trapezoid`]; see
+    /// [`crate::pcb_pad_shape`]. Saved in the optional `trapezoid_delta`
+    /// pad column (`snxpcb/1.4`).
+    #[serde(default)]
+    pub trapezoid_delta: Point,
+    /// The copper outline in the pad's own frame, mm, about
+    /// [`Self::position`]: a simple polygon that turns with the pad. Read
+    /// only for [`PadShape::Custom`]. Saved in the optional
+    /// `custom_outline` pad column (`snxpcb/1.4`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_outline: Vec<Point>,
     /// The net was set by hand and the schematic never changes it.
     /// Saved in the optional `net_locked` pad column.
     #[serde(default)]
     pub net_locked: bool,
+    /// Copper sizes that differ by layer (#2401); `None` is [`Self::size`]
+    /// on every layer. Saved in the optional `layer_sizes` pad column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_sizes: Option<LayerSizes<Point>>,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -339,6 +363,13 @@ pub struct Segment {
     pub layer: String,
     #[serde(default)]
     pub net: u32,
+    /// Move, delete and edits other than the lock itself are refused
+    /// (#2407). Saved in the optional `locked` track column.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Mask settings (#2378); the lock is `locked`.
+    #[serde(default, skip_serializing_if = "TrackAttributes::is_default")]
+    pub attributes: TrackAttributes,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -359,6 +390,17 @@ pub struct Via {
     pub net: u32,
     #[serde(default = "default_via_type")]
     pub via_type: ViaType,
+    /// Move, delete and edits other than the lock itself are refused
+    /// (#2407). Saved in the optional `locked` via column.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Diameters that differ by layer (#2401); `None` is [`Self::diameter`]
+    /// on every layer. Saved in the optional `layer_sizes` via column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_sizes: Option<LayerSizes<f64>>,
+    /// Mask and tenting settings (#2378); the lock is `locked`.
+    #[serde(default, skip_serializing_if = "ViaAttributes::is_default")]
+    pub attributes: ViaAttributes,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -369,9 +411,56 @@ fn default_via_type() -> ViaType {
     ViaType::Through
 }
 
+impl Via {
+    /// The copper diameter on `layer`: its per-layer size there, else
+    /// [`Self::diameter`].
+    pub fn diameter_on(&self, layer: CopperLayer) -> f64 {
+        self.layer_sizes
+            .as_ref()
+            .and_then(|sizes| sizes.on(layer))
+            .unwrap_or(self.diameter)
+    }
+
+    /// The smallest copper diameter on the layers the via passes through:
+    /// those of `copper` (the board's copper, top to bottom) between its two
+    /// span ends, every one of them when a span end is not copper.
+    /// [`Self::diameter`] counts only on a layer its sizes do not cover, as
+    /// top/middle/bottom sizes cover every layer.
+    pub fn min_diameter(&self, copper: &[CopperLayer]) -> f64 {
+        let ends: Option<Vec<CopperLayer>> = self
+            .layers
+            .iter()
+            .map(|name| parse_pcb_layer(name).and_then(PcbLayer::copper))
+            .collect();
+        let span = ends
+            .filter(|ends| !ends.is_empty())
+            .and_then(|ends| Some((*ends.iter().min()?, *ends.iter().max()?)));
+        copper
+            .iter()
+            .filter(|&&layer| span.is_none_or(|(from, to)| (from..=to).contains(&layer)))
+            .map(|&layer| self.diameter_on(layer))
+            .reduce(f64::min)
+            .unwrap_or(self.diameter)
+    }
+}
+
+impl Pad {
+    /// The copper size on `layer`: its per-layer size there, else
+    /// [`Self::size`].
+    pub fn size_on(&self, layer: CopperLayer) -> Point {
+        self.layer_sizes
+            .as_ref()
+            .and_then(|sizes| sizes.on(layer))
+            .unwrap_or(self.size)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Zone
 // ---------------------------------------------------------------------------
+
+/// The `fill_type` of solid copper drawn as a Fill or a Solid Region (#2373).
+pub const SOLID_FILL: &str = "solid";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Zone {
@@ -414,6 +503,14 @@ pub struct Zone {
     pub clearance: f64,
     #[serde(default)]
     pub min_thickness: f64,
+    /// A pour's islands smaller than this, in mm², are dropped from its
+    /// fill; 0 keeps every island. Not written when 0.
+    #[serde(default, skip_serializing_if = "crate::zone_pour::is_unset_area")]
+    pub min_island_area: f64,
+    /// A pour drops the islands of its fill that touch no copper of its
+    /// net. Not written when off.
+    #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
+    pub remove_dead_islands: bool,
     /// Keys in this zone's `[[zones]]` table that this build does not
     /// recognise, kept so a save re-emits them: a zone field added by a
     /// later build (as `holes` was in #818) survives a re-save here (#883).
@@ -432,8 +529,14 @@ pub struct Zone {
 // Board-level graphics and text
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A board drawing on a non-copper layer: a line, arc, circle, rectangle or
+/// text frame (#2424; kinds in [`crate::pcb_graphic`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BoardGraphic {
+    /// Shares the board's one id space with the other board items. A file
+    /// written before #2424 has none; loading derives one per drawing.
+    #[serde(default)]
+    pub uuid: Uuid,
     #[serde(default)]
     pub graphic_type: String,
     #[serde(default)]
@@ -447,6 +550,16 @@ pub struct BoardGraphic {
     pub radius: f64,
     #[serde(default)]
     pub points: Vec<Point>,
+    /// A text frame's text; `\n` breaks a line. Not written when empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    /// A text frame's text height in mm. Not written when 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub font_size: f64,
+}
+
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -495,6 +608,12 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// Free arcs, pads and dimensions (#2373).
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pcb_free::FreePrimitives::is_empty"
+    )]
+    pub free: crate::pcb_free::FreePrimitives,
     /// The board sketch (#2234) and the keepouts, cutouts, holes and
     /// V-scores it baked to; `None` for a board drawn without one. Written
     /// only through the board engine's `SetBoardSketch` command, which also
@@ -508,6 +627,11 @@ pub struct PcbBoard {
         skip_serializing_if = "crate::pcb_options::BoardOptions::is_default"
     )]
     pub options: crate::pcb_options::BoardOptions,
+    /// The physical layer stack (#2401); `None` for a board whose stack was
+    /// never edited, which shows [`LayerStack::derived`]. Written only
+    /// through the board engine's `SetLayerStack` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stackup: Option<LayerStack>,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for

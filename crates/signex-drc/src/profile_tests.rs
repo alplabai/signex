@@ -10,6 +10,7 @@ fn drc(severity: &[(&str, &str)], dsl: Option<&str>, unknown: &str) -> DrcRuleSe
             .collect(),
         dsl: dsl.map(str::to_string),
         unknown: serde_json::from_str(unknown).unwrap(),
+        ..DrcRuleSet::default()
     }
 }
 

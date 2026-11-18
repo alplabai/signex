@@ -1,13 +1,14 @@
 //! Validate one parsed rule and compile it into a [`UserRule`]. Errors drop
 //! the rule; a warning keeps it parsed but says what is not applied.
 
-use signex_drc::{CopperObject, Limit, NetScope, UserRule};
+use signex_drc::{CopperObject, Limit, LimitKind, NetScope, UserRule};
 use signex_types::format::parse_pcb_layer;
 use signex_types::violation::Severity;
 
 use pcb_geom::{layer_bit, mm_to_nm};
 
 use crate::ast::*;
+use crate::table::{LimitField, RuleKind};
 use crate::{Diagnostic, Level};
 
 /// Copper layer masks for `layer == outer` / `layer == inner`.
@@ -35,7 +36,7 @@ pub(crate) fn compile_rule(ast: &RuleAst) -> Outcome {
     };
     let target = c.target(&ast.target);
     let pair = ast.pair.as_ref().and_then(|p| c.pair(p, target));
-    let (nets, layers) = c.scope(&ast.when);
+    let (nets, layers) = c.scope(&ast.when, target);
     let limits = c.limits(&ast.require, target);
     let errors = c.found.iter().any(|d| d.level == Level::Error);
     let unchecked = matches!(pair, Some(Pair::NotMeasured));
@@ -64,13 +65,6 @@ pub(crate) fn compile_rule(ast: &RuleAst) -> Outcome {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum Target {
-    Clearance,
-    Track,
-    Via,
-}
-
 enum Pair {
     Copper([CopperObject; 2]),
     NotMeasured,
@@ -95,22 +89,18 @@ impl Checker<'_> {
         self.say(Level::Error, span, message);
     }
 
-    fn target(&mut self, word: &Word) -> Option<Target> {
-        let target = match word.text.as_str() {
-            "clearance" => Target::Clearance,
-            "track" => Target::Track,
-            "via" => Target::Via,
-            other => {
-                let msg = format!("unknown target '{other}' (clearance, track or via)");
-                self.error(&word.span, msg);
-                return None;
-            }
-        };
-        Some(target)
+    fn target(&mut self, word: &Word) -> Option<RuleKind> {
+        let target = RuleKind::from_keyword(&word.text);
+        if target.is_none() {
+            let known: Vec<&str> = RuleKind::ALL.iter().map(|k| k.keyword()).collect();
+            let msg = format!("unknown target '{}' ({})", word.text, or_list(&known));
+            self.error(&word.span, msg);
+        }
+        target
     }
 
-    fn pair(&mut self, objects: &[Word; 2], target: Option<Target>) -> Option<Pair> {
-        if target.is_some_and(|t| t != Target::Clearance) {
+    fn pair(&mut self, objects: &[Word; 2], target: Option<RuleKind>) -> Option<Pair> {
+        if target.is_some_and(|t| t != RuleKind::Clearance) {
             let msg = "'between' is for a clearance rule only".to_string();
             self.error(&objects[0].span, msg);
             return None;
@@ -124,6 +114,8 @@ impl Checker<'_> {
                 "via" => copper.push(CopperObject::Via),
                 "hole" | "edge" => {
                     unmeasured = true;
+                    // Hole to hole and copper to the board edge have their
+                    // own targets: `on hole require spacing`, `on edge`.
                     let msg = format!(
                         "clearance to '{}' is not checked yet; the rule is not applied",
                         object.text
@@ -143,9 +135,20 @@ impl Checker<'_> {
         }
     }
 
-    fn scope(&mut self, conds: &[CondAst]) -> (NetScope, Option<u32>) {
+    fn scope(&mut self, conds: &[CondAst], target: Option<RuleKind>) -> (NetScope, Option<u32>) {
+        if let Some(kind) = target.filter(|k| !k.is_scoped())
+            && let Some(cond) = conds.first()
+        {
+            let msg = format!(
+                "a {} rule is board-wide and takes no 'when' condition",
+                kind.keyword()
+            );
+            self.error(&cond.subject.span, msg);
+            return (NetScope::Board, None);
+        }
         let mut nets: Option<NetScope> = None;
         let mut layers: Option<u32> = None;
+        let mut other: Option<&CondAst> = None;
         for cond in conds {
             let subject = cond.subject.text.as_str();
             let value = cond.value.text.clone();
@@ -153,6 +156,14 @@ impl Checker<'_> {
                 ("net", CondOp::Is) => NetScope::Net(value),
                 ("net", CondOp::Matches) => NetScope::Pattern(value),
                 ("class", CondOp::Is) => NetScope::Class(value),
+                ("other_class", CondOp::Is) => {
+                    if other.is_some() {
+                        let msg = "a rule takes one other_class condition".to_string();
+                        self.error(&cond.subject.span, msg);
+                    }
+                    other = Some(cond);
+                    continue;
+                }
                 ("layer", CondOp::Is) => {
                     if layers.is_some() {
                         let msg = "a rule takes one layer condition".to_string();
@@ -161,7 +172,7 @@ impl Checker<'_> {
                     layers = self.layer(&cond.value).or(layers);
                     continue;
                 }
-                ("class" | "layer", CondOp::Matches) => {
+                ("class" | "other_class" | "layer", CondOp::Matches) => {
                     let msg = format!("'{subject}' takes '==', not 'matches'");
                     self.error(&cond.subject.span, msg);
                     continue;
@@ -172,7 +183,8 @@ impl Checker<'_> {
                     continue;
                 }
                 (other, _) => {
-                    let msg = format!("unknown condition '{other}' (net, class or layer)");
+                    let msg =
+                        format!("unknown condition '{other}' (net, class, other_class or layer)");
                     self.error(&cond.subject.span, msg);
                     continue;
                 }
@@ -183,7 +195,27 @@ impl Checker<'_> {
             }
             nets = Some(scope);
         }
-        (nets.unwrap_or(NetScope::Board), layers)
+        let nets = nets.unwrap_or(NetScope::Board);
+        let Some(other) = other else {
+            return (nets, layers);
+        };
+        // `class == "A" and other_class == "B"`: a clearance between the
+        // nets of two classes (#2398).
+        if target.is_some_and(|t| t != RuleKind::Clearance) {
+            let msg = "'other_class' is for a clearance rule only".to_string();
+            self.error(&other.subject.span, msg);
+            return (nets, layers);
+        }
+        match nets {
+            NetScope::Class(class) => {
+                (NetScope::ClassPair(class, other.value.text.clone()), layers)
+            }
+            nets => {
+                let msg = "'other_class' needs a 'class' condition".to_string();
+                self.error(&other.subject.span, msg);
+                (nets, layers)
+            }
+        }
     }
 
     fn layer(&mut self, value: &Word) -> Option<u32> {
@@ -203,7 +235,7 @@ impl Checker<'_> {
         copper.map(|layer| 1 << layer_bit(layer))
     }
 
-    fn limits(&mut self, limits: &[LimitAst], target: Option<Target>) -> Vec<Limit> {
+    fn limits(&mut self, limits: &[LimitAst], target: Option<RuleKind>) -> Vec<Limit> {
         let mut out: Vec<Limit> = Vec::new();
         let mut kept: Vec<(&LimitAst, i64)> = Vec::new();
         for ast in limits {
@@ -213,32 +245,27 @@ impl Checker<'_> {
             let Some(target) = target else {
                 continue;
             };
-            let limit = match (target, ast.field.text.as_str(), ast.bound) {
-                (Target::Clearance, "clearance", Bound::AtLeast) => Limit::MinClearance(nm),
-                (Target::Track, "width", Bound::AtLeast) => Limit::MinTrackWidth(nm),
-                (Target::Track, "width", Bound::AtMost) => Limit::MaxTrackWidth(nm),
-                (Target::Via, "diameter", Bound::AtLeast) => Limit::MinViaDiameter(nm),
-                (Target::Via, "drill", Bound::AtLeast) => Limit::MinViaDrill(nm),
-                (Target::Clearance, "clearance", _) | (Target::Via, "diameter" | "drill", _) => {
-                    let msg = format!("'{}' takes only '>=' (a minimum)", ast.field.text);
-                    self.error(&ast.field.span, msg);
-                    continue;
-                }
-                (_, field, _) => {
-                    let fields = match target {
-                        Target::Clearance => "clearance",
-                        Target::Track => "width",
-                        Target::Via => "diameter or drill",
-                    };
-                    let msg = format!("unknown field '{field}' for this target ({fields})");
-                    self.error(&ast.field.span, msg);
-                    continue;
-                }
+            let word = ast.field.text.as_str();
+            let Some(field) = LimitField::of(target, word, ast.bound) else {
+                let other = match ast.bound {
+                    Bound::AtLeast => Bound::AtMost,
+                    Bound::AtMost => Bound::AtLeast,
+                };
+                let msg = match LimitField::of(target, word, other) {
+                    Some(f) if f.bound() == Bound::AtLeast => {
+                        format!("'{word}' takes only '>=' (a minimum)")
+                    }
+                    Some(_) => format!("'{word}' takes only '<=' (a maximum)"),
+                    None => format!(
+                        "unknown field '{word}' for this target ({})",
+                        LimitField::words_of(target)
+                    ),
+                };
+                self.error(&ast.field.span, msg);
+                continue;
             };
-            let twice = out
-                .iter()
-                .any(|l| std::mem::discriminant(l) == std::mem::discriminant(&limit));
-            if twice {
+            let limit = Limit::of(field.limit_kind(), nm);
+            if out.iter().any(|l| l.kind() == limit.kind()) {
                 let msg = format!("'{}' is limited twice the same way", ast.field.text);
                 self.error(&ast.field.span, msg);
                 continue;
@@ -267,20 +294,28 @@ impl Checker<'_> {
         }
     }
 
-    /// Says a limit of 0 (a minimum of 0 checks nothing, a maximum of 0
-    /// reports every track) and a clearance so large it is likely a wrong
-    /// unit: over 10 mm a warning, over 100 mm an error (a clearance widens
-    /// the search around every copper item it covers). False when the limit
-    /// is refused.
+    /// Says a limit of 0 (a minimum of 0 checks nothing, unless touching
+    /// already breaks it; a track or hole maximum of 0 reports every one; a
+    /// maximum expansion of 0 is a real limit) and a clearance so large it
+    /// is likely a wrong unit: over 10 mm a warning, over 100 mm an error
+    /// (a clearance widens the search around every copper item it covers).
+    /// False when the limit is refused.
     fn plausible(&mut self, ast: &LimitAst, limit: &Limit, nm: i64) -> bool {
-        if nm == 0 {
-            let msg = match limit {
-                Limit::MaxTrackWidth(_) => {
-                    "a maximum of 0 reports every track in this rule's scope"
+        let kind = limit.kind();
+        if nm == 0 && !kind.zero_still_checks() {
+            let msg = match kind {
+                LimitKind::MaxTrackWidth => {
+                    Some("a maximum of 0 reports every track in this rule's scope")
                 }
-                _ => "a limit of 0 checks nothing for this rule's scope",
+                LimitKind::MaxHoleSize => {
+                    Some("a maximum of 0 reports every hole in this rule's scope")
+                }
+                _ if kind.is_maximum() => None,
+                _ => Some("a limit of 0 checks nothing for this rule's scope"),
             };
-            self.say(Level::Warning, &ast.number.span, msg.to_string());
+            if let Some(msg) = msg {
+                self.say(Level::Warning, &ast.number.span, msg.to_string());
+            }
         }
         if !matches!(limit, Limit::MinClearance(_)) || nm <= CLEARANCE_WARN_NM {
             return true;
@@ -333,4 +368,13 @@ fn written(ast: &LimitAst) -> String {
     };
     let unit = ast.unit.as_ref().map_or("", |u| u.text.as_str());
     format!("{} {op} {}{unit}", ast.field.text, ast.number.text)
+}
+
+/// `a, b or c`.
+fn or_list(words: &[&str]) -> String {
+    match words.split_last() {
+        Some((last, [])) => (*last).to_string(),
+        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        None => String::new(),
+    }
 }

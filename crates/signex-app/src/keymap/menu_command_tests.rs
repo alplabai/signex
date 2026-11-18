@@ -21,6 +21,7 @@ use super::{AppCommandId, metadata_for};
 /// crate root (`CARGO_MANIFEST_DIR`).
 const MENU_SOURCES: &[&str] = &[
     "src/menu_bar/model/menus.rs",
+    "src/menu_bar/model/sheet_place.rs",
     "src/app/view/context_menu/menus.rs",
     "src/app/view/context_menu/project_tree.rs",
     "src/app/view/context_menu/submenu.rs",
@@ -103,6 +104,6 @@ fn every_menu_command_id_resolves_in_the_catalog() {
     assert!(
         orphans.is_empty(),
         "menu rows reference command ids with no CommandMetadata entry \
-         (add them to keymap/catalog): {orphans:?}"
+         (add them to signex-commands/src/catalog): {orphans:?}"
     );
 }

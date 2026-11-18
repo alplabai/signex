@@ -53,6 +53,10 @@ pub enum TabKind {
     /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
     /// id; `TabInfo.path` is the `.snxprj` path.
     Project(super::state::ProjectId),
+    /// The project's design rules as a Rules tab (#2398). Tab state lives
+    /// in the project's [`crate::app::ProjectTabState::rules`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    Rules(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -98,6 +102,20 @@ impl TabKind {
             TabKind::Project(id) => Some(*id),
             _ => None,
         }
+    }
+
+    /// `Some(id)` if this tab is a project's Rules tab.
+    pub fn as_rules(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Rules(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// A tab that shows a project's own settings, not a drawing: the
+    /// Project and Rules tabs. Neither is undocked or restored from History.
+    pub fn is_project_page(&self) -> bool {
+        matches!(self, TabKind::Project(_) | TabKind::Rules(_))
     }
 }
 
@@ -667,9 +685,20 @@ impl FootprintDocument {
             &mut baseline,
             log_repairs,
         );
-        let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-            &file.footprints[active_idx],
-        );
+        if log_repairs {
+            crate::library::editor::footprint::pad_shape_warnings::warn_trapezoid_faults(
+                &path, &file,
+            );
+        }
+        let mut state =
+            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                &file.footprints[active_idx],
+            );
+        // The sketch is solved for display off the UI thread (#2468):
+        // `finish_update` starts it.
+        if file.footprints[active_idx].sketch.is_some() {
+            state.sketch_solve.owe_open_solve();
+        }
         if log_repairs && state.legacy_pad_stack_offered {
             crate::diagnostics::log_warning(format!(
                 "{}: every sketch pad has paste disabled and direct connect (the stack builds before #1052 wrote), so none gets a paste stencil opening; the Properties panel offers to restore it",
@@ -1014,6 +1043,12 @@ pub enum Tool {
     Measure,
     /// One click on a wire splits it in two at that point (#1254).
     BreakWire,
+    /// Two clicks draw a Blanket region (#2420).
+    Blanket,
+    /// Two clicks draw a Compile Mask region (#2420).
+    CompileMask,
+    /// One click on a `_P` or `_N` net marks the differential pair (#2420).
+    DiffPair,
 }
 
 impl std::fmt::Display for Tool {
@@ -1038,6 +1073,9 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
+            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::CompileMask => write!(f, "Place Compile Mask"),
+            Tool::DiffPair => write!(f, "Place Differential Pair"),
         }
     }
 }

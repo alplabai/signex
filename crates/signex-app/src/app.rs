@@ -14,17 +14,23 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+pub(crate) mod board_output;
+pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
+pub(crate) mod board_reuse;
+pub(crate) mod board_tools;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
 pub mod contracts;
+pub(crate) mod core;
 mod dir_listing;
 pub(crate) mod dispatch;
 mod document;
 pub mod document_ids;
 pub mod document_read;
 mod documents;
+pub(crate) mod fab_outputs;
 pub(crate) mod file_extension;
 mod handlers;
 #[cfg(test)]
@@ -38,17 +44,23 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;
 mod project_tab;
+mod rules_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
+pub(crate) mod design_read;
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
 pub(crate) mod document_setup;
+#[cfg(test)]
+mod edit_tail_tests;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
+pub(crate) mod pcb_bar_groups;
 mod pcb_dirty_adapter;
 pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;
@@ -78,21 +90,29 @@ pub use assign_footprints::{
     PartAccess,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
+pub use board_output::{
+    BoardOutputDialog, BoardOutputMsg, BoardOutputState, BoardPrintFlag, BoardPrintState,
+    BoardReportsState,
+};
+pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
+pub use board_reuse::ReuseBlockMsg;
 pub use contracts::{
-    AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
-    ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,
-    DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome,
-    EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, FootprintSwapMsg,
-    GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
-    KeymapModMigration, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg,
-    OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg, PcbMsg,
-    PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState,
-    ProjectMsg, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
-    ViewRotationMsg, WindowMsg,
+    AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
+    BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
+    ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget, DrcRunResult, DxfImportMsg,
+    EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState,
+    ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, FootprintSwapMsg, GitCommitFailure,
+    GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
+    LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu,
+    LayerTabMenuMsg, LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
+    NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu,
+    PcbBarMsg, PcbMsg, PcbViewMsg, PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, TuneMsg, UiMsg,
+    VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
@@ -101,6 +121,7 @@ pub use documents::{
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
     TabDocument, TabInfo, TabKind, Tool,
 };
+pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
 pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
@@ -148,6 +169,8 @@ impl Signex {
         self.prune_pcb_component_draft();
         // A New PCB / New Schematic dialog of a closed project closes (#2232).
         self.drop_document_setup_of_closed_project();
+        // The Rules tab in view re-reads its flags when its rules changed (#2398).
+        self.sync_rules_analysis();
         self.sync_undo_depth();
         // A resize, a dock collapsed or expanded, or a panel docked into an
         // empty side all change the room beside the canvas (#2347).

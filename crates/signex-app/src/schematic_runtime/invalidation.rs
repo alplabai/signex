@@ -1,0 +1,89 @@
+//! Which collections of the render snapshot an edit changed, so the scene
+//! cache copies only those.
+
+use signex_engine::DocumentPatch;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RenderInvalidation(u32);
+
+impl RenderInvalidation {
+    pub const NONE: Self = Self(0);
+    pub const SYMBOLS: Self = Self(1 << 0);
+    pub const WIRES: Self = Self(1 << 1);
+    pub const LABELS: Self = Self(1 << 2);
+    pub const TEXT_NOTES: Self = Self(1 << 3);
+    pub const BUSES: Self = Self(1 << 4);
+    pub const BUS_ENTRIES: Self = Self(1 << 5);
+    pub const JUNCTIONS: Self = Self(1 << 6);
+    pub const NO_CONNECTS: Self = Self(1 << 7);
+    pub const CHILD_SHEETS: Self = Self(1 << 8);
+    pub const DRAWINGS: Self = Self(1 << 9);
+    pub const LIB_SYMBOLS: Self = Self(1 << 10);
+    pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
+    /// The sheet's net colours: a repaint with no geometry or ERC change.
+    pub const NET_COLORS: Self = Self(1 << 13);
+    /// Blankets, Compile Masks and Differential Pair directives (#2420).
+    pub const DIRECTIVES: Self = Self(1 << 14);
+    pub const FULL: Self = Self(u32::MAX);
+
+    /// True when any bit of `mask` is also set in `self`.
+    pub fn intersects(self, mask: Self) -> bool {
+        self.0 & mask.0 != 0
+    }
+}
+
+impl std::ops::BitOr for RenderInvalidation {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for RenderInvalidation {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+/// The render collections each document change redraws. The sheet default
+/// font is inherited by every kind of text, so it redraws all four.
+const PROJECTION: [(DocumentPatch, RenderInvalidation); 16] = {
+    use RenderInvalidation as R;
+    [
+        (DocumentPatch::SYMBOLS, R::SYMBOLS),
+        (DocumentPatch::WIRES, R::WIRES),
+        (DocumentPatch::LABELS, R::LABELS),
+        (DocumentPatch::TEXT_NOTES, R::TEXT_NOTES),
+        (DocumentPatch::BUSES, R::BUSES),
+        (DocumentPatch::BUS_ENTRIES, R::BUS_ENTRIES),
+        (DocumentPatch::JUNCTIONS, R::JUNCTIONS),
+        (DocumentPatch::NO_CONNECTS, R::NO_CONNECTS),
+        (DocumentPatch::NO_ERC_DIRECTIVES, R::NO_ERC_DIRECTIVES),
+        (DocumentPatch::DIRECTIVES, R::DIRECTIVES),
+        (DocumentPatch::CHILD_SHEETS, R::CHILD_SHEETS),
+        (DocumentPatch::DRAWINGS, R::DRAWINGS),
+        (DocumentPatch::LIB_SYMBOLS, R::LIB_SYMBOLS),
+        (DocumentPatch::PAPER, R::PAPER),
+        (DocumentPatch::NET_COLORS, R::NET_COLORS),
+        (
+            DocumentPatch::FONT_FAMILY,
+            R(R::SYMBOLS.0 | R::LABELS.0 | R::TEXT_NOTES.0 | R::CHILD_SHEETS.0),
+        ),
+    ]
+};
+
+/// What the render cache re-copies for a document change. Applied once,
+/// where the GUI refreshes; decisions read the `DocumentPatch` itself.
+impl From<DocumentPatch> for RenderInvalidation {
+    fn from(patch: DocumentPatch) -> Self {
+        if patch == DocumentPatch::FULL {
+            return Self::FULL;
+        }
+        PROJECTION
+            .iter()
+            .filter(|(bit, _)| patch.contains(*bit))
+            .fold(Self::NONE, |acc, (_, render)| acc | *render)
+    }
+}

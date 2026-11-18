@@ -97,6 +97,12 @@ impl IdSpace {
         *items = kept;
     }
 
+    /// An id for the `position`th (from 1) object of `kind` saved with none:
+    /// derived like a repair's, so every read of the file names it alike.
+    pub(in crate::format) fn mint(&self, kind: &str, position: usize) -> Uuid {
+        self.fresh_uuid(kind, position, Uuid::nil(), "unnamed")
+    }
+
     /// A uuid not yet taken, derived from the document's content. `scope`
     /// tells repairs of the same position apart.
     fn fresh_uuid(&self, kind: &str, position: usize, old: Uuid, scope: &str) -> Uuid {
@@ -224,6 +230,12 @@ fn repair_objects(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
         None,
         by_field!(no_name),
     );
+    let directive = Access {
+        uuid: |d: &crate::schematic::SchDirective| d.uuid(),
+        set_uuid: |d, u| d.set_uuid(u),
+        name: |d| d.kind().as_str().to_string(),
+    };
+    ids.check(&mut sheet.directives, kind::DIRECTIVE, None, directive);
 }
 
 /// The pins of each sheet symbol; they share the sheet's id space.

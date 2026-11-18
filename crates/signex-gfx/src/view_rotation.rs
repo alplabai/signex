@@ -1,6 +1,7 @@
 //! The turn of a 2D view on screen (#2316): a value object every
 //! screen/world transform of a turned view reads, so no caller works out its
-//! own sine and cosine.
+//! own sine and cosine. It also says whether the view is seen from below
+//! (#2394): mirrored left to right before the turn.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
@@ -10,12 +11,15 @@
 //! drawing clockwise as the user sees it. A multiple of 90 degrees gets exact
 //! 0 / 1 / -1 factors, so a quarter turn moves no point by a rounding error.
 
-/// A clockwise turn of the view, in degrees within `[0, 360)`.
+/// A clockwise turn of the view, in degrees within `[0, 360)`, of the
+/// drawing as seen from above or, when mirrored, from below.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ViewRotation {
     degrees: f32,
     cos: f32,
     sin: f32,
+    /// World x is negated before the turn: the view from below.
+    mirrored: bool,
 }
 
 impl Default for ViewRotation {
@@ -25,15 +29,16 @@ impl Default for ViewRotation {
 }
 
 impl ViewRotation {
-    /// No turn.
+    /// No turn, seen from above.
     pub const IDENTITY: Self = Self {
         degrees: 0.0,
         cos: 1.0,
         sin: 0.0,
+        mirrored: false,
     };
 
-    /// A turn of `degrees` clockwise, folded into `[0, 360)`. A non-finite
-    /// angle is no turn.
+    /// A turn of `degrees` clockwise, folded into `[0, 360)`, seen from
+    /// above. A non-finite angle is no turn.
     pub fn from_degrees(degrees: f32) -> Self {
         if !degrees.is_finite() {
             return Self::IDENTITY;
@@ -52,7 +57,17 @@ impl ViewRotation {
         } else {
             degrees.to_radians().sin_cos()
         };
-        Self { degrees, cos, sin }
+        Self {
+            degrees,
+            cos,
+            sin,
+            mirrored: false,
+        }
+    }
+
+    /// This turn seen from below (`true`) or from above.
+    pub fn with_mirror(self, mirrored: bool) -> Self {
+        Self { mirrored, ..self }
     }
 
     /// The angle, in `[0, 360)`.
@@ -60,34 +75,42 @@ impl ViewRotation {
         self.degrees
     }
 
-    pub fn is_identity(self) -> bool {
-        self.degrees == 0.0
+    /// Whether the view is seen from below: mirrored left to right.
+    pub fn is_mirrored(self) -> bool {
+        self.mirrored
     }
 
-    /// `[cos, sin]` of the turn.
+    /// No turn and no mirror: world and screen axes agree.
+    pub fn is_identity(self) -> bool {
+        self.degrees == 0.0 && !self.mirrored
+    }
+
+    /// `[cos, sin]` of the turn. The mirror is not in them: see
+    /// [`Self::is_mirrored`].
     pub fn factors(self) -> [f32; 2] {
         [self.cos, self.sin]
     }
 
-    /// This turn followed by `degrees` more.
+    /// This turn followed by `degrees` more, mirrored as it was.
     pub fn turned_by(self, degrees: f32) -> Self {
-        Self::from_degrees(self.degrees + degrees)
+        Self::from_degrees(self.degrees + degrees).with_mirror(self.mirrored)
     }
 
-    /// `v` turned by this rotation (world direction to screen direction).
+    /// `v` turned by this rotation (world direction to screen direction),
+    /// mirrored first when seen from below.
     pub fn apply(self, v: [f32; 2]) -> [f32; 2] {
+        let x = if self.mirrored { -v[0] } else { v[0] };
         [
-            v[0] * self.cos - v[1] * self.sin,
-            v[0] * self.sin + v[1] * self.cos,
+            x * self.cos - v[1] * self.sin,
+            x * self.sin + v[1] * self.cos,
         ]
     }
 
     /// `v` turned back (screen direction to world direction).
     pub fn undo(self, v: [f32; 2]) -> [f32; 2] {
-        [
-            v[0] * self.cos + v[1] * self.sin,
-            -v[0] * self.sin + v[1] * self.cos,
-        ]
+        let x = v[0] * self.cos + v[1] * self.sin;
+        let y = -v[0] * self.sin + v[1] * self.cos;
+        [if self.mirrored { -x } else { x }, y]
     }
 
     /// World mm to screen px: `apply(world) * scale + offset`, the mapping of
@@ -183,5 +206,20 @@ mod tests {
         assert_eq!(r.bounding_size([40.0, 10.0]), [10.0, 40.0]);
         let r = ViewRotation::from_degrees(45.0).bounding_size([10.0, 10.0]);
         assert!((r[0] - 10.0 * 2f32.sqrt()).abs() < 1e-4);
+    }
+
+    /// #2394: seen from below, +x goes left on screen; undo inverts it at
+    /// any angle, and a further turn keeps the mirror.
+    #[test]
+    fn a_mirrored_view_flips_x_before_the_turn() {
+        let below = ViewRotation::IDENTITY.with_mirror(true);
+        assert!(!below.is_identity() && below.is_mirrored());
+        assert_eq!(below.apply([3.0, 4.0]), [-3.0, 4.0]);
+        for deg in [0.0, 37.0, 90.0, 233.5] {
+            let r = ViewRotation::from_degrees(deg).with_mirror(true);
+            let back = r.undo(r.apply([12.5, -7.25]));
+            assert!((back[0] - 12.5).abs() < 1e-4 && (back[1] + 7.25).abs() < 1e-4);
+        }
+        assert!(below.turned_by(90.0).is_mirrored());
     }
 }

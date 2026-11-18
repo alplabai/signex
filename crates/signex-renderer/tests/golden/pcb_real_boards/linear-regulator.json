@@ -1,0 +1,21 @@
+{
+  "traces": 16,
+  "vias": 4,
+  "pads": 16,
+  "zones": 1,
+  "zone_holes": 0,
+  "copper_layers": 2,
+  "layer_rows": 31,
+  "fill_triangles": 380,
+  "cutouts": 0,
+  "keepouts": 0,
+  "mounting_holes": 0,
+  "texts": 11,
+  "overlay_lines": 84,
+  "overlay_circles": 1,
+  "overlay_polygons": 0,
+  "geometry_hash": "8567c79244904d44",
+  "overlay_hash": "af4e748a2de13121",
+  "text_hash": "022353161b9f14d8",
+  "colour_hash": "b100039b40a54655"
+}

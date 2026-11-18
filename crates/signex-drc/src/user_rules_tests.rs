@@ -265,6 +265,26 @@ fn an_inner_layer_via_rule_does_not_lift_a_board_wide_minimum_off_the_outer_laye
 }
 
 #[test]
+fn a_top_middle_bottom_via_is_checked_with_its_part_sizes_not_its_own_diameter() {
+    // Diameter 0.45 left over from Simple mode; every part is 0.6 (#2401).
+    let mut v = via(1, (0.0, 0.0), 1);
+    v.diameter = 0.45;
+    v.layer_sizes = Some(signex_types::pcb::LayerSizes::TopMiddleBottom {
+        top: 0.6,
+        middle: 0.6,
+        bottom: 0.6,
+    });
+    let four = four_layers(named(board(vec![], vec![], vec![v])));
+    let all = rule(
+        "vias",
+        NetScope::Board,
+        vec![Limit::MinViaDiameter(500_000)],
+    );
+    let found = via_findings(&four, vec![all]);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
 fn an_inner_layer_clearance_rule_finds_nothing_on_a_two_layer_board() {
     let mut inner = clearance("inner", NetScope::Board, 500_000);
     inner.layers = Some(INNER);
@@ -579,6 +599,17 @@ fn position(kind: ViolationKind) -> usize {
         ViolationKind::TrackWidth => 4,
         ViolationKind::ViaDiameter => 5,
         ViolationKind::ViaDrill => 6,
+        ViolationKind::HoleSize => 7,
+        ViolationKind::AnnularRing => 8,
+        ViolationKind::HoleToHole => 9,
+        ViolationKind::EdgeClearance => 10,
+        ViolationKind::ViaInPad => 11,
+        ViolationKind::SilkToPad => 12,
+        ViolationKind::SilkToSilk => 13,
+        ViolationKind::MaskSliver => 14,
+        ViolationKind::MaskExpansion => 15,
+        ViolationKind::PasteExpansion => 16,
+        ViolationKind::CourtyardOverlap => 17,
     }
 }
 
@@ -592,6 +623,17 @@ fn all_lists_every_kind_in_declaration_order() {
         ViolationKind::TrackWidth,
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
+        ViolationKind::HoleSize,
+        ViolationKind::AnnularRing,
+        ViolationKind::HoleToHole,
+        ViolationKind::EdgeClearance,
+        ViolationKind::ViaInPad,
+        ViolationKind::SilkToPad,
+        ViolationKind::SilkToSilk,
+        ViolationKind::MaskSliver,
+        ViolationKind::MaskExpansion,
+        ViolationKind::PasteExpansion,
+        ViolationKind::CourtyardOverlap,
     ];
     assert_eq!(ViolationKind::ALL.len(), every.len());
     for (i, kind) in every.into_iter().enumerate() {
@@ -599,4 +641,48 @@ fn all_lists_every_kind_in_declaration_order() {
         assert_eq!(ViolationKind::ALL[i], kind);
         assert_eq!(kind as usize, i, "declaration order");
     }
+}
+
+/// #2389: the router's broad phase looks as far as any pair can need,
+/// including a written rule between two object kinds that never applies
+/// to an item and one like it.
+#[test]
+fn the_widest_clearance_covers_classes_and_pair_scoped_rules() {
+    let b = pair(0.4);
+    // HV_A's class asks 0.5 mm.
+    assert_eq!(rules_for(&b, vec![]).widest_clearance(), 500_000);
+    let mut track_pad = clearance("track_pad", NetScope::Board, 2_000_000);
+    track_pad.pair = Some([CopperObject::Track, CopperObject::Pad]);
+    let rules = rules_for(&b, vec![track_pad]);
+    assert_eq!(rules.widest_clearance(), 2_000_000);
+    assert_eq!(rules.reach_of(1), 2_000_000);
+}
+
+/// #2373: a copper arc is held to the track width limits, at its middle.
+#[test]
+fn a_track_width_rule_reports_a_copper_arc_outside_its_limits() {
+    let user = vec![rule(
+        "w",
+        NetScope::Net("SIG".into()),
+        vec![Limit::MinTrackWidth(200_000)],
+    )];
+    let mut b = named(board(vec![], vec![], vec![]));
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: id(4100),
+        start: signex_types::pcb::Point::new(0.0, 0.0),
+        mid: signex_types::pcb::Point::new(5.0, 5.0),
+        end: signex_types::pcb::Point::new(10.0, 0.0),
+        width: 0.1,
+        layer: "TopCopper".into(),
+        net: 3,
+    });
+    let report = run(&b, &rules_for(&b, user));
+    assert_eq!(report.count(ViolationKind::TrackWidth), 1, "{report:?}");
+    let v = report
+        .violations
+        .iter()
+        .find(|v| v.kind == ViolationKind::TrackWidth)
+        .expect("the width finding");
+    assert_eq!(v.items, [pcb_geom::ItemRef::Arc(id(4100))]);
+    assert_eq!(v.at, pcb_geom::PointNm::new(5_000_000, 5_000_000));
 }

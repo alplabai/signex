@@ -6,9 +6,8 @@
 //! multi-unit part ([`SymbolPadKey`]). Sync never reads a designator. A
 //! footprint with no stored link is reported
 //! ([`PadNetIssue::FootprintNotLinked`]) and left completely untouched;
-//! Update PCB (`diff_board`) links such a footprint by designator;
-//! [`link_footprints_by_designator`] does the same once, on request. See
-//! ADR-0005 section 11.
+//! Update PCB (`diff_board`) is the one place such a footprint is linked, by
+//! a unique designator. See ADR-0005 section 11.
 //!
 //! The schematic is the source of truth for pads it links to, except a pad
 //! whose net is locked: that pad keeps its net number (a rename of that
@@ -24,7 +23,6 @@
 mod assign;
 mod edit;
 mod key;
-mod link_by_designator;
 mod numbering;
 #[cfg(test)]
 mod tests;
@@ -32,9 +30,6 @@ mod tests;
 pub use assign::{assign_pad_net, set_pad_net_lock};
 pub use edit::{BoardNetEdit, NetEditRefusal, PadNetChange, ZoneNetName};
 pub use key::{PadLinkKey, SymbolPad, SymbolPadKey};
-pub use link_by_designator::{
-    BoardLinkEdit, FootprintLinkChange, LinkByDesignatorReport, link_footprints_by_designator,
-};
 
 use std::collections::{HashMap, HashSet};
 

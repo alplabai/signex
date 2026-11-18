@@ -159,6 +159,9 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
+    /// The pan/zoom frame bench (#2472), a dev/QA mode. Routed to
+    /// `dispatch_pan_zoom_bench_message`.
+    PanZoomBench(crate::pan_zoom_bench::BenchMsg),
 }
 
 impl Message {
@@ -171,19 +174,27 @@ impl Message {
 
 mod cross_probe;
 mod dialogs;
+mod layer_strip;
 mod messages;
 mod net_nav;
 mod pcb;
+mod placement_extras;
 mod state;
 
 pub use cross_probe::CrossProbeMsg;
 pub use dialogs::*;
+pub use layer_strip::{
+    LAYER_SET_NAME_INPUT_ID, LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg,
+    LayerStripMsg, LayerTabMenu, LayerTabMenuMsg, LayerTabSubmenu,
+};
 pub use messages::*;
 pub use net_nav::NetNavMsg;
 pub use pcb::{
-    BoardSketchMsg, DrcRunResult, FootprintSwapMsg, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg,
-    ViewAngleEntry, ViewRotationMsg,
+    Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg, BoardSketchMsg, BoardToolsMsg,
+    DrcRunResult, DxfImportMsg, FootprintSwapMsg, PartSwapMsg, PcbBarMenu, PcbBarMsg, PcbMsg,
+    PcbViewMsg, TuneMsg, ViewAngleEntry, ViewRotationMsg,
 };
+pub use placement_extras::PlacementExtrasMsg;
 pub use state::*;
 
 #[cfg(test)]

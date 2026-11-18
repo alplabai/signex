@@ -42,7 +42,10 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool) -> Footprint {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -71,6 +74,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -89,6 +93,7 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

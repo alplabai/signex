@@ -1,12 +1,15 @@
 //! Board options (#2374): snap guides, the extra snap grids, the sheet, the
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
-//! board engine's `SetBoardOptions` command. See `docs/PCB_BOARD_OPTIONS.md`.
+//! board engine's `SetBoardOptions` command. The board's origin (#2384) and
+//! its waived design-rule findings (#2399) are kept here too, and the panel
+//! (#2410). See `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::Point;
+pub use crate::pcb_origin::BoardOrigin;
 use crate::theme::Color;
 
 /// The colours a guide or grid swatch steps through, first one the default
@@ -46,6 +49,37 @@ pub struct BoardOptions {
     pub polygon_naming: PolygonNaming,
     #[serde(default)]
     pub designator_display: DesignatorDisplay,
+    /// The point shown as (0, 0), Y up (#2384). A board saved without one
+    /// counts from the model's zero.
+    #[serde(default)]
+    pub origin: BoardOrigin,
+    /// Design-rule findings the designer accepted, each with a note (#2399).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drc_waivers: Vec<DrcWaiver>,
+    /// The panel the board is arrayed into for manufacture (#2410); `None`
+    /// for a board made on its own. Changed only through the board engine's
+    /// `SetBoardPanel` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<crate::pcb_panel::BoardPanel>,
+}
+
+/// One accepted design-rule finding. `key` names the finding the same way
+/// in every run (`signex_drc::waiver_key`): its rule and the objects, not
+/// where they are. `fingerprint` is the objects' geometry when it was
+/// waived (`signex_drc::fingerprint`, #2307): moving, resizing or re-netting
+/// one of them lapses the waiver and the finding comes back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DrcWaiver {
+    pub key: String,
+    /// The rule id it was waived under (`builtin::clearance`, `user::<name>`).
+    pub rule: String,
+    /// Why the finding is accepted; may be empty.
+    #[serde(default)]
+    pub note: String,
+    /// A waiver saved before #2307 has none; it lapses once and is waived
+    /// again.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
 }
 
 impl BoardOptions {
@@ -55,7 +89,7 @@ impl BoardOptions {
 
     /// The grid a carry or placement of `what` snaps to: the first extra
     /// grid that applies to it, else the board's own grid of `board_step`
-    /// at the origin.
+    /// counted from the board origin (#2384).
     pub fn grid_for(&self, what: GridUse, board_step: f64) -> GridSpec {
         self.grids
             .iter()
@@ -66,7 +100,7 @@ impl BoardOptions {
             })
             .unwrap_or(GridSpec {
                 step_mm: board_step,
-                origin: Point::ZERO,
+                origin: self.origin.at,
             })
     }
 }

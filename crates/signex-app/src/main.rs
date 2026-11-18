@@ -7,7 +7,7 @@
 use signex_app::app::Signex;
 use signex_app::fonts::bundled;
 use signex_app::startup_args::StartupAction;
-use signex_app::{diagnostics, fonts, startup_args};
+use signex_app::{diagnostics, fonts, pan_zoom_bench, startup_args};
 
 fn main() -> iced::Result {
     // `--version` / `--help` must answer before logging, fonts, iced or
@@ -26,6 +26,25 @@ fn main() -> iced::Result {
         StartupAction::Launch(paths) => paths,
     };
 
+    // The pan/zoom frame bench, a dev/QA mode (#2472, docs/PERFORMANCE.md):
+    // it opens its own board instead of the command-line documents.
+    let bench = match pan_zoom_bench::BenchConfig::from_env() {
+        None => None,
+        Some(Ok(config)) if config.board.is_file() => Some(config),
+        Some(Ok(config)) => {
+            eprintln!(
+                "[signex] {}: no such board file: {}",
+                pan_zoom_bench::ENV_BOARD,
+                config.board.display()
+            );
+            std::process::exit(2);
+        }
+        Some(Err(error)) => {
+            eprintln!("[signex] {error}");
+            std::process::exit(2);
+        }
+    };
+
     if let Err(error) = diagnostics::init_logging() {
         eprintln!("[signex] failed to initialize logging: {error:#}");
     }
@@ -34,7 +53,10 @@ fn main() -> iced::Result {
     let ui_font_name = fonts::read_ui_font_pref();
 
     iced::daemon(
-        move || Signex::boot(startup_paths.clone()),
+        move || match &bench {
+            Some(config) => Signex::boot_pan_zoom_bench(config.clone()),
+            None => Signex::boot(startup_paths.clone()),
+        },
         Signex::update,
         Signex::view,
     )

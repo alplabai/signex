@@ -69,9 +69,9 @@ impl Signex {
         }
     }
 
-    /// Redraw every undocked window's designators from the hierarchies now
-    /// known; a window's canvas is otherwise only refreshed while it is the
-    /// active one.
+    /// Redraw every undocked window's and unfocused tile pane's designators
+    /// from the hierarchies now known; such a canvas is otherwise only
+    /// refreshed while it is the active one.
     pub(crate) fn refresh_window_designators(&mut self) {
         let windows: Vec<_> = self
             .ui_state
@@ -87,6 +87,23 @@ impl Signex {
         for (id, path) in windows {
             let designators = self.designators_for_path(&path);
             if let Some(canvas) = self.interaction_state.canvases.get_mut(&id)
+                && canvas.designators != designators
+            {
+                canvas.designators = designators;
+                canvas.clear_content_cache();
+            }
+        }
+        // The unfocused tile panes' sheets too (#2249).
+        let panes: Vec<_> = self
+            .interaction_state
+            .tile_panes
+            .schematic
+            .keys()
+            .cloned()
+            .collect();
+        for path in panes {
+            let designators = self.designators_for_path(&path);
+            if let Some(canvas) = self.interaction_state.tile_panes.schematic.get_mut(&path)
                 && canvas.designators != designators
             {
                 canvas.designators = designators;

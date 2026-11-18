@@ -25,10 +25,14 @@ impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
     fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
         fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
             let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
-            serde_json::json!({
+            let mut json = serde_json::json!({
                 "panels": kinds,
                 "collapsed": region.collapsed,
-            })
+            });
+            if let Some(width) = region.width {
+                json["width"] = serde_json::json!(width);
+            }
+            json
         }
 
         try_update_prefs_json(&self.path, "dock", |prefs| {
@@ -78,6 +82,11 @@ pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::
         {
             dock.update(crate::dock::DockMessage::ToggleCollapse(pos));
         }
+        // A layout saved before #2395 has no width; the dock keeps the
+        // fresh-layout width.
+        if let Some(width) = region.get("width").and_then(|v| v.as_f64()) {
+            dock.set_preferred_width(pos, width as f32);
+        }
     }
     Some(dock)
 }
@@ -94,7 +103,6 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         SchFilter => "sch_filter",
         SchList => "sch_list",
         Messages => "messages",
-        SignexAi => "signex_ai",
         Drc => "drc",
         BomStudio => "bom_studio",
         Favorites => "favorites",
@@ -128,7 +136,6 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "sch_filter" => SchFilter,
         "sch_list" => SchList,
         "messages" => Messages,
-        "signex_ai" => SignexAi,
         "drc" => Drc,
         "bom_studio" => BomStudio,
         "favorites" => Favorites,
@@ -159,21 +166,26 @@ mod tests {
     use crate::dock::{DockLayoutSnapshot, DockLayoutStore, PanelPosition, RegionLayout};
     use crate::panels::PanelKind;
 
-    fn region(panels: &[PanelKind], collapsed: bool) -> RegionLayout {
+    fn region(panels: &[PanelKind], collapsed: bool, width: Option<u32>) -> RegionLayout {
         RegionLayout {
             panels: panels.to_vec(),
             collapsed,
+            width,
         }
     }
 
-    /// Saves a layout holding Signex AI through the real store and returns
-    /// the saved `prefs.json` text.
+    /// Saves a layout through the real store and returns the saved
+    /// `prefs.json` text.
     fn saved(dir: &tempfile::TempDir) -> String {
         let path = dir.path().join("prefs.json");
         let layout = DockLayoutSnapshot {
-            left: region(&[PanelKind::Projects], false),
-            right: region(&[PanelKind::Properties, PanelKind::SignexAi], false),
-            bottom: region(&[PanelKind::Messages], true),
+            left: region(&[PanelKind::Projects], false, Some(310)),
+            right: region(
+                &[PanelKind::Properties, PanelKind::History],
+                false,
+                Some(420),
+            ),
+            bottom: region(&[PanelKind::Messages], true, None),
         };
         PrefsDockLayoutStore::at(path.clone())
             .write(&layout)
@@ -182,29 +194,63 @@ mod tests {
     }
 
     #[test]
-    fn the_signex_ai_panel_round_trips_under_its_layout_key() {
+    fn a_saved_layout_round_trips_under_its_layout_keys() {
         let dir = tempfile::tempdir().expect("temp dir");
         let text = saved(&dir);
         let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
 
-        // Saved under "signex_ai".
         assert_eq!(
             json["dock"]["right"]["panels"],
-            serde_json::json!(["properties", "signex_ai"])
+            serde_json::json!(["properties", "history"])
         );
 
-        // Loaded back as the same panel.
         let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
         assert_eq!(
             dock.panel_kinds(PanelPosition::Right),
-            [PanelKind::Properties, PanelKind::SignexAi]
+            [PanelKind::Properties, PanelKind::History]
+        );
+    }
+
+    /// #2466: Community has no Signex AI panel. A `prefs.json` saved while
+    /// it had one still loads; only the `signex_ai` entry is dropped.
+    #[test]
+    fn a_saved_signex_ai_entry_is_dropped_and_the_rest_loads() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("prefs.json");
+        std::fs::write(
+            &path,
+            r#"{"theme":"graphite_dark","dock":{
+                "left":{"panels":["projects","signex_ai"],"collapsed":false,"width":310},
+                "right":{"panels":["properties","signex_ai","history"],"collapsed":false},
+                "bottom":{"panels":["signex_ai","messages"],"collapsed":true}}}"#,
+        )
+        .expect("write an old prefs.json");
+
+        let json = read_prefs_json(&path).expect("the old prefs.json parses");
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout still loads");
+
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::History]
+        );
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::Messages]
+        );
+        assert!(dock.is_collapsed(PanelPosition::Bottom));
+        assert_eq!(dock.preferred_width(PanelPosition::Left), 310.0);
+        assert!(
+            crate::panels::ALL_PANELS
+                .iter()
+                .all(|k| panel_kind_key(*k) != "signex_ai")
         );
     }
 
     #[test]
     fn an_unknown_panel_key_drops_only_that_panel() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let text = saved(&dir).replace("signex_ai", "signal");
+        let text = saved(&dir).replace("history", "signal");
         let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
 
         let dock = read_dock_layout_from(Some(&json)).expect("the layout itself still loads");
@@ -220,5 +266,42 @@ mod tests {
         );
         assert!(dock.is_collapsed(PanelPosition::Bottom));
         assert!(!dock.is_collapsed(PanelPosition::Left));
+    }
+
+    /// #2395: the side docks' preferred widths are saved and load back.
+    #[test]
+    fn the_side_dock_widths_round_trip() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let json: serde_json::Value =
+            serde_json::from_str(&saved(&dir)).expect("prefs.json parses");
+        assert_eq!(json["dock"]["left"]["width"], serde_json::json!(310));
+        assert_eq!(json["dock"]["right"]["width"], serde_json::json!(420));
+        assert!(json["dock"]["bottom"].get("width").is_none());
+
+        let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
+        assert_eq!(dock.preferred_width(PanelPosition::Left), 310.0);
+        assert_eq!(dock.preferred_width(PanelPosition::Right), 420.0);
+    }
+
+    /// A layout saved before the widths were stored still loads, with the
+    /// fresh-layout widths.
+    #[test]
+    fn a_layout_without_widths_loads_with_the_default_widths() {
+        let json = serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false },
+                "right": { "panels": ["properties"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("an older layout loads");
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.preferred_width(PanelPosition::Left),
+            crate::dock::DEFAULT_LEFT_DOCK_WIDTH
+        );
+        assert_eq!(
+            dock.preferred_width(PanelPosition::Right),
+            crate::dock::DEFAULT_RIGHT_DOCK_WIDTH
+        );
     }
 }

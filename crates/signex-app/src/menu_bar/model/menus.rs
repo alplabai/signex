@@ -50,14 +50,22 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         submenu(
             ctx,
             menu_ids::MENU_FILE_IMPORT,
-            vec![item(
-                ctx,
-                menu_ids::MENU_FILE_IMPORT_ALTIUM,
-                MenuMessage::ImportAltium,
-            )],
+            vec![
+                item(
+                    ctx,
+                    menu_ids::MENU_FILE_IMPORT_ALTIUM,
+                    MenuMessage::ImportAltium,
+                ),
+                // #2410: a DXF drawing onto the board in view; greyed
+                // without one.
+                cmd_item_gated(ctx, cmd("import_dxf", "")),
+                cmd_item_gated(ctx, cmd("import_dxf_outline", "")),
+            ],
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
         submenu(ctx, menu_ids::MENU_FILE_EXPORT, export(ctx)),
+        // The board's fabrication files (#2388); greyed without a board in view.
+        cmd_item_gated(ctx, cmd("fabrication_outputs", "")),
         cmd_item_gated(ctx, cmd("print", "Mod+P")),
         SEP,
         item(ctx, menu_ids::MENU_FILE_EXIT, MenuMessage::Exit),
@@ -119,11 +127,14 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
+        // The board and its parts as a STEP model (#2488); greyed without
+        // a board in view.
+        cmd_item_gated(ctx, cmd("export_board_step", "")),
     ]
 }
 
 pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![
+    let mut rows = vec![
         cmd_item_gated(ctx, cmd("undo", "Mod+Z")),
         cmd_item_gated(ctx, cmd("redo", "Ctrl+Y")),
         SEP,
@@ -135,13 +146,22 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Del")),
         submenu(ctx, menu_ids::MENU_EDIT_MOVE, move_menu(ctx)),
-        submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)),
+    ];
+    // Arrange orders schematic drawings only, so a board has no such row
+    // (#2405).
+    if !ctx.commands.pcb.shown {
+        rows.push(submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)));
+    }
+    rows.extend([
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
         SEP,
         cmd_item_gated(ctx, cmd("find", "Mod+F")),
         cmd_item_gated(ctx, cmd("find_and_replace", "Ctrl+H")),
-    ]
+        // #2416: seeds from the object under the cursor or the one selected.
+        cmd_item_gated(ctx, cmd("find_similar_objects", "")),
+    ]);
+    rows
 }
 
 /// Edit ▸ Move: move, turn and mirror the selection, on a sheet and on a
@@ -196,11 +216,17 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_single_layer_mode", "")),
         cmd_item_gated(ctx, cmd("toggle_layer_visibility", "")),
         cmd_item_gated(ctx, cmd("show_all_layers", "")),
+        // The layer tabs' numbers (#2394).
+        cmd_item_gated(ctx, cmd("toggle_layer_numbers", "")),
         // The board view's turn on screen (#2316); greyed without a PCB.
         cmd_item_gated(ctx, cmd("view_rotate", "")),
         cmd_item_gated(ctx, cmd("view_rotate_ccw", "")),
         cmd_item_gated(ctx, cmd("view_rotate_180", "")),
         cmd_item_gated(ctx, cmd("view_rotate_reset", "")),
+        // The board seen from below (#2394); greyed without a PCB.
+        cmd_item_gated(ctx, cmd("flip_board_view", "")),
+        // The board in 3D, or flat again (#2390); greyed without a PCB.
+        cmd_item_gated(ctx, cmd("view_board_3d", "")),
         SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
@@ -242,16 +268,14 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         panel_item(
             ctx,
-            ids::PANELS_KIND_SIGNEX_AI,
-            PanelKind::SignexAi,
-            MenuMessage::OpenSignexAiPanel,
-        ),
-        panel_item(
-            ctx,
             ids::PANELS_KIND_LAYERS,
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
+        // #2416: the Net Inspector panel (docs/MENU_BAR.md#view-net-inspector),
+        // and the Active Bar's selection filter of the sheet in view.
+        cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        cmd_item_gated(ctx, cmd("open_selection_filter", "")),
     ]
 }
 
@@ -267,24 +291,31 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 /// Place on a board: the board placement tools, each running the command its
 /// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), then Board
-/// Sketch, which draws the outline, cutouts and keepouts.
+/// the board editor cannot run it (one table, #2352, #2373), the Graphics
+/// submenu of drawings on non-copper layers (#2424), then Board Sketch,
+/// which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU
-        .into_iter()
-        .map(|tool| match tool.state() {
-            ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
-            ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
-        })
-        .collect();
-    rows.extend([SEP, cmd_item_gated(ctx, cmd("board_sketch", ""))]);
+    let row = |tool: BoardPlaceTool| match tool.state() {
+        ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
+        ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
+    };
+    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU.into_iter().map(row).collect();
+    let graphics = BoardPlaceTool::GRAPHICS_MENU.into_iter().map(row).collect();
+    rows.extend([
+        submenu(ctx, menu_ids::MENU_PLACE_GRAPHICS, graphics),
+        SEP,
+        cmd_item_gated(ctx, cmd("board_sketch", "")),
+    ]);
     rows
 }
 
+/// Place on a sheet: the wiring, part and text rows, then every other
+/// placement tool of the Active Bar in its group (#2415).
 fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![
+    let mut rows = vec![
         cmd_item_gated(ctx, cmd("place_wire", "W")),
         cmd_item_gated(ctx, cmd("place_bus", "B")),
+        cmd_item_gated(ctx, cmd("place_bus_entry", "")),
         cmd_item_gated(ctx, cmd("place_net_label", "L")),
         SEP,
         cmd_item_gated(ctx, cmd("open_components_panel", "P")),
@@ -297,14 +328,26 @@ fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::PlaceText,
             ctx.commands.has_schematic,
         ),
-        item_if(
+        cmd_item_gated(ctx, cmd("place_text_frame", "")),
+        cmd_item_gated(ctx, cmd("place_note", "")),
+        // Runs `place_no_connect`, so the row shows its key (#2416); the
+        // command has no menu text of its own.
+        cmd_item_gated_as(
             ctx,
-            menu_ids::MENU_PLACE_NO_CONNECT,
-            MenuMessage::PlaceNoConnect,
-            ctx.commands.has_schematic,
+            cmd("place_no_connect", ""),
+            ctx.i18n
+                .message(menu_ids::MENU_PLACE_NO_CONNECT, &[])
+                .into_string(),
         ),
         cmd_item_gated(ctx, cmd("place_sheet_entry", "")),
-    ]
+        SEP,
+        // #1667: another sheet's content, or a DXF drawing, on the cursor.
+        cmd_item_gated(ctx, cmd("place_design_block", "")),
+        cmd_item_gated(ctx, cmd("import_graphics", "")),
+        SEP,
+    ];
+    rows.extend(super::sheet_place::tool_groups(ctx));
+    rows
 }
 
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
@@ -314,8 +357,15 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2234: enter or leave the sketch of the board in view; greyed
         // with no PCB.
         cmd_item_gated(ctx, cmd("board_sketch", "")),
+        // #2401: the layer stack manager of the board in view.
+        cmd_item_gated(ctx, cmd("board_layer_stack", "")),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
+        // #2416: the project's net-class table, in its own panel.
+        cmd_item_gated(ctx, cmd("open_net_classes", "")),
+        // #2398: the project's design rules as a document tab; greyed with
+        // no project open.
+        cmd_item_gated(ctx, cmd("open_rules", "")),
     ]
 }
 
@@ -381,8 +431,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-/// Reports: every output of the open schematic. The BOM row is the one
-/// working BOM dialog (#1251); the old Design > Generate BOM duplicate row is folded in.
+/// Reports: every output of the open schematic, then the board's reports.
+/// The BOM row is the one working BOM dialog (#1251); the old Design >
+/// Generate BOM duplicate row is folded in.
 pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
@@ -404,6 +455,15 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportErcReport,
             has_schematic,
         ),
+        SEP,
+        // The board's reports (#2404), greyed without a board in view.
+        cmd_item_gated(ctx, cmd("board_report_bom", "")),
+        cmd_item_gated(ctx, cmd("board_report_netlist", "")),
+        cmd_item_gated(ctx, cmd("board_report_net_length", "")),
+        cmd_item_gated(ctx, cmd("board_report_components", "")),
+        cmd_item_gated(ctx, cmd("export_board_report", "")),
+        // #2486: the assembly drawings as SVG files.
+        cmd_item_gated(ctx, cmd("export_assembly_svg", "")),
     ]
 }
 
@@ -453,11 +513,30 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "")),
+        // The DRC results and board Net Classes panels (#2399, #2400):
+        // docs/MENU_BAR.md#tools-drc-results
+        cmd_item_gated(ctx, cmd("open_drc_panel", "")),
+        cmd_item_gated(ctx, cmd("open_net_classes_panel", "")),
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "")),
-        // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
-        cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        // #2216: docs/MENU_BAR.md#tools-repour
+        cmd_item_gated(ctx, cmd("repour_selected", "")),
+        cmd_item_gated(ctx, cmd("repour_all", "")),
+        SEP,
+        // #2408, #2409: the board edits on the board in view and its
+        // selection: docs/MENU_BAR.md#tools-board-edits
+        cmd_item_gated(ctx, cmd("stitch_vias", "")),
+        cmd_item_gated(ctx, cmd("add_teardrops", "")),
+        cmd_item_gated(ctx, cmd("remove_teardrops", "")),
+        cmd_item_gated(ctx, cmd("gloss_selected_routes", "")),
+        cmd_item_gated(ctx, cmd("board_shape_from_selection", "")),
+        cmd_item_gated(ctx, cmd("keepout_from_selection", "")),
+        cmd_item_gated(ctx, cmd("arrange_in_box", "")),
+        // #2410: array the board in view into a panel, or make it single
+        // again; one undo step each. docs/PANELISATION.md
+        cmd_item_gated(ctx, cmd("panelize_board", "")),
+        cmd_item_gated(ctx, cmd("remove_board_panel", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.
@@ -510,10 +589,11 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        // Main window plus undocked document windows; greyed with none
-        // undocked: docs/MENU_BAR.md#window-tile
+        // Document panes of the main window (#2249) and the undocked document
+        // windows; Untile is live while tiled: docs/MENU_BAR.md#window-tile
         cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
+        cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]

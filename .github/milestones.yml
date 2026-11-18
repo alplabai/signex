@@ -147,7 +147,7 @@
   aliases: ["v1.2.0 — SCH Tables & Docs"]
 
 - title: "Enhanced Output"
-  description: "Smart PDF, variant BOM, watermark, output jobs."
+  description: "PDF Export, variant BOM, watermark, Export Jobs."
   state: open
   aliases: ["v1.3.0 — Enhanced Output"]
 
@@ -162,7 +162,7 @@
   aliases: ["v1.4.1 — Design References & Annotations"]
 
 - title: "Measurements & Signex AI Integration"
-  description: "#measurement() function, measurement timeline, attachments, stale detection, Signex AI notebook read/write (Pro)."
+  description: "#measurement() function, measurement timeline, attachments, stale detection."
   state: open
   aliases: ["v1.4.2 — Measurements & Signal AI Integration", "Measurements & Signal AI Integration"]
 
@@ -182,7 +182,7 @@
   aliases: ["v1.5.1 — Schematic Linking & Power Tree"]
 
 - title: "AI Design"
-  description: "Gate: schematic and PCB design with Signex AI as assistant and generator, PCB layout from the schematic, routing."
+  description: "Gate: board layout and routing from the schematic (the PCB Design gate)."
   state: open
 
 - title: "PCB Layout"
@@ -190,22 +190,26 @@
   state: open
   aliases: ["v2.0.0 — PCB Viewer", "PCB Viewer"]
 
+- title: "Requirements & Verification"
+  description: "Project requirements (rules, net classes, rail budgets, board size, BOM cost, approved parts) run as deterministic checks with pass, fail and evidence."
+  state: open
+
 - title: "Chat & Context"
-  description: "Signex AI panel (streaming chat, markdown), design context for schematic and board, session history, client for the hosted AI service."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.1.0 — Chat & Context"]
 
 - title: "Edit & Analysis Tools"
-  description: "Signex AI Assistant mode: undoable tools over the Command Registry for schematic and board, ERC / DRC checks, reviewable fix suggestions."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.2.0 — Edit & Analysis Tools"]
 
 - title: "Generator: Schematic"
-  description: "Signex AI Generator mode: written specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
 
 - title: "Generator: Board"
-  description: "Signex AI Generator mode: board created from the schematic, outline, placement, routing, DRC-clean, as a reviewable change list."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
 
 - title: "PCB Routing"
@@ -242,6 +246,10 @@
   description: "Pick-and-place CSV, IPC-2581, STEP 3D export (board body), assembly SVG."
   state: open
   aliases: ["v2.2.1 — Assembly & 3D Export"]
+
+- title: "Scripted Demo Videos"
+  description: "Scripted, re-recordable feature videos (MP4 and GIF) with captions and a drawn pointer for the README, docs and website."
+  state: open
 
 - title: "3D Viewer"
   description: "3D PCB, PBR materials, STEP model loading."
@@ -376,41 +384,67 @@
   state: open
   aliases: ["v2.7.3 — Simulation Overlay Bake-In"]
 
+- title: "MCAD Kernel"
+  description: "Solid-modelling kernel behind a Signex crate: bodies, exact STEP read/write, tessellation, a native mechanical document."
+  state: open
+
+- title: "Enclosure Fit Check"
+  description: "Check the board against an enclosure STEP: clearance, collisions, component height, mounting-hole alignment, in DRC."
+  state: open
+
+- title: "Part Modelling"
+  description: "Sketch, extrude, revolve, cut, fillet, shell, holes and patterns, with parameters and an editable feature history."
+  state: open
+
+- title: "Board-Driven Enclosure"
+  description: "An enclosure started from the board: walls, lid, standoffs on mounting holes, port cut-outs, kept in step with board changes."
+  state: open
+
+- title: "Assemblies & Interference"
+  description: "Components, joints, interference between parts and exploded views, with the board as one component."
+  state: open
+
+- title: "Sheet Metal & Plastic Parts"
+  description: "Flanges, bends and flat patterns with DXF; bosses, ribs and snap fits for moulded enclosures."
+  state: open
+
 - title: "Pro Release"
-  description: "Pro: hosted Signex AI and the Generator, subscription with included AI credits. Team: live collaboration."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.0.0 — Pro Release"]
 
 # ─────────── speculative — everything below here ───────────
-# docs/ROADMAP.md §11: the order and timing past the Pro Release are speculative and
-# user feedback will reshape them. These milestones exist so that scoped
+# docs/ROADMAP.md §11: the order and timing of these plans are speculative
+# and user feedback will reshape them. Milestones of Signex Pro plans stay
+# so their issues keep them, with a neutral description; Pro is planned in
+# the private Pro roadmap (docs/ROADMAP.md §12, "Pro plans"). These milestones exist so that scoped
 # work is visible and issues have somewhere to hang — NOT as commitments.
 # None of them carries exit criteria; none of them gates anything.
 # The Plugin System band is deliberately absent: the roadmap publishes it
 # at band level only, because it has no sub-release staging plan. Do not
 # add a Plugin System sub-release here before the roadmap defines it.
 - title: "Visual & Polish"
-  description: "Speculative — Visual context (canvas screenshot to a vision model), usage meter, graceful offline degradation."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.1.1 — Visual & Polish"]
 
 - title: "Sim & Templates"
-  description: "Speculative — Simulation and notebook tool use, design review mode, circuit templates, natural-language constraint entry."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.2.1 — Sim & Templates"]
 
 - title: "Realtime & CRDT"
-  description: "Speculative — Realtime WebSocket client (signex-collab), CRDT document model, auth with accounts / teams / roles."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.4.0 — Realtime & CRDT"]
 
 - title: "Presence & Cursors"
-  description: "Speculative — Per-user canvas cursors, presence panel with follow mode, sheet / region / layer / net locking."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.4.1 — Presence & Cursors"]
 
 - title: "Storage & Review"
-  description: "Speculative — Cloud project storage, version history + edit attribution, pinned comments and review workflow, offline op queue with replay."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v3.4.2 — Storage & Review"]
 
@@ -470,51 +504,51 @@
   aliases: ["v4.4.1 — Advanced Geometry & Import"]
 
 - title: "Signex 365"
-  description: "Speculative — Cloud PLM platform, BOM Studio, ECO workflow, ERP bridge (Odoo/ERPNext)."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.0.0 — Signex 365"]
 
 - title: "Component Picker"
-  description: "Speculative — Desktop component picker backed by the PLM, paginated component search, lifecycle alerts (EOL / NRND / Obsolete)."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.0.1 — Component Picker"]
 
 - title: "BOM Panel & Pricing"
-  description: "Speculative — BOM Studio panel, live pricing + availability from cached distributor data, BOM cost roll-up per assembly."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.1.0 — BOM Panel & Pricing"]
 
 - title: "Lifecycle & Risk"
-  description: "Speculative — Lifecycle status and part-choice ranking, supply-chain risk alerts, cost optimisation suggestions, unified component model."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.1.1 — Lifecycle & Risk"]
 
 - title: "BOM & ECO Sync"
-  description: "Speculative — BOM push Signex → PLM, delta sync of changed lines, ECO creation from Signex."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.2.0 — BOM & ECO Sync"]
 
 - title: "Documents & Lifecycle"
-  description: "Speculative — Document publishing into PLM document management, batch lifecycle status check on file open."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.2.1 — Documents & Lifecycle"]
 
 - title: "Odoo / ERPNext Sync"
-  description: "Speculative — Released BOMs Signex → PLM → ERP; ERP purchase pricing back into BOM Studio."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.3.0 — Odoo / ERPNext Sync"]
 
 - title: "ECO & Vendor Sync"
-  description: "Speculative — ECO traceability through manufacturing, vendor sync (PLM AVL → ERP supplier list)."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.3.1 — ECO & Vendor Sync"]
 
 - title: "Compliance & Obsolescence"
-  description: "Speculative — RoHS / REACH status in the desktop, obsolescence monitoring with alternatives, AVL badge on the component picker."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.4.0 — Compliance & Obsolescence"]
 
 - title: "PLM-Aware AI"
-  description: "Speculative — PLM-aware Signex AI design review with supply-chain analysis, reusable testbench library (.snxsim templates) in the PLM."
+  description: "Signex Pro plan; planned in the private Pro roadmap."
   state: open
   aliases: ["v5.4.1 — PLM-Aware AI"]

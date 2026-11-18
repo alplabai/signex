@@ -21,7 +21,10 @@ pub use layout_sync::{
     DockLayoutStore, DockLayoutSync, DockLayoutWrite, RegionLayout,
 };
 pub use placement::{DropGeometry, RegionExtent, drop_target};
-pub use side_width::{DOCK_HANDLE, MIN_CANVAS_WIDTH, MIN_SIDE_DOCK_WIDTH};
+pub use side_width::{
+    DEFAULT_LEFT_DOCK_WIDTH, DEFAULT_RIGHT_DOCK_WIDTH, DOCK_HANDLE, MIN_CANVAS_WIDTH,
+    MIN_SIDE_DOCK_WIDTH,
+};
 pub use types::{
     DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
     PanelSite,

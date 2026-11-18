@@ -4,7 +4,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::app::command::operand_handlers::operand_handler;
-use crate::keymap::{AppCommandId, metadata_for};
+use crate::keymap::{AppCommandId, OperandKind, metadata_for};
 
 /// The most edits one call may carry: the app runs them all before the
 /// person's next keystroke is handled.
@@ -152,7 +152,184 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "rules_add",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_remove",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_enable",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    // #2400: the board Net Classes panel's edits of the project table.
+    (
+        "add_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "rename_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "delete_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "set_net_class_rules",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "assign_board_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    // #2399: a waiver is board data; no sheet's undo step covers it.
+    (
+        "waive_drc_violation",
+        "it edits the board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "unwaive_drc_violation",
+        "it edits the board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2401, #2407: board edits, each its own step on the board it names.
+    ("set_layer_stack", BOARD_EDIT),
+    ("lock_board_items", BOARD_EDIT),
+    ("unlock_board_items", BOARD_EDIT),
+    ("set_via_span", BOARD_EDIT),
+    ("set_layer_sizes", BOARD_EDIT),
+    ("set_pad_shape", BOARD_EDIT),
+    // #2408, #2409: the board Tools edits are board steps of their own.
+    ("stitch_vias", BOARD_EDIT),
+    ("add_teardrops", BOARD_EDIT),
+    ("remove_teardrops", BOARD_EDIT),
+    ("gloss_selected_routes", BOARD_EDIT),
+    ("board_shape_from_selection", BOARD_EDIT),
+    ("keepout_from_selection", BOARD_EDIT),
+    ("arrange_in_box", BOARD_EDIT),
+    (
+        "rules_matrix_set",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_create",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_edit",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_set_apply",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "rules_preset_apply",
+        "it writes the project's rule set, which no sheet's undo step covers",
+    ),
+    (
+        "add_board_graphic",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_board_graphic",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_text",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2389: length tuning lands on the named board's own undo stack.
+    (
+        "tune_net_length",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "tune_diff_pair",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "panelize_board",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "remove_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "swap_pins",
+        "it edits the board and its sheet together; run it as its own command",
+    ),
+    (
+        "swap_gates",
+        "it edits the board and its sheet together; run it as its own command",
+    ),
+    (
+        "place_board_reuse_block",
+        "it edits the project's board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "project_move_sheet",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_add_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_rename_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_active_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_move_library",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_annotate_undo",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_version_control",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_add_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_enable_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
+
+const BOARD_EDIT: &str =
+    "it edits a board, which no sheet's undo step covers; run it as its own command";
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand
@@ -180,6 +357,13 @@ pub fn edit_refusal(command: &AppCommandId) -> Option<String> {
     }
     if operand_handler(command).is_none() {
         return Some(format!("`{id}` has no operand form yet"));
+    }
+    // An edit list comes from an agent, which has no file read for it
+    // (`place_design_block`, `import_graphics`, #1667).
+    if meta.operands.iter().any(|op| op.kind == OperandKind::Path) {
+        return Some(format!(
+            "`{id}` takes a file path; an edit list does not read a file it names"
+        ));
     }
     PROJECT_WIDE
         .iter()
@@ -295,6 +479,7 @@ mod tests {
     #[test]
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
+            "autoplace_fields",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
@@ -302,8 +487,12 @@ mod tests {
             "draw_line",
             "draw_rectangle",
             "draw_wire",
+            "edit_blanket",
+            "place_blanket",
             "place_bus",
+            "place_compile_mask",
             "place_component",
+            "place_diff_pair",
             "place_global_label",
             "place_hierarchical_label",
             "place_junction",
@@ -317,6 +506,10 @@ mod tests {
             "place_text",
             "place_text_string",
             "place_wire",
+            "set_object_position",
+            "set_object_rotation",
+            "set_sheet_symbol_size",
+            "set_symbol_parameter",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();
@@ -337,7 +530,11 @@ mod tests {
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
             ("update_pcb_from_schematic", "edits the project's board"),
+            ("tune_net_length", "edits a board"),
+            ("tune_diff_pair", "edits a board"),
             ("toggle_properties_panel", "not runnable headless"),
+            ("place_design_block", "takes a file path"),
+            ("import_graphics", "takes a file path"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

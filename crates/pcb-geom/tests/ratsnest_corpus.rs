@@ -68,6 +68,8 @@ fn ten_thousand_tracks() -> PcbBoard {
             let x = f64::from(col) * 2.0;
             let split = row % 2 == 0 && col == 50;
             board.segments.push(Segment {
+                locked: false,
+                attributes: Default::default(),
                 uuid: Uuid::from_u128(u128::from(row) * 100 + u128::from(col) + 1),
                 start: Point::new(x, f64::from(row)),
                 end: Point::new(x + 2.0, f64::from(row)),
@@ -129,6 +131,8 @@ fn ten_thousand_tracks_and_zones() -> PcbBoard {
                 thermal_width: 0.0,
                 clearance: 0.0,
                 min_thickness: 0.0,
+                min_island_area: 0.0,
+                remove_dead_islands: false,
                 unknown: Default::default(),
             });
         }

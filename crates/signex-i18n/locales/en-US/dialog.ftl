@@ -88,6 +88,8 @@ dialog-annotate-nothing-to-number = No symbols need annotation — every referen
 dialog-annotate-summary-nothing = Annotation has nothing to do — all { $total } symbols on '{ $sheet }' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch.
 dialog-annotate-summary-changes = Annotation will assign new designators to { $changes } of { $total } symbols on '{ $sheet }'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.
 dialog-annotate-summary-heading = Annotation Summary
+# Count on the Proposed Change List heading. Both are whole numbers.
+dialog-annotate-change-count = { $changes } of { $total } designators will change
 dialog-annotate-reprefix-unavailable = Re-prefix to standard is unavailable: this project follows no designator standard. Pick one in Project Options.
 dialog-annotate-reprefix-note = Re-prefix to standard re-issues the prefix of every placed part under { $standard } and renumbers them, across the whole project, as one undo step, after you confirm a list of the changes. Sheets that are not open are loaded unsaved; nothing is written until you save. Locked parts, hand-edited prefixes and parts without a library link are left alone and listed in Messages. PCB references are not updated.
 dialog-annotate-running = Running…

@@ -7,9 +7,12 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_3d;
+mod board_net_classes;
 mod board_project;
 mod board_sketch;
-mod case_fold;
+#[cfg(test)]
+mod case_fold_tests;
 pub(crate) mod check_runs;
 pub(crate) mod cross_select;
 pub(crate) mod dir_case;
@@ -35,6 +38,7 @@ mod path_key;
 mod pcb_board;
 mod pcb_drc;
 pub(crate) mod pcb_edit;
+pub(crate) mod pcb_query;
 mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -58,13 +62,16 @@ mod window_scales;
 mod window_sizes;
 mod window_tab;
 
+pub use crate::app::core::case_fold::CaseFold;
 pub use agent_edits::AgentEdits;
+pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
-pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
+pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
@@ -90,6 +97,9 @@ pub struct Signex {
     /// The local agent listener's runtime state (#1924); inert while the
     /// "Allow agent connections" preference is off.
     pub(crate) agent: crate::app::agent::AgentState,
+    /// The pan/zoom frame bench (#2472); `None` unless the process was
+    /// started with `SIGNEX_BENCH_PAN_ZOOM` set.
+    pub(crate) pan_zoom_bench: Option<crate::pan_zoom_bench::PanZoomBench>,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -239,32 +249,7 @@ pub enum ModalId {
 
 pub use signex_types::schematic::AnnotateOrder;
 
-/// Opaque identifier for a loaded project in the workspace. Assigned by
-/// `DocumentState::next_project_id` on load and never reused, so stale
-/// references (e.g. a tab pointing at a closed project) resolve to `None`
-/// via `DocumentState::project_by_id` instead of silently aliasing another
-/// project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct ProjectId(u32);
-
-impl ProjectId {
-    /// The id as an engine pick marker carries it.
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-
-    /// A fixed id for a test that has no `DocumentState` to mint one from.
-    #[cfg(test)]
-    pub(crate) const fn test_id(n: u32) -> Self {
-        Self(n)
-    }
-}
-
-impl std::fmt::Display for ProjectId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "proj:{}", self.0)
-    }
-}
+pub use crate::app::core::project_id::ProjectId;
 
 /// One loaded project in the multi-project workspace. `path` is the
 /// canonical identity (`.snxprj` location on disk); `data`
@@ -518,6 +503,8 @@ pub struct DocumentState {
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
     pub(crate) check_runs: check_runs::CheckRuns,
+    /// Each open project's design reuse blocks, read or saved (#2410).
+    pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,
@@ -938,9 +925,7 @@ impl PreviewState {
 impl DocumentState {
     /// Mint a fresh `ProjectId` and bump the counter. Never reuses ids.
     pub fn mint_project_id(&mut self) -> ProjectId {
-        let id = ProjectId(self.next_project_id);
-        self.next_project_id = self.next_project_id.wrapping_add(1);
-        id
+        ProjectId::mint(&mut self.next_project_id)
     }
 
     pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {

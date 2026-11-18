@@ -203,14 +203,9 @@ fn tree_node(
     fold: CaseFold,
 ) -> TreeNode {
     let node = siblings[index];
-    let label = match node.kind {
-        SheetNodeKind::Present => node.name.clone(),
-        SheetNodeKind::Missing => format!("{} (missing)", node.name),
-        SheetNodeKind::Unreadable => format!("{} (unreadable)", node.name),
-        SheetNodeKind::Rejected => format!("{} (rejected)", node.name),
-        SheetNodeKind::Cycle => format!("{} (cycle)", node.name),
-        SheetNodeKind::Truncated => format!("{} (not expanded)", node.name),
-    };
+    // The cached row reads en-US; the panel names it in its own language
+    // with `NavigatorModel::shown_tree`.
+    let label = row_label(&signex_i18n::I18n::en_us(), node);
     let kids: Vec<&SheetNode> = node.children.iter().collect();
     let children: Vec<TreeNode> = (0..kids.len())
         .map(|i| tree_node(&kids, i, active, open, fold))
@@ -227,6 +222,47 @@ fn tree_node(
         .with_badge(node.filename.clone())
         .with_active(active == Some(key.as_str()))
         .with_open(open.contains(&key))
+}
+
+/// A sheet's row text in `i18n`'s language: its name, with the mark of a
+/// sheet that is not a plain page. Plain text, so no isolation marks.
+fn row_label(i18n: &signex_i18n::I18n, node: &SheetNode) -> String {
+    use signex_i18n::ids;
+    let id = match node.kind {
+        SheetNodeKind::Present => return node.name.clone(),
+        SheetNodeKind::Missing => ids::PANELS_NAVIGATOR_MISSING,
+        SheetNodeKind::Unreadable => ids::PANELS_NAVIGATOR_UNREADABLE,
+        SheetNodeKind::Rejected => ids::PANELS_NAVIGATOR_REJECTED,
+        SheetNodeKind::Cycle => ids::PANELS_NAVIGATOR_CYCLE,
+        SheetNodeKind::Truncated => ids::PANELS_NAVIGATOR_NOT_EXPANDED,
+    };
+    i18n.message_plain(id, &[("name", node.name.as_str().into())])
+}
+
+impl NavigatorModel {
+    /// The rows as the panel shows them in `i18n`'s language. Rows, keys and
+    /// paths are the cached tree's, so selection and navigation, which go
+    /// by path and key, are unchanged.
+    pub fn shown_tree(&self, i18n: &signex_i18n::I18n) -> Vec<TreeNode> {
+        fn walk(
+            model: &NavigatorModel,
+            i18n: &signex_i18n::I18n,
+            nodes: &mut [TreeNode],
+            path: &mut Vec<usize>,
+        ) {
+            for (i, node) in nodes.iter_mut().enumerate() {
+                path.push(i);
+                if let Some(sheet) = model.node_at(path) {
+                    node.label = row_label(i18n, sheet);
+                }
+                walk(model, i18n, &mut node.children, path);
+                path.pop();
+            }
+        }
+        let mut rows = self.tree.clone();
+        walk(self, i18n, &mut rows, &mut Vec::new());
+        rows
+    }
 }
 
 /// Every branch row with whether it is expanded.
@@ -332,6 +368,91 @@ mod tests {
         m.rebuild_tree(None, &[]);
         assert!(!m.tree[0].children[0].expanded);
         assert!(m.tree[0].expanded);
+    }
+
+    /// #2059: each mark reads as the `format!` it replaced in en-US (one
+    /// space before the mark) and follows the language.
+    #[test]
+    fn every_row_mark_reads_as_before_and_follows_the_language() {
+        let en = signex_i18n::I18n::en_us();
+        let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        for (kind, english) in [
+            (SheetNodeKind::Present, "ADC"),
+            (SheetNodeKind::Missing, "ADC (missing)"),
+            (SheetNodeKind::Unreadable, "ADC (unreadable)"),
+            (SheetNodeKind::Rejected, "ADC (rejected)"),
+            (SheetNodeKind::Cycle, "ADC (cycle)"),
+            (SheetNodeKind::Truncated, "ADC (not expanded)"),
+        ] {
+            let sheet = SheetNode {
+                kind,
+                ..node("ADC", "adc.snxsch", vec![])
+            };
+            assert_eq!(row_label(&en, &sheet), english, "{kind:?}");
+            if kind != SheetNodeKind::Present {
+                assert_ne!(row_label(&xa, &sheet), english, "{kind:?}");
+            }
+        }
+    }
+
+    /// The shown rows are renamed in the panel's language while keys and
+    /// paths stay the cached tree's, so a row still leads to its sheet.
+    #[test]
+    fn shown_rows_follow_the_language_and_keep_their_paths() {
+        let mut m = model();
+        if let Some(root) = m.hierarchy.as_mut().and_then(|h| h.root.as_mut()) {
+            root.children[0].children[0].kind = SheetNodeKind::Missing;
+        }
+        m.rebuild_tree(None, &[]);
+        let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        let shown = m.shown_tree(&xa);
+        let adc = &shown[0].children[0].children[0];
+        assert_ne!(adc.label, "ADC (missing)");
+        assert_eq!(
+            adc.label,
+            xa.message_plain(
+                signex_i18n::ids::PANELS_NAVIGATOR_MISSING,
+                &[("name", "ADC".into())]
+            )
+        );
+        assert_eq!(adc.key, m.tree[0].children[0].children[0].key);
+        assert_eq!(
+            m.node_at(&[0, 0, 0]).map(|n| n.filename.as_str()),
+            Some("adc.snxsch")
+        );
+        assert_eq!(
+            signex_widgets::tree_view::key_of(&shown, &[0, 0, 0]),
+            signex_widgets::tree_view::key_of(&m.tree, &[0, 0, 0])
+        );
+    }
+
+    /// The Navigator panel draws the rows in its own language.
+    #[test]
+    fn the_navigator_panel_shows_the_rows_in_its_language() {
+        let mut m = model();
+        if let Some(root) = m.hierarchy.as_mut().and_then(|h| h.root.as_mut()) {
+            root.children[0].children[0].kind = SheetNodeKind::Missing;
+        }
+        m.rebuild_tree(None, &[]);
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.navigator = m;
+        ctx.i18n = std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
+            "en-XA".into(),
+        )));
+        let want = ctx.i18n.message_plain(
+            signex_i18n::ids::PANELS_NAVIGATOR_MISSING,
+            &[("name", "ADC".into())],
+        );
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            crate::panels::projects::view_navigator(&ctx),
+            iced::Size::new(360.0, 900.0),
+        )
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+        assert!(texts.contains(&want), "{want:?} in {texts:#?}");
+        assert!(!texts.iter().any(|t| t == "ADC (missing)"), "{texts:#?}");
     }
 
     #[test]

@@ -4,6 +4,7 @@
 
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 #[cfg(unix)]
 mod client;
 mod deferred;
@@ -14,10 +15,12 @@ mod journal;
 mod live;
 mod opened;
 mod origin;
+mod owed_repaint;
 #[cfg(unix)]
 mod presence;
 mod refusals;
 mod round_trip;
+mod window_layout;
 
 use serde_json::{Value, json};
 use signex_types::document_id::DocumentId;
@@ -84,6 +87,8 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

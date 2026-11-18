@@ -74,14 +74,26 @@ impl Translatable {
     /// marks ([`MessageRenderer::message_plain`]): the same string goes to
     /// the screen, to window titles and to en-US logs, which must stay
     /// byte-identical with the English the code built before the catalog.
+    /// A nested message argument is rendered first, with the same `i18n`.
     pub fn render<R: MessageRenderer + ?Sized>(&self, i18n: &R) -> String {
         match &self.0 {
             Inner::Catalog { id, args } => {
-                let args: Vec<(&str, Arg)> =
-                    args.iter().map(|(name, a)| (*name, a.clone())).collect();
+                let args: Vec<(&str, Arg)> = args
+                    .iter()
+                    .map(|(name, a)| (*name, a.rendered_with(i18n)))
+                    .collect();
                 i18n.message_plain(*id, &args)
             }
             Inner::Verbatim(text) => text.as_str().to_owned(),
+        }
+    }
+
+    /// The id, or the verbatim text, for a nested message that reached the
+    /// formatter without being rendered.
+    pub(crate) fn unrendered(&self) -> &str {
+        match &self.0 {
+            Inner::Catalog { id, .. } => id.as_str(),
+            Inner::Verbatim(text) => text.as_str(),
         }
     }
 }
@@ -97,3 +109,7 @@ impl From<UserText> for Translatable {
         Self::verbatim(text)
     }
 }
+
+#[cfg(test)]
+#[path = "translatable_tests.rs"]
+mod tests;

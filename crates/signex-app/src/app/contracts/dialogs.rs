@@ -700,6 +700,8 @@ pub enum ProjectMsg {
     AppQuitConfirm(ProjectCloseChoice),
     /// A Project tab message (#1202), routed to the `project_tab` slice.
     Tab(crate::app::ProjectTabMsg),
+    /// A Rules tab message (#2398), routed to the `rules_tab` slice.
+    Rules(crate::app::RulesTabMsg),
     /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
     FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries
@@ -941,6 +943,8 @@ pub enum EditMsg {
     /// Reorder the selected drawings within the sheet's drawing list; the
     /// selection's circuit elements are ignored (#1583).
     ArrangeDrawings(signex_engine::DrawingArrange),
+    /// A placement extra on a sheet (#1667).
+    Extras(super::PlacementExtrasMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

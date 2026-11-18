@@ -94,14 +94,23 @@ impl Selection {
             .iter()
             .filter_map(|item| match *item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => Some(id),
-                ItemRef::Track(_) | ItemRef::Via(_) => None,
+                ItemRef::Track(_)
+                | ItemRef::Via(_)
+                | ItemRef::Zone { .. }
+                | ItemRef::Text(_)
+                | ItemRef::Arc(_)
+                | ItemRef::FreePad(_)
+                | ItemRef::Dimension(_)
+                | ItemRef::Graphic { .. }
+                // A text moves on its own (#2368).
+                | ItemRef::FootprintText { .. } => None,
             })
             .collect()
     }
 }
 
-/// The item under `p`: a via over a pad over a track over a footprint
-/// body, then the lowest
+/// The item under `p`: a via over a pad over a track over a board drawing
+/// over a footprint body over a drawn area, then the lowest
 /// [`ItemRef`], so the answer does not depend on how the tree was built.
 pub fn pick(index: &BoardIndex, p: PointNm, tolerance: i64) -> Option<&IndexedItem> {
     pick_filtered(index, p, tolerance, &PickFilter::default())
@@ -115,20 +124,54 @@ pub fn pick_filtered<'a>(
     tolerance: i64,
     filter: &PickFilter,
 ) -> Option<&'a IndexedItem> {
+    pick_where(index, p, tolerance, |item| filter.allows(item))
+}
+
+/// [`pick_filtered`] passing over designators and comments, for a tool that
+/// acts on parts (Move, Measure): a click on a part's text picks the body or
+/// copper under it, or nothing (#2368).
+pub fn pick_under_texts<'a>(
+    index: &'a BoardIndex,
+    p: PointNm,
+    tolerance: i64,
+    filter: &PickFilter,
+) -> Option<&'a IndexedItem> {
+    pick_where(index, p, tolerance, |item| {
+        filter.allows(item) && !matches!(item, ItemRef::FootprintText { .. })
+    })
+}
+
+fn pick_where(
+    index: &BoardIndex,
+    p: PointNm,
+    tolerance: i64,
+    keep: impl Fn(ItemRef) -> bool,
+) -> Option<&IndexedItem> {
     index
         .items_at(p, tolerance)
         .into_iter()
-        .filter(|i| filter.allows(i.item))
+        .filter(|i| keep(i.item))
         .min_by_key(|i| (rank(i.item), i.item))
 }
 
 fn rank(item: ItemRef) -> u8 {
     match item {
         ItemRef::Via(_) => 0,
-        ItemRef::Pad { .. } => 1,
-        ItemRef::Track(_) => 2,
+        ItemRef::Pad { .. } | ItemRef::FreePad(_) => 1,
+        ItemRef::Track(_) | ItemRef::Arc(_) => 2,
+        // Board strings, dimensions and drawings sit over the copper they
+        // label (#2373), and a drawing's thin stroke over a part's body takes
+        // the click (#2424).
+        // A designator or comment over its part's body takes the click too
+        // (#2368).
+        ItemRef::Text(_)
+        | ItemRef::Dimension(_)
+        | ItemRef::Graphic { .. }
+        | ItemRef::FootprintText { .. } => 3,
         // The body is under its own pads: a click on copper takes the copper.
-        ItemRef::Footprint(_) => 3,
+        ItemRef::Footprint(_) => 4,
+        // A drawn area is under everything on it (#2383).
+        ItemRef::Zone { .. } => 5,
     }
 }
 

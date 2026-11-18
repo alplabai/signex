@@ -3,6 +3,7 @@
 use iced::widget::{column, row};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{UserText, ids};
+use signex_types::pcb_stack::StackMode;
 use signex_widgets::text;
 
 use super::rows::{
@@ -158,40 +159,35 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
     s.push(
         common,
         ids::PCB_PRIM_STACK_SIMPLE,
-        fixed_tiles(
-            look,
-            &[
-                ids::PCB_PRIM_STACK_SIMPLE,
-                ids::PCB_PRIM_STACK_TOP_MIDDLE_BOTTOM,
-                ids::PCB_PRIM_STACK_FULL,
-            ],
-            0,
-            ids::PCB_PRIM_STACK_UNSUPPORTED,
-        ),
+        super::stack_rows::mode_tiles(look, common, f.mode),
     );
     s.push(
         common,
         ids::PCB_PRIM_COPPER,
         group(look, ids::PCB_PRIM_COPPER),
     );
-    s.push(
-        common,
-        ids::PCB_PRIM_X_SIZE,
-        labelled(
-            look,
+    if f.mode == Some(StackMode::Simple) || f.layer_sizes.is_empty() {
+        s.push(
+            common,
             ids::PCB_PRIM_X_SIZE,
-            mm_field(common, F::SizeX, f.size_x, look),
-        ),
-    );
-    s.push(
-        common,
-        ids::PCB_PRIM_Y_SIZE,
-        labelled(
-            look,
+            labelled(
+                look,
+                ids::PCB_PRIM_X_SIZE,
+                mm_field(common, F::SizeX, f.size_x, look),
+            ),
+        );
+        s.push(
+            common,
             ids::PCB_PRIM_Y_SIZE,
-            mm_field(common, F::SizeY, f.size_y, look),
-        ),
-    );
+            labelled(
+                look,
+                ids::PCB_PRIM_Y_SIZE,
+                mm_field(common, F::SizeY, f.size_y, look),
+            ),
+        );
+    } else {
+        super::stack_rows::size_rows(look, common, &f.layer_sizes, true, &mut s);
+    }
     let target = common.target.clone();
     let shapes = dropdown(common, &f.shapes, f.shape.clone(), move |choice| {
         PcbPrimitiveMsg::ShapePicked {

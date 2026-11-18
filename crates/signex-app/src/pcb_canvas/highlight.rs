@@ -25,6 +25,10 @@ pub struct Highlight {
     pub hover_body: Option<Shape>,
     /// Where a footprint drag or Move would put what it carries (#2240).
     pub ghost: Vec<Shape>,
+    /// The copper of the highlighted board net (#2403).
+    pub net: Vec<Shape>,
+    /// The Measure ruler, in board mm (#2403).
+    pub measure: Option<(signex_types::pcb::Point, signex_types::pcb::Point)>,
 }
 
 /// Paints [`PcbCanvas`]'s highlight and marquee; takes no input.
@@ -75,9 +79,16 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         for shape in &canvas.highlight.ghost {
             paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
         }
+        for shape in &canvas.highlight.net {
+            paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
+        }
+        if let Some((from, to)) = canvas.highlight.measure {
+            paint_ruler(&mut frame, &camera, from, to, accent);
+        }
         if let Some((from, to)) = canvas.marquee.get() {
             let at = |p: signex_types::pcb::Point| Point::new(p.x as f32, p.y as f32);
-            let window = is_window(from, to, camera.rotation().degrees());
+            let (judged_from, judged_to, deg) = camera.box_frame(from, to);
+            let window = is_window(judged_from, judged_to, deg);
             paint_marquee(&mut frame, &camera, at(from), at(to), window, accent);
         }
         layers.push(frame.into_geometry());
@@ -153,7 +164,7 @@ fn paint(
                 .with_line_cap(LineCap::Round);
             frame.stroke(&path, stroke);
         }
-        Shape::Rect { .. } | Shape::RoundRect { .. } => {
+        Shape::Rect { .. } | Shape::RoundRect { .. } | Shape::Polygon { .. } => {
             let points = shape.outline(CORNER_STEPS);
             let path = Path::new(|b| {
                 let mut ring = points.iter().map(|p| screen(camera, *p));
@@ -181,6 +192,25 @@ fn is_window(from: signex_types::pcb::Point, to: signex_types::pcb::Point, view_
                 == pcb_geom::RectSelect::Inside
         }
         _ => false,
+    }
+}
+
+/// The Measure ruler (#2403): a line between the two points, each marked
+/// with a ring. The reading itself goes to the Messages panel.
+fn paint_ruler(
+    frame: &mut canvas::Frame,
+    camera: &BoardCamera,
+    from: signex_types::pcb::Point,
+    to: signex_types::pcb::Point,
+    accent: Color,
+) {
+    let at =
+        |p: signex_types::pcb::Point| camera.world_to_screen(Point::new(p.x as f32, p.y as f32));
+    let (a, b) = (at(from), at(to));
+    let stroke = Stroke::default().with_width(1.5).with_color(accent);
+    frame.stroke(&Path::line(a, b), stroke);
+    for end in [a, b] {
+        frame.stroke(&Path::circle(end, 4.0), stroke);
     }
 }
 

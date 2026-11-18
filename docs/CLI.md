@@ -111,8 +111,10 @@ the dialog cannot be answered.
 The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
-`draw_graphic_line`, `draw_rectangle`) take an optional `document`, an id or a
-path as for `apply_edits`. Given, the command runs on that sheet and never on
+`draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420,
+[SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
+`document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on
 the active tab: pin references, the intent checks and their scratch copies, the
 commit, undo and the dirty flag all go to it, and no tab or focus changes. An
 unknown, unloaded, non-schematic or read-only document is refused with its
@@ -508,6 +510,77 @@ menu action, run by a person, keeps its read in place. The answer is
 `{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
+## Editing placed objects
+
+The Location and Parameters rows of a placed object in Properties run these
+commands' edits (#2418). Each is one engine edit and one undo step; `id` is
+the object's uuid (from `find_items` or `read_document`) on the sheet the
+edit targets, and `document` names that sheet as for a placement. Points are
+stored mm, Y down from the paper's top, as every operand point is; the
+Properties rows read the panel's unit and the page origin instead. The answer
+is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
+
+```text
+set_object_position id=<uuid> at=x,y [document=..]
+set_object_rotation id=<uuid> rotation=0|90|180|270 [document=..]
+set_sheet_symbol_size id=<uuid> size=w,h [document=..]
+set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
+```
+
+- `set_object_position` moves a part, label, sheet symbol, sheet entry, wire
+  or bus (its start), bus entry, junction, no-connect, No-ERC directive or
+  text note so its position is `at`. Wires on a moved part follow it when
+  "keep wires" is on, as a drag does; a sheet entry stays on its symbol's
+  border. A pin reference is refused here.
+- `set_object_rotation` turns a part in place (its wires follow when "keep
+  wires" is on) or sets a label's angle. A power port takes the absolute angle its
+  Rotation row always set. Any other kind is refused.
+- `set_sheet_symbol_size` keeps the top-left corner; entries on the right and
+  bottom edges travel with them. Refused with the reason, nothing changed,
+  when an edge is under 5.08 mm, an entry would fall off its shortened edge,
+  or a moving entry is connected or would land on a connection.
+- `set_symbol_parameter` sets one custom parameter of a placed part (left out
+  or empty `value`: the parameter stays, with no value). `reference`, `value`
+  and `footprint` have their own rows and commands and are refused here.
+
+A locked object is refused with the lock's reason before anything is sent.
+Without operands (the palette, a key) each says which Properties row to use.
+
+## Placement extras
+
+The operand forms of three placement extras (#1667). Each is one undo step
+and ends in the commit its key and its click end in.
+
+```text
+autoplace_fields id=<part uuid> document=..
+place_design_block path=<sheet .snxsch> at=x,y [document=..]
+import_graphics path=<drawing .dxf> at=x,y [document=..]
+```
+
+- `autoplace_fields` puts the reference and value of the part `id` where the
+  autoplacer puts them, also when the user had moved them, and answers
+  `{"id", "moved"}`. It names its `document`, since an agent has no
+  selection; a locked part is refused with the lock's reason.
+- `place_design_block` places the parts, wires, buses, labels, junctions,
+  no-connects, text notes and drawings of the sheet file `path` (with the
+  bodies its parts use), and answers `{"placed", "skipped_sheet_symbols"}`.
+  Sheet symbols in that file are left out: each names a child file relative
+  to its own sheet. Designators are numbered as a paste numbers them.
+- `import_graphics` places the LINE, CIRCLE, ARC, LWPOLYLINE and POLYLINE
+  entities of the ASCII DXF file `path` as sheet drawings in the project's
+  shape line width, scaled from the file's `$INSUNITS` to mm (no units: mm),
+  Y turned down. It answers `{"placed", "skipped"}`; `skipped` counts the
+  entities it does not read (text, blocks, hatches, splines). A polyline's
+  bulges are read as straight segments. A circle, arc or polyline whose
+  plane faces down Z (extrusion `0,0,-1`) is mirrored back in X. A file over
+  64 MiB is refused before it is read.
+
+`at` is where the grid-snapped centre of the content lands, as the cursor
+holds it; a point off the grid is refused as for any placement. The file is
+read off the UI thread before the edit runs. Without operands, in a window,
+`place_design_block` and `import_graphics` open a file dialog and put the
+content on the cursor; `autoplace_fields` acts on the selected parts.
+
 ## Checks on demand
 
 ```text
@@ -663,7 +736,7 @@ The answer is a check report (above), `"check": "drc"`:
    "message": "clearance 0.15 mm, needs 0.2 mm, GND / VCC",
    "evidence": {"nets": ["GND", "VCC"], "layers": ["TopCopper"],
      "at": [0.0, 0.2], "measured_nm": 150000, "required_nm": 200000,
-     "rule_source": "board_setup"},
+     "waiver_key": "<32 hex>", "rule_source": "board_setup"},
    "items": ["<track uuid>", "<track uuid>"], "sheet": "/abs/demo.snxpcb",
    "key": "<32 hex>"}],
  "waived": [], "lapsed": [],
@@ -684,9 +757,10 @@ The answer is a check report (above), `"check": "drc"`:
 - `evidence`: `nets` (two names; the same net twice for an unconnected link
   or a keepout, `net <n>` for a net with no name), `layers` (copper layer
   names), `at` (mm, board coordinates), `measured_nm` and `required_nm` (as
-  Run DRC's panel shows them), `keepout` (the keepout's uuid) and
-  `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
-  clearance or a written limit).
+  Run DRC's panel shows them), `waiver_key` (`signex_drc::waiver_key`, the
+  id `waive_drc_violation` and the DRC panel name the finding by), `keepout`
+  (the keepout's uuid) and `rule_source` (`written`, `net_class`,
+  `board_setup` or `default`; for a clearance or a written limit).
 - `key`: a hash of the board path, the rule id (and, for a written rule,
   the kind of limit broken), the items and the keepout, so moving an item
   keeps it. The board path is the document entry's own: the tab's path when
@@ -705,7 +779,18 @@ The answer is a check report (above), `"check": "drc"`:
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
-- `waived` and `lapsed` are empty: DRC has no waivers yet.
+- `waived` and `lapsed` come from the board's own waivers, the ones the DRC
+  panel and Run DRC read (`[board_options] drc_waivers` in the `.snxpcb`,
+  #2307). A waived finding is in `waived` with its waiver, not in
+  `findings`. A waiver whose objects changed since it was waived (moved,
+  resized, on another layer or net) has lapsed: the finding is back in
+  `findings` and the waiver is in `lapsed`. A waiver object is
+  `{"kind": "finding", "rule_id", "key", "fingerprint", "reason"}`; `key` is
+  the finding's `evidence.waiver_key`. A finding of a rule switched `off` is
+  not listed and its waiver is in neither list. To waive a finding, run
+  `waive_drc_violation document=<board> id=<evidence.waiver_key>
+  text=<note>` after a Run DRC of the board; it is refused when the board
+  changed since that run (`docs/architecture/pcb-drc.md`, "Waivers").
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.
 
@@ -719,6 +804,152 @@ Known limits:
   closed. A `pcb_file` spelled differently from the tab path (case,
   `sub/../`) can change the keys between an open and a closed check, and a
   baseline made in the other state is then refused.
+
+## Requirement checks
+
+```text
+check_requirements document=<project, or one of its sheets or its board> [baseline=<run>]
+```
+
+A project keeps a list of requirements, its own targets (#2339). Each one is
+a deterministic check that passes or fails with evidence, and
+`check_requirements` runs the whole list on demand and answers with a check
+report in the shape `check_erc` and `check_drc` use (above). It is a Community
+feature, read-only like the other checks: it writes nothing to a panel, the
+ERC or DRC results or Messages, and it is a query on the agent channel and in
+`signex-cli`. The list is edited in the Project tab's Requirements section
+or with the `project_*_requirement` commands ([PROJECT_TAB.md](PROJECT_TAB.md)).
+
+```bash
+signex-cli run demo.snxprj check_requirements --arg document=demo.snxprj
+```
+
+The list is the top-level `requirements` key of the `.snxprj`, beside
+`rules`, not inside it: it is not part of the rule set's hash, a rule profile
+or Update from profile. Each entry is an object with an `id` (unique in the
+list), a `kind`, an optional `severity` (`error`, the default, `warning` or
+`info`; the severity of the findings it raises), an optional `enabled`
+(`true`, the default; a requirement with `false` is kept, not checked, never
+in `passed`, and named in the report's `warnings`) and the kind's fields. A
+project save writes every entry back as it was read: defaults left out stay
+left out and `100` stays `100` (keys come out sorted, as in the rest of the
+file).
+
+| `kind` | Fields | Passes when |
+|---|---|---|
+| `erc_clean` | `allow_warnings` (default `false`) | the project's ERC run (as `check_erc` runs it from the root sheet) has no error finding, and no warning finding unless allowed |
+| `drc_clean` | `allow_warnings` (default `false`) | the DRC run of the project's board (as `check_drc` runs it) has no error finding, and no warning finding unless allowed |
+| `board_size` | `max_width_mm`, `max_height_mm` | the bounding box of the board outline is at most that wide and high |
+| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
+| `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
+| `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
+
+```json
+"requirements": [
+  {"id": "erc", "kind": "erc_clean"},
+  {"id": "size", "kind": "board_size", "max_width_mm": 100, "max_height_mm": 80},
+  {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": "USB",
+   "min_trace_width_mm": 0.2, "severity": "warning"},
+  {"id": "cost", "kind": "bom_cost", "quantity": 100, "currency": "USD",
+   "max_unit_cost": 12.5}
+]
+```
+
+The report:
+
+- `check` is `requirements`; the run is numbered and kept like the other
+  checks, and `baseline=` compares with an earlier run of the same project
+  (any document of the project names it). A run of another check is refused
+  as a baseline.
+- A finding's `rule` is `req::<id>`, its `severity` the requirement's.
+  `evidence` holds the `kind` and what was measured: the board's
+  `width_mm`/`height_mm` and the limits; a part's `designator`, `library_row`
+  and `state`; a net's `net` and `class`, or a class's set and minimum
+  values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
+  for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
+  `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not
+  a copy of every ERC or DRC finding.
+- `sheet` is the board file for `board_size`, `net_class` and `drc_clean`,
+  the project file otherwise.
+- `key` is a hash of the project file, the rule and what the finding is
+  about (a part's designator, a net, a class and its value), so it holds
+  while the measured values change.
+- `passed` lists the requirements met (`req::<id>`), in list order. It is an
+  addition to the shared shape: ERC and DRC leave it out. An id used by more
+  than one entry, readable or not, is never in `passed`: the first entry is
+  checked, every later one is a finding.
+- `warnings`: what the ERC and DRC runs could not do (prefixed `ERC:` and
+  `DRC:`), the sheets the BOM could not read, and `The project lists no
+  requirements` for an empty list.
+- `rule_set`: `source` (`project`), `requirements` (how many) and `sha256`
+  (the hash of the list as stored, keys sorted), so two runs over different
+  lists can be told apart.
+
+A requirement that cannot be evaluated is a finding, never a pass: an entry
+this build cannot read (an unknown kind, a missing or mistyped field, a field
+it does not know; it is kept in the file as written), an id used twice, a
+limit that is no positive length, no board or an unreadable one, a pattern no
+board net matches, a class the project does not have, an ERC or DRC run that
+did not finish, a part with no library row or one in no open library, and a
+BOM line with no cached price in the currency.
+
+How each kind is measured:
+
+- `board_size` takes the outline's axis-aligned bounding box; a rotated board
+  is not turned to fit.
+- `parts_state` checks the parts the BOM buys (fitted, in the BOM and on the
+  board, the active variant applied), each placement of a child sheet once.
+  The states come from the libraries open in the app.
+- `net_class` reads the nets of the project's board; a class's `0` (unset)
+  value fails a minimum.
+- `bom_cost` prices the BOM as the BOM export groups it, from the prices the
+  open libraries cached; it never fetches a price. Each line buys its fitted
+  quantity times `quantity`, at least the distributor's minimum order, at
+  that quantity's price break (the BOM export's own pricing); the line costs
+  are rounded to cents and the total is divided by `quantity`. A price in another currency is not
+  converted; the cost is then not known and the requirement fails.
+
+Known limits:
+
+- A project lists one board (`pcb_file`), so `drc_clean`, `board_size` and
+  `net_class` check that board.
+- Rail budgets (current and voltage per rail) are not a kind yet: the parts,
+  nets and classes do not carry that data.
+- Over the agent channel `document=` names one of the project's sheets or its
+  board: the project file itself is refused at the agent gate, as for every
+  command, because it is not a document of a project.
+- The ERC and DRC runs a requirement uses are not numbered or kept; run
+  `check_erc` or `check_drc` for their findings.
+
+## Board queries
+
+Three queries read one open board (#2403), through the same domain code as
+Measure Distance, the Net Inspector and Find Similar Objects on a board. Each
+answers with data, changes nothing, and is on the agent channel. A sheet or a
+board that is not loaded is refused with the reason.
+
+```text
+measure_board document=<board> start=x,y end=x,y
+measure_board document=<board> ids=<uuid>,<uuid>
+query_board_nets document=<board> [net=<name>]
+find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
+```
+
+- `measure_board` answers `kind` (`point_to_point`, or `edge_to_edge` for
+  `ids`: the closest approach of the two items' copper, footprint body or
+  area outline), `distance_mm`, `dx_mm`, `dy_mm`, and `from` / `to` in mm.
+  `start`, `end`, `from` and `to` count from the board origin with Y up, and
+  `dy_mm` is positive when `to` is above `from`.
+- `query_board_nets` answers `count` and `nets`, by name: `net`, `name`,
+  `routed_length_mm` (the tracks' centre lines), `tracks`, `vias`, `pads`,
+  `unrouted` (connections still to route) and `routed`.
+- `find_similar_items` answers the `seed`, the `criteria` (each property
+  and the seed's value) and the matching `ids`. `fields` names the
+  properties that must match, `kind` when left out: `kind`, `value`,
+  `footprint`, `designator_prefix`, `net_name`, `layer`, `width`, `size`,
+  `drill`, `shape`. A property the seed does not have is refused.
+
+Find by text on a board is `find_items` (designator and value).
 
 ## Working through a running Signex
 

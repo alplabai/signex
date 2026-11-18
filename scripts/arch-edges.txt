@@ -20,6 +20,7 @@ signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-output
 signex-app -> signex-renderer
+signex-app -> signex-req
 signex-app -> signex-sketch
 signex-app -> signex-types
 signex-app -> signex-widgets
@@ -30,6 +31,7 @@ signex-bom -> signex-types
 signex-cli -> signex-app
 signex-cli -> signex-i18n
 signex-cli -> signex-types
+signex-commands -> signex-i18n-ids
 signex-commands -> signex-types
 signex-drc -> pcb-geom
 signex-drc -> signex-types
@@ -51,12 +53,16 @@ signex-library -> signex-sketch
 signex-library -> signex-types
 signex-library-server -> signex-library
 signex-net -> signex-types
+signex-output -> pcb-geom
 signex-output -> signex-bom
 signex-output -> signex-types
 signex-renderer -> pcb-geom
 signex-renderer -> signex-3d-model-importer
 signex-renderer -> signex-gfx
+signex-renderer -> signex-mcad
 signex-renderer -> signex-types
+signex-req -> signex-bom
+signex-req -> signex-types
 signex-sketch -> signex-types
 signex-widgets -> signex-i18n
 signex-widgets -> signex-types

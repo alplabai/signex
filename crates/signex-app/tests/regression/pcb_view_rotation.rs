@@ -54,7 +54,10 @@ fn board() -> PcbBoard {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -78,6 +81,8 @@ fn board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     let segment = Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(3),
         start: pt(0.0, 0.0),
         end: pt(25.0, 0.0),
@@ -87,17 +92,21 @@ fn board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     let via = Via {
+        attributes: Default::default(),
         uuid: Uuid::from_u128(4),
         position: pt(30.0, 0.0),
         diameter: 0.6,
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 1,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -113,6 +122,7 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        free: Default::default(),
         unknown: Default::default(),
     }
 }

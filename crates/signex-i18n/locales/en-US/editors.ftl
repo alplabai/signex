@@ -242,8 +242,6 @@ editors-symbol-status-part-pins = Part { $part } of { $parts } · { $pins ->
     }
 editors-symbol-status-pin-selected = Pin { $number } { $name } selected
 editors-symbol-status-items-selected = { $count } selected
-editors-symbol-status-hint-selected = Del removes · drag to move
-editors-symbol-status-hint-idle = { $undo } undo · { $redo } redo · scroll zooms · right-drag pans · Home fits
 editors-symbol-copy-again = Copy Again
 
 ## Graphite views (#2225)
@@ -261,10 +259,10 @@ editors-component-header-unparsed = { $count ->
 
 ## Footprint editor status bar (Graphite)
 editors-footprint-status-pad-selected = Pad { $number } — { $width } × { $height } { $unit } @ ({ $x }, { $y })
-editors-footprint-status-hint-idle = { $pads ->
+editors-footprint-status-pad-count = { $pads ->
     [one] { $pads } pad
    *[other] { $pads } pads
-} · Click empty area to add, drag to move, Del to remove
+}
 
 ## Footprint editor Properties panel
 # Header while a pad is selected: its number, its kind (SMD, Through-hole…)
@@ -317,8 +315,17 @@ editors-pad-shape = Shape
 editors-pad-size-x = X-Size
 editors-pad-size-y = Y-Size
 editors-pad-corner-radius = Corner radius %
+editors-pad-trapezoid-delta-x = Delta X
+editors-pad-trapezoid-delta-y = Delta Y
 # Thermal relief toggle of the Simple pad stack.
 editors-pad-relief = Relief
+# Read-only position of the selected pad, one row per axis.
+editors-pad-position-x = X (mm)
+editors-pad-position-y = Y (mm)
+# Simple pad stack: the paste opening on this side is on. $layer is a layer name.
+editors-pad-paste-enabled = { $layer } on
+# Simple pad stack: the solder mask covers the pad. $layer is a layer name.
+editors-pad-tented = { $layer } tented
 editors-pad-hole-details = Hole Details
 editors-pad-hole-tolerance-plus = Tolerance + (mm)
 editors-pad-hole-tolerance-minus = Tolerance − (mm)

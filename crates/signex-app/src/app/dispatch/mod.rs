@@ -129,6 +129,7 @@ impl Signex {
             Message::Pcb(msg) => self.dispatch_pcb_message(msg),
             Message::CrossProbe(msg) => self.dispatch_cross_probe_message(msg),
             Message::UpdatePcb(msg) => self.dispatch_update_pcb_message(msg),
+            Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
         }
     }
 
@@ -159,7 +160,9 @@ impl Signex {
             WindowMsg::WindowGeometrySettled(id) => self.window_geometry_settled(id),
             WindowMsg::WindowGeometryRead(readout) => self.window_geometry_read(*readout),
             WindowMsg::WindowGeometrySaved(result) => self.window_geometry_saved(result),
-            WindowMsg::TileRequested(layout) => self.tile_windows(layout),
+            WindowMsg::TileRequested(layout) => self.tile(layout),
+            WindowMsg::UntileRequested => self.untile_documents(),
+            WindowMsg::TilePanePressed(tab) => self.focus_tile_pane(tab),
             WindowMsg::WindowScaleChanged(id, scale) => {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical
@@ -366,6 +369,7 @@ impl Signex {
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
                             self.forget_pcb_carry_of_window(id);
+                            self.settle_document_tiling();
                         }
                         // Closing a detached panel reattaches it to the
                         // dock so the user doesn't lose access to the
@@ -461,34 +465,11 @@ impl Signex {
                 // renders the correct schematic from its first frame.
                 // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                let mut per_window = crate::canvas::CanvasSlot::new();
-                if let Some(engine) = self.document_state.engines.get(&path) {
-                    per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
-                            engine.document(),
-                            engine.revision(),
-                        ),
-                    ));
-                }
-                // #631 — theme, snap, grid size/style and grid visibility
-                // used to be mirrored here so the new window would not
-                // flash the defaults. They are read from `UiState` in
-                // `view` now, so a fresh window is correct on its first
-                // frame with nothing copied. Paper size stays: it belongs
-                // to *this* window's document, not to the app.
-                per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
-                per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                // The sheet frame belongs to this window's document too;
-                // without it the undocked window draws no frame until the
-                // next paper change.
-                per_window.sheet_frame = self.sheet_frame_for_path(
-                    &path,
-                    per_window.paper_width_mm,
-                    per_window.paper_height_mm,
-                );
-                per_window.special_strings = self.special_strings_for_path(&path);
-                per_window.designators = self.designators_for_path(&path);
-                per_window.fit_to_sheet();
+                // The tab was the active one, so the main canvas holds its
+                // paper size.
+                let main = &self.interaction_state.canvas;
+                let paper = (main.paper_width_mm, main.paper_height_mm);
+                let per_window = self.seeded_canvas_slot(&path, paper);
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
                 // window no longer moves the other (#494).
@@ -498,6 +479,8 @@ impl Signex {
                         .insert(id, per_window_pcb);
                 }
                 self.refresh_window_panel_ctxs(None);
+                // One pane fewer in the main window (#2249).
+                self.settle_document_tiling();
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
@@ -517,6 +500,8 @@ impl Signex {
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);
                 self.forget_pcb_carry_of_window(id);
+                // The tab is back in the main window, as a pane when tiled.
+                self.settle_document_tiling();
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),

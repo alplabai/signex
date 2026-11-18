@@ -67,15 +67,20 @@ impl<'a> Section<'a> {
         }
     }
 
+    /// Add `row`, whose label the caller already matched to the search.
+    pub fn push_row(&mut self, row: Element<'a, PanelMsg>) {
+        self.rows.push(row);
+    }
+
     /// The section, or nothing when the search left no row.
     pub fn finish(self) -> Option<Element<'a, PanelMsg>> {
         if self.rows.is_empty() {
             return None;
         }
-        let title = self.look.t(self.title).into_string();
+        let title = self.look.t(self.title);
         let mut col: Column<Element<'a, PanelMsg>> = column![
             container(crate::panels::widgets::section_title(
-                &title,
+                title,
                 self.look.tokens(),
                 &self.look.ctx.i18n
             ))
@@ -98,9 +103,9 @@ pub(super) fn stack<'a>(sections: Vec<Option<Element<'a, PanelMsg>>>) -> Element
     col.width(Length::Fill).boxed()
 }
 
-fn label_cell<'a>(look: Look<'a>, id: MessageId) -> Element<'a, PanelMsg> {
+fn label_cell<'a>(look: Look<'a>, label: impl Into<Label<'a>>) -> Element<'a, PanelMsg> {
     container(
-        text(look.t(id))
+        text(label)
             .size(TS.body)
             .color(look.muted)
             .wrapping(iced::widget::text::Wrapping::Word),
@@ -116,9 +121,18 @@ pub(super) fn labelled<'a>(
     id: MessageId,
     value: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
+    labelled_text(look, look.t(id), value)
+}
+
+/// A label given as text (a layer's name) and its value.
+pub(super) fn labelled_text<'a>(
+    look: Look<'a>,
+    label: impl Into<Label<'a>>,
+    value: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
     container(
         row![
-            label_cell(look, id),
+            label_cell(look, label),
             container(value).width(Length::FillPortion(VALUE_PORTION)),
         ]
         .spacing(SP.m)
@@ -185,6 +199,9 @@ pub(super) fn field<'a>(
         .padding(SP.s)
         .style(form_look::text_input_style)
         .width(Length::Fill);
+    if common.target.is_placement() && super::is_placement_focus(field) {
+        input = input.id(super::PLACEMENT_INPUT_ID.clone());
+    }
     if common.is_editable() {
         let target = common.target.clone();
         let submitted = PcbPrimitiveMsg::FieldSubmitted {
@@ -337,6 +354,29 @@ pub(super) fn fixed_checkbox<'a>(
     with_tip(look, check.boxed(), tip)
 }
 
+/// A checkbox with its label, ticked when `checked` is `Some(true)`; it
+/// sends `on_toggle` when the selection can be edited.
+pub(super) fn live_checkbox<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    label: MessageId,
+    checked: Option<bool>,
+    on_toggle: impl Fn(bool) -> PcbPrimitiveMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    let check = checkbox::<PanelMsg, Theme, iced::Renderer>(checked == Some(true))
+        .labelled(look.t(label))
+        .size(TS.body)
+        .text_size(TS.body)
+        .style(form_look::checkbox_style);
+    if common.is_editable() {
+        check
+            .on_toggle(move |on| PanelMsg::PcbPrimitive(on_toggle(on)))
+            .boxed()
+    } else {
+        check.boxed()
+    }
+}
+
 /// A disabled field box showing `value`, with `tip`.
 pub(super) fn fixed_value<'a>(
     look: Look<'a>,
@@ -365,66 +405,6 @@ pub(super) fn fixed_value<'a>(
 /// The lock toggle beside a location, disabled with `tip`.
 pub(super) fn lock<'a>(look: Look<'a>, locked: bool, tip: MessageId) -> Element<'a, PanelMsg> {
     fixed_checkbox(look, signex_i18n::ids::PCB_PRIM_LOCK, locked, tip)
-}
-
-/// A mask-expansion section: Rule chosen, Manual and the value disabled
-/// until the board stores an expansion per item.
-pub(super) fn mask_section<'a>(
-    look: Look<'a>,
-    common: &PrimitiveCommon,
-    title: MessageId,
-    sides: bool,
-) -> Option<Element<'a, PanelMsg>> {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_MASK_UNSUPPORTED;
-    let mut s = Section::new(look, title);
-    s.push(
-        common,
-        ids::PCB_PRIM_RULE,
-        fixed_tiles(look, &[ids::PCB_PRIM_RULE, ids::PCB_PRIM_MANUAL], 0, tip),
-    );
-    if sides {
-        for side in [ids::PCB_PRIM_TOP, ids::PCB_PRIM_BOTTOM] {
-            s.push(
-                common,
-                side,
-                labelled(
-                    look,
-                    side,
-                    fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip),
-                ),
-            );
-            s.push(
-                common,
-                ids::PCB_PRIM_TENTED,
-                labelled(
-                    look,
-                    ids::PCB_PRIM_TENTED,
-                    fixed_checkbox(look, side, false, tip),
-                ),
-            );
-        }
-        s.push(
-            common,
-            ids::PCB_PRIM_FROM_HOLE_EDGE,
-            labelled(
-                look,
-                ids::PCB_PRIM_FROM_HOLE_EDGE,
-                fixed_checkbox(look, ids::PCB_PRIM_FROM_HOLE_EDGE, false, tip),
-            ),
-        );
-    } else {
-        s.push(
-            common,
-            ids::PCB_PRIM_EXPANSION,
-            labelled(
-                look,
-                ids::PCB_PRIM_EXPANSION,
-                fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip),
-            ),
-        );
-    }
-    s.finish()
 }
 
 /// The Testpoint section: Fabrication and Assembly, top and bottom, all
@@ -501,4 +481,52 @@ pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Elemen
             .align_y(iced::Alignment::Center)
             .boxed(),
     )
+}
+
+/// The Layer row of an arc, string or dimension (#2373): its colour chip
+/// and a dropdown of the layers it can move to.
+pub(super) fn any_layer_row<'a>(
+    look: Look<'a>,
+    common: &'a PrimitiveCommon,
+    layers: &'a [super::AreaLayerChoice],
+    layer: Option<&'a super::AreaLayerChoice>,
+) -> Element<'a, PanelMsg> {
+    let target = common.target.clone();
+    let list = dropdown(common, layers, layer.cloned(), move |choice| {
+        PcbPrimitiveMsg::AreaLayerPicked {
+            target: target.clone(),
+            layer: choice.layer,
+        }
+    });
+    let swatch = layer.map_or_else(
+        || {
+            container(Space::new())
+                .width(Length::Fixed(TS.body))
+                .boxed()
+        },
+        |l| {
+            chip(crate::pcb_canvas::layer_style::layer_colour(
+                l.layer,
+                look.tokens(),
+            ))
+        },
+    );
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_LAYER,
+        row![swatch, container(list).width(Length::Fill)]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+    )
+}
+
+/// A text field: the draft while one is typed, else `value`.
+pub(super) fn text_field<'a>(
+    common: &PrimitiveCommon,
+    id: PrimitiveField,
+    value: Option<&str>,
+    look: Look<'a>,
+) -> Element<'a, PanelMsg> {
+    field(common, id, value.map(str::to_string), None, look)
 }

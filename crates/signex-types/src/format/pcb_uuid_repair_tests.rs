@@ -18,6 +18,8 @@ fn pt(x: f64) -> PcbPoint {
 
 fn track(n: u128, end_x: f64) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: id(n),
         start: pt(0.0),
         end: pt(end_x),
@@ -30,12 +32,15 @@ fn track(n: u128, end_x: f64) -> Segment {
 
 fn via(n: u128, x: f64) -> Via {
     Via {
+        attributes: Default::default(),
         uuid: id(n),
         position: pt(x),
         diameter: 0.6,
         drill: 0.3,
         layers: vec!["TopCopper".into(), "BottomCopper".into()],
         net: 0,
+        locked: false,
+        layer_sizes: None,
         via_type: ViaType::Through,
         unknown_columns: Default::default(),
     }
@@ -56,6 +61,8 @@ fn zone(n: u128, name: &str) -> Zone {
         thermal_width: 0.5,
         clearance: 0.2,
         min_thickness: 0.2,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
         unknown: Default::default(),
     }
 }
@@ -85,7 +92,10 @@ fn pad(n: u128, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
+        layer_sizes: None,
         net_locked: false,
     }
 }
@@ -221,4 +231,57 @@ fn a_footprint_carrying_the_board_id_is_not_silently_kept() {
     ));
     // The pad stays attached to the footprint across another save and read.
     assert_eq!(reopen(&loaded).footprints[0].pads.len(), 1);
+}
+
+fn drawing(n: u128, kind: &str, x: f64) -> crate::pcb::BoardGraphic {
+    crate::pcb::BoardGraphic {
+        uuid: id(n),
+        graphic_type: kind.into(),
+        layer: "TopSilkscreen".into(),
+        width: 0.1,
+        start: Some(pt(x)),
+        end: Some(PcbPoint { x: x + 4.0, y: 3.0 }),
+        center: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    }
+}
+
+/// #2424: a text frame's id, text (line breaks included) and text height
+/// come back from the file as they were saved.
+#[test]
+fn a_text_frame_round_trips_with_its_id_text_and_height() {
+    let mut b = board();
+    let mut frame = drawing(40, "text_frame", 1.0);
+    frame.text = "REV A\nBOARD \"2\" = x".into();
+    frame.font_size = 1.5;
+    b.graphics = vec![drawing(41, "line", 0.0), frame];
+    let loaded = reopen(&b);
+    assert!(loaded.unknown.load_repairs.is_empty());
+    assert_eq!(loaded.graphics, b.graphics);
+}
+
+/// #2424: drawings saved before they had ids get one each on load, the
+/// same on every read, with no repair note, and two equal ones both stay.
+#[test]
+fn drawings_saved_without_ids_get_stable_ones_silently() {
+    let mut b = board();
+    b.graphics = vec![
+        drawing(0, "line", 0.0),
+        drawing(0, "line", 0.0),
+        drawing(0, "rect", 5.0),
+    ];
+    let text = SnxPcb::new(b).write_string().unwrap();
+    let first = SnxPcb::parse(&text).unwrap().board;
+    let again = SnxPcb::parse(&text).unwrap().board;
+    assert!(first.unknown.load_repairs.is_empty());
+    assert_eq!(first.graphics.len(), 3, "equal old drawings both stay");
+    let ids: Vec<Uuid> = first.graphics.iter().map(|g| g.uuid).collect();
+    assert!(ids.iter().all(|u| !u.is_nil() && *u != first.uuid));
+    assert_ne!(ids[0], ids[1]);
+    assert_ne!(ids[1], ids[2]);
+    let again_ids: Vec<Uuid> = again.graphics.iter().map(|g| g.uuid).collect();
+    assert_eq!(ids, again_ids, "every read names them alike");
 }

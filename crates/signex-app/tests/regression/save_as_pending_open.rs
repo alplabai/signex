@@ -242,6 +242,7 @@ fn a_late_open_result_for_an_owned_path_is_dropped_with_a_warning() {
 fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -258,6 +259,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
         zones: vec![],
         graphics: vec![],
         texts: vec![],
+        free: Default::default(),
     }
 }
 
@@ -647,6 +649,8 @@ fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uui
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                fab_outputs: None,
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

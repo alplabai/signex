@@ -30,6 +30,7 @@ pub mod altium_import;
 pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
+pub mod board_3d_shader;
 pub mod canvas;
 pub(crate) mod choice;
 pub mod chrome;
@@ -46,6 +47,7 @@ pub mod frame_probe;
 pub mod headless;
 pub mod icons;
 pub mod io_ports;
+pub mod pan_zoom_bench;
 pub mod paste_array;
 pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
@@ -53,6 +55,7 @@ pub mod paste_prefs;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+pub mod layer_strip_prefs;
 #[cfg(test)]
 pub(crate) mod layout_probe;
 pub mod library;

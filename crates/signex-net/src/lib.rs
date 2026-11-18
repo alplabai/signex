@@ -14,9 +14,12 @@ pub mod uf;
 pub mod board;
 
 mod parts;
-pub use parts::{DesignPart, PartAnchor, design_parts};
+pub use parts::{DesignPart, design_parts};
 
 pub mod cross_probe;
+
+mod directives;
+pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
 
 mod net_class;
 pub use net_class::{

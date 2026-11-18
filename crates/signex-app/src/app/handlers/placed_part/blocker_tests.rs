@@ -118,6 +118,8 @@ fn app_with_child_reference(reference: &str, fold: CaseFold) -> (Signex, PlacedP
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            fab_outputs: None,
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
