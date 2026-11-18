@@ -129,6 +129,48 @@ clearance the design rules ask from other nets' copper (#2389).
   several layers in one search, and a route kept when its board's tab
   closes mid-route.
 
+### Router soak and bench
+
+`signex-engine`'s `tests/routing/` measures the router against its quality
+bar (#2482, #2483) on every board it finds: a synthetic board, the realistic
+corpus boards (`signex-types/tests/corpus/pcb/real/`) and, once it is in,
+the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
+`.snxprj` beside each board).
+
+- **Soak.** A seeded driver applies random actions through `BoardEngine`:
+  routes and shoves (one or two legs from a ratsnest line or a pad, landed
+  as one step as the tool lands them), track and footprint moves, deletes,
+  undo and redo. After every action: nothing panicked, the engine's history
+  matches the steps taken, undo and redo give back the board exactly as it
+  was, ids are unique, tracks are finite, on copper and on known nets, no
+  zero-length track appeared, a refused route changed nothing, and a
+  just-routed draft fits the board it was routed on. A failure prints its
+  seed, action index and the command that replays it. A routed track laid
+  over a same-net track already there (same layer, on one line, sharing a
+  stretch) is counted in the run's report (`overlapped_tracks`), not
+  failed, until the router defect #2492 is fixed. Not checked yet (#2482):
+  dangling track ends and connectivity against the net list. The soak's own
+  edits make both on purpose (a stub routed into open board, a track moved
+  off its pads or across another net), so these checks must first tell an
+  edit's effect from a defect.
+- **Bench.** One-leg routes, half of them shoves: the rounds each shove
+  took (`pcb_geom::route::shove_run`). A shove converged when it settled
+  within 8 rounds: it cleared the way, or found a push that cannot be made
+  (a pad in the way, a crossing track), after which the router walks
+  around. One that ran out of rounds did not; the report also counts the
+  shoves that cleared the way. Then the time from click to
+  landed step, and the DRC delta: every design rule check finding a route
+  adds, other than an unrouted link, names the route's own tracks or vias.
+- **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
+  and bench with every test run (DRC delta and convergence asserted). The
+  scheduled `routing-soak` workflow runs the ignored `soak_long` (10 000
+  actions per board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
+  of actions; median latency at most 16 ms and p95 at most 33 ms on the
+  median board by copper count) in release; a failed night opens or
+  comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
+  `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
+  and one board.
+
 ## Differential Pair Routing and Multi-Route
 
 `place_board_diff_pair` and `place_board_multi_route` (no default key;

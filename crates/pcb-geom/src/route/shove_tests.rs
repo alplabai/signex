@@ -5,7 +5,7 @@
 use uuid::Uuid;
 
 use super::test_board::{at, board, nm, pad_at, track_at};
-use super::{NewCopper, Pushed, RouteWorld, shove};
+use super::{NewCopper, Pushed, RouteWorld, shove, shove_run};
 use crate::copper::CopperItem;
 use crate::units::PointNm;
 
@@ -127,4 +127,54 @@ fn a_locked_track_is_not_pushed_or_stretched() {
     );
     let world = RouteWorld::new(&locked_riser, &rule);
     assert_eq!(shove(&world, &[leg()]), None, "its locked riser stays");
+}
+
+/// #2483: a shove reports the rounds of pushing it ran: none when nothing
+/// is in the way, one per track pushed in turn, and the round it gave up in.
+#[test]
+fn a_shove_reports_the_rounds_it_took() {
+    let clear = board(Vec::new(), vec![track_at(1, (2.0, 3.0), (8.0, 3.0), 2)]);
+    let world = RouteWorld::new(&clear, &rule);
+    let run = shove_run(&world, &[leg()]);
+    let answer = (run.pushed, run.rounds, run.settled);
+    assert_eq!(answer, (Some(Vec::new()), 0, true));
+
+    // Net 2 over the leg, net 3 over net 2: net 2 pushes net 3 in turn.
+    let stacked = board(
+        Vec::new(),
+        vec![
+            track_at(1, (2.0, 0.3), (8.0, 0.3), 2),
+            track_at(2, (2.0, 0.7), (8.0, 0.7), 3),
+        ],
+    );
+    let world = RouteWorld::new(&stacked, &rule);
+    let run = shove_run(&world, &[leg()]);
+    assert_eq!(run.rounds, 2, "{run:?}");
+    assert_eq!(run.pushed.as_ref().map(Vec::len), Some(2));
+    assert_eq!(run.pushed, shove(&world, &[leg()]), "the same answer");
+
+    let crossed = board(Vec::new(), vec![track_at(1, (5.0, -3.0), (5.0, 3.0), 2)]);
+    let world = RouteWorld::new(&crossed, &rule);
+    let run = shove_run(&world, &[leg()]);
+    assert_eq!(
+        (run.pushed, run.rounds, run.settled),
+        (None, 1, true),
+        "gave up in round one: a push that cannot be made is an answer"
+    );
+
+    // Six nets stacked over the leg, each crowding the next: more pushes in
+    // turn than the rounds allow, so the pushing never settles.
+    let tower = board(
+        Vec::new(),
+        (0..6)
+            .map(|k| {
+                let y = 0.3 + 0.4 * k as f64;
+                track_at(k as u128 + 1, (2.0, y), (8.0, y), k + 2)
+            })
+            .collect(),
+    );
+    let world = RouteWorld::new(&tower, &rule);
+    let run = shove_run(&world, &[leg()]);
+    assert_eq!((run.pushed.as_ref(), run.settled), (None, false), "{run:?}");
+    assert_eq!(run.rounds, super::shove::ROUNDS + 1);
 }

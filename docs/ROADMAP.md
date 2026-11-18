@@ -194,7 +194,7 @@ workstream is active in every phase.
 | **WS-U**  | UI Shell + Schematic Canvas | `signex-app` (shell, panels, schematic)      |
 | **WS-V**  | Validation (ERC/DRC)        | `signex-erc`, `signex-drc`                   |
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
-| **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
+| **WS-P**  | PCB Geometry + Router       | `pcb-geom` (routing in `pcb-geom::route`)    |
 | **WS-3D** | 3D Viewer                   | `signex-model-import`, `signex-render-3d`    |
 | **WS-MC** | MCAD                        | `signex-mcad`                                |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
@@ -517,7 +517,7 @@ management land in this band.
 
 | Plan | Scope |
 |------|-------|
-| **PCB Routing** | Router stage 1, greedy single-trace. `pcb-geom` crate (polygon offset, R-tree, Delaunay, Minkowski); `pcb-router` skeleton (session model, preview / commit); single-trace routing with 45° / 90° / arc45 / arc90 corners; via placement (through / blind / buried); net-class editor (width, clearance, via size per class); live DRC feedback with the 15 base rules (`signex-drc`) |
+| **PCB Routing** | Router stage 1, greedy single-trace. `pcb-geom` crate (polygon offset, R-tree, Delaunay, Minkowski); router session (preview / commit) in `pcb-geom::route`, driven by `signex-engine` (`pcb::route`); there is no separate router crate; single-trace routing with 45° / 90° / arc45 / arc90 corners; via placement (through / blind / buried); net-class editor (width, clearance, via size per class); live DRC feedback with the 15 base rules (`signex-drc`) |
 | **Router: Walkaround** | Obstacle graph with clearance-inflated Minkowski offsets; A* pathfinder with corner / via / layer costs; corner-insertion pass preserving 45° / 90° / arc style; incremental debounced DRC on the proposed path; routing test-corpus tooling (50 boards under permissive licences, see below) |
 | **Router: Push-and-Shove** | Topology-preserving shove solver with fixed-point iteration; rigidity heuristics (pad / via / edge proximity); via shove within a rigidity budget; preview buffer + commit barrier with Escape rollback; the whole shove cascade undone as one action |
 | **Router: Diff Pairs & Length Tuning** | Coupled two-net router with gap control; length meander generator (accordion / trombone / sawtooth); length and skew reporting per net and per pair; teardrops as a design rule and a per-pad property |
