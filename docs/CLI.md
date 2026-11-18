@@ -533,12 +533,15 @@ already places is refused. `at` is the top-left corner (a grid coordinate,
 never a pin reference); without it the symbol goes under the sheet's content.
 The file is read off the UI thread before the edit runs. The answer is
 `{"id", "name", "file", "at", "size", "entries"}`. It takes a file path, so it
-is not an edit of `apply_edits`, as `place_design_block` is not.
+is not an edit of `apply_edits`, as `place_design_block` is not. Without
+`path` a headless run is refused for the missing operand; the file picker of
+the menu row is never opened.
 
 `sync_sheet_entries` applies what the dialog's preview would show for
 `direction`, at once, on the sheet symbol `symbol` (its id, or its unique
 name): `to_symbol` changes the symbol's entries (a renamed entry keeps its
-place and wires; only auto-generated entries are removed), `to_sheet`
+place and wires; only auto-generated entries of `symbol` are renamed, and
+only auto-generated entries are removed), `to_sheet`
 changes the child sheet's Hierarchical labels (never a Global label) as one
 undo step of the child, left unsaved; a closed child goes to a tabless
 engine. The closed child file is read off the UI thread first; a sheet that

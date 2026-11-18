@@ -107,9 +107,11 @@ list names the ERC rule ids it silences (`builtin::...`, `user::...`, or `*`);
 an empty list silences every rule (#1699). On disk it is an entry of
 `no_erc_directives` in `[extras.sheet]`; `rules` is left out when empty, so a
 marker without a list, including every marker saved before the list existed,
-re-saves byte-identical and loads as "every rule". A build that predates the
-list drops it on re-save and the marker silences every rule again; the format
-version of #2207 is what will refuse that save.
+re-saves byte-identical and loads as "every rule". A sheet where any marker
+has a list is written as `snxsch/1.2` (a sheet without one stays
+`snxsch/1.1`). A build that predates the list reads only up to 1.1, so it
+opens a 1.2 sheet read-only and refuses every save, rather than dropping the
+list and letting the marker silence every rule (`docs/FORMAT_VERSIONS.md`).
 
 Every suppression path asks the one test, `no_erc_rules_suppress`: the
 per-sheet run (`drop_suppressed` and the rules that check the marker

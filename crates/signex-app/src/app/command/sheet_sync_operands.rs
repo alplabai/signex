@@ -235,7 +235,7 @@ impl Signex {
             .ok_or("no schematic is open")?
             .document();
         let ports = signex_engine::ports_for_pin_sync(child, parent, &symbol.filename);
-        let command = signex_engine::sync_from_sheet_command(&symbol.filename, ports, preview);
+        let command = signex_engine::sync_from_sheet_command(symbol, ports, preview);
         self.refuse_contacts(std::slice::from_ref(&command), "synced entries")?;
         let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], true, true);
         if outcome == MutationOutcome::Failed {

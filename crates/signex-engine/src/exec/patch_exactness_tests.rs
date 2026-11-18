@@ -1017,7 +1017,7 @@ fn samples() -> Vec<(String, Command)> {
                 name: "SDA".into(),
                 direction: "input".into(),
             }],
-            renames: Vec::new(),
+            renames: None,
         },
     );
     add(

@@ -18,6 +18,13 @@ pub struct SheetEntryRename {
     pub to: String,
 }
 
+/// The entry renames a sync makes on one sheet symbol, by its id (#1276).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolEntryRenames {
+    pub symbol: Uuid,
+    pub renames: Vec<SheetEntryRename>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MirrorAxis {
     Horizontal,
@@ -445,13 +452,14 @@ pub enum Command {
     },
     /// Reconcile parent-sheet symbolic pins for all child sheets that point
     /// to `child_filename`, based on the exposed ports from that child.
-    /// `renames` run first: a pin named `from` takes the name `to` in place,
-    /// so its wires stay on it (#1276); a symbol that already has a `to`
-    /// pin keeps both pins as they are.
+    /// `renames` run first, on the one symbol they name: its auto-generated
+    /// pin named `from` takes the name `to` in place, so its wires stay on
+    /// it (#1276); a symbol that already has a `to` pin keeps both pins as
+    /// they are, and a hand-placed pin is never renamed.
     ReconcileChildSheetPins {
         child_filename: String,
         ports: Vec<SheetPort>,
-        renames: Vec<SheetEntryRename>,
+        renames: Option<SymbolEntryRenames>,
     },
     /// Re-point every hierarchical child-sheet reference whose `filename`
     /// is `from` at `to` — the follow-up to renaming the referenced

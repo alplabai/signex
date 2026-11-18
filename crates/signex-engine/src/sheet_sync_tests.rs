@@ -8,9 +8,10 @@ use signex_types::schematic::{
 };
 
 use crate::{
-    Command, Engine, SheetEntryRename, SheetPort, SheetSyncPreview, entry_changes_from_sheet,
-    exposed_sheet_ports, port_changes_from_symbol, port_sync_commands, ports_for_pin_sync,
-    sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command, unused_sheet_symbol_name,
+    Command, Engine, SheetEntryRename, SheetPort, SheetSyncPreview, SymbolEntryRenames,
+    entry_changes_from_sheet, exposed_sheet_ports, port_changes_from_symbol, port_sync_commands,
+    ports_for_pin_sync, sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
+    unused_sheet_symbol_name,
 };
 
 const FILE: &str = "child.snxsch";
@@ -136,12 +137,13 @@ fn sheet_to_symbol_renames_in_place_adds_and_drops_then_undoes() {
     assert_eq!(preview.renamed, vec![rename("OLD", "NEW")]);
     assert_eq!(names(&preview.added), ["X"]);
     assert_eq!(names(&preview.removed), ["GONE"]);
-    let old = parent.child_sheets[0].pins[1].clone();
+    let target = parent.child_sheets[0].clone();
+    let old = target.pins[1].clone();
     let ports = ports_for_pin_sync(&child, &parent, FILE);
     let mut engine = Engine::new(parent).expect("engine");
     let before = engine.document().child_sheets.clone();
     let result = engine
-        .execute(sync_from_sheet_command(FILE, ports, &preview))
+        .execute(sync_from_sheet_command(&target, ports, &preview))
         .expect("sync");
     assert!(result.changed);
 
@@ -172,16 +174,63 @@ fn a_rename_onto_a_taken_name_leaves_the_entries() {
         ])],
         ..SchematicSheet::default()
     };
+    let symbol_id = parent.child_sheets[0].uuid;
     let mut engine = Engine::new(parent).expect("engine");
     let before = engine.document().child_sheets.clone();
     let command = Command::ReconcileChildSheetPins {
         child_filename: FILE.to_string(),
         ports: vec![port("OLD", "input"), port("NEW", "input")],
-        renames: vec![rename("OLD", "NEW")],
+        renames: Some(SymbolEntryRenames {
+            symbol: symbol_id,
+            renames: vec![rename("OLD", "NEW")],
+        }),
     };
     let result = engine.execute(command).expect("sync");
     assert!(!result.changed);
     assert_eq!(engine.document().child_sheets, before);
+}
+
+/// The rename is made for one sheet symbol: a hand-placed entry with the old
+/// name on another symbol of the same file keeps its name.
+#[test]
+fn a_rename_stays_on_the_previewed_symbol_and_its_generated_entries() {
+    let previewed = symbol(vec![
+        pin("A", "input", 52.54, true),
+        pin("OLD", "output", 52.54, true),
+    ]);
+    let hand = pin("OLD", "output", 60.16, false);
+    let other = ChildSheet {
+        uuid: uuid::Uuid::now_v7(),
+        ..symbol(vec![hand.clone()])
+    };
+    let ports = vec![port("A", "input"), port("NEW", "output")];
+    let preview = entry_changes_from_sheet(&previewed, &ports);
+    assert_eq!(preview.renamed, vec![rename("OLD", "NEW")]);
+    let renamed_id = previewed.pins[1].uuid;
+    let parent = SchematicSheet {
+        child_sheets: vec![previewed.clone(), other],
+        ..SchematicSheet::default()
+    };
+    let mut engine = Engine::new(parent).expect("engine");
+    let result = engine
+        .execute(sync_from_sheet_command(&previewed, ports, &preview))
+        .expect("sync");
+    assert!(result.changed);
+
+    let sheets = &engine.document().child_sheets;
+    let on = |idx: usize, id: uuid::Uuid| {
+        sheets[idx]
+            .pins
+            .iter()
+            .find(|p| p.uuid == id)
+            .map(|p| (p.name.clone(), p.auto_generated))
+    };
+    assert_eq!(on(0, renamed_id), Some(("NEW".to_string(), true)));
+    assert_eq!(
+        on(1, hand.uuid),
+        Some(("OLD".to_string(), false)),
+        "the other symbol's hand-placed entry keeps its name"
+    );
 }
 
 /// The child for the Symbol to Sheet tests: one port to rename, one carried

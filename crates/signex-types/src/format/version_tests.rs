@@ -206,8 +206,9 @@ fn snxsch_1_1_loads_and_the_old_token_upgrades_on_save() {
 }
 
 /// #2207: every `.snxsch` / `.snxpcb` token this build reads loads, a save
-/// writes the current one, a newer major is refused naming it, and a file
-/// with no token is refused.
+/// writes the current one (`snxsch/1.1` for a sheet without No-ERC rule
+/// lists, `snxsch/1.2` included), a newer major is refused naming it, and a
+/// file with no token is refused.
 #[test]
 fn every_readable_token_loads_and_saves_as_current() {
     for token in SNXSCH_VERSION.readable {

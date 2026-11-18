@@ -92,7 +92,8 @@ pub use annotation::{AnnotatePlacement, AnnotateScope};
 pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
-    SelectionTransform, SheetEntryRename, SheetPort, SymbolFlag, SymbolTextField, TextTarget,
+    SelectionTransform, SheetEntryRename, SheetPort, SymbolEntryRenames, SymbolFlag,
+    SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::change_component::{
@@ -1047,7 +1048,7 @@ mod tests {
                         direction: "output".to_string(),
                     },
                 ],
-                renames: Vec::new(),
+                renames: None,
             })
             .unwrap();
 
@@ -1103,7 +1104,7 @@ mod tests {
                     name: "SDA".to_string(),
                     direction: "output".to_string(),
                 }],
-                renames: Vec::new(),
+                renames: None,
             })
             .unwrap();
 

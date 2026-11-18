@@ -8,9 +8,11 @@ format declares only its own table row below.
 
 ## The rules
 
-- **Save** writes the format's current token. The one exception is `.snxsym`:
-  it writes the lowest of its three tokens the content needs, so a symbol file
-  without polygons or De Morgan bodies stays `snxsym/v1`.
+- **Save** writes the format's current token. The exceptions are `.snxsym`
+  and `.snxsch`: each writes the lowest token the content needs. A symbol
+  file without polygons or De Morgan bodies stays `snxsym/v1`; a schematic
+  stays `snxsch/1.1`, byte for byte, unless a No-ERC directive names the
+  rules it silences, which writes `snxsch/1.2` (#1699).
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -28,7 +30,7 @@ format declares only its own table row below.
 
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
-| `.snxsch` | `snxsch/1.1` | `snxsch/1`, `snxsch/1.1` | opens read-only | refused |
+| `.snxsch` | `snxsch/1.1`, or `1.2` with a No-ERC rule list | `snxsch/1`, `1.1`, `1.2` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4` | `snxpcb/1` to `snxpcb/1.4` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |

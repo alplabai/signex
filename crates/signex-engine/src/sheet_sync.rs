@@ -13,7 +13,7 @@ use signex_types::schematic::{
     SelectedKind, SheetPin, VAlign, normalize_port_name,
 };
 
-use crate::command::{Command, SheetEntryRename, SheetPort, TextTarget};
+use crate::command::{Command, SheetEntryRename, SheetPort, SymbolEntryRenames, TextTarget};
 use crate::sheet::{exposed_sheet_ports, normalize_sheet_pin_direction};
 use crate::sheet_placement::DEFAULT_CHILD_SHEET_STROKE_MM;
 
@@ -127,25 +127,35 @@ pub fn entry_changes_from_sheet(symbol: &ChildSheet, ports: &[SheetPort]) -> She
 }
 
 /// The command that applies Sheet to Symbol for every sheet symbol of
-/// `child_filename`: `ports` as `ports_for_pin_sync` gives them, and the
-/// renames of `preview`.
+/// `symbol`'s file: `ports` as `ports_for_pin_sync` gives them, and the
+/// renames of `preview`, which was made for `symbol` and renames only its
+/// entries.
 pub fn sync_from_sheet_command(
-    child_filename: &str,
+    symbol: &ChildSheet,
     ports: Vec<SheetPort>,
     preview: &SheetSyncPreview,
 ) -> Command {
-    Command::ReconcileChildSheetPins {
-        child_filename: child_filename.to_string(),
-        ports,
+    let renames = (!preview.renamed.is_empty()).then(|| SymbolEntryRenames {
+        symbol: symbol.uuid,
         renames: preview.renamed.clone(),
+    });
+    Command::ReconcileChildSheetPins {
+        child_filename: symbol.filename.clone(),
+        ports,
+        renames,
     }
 }
 
-/// Rename `symbol`'s entries in place, keeping position, direction and id.
-/// A rename whose new name is already an entry of the symbol is skipped.
-pub(crate) fn rename_sheet_entries(symbol: &mut ChildSheet, renames: &[SheetEntryRename]) -> bool {
+/// Rename the auto-generated entries of `symbol` in place, keeping position,
+/// direction and id, when `renames` names this symbol. A hand-placed entry
+/// keeps its name, and a rename whose new name is already an entry of the
+/// symbol is skipped.
+pub(crate) fn rename_sheet_entries(symbol: &mut ChildSheet, renames: &SymbolEntryRenames) -> bool {
+    if symbol.uuid != renames.symbol {
+        return false;
+    }
     let mut changed = false;
-    for rename in renames {
+    for rename in &renames.renames {
         let Some(to) = normalize_port_name(&rename.to) else {
             continue;
         };
@@ -160,7 +170,7 @@ pub(crate) fn rename_sheet_entries(symbol: &mut ChildSheet, renames: &[SheetEntr
         if let Some(pin) = symbol
             .pins
             .iter_mut()
-            .find(|pin| normalize_port_name(&pin.name) == Some(from))
+            .find(|pin| pin.auto_generated && normalize_port_name(&pin.name) == Some(from))
         {
             pin.name = to.to_string();
             changed = true;

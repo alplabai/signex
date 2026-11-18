@@ -680,7 +680,9 @@ removed and renamed, and Apply makes exactly those changes as one undo step.
 Esc and Cancel close it without a change. A rename is read only when, for one
 direction (input, output, ...), exactly one name is gone and one is new; it
 keeps the entry's place and wires, or the port label's place. Sheet to sheet
-symbol removes auto-generated entries only, as Sync Sheet Pins does; Sheet
+symbol renames and removes auto-generated entries only, as Sync Sheet Pins
+does, and renames on the selected sheet symbol only: a hand-placed entry, or
+an entry of another symbol of the same file, keeps its name; Sheet
 symbol to sheet removes and renames Hierarchical labels only and never touches
 a Global label. A sheet that is not open is changed in memory, left unsaved,
 and refused if its file changed on disk after the dialog read it. The rules:
