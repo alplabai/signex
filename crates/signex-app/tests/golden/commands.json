@@ -1505,6 +1505,11 @@
     "category": "modify"
   },
   {
+    "id": "set_active_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "set_board_graphic",
     "group": "Pcb",
     "category": "edit"
@@ -1513,6 +1518,11 @@
     "id": "set_board_panel",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "set_layer_color",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "set_layer_sizes",
@@ -1530,6 +1540,11 @@
     "category": "view"
   },
   {
+    "id": "set_layer_visible",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "set_net_class_rules",
     "group": "Pcb",
     "category": "design"
@@ -1543,6 +1558,16 @@
     "id": "set_object_rotation",
     "group": "Schematic",
     "category": "edit"
+  },
+  {
+    "id": "set_object_transparency",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "set_object_visible",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "set_selection_filters",
@@ -1606,6 +1631,11 @@
   },
   {
     "id": "show_layer_set",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "show_used_layers_only",
     "group": "Pcb",
     "category": "view"
   },

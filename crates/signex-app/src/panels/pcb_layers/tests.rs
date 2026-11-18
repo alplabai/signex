@@ -62,10 +62,21 @@ fn shown(msgs: &[PanelMsg]) -> Vec<String> {
     msgs.iter().map(|m| format!("{m:?}")).collect()
 }
 
+/// Where the row named `label` is: its last text of that name, below the
+/// dropdowns above the rows (the layer set dropdown also reads All Layers).
+fn row_text(ctx: &PanelContext, label: &str) -> iced::Rectangle {
+    texts(ctx)
+        .into_iter()
+        .rev()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("no row {label}"))
+        .bounds
+}
+
 /// Every message a click publishes along the line of `label`, from `from`
 /// to `to` in x: the eyes and chips beside a name.
 fn messages_along(ctx: &PanelContext, label: &str, from: f32, to: f32) -> Vec<PanelMsg> {
-    let y = find(&texts(ctx), label).bounds.center_y();
+    let y = row_text(ctx, label).center_y();
     let mut out: Vec<PanelMsg> = Vec::new();
     let mut x = from;
     while x < to {
@@ -81,7 +92,7 @@ fn messages_along(ctx: &PanelContext, label: &str, from: f32, to: f32) -> Vec<Pa
 
 /// What the eyes and chips left of `label` send.
 fn left_of(ctx: &PanelContext, label: &str) -> Vec<PanelMsg> {
-    let bounds = find(&texts(ctx), label).bounds;
+    let bounds = row_text(ctx, label);
     messages_along(ctx, label, 0.0, bounds.x)
 }
 

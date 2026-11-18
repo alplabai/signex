@@ -378,6 +378,12 @@ altium	hint	-	-	toggle_layer_numbers
 altium	hint	-	-	board_layer_stack
 altium	hint	-	-	set_layer_stack
 altium	hint	-	-	set_layer_sizes
+altium	hint	-	-	set_layer_visible
+altium	hint	-	-	set_active_layer
+altium	hint	-	-	set_layer_color
+altium	hint	-	-	show_used_layers_only
+altium	hint	-	-	set_object_visible
+altium	hint	-	-	set_object_transparency
 altium	hint	-	-	highlight_net_under_cursor
 altium	hint	-	-	highlight_related_net_objects
 altium	hint	-	-	clear_net_highlighting
@@ -858,6 +864,12 @@ classic	hint	-	-	toggle_layer_numbers
 classic	hint	-	-	board_layer_stack
 classic	hint	-	-	set_layer_stack
 classic	hint	-	-	set_layer_sizes
+classic	hint	-	-	set_layer_visible
+classic	hint	-	-	set_active_layer
+classic	hint	-	-	set_layer_color
+classic	hint	-	-	show_used_layers_only
+classic	hint	-	-	set_object_visible
+classic	hint	-	-	set_object_transparency
 classic	hint	-	`	highlight_net_under_cursor
 classic	hint	-	-	highlight_related_net_objects
 classic	hint	-	~	clear_net_highlighting
