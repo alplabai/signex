@@ -1,6 +1,6 @@
-## Board Reports (#2404) and Board Print / PDF (#2402).
+## Board Reports (#2404), Board Print / PDF (#2402) and the board STEP export (#2488).
 
-board-output-no-pcb = Board reports and board printing need an open PCB.
+board-output-no-pcb = Board reports, board printing and STEP export need an open PCB.
 board-output-board-gone = { $board } is no longer open, so nothing was written.
 
 board-reports-title = Board Reports
@@ -76,3 +76,5 @@ board-print-svg-folder = Folder for the Assembly Drawings
 board-print-close = Close
 board-print-mirrored = mirrored
 board-print-failed = The board PDF could not be made: { $why }
+board-step-export-title = Export STEP 3D Model
+board-step-failed = The board STEP model could not be made: { $why }

@@ -1,17 +1,20 @@
-//! Board Reports (#2404), Board Print / PDF (#2402) and the assembly
-//! drawings (#2486). The tables, the PDF and the drawings are
-//! `signex_output::board_report`, `signex_output::board_pdf` and
-//! `signex_output::assembly_drawing`; this slice holds the open dialog,
-//! routes its messages and writes the files through the export write path
-//! (a `Task`, crash-safe). Nothing here changes the board, so there is no
-//! undo step. Rules: `docs/BOARD_OUTPUT.md`.
+//! Board Reports (#2404), Board Print / PDF (#2402), the assembly drawings
+//! (#2486) and the board STEP export (#2488). The tables, the PDF and the
+//! drawings are `signex_output::board_report`, `signex_output::board_pdf`
+//! and `signex_output::assembly_drawing`, the STEP model
+//! `signex_renderer::board3d::board_step`; this slice holds the open
+//! dialog, routes its messages and writes the files through the export
+//! write path (a `Task`, crash-safe). Nothing here changes the board, so
+//! there is no undo step. Rules: `docs/BOARD_OUTPUT.md`.
 
 mod assembly;
 mod operands;
 mod print;
 mod reports;
+mod step;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReport,
@@ -19,11 +22,12 @@ use signex_output::{
 };
 
 pub(crate) use print::set_label;
+pub use step::BoardStepBuilt;
 
 pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
-    export_board_pdf, export_board_report,
+    export_board_pdf, export_board_report, export_board_step,
 };
 
 impl From<BoardOutputMsg> for crate::app::Message {
@@ -81,6 +85,21 @@ pub enum BoardOutputMsg {
     },
     /// Close, Esc or the header's close button.
     Closed,
+    /// `export_board_step` or File ▸ Export ▸ STEP 3D Model: the save
+    /// dialog for the board in view.
+    StepExportRequested,
+    /// The save dialog answered with `path` for `board`.
+    StepPathChosen {
+        board: PathBuf,
+        path: PathBuf,
+    },
+    /// The STEP model of `board` was made off the update thread, or why it
+    /// could not be; `path` is where it goes.
+    StepBuilt {
+        board: PathBuf,
+        path: PathBuf,
+        built: Result<Arc<BoardStepBuilt>, String>,
+    },
 }
 
 /// The on/off settings of a board print.
@@ -192,6 +211,17 @@ impl crate::app::Signex {
                 replaced,
             } => return self.write_assembly_svgs(&board, &options, &folder, &replaced),
             M::Closed => self.ui_state.board_output.dialog = None,
+            M::StepExportRequested => return self.request_board_step(),
+            M::StepPathChosen { board, path } => {
+                return self.build_board_step(
+                    &board,
+                    path,
+                    signex_renderer::board3d::StepSchema::default(),
+                );
+            }
+            M::StepBuilt { board, path, built } => {
+                return self.write_board_step(&board, path, built);
+            }
         }
         iced::Task::none()
     }
@@ -229,3 +259,5 @@ mod tests;
 mod tests_assembly;
 #[cfg(test)]
 mod tests_print;
+#[cfg(test)]
+mod tests_step;

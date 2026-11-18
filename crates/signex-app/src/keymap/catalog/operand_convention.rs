@@ -68,6 +68,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2486: the assembly drawings by side.
     ("side", OperandKind::Text),
     ("sides", OperandKind::Text),
+    ("schema", OperandKind::Text),
     ("field", OperandKind::Text),
     ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),

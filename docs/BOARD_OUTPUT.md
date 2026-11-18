@@ -151,3 +151,45 @@ the drawing is meant to change). The PDF goldens are the pages' content
 streams with numbers rounded to 0.01 pt.
 
 Not yet: free arcs and free pads on the drawing's layers.
+
+## STEP export
+
+On a board, File ▸ Export ▸ STEP 3D Model... and `export_board_step` write
+the board and its parts as a STEP model (#2488) for MCAD tools. It reads the
+board as it is in memory and changes nothing.
+
+- **Board body**: the outline (or, with none, the box round the copper, as
+  the 3D view frames it) extruded from z = 0 to the board thickness, which
+  the board engine keeps equal to the layer stack's total. The cutouts,
+  mounting holes, pad drills and via drills inside the outline are cut
+  through; a hole that meets one cut before it is left out, as in the 3D
+  view, and the export warns how many. The body is built on the MCAD kernel
+  (`signex_mcad::board_body`) and written exactly: flat faces on a `PLANE`,
+  hole walls on a `CYLINDRICAL_SURFACE`, straight edges on a `LINE`, hole
+  rims on a `CIRCLE`. Each face is named after its persistent name (`Top`,
+  `Bottom`, `Outline side 3`, `Hole 12 wall`, `Cut-out 0 wall`). A board
+  that falls apart into pieces is one solid per piece.
+- **Parts**: each footprint's body is the one the 3D view draws (its
+  attached model, placed by the attachment's offset and turn, else its 3D
+  Body, else a box over its pads), placed as the footprint is and stood on
+  its face. A model is a triangle mesh, so a part is a faceted surface body
+  (one `ADVANCED_FACE` per triangle), named by its designator. A model that
+  cannot be read is replaced by the plain body, with a warning.
+- **File**: ISO 10303-21, schema AP214 (`AUTOMOTIVE_DESIGN`, the default,
+  read by nearly every MCAD tool) or AP242 (`schema=ap242`). One product,
+  named after the board file, in millimetres; x right, y up (the board
+  seen from above), z up out of the top face, the bottom face at z = 0. No
+  colours and no copper.
+- **Where it is written**: `signex-mcad` turns solids and meshes into bytes
+  (`write_step`, no IO); `signex_renderer::board3d::board_step` gathers the
+  board body and the parts; the app reads the parts' models and runs the
+  kernel off the UI thread, then writes the file through the export write
+  path (atomic, off the UI thread).
+
+Headless and CLI: `export_board_step document=<board> path=<file>` with the
+optional `schema` (`ap214`, `ap242`); the answer names the board, the file
+and the schema. It takes a path, so it is CLI only (`export` capability).
+
+Not yet: colours, copper and silkscreen on the faces, each part as its own
+product in an assembly, and a part's exact STEP geometry when its model was
+a STEP file (it is written from the 3D view's mesh).

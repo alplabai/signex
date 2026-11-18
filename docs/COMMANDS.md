@@ -352,6 +352,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `export_assembly_svg` | Write the board's top and bottom assembly drawings as SVG files | reports | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
+| `export_board_step` | Export the board and its parts as a STEP 3D model | reports | — | — |
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `find_similar_items` | Find similar items on a board | search | — | — |

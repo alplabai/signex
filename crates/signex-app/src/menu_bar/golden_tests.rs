@@ -400,6 +400,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("export_board_report", "ExportBoardReport"),
     // #2486: fixture name only.
     ("export_assembly_svg", "ExportAssemblySvg"),
+    ("export_board_step", "ExportBoardStep"),
     ("back_annotate_schematics", "BackAnnotate"),
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),

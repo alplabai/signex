@@ -1,0 +1,24 @@
+[package]
+name = "signex-mcad"
+description = "Mechanical CAD core: solids on an exact B-rep kernel, persistent face and edge names, tessellation for the 3D view, STEP export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# No IO and no threads: bytes in, bytes out, so the crate builds for
+# wasm32-unknown-unknown (docs/ROADMAP.md, "MCAD (P3)").
+[dependencies]
+# Exact B-rep kernel (Apache-2.0); its NOTICE is in THIRD_PARTY_NOTICES.md.
+solidcore = "1.0.1"
+# Polygon triangulation of trimmed faces in their UV domain.
+earcut = "0.4.12"
+thiserror.workspace = true
+
+[dev-dependencies]
+# The round-trip tests read the written STEP back through Signex's importer.
+signex-3d-model-importer.workspace = true
+
+[lints]
+workspace = true

@@ -665,10 +665,13 @@ Mechanical design inside Signex, so the board and the part it goes into are
 designed, checked and changed in one place. Solid
 modelling uses an existing B-rep kernel crate, wrapped by a Signex crate. The
 kernel must be Apache-2.0 or MIT, pure Rust, wasm-compatible and an exact B-rep.
-`solidcore` is the current choice against these criteria; it is re-checked when
-MCAD Kernel starts, since the crate is still being ported. The kernel is a
-normal dependency, credited in the third-party licence list, with its NOTICE
-file carried in the distribution as Apache-2.0 §4(d) requires. Signex's own
+`solidcore` is the kernel: re-checked when MCAD Kernel started (2026-11-18), version
+1.0.1 is on crates.io under Apache-2.0, pure Rust with no dependency but
+`thiserror`, and builds for `wasm32-unknown-unknown`; it has no face
+tessellation, so `signex-mcad` triangulates faces itself. The kernel is a
+normal dependency, credited in the third-party licence list
+(`THIRD_PARTY_NOTICES.md`), with its NOTICE file carried in the distribution
+as Apache-2.0 §4(d) requires. Signex's own
 sketch solver (`signex-sketch`) drives every sketch, so the sketch mode users
 already know is the one they model with. Every operation is a command with an
 inverse (one undo step), a typed agent command with a JSON result, and reachable
@@ -684,8 +687,8 @@ native mechanical document are read from and written to bytes (`&[u8]` in,
 test), reached through an `Effect`, never through `std::fs` inside the crate.
 The crate uses no `std::fs`, `std::net`, threads or tokio; long kernel work runs
 as a compute job the host schedules. The kernel dependency must also build for
-`wasm32`. `signex-mcad` joins the `DOMAIN` set in `scripts/check_arch_guard.sh`
-and the `wasm32` CI build when it is created.
+`wasm32`. `signex-mcad` is in the `DOMAIN` set in `scripts/check_arch_guard.sh`,
+and the `check` job in `ci.yml` builds it for `wasm32-unknown-unknown`.
 
 | Plan | Scope |
 |------|-------|
@@ -701,11 +704,15 @@ scoped. Work on it starts once the schematic and PCB editors are complete
 and the release that ships them, with its demo videos and website, is out.
 The goal is one tool for
 every electronic and mechanical design. Its hard dependencies are the 3D Viewer
-band and the STEP 3D export in Assembly & 3D Export. The STEP translator of
-MCAD Kernel is pulled forward into the Community Release (2026-11-17):
-Assembly & 3D Export writes the board's STEP with it, so it is built before
-the rest of MCAD Kernel, which stays P3. Enclosure Fit Check needs
-no modelling and comes first; the other plans follow in table order.
+band and the STEP 3D export in Assembly & 3D Export. MCAD Kernel bring-up is
+pulled into the Community Release (2026-11-18, #2487): the `signex-mcad`
+crate with bodies, faces, edges, persistent names, guarded kernel calls and
+tessellation, and its STEP translator, which Assembly & 3D Export uses to
+write the board's STEP from kernel solids (#2488). This widens the
+2026-11-17 decision, which pulled forward only the STEP translator. The
+native mechanical document type and the rest of MCAD keep their order and
+stay P3: Enclosure Fit Check needs no modelling and comes first; the other
+plans follow in table order.
 
 ---
 
@@ -854,6 +861,16 @@ What that promotion does and does not mean:
 - **Sub-version boundaries within a band are the softest thing on this
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
+
+### 2026-11-18 — MCAD Kernel bring-up pulled into the Community Release
+
+Maintainer decision (Caner), also a row in `docs/DECISIONS.md`: MCAD
+Kernel bring-up (#2487) starts now and ships in the Community Release, so
+the board's STEP (#2488) is written from kernel solids. It widens the
+2026-11-17 entry, which pulled forward only the STEP translator. The kernel
+choice was re-checked first: `solidcore` 1.0.1 meets the criteria in
+"MCAD (P3)". The native mechanical document type and every other MCAD plan
+keep their order and stay P3.
 
 ### 2026-11-17 — Community goal decisions
 

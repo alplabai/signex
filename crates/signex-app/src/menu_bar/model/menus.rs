@@ -127,6 +127,9 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
+        // The board and its parts as a STEP model (#2488); greyed without
+        // a board in view.
+        cmd_item_gated(ctx, cmd("export_board_step", "")),
     ]
 }
 

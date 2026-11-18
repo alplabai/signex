@@ -1,5 +1,6 @@
 //! Ids of `locales/en-US/board_output.ftl`: the Board Reports dialog
-//! (#2404) and the Board Print / PDF dialog (#2402).
+//! (#2404), the Board Print / PDF dialog (#2402) and the board STEP
+//! export (#2488).
 
 define_ids! {
     BOARD_OUTPUT;
@@ -69,4 +70,6 @@ define_ids! {
     BOARD_PRINT_CLOSE = "board-print-close";
     BOARD_PRINT_MIRRORED = "board-print-mirrored";
     BOARD_PRINT_FAILED = "board-print-failed";
+    BOARD_STEP_EXPORT_TITLE = "board-step-export-title";
+    BOARD_STEP_FAILED = "board-step-failed";
 }

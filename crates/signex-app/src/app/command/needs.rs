@@ -387,7 +387,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_net_classes" | "open_net_classes_panel" => Needs::NetClassTable,
         // #2216: the pours of the board in view.
         "repour_selected" | "repour_all" => Needs::Pcb,
-        // #2404, #2402: the board reports and Board Print / PDF.
+        // #2404, #2402, #2488: the board reports, Board Print / PDF and STEP.
         "board_report_bom"
         | "board_report_netlist"
         | "board_report_net_length"
@@ -395,7 +395,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "export_board_report"
         | "export_board_pdf"
         | "export_assembly_svg"
-        | "board_assembly_drawing" => Needs::Pcb,
+        | "board_assembly_drawing"
+        | "export_board_step" => Needs::Pcb,
         "measure_distance" => Needs::MeasureTarget,
         // #2410: panelisation acts on the board in view.
         "panelize_board" | "remove_board_panel" | "set_board_panel" => Needs::Pcb,
