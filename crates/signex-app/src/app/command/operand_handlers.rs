@@ -121,7 +121,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_layer_color", board_view::set_layer_color),
     ("show_used_layers_only", board_view::show_used_layers_only),
     ("set_object_visible", board_view::set_object_visible),
-    ("set_object_transparency", board_view::set_object_transparency),
+    (
+        "set_object_transparency",
+        board_view::set_object_transparency,
+    ),
     ("board_report_bom", output::board_report_bom),
     ("board_report_netlist", output::board_report_netlist),
     ("board_report_net_length", output::board_report_net_length),

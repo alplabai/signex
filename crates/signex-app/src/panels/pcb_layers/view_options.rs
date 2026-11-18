@@ -80,14 +80,16 @@ fn cell<'a>(
     let cell = button(text(t!(panel.i18n, label)).size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press_maybe(msg)
-        .style(move |theme: &iced::Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let mut style = segment_cell(theme, on, hovered);
-            if greyed {
-                style.text_color = form_look::FormLook::of(theme).ink4;
-            }
-            style
-        })
+        .style(
+            move |theme: &iced::Theme, status: iced::widget::button::Status| {
+                let hovered = matches!(status, iced::widget::button::Status::Hovered);
+                let mut style = segment_cell(theme, on, hovered);
+                if greyed {
+                    style.text_color = form_look::FormLook::of(theme).ink4;
+                }
+                style
+            },
+        )
         .boxed();
     if greyed {
         not_yet(cell, panel, ctx)
@@ -117,8 +119,20 @@ fn general_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'
     );
     let toggle_3d = Some(PanelMsg::LayersPanel(LayersPanelMsg::Board3dToggled));
     let three_d = segmented(vec![
-        cell(panel, ctx, ids::PCB_VIEW_OFF, !panel.board_3d, toggle_3d.clone().filter(|_| panel.board_3d)),
-        cell(panel, ctx, ids::PCB_VIEW_ON, panel.board_3d, toggle_3d.filter(|_| !panel.board_3d)),
+        cell(
+            panel,
+            ctx,
+            ids::PCB_VIEW_OFF,
+            !panel.board_3d,
+            toggle_3d.clone().filter(|_| panel.board_3d),
+        ),
+        cell(
+            panel,
+            ctx,
+            ids::PCB_VIEW_ON,
+            panel.board_3d,
+            toggle_3d.filter(|_| !panel.board_3d),
+        ),
     ]);
     let toggle_single = Some(PanelMsg::PcbLayers(PcbViewMsg::SingleLayerModeToggled));
     let single = segmented(vec![
@@ -146,7 +160,13 @@ fn general_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'
             .style(form_look::checkbox_style)
             .on_toggle(|_| PanelMsg::ToggleGrid),
         not_yet(
-            chip(panel, crate::pcb_canvas::layer_style::grid_colour(), false, None, ctx),
+            chip(
+                panel,
+                crate::pcb_canvas::layer_style::grid_colour(),
+                false,
+                None,
+                ctx
+            ),
             panel,
             ctx,
         ),
@@ -194,10 +214,16 @@ fn object_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'a
     .spacing(SP.xs)
     .align_y(Alignment::Center);
     if all.is_none() {
-        all_row = all_row.push(text(t!(i18n, ids::PCB_VIEW_MIXED)).size(TS.caption).color(muted));
+        all_row = all_row.push(
+            text(t!(i18n, ids::PCB_VIEW_MIXED))
+                .size(TS.caption)
+                .color(muted),
+        );
     }
     let header = row![
-        text(t!(i18n, ids::PCB_VIEW_DRAFT)).size(TS.caption).color(muted),
+        text(t!(i18n, ids::PCB_VIEW_DRAFT))
+            .size(TS.caption)
+            .color(muted),
         text(t!(i18n, ids::PCB_VIEW_TRANSPARENCY))
             .size(TS.caption)
             .color(muted)
@@ -209,7 +235,11 @@ fn object_rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'a
         container(all_row).padding([0.0, SP.s]).boxed(),
         container(header).padding([0.0, SP.m]).boxed(),
     ];
-    rows.extend(BoardObject::ALL.into_iter().map(|kind| object_row(panel, kind, ctx)));
+    rows.extend(
+        BoardObject::ALL
+            .into_iter()
+            .map(|kind| object_row(panel, kind, ctx)),
+    );
     rows
 }
 
@@ -221,19 +251,22 @@ fn object_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let i18n = &panel.i18n;
     let shown = panel.shows_object(kind);
-    let toggled = kind.can_hide().then_some(PanelMsg::PcbLayers(
-        PcbViewMsg::ObjectVisibilitySet {
+    let toggled = kind
+        .can_hide()
+        .then_some(PanelMsg::PcbLayers(PcbViewMsg::ObjectVisibilitySet {
             kind: Some(kind),
             visible: !shown,
-        },
-    ));
+        }));
     let ink = if shown && kind.can_hide() {
         crate::styles::ti(ctx.tokens.text)
     } else {
         resolve(&ctx.tokens).ink3
     };
     let draft = not_yet(
-        checkbox(false).size(TS.body).style(form_look::checkbox_style).boxed(),
+        checkbox(false)
+            .size(TS.body)
+            .style(form_look::checkbox_style)
+            .boxed(),
         panel,
         ctx,
     );
@@ -326,6 +359,6 @@ fn additional_chips<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Element<'
         )
     });
     container(Row::with_children(chips).spacing(SP.xs).wrap())
-    .padding([SP.xs, SP.m])
-    .boxed()
+        .padding([SP.xs, SP.m])
+        .boxed()
 }

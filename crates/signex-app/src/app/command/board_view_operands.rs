@@ -24,8 +24,7 @@ fn on_operand(args: &CommandArgs) -> Result<bool, String> {
 /// `kind`: a kind of object by its token.
 fn object_operand(args: &CommandArgs) -> Result<BoardObject, String> {
     let token = text_operand(args, "kind");
-    BoardObject::from_token(token)
-        .ok_or_else(|| format!("`{token}` is not a kind of board object"))
+    BoardObject::from_token(token).ok_or_else(|| format!("`{token}` is not a kind of board object"))
 }
 
 /// `set_layer_visible layer=.. on=.. document=..`: a layer's eye.
@@ -70,10 +69,7 @@ pub(super) fn set_object_visible(app: &mut Signex, args: &CommandArgs) -> Ran {
             if kind.can_hide() {
                 Ok(Some(kind))
             } else {
-                Err(format!(
-                    "the board view cannot hide {} yet",
-                    kind.token()
-                ))
+                Err(format!("the board view cannot hide {} yet", kind.token()))
             }
         })
     };

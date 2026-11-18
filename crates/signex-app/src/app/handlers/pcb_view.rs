@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{
-    BoardObject, BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet, board_copper_layers,
-    board_layers, builtin_set_layers, kind_layers, listed_layers, signal_layers,
+    BoardObject, BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet,
+    board_copper_layers, board_layers, builtin_set_layers, kind_layers, listed_layers,
+    signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -250,7 +251,10 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         PcbViewMsg::ObjectVisibilitySet { kind, visible } => {
             let kinds = match kind {
                 Some(kind) => vec![kind],
-                None => BoardObject::ALL.into_iter().filter(|k| k.can_hide()).collect(),
+                None => BoardObject::ALL
+                    .into_iter()
+                    .filter(|k| k.can_hide())
+                    .collect(),
             };
             for kind in kinds {
                 view.set_object_visible(kind, visible);

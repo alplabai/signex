@@ -18,7 +18,12 @@ pub fn used_layers(board: &PcbBoard) -> HashSet<PcbLayer> {
     names.extend(board.segments.iter().map(|s| s.layer.as_str()));
     names.extend(board.free.arcs.iter().map(|a| a.layer.as_str()));
     names.extend(board.free.dimensions.iter().map(|d| d.layer.as_str()));
-    names.extend(board.vias.iter().flat_map(|v| v.layers.iter().map(String::as_str)));
+    names.extend(
+        board
+            .vias
+            .iter()
+            .flat_map(|v| v.layers.iter().map(String::as_str)),
+    );
     names.extend(board.zones.iter().map(|z| z.layer.as_str()));
     names.extend(board.graphics.iter().map(|g| g.layer.as_str()));
     names.extend(board.texts.iter().map(|t| t.layer.as_str()));
@@ -41,7 +46,11 @@ pub fn used_layers(board: &PcbBoard) -> HashSet<PcbLayer> {
     }
     let mut used: HashSet<PcbLayer> = names.into_iter().filter_map(parse_pcb_layer).collect();
     for footprint in &board.footprints {
-        used.extend(footprint_texts(footprint, None).into_iter().map(|t| t.layer));
+        used.extend(
+            footprint_texts(footprint, None)
+                .into_iter()
+                .map(|t| t.layer),
+        );
     }
     if !board.outline.is_empty() {
         used.insert(BOARD_OUTLINE);

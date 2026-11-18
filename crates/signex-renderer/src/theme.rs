@@ -4,10 +4,10 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+use crate::pcb::BoardPaint;
 use serde::Deserialize;
 use signex_gfx::style::ColorSlot;
 use signex_types::theme::{BoardLayerColors, CanvasColors, Color, ThemeId, canvas_colors};
-use crate::pcb::BoardPaint;
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug, PartialEq)]

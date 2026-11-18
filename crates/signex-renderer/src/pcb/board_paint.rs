@@ -154,7 +154,10 @@ mod tests {
         for kind in BoardObject::ALL {
             assert_eq!(BoardObject::from_token(kind.token()), Some(kind));
         }
-        assert_eq!(BoardObject::from_token(" Tracks "), Some(BoardObject::Tracks));
+        assert_eq!(
+            BoardObject::from_token(" Tracks "),
+            Some(BoardObject::Tracks)
+        );
         assert_eq!(BoardObject::from_token("wires"), None);
     }
 

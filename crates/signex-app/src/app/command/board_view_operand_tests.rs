@@ -58,7 +58,10 @@ fn board() -> PcbBoard {
         setup: None,
         nets: vec![],
         footprints: vec![],
-        segments: vec![segment(1, 0.0, "TopCopper"), segment(2, 5.0, "BottomCopper")],
+        segments: vec![
+            segment(1, 0.0, "TopCopper"),
+            segment(2, 5.0, "BottomCopper"),
+        ],
         vias: vec![],
         zones: vec![],
         graphics: vec![],
@@ -83,7 +86,9 @@ fn open() -> (Signex, PathBuf) {
 }
 
 fn panel(app: &mut Signex, event: PcbViewMsg) {
-    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(event))));
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(
+        event,
+    ))));
 }
 
 fn snapshot(app: &Signex) -> PcbSnapshot {
@@ -123,12 +128,22 @@ fn a_layer_eye_hides_it_from_the_draw_and_its_command_shows_it() {
     panel(&mut app, PcbViewMsg::LayerVisibilityToggled(BOTTOM));
     assert!(lines(&app).iter().all(|(y, _)| *y == 0.0), "Bottom is gone");
     assert_eq!(
-        run(&mut app, &path, "set_layer_visible", &["layer=BottomCopper", "on=true"]),
+        run(
+            &mut app,
+            &path,
+            "set_layer_visible",
+            &["layer=BottomCopper", "on=true"]
+        ),
         CommandOutcome::Ran
     );
     assert_eq!(lines(&app).len(), 2);
     assert_eq!(
-        run(&mut app, &path, "set_layer_visible", &["layer=BottomCopper", "on=false"]),
+        run(
+            &mut app,
+            &path,
+            "set_layer_visible",
+            &["layer=BottomCopper", "on=false"]
+        ),
         CommandOutcome::Ran
     );
     assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
@@ -160,7 +175,12 @@ fn a_colour_change_recolours_the_canvas_and_the_chip() {
     );
     assert_eq!(top(&lines(&app)), top(&before), "the palette colour again");
     assert_eq!(
-        run(&mut app, &path, "set_layer_color", &["layer=TopCopper", "color=#00ff00"]),
+        run(
+            &mut app,
+            &path,
+            "set_layer_color",
+            &["layer=TopCopper", "color=#00ff00"]
+        ),
         CommandOutcome::Ran
     );
     assert_eq!(&top(&lines(&app))[..3], &[0.0, 1.0, 0.0]);
@@ -187,7 +207,10 @@ fn used_on_and_the_active_layer_run_from_the_panel_and_the_commands() {
 fn single_layer_mode_leaves_only_the_active_layer() {
     let (mut app, _path) = open();
     panel(&mut app, PcbViewMsg::SingleLayerModeToggled);
-    assert!(lines(&app).iter().all(|(y, _)| *y == 0.0), "only Top is drawn");
+    assert!(
+        lines(&app).iter().all(|(y, _)| *y == 0.0),
+        "only Top is drawn"
+    );
 }
 
 #[test]
@@ -212,17 +235,32 @@ fn a_transparency_changes_the_track_alpha_and_an_object_eye_hides_tracks() {
         assert!((b[3] - a[3] * 0.5).abs() < 1e-6, "{a:?} -> {b:?}");
     }
     assert_eq!(
-        run(&mut app, &path, "set_object_transparency", &["kind=tracks", "value=0"]),
+        run(
+            &mut app,
+            &path,
+            "set_object_transparency",
+            &["kind=tracks", "value=0"]
+        ),
         CommandOutcome::Ran
     );
     assert_eq!(lines(&app), before);
     assert_eq!(
-        run(&mut app, &path, "set_object_visible", &["kind=tracks", "on=false"]),
+        run(
+            &mut app,
+            &path,
+            "set_object_visible",
+            &["kind=tracks", "on=false"]
+        ),
         CommandOutcome::Ran
     );
     assert!(snapshot(&app).traces.is_empty());
     assert_eq!(
-        run(&mut app, &path, "set_object_visible", &["kind=all", "on=true"]),
+        run(
+            &mut app,
+            &path,
+            "set_object_visible",
+            &["kind=all", "on=true"]
+        ),
         CommandOutcome::Ran
     );
     assert_eq!(snapshot(&app).traces.len(), 2);

@@ -226,7 +226,12 @@ fn all_layers_row<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Element<'a,
     );
     container(
         row![
-            eye(panel, panel.has_hidden(), Some(PanelMsg::PcbLayers(toggled)), ctx),
+            eye(
+                panel,
+                panel.has_hidden(),
+                Some(PanelMsg::PcbLayers(toggled)),
+                ctx
+            ),
             text(t!(i18n, ids::PCB_LAYERS_ALL_LAYERS))
                 .size(TS.body)
                 .width(Length::Fill),

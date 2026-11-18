@@ -174,14 +174,21 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
     let mut view = PcbLayerView::default();
     let closed = draw_pixels(panel(&context(&view)), WINDOW);
     let open = context_with(&view, ui);
-    assert!(listed(&open, "Colour"), "the colour row opens under the row");
+    assert!(
+        listed(&open, "Colour"),
+        "the colour row opens under the row"
+    );
     view.set_layer_colour(BOTTOM, Some([255, 0, 255]));
     let ctx = context(&view);
     assert_eq!(
         ctx.pcb_layers.colour(BOTTOM),
         iced::Color::from_rgb8(255, 0, 255)
     );
-    assert_ne!(closed, draw_pixels(panel(&ctx), WINDOW), "the chip is recoloured");
+    assert_ne!(
+        closed,
+        draw_pixels(panel(&ctx), WINDOW),
+        "the chip is recoloured"
+    );
 }
 
 /// #2363: Used On lists only the layers the board has objects on.
@@ -273,7 +280,12 @@ fn a_tab_click_switches_to_view_options() {
         ))])
     );
     let ctx = context_with(&PcbLayerView::default(), options());
-    for label in ["GENERAL SETTINGS", "OBJECT VISIBILITY", "Tracks", "Show Grid"] {
+    for label in [
+        "GENERAL SETTINGS",
+        "OBJECT VISIBILITY",
+        "Tracks",
+        "Show Grid",
+    ] {
         assert!(listed(&ctx, label), "{label}");
     }
 }
@@ -345,5 +357,8 @@ fn the_panel_state_opens_and_closes_a_chip() {
     assert_eq!(ui.picker, Some((TOP, true)));
     ui.apply(&LayersPanelMsg::ColourChipToggled(TOP));
     assert_eq!(ui.picker, None);
-    assert!(!ui.apply(&LayersPanelMsg::Board3dToggled), "the app's to run");
+    assert!(
+        !ui.apply(&LayersPanelMsg::Board3dToggled),
+        "the app's to run"
+    );
 }

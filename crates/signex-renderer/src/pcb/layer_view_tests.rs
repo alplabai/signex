@@ -6,6 +6,7 @@ use crate::pcb::{
 use crate::schematic::ViewRenderer;
 use crate::theme::ResolvedTheme;
 use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_types::pcb::LayerDef;
 use signex_types::pcb_layer::{InnerCopper, MechanicalLayer};
 
 const TOP: PcbLayer = PcbLayer::Copper(CopperLayer::Top);
