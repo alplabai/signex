@@ -1,10 +1,12 @@
-//! Board Reports (#2404) and Board Print / PDF (#2402). The tables and the
-//! PDF are `signex_output::board_report` and `signex_output::board_pdf`; this
-//! slice holds the open dialog, routes its messages and writes the files
-//! through the export write path (a `Task`, crash-safe). Nothing here
-//! changes the board, so there is no undo step. Rules:
-//! `docs/BOARD_OUTPUT.md`.
+//! Board Reports (#2404), Board Print / PDF (#2402) and the assembly
+//! drawings (#2486). The tables, the PDF and the drawings are
+//! `signex_output::board_report`, `signex_output::board_pdf` and
+//! `signex_output::assembly_drawing`; this slice holds the open dialog,
+//! routes its messages and writes the files through the export write path
+//! (a `Task`, crash-safe). Nothing here changes the board, so there is no
+//! undo step. Rules: `docs/BOARD_OUTPUT.md`.
 
+mod assembly;
 mod operands;
 mod print;
 mod reports;
@@ -18,6 +20,7 @@ use signex_output::{
 
 pub(crate) use print::set_label;
 
+pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
     export_board_pdf, export_board_report,
@@ -63,6 +66,16 @@ pub enum BoardOutputMsg {
         board: PathBuf,
         options: Box<BoardPrintOptions>,
         path: PathBuf,
+    },
+    /// The dialog's Export Assembly SVG or `export_assembly_svg`: the
+    /// folder dialog.
+    SvgExportRequested,
+    /// The folder dialog answered with `folder`; `options` are the ones
+    /// in use when the export was asked for.
+    SvgFolderChosen {
+        board: PathBuf,
+        options: Box<BoardPrintOptions>,
+        folder: PathBuf,
     },
     /// Close, Esc or the header's close button.
     Closed,
@@ -169,6 +182,12 @@ impl crate::app::Signex {
                 options,
                 path,
             } => return self.write_board_pdf(&board, &options, path),
+            M::SvgExportRequested => return self.request_assembly_svg(),
+            M::SvgFolderChosen {
+                board,
+                options,
+                folder,
+            } => return self.write_assembly_svgs(&board, &options, &folder),
             M::Closed => self.ui_state.board_output.dialog = None,
         }
         iced::Task::none()
@@ -205,3 +224,5 @@ fn file_title(path: &std::path::Path) -> String {
 mod tests;
 #[cfg(test)]
 mod tests_print;
+#[cfg(test)]
+mod tests_assembly;

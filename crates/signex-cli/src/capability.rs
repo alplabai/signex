@@ -180,6 +180,7 @@ mod tests {
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
+            (Capability::Export, "export_assembly_svg"),
         ]);
         assert_eq!(non_default, pinned);
     }

@@ -49,6 +49,8 @@ board-print-set-top = Top Side
 board-print-set-bottom = Bottom Side
 board-print-set-inner = Inner Copper
 board-print-set-mechanical = Outline and Mechanical
+board-print-set-assembly-top = Assembly Drawing, Top
+board-print-set-assembly-bottom = Assembly Drawing, Bottom
 board-print-pages = Pages
 board-print-pages-per-set = One Page per Set
 board-print-pages-composite = All Sets on One Page
@@ -69,6 +71,8 @@ board-print-page-count = { $count ->
 }
 board-print-no-sets = Pick at least one layer set to print.
 board-print-export = Export PDF…
+board-print-export-svg = Export Assembly SVG…
+board-print-svg-folder = Folder for the Assembly Drawings
 board-print-close = Close
 board-print-mirrored = mirrored
 board-print-failed = The board PDF could not be made: { $why }

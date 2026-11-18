@@ -45,6 +45,8 @@ define_ids! {
     BOARD_PRINT_SET_BOTTOM = "board-print-set-bottom";
     BOARD_PRINT_SET_INNER = "board-print-set-inner";
     BOARD_PRINT_SET_MECHANICAL = "board-print-set-mechanical";
+    BOARD_PRINT_SET_ASSEMBLY_TOP = "board-print-set-assembly-top";
+    BOARD_PRINT_SET_ASSEMBLY_BOTTOM = "board-print-set-assembly-bottom";
     BOARD_PRINT_PAGES = "board-print-pages";
     BOARD_PRINT_PAGES_PER_SET = "board-print-pages-per-set";
     BOARD_PRINT_PAGES_COMPOSITE = "board-print-pages-composite";
@@ -62,6 +64,8 @@ define_ids! {
     BOARD_PRINT_PAGE_COUNT = "board-print-page-count";
     BOARD_PRINT_NO_SETS = "board-print-no-sets";
     BOARD_PRINT_EXPORT = "board-print-export";
+    BOARD_PRINT_EXPORT_SVG = "board-print-export-svg";
+    BOARD_PRINT_SVG_FOLDER = "board-print-svg-folder";
     BOARD_PRINT_CLOSE = "board-print-close";
     BOARD_PRINT_MIRRORED = "board-print-mirrored";
     BOARD_PRINT_FAILED = "board-print-failed";

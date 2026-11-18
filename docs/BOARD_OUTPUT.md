@@ -50,14 +50,17 @@ On a board, File ▸ Print (Ctrl+P), File ▸ Export ▸ PDF and
 
 - **Layer sets** (`BoardLayerSet`): Top Side (top copper and every top-side
   technical layer), Bottom Side (the same below), Inner Copper, Outline and
-  Mechanical (the outline, margin, mechanical and documentation layers). A
-  layer the build does not know prints with no set.
-- **Pages**: one page per chosen set, in that order, or every chosen set on
-  one composite page (drawn mechanical, inner, bottom, top, so the top side
-  is on top).
-- **Mirror the bottom side**: a page of the bottom set alone is drawn
-  mirrored left to right, as seen from below. A composite page is never
-  mirrored.
+  Mechanical (the outline, margin, mechanical and documentation layers), and
+  the two assembly drawings, Assembly Drawing, Top and Assembly Drawing,
+  Bottom (see "Assembly drawings" below). A layer the build does not know
+  prints with no set.
+- **Pages**: one page per chosen set, in that order, or every chosen layer
+  set on one composite page (drawn mechanical, inner, bottom, top, so the top
+  side is on top). An assembly drawing is always a page of its own, after the
+  composite page.
+- **Mirror the bottom side**: a page of the bottom set or of the bottom
+  assembly drawing is drawn mirrored left to right, as seen from below. A
+  composite page is never mirrored.
 - **Scale**: Fit to Page fills the space inside the 10 mm margins and above
   the title block; 1:1 prints the board at its size, centred (a board larger
   than the page is cut at the page edge; the page is flagged and the export
@@ -82,13 +85,64 @@ Export PDF asks for the file and writes it off the UI thread, crash-safe.
 
 Headless and CLI: `export_board_pdf document=<board> path=<file>` with the
 optional `layers` (comma-separated set ids `top`, `bottom`, `inner`,
-`mechanical`), `pages` (`per_set`, `composite`), `scale` (`fit`,
-`one_to_one`) and the switches `monochrome`, `mirror_bottom`, `outline`,
-`drill_marks`, `title_block`; anything left out is the default above. The
-answer lists each page's sets, mirror, scale, printed size in mm and whether
-the board runs off the page, and the export's warnings. CLI only
-(`export` capability).
+`mechanical`, `assembly_top`, `assembly_bottom`), `pages` (`per_set`,
+`composite`), `scale` (`fit`, `one_to_one`) and the switches `monochrome`,
+`mirror_bottom`, `outline`, `drill_marks`, `title_block`; anything left out
+is the default above. The answer lists each page's sets, mirror, scale,
+printed size in mm and whether the board runs off the page, and the export's
+warnings. CLI only (`export` capability).
 
-Not yet: footprint designator and comment texts, a raster preview of the
-pages, a system printer, and a page size other than A4 landscape in the
-dialog (the options carry one).
+Not yet: footprint designator and comment texts on the layer set pages, a
+raster preview of the pages, a system printer, and a page size other than A4
+landscape in the dialog (the options carry one).
+
+## Assembly drawings
+
+One builder, `signex_output::assembly_drawing(board, side)`, makes the top or
+the bottom assembly drawing as a list of marks in board mm; the board PDF
+draws it as a page and `signex_output::assembly_svg` writes it as SVG, so the
+two never differ.
+
+- **Content**, in drawing order: the Dimensions layer (board drawings,
+  texts and linear dimensions), the side's Fab, Assembly and Fiducial layers
+  (footprint and board drawings and texts), the side's Designator layer, the
+  designator of each part on that side, then the board outline and the Edge
+  Cuts drawings on top. The designator is the part's own designator text when
+  it sits on the side's Designator layer (left out when hidden), else the
+  designator centred on the part's origin, turned with the part and kept
+  upright, 1 mm high. Silkscreen, copper, courtyard and the other side are
+  left out.
+- **Inks**: outline black, fab grey, assembly blue, fiducial green,
+  designators red, dimensions purple; black in monochrome.
+- **Extent**: the outline and Edge Cuts drawings, else every mark, else the
+  default board area. An assembly page is framed on it, so a board drawn only
+  with Edge Cuts lines still fills the page.
+- **PDF**: the sets Assembly Drawing, Top (`assembly_top`) and Assembly
+  Drawing, Bottom (`assembly_bottom`) of Board Print / PDF, with the page's
+  scale, ink, mirror and title block options.
+- **SVG**: one file per side, `<board>-assembly-top.svg` and
+  `<board>-assembly-bottom.svg`. One view-box unit is one board mm with a
+  2 mm margin, so the file prints 1:1; numbers to the micrometre; texts are
+  centred `<text>` elements in Roboto (a viewer falls back to sans-serif).
+  The bottom file is mirrored when Mirror the Bottom Side is on.
+
+Surfaces: Board Print / PDF's Export Assembly SVG and the palette's
+Assembly Drawings as SVG (`export_assembly_svg`) ask for a folder and write
+the drawings of the chosen assembly sets, both sides when none is chosen,
+off the UI thread and crash-safe. Headless and CLI:
+`export_assembly_svg document=<board> path=<folder>` with the optional
+`sides` (`top`, `bottom`; both when left out), `mirror_bottom` (on when left
+out) and `monochrome`; the answer lists each file's side, path and mirror.
+CLI only (`export` capability). Agents: `board_assembly_drawing
+document=<board> side=<top|bottom>` with the same switches answers
+`{document, side, mirrored, extent_mm, svg}` and writes nothing; in a window
+it opens Board Print / PDF.
+
+Golden tests: `signex_output::svg::board::tests` and
+`signex_output::pdf::board::assembly_tests` draw the corpus board
+`mixed-tht-smd` and compare with `crates/signex-output/testdata/assembly/`
+(regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-output assembly` when
+the drawing is meant to change). The PDF goldens are the pages' content
+streams with numbers rounded to 0.01 pt.
+
+Not yet: free arcs and free pads on the drawing's layers.

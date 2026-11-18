@@ -13,6 +13,7 @@ use crate::pdf::ColourMode;
 
 #[cfg(test)]
 mod bus_entry_tests;
+pub mod board;
 mod document;
 mod drawings;
 mod family;
