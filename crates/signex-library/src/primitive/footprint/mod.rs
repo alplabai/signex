@@ -17,6 +17,8 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+#[cfg(test)]
+mod format_version_tests;
 mod load_repair;
 mod mount_style;
 mod pad;
@@ -27,8 +29,6 @@ mod serde_tsv;
 mod silk_marker;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod format_version_tests;
 
 pub use load_repair::LoadRepair;
 pub use mount_style::MountStyle;

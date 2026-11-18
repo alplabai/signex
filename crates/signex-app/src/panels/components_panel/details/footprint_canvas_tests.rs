@@ -3,10 +3,10 @@
 
 use iced::widget::canvas::Program;
 use iced::{Event, Point, Rectangle, mouse};
+use signex_library::primitive::footprint::ChamferedCorners;
 use signex_library::primitive::{
     Drill, Footprint, FpGraphic, FpGraphicKind, Pad, PadKind, PadShape, Polygon,
 };
-use signex_library::primitive::footprint::ChamferedCorners;
 
 use super::footprint_scale::{length_label, round_length_mm, scale_bar, size_label};
 use super::{FootprintPreview, PreviewState};
