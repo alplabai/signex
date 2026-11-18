@@ -139,16 +139,18 @@ pub(crate) mod tests {
             ("matrix/matrix".to_string(), "UNITS=MM\n".to_string()),
             (long.clone(), String::new()),
         ];
-        let tar = archive("job", &files);
+        // A 64-character root makes the long path split into prefix and name.
+        let root = "j".repeat(64);
+        let tar = archive(&root, &files);
         let read = read_archive(&tar);
         assert_eq!(
             read,
             vec![
-                ("job/matrix/matrix".to_string(), "UNITS=MM\n".to_string()),
-                (format!("job/{long}"), String::new()),
+                (format!("{root}/matrix/matrix"), "UNITS=MM\n".to_string()),
+                (format!("{root}/{long}"), String::new()),
             ]
         );
-        assert!(tar.starts_with("job/\0"), "the root folder comes first");
-        assert_eq!(tar, archive("job", &files), "the same bytes every time");
+        assert!(tar.starts_with(&format!("{root}/\0")), "the root folder comes first");
+        assert_eq!(tar, archive(&root, &files), "the same bytes every time");
     }
 }

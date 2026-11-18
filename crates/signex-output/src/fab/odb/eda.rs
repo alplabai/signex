@@ -105,11 +105,11 @@ impl<'a> Eda<'a> {
                             entry.1.extend(fids);
                         }
                         (None, Some(net)) => {
-                            let copper = nets.entry(net.clone()).or_default();
+                            let net_copper = nets.entry(net.clone()).or_default();
                             if *function == Function::ViaPad {
-                                copper.via.extend(fids);
+                                net_copper.via.extend(fids);
                             } else {
-                                copper.trace.extend(fids);
+                                net_copper.trace.extend(fids);
                             }
                         }
                         (None, None) => {}
@@ -190,8 +190,8 @@ impl<'a> Eda<'a> {
         let nets = nets
             .into_iter()
             .enumerate()
-            .map(|(number, (name, copper))| {
-                let subnets = subnets(number, copper, &mut components);
+            .map(|(number, (name, net_copper))| {
+                let subnets = subnets(number, net_copper, &mut components);
                 (word(&name), subnets)
             })
             .collect();
