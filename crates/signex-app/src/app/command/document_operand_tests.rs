@@ -546,6 +546,13 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "show_layer_group",
                     "show_layer_set",
                     "save_layer_set",
+                    // #2363: the Layers panel's board view configuration.
+                    "set_layer_visible",
+                    "set_active_layer",
+                    "set_layer_color",
+                    "show_used_layers_only",
+                    "set_object_visible",
+                    "set_object_transparency",
                     // #2399, #2400: DRC results and the board net classes.
                     "show_drc_violation",
                     "filter_drc_results",

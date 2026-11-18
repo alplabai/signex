@@ -483,7 +483,14 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "show_layer_group"
         | "set_layer_tab_names"
         | "toggle_layer_numbers"
-        | "flip_board_view" => Needs::Pcb,
+        | "flip_board_view"
+        // #2363: the Layers panel's board view configuration.
+        | "set_layer_visible"
+        | "set_active_layer"
+        | "set_layer_color"
+        | "show_used_layers_only"
+        | "set_object_visible"
+        | "set_object_transparency" => Needs::Pcb,
         // At 0° Reset has nothing to do, so it is greyed.
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,

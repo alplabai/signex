@@ -9,7 +9,7 @@ use pcb_geom::{
     BoardIndex, BoardTextField, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
     pick_under_texts, turned_marquee_select,
 };
-use signex_renderer::pcb::PcbLayerView;
+use signex_renderer::pcb::{BoardObject, PcbLayerView, zone_object};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
@@ -491,7 +491,7 @@ impl PcbSelectionState {
 impl PcbSelectionState {
     /// `index` without the items on a layer the view hides.
     fn without_hidden(&self, index: BoardIndex, board: &PcbBoard) -> BoardIndex {
-        if !self.view.has_hidden() {
+        if !self.view.has_hidden() && !self.view.hides_objects() {
             return index;
         }
         let hidden = hidden_items(board, &self.view);
@@ -500,7 +500,8 @@ impl PcbSelectionState {
 }
 
 /// The pads, tracks, vias, footprint bodies and drawn areas of `board` that
-/// sit only on hidden layers. A footprint body follows the side the footprint is on.
+/// sit only on hidden layers, or whose kind the View Options hide (#2363).
+/// A footprint body follows the side the footprint is on.
 fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
     let mut hidden = HashSet::new();
     for footprint in &board.footprints {
@@ -508,7 +509,7 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             hidden.insert(ItemRef::Footprint(footprint.uuid));
         }
         for pad in &footprint.pads {
-            if !view.shows_pad(footprint, pad) {
+            if !view.shows_object(BoardObject::Pads) || !view.shows_pad(footprint, pad) {
                 hidden.insert(ItemRef::Pad {
                     footprint: footprint.uuid,
                     pad: pad.uuid,
@@ -524,19 +525,22 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             }
         }
     }
+    let tracks = view.shows_object(BoardObject::Tracks);
     for segment in &board.segments {
-        if !view.shows_any(std::slice::from_ref(&segment.layer)) {
+        if !tracks || !view.shows_any(std::slice::from_ref(&segment.layer)) {
             hidden.insert(ItemRef::Track(segment.uuid));
         }
     }
     for via in &board.vias {
-        if !view.shows_via(&via.layers) {
+        if !view.shows_object(BoardObject::Vias) || !view.shows_via(&via.layers) {
             hidden.insert(ItemRef::Via(via.uuid));
         }
     }
     for zone in &board.zones {
         let kind = pcb_geom::PickKind::of_zone(zone);
-        if let Some(kind) = kind.filter(|_| !view.shows_any(std::slice::from_ref(&zone.layer))) {
+        let off = !view.shows_object(zone_object(zone))
+            || !view.shows_any(std::slice::from_ref(&zone.layer));
+        if let Some(kind) = kind.filter(|_| off) {
             hidden.insert(ItemRef::Zone {
                 zone: zone.uuid,
                 kind,
@@ -548,7 +552,10 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
         let Some(kind) = graphic.kind() else {
             continue;
         };
-        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+        // A text frame is a text: hidden with Texts.
+        let text_off = kind == signex_types::pcb_graphic::BoardGraphicKind::TextFrame
+            && !view.shows_object(BoardObject::Texts);
+        if text_off || !view.shows_any(std::slice::from_ref(&graphic.layer)) {
             hidden.insert(ItemRef::Graphic {
                 graphic: graphic.uuid,
                 kind: pcb_geom::PickKind::of_graphic(kind),
@@ -561,22 +568,39 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
 /// The strings, free arcs, free pads and dimensions on layers `view` hides
 /// (#2373): not picked, as they are not drawn.
 fn hidden_free_items(board: &PcbBoard, view: &PcbLayerView, hidden: &mut HashSet<ItemRef>) {
-    let off = |layer: &String| !view.shows_any(std::slice::from_ref(layer));
-    for text in board.texts.iter().filter(|t| off(&t.layer)) {
+    let off = |layer: &String, kind| {
+        !view.shows_object(kind) || !view.shows_any(std::slice::from_ref(layer))
+    };
+    for text in board
+        .texts
+        .iter()
+        .filter(|t| off(&t.layer, BoardObject::Texts))
+    {
         hidden.insert(ItemRef::Text(text.uuid));
     }
-    for arc in board.free.arcs.iter().filter(|a| off(&a.layer)) {
+    for arc in board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| off(&a.layer, BoardObject::Arcs))
+    {
         hidden.insert(ItemRef::Arc(arc.uuid));
     }
-    for dimension in board.free.dimensions.iter().filter(|d| off(&d.layer)) {
+    for dimension in board
+        .free
+        .dimensions
+        .iter()
+        .filter(|d| off(&d.layer, BoardObject::Dimensions))
+    {
         hidden.insert(ItemRef::Dimension(dimension.uuid));
     }
     let frame = signex_types::pcb_free::free_pad_frame();
+    let pads = view.shows_object(BoardObject::Pads);
     for pad in board
         .free
         .pads
         .iter()
-        .filter(|p| !view.shows_pad(&frame, p))
+        .filter(|p| !pads || !view.shows_pad(&frame, p))
     {
         hidden.insert(ItemRef::FreePad(pad.uuid));
     }
@@ -760,6 +784,57 @@ mod tests {
         view.show_all();
         state.set_view(&view);
         assert!(state.click(&board, on_bottom, 0.1, ClickMode::Replace));
+    }
+
+    /// #2363: a kind the View Options hide is not picked, on any layer, and
+    /// can be picked again once shown.
+    #[test]
+    fn a_hidden_object_kind_cannot_be_hit() {
+        let board = two_layer_board();
+        let on_top = Point::new(2.0, 0.0);
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Tracks, false);
+        state.set_view(&view);
+        assert!(!state.click(&board, on_top, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+
+        view.set_object_visible(BoardObject::Tracks, true);
+        state.set_view(&view);
+        assert!(state.click(&board, on_top, 0.1, ClickMode::Replace));
+    }
+
+    /// #2363: hiding Texts hides a text frame, drawing and all; a plain
+    /// drawing on the same layer stays pickable.
+    #[test]
+    fn hiding_texts_hides_a_text_frame_but_not_a_drawing() {
+        let drawing = |n: u128, kind: &str| signex_types::pcb::BoardGraphic {
+            uuid: Uuid::from_u128(n),
+            graphic_type: kind.to_owned(),
+            layer: "TopSilkscreen".to_owned(),
+            width: 0.1,
+            start: Some(Point::new(0.0, 0.0)),
+            end: Some(Point::new(4.0, 2.0)),
+            center: None,
+            radius: 0.0,
+            points: Vec::new(),
+            text: "NOTE".to_owned(),
+            font_size: 1.0,
+        };
+        let mut board = board();
+        board.graphics = vec![drawing(20, "text_frame"), drawing(21, "line")];
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Texts, false);
+        let hidden = hidden_items(&board, &view);
+        let ids: Vec<Uuid> = hidden
+            .iter()
+            .filter_map(|item| match item {
+                ItemRef::Graphic { graphic, .. } => Some(*graphic),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [Uuid::from_u128(20)]);
     }
 
     /// Review finding 4 / S1 on #2271: selecting a list of items (a DRC pick,

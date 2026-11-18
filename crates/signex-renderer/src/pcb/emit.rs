@@ -10,6 +10,7 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         net: segment.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        object: BoardObject::Tracks,
     }
 }
 
@@ -26,6 +27,7 @@ pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInpu
             net: arc.net,
             dimmed: false,
             ink: CopperInk::Unknown,
+            object: BoardObject::Arcs,
         })
         .collect()
 }
@@ -131,6 +133,7 @@ pub(super) fn zone_from_board_zone(
         dimmed: false,
         ink: CopperInk::Unknown,
         fill: zone.is_pour().then(Vec::new),
+        object: super::layer_view::zone_object(zone),
     })
 }
 
@@ -233,7 +236,12 @@ fn pad_drill_mm(pad: &Pad) -> f32 {
 /// The colour of copper drawn in `ink`; `fallback` for copper on no layer
 /// this build knows.
 pub(super) fn copper_color(theme: &ResolvedTheme, ink: CopperInk, fallback: ColorSlot) -> [f32; 4] {
-    theme.color(ink.slot(fallback))
+    theme.copper_ink_color(ink, fallback)
+}
+
+/// `color` faded by the view's transparency of `kind` (#2363).
+fn faded(theme: &ResolvedTheme, kind: BoardObject, color: [f32; 4]) -> [f32; 4] {
+    with_alpha_mul(color, theme.paint().opacity(kind))
 }
 
 pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
@@ -241,7 +249,11 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
     scene.lines.reserve(snapshot.traces.len());
 
     for trace in &snapshot.traces {
-        let color = copper_color(theme, trace.ink, ColorSlot::Wire);
+        let color = faded(
+            theme,
+            trace.object,
+            copper_color(theme, trace.ink, ColorSlot::Wire),
+        );
         scene.lines.push(LineSegment {
             p0: trace.p0,
             p1: trace.p1,
@@ -264,7 +276,11 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     for via in &snapshot.vias {
         let outer = (via.diameter_mm * 0.5).max(0.01);
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
-        let color = copper_color(theme, via.ink, ColorSlot::Junction);
+        let color = faded(
+            theme,
+            BoardObject::Vias,
+            copper_color(theme, via.ink, ColorSlot::Junction),
+        );
 
         // A drill as wide as the via leaves no copper: all of it is hole.
         if hole > 0.0 && hole >= outer {
@@ -348,7 +364,11 @@ pub(super) fn emit_static_polygons(
             });
             continue;
         }
-        let copper = copper_color(theme, pad.ink, ColorSlot::Pin);
+        let copper = faded(
+            theme,
+            BoardObject::Pads,
+            copper_color(theme, pad.ink, ColorSlot::Pin),
+        );
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
             pad.dimmed,
@@ -375,11 +395,19 @@ pub(super) fn emit_static_polygons(
 
     for zone in &snapshot.zones {
         let fill = dim_if(
-            with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            faded(
+                theme,
+                zone.object,
+                with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            ),
             zone.dimmed,
         );
         let stroke = Some(dim_if(
-            copper_color(theme, zone.ink, ColorSlot::Bus),
+            faded(
+                theme,
+                zone.object,
+                copper_color(theme, zone.ink, ColorSlot::Bus),
+            ),
             zone.dimmed,
         ));
         // A pour: its fill pieces as copper, then its outline stroked only.

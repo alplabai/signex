@@ -309,6 +309,45 @@ pub const LAYER_SET_NAME: &[Operand] = &[required("name", OperandKind::Text)];
 /// (#2394).
 pub const LAYER_TAB_NAMES: &[Operand] = &[required("style", OperandKind::Text)];
 
+/// One layer of the named board's view shown (`on=true`) or hidden (#2363).
+pub const LAYER_VISIBLE: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// One layer's colour in the named board's view (#2363); without `color`
+/// the board palette's again.
+pub const LAYER_COLOR: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    optional("color", OperandKind::Color),
+    required("document", OperandKind::Document),
+];
+
+/// A switch of the named board's view (#2363).
+pub const ON_BOARD: &[Operand] = &[
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// A kind of object of the named board's view shown or hidden (#2363):
+/// `pads`, `vias`, `arcs`, `tracks`, `polygons`, `regions`, `fills`,
+/// `texts`, `dimensions`, `keepouts`, or `all`.
+pub const OBJECT_VISIBLE: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// How transparent a kind of object of the named board's view is drawn
+/// (#2363): `value` in percent, 0 to 100; `kind` is `pads`, `vias`, `arcs`,
+/// `tracks`, `polygons`, `regions` or `fills`.
+pub const OBJECT_TRANSPARENCY: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("value", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
 /// DXF import onto a layer (#2410): the file, the layer token (the active
 /// layer when left out) and the board.
 pub const IMPORT_DXF: &[Operand] = &[

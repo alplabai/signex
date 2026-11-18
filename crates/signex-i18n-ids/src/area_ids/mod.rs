@@ -6,6 +6,7 @@ mod board_checks;
 mod board_output;
 mod board_panel;
 mod board_query;
+mod board_view;
 mod bom;
 mod chrome;
 mod dialog;
@@ -37,6 +38,7 @@ pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
 pub use board_query::*;
+pub use board_view::*;
 pub use bom::*;
 pub use chrome::*;
 pub use dialog::*;
@@ -72,6 +74,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
         board_query::BOARD_QUERY,
+        board_view::BOARD_VIEW,
         bom::BOM,
         chrome::CHROME,
         dialog::DIALOG,

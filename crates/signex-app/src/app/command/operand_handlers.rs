@@ -15,6 +15,7 @@ use super::agent_edits as agent;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
+use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
@@ -115,6 +116,16 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("hide_layer_group", strip::hide_layer_group),
     ("show_layer_group", strip::show_layer_group),
     ("set_layer_tab_names", strip::set_layer_tab_names),
+    // #2363: the Layers panel's board view configuration.
+    ("set_layer_visible", board_view::set_layer_visible),
+    ("set_active_layer", board_view::set_active_layer),
+    ("set_layer_color", board_view::set_layer_color),
+    ("show_used_layers_only", board_view::show_used_layers_only),
+    ("set_object_visible", board_view::set_object_visible),
+    (
+        "set_object_transparency",
+        board_view::set_object_transparency,
+    ),
     ("board_report_bom", output::board_report_bom),
     ("board_report_netlist", output::board_report_netlist),
     ("board_report_net_length", output::board_report_net_length),
@@ -335,6 +346,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // #2363: a person uses the Layers panel.
+        "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(
+            "this command needs the operands `layer` and `document` — \
+             use the layer's row in the Layers panel",
+        ),
+        "show_used_layers_only" => Some(
+            "`show_used_layers_only` needs the operands `on` and `document` — \
+             use Used On in the Layers panel",
+        ),
+        "set_object_visible" | "set_object_transparency" => Some(
+            "this command needs the operands `kind` and `document` — \
+             use View Options in the Layers panel",
         ),
         // #2410: a person edits the panel in the board's Properties.
         "set_board_panel" => Some(

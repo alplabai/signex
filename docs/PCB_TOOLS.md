@@ -634,6 +634,62 @@ channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
 View menu rows. See `docs/COMMANDS.md`.
 
+## Board view configuration
+
+The Layers panel configures the board view (#2363). It has a search field,
+which keeps the rows whose name holds the text, and two tabs.
+
+**Layers & Colors**, top to bottom:
+
+- Layer Sets: the set dropdown (the built-in sets, then the saved ones), a
+  name field with Save, and Delete for the saved set in view. They do what
+  the layer set button does.
+- Active Layer: the same choice as the layer tabs.
+- View From Bottom Side: the flip of the layer tab menu.
+- Import... and Export...: greyed until a view can be saved to a file.
+- All Layers: its eye hides every layer, or shows them all while one is
+  hidden. Used On lists only the layers the board has objects on.
+- Signal and Plane Layers: the copper layers, each with its number in the
+  stack and its type.
+- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
+  side. The rows map onto the named technical layers: 3D Body, Assembly,
+  Component Outline (the fabrication layers), Courtyard, Designator,
+  Overlay (silkscreen), Paste, Solder (solder mask), Adhesive, Fiducial and
+  Keep-Out. Coating, Component Center, Tenting and Value have no layer and
+  are greyed.
+- Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
+  and ECO 2. Other Layers: Drill Drawing, Drill Guide (no layer yet,
+  greyed) and Multi-Layer (vias and through-hole pads).
+- System Colors: the eyes of Connection Lines (the ratsnest) and the Origin
+  Marker work; the other rows and the system colours are greyed.
+
+A click on a layer's name makes it the active layer. A click on a chip opens
+the colours under the row: twelve presets, Custom... and the palette colour
+again. The colour is an override on top of the one board palette for this
+board view only; the canvas (the Board Outline colour draws the board edge
+too), the chip and the board texts draw it. The Keep-Out chips are greyed:
+the board's keepout regions keep the palette colour.
+
+**View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
+Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All
+Objects (Mixed while the rows differ) and one row per kind of object, each
+with an eye, Draft (greyed) and a Transparency slider. Pads, Vias, Arcs,
+Tracks, Polygons, Regions, Fills, Texts, Dimensions and Keepouts can be
+hidden; a hidden kind is neither drawn nor picked. Texts covers footprint
+texts, board strings and text frames, box and all. Pads, Vias, Arcs (copper
+arcs; Tracks never fades them), Tracks, Polygons, Regions and Fills can be
+drawn transparent. Mask and Dim Settings and the Additional Options chips
+are greyed until the view can draw them.
+
+All of this is the board view's state, for the session; nothing touches the
+board file. Saving the view, presets and every greyed control are tracked in
+#2480. Every control has a catalog command that names its board with
+`document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
+(without `color`, the palette colour again), `show_used_layers_only`,
+`set_object_visible` (`kind=all` for All Objects) and
+`set_object_transparency` (`value` in percent), next to the layer strip's
+commands above.
+
 ## Reading a board
 
 Measure, Find and Replace, Find Similar Objects and the nets work on a board

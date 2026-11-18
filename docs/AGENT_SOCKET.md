@@ -120,7 +120,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
+  person's preferences), the Layers panel's board view commands
+  `set_layer_visible`, `set_active_layer`, `set_layer_color`,
+  `show_used_layers_only`, `set_object_visible` and `set_object_transparency`
+  (#2363; view state of the named board, no undo step), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
   `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
   `document` is the project or any document of it), the board's DRC

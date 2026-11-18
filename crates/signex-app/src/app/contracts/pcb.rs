@@ -253,14 +253,9 @@ pub enum PcbViewMsg {
     /// The user made one layer the active one (a tab under the canvas or a
     /// Layers panel row).
     ActiveLayerPicked(PcbLayer),
-    /// The user turned single-layer mode on or off (Shift+S, the Layers
-    /// panel button).
+    /// The user turned single-layer mode on or off (Shift+S, the View
+    /// Options switch).
     SingleLayerModeToggled,
-    /// The user showed or hid every layer of one Layers panel group.
-    LayerGroupVisibilitySet {
-        group: signex_renderer::pcb::LayerGroup,
-        visible: bool,
-    },
     /// The user asked to show or hide one layer (its eye in the Layers panel).
     LayerVisibilityToggled(PcbLayer),
     /// The user asked to show or hide the active layer.
@@ -289,6 +284,30 @@ pub enum PcbViewMsg {
     /// The user flipped the board view: seen from below or above again
     /// (#2394).
     BoardFlipToggled,
+    /// The user showed or hid one layer (an eye of the Layers panel,
+    /// `set_layer_visible`, #2363).
+    LayerVisibilitySet { layer: PcbLayer, visible: bool },
+    /// The user gave a layer its own colour in this view, or (`None`) the
+    /// board palette's again (a colour chip, `set_layer_color`, #2363).
+    LayerColourSet {
+        layer: PcbLayer,
+        colour: Option<[u8; 3]>,
+    },
+    /// The Layers panel lists only the layers the board uses, or every
+    /// layer again (Used On, #2363).
+    UsedLayersOnlySet(bool),
+    /// The user showed or hid one kind of object; `None`: every kind the
+    /// view can hide (View Options, #2363).
+    ObjectVisibilitySet {
+        kind: Option<signex_renderer::pcb::BoardObject>,
+        visible: bool,
+    },
+    /// The user set how transparent one kind of object is drawn, percent
+    /// (View Options, #2363).
+    ObjectTransparencySet {
+        kind: signex_renderer::pcb::BoardObject,
+        percent: u8,
+    },
 }
 
 /// What the user did about the turn of a board view on screen (#2316). View

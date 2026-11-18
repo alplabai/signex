@@ -614,6 +614,7 @@ impl Signex {
                     projects_view: Default::default(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),
+                    pcb_layers_ui: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
