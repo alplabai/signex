@@ -1503,7 +1503,11 @@ fn property_run(seed: u64, cases: usize) -> RunCounts {
             .symbols
             .iter()
             .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
-        if selects_wire || moves_power {
+        // A pin end the plain move put inside a wire joins it through a new
+        // dot (2026-11-18): the user's placement, not the pass's doing.
+        let pin_joined = (plain.document().junctions.iter())
+            .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
+        if selects_wire || moves_power || pin_joined {
             // Co-selected items move plainly, wherever the user puts them, and
             // a power port landing on a net merges it by name: the closure
             // oracle above is the check for these cases.
@@ -1627,17 +1631,28 @@ fn moving_a_part_by_its_own_pitch_does_not_short_its_pins() {
 }
 
 #[test]
-fn a_pin_landing_on_a_foreign_wire_interior_does_not_merge_nets() {
+/// A pin end landing inside a wire joins it through a dot (2026-11-18; this
+/// used to leave the nets apart, the bare contact counting for nothing).
+fn a_pin_landing_on_a_foreign_wire_interior_joins_it_through_a_dot() {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // 45/55
     let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0)); // 20/30
-    let _r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0)); // 45/55 @ y90
+    let r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0)); // 45/55 @ y90
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
     add_wire(&mut sheet, (45.0, 60.0), (45.0, 90.0)); // foreign net, R5.1
-    let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet, &[r1]);
+    let at = Point::new(45.0, 65.0);
+    assert!(
+        e.document().junctions.iter().any(|j| j.position == at),
+        "{}",
+        describe(e.document())
+    );
+    let joined = net_shape(e.document()).into_iter().any(|(_, pins)| {
+        pins.contains(&(r1, "1".to_string())) && pins.contains(&(r5, "1".to_string()))
+    });
+    assert!(joined, "R1.1 joins R5.1");
+    assert_no_overlaps(&e);
 }
 
 #[test]

@@ -142,6 +142,9 @@ pub enum ErcMsg {
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
+    /// Repair Pin Junctions: a dot on every pin end of the active sheet that
+    /// lies inside a wire with none, as one undo step (2026-11-18).
+    PinJunctionRepairRequested,
     /// "Save as profile": open the dialog that asks for a name and version
     /// (#1608). Writes nothing.
     ProfileSaveDialogOpened,
