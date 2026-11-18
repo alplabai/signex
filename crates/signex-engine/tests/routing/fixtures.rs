@@ -1,7 +1,9 @@
 //! The boards the routing soak and bench run on: a synthetic board, the
-//! realistic corpus boards (`signex-types/tests/corpus/pcb/real/`), and
-//! every board of the routing corpus (`testdata/routing-corpus/*.snxpcb`)
-//! once it is in. A board's net classes come from the `.snxprj` beside it.
+//! realistic corpus boards (`signex-types/tests/corpus/pcb/real/`), and the
+//! boards of the routing corpus (`testdata/routing-corpus/*.snxpcb`, #2481),
+//! all of them or the smallest few. A board's net classes come from the
+//! `.snxprj` beside it. The routing corpus is stored in Git LFS: a board
+//! whose objects were not fetched is skipped with a message.
 
 use std::path::{Path, PathBuf};
 
@@ -12,26 +14,51 @@ use signex_types::pcb::PcbBoard;
 use signex_types::project::parse_project_bytes;
 use uuid::Uuid;
 
+/// How many routing-corpus boards a per-PR run takes.
+pub const CORPUS_SAMPLE: usize = 3;
+
+/// The first line of a Git LFS pointer, which stands in for a file whose
+/// objects were not fetched.
+const LFS_POINTER: &str = "version https://git-lfs.github.com/spec/v1";
+
 pub struct Fixture {
     pub name: String,
     pub board: PcbBoard,
     pub classes: Vec<NetClass>,
 }
 
-/// Every board, in a fixed order: the synthetic one, the realistic corpus,
-/// then the routing corpus.
-pub fn all() -> Vec<Fixture> {
+/// Which routing-corpus boards a run takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Corpus {
+    All,
+    /// The `n` smallest files, so a per-PR run stays fast.
+    Smallest(usize),
+}
+
+/// The boards, in a fixed order: the synthetic one, the realistic corpus,
+/// then the routing corpus boards `corpus` picks.
+pub fn boards(corpus: Corpus) -> Vec<Fixture> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut out = vec![synthetic()];
     out.extend(boards_in(
         &root.join("../signex-types/tests/corpus/pcb/real"),
+        Corpus::All,
     ));
-    out.extend(boards_in(&root.join("../../testdata/routing-corpus")));
+    out.extend(boards_in(
+        &root.join("../../testdata/routing-corpus"),
+        corpus,
+    ));
     out
 }
 
-/// The `.snxpcb` boards in `dir`, by file name; none when there is no `dir`.
-fn boards_in(dir: &Path) -> Vec<Fixture> {
+/// The size of the file at `path`; unreadable files sort last.
+fn file_len(path: &Path) -> u64 {
+    std::fs::metadata(path).map_or(u64::MAX, |m| m.len())
+}
+
+/// The `.snxpcb` boards in `dir` that `corpus` picks, by file name; none
+/// when there is no `dir`.
+fn boards_in(dir: &Path, corpus: Corpus) -> Vec<Fixture> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -40,15 +67,26 @@ fn boards_in(dir: &Path) -> Vec<Fixture> {
         .filter(|path| path.extension().is_some_and(|ext| ext == "snxpcb"))
         .collect();
     paths.sort();
-    paths.iter().map(|path| load(path)).collect()
+    if let Corpus::Smallest(n) = corpus {
+        // A stable sort keeps name order among files of one size.
+        paths.sort_by_key(|path| file_len(path));
+        paths.truncate(n);
+        paths.sort();
+    }
+    paths.iter().filter_map(|path| load(path)).collect()
 }
 
-fn load(path: &Path) -> Fixture {
+/// The board at `path`; `None`, with a message, for a Git LFS pointer.
+fn load(path: &Path) -> Option<Fixture> {
     let name = path
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{name}: {e}"));
+    if text.starts_with(LFS_POINTER) {
+        eprintln!("{name}: skipped, a Git LFS pointer; run `git lfs pull` to fetch the board");
+        return None;
+    }
     let board = SnxPcb::parse(&text)
         .unwrap_or_else(|e| panic!("{name}: {e:?}"))
         .board;
@@ -61,11 +99,11 @@ fn load(path: &Path) -> Fixture {
         }
         Err(_) => Vec::new(),
     };
-    Fixture {
+    Some(Fixture {
         name,
         board,
         classes,
-    }
+    })
 }
 
 /// Eight nets of three round 1 mm top pads each, in rows that bend so

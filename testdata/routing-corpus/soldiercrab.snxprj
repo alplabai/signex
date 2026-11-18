@@ -1,0 +1,26 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "soldiercrab",
+  "net_classes": [
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.127,
+      "diff_pair_width": 0.127,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.127,
+      "via_diameter": 0.4572,
+      "via_drill": 0.2032
+    }
+  ],
+  "pcb_file": "soldiercrab.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

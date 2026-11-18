@@ -132,10 +132,15 @@ clearance the design rules ask from other nets' copper (#2389).
 ### Router soak and bench
 
 `signex-engine`'s `tests/routing/` measures the router against its quality
-bar (#2482, #2483) on every board it finds: a synthetic board, the realistic
-corpus boards (`signex-types/tests/corpus/pcb/real/`) and, once it is in,
-the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
-`.snxprj` beside each board).
+bar (#2482, #2483) on a synthetic board, the realistic corpus boards
+(`signex-types/tests/corpus/pcb/real/`) and the routing corpus
+(`testdata/routing-corpus/*.snxpcb`, net classes from the `.snxprj` beside
+each board). The routing corpus (#2481) is 50 third-party boards under
+their own licences, listed in `testdata/routing-corpus/MANIFEST.tsv` and
+checked by `scripts/check_routing_corpus.sh`; its README says what the
+licences allow. The boards are stored in Git LFS: in a clone without the
+LFS objects each board is a pointer file, and the tests skip it with a
+message (`git lfs pull` fetches them).
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
@@ -162,14 +167,16 @@ the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
   landed step, and the DRC delta: every design rule check finding a route
   adds, other than an unrouted link, names the route's own tracks or vias.
 - **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
-  and bench with every test run (DRC delta and convergence asserted). The
-  scheduled `routing-soak` workflow runs the ignored `soak_long` (10 000
-  actions per board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
+  and bench with every test run (DRC delta and convergence asserted) on the
+  fixed boards and the three smallest routing corpus files, so per-PR CI
+  stays fast. The scheduled `routing-soak` workflow runs the ignored
+  `soak_long` (10 000 actions on every board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
   of actions; median latency at most 16 ms and p95 at most 33 ms on the
   median board by copper count) in release; a failed night opens or
   comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
   `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
-  and one board.
+  and one board (looked up in the whole corpus, also by the short runs).
+  Both workflows that run these tests check out the LFS objects.
 
 ## Differential Pair Routing and Multi-Route
 
