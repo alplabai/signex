@@ -110,6 +110,8 @@ mod sheet_frame_tests;
 #[cfg(test)]
 mod sheet_page_tests;
 #[cfg(test)]
+mod sheet_variables_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod text_extents_tests;
@@ -645,6 +647,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
+            variables: sheet_extras.variables,
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
             text_extents,

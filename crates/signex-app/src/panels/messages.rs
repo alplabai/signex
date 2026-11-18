@@ -1089,6 +1089,8 @@ pub enum PanelMsg {
     TitleBlockTyping(super::TitleBlockField, String),
     /// Title Block: Enter in a field writes its draft to the sheet.
     CommitTitleBlockField(super::TitleBlockField),
+    /// Sheet Variables: an edit of the active sheet's variables (#1987).
+    SheetVariables(super::SheetVariableMsg),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
     /// The multi-selection form of the Properties panel (#1258).

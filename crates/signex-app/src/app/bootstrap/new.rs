@@ -652,6 +652,7 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
+                    sheet_variables: std::collections::BTreeMap::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,

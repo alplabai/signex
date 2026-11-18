@@ -577,6 +577,9 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        let sheet_variables = active_schematic_snapshot
+            .map(|snapshot| snapshot.variables.clone())
+            .unwrap_or_default();
         let project_parameters = self
             .document_state
             .active_path
@@ -715,6 +718,7 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             project_parameters,
+            sheet_variables,
             drafts,
             numeric_draft,
             title_block_sheet,

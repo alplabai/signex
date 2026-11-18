@@ -16,7 +16,9 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
+use super::symbols::{
+    push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables, symbol_field_text,
+};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -28,6 +30,7 @@ use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::field_effective_style;
 use signex_types::schematic::{DrawingPlacement, LabelType};
+use signex_types::variables::{Layered, Resolver, TextTable};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -275,7 +278,7 @@ impl SvgRenderContext {
                     fill_rgb: palette.note_text,
                     text: normalize_standard_text(
                         &match eval_inputs.and_then(|e| e.special_strings) {
-                            Some(special) => crate::resolve(&note.text, special),
+                            Some(special) => crate::resolve_text(&note.text, special),
                             None => note.text.clone(),
                         },
                     ),
@@ -330,19 +333,41 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
+        let special = eval_inputs.and_then(|e| e.special_strings);
+        // The sheet's variable model (#1987), under each part's own fields.
+        let model_tables = special.map(crate::SubstitutionContext::variable_tables);
+        let global_refdes = eval_inputs.map(|e| TextTable(e.global_refdes));
         for sym in &sheet.schematic.symbols {
             let symbol_vars = symbol_eval_variables(sym);
+            let part_table = TextTable(&symbol_vars);
             let mut refdes_vars = HashMap::new();
             if !sym.uuid.is_nil() && !sym.reference.is_empty() {
                 refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
             }
+            let local_refdes = TextTable(&refdes_vars);
             let symbol_eval_ctx = ExpressionEvalContext {
                 current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
                 current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
                 cell: eval_inputs.map(|e| e.cell),
-                at_variables: Some(&symbol_vars),
-                refdes_variables: eval_inputs.map(|e| e.global_refdes).or(Some(&refdes_vars)),
+                at_variables: Some(&part_table),
+                refdes_variables: Some(match &global_refdes {
+                    Some(table) => table as &dyn Resolver,
+                    None => &local_refdes,
+                }),
                 ..ExpressionEvalContext::default()
+            };
+            // The value field reads the variables too (#1596), except a power
+            // port's: its value is a net name, so it resolves nothing.
+            let mut field_layers: Vec<&dyn Resolver> = vec![&part_table];
+            if !sym.is_power
+                && let Some(tables) = &model_tables
+            {
+                field_layers.extend(tables.iter().map(|t| t as &dyn Resolver));
+            }
+            let field_model = Layered::new(field_layers);
+            let field_eval_ctx = ExpressionEvalContext {
+                at_variables: Some(&field_model),
+                ..symbol_eval_ctx.clone()
             };
 
             let symbol_pin_nets = eval_inputs.and_then(|e| {
@@ -446,7 +471,7 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
+                    text: symbol_field_text(&sym.value, sym.is_power, &field_eval_ctx, special),
                 });
             }
         }

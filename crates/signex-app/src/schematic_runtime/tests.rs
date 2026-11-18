@@ -24,6 +24,7 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),

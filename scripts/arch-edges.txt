@@ -66,5 +66,6 @@ signex-req -> signex-bom
 signex-req -> signex-types
 signex-sketch -> signex-expr
 signex-sketch -> signex-types
+signex-types -> signex-expr
 signex-widgets -> signex-i18n
 signex-widgets -> signex-types

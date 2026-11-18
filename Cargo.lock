@@ -6041,6 +6041,7 @@ version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
+ "signex-expr",
  "sha2",
  "tempfile",
  "thiserror 2.0.18",

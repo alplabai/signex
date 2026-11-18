@@ -313,6 +313,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         no_erc_directives,
         directives,
         title_block,
+        variables,
         lib_symbols,
         frame,
         page,
@@ -366,6 +367,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block))
+            || differ(variables, &b.variables)
             || differ(page, &b.page)
             || differ(frame, &b.frame),
         DocumentPatch::PAPER,
@@ -386,7 +388,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 63] = [
+const ALL_KINDS: [CommandKind; 64] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -440,6 +442,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetSheetColor,
     CommandKind::SetPageOrigin,
     CommandKind::SetTitleBlockField,
+    CommandKind::SetSheetVariable,
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
@@ -510,6 +513,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSheetColor
         | CommandKind::SetPageOrigin
         | CommandKind::SetTitleBlockField
+        | CommandKind::SetSheetVariable
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
@@ -1082,6 +1086,13 @@ fn samples() -> Vec<(String, Command)> {
         Command::SetTitleBlockField {
             key: "drawn_by".into(),
             value: "A. Engineer".into(),
+        },
+    );
+    add(
+        "SetSheetVariable",
+        Command::SetSheetVariable {
+            name: "VCC".into(),
+            value: Some("= 3.3V".into()),
         },
     );
     add(

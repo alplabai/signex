@@ -2,8 +2,10 @@
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text, text_input};
+use signex_types::variables::{FieldText, TextTable, classify, variable_text};
+use signex_widgets::{button, text, text_input};
 
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
@@ -30,9 +32,41 @@ fn value_input<'a>(project: &'a LoadedProject, name: &str) -> iced::widget::Text
             value,
         })
     })
+    .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted { project_id }))
     .size(ts.label)
     .padding(sp.s)
     .width(Length::Fill)
+}
+
+/// What the variable `name` evaluates to, or why it does not (#1987); `None`
+/// for a literal value, which shows as typed.
+fn evaluation_note<'a>(
+    i18n: &signex_i18n::I18n,
+    project: &LoadedProject,
+    name: &str,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    let ts = TypeScale::default();
+    let stored = project.data.parameters.get(name)?;
+    if let FieldText::Literal(_) = classify(stored) {
+        return None;
+    }
+    let (note, color) = match variable_text(&TextTable(&project.data.parameters), name)? {
+        Ok(value) => (
+            t!(i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value),
+            tokens.text_secondary,
+        ),
+        Err(error) => {
+            let error = error.to_string();
+            (t!(i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error), tokens.error)
+        }
+    };
+    Some(
+        text(note)
+            .size(ts.label)
+            .color(crate::styles::ti(color))
+            .boxed(),
+    )
 }
 
 pub(in crate::app::project_tab) fn view<'a>(
@@ -44,16 +78,14 @@ pub(in crate::app::project_tab) fn view<'a>(
     let (ts, sp) = (TypeScale::default(), Spacing::default());
     let project_id = project.id;
     let mut body = column![
-        text(raw("Parameters"))
+        text(t!(i18n, ids::PROJECT_SECTION_PARAMETERS))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text))
             .boxed(),
-        text(raw(
-            "Every sheet inherits these; a sheet's own Title Block value overrides one."
-        ))
-        .size(ts.label)
-        .color(crate::styles::ti(tokens.text_secondary))
-        .boxed(),
+        text(t!(i18n, ids::PROJECT_PARAMETERS_HINT))
+            .size(ts.label)
+            .color(crate::styles::ti(tokens.text_secondary))
+            .boxed(),
     ]
     .spacing(sp.l)
     .width(Length::Fixed(ts.body * SECTION_MAX_EMS));
@@ -63,9 +95,12 @@ pub(in crate::app::project_tab) fn view<'a>(
             value_input(project, field.key()),
             tokens,
         ));
+        if let Some(note) = evaluation_note(i18n, project, field.key(), tokens) {
+            body = body.push(note);
+        }
     }
     body = body.push(
-        text(raw("Custom parameters"))
+        text(t!(i18n, ids::PROJECT_PARAMETERS_VARIABLES))
             .size(ts.heading)
             .color(crate::styles::ti(tokens.text))
             .boxed(),
@@ -76,7 +111,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         .keys()
         .filter(|k| !TitleBlockField::ALL.iter().any(|f| f.key() == k.as_str()))
     {
-        let remove = button(text(raw("Remove")).size(ts.body))
+        let remove = button(text(t!(i18n, ids::PROJECT_PARAMETERS_REMOVE)).size(ts.body))
             .padding([sp.xs, sp.m])
             .style(crate::styles::outline_button(tokens))
             .on_press(tab_message(ProjectTabMsg::ParameterRemoved {
@@ -90,8 +125,11 @@ pub(in crate::app::project_tab) fn view<'a>(
                 .align_y(iced::Alignment::Center),
             tokens,
         ));
+        if let Some(note) = evaluation_note(i18n, project, name, tokens) {
+            body = body.push(note);
+        }
     }
-    let add = button(text(raw("Add")).size(ts.body))
+    let add = button(text(t!(i18n, ids::PROJECT_PARAMETERS_ADD)).size(ts.body))
         .padding([sp.xs, sp.m])
         .style(crate::styles::outline_button(tokens))
         .on_press(tab_message(ProjectTabMsg::ParameterAdded { project_id }));

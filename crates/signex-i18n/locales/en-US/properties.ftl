@@ -240,3 +240,12 @@ properties-title-block-from-project = { $field } (project)
 # The sheet's own value replaces the project's. $field is the field's name.
 properties-title-block-overrides-project = { $field } (overrides project)
 properties-title-block-hint = Press Enter to apply a field.
+properties-section-sheet-variables = Sheet Variables
+properties-sheet-variable-add = Add
+properties-sheet-variable-remove = Remove
+# What a variable's `=` expression evaluates to. $value is the result, such
+# as 1.65V.
+properties-sheet-variable-shows = Shows { $value }
+# Why a variable's `=` expression does not evaluate. $error is the reason.
+properties-sheet-variable-error = Error: { $error }
+properties-sheet-variables-hint = A sheet variable replaces the project variable of the same name. A value starting with = is an expression. Press Enter to apply.

@@ -723,6 +723,7 @@ impl Engine {
             | Command::SetSheetColor { .. }
             | Command::SetPageOrigin { .. }
             | Command::SetTitleBlockField { .. }
+            | Command::SetSheetVariable { .. }
             | Command::SetDocumentFontFamily { .. }
             | Command::SetNetColors { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {

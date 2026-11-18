@@ -42,6 +42,7 @@ pub mod sketch;
 pub mod text_increment;
 pub mod theme;
 mod token_enum;
+pub mod variables;
 pub mod violation;
 pub mod zone_holes;
 pub mod zone_keepout;

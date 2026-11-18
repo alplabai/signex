@@ -644,9 +644,10 @@ known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, 
 The title block of every sheet is filled from **project parameters**. Open the
 project's **Project** tab (project tree, **Project Options**) and choose
 **Parameters**: title, document number, revision, date, company, drawn by,
-checked by and approved by apply to every sheet, and **Custom parameters** adds
-your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
-to the `.snxprj` with `Ctrl+S`.
+checked by and approved by apply to every sheet, and **Variables** adds your
+own name/value pairs (the project variables). A name is letters, digits and
+`_`, not starting with a digit. Edits there are undoable with `Ctrl+Z` and are
+saved to the `.snxprj` with `Ctrl+S`.
 
 A sheet can override a value: in the sheet's **Properties** panel, **Title
 Block** section, type the value for that sheet. The label shows `(project)`
@@ -654,8 +655,24 @@ while the field is empty and takes the project's value, and `(overrides
 project)` while the sheet has its own. Clear the field to fall back to the
 project's value.
 
-Any text note, and the title block, can use these special strings. They
-resolve the same way on the canvas, in the PDF and in the SVG page:
+A sheet has its own variables too: the **Sheet Variables** section of the
+sheet's **Properties** panel. Type a name, press **Add**, type the value and
+press `Enter`. A sheet variable replaces the project variable of the same name
+on that sheet only; it is saved in the `.snxsch`.
+
+A value that starts with `=` is an expression: `= VCC / 2` with `VCC` set to
+`3.3V` shows `1.65V`. An expression may use other variables, units and the
+functions of the footprint parameters. The value you typed is what is saved;
+the result is what is drawn. A value that does not evaluate (an unknown name,
+or two variables that refer to each other) is drawn as typed, shows its error
+under the field, and is reported in the **Messages** panel when you press
+`Enter`. To start a plain value with `=`, type `==`.
+
+Any text note, the title block and a part's value can use these special
+strings. They resolve the same way on the canvas, in the PDF and in the SVG
+page; the field itself keeps the string. A text note that starts with `=` is
+an expression too. A power port's value is a net name and is never resolved,
+and neither are net labels, ports and sheet entries:
 
 | String | Value |
 |---|---|
@@ -669,7 +686,7 @@ resolve the same way on the canvas, in the PDF and in the SVG page:
 | `${COMMENT1}` to `${COMMENT4}` | the four comment lines |
 | `${SHEETNUMBER}`, `${SHEETCOUNT}` | this sheet's number and the sheet count |
 | `${SHEETNAME}`, `${FILENAME}` | the sheet's name and file name |
-| `${NAME}` | a custom parameter called `NAME` (case matters) |
+| `${NAME}` | the variable `NAME`: the sheet's, else the project's (an exact match first, then one in any letter case) |
 
 An unknown string prints as empty text. The standard title block prints the
 title, document number, revision, sheet, date, company, file name and the

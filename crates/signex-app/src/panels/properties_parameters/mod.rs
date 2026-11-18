@@ -14,6 +14,7 @@ mod form_rows;
 mod general;
 mod graphite_table;
 mod net_params;
+mod sheet_variables;
 mod title_block;
 
 #[cfg(test)]
@@ -35,4 +36,5 @@ pub use net_params::{
     empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
     net_params_tabs, preplacement_justification_grid,
 };
+pub use sheet_variables::{SheetVariableMsg, view_sheet_variables_section};
 pub use title_block::{TitleBlockDraft, TitleBlockField, view_title_block_section};

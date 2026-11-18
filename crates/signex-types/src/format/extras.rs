@@ -372,6 +372,12 @@ pub(in crate::format) struct SheetExtras {
     /// Page settings (`[extras.sheet.page]`, #2034); omitted at the default.
     #[serde(default, skip_serializing_if = "PageExtras::is_default")]
     pub(in crate::format) page: PageExtras,
+    /// Sheet variables (`[extras.sheet.variables]`, #1987): name to source
+    /// text. Omitted when empty, so a sheet without any re-saves
+    /// byte-identical; a table, so a build that predates it keeps it as an
+    /// unknown key of `[extras.sheet]` and writes it back.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) variables: BTreeMap<String, String>,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -397,6 +403,7 @@ impl SheetExtras {
             && self.locked_objects.is_empty()
             && self.frame.is_default()
             && self.page.is_default()
+            && self.variables.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -474,6 +481,7 @@ impl SheetExtras {
                 unknown: s.unknown.frame.clone(),
             },
             page: PageExtras::of(s.page, &s.unknown.page),
+            variables: s.variables.clone(),
             unknown: {
                 // A kept non-table `page` gives way to a real page table.
                 let mut extras = s.unknown.extras.clone();

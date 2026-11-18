@@ -9,8 +9,8 @@ variables (#1987), BOM columns (#1988) and board rules (#1989) next.
 `signex-expr` is a leaf domain crate: its only dependencies are `serde` and
 `thiserror`, no workspace crate, no UI, no IO (it is in the `DOMAIN` set of
 `scripts/check_arch_guard.sh`). Any crate may depend on it, `signex-types`
-included, without pulling in the sketch solver. Today `signex-sketch`,
-`signex-bake` and `signex-app` do (`scripts/arch-edges.txt`).
+included, without pulling in the sketch solver. Today `signex-types`,
+`signex-sketch`, `signex-bake` and `signex-app` do (`scripts/arch-edges.txt`).
 
 | Module | Holds |
 |---|---|
@@ -55,8 +55,32 @@ while it is still being evaluated is `ExprError::Cycle`, and a reference
 chain deeper than `MAX_EXPR_DEPTH` is `ExprError::TooDeep`.
 
 The markup lookups (`${refdes:key}`, `@{name}`, `NET_NAME()`) and the
-output-side refdes tables are to read the same resolvers (maintainer
-decision 2026-11-18); `Binding::Text` gives them the stored text unchanged.
+output-side refdes tables read the same resolvers (#1987): every table is a
+`signex_types::variables::TextTable` (an exact name first, then one in any
+ASCII case), and `Binding::Text` gives them the stored text unchanged.
+
+## Variables (#1987)
+
+One variable model, in `signex_types::variables`:
+
+| Scope | Stored in | Edited in |
+|---|---|---|
+| Project | `.snxprj` `parameters` (title-block keys and user names) | Project tab, Parameters |
+| Sheet | `.snxsch` `[extras.sheet.variables]` (`SchematicSheet::variables`) | sheet Properties, Sheet Variables |
+
+A value is a literal text or an `=` expression; the source is saved, the
+evaluated text is drawn. Lookups stack `Layered` scopes innermost first: a
+part's fields (for a value field's `@{name}` / `${name}`), then the sheet's
+variables, then the project's. `${NAME}` special strings
+(`signex_output::resolve`) try the built-in tokens first, then the variables.
+A value that does not evaluate is drawn as its source and reported in
+Messages (`sheet_variable_issues`, `project_variable_issues`); the
+evaluator's cycle detection reports `a = b, b = a` as `ExprError::Cycle`.
+
+The sheet table is an extras key, not a TSV row: a build that predates it
+keeps it as an unknown `[extras.sheet]` table and writes it back, so the
+`.snxsch` token does not change (`docs/FORMAT_VERSIONS.md`, "Changing a
+format"), and a sheet without variables re-saves byte-identical.
 
 ## What stays in signex-sketch
 

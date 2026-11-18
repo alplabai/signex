@@ -108,6 +108,7 @@ pub enum CommandKind {
     SetSheetColor,
     SetPageOrigin,
     SetTitleBlockField,
+    SetSheetVariable,
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
@@ -501,6 +502,13 @@ pub enum Command {
         key: String,
         value: String,
     },
+    /// Set or remove one sheet variable (#1987): `value` is the source text
+    /// (a literal or an `=` expression), saved as typed; `None` removes the
+    /// variable. Stored in `SchematicSheet::variables`.
+    SetSheetVariable {
+        name: String,
+        value: Option<String>,
+    },
     /// Set one symbol's designator at one placement of its sheet: the
     /// instance entry for `placement` (#1151). A blank `reference` removes the
     /// entry, so the placement falls back to the symbol's `reference`. The
@@ -691,6 +699,7 @@ impl Command {
             Command::SetSheetColor { .. } => CommandKind::SetSheetColor,
             Command::SetPageOrigin { .. } => CommandKind::SetPageOrigin,
             Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
+            Command::SetSheetVariable { .. } => CommandKind::SetSheetVariable,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,

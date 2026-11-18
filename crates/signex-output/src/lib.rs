@@ -50,7 +50,7 @@ pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
     preview_raster_size,
 };
-pub use substitution::{SubstitutionContext, resolve};
+pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 
 /// The universal exporter trait — one impl per output format.
@@ -198,6 +198,10 @@ pub struct ProjectMetadata {
     /// override. `None` for metadata built by hand, whose own values then
     /// stand in for the project's.
     pub project_parameters: Option<std::collections::BTreeMap<String, String>>,
+    /// The sheet's own variables (#1987), which shadow the project's
+    /// (`custom_fields`) in `${NAME}` and in expressions. Empty for project
+    /// metadata; set by [`Self::for_schematic`].
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
 }
 
 /// Entries of `custom_fields` that describe the export, not a title-block
@@ -273,6 +277,13 @@ impl ProjectMetadata {
             }
         }
         out.project_parameters = self.project_parameters.clone();
+        out
+    }
+
+    /// [`Self::for_sheet`] for `sheet`'s title block, with its variables.
+    pub fn for_schematic(&self, sheet: &signex_types::schematic::SchematicSheet) -> Self {
+        let mut out = self.for_sheet(&sheet.title_block);
+        out.sheet_variables = sheet.variables.clone();
         out
     }
 }

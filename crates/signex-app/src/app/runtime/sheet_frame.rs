@@ -57,11 +57,14 @@ impl Signex {
             Some(project) => project_sheet_position(project, path),
             None => loose_sheet_position(document_state, path),
         };
+        let mut metadata = crate::app::handlers::menu::export::export_metadata_with(
+            project,
+            &self.title_block_with_drafts(path, engine),
+        );
+        // The sheet's variables shadow the project's (#1987).
+        metadata.sheet_variables = engine.document().variables.clone();
         Some(SpecialStrings {
-            metadata: crate::app::handlers::menu::export::export_metadata_with(
-                project,
-                &self.title_block_with_drafts(path, engine),
-            ),
+            metadata,
             filename: path
                 .file_name()
                 .unwrap_or_default()
