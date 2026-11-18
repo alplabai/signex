@@ -64,7 +64,6 @@ mod projects_graphite;
 mod properties;
 mod sch_filter;
 pub use sch_filter::SchFilterMsg;
-pub mod signal;
 mod status;
 mod symbol_context;
 mod widgets;
@@ -184,7 +183,6 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
-    SignexAi,
     Drc,
     LayerStack,
     /// The layers of the active tab (#2223, #2359): a board's layers with
@@ -242,7 +240,6 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchList,
     PanelKind::Erc,
     PanelKind::Messages,
-    PanelKind::SignexAi,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -273,7 +270,6 @@ impl PanelKind {
                 | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
-                | PanelKind::SignexAi
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -299,7 +295,6 @@ impl PanelKind {
             PanelKind::Filter => ids::PANELS_KIND_FILTER,
             PanelKind::Erc => ids::PANELS_KIND_ERC,
             PanelKind::Messages => ids::PANELS_KIND_MESSAGES,
-            PanelKind::SignexAi => ids::PANELS_KIND_SIGNEX_AI,
             PanelKind::Drc => ids::PANELS_KIND_DRC,
             PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
             PanelKind::Layers => ids::PANELS_KIND_LAYERS,
@@ -332,7 +327,6 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
-            PanelKind::SignexAi => "Signex AI",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::Layers => "Layers",
@@ -378,9 +372,6 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         ),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
-        PanelKind::SignexAi => {
-            return signal::view(ctx);
-        }
         PanelKind::Drc => drc_results::view(ctx),
         PanelKind::LayerStack => layer_stack::view(ctx),
         // One Layers panel follows the active tab (#2359): a footprint's

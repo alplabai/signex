@@ -13,8 +13,8 @@ use super::frame::{MARGIN_MM, TITLE_BLOCK_MM};
 use super::{BoardLayerSet, BoardPrintOptions, PageFrame};
 use crate::pdf::MM_TO_PT;
 
-type Rgb = (f32, f32, f32);
-type Pt = (f32, f32);
+pub(super) type Rgb = (f32, f32, f32);
+pub(super) type Pt = (f32, f32);
 
 const BLACK: Rgb = (0.0, 0.0, 0.0);
 const PAPER: Rgb = (1.0, 1.0, 1.0);
@@ -42,6 +42,8 @@ fn ink(set: BoardLayerSet, monochrome: bool) -> Rgb {
         BoardLayerSet::Bottom => (0.12, 0.27, 0.78),
         BoardLayerSet::Inner => (0.10, 0.52, 0.22),
         BoardLayerSet::Mechanical => (0.50, 0.10, 0.55),
+        // Drawn by `assembly::page` in the drawing's own inks; never here.
+        BoardLayerSet::AssemblyTop | BoardLayerSet::AssemblyBottom => (0.35, 0.35, 0.35),
     }
 }
 
@@ -325,7 +327,7 @@ fn disc(s: &mut PdfSurface<'_>, frame: &PageFrame, at: (f64, f64), radius_mm: f6
 }
 
 /// Fill `rings` as one even-odd area: an outline and its holes.
-fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
+pub(super) fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     let rings: Vec<&Vec<Pt>> = rings.iter().filter(|r| r.len() >= 3).collect();
     if rings.is_empty() {
         return;
@@ -337,7 +339,7 @@ fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     s.raw_operator("f*\n");
 }
 
-fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
+pub(super) fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
     if points.len() < 2 {
         return;
     }
@@ -389,7 +391,7 @@ fn justified_label(
 
 /// A text centred on `at` (model mm), `size_mm` high, turned by
 /// `rotation_deg`. Too small to read, it is left out.
-fn label(
+pub(super) fn label(
     s: &mut PdfSurface<'_>,
     frame: &PageFrame,
     at: (f64, f64),

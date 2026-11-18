@@ -12,7 +12,7 @@ impl Signex {
             OverlayMsg::OpenPanel(kind) => {
                 // The generic panel-list entry point. It used to send
                 // *every* kind to the right column, so picking a panel
-                // whose home is elsewhere — Projects, Signex AI, ERC —
+                // whose home is elsewhere — Projects, Components, ERC —
                 // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
                 let shown = self.show_panel(kind);

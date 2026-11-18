@@ -174,8 +174,6 @@ panels-kind-filter = Filter
 # Electrical rule check.
 panels-kind-erc = ERC
 panels-kind-messages = Messages
-# The Signex AI assistant; Signex is the product name.
-panels-kind-signex-ai = Signex AI
 # Design rule check.
 panels-kind-drc = DRC
 panels-kind-layer-stack = Layer Stack
@@ -221,32 +219,17 @@ panels-tab-kind-library = LIB
 panels-tab-kind-component = CMP
 panels-tab-kind-project = PRJ
 
-## Empty-state cards and the AI Design shell
+## Empty-state cards
 
 # Selection Filter panel: its title while the panel has no backend.
 panels-selection-filter-title = Selection Filter
 # Selection Filter panel: the line under the title.
 panels-selection-filter-body = All object types enabled
 
-# Tooltip of every Signex AI and Start screen control that has no backend
-# yet. "AI Design" is the name of that coming feature.
-panels-coming-soon = Coming in AI Design
+# Tooltip of every Start screen control that has no backend yet.
+panels-coming-soon = Coming soon
 
-# Signex AI panel, Assistant mode: empty-state title and line.
-panels-signal-assistant-title = Signex AI is not available yet
-# The two Signex AI modes on the panel's switch.
-panels-signal-mode-assistant = Assistant
-panels-signal-mode-generator = Generator
-panels-signal-assistant-body = Ask about this sheet and review proposed changes before anything is applied.
-# Signex AI panel, Generator mode: empty-state title and line.
-panels-signal-generator-title = The Generator is not available yet
-panels-signal-generator-body = Describe a board and approve each stage before anything is drawn.
-# Placeholder of the (disabled) ask field.
-panels-signal-ask = Ask about this sheet, or describe a change
-# Send button glyph of the ask field.
-panels-signal-send = →
-
-## Start screen. "Signal" is the name of the AI design assistant.
+## Start screen.
 
 start-new-project = New project
 # Button that opens a project; the ellipsis says a file dialog follows.
@@ -269,18 +252,7 @@ start-libraries-summary =
        *[other] { $components } components
     }
 start-hero-title = What are you building?
-start-hero-body = Describe the board. Signal drafts the specification, architecture and parts, and you approve each stage before anything is drawn.
-# Placeholder of the (disabled) specification box.
-start-spec-placeholder = Describe the board: what it does, its size, layers and budget.
-# Specification box buttons (disabled until the AI backend exists).
-start-spec-attach = Attach
-start-spec-import = Import
-start-spec-constraints = Constraints
-start-spec-generate = Generate design
-# Specification box mode switch.
-start-spec-generator = Generator
-start-spec-assistant = Assistant
-start-spec-libraries-first = Signal uses your loaded libraries first
+start-hero-body = Start a new project, open one you have, or begin from the reference design below.
 # Section headings, shown in capitals.
 start-reference-design = START FROM A REFERENCE DESIGN
 start-recent-projects = RECENT PROJECTS

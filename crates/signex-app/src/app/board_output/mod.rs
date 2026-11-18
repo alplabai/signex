@@ -1,26 +1,35 @@
-//! Board Reports (#2404) and Board Print / PDF (#2402). The tables and the
-//! PDF are `signex_output::board_report` and `signex_output::board_pdf`; this
-//! slice holds the open dialog, routes its messages and writes the files
-//! through the export write path (a `Task`, crash-safe). Nothing here
-//! changes the board, so there is no undo step. Rules:
-//! `docs/BOARD_OUTPUT.md`.
+//! Board Reports (#2404), Board Print / PDF (#2402), the assembly drawings
+//! (#2486) and the board STEP export (#2488). The tables, the PDF and the
+//! drawings are `signex_output::board_report`, `signex_output::board_pdf`
+//! and `signex_output::assembly_drawing`, the STEP model
+//! `signex_renderer::board3d::board_step`; this slice holds the open
+//! dialog, routes its messages and writes the files through the export
+//! write path (a `Task`, crash-safe). Nothing here changes the board, so
+//! there is no undo step. Rules: `docs/BOARD_OUTPUT.md`.
 
+mod assembly;
 mod operands;
 mod print;
 mod reports;
+mod step;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReport,
     BoardReportKind,
 };
+use signex_types::pcb_layer::BoardSide;
 
-pub(crate) use print::set_label;
+pub(crate) use print::{print_text, set_label};
+pub use step::BoardStepBuilt;
+pub(crate) use step::{StepContext, make_step_of};
 
+pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg, side_operand};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
-    export_board_pdf, export_board_report,
+    export_board_pdf, export_board_report, export_board_step,
 };
 
 impl From<BoardOutputMsg> for crate::app::Message {
@@ -49,6 +58,9 @@ pub enum BoardOutputMsg {
     },
     /// `print` or `export_board_pdf` on a board: Board Print / PDF opens.
     PrintRequested,
+    /// `board_assembly_drawing` in a window: Board Print / PDF opens with
+    /// the assembly set of `side` chosen, both sets when no side is named.
+    AssemblyPrintRequested(Option<BoardSide>),
     PrintSetToggled(BoardLayerSet),
     PrintPagesPicked(BoardPrintPages),
     PrintScalePicked(BoardPrintScale),
@@ -64,8 +76,35 @@ pub enum BoardOutputMsg {
         options: Box<BoardPrintOptions>,
         path: PathBuf,
     },
+    /// The dialog's Export Assembly SVG or `export_assembly_svg`: the
+    /// folder dialog.
+    SvgExportRequested,
+    /// The folder dialog answered with `folder`; `options` are the ones
+    /// in use when the export was asked for; `replaced` are the files
+    /// already in the folder that the export overwrites.
+    SvgFolderChosen {
+        board: PathBuf,
+        options: Box<BoardPrintOptions>,
+        folder: PathBuf,
+        replaced: Vec<PathBuf>,
+    },
     /// Close, Esc or the header's close button.
     Closed,
+    /// `export_board_step` or File ▸ Export ▸ STEP 3D Model: the save
+    /// dialog for the board in view.
+    StepExportRequested,
+    /// The save dialog answered with `path` for `board`.
+    StepPathChosen {
+        board: PathBuf,
+        path: PathBuf,
+    },
+    /// The STEP model of `board` was made off the update thread, or why it
+    /// could not be; `path` is where it goes.
+    StepBuilt {
+        board: PathBuf,
+        path: PathBuf,
+        built: Result<Arc<BoardStepBuilt>, String>,
+    },
 }
 
 /// The on/off settings of a board print.
@@ -152,6 +191,7 @@ impl crate::app::Signex {
                 return self.write_board_report_csv(&board, kind, path);
             }
             M::PrintRequested => self.open_board_print(),
+            M::AssemblyPrintRequested(side) => self.open_assembly_print(side),
             M::PrintSetToggled(set) => self.edit_board_print(|o| {
                 if let Some(at) = o.sets.iter().position(|s| *s == set) {
                     o.sets.remove(at);
@@ -169,7 +209,25 @@ impl crate::app::Signex {
                 options,
                 path,
             } => return self.write_board_pdf(&board, &options, path),
+            M::SvgExportRequested => return self.request_assembly_svg(),
+            M::SvgFolderChosen {
+                board,
+                options,
+                folder,
+                replaced,
+            } => return self.write_assembly_svgs(&board, &options, &folder, &replaced),
             M::Closed => self.ui_state.board_output.dialog = None,
+            M::StepExportRequested => return self.request_board_step(),
+            M::StepPathChosen { board, path } => {
+                return self.build_board_step(
+                    &board,
+                    path,
+                    signex_renderer::board3d::StepSchema::default(),
+                );
+            }
+            M::StepBuilt { board, path, built } => {
+                return self.write_board_step(&board, path, built);
+            }
         }
         iced::Task::none()
     }
@@ -204,4 +262,8 @@ fn file_title(path: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_assembly;
+#[cfg(test)]
 mod tests_print;
+#[cfg(test)]
+mod tests_step;

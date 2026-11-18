@@ -12,6 +12,12 @@ define_ids! {
     FAB_OUTPUTS_DRILL = "fab-outputs-drill";
     FAB_OUTPUTS_CENTROID = "fab-outputs-centroid";
     FAB_OUTPUTS_TEST_NETLIST = "fab-outputs-test-netlist";
+    FAB_OUTPUTS_IPC2581 = "fab-outputs-ipc2581";
+    FAB_OUTPUTS_ODB = "fab-outputs-odb";
+    FAB_OUTPUTS_ODB_FOLDER = "fab-outputs-odb-folder";
+    FAB_OUTPUTS_ASSEMBLY_PDF = "fab-outputs-assembly-pdf";
+    FAB_OUTPUTS_ASSEMBLY_SVG = "fab-outputs-assembly-svg";
+    FAB_OUTPUTS_STEP = "fab-outputs-step";
     FAB_OUTPUTS_NAME = "fab-outputs-name";
     FAB_OUTPUTS_FOLDER = "fab-outputs-folder";
     FAB_OUTPUTS_BROWSE = "fab-outputs-browse";
@@ -29,8 +35,13 @@ define_ids! {
     FAB_OUTPUTS_WRITE_FAILED = "fab-outputs-write-failed";
     FAB_OUTPUTS_PANEL = "fab-outputs-panel";
     FAB_OUTPUTS_PANEL_REFUSED = "fab-outputs-panel-refused";
+    FAB_OUTPUTS_ASSEMBLY_REFUSED = "fab-outputs-assembly-refused";
+    FAB_OUTPUTS_STEP_REFUSED = "fab-outputs-step-refused";
     FAB_OUTPUTS_NOTE_ZONES = "fab-outputs-note-zones";
     FAB_OUTPUTS_NOTE_SKIPPED = "fab-outputs-note-skipped";
     FAB_OUTPUTS_NOTE_UNNAMED_PARTS = "fab-outputs-note-unnamed-parts";
+    FAB_OUTPUTS_NOTE_HOLES = "fab-outputs-note-holes";
+    FAB_OUTPUTS_NOTE_MODEL_UNREAD = "fab-outputs-note-model-unread";
+    FAB_OUTPUTS_NOTE_CHARS = "fab-outputs-note-chars";
     FAB_OUTPUTS_STALE = "fab-outputs-stale";
 }

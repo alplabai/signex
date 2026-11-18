@@ -19,6 +19,9 @@ board_report_net_length	pcb	Show each net's routed length, tracks and vias	Net L
 board_report_components	pcb	Show each component's designator, footprint, position, rotation and side	Component Report…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
 export_board_report	reports	Export a board report as a CSV file	Export Report as CSV…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,kind:text,path:path
 export_board_pdf	reports	Print the board's layers to a PDF file	Board Print / PDF…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,layers:text?,pages:text?,scale:text?,monochrome:bool?,mirror_bottom:bool?,outline:bool?,drill_marks:bool?,title_block:bool?
+export_assembly_svg	reports	Write the board's top and bottom assembly drawings as SVG files	Assembly Drawings as SVG…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,sides:text?,mirror_bottom:bool?,monochrome:bool?
+board_assembly_drawing	pcb	Open Board Print / PDF for an assembly drawing	Assembly Drawing…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,side:text,mirror_bottom:bool?,monochrome:bool?
+export_board_step	reports	Export the board and its parts as a STEP 3D model	STEP 3D Model…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,schema:text?
 project_settings	design	Read the settings of the project	-	General	-	-	Always	-	document:document
 project_move_sheet	design	Move a sheet in the page order of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,sheet:text,direction:text
 project_add_variant	design	Add a variant to the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text

@@ -112,7 +112,6 @@ pub enum MenuMessage {
     OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
-    OpenSignexAiPanel,
     /// View ▸ Layers: show the Layers panel (#2223).
     OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
@@ -187,7 +186,6 @@ impl MenuMessage {
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
-                | Self::OpenSignexAiPanel
                 | Self::OpenLayersPanel
         )
     }

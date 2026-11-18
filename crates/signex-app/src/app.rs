@@ -121,7 +121,7 @@ pub use documents::{
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
     TabDocument, TabInfo, TabKind, Tool,
 };
-pub use fab_outputs::{FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
+pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
 pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;

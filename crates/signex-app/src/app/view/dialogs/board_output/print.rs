@@ -1,5 +1,6 @@
 //! The Board Print / PDF dialog: the layer sets, the page layout, the scale,
-//! the ink and what each page shows, then Export PDF.
+//! the ink and what each page shows, then Export PDF, or Export Assembly SVG
+//! for the assembly drawings (#2486).
 
 use iced::widget::{Column, container, scrollable};
 use iced::{Element, Length, Widget as _};
@@ -151,7 +152,12 @@ pub(super) fn parts<'a>(
         .height(Length::Fill)
         .boxed();
     let footer = dialog_footer_split(
-        Vec::new(),
+        vec![dialog_button(
+            t!(i18n, ids::BOARD_PRINT_EXPORT_SVG),
+            DialogButtonKind::Secondary,
+            Some(out(BoardOutputMsg::SvgExportRequested)),
+            tokens,
+        )],
         vec![
             dialog_button(
                 t!(i18n, ids::BOARD_PRINT_CLOSE),

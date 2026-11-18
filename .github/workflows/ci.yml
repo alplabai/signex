@@ -134,6 +134,15 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      # signex-mcad does no IO and must build for a web front end (#2487,
+      # docs/ROADMAP.md "MCAD (P3)"). `rustup` inside the repo adds the
+      # target to the toolchain rust-toolchain.toml pins.
+      - name: Build signex-mcad for wasm32
+        if: runner.os == 'Linux'
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build -p signex-mcad --target wasm32-unknown-unknown
+
       # No `-W clippy::all`. `clippy::all` is already the default lint set, so
       # the flag bought nothing — but a *group-level* `-W` sets every lint in
       # the group to warn, and that group contains the 67 deny-by-default

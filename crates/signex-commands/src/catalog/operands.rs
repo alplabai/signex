@@ -394,8 +394,8 @@ pub const BOARD_REPORT_EXPORT: &[Operand] = &[
 ];
 /// A board printed to PDF (#2402): which board and the file; the rest
 /// defaults as the dialog opens. `layers` lists sets by id (`top`,
-/// `bottom`, `inner`, `mechanical`), `pages` is `per_set` or `composite`,
-/// `scale` is `fit` or `one_to_one`.
+/// `bottom`, `inner`, `mechanical`, `assembly_top`, `assembly_bottom`),
+/// `pages` is `per_set` or `composite`, `scale` is `fit` or `one_to_one`.
 pub const BOARD_PDF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
@@ -407,6 +407,30 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("outline", OperandKind::Bool),
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
+];
+/// The assembly drawings as SVG files (#2486): which board and the folder
+/// they go in. `sides` lists `top` and `bottom` (both when left out).
+pub const ASSEMBLY_SVG_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("sides", OperandKind::Text),
+    optional("mirror_bottom", OperandKind::Bool),
+    optional("monochrome", OperandKind::Bool),
+];
+/// One assembly drawing as SVG text (#2486): which board and `side`
+/// (`top` or `bottom`).
+pub const ASSEMBLY_DRAWING: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("side", OperandKind::Text),
+    optional("mirror_bottom", OperandKind::Bool),
+    optional("monochrome", OperandKind::Bool),
+];
+/// A board written as a STEP model (#2488): which board and the file;
+/// `schema` is `ap214` (the default) or `ap242`.
+pub const BOARD_STEP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("schema", OperandKind::Text),
 ];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A

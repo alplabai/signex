@@ -127,6 +127,9 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
+        // The board and its parts as a STEP model (#2488); greyed without
+        // a board in view.
+        cmd_item_gated(ctx, cmd("export_board_step", "")),
     ]
 }
 
@@ -262,12 +265,6 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             ids::PANELS_KIND_MESSAGES,
             PanelKind::Messages,
             MenuMessage::OpenMessagesPanel,
-        ),
-        panel_item(
-            ctx,
-            ids::PANELS_KIND_SIGNEX_AI,
-            PanelKind::SignexAi,
-            MenuMessage::OpenSignexAiPanel,
         ),
         panel_item(
             ctx,
@@ -465,6 +462,8 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_report_net_length", "")),
         cmd_item_gated(ctx, cmd("board_report_components", "")),
         cmd_item_gated(ctx, cmd("export_board_report", "")),
+        // #2486: the assembly drawings as SVG files.
+        cmd_item_gated(ctx, cmd("export_assembly_svg", "")),
     ]
 }
 
