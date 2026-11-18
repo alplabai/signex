@@ -1,6 +1,6 @@
 //! Shared Graphite empty-state card: a title, a line of explanation and an
 //! optional muted caption, on the card surface. Used by panels whose backend
-//! is not built yet (Signex AI, Selection Filter).
+//! is not built yet (Selection Filter).
 
 use iced::widget::{column, container};
 use iced::{Element, Length, Widget as _};

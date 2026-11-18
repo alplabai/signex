@@ -131,7 +131,7 @@ impl PanelPosition {
     /// results, TAB during placement surfacing Properties, re-docking
     /// a floating panel, closing a detached panel window. Before #641
     /// each of those picked its own region, so the same kind could be
-    /// docked in all three at once: Signex AI booted Left, the View menu
+    /// docked in all three at once: a panel booted Left, the View menu
     /// added a second one Bottom, and the panel list a third Right.
     ///
     /// The values match the first-run layout seeded in
@@ -143,8 +143,7 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
-            | PanelKind::PcbNets
-            | PanelKind::SignexAi => PanelPosition::Left,
+            | PanelKind::PcbNets => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
