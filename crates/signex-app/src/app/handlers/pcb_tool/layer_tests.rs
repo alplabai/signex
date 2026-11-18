@@ -70,7 +70,7 @@ fn all_on_inner(board: &PcbBoard, net: u32) -> bool {
 }
 
 const NEEDS_COPPER: &str = "make a copper layer active";
-const NEEDS_TEXT_LAYER: &str = "make an overlay, mechanical or documentation layer active";
+const NEEDS_TEXT_LAYER: &str = "make a silkscreen, mechanical or documentation layer active";
 const OTHER_NET: &str = "P5.1 is on net B, the route is on net A";
 const JOINED: &str = "P5.1 joined net A";
 const POUR_NO_NET: &str = "Polygon Pour has no net; set it in Properties";

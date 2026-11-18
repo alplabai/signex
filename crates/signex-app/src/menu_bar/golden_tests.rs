@@ -661,8 +661,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
-    // Mask (#2420) add nine.
-    assert_eq!(checked, 58, "the default profile labels 58 menu rows");
+    // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
+    assert_eq!(checked, 59, "the default profile labels 59 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
