@@ -29,6 +29,44 @@ fn drop_fields_of_moved_symbols(moves: &mut Vec<(SelectedItem, f64, f64)>) {
     moves.retain(|(item, _, _)| !is_field_of(item, &symbols));
 }
 
+/// The pin tips of the moved items, read before they move, less those a
+/// selected wire moving by the same delta carries: a tip on one of its ends,
+/// or under a dot on its span. That wire keeps the pin's joins
+/// (`transform::rubber_band::wire_contacts`); the pin pass rerouting the same
+/// point too would fight it, and warn about a pin that stays connected.
+fn tips_not_carried(
+    document: &SchematicSheet,
+    moves: &[(SelectedItem, f64, f64)],
+) -> Vec<crate::PinTip> {
+    use signex_net::{point_on_segment, pt_key};
+    let dots: std::collections::HashSet<_> = (document.junctions.iter())
+        .map(|j| pt_key(&j.position))
+        .collect();
+    let wires: Vec<_> = (moves.iter())
+        .filter(|(item, _, _)| item.kind == SelectedKind::Wire)
+        .filter_map(|(item, dx, dy)| {
+            let wire = document.wires.iter().find(|w| w.uuid == item.uuid)?;
+            let ends = (pt_key(&wire.start), pt_key(&wire.end));
+            Some((ends, (dx.to_bits(), dy.to_bits())))
+        })
+        .collect();
+    let carried = |k: (i64, i64), delta: (u64, u64)| {
+        wires.iter().any(|&((a, b), d)| {
+            d == delta && (k == a || k == b || (dots.contains(&k) && point_on_segment(k, a, b)))
+        })
+    };
+    let mut tips = Vec::new();
+    for (item, dx, dy) in moves {
+        if item.kind == SelectedKind::Wire {
+            continue;
+        }
+        let delta = (dx.to_bits(), dy.to_bits());
+        let own = crate::moved_pin_tips(document, std::slice::from_ref(item));
+        tips.extend(own.into_iter().filter(|tip| !carried(tip.old_key(), delta)));
+    }
+    tips
+}
+
 /// `items` less the field items whose symbol's turn already turns the text, so
 /// a turn rotates it once (#2094). A user-placed symbol's turn leaves its texts
 /// alone (the autoplacer skips them), so those field items stay.
@@ -282,7 +320,7 @@ impl Engine {
         moves.extend(followers.entries.iter().copied());
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
-        let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
+        let tips = keep_wires.then(|| tips_not_carried(&self.document, &moves));
         // And what joins a selected wire, which it carries along.
         let contacts = keep_wires.then(|| crate::moved_wire_contacts(&self.document, &items));
         // So must the wires, to tell the pairs already meeting end to end
