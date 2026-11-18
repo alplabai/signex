@@ -9,10 +9,12 @@ use std::collections::BTreeMap;
 use pcb_geom::{ItemRef, NM_PER_MM, Rejected, copper_layers};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use signex_types::check::{CheckReport, Finding};
+use signex_types::check::{CheckReport, Finding, WaivedFinding};
 use signex_types::format::pcb_layer_token;
+use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 
+use crate::waiver::{WaiverState, waiver_json, waiver_key, waiver_state};
 use crate::{DrcReport, DrcRules, SkippedKeepout, Violation, ViolationKind};
 
 /// The id a report names its check by.
@@ -21,24 +23,45 @@ pub const DRC_CHECK: &str = "drc";
 /// Hex digits of the key: 128 bits of the hash, as ERC's.
 const KEY_HEX_DIGITS: usize = 32;
 
-/// `report`, a run over the board file `board`, as a check report.
+/// `report`, a run over `pcb`, the board file `board`, as a check report.
 /// `net_names` names the board's nets by number. The warnings are
 /// `warnings`, then what the rule text and the setup said, then one per item
 /// the run could not check (keepouts, then items). `rule_set` gets the clearance the run used.
-/// DRC has no waivers, so `waived` and `lapsed` are empty; a finding of a
-/// rule switched off is not listed.
+/// The board's own waivers (`options.drc_waivers`, #2307) move a waived
+/// finding to `waived`; a lapsed one stays a finding and its waiver goes to
+/// `lapsed`. A finding of a rule switched off is not listed, and its waiver
+/// is neither.
 pub fn check_report(
     report: &DrcReport,
+    pcb: &PcbBoard,
     net_names: &BTreeMap<u32, String>,
     board: &str,
     warnings: Vec<String>,
     rule_set: Map<String, Value>,
 ) -> CheckReport {
-    let findings = report
-        .violations
-        .iter()
-        .filter_map(|v| finding(report, v, net_names, board))
-        .collect();
+    let waivers = &pcb.options.drc_waivers;
+    let mut findings = Vec::new();
+    let mut waived = Vec::new();
+    let mut lapsed: Vec<Value> = Vec::new();
+    for v in &report.violations {
+        let Some(finding) = finding(report, v, net_names, board) else {
+            continue;
+        };
+        match waiver_state(waivers, v, pcb) {
+            WaiverState::Waived(w) => waived.push(WaivedFinding {
+                finding,
+                waiver: waiver_json(w),
+            }),
+            WaiverState::Lapsed(w) => {
+                let json = waiver_json(w);
+                if !lapsed.contains(&json) {
+                    lapsed.push(json);
+                }
+                findings.push(finding);
+            }
+            WaiverState::Open => findings.push(finding),
+        }
+    }
     let warnings = warnings
         .into_iter()
         .chain(rule_warnings(&report.rules))
@@ -48,7 +71,7 @@ pub fn check_report(
     let mut rule_set = rule_set;
     rule_set.insert("clearance_nm".into(), json!(report.rules.clearance));
     rule_set.insert("from_default".into(), json!(report.rules.from_default));
-    CheckReport::new(DRC_CHECK, findings, Vec::new(), Vec::new(), warnings)
+    CheckReport::new(DRC_CHECK, findings, waived, lapsed, warnings)
         .with_rule_set(Value::Object(rule_set))
 }
 
@@ -154,6 +177,8 @@ fn evidence(rules: &DrcRules, v: &Violation, a: &str, b: &str) -> Value {
     out.insert("at".into(), json!([mm(v.at.x), mm(v.at.y)]));
     out.insert("measured_nm".into(), json!(v.measured_nm));
     out.insert("required_nm".into(), json!(v.required_nm));
+    // What `waive_drc_violation id=` takes (#2307).
+    out.insert("waiver_key".into(), json!(waiver_key(v)));
     if let Some(keepout) = v.keepout {
         out.insert("keepout".into(), json!(keepout.to_string()));
     }

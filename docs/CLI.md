@@ -736,7 +736,7 @@ The answer is a check report (above), `"check": "drc"`:
    "message": "clearance 0.15 mm, needs 0.2 mm, GND / VCC",
    "evidence": {"nets": ["GND", "VCC"], "layers": ["TopCopper"],
      "at": [0.0, 0.2], "measured_nm": 150000, "required_nm": 200000,
-     "rule_source": "board_setup"},
+     "waiver_key": "<32 hex>", "rule_source": "board_setup"},
    "items": ["<track uuid>", "<track uuid>"], "sheet": "/abs/demo.snxpcb",
    "key": "<32 hex>"}],
  "waived": [], "lapsed": [],
@@ -757,9 +757,10 @@ The answer is a check report (above), `"check": "drc"`:
 - `evidence`: `nets` (two names; the same net twice for an unconnected link
   or a keepout, `net <n>` for a net with no name), `layers` (copper layer
   names), `at` (mm, board coordinates), `measured_nm` and `required_nm` (as
-  Run DRC's panel shows them), `keepout` (the keepout's uuid) and
-  `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
-  clearance or a written limit).
+  Run DRC's panel shows them), `waiver_key` (`signex_drc::waiver_key`, the
+  id `waive_drc_violation` and the DRC panel name the finding by), `keepout`
+  (the keepout's uuid) and `rule_source` (`written`, `net_class`,
+  `board_setup` or `default`; for a clearance or a written limit).
 - `key`: a hash of the board path, the rule id (and, for a written rule,
   the kind of limit broken), the items and the keepout, so moving an item
   keeps it. The board path is the document entry's own: the tab's path when
@@ -778,7 +779,18 @@ The answer is a check report (above), `"check": "drc"`:
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
-- `waived` and `lapsed` are empty: DRC has no waivers yet.
+- `waived` and `lapsed` come from the board's own waivers, the ones the DRC
+  panel and Run DRC read (`[board_options] drc_waivers` in the `.snxpcb`,
+  #2307). A waived finding is in `waived` with its waiver, not in
+  `findings`. A waiver whose objects changed since it was waived (moved,
+  resized, on another layer or net) has lapsed: the finding is back in
+  `findings` and the waiver is in `lapsed`. A waiver object is
+  `{"kind": "finding", "rule_id", "key", "fingerprint", "reason"}`; `key` is
+  the finding's `evidence.waiver_key`. A finding of a rule switched `off` is
+  not listed and its waiver is in neither list. To waive a finding, run
+  `waive_drc_violation document=<board> id=<evidence.waiver_key>
+  text=<note>` after a Run DRC of the board; it is refused when the board
+  changed since that run (`docs/architecture/pcb-drc.md`, "Waivers").
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.
 

@@ -132,17 +132,60 @@ impl Signex {
                         crate::diagnostics::log_warning(super::LOOSE_BOARD_WARNING);
                     }
                     log_report(report, net_names);
+                    self.log_lapsed_drc_waivers();
                 }
             }
         }
         self.refresh_panel_ctx();
     }
 
+    /// One Messages line when the last run found waivers whose objects
+    /// changed since they were waived (#2307): those findings are back.
+    fn log_lapsed_drc_waivers(&self) {
+        let Some(done) = self.interaction_state.pcb_drc.last() else {
+            return;
+        };
+        let Some(board) = self.document_state.pcb_board(&done.path) else {
+            return;
+        };
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&done.path)
+            .copied()
+            .unwrap_or(0);
+        if done.is_stale(revision, self.board_net_classes(&done.path)) {
+            // Edited during the run: the report is not of the geometry now.
+            return;
+        }
+        let waivers = &board.options.drc_waivers;
+        if waivers.is_empty() {
+            return;
+        }
+        let lapsed = done
+            .report
+            .violations
+            .iter()
+            .filter(|v| {
+                matches!(
+                    signex_drc::waiver_state(waivers, v, board),
+                    signex_drc::WaiverState::Lapsed(_)
+                )
+            })
+            .count();
+        if lapsed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "DRC: {lapsed} waived finding(s) are back: their objects changed since they were waived"
+            ));
+        }
+    }
+
     /// What the Messages panel and the DRC results panel (#2399) show of the
     /// active board's check; `None` with no PCB in view.
     pub(crate) fn pcb_drc_panel(&self) -> Option<crate::panels::DrcPanel> {
         let path = self.active_tab_path()?;
-        let waivers = &self.active_pcb()?.options.drc_waivers;
+        let pcb = self.active_pcb()?;
+        let waivers = &pcb.options.drc_waivers;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
@@ -210,7 +253,11 @@ impl Signex {
                     rule: signex_drc::rule_id(v).to_string(),
                     severity: report.severity_of(v),
                     objects: v.items.len(),
-                    waiver: signex_drc::waiver_of(waivers, v).map(|w| w.note.clone()),
+                    // A lapsed waiver leaves the row open (#2307).
+                    waiver: match signex_drc::waiver_state(waivers, v, pcb) {
+                        signex_drc::WaiverState::Waived(w) => Some(w.note.clone()),
+                        _ => None,
+                    },
                 }
             })
             .collect();
