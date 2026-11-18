@@ -209,6 +209,22 @@ pub struct ProjectMetadata {
     /// (`custom_fields`) in `${NAME}` and in expressions. Empty for project
     /// metadata; set by [`Self::for_schematic`].
     pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The clock and the files' modified dates the computed tokens show;
+    /// every sheet's metadata keeps them from the metadata it derives from.
+    pub document_facts: DocumentFacts,
+}
+
+/// What the computed special strings show, formatted by the caller: the
+/// clock and each document file's modified date (maintainer decision
+/// 2026-11-18). An empty value resolves empty.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DocumentFacts {
+    /// `${CurrentDate}`, and `${Date}` while the title block leaves it empty.
+    pub current_date: String,
+    /// `${CurrentTime}` and `${Time}`.
+    pub current_time: String,
+    /// `${ModifiedDate}` of each document file, by the path it is open at.
+    pub modified_dates: std::collections::BTreeMap<PathBuf, String>,
 }
 
 /// Entries of `custom_fields` that describe the export, not a title-block
@@ -284,6 +300,7 @@ impl ProjectMetadata {
             }
         }
         out.project_parameters = self.project_parameters.clone();
+        out.document_facts = self.document_facts.clone();
         out
     }
 

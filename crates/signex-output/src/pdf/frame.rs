@@ -66,6 +66,7 @@ pub(crate) fn sheet_substitution<'a>(
 ) -> SubstitutionContext<'a> {
     SubstitutionContext {
         metadata,
+        document_path: sheet.path.clone(),
         filename: sheet
             .path
             .file_name()

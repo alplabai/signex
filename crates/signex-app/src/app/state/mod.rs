@@ -19,6 +19,7 @@ pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
+mod document_times;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
@@ -67,6 +68,7 @@ pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
+pub use document_times::DocumentTimes;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
@@ -416,6 +418,8 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// The clock and the file times the computed special strings show.
+    pub times: DocumentTimes,
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on

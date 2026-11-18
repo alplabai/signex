@@ -445,7 +445,9 @@ fn build_scope(
         Some(project) => owned_pages(project, &pages, &sheet_set),
         None => loose_pages(document_state, active_path),
     };
-    let metadata = export_metadata(active_engine, owning_project);
+    let mut metadata = export_metadata(active_engine, owning_project);
+    // The clock and file times the computed tokens print, as kept in state.
+    metadata.document_facts = document_state.times.facts();
     // The active sheet's page, matched under the project's case rules (#694):
     // `A.snxsch` and `a.snxsch` are one file on a case-insensitive volume, but
     // `signex-output` compares paths exactly. Hand it the page's own spelling.

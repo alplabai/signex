@@ -288,6 +288,10 @@ impl Signex {
 
     /// Rebuild the context in the main slot from the active document.
     pub(crate) fn refresh_main_panel_ctx(&mut self) {
+        // The clock is read here, in the runtime layer, and kept in state:
+        // `${CurrentTime}` shows the time the panel was last built, to the
+        // minute, and `view` never reads the clock.
+        self.document_state.times.now = Some(chrono::Local::now());
         // The app-wide requests (project probe, row summaries, Navigator
         // assembly, a pending profile update) belong to the main window. A
         // window's refresh runs with its sheet swapped in and must not

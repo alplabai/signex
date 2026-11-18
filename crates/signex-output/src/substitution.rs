@@ -14,8 +14,12 @@
 //!   variables first, then the project's. A value that is an `=` expression
 //!   shows its evaluated text, or its source when it does not evaluate (the
 //!   error is reported in Messages). See `signex_types::variables`.
+//! - Every row name of Document Options ▸ Parameters is a token too
+//!   (`${CompanyName}`, `${CurrentDate}`, `${Author}`): see
+//!   `parameter_alias`.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use signex_types::variables::{
     FieldText, Layered, Resolver, TextTable, classify, display_text, variable_display,
@@ -28,6 +32,9 @@ use crate::ProjectMetadata;
 #[derive(Debug, Clone)]
 pub struct SubstitutionContext<'a> {
     pub metadata: &'a ProjectMetadata,
+    /// The document's full path, for `${DocumentFullPathAndName}` and its
+    /// `${ModifiedDate}`; empty for a context with no document.
+    pub document_path: PathBuf,
     pub filename: String,
     pub sheet_name: String,
     pub sheet_number: usize,
@@ -72,12 +79,43 @@ impl<'a> SubstitutionContext<'a> {
         })
     }
 
+    /// A title-block entry of `custom_fields`; empty when the sheet and the
+    /// project leave it unset.
+    fn custom(&self, key: &str) -> String {
+        let fields = &self.metadata.custom_fields;
+        fields.get(key).cloned().unwrap_or_default()
+    }
+
     /// The stored text of a built-in token; `None` for any other name.
     fn builtin(&self, token: &str) -> Option<String> {
+        let token = parameter_alias(token).unwrap_or(token);
+        let m = self.metadata;
+        let facts = &m.document_facts;
+        match token {
+            "CURRENTDATE" => Some(facts.current_date.clone()),
+            "CURRENTTIME" => Some(facts.current_time.clone()),
+            "MODIFIEDDATE" => Some(
+                facts
+                    .modified_dates
+                    .get(&self.document_path)
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
+            "DOCUMENTFULLPATHANDNAME" => Some(self.document_path.display().to_string()),
+            "AUTHOR" | "ENGINEER" | "ORGANIZATION" | "ADDRESS1" | "ADDRESS2" | "ADDRESS3"
+            | "ADDRESS4" => Some(self.custom(&token.to_ascii_lowercase())),
+            _ => self.sheet_builtin(token),
+        }
+    }
+
+    /// [`Self::builtin`] for the tokens of the sheet and its title block.
+    fn sheet_builtin(&self, token: &str) -> Option<String> {
         let m = self.metadata;
         match token {
             "TITLE" => Some(m.title.clone()),
             "REV" | "REVISION" => Some(m.revision.clone()),
+            // An empty Date shows today, and nothing is stored for it.
+            "DATE" if m.date.is_empty() => Some(m.document_facts.current_date.clone()),
             "DATE" => Some(m.date.clone()),
             "COMPANY" => Some(m.company.clone()),
             "COMMENT1" => Some(m.comments[0].clone()),
@@ -106,28 +144,46 @@ impl<'a> SubstitutionContext<'a> {
                 String::new()
             }),
             "VERSION" => Some(self.signex_version.to_string()),
-            "PROJECT_NAME" => Some(
-                m.custom_fields
-                    .get("project_name")
-                    .cloned()
-                    .unwrap_or_default(),
-            ),
-            "DRAWNBY" => Some(m.custom_fields.get("drawn_by").cloned().unwrap_or_default()),
-            "CHECKEDBY" => Some(
-                m.custom_fields
-                    .get("checked_by")
-                    .cloned()
-                    .unwrap_or_default(),
-            ),
-            "APPROVEDBY" => Some(
-                m.custom_fields
-                    .get("approved_by")
-                    .cloned()
-                    .unwrap_or_default(),
-            ),
+            "PROJECT_NAME" => Some(self.custom("project_name")),
+            "DRAWNBY" => Some(self.custom("drawn_by")),
+            "CHECKEDBY" => Some(self.custom("checked_by")),
+            "APPROVEDBY" => Some(self.custom("approved_by")),
             _ => None,
         }
     }
+}
+
+/// The upper-case token a Document Options ▸ Parameters row name stands for
+/// (`CompanyName` is `COMPANY`); `None` for any other name. These names are
+/// matched exactly, before the variables, as every built-in token is.
+fn parameter_alias(token: &str) -> Option<&'static str> {
+    Some(match token {
+        "Title" => "TITLE",
+        "Revision" => "REVISION",
+        "Date" => "DATE",
+        "CompanyName" | "COMPANYNAME" => "COMPANY",
+        "DocumentNumber" => "DOCUMENTNUMBER",
+        "DrawnBy" => "DRAWNBY",
+        "CheckedBy" => "CHECKEDBY",
+        "ApprovedBy" => "APPROVEDBY",
+        "DocumentName" | "DOCUMENTNAME" => "FILENAME",
+        "SheetName" => "SHEETNAME",
+        "SheetNumber" => "SHEETNUMBER",
+        "SheetCount" => "SHEETCOUNT",
+        "ProjectName" => "PROJECT_NAME",
+        "CurrentTime" | "Time" | "TIME" => "CURRENTTIME",
+        "CurrentDate" => "CURRENTDATE",
+        "ModifiedDate" => "MODIFIEDDATE",
+        "DocumentFullPathAndName" => "DOCUMENTFULLPATHANDNAME",
+        "Author" => "AUTHOR",
+        "Engineer" => "ENGINEER",
+        "Organization" => "ORGANIZATION",
+        "Address1" => "ADDRESS1",
+        "Address2" => "ADDRESS2",
+        "Address3" => "ADDRESS3",
+        "Address4" => "ADDRESS4",
+        _ => return None,
+    })
 }
 
 /// [`resolve`] under the `=` rule (#1987), for a text note: a text that is
@@ -251,6 +307,7 @@ mod tests {
     fn ctx<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {
         SubstitutionContext {
             metadata: m,
+            document_path: PathBuf::new(),
             filename: "PowerSupply.standard_sch".into(),
             sheet_name: "Analog".into(),
             sheet_number: 2,
@@ -422,6 +479,7 @@ mod special_string_tests {
             text,
             &SubstitutionContext {
                 metadata: m,
+                document_path: PathBuf::new(),
                 filename: "power.snxsch".into(),
                 sheet_name: "power".into(),
                 sheet_number: 2,
@@ -492,3 +550,7 @@ mod special_string_tests {
 #[cfg(test)]
 #[path = "substitution_variable_tests.rs"]
 mod variable_tests;
+
+#[cfg(test)]
+#[path = "substitution_computed_tests.rs"]
+mod computed_tests;

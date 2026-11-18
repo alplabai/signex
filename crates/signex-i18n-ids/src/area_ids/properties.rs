@@ -167,6 +167,19 @@ define_ids! {
     PROPERTIES_PARAMETER_SHEET_NUMBER = "properties-parameter-sheet-number";
     PROPERTIES_PARAMETER_SHEET_COUNT = "properties-parameter-sheet-count";
     PROPERTIES_PARAMETER_PROJECT_NAME = "properties-parameter-project-name";
+    PROPERTIES_PARAMETER_CURRENT_TIME = "properties-parameter-current-time";
+    PROPERTIES_PARAMETER_CURRENT_DATE = "properties-parameter-current-date";
+    PROPERTIES_PARAMETER_TIME = "properties-parameter-time";
+    PROPERTIES_PARAMETER_DOCUMENT_FULL_PATH = "properties-parameter-document-full-path";
+    PROPERTIES_PARAMETER_MODIFIED_DATE = "properties-parameter-modified-date";
+    PROPERTIES_TITLE_BLOCK_AUTHOR = "properties-title-block-author";
+    PROPERTIES_TITLE_BLOCK_ENGINEER = "properties-title-block-engineer";
+    PROPERTIES_TITLE_BLOCK_ORGANIZATION = "properties-title-block-organization";
+    PROPERTIES_TITLE_BLOCK_ADDRESS_1 = "properties-title-block-address-1";
+    PROPERTIES_TITLE_BLOCK_ADDRESS_2 = "properties-title-block-address-2";
+    PROPERTIES_TITLE_BLOCK_ADDRESS_3 = "properties-title-block-address-3";
+    PROPERTIES_TITLE_BLOCK_ADDRESS_4 = "properties-title-block-address-4";
+    PROPERTIES_TITLE_BLOCK_TODAY = "properties-title-block-today";
     PROPERTIES_VALUE_SHOWS = "properties-value-shows";
     PROPERTIES_VALUE_ERROR = "properties-value-error";
 }

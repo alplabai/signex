@@ -256,6 +256,21 @@ properties-parameter-sheet-name = Sheet Name
 properties-parameter-sheet-number = Sheet Number
 properties-parameter-sheet-count = Sheet Count
 properties-parameter-project-name = Project Name
+properties-parameter-current-time = Current Time
+properties-parameter-current-date = Current Date
+properties-parameter-time = Time
+properties-parameter-document-full-path = Document Full Path
+properties-parameter-modified-date = Modified Date
+properties-title-block-author = Author
+properties-title-block-engineer = Engineer
+properties-title-block-organization = Organization
+properties-title-block-address-1 = Address 1
+properties-title-block-address-2 = Address 2
+properties-title-block-address-3 = Address 3
+properties-title-block-address-4 = Address 4
+# The sheet leaves the Date field empty, so it shows today's date and
+# stores nothing. $field is the field's name.
+properties-title-block-today = { $field } (today)
 # What a part value's `=` expression evaluates to. $value is the result,
 # such as 20kΩ.
 properties-value-shows = Shows { $value }

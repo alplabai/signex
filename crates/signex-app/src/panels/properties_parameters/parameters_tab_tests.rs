@@ -82,6 +82,22 @@ fn sheet_title(app: &Signex, path: &Path) -> Option<String> {
     engine.document().title_block.get("title").cloned()
 }
 
+/// Save, then read back the bytes Save wrote.
+fn save_and_reopen(app: &mut Signex, recorder: &Recorder) -> SchematicSheet {
+    send(app, Message::File(FileMsg::Save));
+    let written = recorder.0.lock().unwrap().last().cloned();
+    let written = written.expect("Save wrote the sheet");
+    signex_types::format::SnxSchematic::parse(&written)
+        .expect("reopens")
+        .sheet
+}
+
+/// Type `text` into `field`'s row and press Enter.
+fn apply(app: &mut Signex, field: TitleBlockField, text: &str) {
+    panel(app, PanelMsg::TitleBlockTyping(field, text.to_string()));
+    panel(app, PanelMsg::CommitTitleBlockField(field));
+}
+
 fn shown_title(app: &mut Signex) -> String {
     app.refresh_panel_ctx();
     shown_title_block_value(&app.document_state.panel_ctx, TitleBlockField::Title)
@@ -116,12 +132,7 @@ fn a_title_typed_in_parameters_shows_and_is_saved_to_the_sheet() {
     send(&mut app, Message::Edit(EditMsg::Redo));
     assert_eq!(sheet_title(&app, &path).as_deref(), Some("dcdc"));
 
-    send(&mut app, Message::File(FileMsg::Save));
-    let written = recorder.0.lock().unwrap().last().cloned();
-    let written = written.expect("Save wrote the sheet");
-    let saved = signex_types::format::SnxSchematic::parse(&written)
-        .expect("reopens")
-        .sheet;
+    let saved = save_and_reopen(&mut app, &recorder);
     assert_eq!(
         saved.title_block.get("title").map(String::as_str),
         Some("dcdc")
@@ -142,4 +153,99 @@ fn the_built_in_rows_hold_the_sheets_resolved_values() {
     assert_eq!(value(BuiltinParameter::DocumentName), Some("power.snxsch"));
     assert_eq!(value(BuiltinParameter::SheetName), Some("power"));
     assert_eq!(value(BuiltinParameter::ProjectName), Some(""));
+}
+
+/// The title-block fields the Parameters list added.
+const NEW_FIELDS: [TitleBlockField; 7] = [
+    TitleBlockField::Author,
+    TitleBlockField::Engineer,
+    TitleBlockField::Organization,
+    TitleBlockField::Address1,
+    TitleBlockField::Address2,
+    TitleBlockField::Address3,
+    TitleBlockField::Address4,
+];
+
+/// Each new field edits through its row, is written by Save and read back,
+/// and reads as `${Name}` in a text note.
+#[test]
+fn each_new_field_edits_saves_reopens_and_reads_in_a_note() {
+    let (mut app, path, recorder) = app_on_sheet();
+    let value = |field: TitleBlockField| format!("{} value", field.token());
+    for field in NEW_FIELDS {
+        apply(&mut app, field, &value(field));
+    }
+    app.refresh_panel_ctx();
+    let special = app.special_strings_for_path(&path).expect("the open sheet");
+    let saved = save_and_reopen(&mut app, &recorder);
+    for field in NEW_FIELDS {
+        let ctx = &app.document_state.panel_ctx;
+        assert_eq!(shown_title_block_value(ctx, field), value(field));
+        let stored = saved.title_block.get(field.key()).cloned();
+        assert_eq!(stored, Some(value(field)), "{field:?}");
+        let note = format!("${{{}}}", field.token());
+        assert_eq!(special.resolve_text(&note), value(field), "{note}");
+    }
+}
+
+/// The computed tokens resolve in a note from the clock and file times kept
+/// in state, and their read-only rows show the same values.
+#[test]
+fn the_computed_tokens_resolve_in_a_note_and_their_rows() {
+    use chrono::TimeZone;
+    let (mut app, path, _recorder) = app_on_sheet();
+    let modified = chrono::Local.with_ymd_and_hms(2026, 11, 17, 8, 0, 0).unwrap();
+    let modified = std::time::SystemTime::from(modified);
+    app.document_state.times.set_modified(&path, modified);
+    app.refresh_panel_ctx();
+    let now = app.document_state.times.now.expect("clock read");
+    let today = now.format("%Y-%m-%d").to_string();
+    let time = now.format("%H:%M").to_string();
+    let special = app.special_strings_for_path(&path).expect("the open sheet");
+    for (note, value) in [
+        ("${CurrentDate}", today.as_str()),
+        ("${CurrentTime}", time.as_str()),
+        ("${Time}", time.as_str()),
+        ("${ModifiedDate}", "2026-11-17"),
+        ("${DocumentFullPathAndName}", "power.snxsch"),
+    ] {
+        assert_eq!(special.resolve_text(note), value, "{note}");
+    }
+    let rows = &app.document_state.panel_ctx.builtin_parameters;
+    for (parameter, value) in [
+        (BuiltinParameter::CurrentDate, today.as_str()),
+        (BuiltinParameter::CurrentTime, time.as_str()),
+        (BuiltinParameter::ModifiedDate, "2026-11-17"),
+        (BuiltinParameter::DocumentFullPathAndName, "power.snxsch"),
+    ] {
+        let row = rows.iter().find(|(p, _)| *p == parameter);
+        assert_eq!(row.map(|(_, v)| v.as_str()), Some(value), "{parameter:?}");
+    }
+}
+
+/// An empty Date shows today and Save writes nothing for it; a typed Date
+/// is stored, wins over today, and survives Save and reopen.
+#[test]
+fn an_empty_date_shows_today_and_a_typed_one_round_trips() {
+    let (mut app, path, recorder) = app_on_sheet();
+    // Another field, so the sheet has an edit to save.
+    apply(&mut app, TitleBlockField::Title, "dcdc");
+    app.refresh_panel_ctx();
+    let now = app.document_state.times.now.expect("clock read");
+    let today = now.format("%Y-%m-%d").to_string();
+    let special = app.special_strings_for_path(&path).expect("the open sheet");
+    assert_eq!(special.resolve_text("${Date}"), today);
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(shown_title_block_value(ctx, TitleBlockField::Date), "");
+    let saved = save_and_reopen(&mut app, &recorder);
+    let date = saved.title_block.get("date");
+    assert_eq!(date, None, "an empty Date stores nothing");
+
+    apply(&mut app, TitleBlockField::Date, "2026-01-02");
+    app.refresh_panel_ctx();
+    let special = app.special_strings_for_path(&path).expect("the open sheet");
+    assert_eq!(special.resolve_text("${Date}"), "2026-01-02");
+    let saved = save_and_reopen(&mut app, &recorder);
+    let date = saved.title_block.get("date").map(String::as_str);
+    assert_eq!(date, Some("2026-01-02"));
 }

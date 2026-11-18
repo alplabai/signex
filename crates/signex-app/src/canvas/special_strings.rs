@@ -13,6 +13,9 @@ pub struct SpecialStrings {
     /// The sheet's metadata, its variables included
     /// (`ProjectMetadata::sheet_variables`).
     pub metadata: ProjectMetadata,
+    /// The sheet's full path, for `${DocumentFullPathAndName}` and its
+    /// `${ModifiedDate}`.
+    pub path: std::path::PathBuf,
     pub filename: String,
     pub sheet_name: String,
     /// `None` when the sheet has no number in its project (a hierarchical
@@ -51,6 +54,7 @@ impl SpecialStrings {
         let defaults = PdfOptions::default();
         SubstitutionContext {
             metadata: &self.metadata,
+            document_path: self.path.clone(),
             filename: self.filename.clone(),
             sheet_name: self.sheet_name.clone(),
             sheet_number: self.sheet_number.unwrap_or(0),
@@ -82,6 +86,7 @@ mod tests {
             .insert("VCC".to_string(), "3.3V".to_string());
         SpecialStrings {
             metadata,
+            path: std::path::PathBuf::from("power.snxsch"),
             filename: "power.snxsch".to_string(),
             sheet_name: "power".to_string(),
             sheet_number: Some(1),
