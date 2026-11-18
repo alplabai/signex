@@ -66,6 +66,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("drill_marks", OperandKind::Bool),
     ("title_block", OperandKind::Bool),
     ("field", OperandKind::Text),
+    ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),
     ("scope", OperandKind::Text),
     ("values", OperandKind::Text),
