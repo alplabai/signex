@@ -126,20 +126,8 @@ impl Env {
             segs,
             joins: vec![kf],
         };
-        // A chosen mode replaces the elbow slide and the wire-direction rule;
-        // a zero-length leg of an aligned L is dropped by the caller.
-        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
-        let corners = match self.policy.wiring {
-            DragWiringMode::Auto => None,
-            DragWiringMode::Straight => {
-                return (vec![straight(vec![(fixed, new)])], Vec::new());
-            }
-            DragWiringMode::HorizontalFirst => Some([across, down]),
-            DragWiringMode::VerticalFirst => Some([down, across]),
-        };
-        if let Some(corners) = corners {
-            let plans = corners.map(|c| straight(vec![(fixed, c), (c, new)]));
-            return (plans.into(), Vec::new());
+        if let Some(plans) = self.mode_plans(fixed, new, straight) {
+            return (plans, Vec::new());
         }
         if !(horizontal || vertical) {
             return (vec![straight(vec![(fixed, new)])], Vec::new());
@@ -166,6 +154,25 @@ impl Env {
             plans.push(straight(vec![(fixed, corner), (corner, new)]));
         }
         (plans, far_keys)
+    }
+
+    /// The routes a chosen drag wiring mode gives from `fixed` to `new`, in
+    /// place of the slide and the wire-direction rule; `None` for Auto. A
+    /// zero-length leg of an aligned L is dropped by the caller.
+    fn mode_plans(
+        &self,
+        fixed: Point,
+        new: Point,
+        plan: impl Fn(Vec<(Point, Point)>) -> Plan,
+    ) -> Option<Vec<Plan>> {
+        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
+        let corners = match self.policy.wiring {
+            DragWiringMode::Auto => return None,
+            DragWiringMode::Straight => return Some(vec![plan(vec![(fixed, new)])]),
+            DragWiringMode::HorizontalFirst => [across, down],
+            DragWiringMode::VerticalFirst => [down, across],
+        };
+        Some(corners.map(|c| plan(vec![(fixed, c), (c, new)])).into())
     }
 
     /// A wire that shrank to nothing goes when something else still holds its
