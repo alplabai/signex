@@ -75,10 +75,13 @@ impl std::error::Error for PadShapeFault {}
 
 /// What is wrong with the parameters of `pad`'s own shape; `None` when they
 /// make copper. Only the shape in use is judged: a delta kept on a pad that
-/// is now a rectangle is not.
+/// is now a rectangle is not. A trapezoid's delta must fit its own size and
+/// every per-layer size, since each layer's copper is built from its own.
 pub fn pad_shape_fault(pad: &Pad) -> Option<PadShapeFault> {
     match pad.shape {
-        PadShape::Trapezoid => trapezoid_corners(pad.size, pad.trapezoid_delta).err(),
+        PadShape::Trapezoid => std::iter::once(pad.size)
+            .chain(pad.layer_sizes.iter().flat_map(|sizes| sizes.sizes()))
+            .find_map(|size| trapezoid_corners(size, pad.trapezoid_delta).err()),
         PadShape::Custom => outline_fault(&pad.custom_outline),
         PadShape::Circle | PadShape::Rect | PadShape::Oval | PadShape::RoundRect => None,
     }

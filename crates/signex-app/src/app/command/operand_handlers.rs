@@ -407,8 +407,9 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
              use the stack rows of the Via or Pad panel in Properties",
         ),
         "set_pad_shape" => Some(
-            "`set_pad_shape` needs the operands `document`, `ids` and `shape` — \
-             use the Shape row of the Pad panel in Properties",
+            "`set_pad_shape` needs the operands `document`, `ids` and `shape`, \
+             with `delta` for a trapezoid or `corners` for a custom pad — \
+             trapezoid and custom pads are drawn in the footprint editor",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

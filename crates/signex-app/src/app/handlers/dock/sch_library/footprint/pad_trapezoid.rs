@@ -34,6 +34,20 @@ fn with_delta(
     Some(PadShape::Trapezoid { delta })
 }
 
+/// Whether `shape` still makes copper on a pad of `size_mm`: a size edit
+/// that would leave a trapezoid's delta too wide is not written, as the
+/// board's pad edit refuses it.
+pub(crate) fn size_fits_shape(shape: &PadShape, size_mm: (f64, f64)) -> bool {
+    let PadShape::Trapezoid { delta } = shape else {
+        return true;
+    };
+    trapezoid_corners(
+        Point::new(size_mm.0, size_mm.1),
+        Point::new(delta[0], delta[1]),
+    )
+    .is_ok()
+}
+
 /// The shape picked for a pad that was `previous`: a trapezoid picked again
 /// keeps its delta, and a pad turning into one gets its top edge half its
 /// width longer, so the change shows.
@@ -111,6 +125,15 @@ mod tests {
         let shape = PadShape::Trapezoid { delta: [0.0, 0.0] };
         assert_eq!(with_delta(&shape, (2.0, 1.0), 1, 2.0), None);
         assert_eq!(with_delta(&PadShape::Rect, (2.0, 1.0), 0, 0.5), None);
+    }
+
+    #[test]
+    fn a_size_that_leaves_the_delta_too_wide_does_not_fit() {
+        // Size X 1.0 seeds delta 0.5; Size X 0.2 would make no copper.
+        let shape = PadShape::Trapezoid { delta: [0.5, 0.0] };
+        assert!(size_fits_shape(&shape, (1.0, 1.0)));
+        assert!(!size_fits_shape(&shape, (0.2, 1.0)));
+        assert!(size_fits_shape(&PadShape::Rect, (0.2, 1.0)));
     }
 
     #[test]

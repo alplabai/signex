@@ -55,7 +55,9 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 use signex_sketch::unit::UnitFamily;
+use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+use signex_types::pcb_pad_shape::trapezoid_corners;
 
 use crate::eval_util::{eval_length, opt_eval_length, strip_eq_prefix};
 use crate::layer_label::layer_id;
@@ -233,6 +235,7 @@ pub(crate) fn bake_one_pad(
             position,
         )?
     };
+    warn_trapezoid_without_copper(&shape, [size_x, size_y], &pad_number, warnings);
 
     // Warn on paste-aperture patterns we don't bake yet.
     match &pad_attr.paste_apertures {
@@ -293,6 +296,24 @@ pub(crate) fn bake_one_pad(
         copper_offset_x_mm: pad_attr.copper_offset_x_mm,
         copper_offset_y_mm: pad_attr.copper_offset_y_mm,
     })
+}
+
+/// Warn when a baked trapezoid's delta makes no copper with the pad's size
+/// (the board's rule, `signex_types::pcb_pad_shape`): such a footprint is
+/// refused when placed on a board.
+fn warn_trapezoid_without_copper(
+    shape: &LibPadShape,
+    size: [f64; 2],
+    pad_number: &str,
+    warnings: &mut Vec<String>,
+) {
+    let LibPadShape::Trapezoid { delta } = shape else {
+        return;
+    };
+    let size = Point::new(size[0], size[1]);
+    if let Err(fault) = trapezoid_corners(size, Point::new(delta[0], delta[1])) {
+        warnings.push(format!("pad {pad_number}: {fault}"));
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────

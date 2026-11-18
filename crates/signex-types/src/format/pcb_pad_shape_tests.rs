@@ -280,3 +280,34 @@ fn a_trapezoid_row_with_no_delta_fails_rather_than_loading_as_a_rect() {
         "{err}"
     );
 }
+
+#[test]
+fn a_per_layer_size_too_small_for_the_trapezoid_delta_fails_to_load_and_to_save() {
+    // Each layer's copper is built from its own size, so the delta must
+    // fit every per-layer size, not only the pad's own.
+    let with_middle = |y: f64| Pad {
+        layer_sizes: Some(crate::pcb::LayerSizes::TopMiddleBottom {
+            top: PcbPoint { x: 1.5, y: 1.0 },
+            middle: PcbPoint { x: 1.5, y },
+            bottom: PcbPoint { x: 1.5, y: 1.0 },
+        }),
+        ..trapezoid(1, PcbPoint { x: 0.0, y: -0.5 })
+    };
+    let err = SnxPcb::new(board_with(vec![with_middle(0.25)]))
+        .write_string()
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("\"trapezoid_delta\""), "{err}");
+
+    let text = SnxPcb::new(board_with(vec![with_middle(0.3)]))
+        .write_string()
+        .unwrap();
+    let narrowed = "middle=1500000x200000";
+    let broken = text.replacen("middle=1500000x300000", narrowed, 1);
+    assert!(broken.contains(narrowed), "{text}");
+    let err = SnxPcb::parse(&broken).unwrap_err().to_string();
+    assert!(
+        err.contains("\"trapezoid_delta\"") && err.contains("twice the side"),
+        "{err}"
+    );
+}

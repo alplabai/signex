@@ -155,3 +155,42 @@ fn via_tenting_and_masks_are_stored_and_a_nan_mask_is_refused() {
         Err(PrimitiveEditRefusal::ItemLocked)
     );
 }
+
+/// #2242: each layer's copper is built from its own size, so a per-layer
+/// size too small for a trapezoid's delta is refused like the pad's own.
+#[test]
+fn a_per_layer_size_too_small_for_the_trapezoid_delta_is_refused() {
+    use signex_types::pcb::LayerSizes;
+    use signex_types::pcb_pad_shape::PadShapeFault;
+    let mut b = board();
+    let pad = [(id(FP_A), id(PAD_A1))];
+    b.footprints[0].pads[0].size = Point::new(1.0, 1.0);
+    let trapezoid = PadEdit::Geometry {
+        shape: PadShape::Trapezoid,
+        trapezoid_delta: Point::new(1.5, 0.0),
+        custom_outline: Vec::new(),
+    };
+    let command = pad_edit_command(&b, &pad, &trapezoid).unwrap();
+    run(&mut b, command);
+    let narrow_inner = LayerSizes::TopMiddleBottom {
+        top: Point::new(1.0, 1.0),
+        middle: Point::new(0.5, 1.0),
+        bottom: Point::new(1.0, 1.0),
+    };
+    let refused = Err(PrimitiveEditRefusal::PadShape(PadShapeFault::DeltaTooWide));
+    assert_eq!(
+        pad_edit_command(&b, &pad, &PadEdit::Sizes(Some(narrow_inner))),
+        refused
+    );
+    let stacked = LayerSizes::TopMiddleBottom {
+        top: Point::new(1.0, 1.0),
+        middle: Point::new(0.9, 1.0),
+        bottom: Point::new(1.0, 1.0),
+    };
+    let command = pad_edit_command(&b, &pad, &PadEdit::Sizes(Some(stacked))).unwrap();
+    run(&mut b, command);
+    assert_eq!(
+        pad_edit_command(&b, &pad, &PadEdit::LayerSizeX(CopperLayer::Bottom, 0.7)),
+        refused
+    );
+}
