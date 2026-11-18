@@ -480,6 +480,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "query_pins",
                     "check_erc",
                     "check_drc",
+                    "check_requirements",
                     "find_items",
                     "apply_edits",
                     "revert",

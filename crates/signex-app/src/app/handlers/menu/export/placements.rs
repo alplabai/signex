@@ -55,7 +55,7 @@ impl LiveOccurrences {
 /// then walk order, so a project whose files are each placed once exports its
 /// components in the same order as before. A sheet the walk never reached gets
 /// no placement, so the BOM counts it zero (#730).
-pub(super) fn netlist_placements(
+pub(crate) fn netlist_placements(
     keys: &[SheetKey],
     occurrences: Vec<SheetOccurrence>,
 ) -> Vec<SheetPlacement> {

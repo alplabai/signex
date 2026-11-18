@@ -23,6 +23,7 @@ fn blank_project() -> ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        requirements: Default::default(),
         unknown: Default::default(),
     }
 }

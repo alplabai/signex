@@ -40,6 +40,10 @@ runs ERC on the sheet's project, answers with a check report once the run
 lands and writes nothing to the ERC panel or Messages;
 `check_drc document=<board> [baseline=<run>]` does the same for DRC on
 one board. Rules in [CLI.md](CLI.md), "Checks on demand".
+`check_requirements document=<project or one of its documents>
+[baseline=<run>]` runs the project's requirements list as checks and
+answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
+checks".
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -78,6 +82,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
 | `check_drc` | Check design rules | validation | — | — |
 | `check_erc` | Check electrical rules | validation | — | — |
+| `check_requirements` | Check project requirements | validation | — | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |

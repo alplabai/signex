@@ -200,6 +200,11 @@
     "category": "validation"
   },
   {
+    "id": "check_requirements",
+    "group": "General",
+    "category": "validation"
+  },
+  {
     "id": "clear_all_net_colors",
     "group": "Schematic",
     "category": "view"

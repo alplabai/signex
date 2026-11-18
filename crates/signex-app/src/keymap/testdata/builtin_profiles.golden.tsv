@@ -317,6 +317,7 @@ altium	hint	-	-	check_erc
 altium	hint	-	-	open_erc_dialog
 altium	hint	-	T D	run_drc
 altium	hint	-	-	check_drc
+altium	hint	-	-	check_requirements
 altium	hint	-	-	open_drc_panel
 altium	hint	-	-	show_drc_violation
 altium	hint	-	-	waive_drc_violation
@@ -799,6 +800,7 @@ classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
+classic	hint	-	-	check_requirements
 classic	hint	-	-	open_drc_panel
 classic	hint	-	-	show_drc_violation
 classic	hint	-	-	waive_drc_violation

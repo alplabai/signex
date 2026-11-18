@@ -29,6 +29,7 @@ members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -56,6 +57,7 @@ default-members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
 ]
 
 [workspace.package]
@@ -121,6 +123,7 @@ signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-drc = { path = "crates/signex-drc" }
 signex-drc-dsl = { path = "crates/signex-drc-dsl" }
+signex-req = { path = "crates/signex-req" }
 signex-net = { path = "crates/signex-net" }
 signex-history = { path = "crates/signex-history" }
 signex-commands = { path = "crates/signex-commands" }

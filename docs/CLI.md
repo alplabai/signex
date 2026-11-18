@@ -805,6 +805,120 @@ Known limits:
   `sub/../`) can change the keys between an open and a closed check, and a
   baseline made in the other state is then refused.
 
+## Requirement checks
+
+```text
+check_requirements document=<project, or one of its sheets or its board> [baseline=<run>]
+```
+
+A project keeps a list of requirements, its own targets (#2339). Each one is
+a deterministic check that passes or fails with evidence, and
+`check_requirements` runs the whole list on demand and answers with a check
+report in the shape `check_erc` and `check_drc` use (above). It is a Community
+feature, read-only like the other checks: it writes nothing to a panel, the
+ERC or DRC results or Messages, and it is a query on the agent channel and in
+`signex-cli`. The list is edited in the project file for now; there is no
+editor yet.
+
+```bash
+signex-cli run demo.snxprj check_requirements --arg document=demo.snxprj
+```
+
+The list is the top-level `requirements` key of the `.snxprj`, beside
+`rules`, not inside it: it is not part of the rule set's hash, a rule profile
+or Update from profile. Each entry is an object with an `id` (unique in the
+list), a `kind`, an optional `severity` (`error`, the default, `warning` or
+`info`; the severity of the findings it raises) and the kind's fields. A
+project save writes every entry back as it was read: defaults left out stay
+left out and `100` stays `100` (keys come out sorted, as in the rest of the
+file).
+
+| `kind` | Fields | Passes when |
+|---|---|---|
+| `erc_clean` | `allow_warnings` (default `false`) | the project's ERC run (as `check_erc` runs it from the root sheet) has no error finding, and no warning finding unless allowed |
+| `drc_clean` | `allow_warnings` (default `false`) | the DRC run of the project's board (as `check_drc` runs it) has no error finding, and no warning finding unless allowed |
+| `board_size` | `max_width_mm`, `max_height_mm` | the bounding box of the board outline is at most that wide and high |
+| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
+| `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
+| `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
+
+```json
+"requirements": [
+  {"id": "erc", "kind": "erc_clean"},
+  {"id": "size", "kind": "board_size", "max_width_mm": 100, "max_height_mm": 80},
+  {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": "USB",
+   "min_trace_width_mm": 0.2, "severity": "warning"},
+  {"id": "cost", "kind": "bom_cost", "quantity": 100, "currency": "USD",
+   "max_unit_cost": 12.5}
+]
+```
+
+The report:
+
+- `check` is `requirements`; the run is numbered and kept like the other
+  checks, and `baseline=` compares with an earlier run of the same project
+  (any document of the project names it). A run of another check is refused
+  as a baseline.
+- A finding's `rule` is `req::<id>`, its `severity` the requirement's.
+  `evidence` holds the `kind` and what was measured: the board's
+  `width_mm`/`height_mm` and the limits; a part's `designator`, `library_row`
+  and `state`; a net's `net` and `class`, or a class's set and minimum
+  values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
+  for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
+  `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not
+  a copy of every ERC or DRC finding.
+- `sheet` is the board file for `board_size`, `net_class` and `drc_clean`,
+  the project file otherwise.
+- `key` is a hash of the project file, the rule and what the finding is
+  about (a part's designator, a net, a class and its value), so it holds
+  while the measured values change.
+- `passed` lists the requirements met (`req::<id>`), in list order. It is an
+  addition to the shared shape: ERC and DRC leave it out. An id used by more
+  than one entry, readable or not, is never in `passed`: the first entry is
+  checked, every later one is a finding.
+- `warnings`: what the ERC and DRC runs could not do (prefixed `ERC:` and
+  `DRC:`), the sheets the BOM could not read, and `The project lists no
+  requirements` for an empty list.
+- `rule_set`: `source` (`project`), `requirements` (how many) and `sha256`
+  (the hash of the list as stored, keys sorted), so two runs over different
+  lists can be told apart.
+
+A requirement that cannot be evaluated is a finding, never a pass: an entry
+this build cannot read (an unknown kind, a missing or mistyped field, a field
+it does not know; it is kept in the file as written), an id used twice, a
+limit that is no positive length, no board or an unreadable one, a pattern no
+board net matches, a class the project does not have, an ERC or DRC run that
+did not finish, a part with no library row or one in no open library, and a
+BOM line with no cached price in the currency.
+
+How each kind is measured:
+
+- `board_size` takes the outline's axis-aligned bounding box; a rotated board
+  is not turned to fit.
+- `parts_state` checks the parts the BOM buys (fitted, in the BOM and on the
+  board, the active variant applied), each placement of a child sheet once.
+  The states come from the libraries open in the app.
+- `net_class` reads the nets of the project's board; a class's `0` (unset)
+  value fails a minimum.
+- `bom_cost` prices the BOM as the BOM export groups it, from the prices the
+  open libraries cached; it never fetches a price. Each line buys its fitted
+  quantity times `quantity`, at least the distributor's minimum order, at
+  that quantity's price break (the BOM export's own pricing); the line costs
+  are rounded to cents and the total is divided by `quantity`. A price in another currency is not
+  converted; the cost is then not known and the requirement fails.
+
+Known limits:
+
+- A project lists one board (`pcb_file`), so `drc_clean`, `board_size` and
+  `net_class` check that board.
+- Rail budgets (current and voltage per rail) are not a kind yet: the parts,
+  nets and classes do not carry that data.
+- Over the agent channel `document=` names one of the project's sheets or its
+  board: the project file itself is refused at the agent gate, as for every
+  command, because it is not a document of a project.
+- The ERC and DRC runs a requirement uses are not numbered or kept; run
+  `check_erc` or `check_drc` for their findings.
+
 ## Board queries
 
 Three queries read one open board (#2403), through the same domain code as

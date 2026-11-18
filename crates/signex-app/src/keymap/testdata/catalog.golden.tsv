@@ -206,6 +206,7 @@ check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:docu
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
+check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?
 open_drc_panel	pcb	Open the DRC results panel	DRC Results	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_drc_violation	pcb	Select a DRC violation and centre the view on it	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,id:text
 waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?

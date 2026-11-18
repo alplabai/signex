@@ -157,3 +157,14 @@ fn a_finding_waiver_has_the_shared_fields_and_the_check_s_own() {
             "reason": "checked", "key": "k1"})
     );
 }
+
+#[test]
+fn a_report_lists_passed_rules_only_when_given_some() {
+    let plain = serde_json::to_value(report(&["k1"])).unwrap();
+    assert!(plain.get("passed").is_none(), "{plain}");
+    let listed = report(&["k1"]).with_passed(vec!["req::size".into()]);
+    let value = serde_json::to_value(&listed).unwrap();
+    assert_eq!(value["passed"], json!(["req::size"]));
+    let back: CheckReport = serde_json::from_value(value).expect("reads back");
+    assert_eq!(back, listed);
+}
