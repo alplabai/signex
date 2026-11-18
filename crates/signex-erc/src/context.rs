@@ -481,6 +481,11 @@ impl ErcContext {
             })
             .collect();
 
+        // A part's value as ERC reads it: an `=` value evaluated on its sheet
+        // (#1986); a power port's net name never is.
+        let sheet_variables = signex_types::variables::TextTable(&snapshot.variables);
+        let variables: [&dyn signex_types::variables::Resolver; 1] = [&sheet_variables];
+
         // --- Step 2: symbols with pre-computed pin connectivity -----------
         // Pins are projected first, then gated below. Pin-to-pin contact is not
         // a connection (ADR-0002 D5.1); the `PinsTouchNotConnected` rule
@@ -517,7 +522,12 @@ impl ErcContext {
                         .collect(),
                     lib_id: sym.lib_id.clone(),
                     unit: sym.unit,
-                    value: sym.value.clone(),
+                    value: signex_types::part_fields::evaluated_value(
+                        &snapshot.symbols,
+                        sym,
+                        &variables,
+                        false,
+                    ),
                     footprint: sym.footprint.clone(),
                     on_board: sym.on_board,
                     unit_count: lib_sym.unit_count(),

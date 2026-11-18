@@ -13,7 +13,7 @@ fn part(reference: &str, value: &str) -> Symbol {
 }
 
 fn value_of(symbols: &[Symbol], at: usize) -> Option<Result<String, ExprError>> {
-    part_field_value(symbols, &symbols[at], "Value", &[])
+    part_field_value(symbols, &symbols[at], "Value", &[], false)
 }
 
 #[test]
@@ -71,10 +71,10 @@ fn a_cycle_between_two_parts_is_an_error_and_draws_the_source() {
         Some(Err(ExprError::Cycle(_)))
     ));
     assert_eq!(
-        part_field_display(&symbols, &symbols[0], "Value", &[]),
+        part_field_display(&symbols, &symbols[0], "Value", &[], false),
         Some("= R2.Value".to_string())
     );
-    let issues = part_field_issues(&symbols, &[]);
+    let issues = part_field_issues(&symbols, &[], false);
     assert_eq!(issues.len(), 2);
     assert!(issues[0].to_string().starts_with("R1 field 'Value': "));
 }
@@ -100,7 +100,7 @@ fn a_field_reads_the_sheet_and_project_variables() {
     let variables: [&dyn Resolver; 2] = [&sheet_t, &project_t];
     let symbols = vec![part("R1", "= (VCC - 2V) / ILED")];
     assert_eq!(
-        part_field_value(&symbols, &symbols[0], "Value", &variables),
+        part_field_value(&symbols, &symbols[0], "Value", &variables, false),
         Some(Ok("130Ω".to_string()))
     );
 }
@@ -112,17 +112,57 @@ fn an_unannotated_part_still_reads_its_own_fields() {
     assert_eq!(value_of(&[r], 0), Some(Ok("1kΩ".to_string())));
 }
 
+
+/// #1416: under the full-codes standard `-QAC1` is only how QAC1 is shown;
+/// typing the sign in an expression is an error, not a silent negation.
 #[test]
-fn renaming_follows_a_renumbered_part() {
-    let renames = HashMap::from([
-        ("R1".to_string(), "R5".to_string()),
-        ("R5".to_string(), "R1".to_string()),
-    ]);
+fn a_signed_designator_in_an_expression_is_an_error() {
+    let source = part("QAC1", "10kΩ");
+    let reader = part("QAC2", "= -QAC1.Value");
+    let symbols = vec![source, reader];
+    let shown = part_field_value(&symbols, &symbols[1], "Value", &[], true);
+    let Some(Err(ExprError::Domain(why))) = shown.clone() else {
+        panic!("expected a domain error, got {shown:?}");
+    };
+    assert!(why.contains("display-only"), "{why}");
+    // Without the sign it reads the part; under another standard the `-`
+    // is an ordinary negation.
+    let plain = vec![part("QAC1", "10kΩ"), part("QAC2", "= QAC1.Value * 2")];
     assert_eq!(
-        rename_part_references("= 2 * R1.Value + R5.Value", &renames),
-        Some("= 2 * R5.Value + R1.Value".to_string())
+        part_field_value(&plain, &plain[1], "Value", &[], true),
+        Some(Ok("20kΩ".to_string()))
     );
-    // A unit after a number, a bare name and a literal are left alone.
-    assert_eq!(rename_part_references("= 10R1 + R1", &renames), None);
-    assert_eq!(rename_part_references("R1.Value", &renames), None);
+    assert_eq!(
+        part_field_value(&symbols, &symbols[1], "Value", &[], false),
+        Some(Ok("-10kΩ".to_string()))
+    );
+}
+
+/// An export copy stores `-QAC1`: a reference without the sign still finds
+/// the part, and one with it is refused.
+#[test]
+fn an_export_copy_with_signed_designators_still_resolves() {
+    let symbols = vec![part("-QAC1", "10kΩ"), part("-QAC2", "= QAC1.Value / 2")];
+    assert_eq!(
+        part_field_value(&symbols, &symbols[1], "Value", &[], false),
+        Some(Ok("5kΩ".to_string()))
+    );
+    let signed = vec![part("-QAC1", "10kΩ"), part("-QAC2", "= 1 + -QAC1.Value")];
+    assert!(matches!(
+        part_field_value(&signed, &signed[1], "Value", &[], false),
+        Some(Err(ExprError::Domain(_)))
+    ));
+}
+
+#[test]
+fn evaluated_value_keeps_literals_power_ports_and_failures_as_stored() {
+    let mut power = part("#PWR1", "= 1V");
+    power.is_power = true;
+    let symbols = vec![part("R1", "10k"), part("R2", "= R9.Value"), power];
+    assert_eq!(evaluated_value(&symbols, &symbols[0], &[], false), "10k");
+    assert_eq!(
+        evaluated_value(&symbols, &symbols[1], &[], false),
+        "= R9.Value"
+    );
+    assert_eq!(evaluated_value(&symbols, &symbols[2], &[], false), "= 1V");
 }

@@ -703,11 +703,23 @@ under the field, and is reported in the **Messages** panel when you press
 A part's value and its fields take expressions too. A bare name is the
 part's own field first (`= Rbase * 2`), then a variable; `R1.Value` is the
 value of part R1 on the same sheet. The sheet, PDF and SVG show the result
-with its unit (`20kΩ`); the **Properties** panel shows the expression in the
-**Value** row and the result, or the error, under it. When annotation
-renumbers R1, `= R1.Value` follows it. An expression that cannot be
-calculated is drawn as typed and listed in **Messages** when you save the
-sheet.
+with its unit (`20kΩ`), and so do the BOM, the netlist export, ERC and the
+Net Inspector: the BOM lists and groups parts by that result. The
+**Properties** panel shows the expression in the **Value** row and the
+result, or the error, under it.
+
+A reference follows its part. When annotation renumbers R1, when you reset
+the designators and annotate again, or when you change or swap a designator
+by hand, `= R1.Value` is rewritten to the part's new designator in the same
+undo step. While a part has no number (`R?`), or shares its designator with
+another part, the reference shows it by an internal id (`_u…`) until it is
+numbered again.
+
+Under the EN IEC 81346-2 full-codes standard the leading `-` of a designator
+is only how it is shown: write `= QAC1.Value`, not `= -QAC1.Value`, which is
+an error. An expression that cannot be calculated is drawn and exported as
+typed and listed in **Messages** when you save the sheet (also by Save All
+or a save before closing) and when you export a BOM or a netlist.
 
 Any text note, the title block and a part's value can use these special
 strings. They resolve the same way on the canvas, in the PDF and in the SVG

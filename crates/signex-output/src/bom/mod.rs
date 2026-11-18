@@ -17,6 +17,8 @@ mod cells;
 pub(crate) mod csv;
 mod html;
 #[cfg(test)]
+mod expression_tests;
+#[cfg(test)]
 mod pricing_tests;
 mod units;
 mod xlsx;
@@ -262,17 +264,25 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     // entries lists R1 and R101, the same designators the netlist names. The
     // same unit appearing twice under one designator is two parts, so without
     // entries a child placed N times still yields N parts.
-    let mut placed: Vec<(&Symbol, &str)> = Vec::new();
-    // Per entry of `placed`: whether the board's footprint of its part is of
+    // Each part with the value it shows: an `=` value evaluated on its sheet,
+    // so a line shows, and groups by, `20kΩ` rather than the expression
+    // (#1986). One that does not evaluate keeps its source text.
+    let mut shown: Vec<(Symbol, String)> = Vec::new();
+    // Per entry of `shown`: whether the board's footprint of its part is of
     // a type the BOM leaves out (#2365).
     let mut left_out: Vec<bool> = Vec::new();
     for (sheet, path) in bom_sheets(ctx) {
+        let metadata = ctx.metadata.for_schematic(sheet);
+        let special = crate::field_value::sheet_context(&metadata);
+        let scope = crate::ValueScope::of_sheet(&sheet.symbols, Some(&special));
         for sym in sheet
             .symbols
             .iter()
             .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
         {
-            placed.push((sym, sym.designator_in(&path).trim()));
+            let mut part = sym.clone();
+            part.value = crate::shown_value(&scope, sym).text;
+            shown.push((part, sym.designator_in(&path).trim().to_string()));
             left_out.push(
                 opts.board_left_out
                     .iter()
@@ -280,6 +290,10 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             );
         }
     }
+    let placed: Vec<(&Symbol, &str)> = shown
+        .iter()
+        .map(|(sym, designator)| (sym, designator.as_str()))
+        .collect();
     let components = placed_components(&placed, &left_out, opts);
 
     BomContext {

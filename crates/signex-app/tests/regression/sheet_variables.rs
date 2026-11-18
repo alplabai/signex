@@ -8,7 +8,30 @@ use signex_app::dock::DockMessage;
 use signex_app::panels::{PanelMsg, SheetVariableMsg};
 use signex_output::template::FramePrimitive;
 
-use crate::project_tab_support::{fixture, open_dirty_root_sheet, open_tab, project_id, save};
+use crate::project_tab_support::{
+    Fixture, fixture, open_dirty_root_sheet, open_tab, project_id, save,
+};
+
+/// The root sheet, listed in the project and open as the active tab. The
+/// project owns only the sheets it lists, so without the entry the sheet
+/// would not see the project's variables. The Messages logger is installed
+/// first: a test runs in its own process, and a line logged before the
+/// logger exists is lost.
+fn open_project_sheet(f: &mut Fixture) -> std::path::PathBuf {
+    drop(signex_app::diagnostics::init_logging());
+    f.app.document_state.projects[0]
+        .data
+        .sheets
+        .push(signex_types::project::SheetEntry {
+            name: "Oscar".into(),
+            filename: "Oscar.snxsch".into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    open_dirty_root_sheet(f)
+}
 
 fn set_parameter(app: &mut Signex, name: &str, value: &str) {
     let project_id = project_id(app);
@@ -65,7 +88,7 @@ fn logged(needle: &str) -> usize {
 fn a_sheet_variable_shadows_the_project_and_is_saved_as_its_source() {
     let mut f = fixture();
     open_tab(&mut f.app);
-    let sheet = open_dirty_root_sheet(&mut f);
+    let sheet = open_project_sheet(&mut f);
     set_parameter(&mut f.app, "VCC", "5V");
     set_parameter(&mut f.app, "company", "= VCC / 2");
     assert!(
@@ -102,7 +125,7 @@ fn a_sheet_variable_shadows_the_project_and_is_saved_as_its_source() {
 fn a_sheet_variable_cycle_is_reported_in_messages() {
     let mut f = fixture();
     open_tab(&mut f.app);
-    open_dirty_root_sheet(&mut f);
+    open_project_sheet(&mut f);
     set_sheet_variable(&mut f.app, "CYCLE_A_1987", "= CYCLE_B_1987 + 1");
     set_sheet_variable(&mut f.app, "CYCLE_B_1987", "= CYCLE_A_1987 * 2");
     assert!(
@@ -116,7 +139,7 @@ fn a_sheet_variable_cycle_is_reported_in_messages() {
 fn a_name_that_is_not_an_identifier_is_refused() {
     let mut f = fixture();
     open_tab(&mut f.app);
-    let sheet = open_dirty_root_sheet(&mut f);
+    let sheet = open_project_sheet(&mut f);
     sheet_variables(
         &mut f.app,
         SheetVariableMsg::NewNameTyped("2 bad".to_string()),

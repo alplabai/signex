@@ -246,7 +246,13 @@ impl Signex {
             match state.tab {
                 NetInspectorTab::ByNet => view.nets = net_rows(data, &state),
                 NetInspectorTab::ByComponent => {
-                    (view.components, view.component_total) = component_rows(data, &state);
+                    // Designators as the project's standard shows them (#1416).
+                    let standard = self
+                        .inspected_project()
+                        .and_then(|id| self.document_state.project_by_id(id))
+                        .and_then(|project| project.data.designator_standard());
+                    (view.components, view.component_total) =
+                        component_rows(data, &state, standard);
                 }
             }
         }

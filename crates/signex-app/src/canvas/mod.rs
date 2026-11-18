@@ -36,6 +36,7 @@ mod shape_preview;
 mod shift_selection;
 mod special_strings;
 mod surface;
+mod value_widths;
 #[cfg(test)]
 mod tool_click_tests;
 mod viewport_resize;
@@ -650,6 +651,7 @@ impl CanvasViewPrefs<'_> {
             class_styles: Some(self.wire_class_styles),
             defaults: self.schematic_defaults,
             designator_standard: self.designator_standard,
+            special_strings: None,
         }
     }
 

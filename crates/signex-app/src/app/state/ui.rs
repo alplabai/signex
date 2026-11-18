@@ -473,8 +473,9 @@ pub struct UiState {
     /// Generation of the newest Number Schematic Sheets read. Outside the
     /// dialog's state so a reopened dialog never takes an older read.
     pub sheet_numbering_reads: u64,
-    /// The Synchronize Sheet Entries and Ports dialog, while open (#1276).
-    pub sheet_sync: Option<crate::app::SheetSyncState>,
+    /// The Synchronize Sheet Entries and Ports dialog, while open (#1276);
+    /// boxed so the closed dialog costs one pointer (#2412).
+    pub sheet_sync: Option<Box<crate::app::SheetSyncState>>,
     /// Generation of the newest sync dialog read, as `sheet_numbering_reads`.
     pub sheet_sync_reads: u64,
     /// Tools ▸ Re-Annotate Board (#1312), while open. Execute is one board
@@ -825,6 +826,7 @@ mod tests {
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

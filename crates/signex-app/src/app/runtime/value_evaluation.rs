@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use signex_types::designator::DesignatorStandard;
 use signex_types::part_fields::part_field_value;
 use signex_types::schematic::SchematicSheet;
 use signex_types::variables::{Resolver, TextTable};
@@ -14,6 +15,7 @@ pub(super) fn value_evaluation_rows(
     sheet: &SchematicSheet,
     symbol: uuid::Uuid,
     project: &BTreeMap<String, String>,
+    standard: Option<DesignatorStandard>,
 ) -> Vec<(String, String)> {
     let Some(symbol) = sheet
         .symbols
@@ -24,7 +26,8 @@ pub(super) fn value_evaluation_rows(
     };
     let (sheet_table, project_table) = (TextTable(&sheet.variables), TextTable(project));
     let variables: [&dyn Resolver; 2] = [&sheet_table, &project_table];
-    match part_field_value(&sheet.symbols, symbol, "Value", &variables) {
+    let signed = standard.is_some_and(DesignatorStandard::shows_product_aspect_sign);
+    match part_field_value(&sheet.symbols, symbol, "Value", &variables, signed) {
         Some(Ok(value)) => vec![("Value Shows".to_string(), value)],
         Some(Err(error)) => vec![("Value Error".to_string(), error.to_string())],
         None => Vec::new(),

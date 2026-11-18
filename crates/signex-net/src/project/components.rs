@@ -5,7 +5,9 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
+use signex_types::part_fields::evaluated_value;
 use signex_types::schematic::InstancePath;
+use signex_types::variables::{Resolver, TextTable};
 use uuid::Uuid;
 
 use super::members::NetMemberKind;
@@ -67,22 +69,24 @@ impl ComponentReport {
 
 /// Every non-power symbol of `occs`, in walk then document order.
 pub(super) fn placed_symbols(occs: &[Occ<'_>]) -> Vec<PlacedSymbol> {
-    occs.iter()
-        .flat_map(|occ| {
-            occ.sheet
-                .symbols
-                .iter()
-                .filter(|s| !s.is_power)
-                .map(|s| PlacedSymbol {
-                    sheet: occ.key.clone(),
-                    occurrence: occ.path.clone(),
-                    id: s.uuid,
-                    designator: s.designator_in(&occ.path).trim().to_string(),
-                    value: s.value.clone(),
-                    footprint: s.footprint.clone(),
-                })
-        })
-        .collect()
+    let mut out = Vec::new();
+    for occ in occs {
+        // The value as shown: an `=` value evaluated on its sheet (#1986).
+        let sheet_variables = TextTable(&occ.sheet.variables);
+        let variables: [&dyn Resolver; 1] = [&sheet_variables];
+        let symbols = &occ.sheet.symbols;
+        for s in symbols.iter().filter(|s| !s.is_power) {
+            out.push(PlacedSymbol {
+                sheet: occ.key.clone(),
+                occurrence: occ.path.clone(),
+                id: s.uuid,
+                designator: s.designator_in(&occ.path).trim().to_string(),
+                value: evaluated_value(symbols, s, &variables, false),
+                footprint: s.footprint.clone(),
+            });
+        }
+    }
+    out
 }
 
 /// A placed symbol in one placement.

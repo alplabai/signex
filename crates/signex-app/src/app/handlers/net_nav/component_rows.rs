@@ -3,6 +3,7 @@
 //! re-derives a net or a part.
 
 use signex_net::ComponentReport;
+use signex_types::designator::display_reference;
 
 use crate::app::state::net_nav::ProjectNetData;
 use crate::panels::NetInspectorState;
@@ -20,10 +21,13 @@ pub(super) fn component_key(part: &ComponentReport) -> String {
 
 /// The rows for `data` under `state`, with every part of the project counted:
 /// the parts whose designator, value or footprint holds the filter, by
-/// designator; an expanded part with its connected pins.
+/// designator; an expanded part with its connected pins. The designator is
+/// shown as `standard` shows it (`-QAC1`, #1416) and the value is the
+/// evaluated one (#1986, read off the index).
 pub(super) fn component_rows(
     data: &ProjectNetData,
     state: &NetInspectorState,
+    standard: Option<signex_types::designator::DesignatorStandard>,
 ) -> (Vec<ComponentRow>, usize) {
     let needle = state.filter.trim().to_lowercase();
     let parts = data.index.components();
@@ -31,13 +35,15 @@ pub(super) fn component_rows(
     let rows = parts
         .into_iter()
         .filter(|part| {
+            let shown = display_reference(standard, &part.designator);
             needle.is_empty()
-                || [&part.designator, &part.value, &part.footprint]
+                || [&*shown, part.value.as_str(), part.footprint.as_str()]
                     .iter()
                     .any(|field| field.to_lowercase().contains(&needle))
         })
-        .map(|part| {
+        .map(|mut part| {
             let key = component_key(&part);
+            part.designator = display_reference(standard, &part.designator).into_owned();
             let expanded = state.expanded_parts.contains(&key);
             let pin_rows = if expanded {
                 part.pins

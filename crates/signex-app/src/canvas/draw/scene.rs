@@ -412,7 +412,7 @@ impl SchematicCanvas<'_> {
                     &self.prefs.canvas_colors,
                     &self.prefs.graphite,
                     &self.designators,
-                    self.prefs.wire_widths(),
+                    self.wire_widths(),
                 );
                 self.draw_selection_extras(frame, snapshot, bounds, &transform);
             };
@@ -477,7 +477,7 @@ impl SchematicCanvas<'_> {
             transform,
             &self.prefs.canvas_colors,
             &self.designators,
-            self.prefs.wire_widths(),
+            self.wire_widths(),
         );
         let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
             .erc_markers

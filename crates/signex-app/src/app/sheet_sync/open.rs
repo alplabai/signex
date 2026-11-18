@@ -69,7 +69,7 @@ impl Signex {
         self.ui_state.sheet_sync_reads += 1;
         let generation = self.ui_state.sheet_sync_reads;
         let open = self.document_state.engines.contains_key(&child_path);
-        self.ui_state.sheet_sync = Some(SheetSyncState {
+        self.ui_state.sheet_sync = Some(Box::new(SheetSyncState {
             generation,
             parent,
             symbol,
@@ -82,7 +82,7 @@ impl Signex {
             previews: None,
             checking: false,
             problem: None,
-        });
+        }));
         if open {
             self.refresh_sheet_sync_previews();
             return Task::none();

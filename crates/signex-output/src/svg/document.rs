@@ -16,9 +16,7 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{
-    push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables, symbol_value_text,
-};
+use super::symbols::{push_symbol_lib_graphics, push_symbol_pins};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -30,7 +28,7 @@ use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::field_effective_style;
 use signex_types::schematic::{DrawingPlacement, LabelType};
-use signex_types::variables::{Layered, Resolver, TextTable};
+use signex_types::variables::{Resolver, TextTable};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -333,12 +331,18 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
-        let special = eval_inputs.and_then(|e| e.special_strings);
-        // The sheet's variable model (#1987), under each part's own fields.
-        let model_tables = special.map(crate::SubstitutionContext::variable_tables);
+        // The value reads the sheet's parts, variables and special strings
+        // through the one rule the canvas uses too (#1596, #1986).
         let global_refdes = eval_inputs.map(|e| TextTable(e.global_refdes));
+        let value_scope = crate::ValueScope {
+            symbols: &sheet.schematic.symbols,
+            special: eval_inputs.and_then(|e| e.special_strings),
+            signed: false,
+            refdes: global_refdes.as_ref().map(|t| t as &dyn Resolver),
+            cell: eval_inputs.map(|e| e.cell),
+        };
         for sym in &sheet.schematic.symbols {
-            let symbol_vars = symbol_eval_variables(sym);
+            let symbol_vars = crate::field_value::symbol_eval_variables(sym);
             let part_table = TextTable(&symbol_vars);
             let mut refdes_vars = HashMap::new();
             if !sym.uuid.is_nil() && !sym.reference.is_empty() {
@@ -355,19 +359,6 @@ impl SvgRenderContext {
                     None => &local_refdes,
                 }),
                 ..ExpressionEvalContext::default()
-            };
-            // The value field reads the variables too (#1596), except a power
-            // port's: its value is a net name, so it resolves nothing.
-            let mut field_layers: Vec<&dyn Resolver> = vec![&part_table];
-            if !sym.is_power
-                && let Some(tables) = &model_tables
-            {
-                field_layers.extend(tables.iter().map(|t| t as &dyn Resolver));
-            }
-            let field_model = Layered::new(field_layers);
-            let field_eval_ctx = ExpressionEvalContext {
-                at_variables: Some(&field_model),
-                ..symbol_eval_ctx.clone()
             };
 
             let symbol_pin_nets = eval_inputs.and_then(|e| {
@@ -471,12 +462,7 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: symbol_value_text(
-                        &sheet.schematic.symbols,
-                        sym,
-                        &field_eval_ctx,
-                        special,
-                    ),
+                    text: crate::shown_value(&value_scope, sym).text,
                 });
             }
         }

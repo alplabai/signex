@@ -17,6 +17,8 @@ pub(super) struct SheetKey {
     class_revision: u64,
     defaults: SchematicDefaults,
     designator_standard: Option<DesignatorStandard>,
+    /// Value fields are boxed on their drawn text (#1986).
+    special_strings: Option<super::SpecialStrings>,
     designators: Designators,
 }
 
@@ -32,6 +34,7 @@ impl SheetKey {
             class_revision,
             defaults: widths.defaults,
             designator_standard: widths.designator_standard,
+            special_strings: widths.special_strings.cloned(),
             designators: designators.clone(),
         }
     }
@@ -49,6 +52,7 @@ impl SheetKey {
             && self.class_revision == class_revision
             && self.defaults == widths.defaults
             && self.designator_standard == widths.designator_standard
+            && self.special_strings.as_ref() == widths.special_strings
             && self.designators == *designators
     }
 }

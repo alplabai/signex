@@ -111,6 +111,9 @@ pub struct WireWidths<'a> {
     /// The project's designator standard: a reference field is boxed on the
     /// text the canvas draws (`-QAC1`, #1416), not the stored one.
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// What the sheet's special strings and variables resolve to: a value field
+    /// is boxed on the text the canvas draws (#1986).
+    pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
 }
 
 impl WireWidths<'_> {

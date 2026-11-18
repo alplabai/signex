@@ -33,26 +33,18 @@ impl SpecialStrings {
         signex_output::resolve_text(text, &self.context())
     }
 
-    /// A symbol value field's drawn text (#1596): its `${TOKEN}`s replaced,
-    /// except on a power port, whose value is a net name and is drawn as
-    /// stored.
-    pub fn resolve_field(&self, text: &str, is_power: bool) -> String {
-        if is_power {
-            text.to_string()
-        } else {
-            self.resolve(text)
-        }
-    }
-
-    /// A symbol's drawn value: an `=` expression evaluated through the parts
-    /// of its sheet (`symbols`) and the variables, with its unit (#1986),
-    /// else [`Self::resolve_field`].
-    pub fn resolve_value(&self, symbols: &[Symbol], symbol: &Symbol) -> String {
+    /// A symbol's drawn value, by the rule the PDF, SVG, BOM and netlist
+    /// share (`signex_output::shown_value`, #1596, #1986): an `=` expression
+    /// evaluated, else its markup and `${TOKEN}`s resolved; a power port's
+    /// value is a net name. `symbols` are the parts of its sheet; `signed`
+    /// whether designators are shown with the product-aspect sign.
+    pub fn resolve_value(&self, symbols: &[Symbol], symbol: &Symbol, signed: bool) -> String {
         let context = self.context();
-        let evaluated = (!symbol.is_power)
-            .then(|| signex_output::resolve_part_field(symbols, symbol, "Value", Some(&context)))
-            .flatten();
-        evaluated.unwrap_or_else(|| self.resolve_field(&symbol.value, symbol.is_power))
+        let scope = signex_output::ValueScope {
+            signed,
+            ..signex_output::ValueScope::of_sheet(symbols, Some(&context))
+        };
+        signex_output::shown_value(&scope, symbol).text
     }
 
     fn context(&self) -> SubstitutionContext<'_> {
@@ -102,8 +94,25 @@ mod tests {
     #[test]
     fn a_value_field_resolves_except_on_a_power_port() {
         let s = special();
-        assert_eq!(s.resolve_field("${TITLE} ${VREF}", false), "Supply 1.65V");
-        assert_eq!(s.resolve_field("${VCC}", true), "${VCC}");
+        let mut part = Symbol {
+            reference: "R1".to_string(),
+            value: "${TITLE} ${VREF} @{Tolerance}".to_string(),
+            ..Default::default()
+        };
+        // The part's own field, read as the PDF reads it (review finding 5).
+        part.fields.insert("Tolerance".to_string(), "1%".to_string());
+        let power = Symbol {
+            reference: "#PWR1".to_string(),
+            value: "${VCC}".to_string(),
+            is_power: true,
+            ..Default::default()
+        };
+        let symbols = vec![part, power];
+        assert_eq!(
+            s.resolve_value(&symbols, &symbols[0], false),
+            "Supply 1.65V 1%"
+        );
+        assert_eq!(s.resolve_value(&symbols, &symbols[1], false), "${VCC}");
     }
 
     /// #1987: a text note that is an `=` expression draws its value.
@@ -137,8 +146,8 @@ mod tests {
             ..Default::default()
         };
         let symbols = vec![r1, r2, power];
-        assert_eq!(s.resolve_value(&symbols, &symbols[0]), "330Ω");
-        assert_eq!(s.resolve_value(&symbols, &symbols[1]), "660Ω");
-        assert_eq!(s.resolve_value(&symbols, &symbols[2]), "= VCC");
+        assert_eq!(s.resolve_value(&symbols, &symbols[0], false), "330Ω");
+        assert_eq!(s.resolve_value(&symbols, &symbols[1], false), "660Ω");
+        assert_eq!(s.resolve_value(&symbols, &symbols[2], false), "= VCC");
     }
 }
