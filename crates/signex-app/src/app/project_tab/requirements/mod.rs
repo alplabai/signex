@@ -197,8 +197,7 @@ impl Signex {
     }
 
     /// Apply `command` from the tab and keep its refusal for the entry it
-    /// was for. An add or a remove moves the places of the entries, so the
-    /// typed boxes are forgotten.
+    /// was for.
     fn edit_requirements_from_tab(
         &mut self,
         project_id: ProjectId,
@@ -206,14 +205,7 @@ impl Signex {
         command: &ProjectRequirementCommand,
     ) -> Result<bool, RequirementProblem> {
         let outcome = self.apply_project_requirement(project_id, command);
-        let reshaped = matches!(
-            command,
-            ProjectRequirementCommand::Add { .. } | ProjectRequirementCommand::Remove { .. }
-        );
         let tab = self.requirements_tab(project_id);
-        if reshaped && outcome.is_ok() {
-            tab.drafts.clear();
-        }
         tab.problem = outcome
             .as_ref()
             .err()
@@ -224,7 +216,8 @@ impl Signex {
     /// Apply one Requirements edit to the project's data as one step of its
     /// General history and mark the `.snxprj` dirty: the tab's and the
     /// catalog commands' one commit path. `Ok(false)` when nothing changed
-    /// or the project is no longer loaded.
+    /// or the project is no longer loaded. Drafts are keyed by list place,
+    /// so an add or a remove, from the tab or a command, forgets them.
     pub(crate) fn apply_project_requirement(
         &mut self,
         project_id: ProjectId,
@@ -246,6 +239,12 @@ impl Signex {
             return Ok(false);
         }
         tab.rules_step_newest = false;
+        if matches!(
+            command,
+            ProjectRequirementCommand::Add { .. } | ProjectRequirementCommand::Remove { .. }
+        ) {
+            tab.requirements.drafts.clear();
+        }
         document.sync_project_history_dirty(project_id, true);
         self.after_project_general_change(false);
         Ok(true)

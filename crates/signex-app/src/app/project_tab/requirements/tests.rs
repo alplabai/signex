@@ -338,3 +338,39 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
     assert!(tab(&app, id).problem.is_some(), "an empty id is refused");
     let _ = app.view_project_tab(id);
 }
+
+/// Drafts are keyed by list place: a remove through the catalog forgets
+/// them, so Enter afterwards cannot commit a draft to the entry that moved
+/// into its place.
+#[test]
+fn a_catalog_remove_forgets_the_drafts_so_none_lands_on_the_wrong_entry() {
+    let (mut app, id, _dir) = app();
+    for name in ["a", "b", "c"] {
+        let id_operand = format!("id={name}");
+        answer(
+            &mut app,
+            "project_add_requirement",
+            &["kind=board_size", &id_operand],
+        );
+    }
+    let field = RequirementField::MaxWidthMm;
+    let edited = RequirementsMsg::FieldEdited {
+        index: 1,
+        field,
+        text: "55".into(),
+    };
+    let _ = send(&mut app, id, edited);
+    assert!(!tab(&app, id).drafts.is_empty(), "a draft on entry b");
+
+    answer(&mut app, "project_remove_requirement", &["requirement=a"]);
+    assert!(tab(&app, id).drafts.is_empty(), "the remove forgot it");
+    let _ = send(&mut app, id, RequirementsMsg::FieldSubmitted { index: 1, field });
+
+    let entries = stored(&app);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0]["id"], "b");
+    assert_eq!(entries[1]["id"], "c");
+    for entry in &entries {
+        assert_eq!(entry["max_width_mm"], json!(100), "{entry}");
+    }
+}
