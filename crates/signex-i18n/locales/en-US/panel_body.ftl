@@ -79,8 +79,28 @@ panels-multi-nothing-shared = Nothing in this selection has fields shared for ed
 panels-projects-none-open = No project open
 # The menu path that opens a project.
 panels-projects-open-hint = File > Open to begin
+# Branches of a project in the Projects tree.
+panels-projects-group-schematics = Schematics
+panels-projects-group-pcb = PCB
+panels-projects-group-bom = Bill of Materials
+panels-projects-group-outputs = Output Jobs
+panels-projects-group-libraries = Libraries
+panels-projects-group-settings = Settings
+# A tree row whose file is gone from disk. $name is the file name.
+panels-projects-file-missing = { $name }  (missing)
+# A tree row whose sheet could not be read. $name is the file name.
+panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
+# Navigator rows of a sheet that is not a plain page. $name is the sheet's name.
+panels-navigator-missing = { $name } (missing)
+panels-navigator-unreadable = { $name } (unreadable)
+# The sheet was refused (it is not a sheet Signex can place).
+panels-navigator-rejected = { $name } (rejected)
+# The sheet places itself further down, so it is not opened again.
+panels-navigator-cycle = { $name } (cycle)
+# The hierarchy is too deep to show this sheet's children.
+panels-navigator-not-expanded = { $name } (not expanded)
 
 ## Components panel: the details of the selected row
 panels-components-details-select = Select a component to see its details.
@@ -88,6 +108,10 @@ panels-components-details-loading = Loading…
 panels-components-details-no-symbol = No symbol.
 panels-components-details-footprint-unreadable = Footprint could not be read.
 panels-components-details-no-footprint = No footprint.
+# Footprint pick-list entry of the row's own footprint. $name is its name.
+panels-components-details-footprint-default = { $name } (default)
+# Name of the row's footprint when it could not be read.
+panels-components-details-footprint-unnamed = Default
 panels-components-details-no-parameters = No parameters.
 
 ## Planned panels: what each will do, under its name and the planned note

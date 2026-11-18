@@ -7,6 +7,7 @@
 use super::super::*;
 use super::rows::{PanelStyle, info_row};
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 /// One Properties edit of a Blanket.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,28 +42,29 @@ pub(super) fn push_directive_sections<'a>(
         &ctx.selection_info,
         "ERC Exclusions",
     ));
-    let title = signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_BLANKET).into_string();
     col = col.push(
-        ctx.collapsible("sel_blanket", &title, &ctx.collapsed_sections, move || {
-            Column::new()
-                .spacing(0)
-                .width(Length::Fill)
-                .push(form_edit_row(
-                    &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_NET_CLASS)
-                        .into_string(),
-                    &class,
-                    muted,
-                    move |value| PanelMsg::EditBlanket(id, BlanketEdit::NetClass(value)),
-                ))
-        })
+        ctx.collapsible(
+            "sel_blanket",
+            ids::PANELS_DIRECTIVE_BLANKET,
+            &ctx.collapsed_sections,
+            move || {
+                Column::new()
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .push(form_edit_row(
+                        t!(i18n, ids::PANELS_DIRECTIVE_NET_CLASS),
+                        &class,
+                        muted,
+                        move |value| PanelMsg::EditBlanket(id, BlanketEdit::NetClass(value)),
+                    ))
+            },
+        )
         .boxed(),
     );
-    let rules_title =
-        signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ERC_EXCLUSIONS).into_string();
     col.push(
         ctx.collapsible(
             "sel_blanket_rules",
-            &rules_title,
+            ids::PANELS_DIRECTIVE_ERC_EXCLUSIONS,
             &ctx.collapsed_sections,
             move || {
                 let all = signex_types::schematic::ALL_ERC_RULES;
@@ -71,8 +73,7 @@ pub(super) fn push_directive_sections<'a>(
                     .spacing(0)
                     .width(Length::Fill)
                     .push(form_check_row(
-                        &signex_i18n::t!(i18n, signex_i18n::ids::PANELS_DIRECTIVE_ALL_RULES)
-                            .into_string(),
+                        t!(i18n, ids::PANELS_DIRECTIVE_ALL_RULES),
                         every,
                         PanelMsg::EditBlanket(
                             id,
@@ -88,7 +89,8 @@ pub(super) fn push_directive_sections<'a>(
                     let rule_id = signex_erc::RuleId::builtin(kind).as_str().to_string();
                     let on = excluded.contains(&rule_id);
                     rows = rows.push(form_check_row(
-                        kind.label(),
+                        // raw: the rule's name comes from signex-erc (#2062).
+                        raw(kind.label()),
                         on,
                         PanelMsg::EditBlanket(
                             id,

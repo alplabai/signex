@@ -196,7 +196,8 @@ fn section_title<'a>(
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
-    form_look::section_label(title, tokens, i18n)
+    // raw: symbol-editor labels move with #2060.
+    form_look::section_label(signex_widgets::raw(title.to_owned()), tokens, i18n)
 }
 
 #[cfg(test)]

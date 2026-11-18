@@ -24,6 +24,7 @@ fn local_color_field<'a>(
     muted: Color,
     border_c: Color,
     picker: Option<crate::app::LocalColorPicker>,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use std::rc::Rc;
 
@@ -37,20 +38,25 @@ fn local_color_field<'a>(
         .is_some()
         .then_some(PanelMsg::SymEditorClearLocalColor(slot));
 
-    color_field(ColorFieldProps {
-        label,
-        current,
-        none_label: "Inherit",
-        show_palette,
-        show_advanced,
-        muted,
-        border_c,
-        on_toggle: PanelMsg::SymEditorToggleLocalColorPicker(slot),
-        on_advanced: PanelMsg::SymEditorOpenLocalColorAdvanced(slot),
-        on_cancel: PanelMsg::SymEditorCancelLocalColorPicker,
-        on_pick,
-        on_clear,
-    })
+    color_field(
+        ColorFieldProps {
+            // raw: symbol-editor labels move with #2060.
+            label: raw(label),
+            current,
+            // raw: symbol-editor labels move with #2060.
+            none_label: raw("Inherit"),
+            show_palette,
+            show_advanced,
+            muted,
+            border_c,
+            on_toggle: PanelMsg::SymEditorToggleLocalColorPicker(slot),
+            on_advanced: PanelMsg::SymEditorOpenLocalColorAdvanced(slot),
+            on_cancel: PanelMsg::SymEditorCancelLocalColorPicker,
+            on_pick,
+            on_clear,
+        },
+        i18n,
+    )
 }
 
 /// Symbol-level default Properties (nothing selected): identity,
@@ -168,6 +174,7 @@ pub(super) fn view_symbol_selection<'a>(
         muted,
         border_c,
         sym.local_color_picker,
+        i18n,
     ));
     col = col.push(local_color_field(
         "Lines",
@@ -176,6 +183,7 @@ pub(super) fn view_symbol_selection<'a>(
         muted,
         border_c,
         sym.local_color_picker,
+        i18n,
     ));
     col = col.push(local_color_field(
         "Pins",
@@ -184,6 +192,7 @@ pub(super) fn view_symbol_selection<'a>(
         muted,
         border_c,
         sym.local_color_picker,
+        i18n,
     ));
     col
 }

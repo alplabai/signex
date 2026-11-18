@@ -80,19 +80,23 @@ impl std::fmt::Display for FootprintChoice {
 }
 
 impl ComponentDetails {
-    /// The footprints the row offers, the default first. Fewer than two
-    /// entries means there is nothing to pick.
-    pub fn footprint_choices(&self) -> Vec<FootprintChoice> {
+    /// The footprints the row offers, the default first, named in `i18n`'s
+    /// language. Fewer than two entries means there is nothing to pick.
+    pub fn footprint_choices(&self, i18n: &signex_i18n::I18n) -> Vec<FootprintChoice> {
+        use signex_i18n::ids;
         let Some(default) = self.default_footprint else {
             return Vec::new();
         };
-        let default_name = self
-            .footprint
-            .as_ref()
-            .map_or("Default", |fp| fp.name.as_str());
+        let default_name = self.footprint.as_ref().map_or_else(
+            || i18n.message_plain(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNNAMED, &[]),
+            |fp| fp.name.clone(),
+        );
         let default = FootprintChoice {
             reference: default,
-            label: format!("{default_name} (default)"),
+            label: i18n.message_plain(
+                ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_DEFAULT,
+                &[("name", default_name.into())],
+            ),
         };
         std::iter::once(default)
             .chain(self.alternate_footprints.iter().map(|a| FootprintChoice {
@@ -104,8 +108,12 @@ impl ComponentDetails {
 
     /// The footprint the picker shows: `pick` when the row offers it, else
     /// the default.
-    pub fn shown_footprint(&self, pick: Option<&PrimitiveRef>) -> Option<FootprintChoice> {
-        let choices = self.footprint_choices();
+    pub fn shown_footprint(
+        &self,
+        pick: Option<&PrimitiveRef>,
+        i18n: &signex_i18n::I18n,
+    ) -> Option<FootprintChoice> {
+        let choices = self.footprint_choices(i18n);
         pick.and_then(|p| choices.iter().find(|c| c.reference == *p))
             .or_else(|| choices.first())
             .cloned()
@@ -266,8 +274,8 @@ pub(crate) fn view<'a>(
         .as_ref()
         .filter(|(key, _)| panel.selected.as_ref() == Some(key))
         .map(|(_, reference)| reference);
-    let shown = d.shown_footprint(pick);
-    let choices = d.footprint_choices();
+    let shown = d.shown_footprint(pick, i18n);
+    let choices = d.footprint_choices(i18n);
     if choices.len() >= 2 {
         col = col.push(
             pick_list(shown.clone(), choices, |choice: &FootprintChoice| {
@@ -384,6 +392,55 @@ mod tests {
         assert!(state.error.is_none());
         assert!(state.finish(&key(2), second, Err("now".into())));
         assert_eq!(state.error.as_deref(), Some("now"));
+    }
+
+    /// #2059: the row's own footprint reads "{name} (default)", or
+    /// "Default (default)" when unread, in en-US, and follows the language.
+    #[test]
+    fn the_default_footprint_entry_follows_the_language() {
+        let reference = PrimitiveRef::new(uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2));
+        let details = ComponentDetails {
+            internal_pn: String::new(),
+            class: String::new(),
+            lifecycle: String::new(),
+            state: signex_library::LifecycleState::Draft,
+            manufacturer: String::new(),
+            mpn: String::new(),
+            description: String::new(),
+            has_footprint_ref: true,
+            symbol: None,
+            footprint: None,
+            default_footprint: Some(reference),
+            alternate_footprints: vec![FootprintOption {
+                reference: PrimitiveRef::new(uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(3)),
+                name: "SOT-23".into(),
+                preview: None,
+            }],
+            parameters: Vec::new(),
+            notes: Vec::new(),
+        };
+        let en = signex_i18n::I18n::en_us();
+        let labels: Vec<String> = details
+            .footprint_choices(&en)
+            .into_iter()
+            .map(|c| c.label)
+            .collect();
+        assert_eq!(labels, ["Default (default)", "SOT-23"]);
+        let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        let shown = details.shown_footprint(None, &xa).expect("the default");
+        assert_eq!(shown.reference, reference);
+        let unnamed = xa.message_plain(
+            signex_i18n::ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNNAMED,
+            &[],
+        );
+        assert_eq!(
+            shown.label,
+            xa.message_plain(
+                signex_i18n::ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_DEFAULT,
+                &[("name", unnamed.into())]
+            )
+        );
+        assert!(!shown.label.ends_with(" (default)"), "{}", shown.label);
     }
 
     #[test]

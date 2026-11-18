@@ -47,25 +47,30 @@ pub(super) fn push_placed_kind_sections<'a>(
         input_bg: palette.input_bg,
     };
     col = push_location_section(col, ctx, look);
-    let facts: Vec<(String, String)> = facts_of(ctx.selected_kind)
+    let facts: Vec<(MessageId, String)> = facts_of(ctx.selected_kind)
         .iter()
         .filter_map(|(key, label)| {
             let (_, value) = ctx.selection_info.iter().find(|(k, _)| k == key)?;
-            Some((t!(ctx.i18n, *label).to_string(), value.clone()))
+            Some((*label, value.clone()))
         })
         .collect();
     if facts.is_empty() {
         return col;
     }
-    let title = t!(ctx.i18n, ids::PANELS_PLACED_PROPERTIES).to_string();
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     col.push(
-        ctx.collapsible("sel_general", &title, &ctx.collapsed_sections, move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            for (label, value) in &facts {
-                c = c.push(prop_kv_row(label, value, muted, primary));
-            }
-            c
-        })
+        ctx.collapsible(
+            "sel_general",
+            ids::PANELS_PLACED_PROPERTIES,
+            &ctx.collapsed_sections,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                for (label, value) in &facts {
+                    c = c.push(prop_kv_row(t!(i18n, *label), value, muted, primary));
+                }
+                c
+            },
+        )
         .boxed(),
     )
 }

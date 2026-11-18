@@ -56,7 +56,7 @@ mod units;
 mod zone_fill;
 
 pub use arrange::{arrange_in_box, placed_extent};
-pub use body::footprint_body;
+pub use body::{footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,

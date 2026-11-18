@@ -47,11 +47,25 @@ pub(in crate::panels) fn family_from_option(option: String) -> Option<String> {
     (option != DEFAULT_OPTION).then_some(option)
 }
 
+/// The pick-list choice of a family entry: "Default" is named from the
+/// catalog, a family by its own name.
+fn family_choice(
+    i18n: &signex_i18n::I18n,
+    option: String,
+) -> crate::choice::Choice<Option<String>> {
+    let value = family_from_option(option);
+    let label = value
+        .clone()
+        .unwrap_or_else(|| i18n.message_plain(signex_i18n::ids::PROPERTIES_FONT_DEFAULT, &[]));
+    crate::choice::Choice { value, label }
+}
+
 pub(in crate::panels) fn font_family_row<'a>(
-    label: &str,
+    label: signex_i18n::Localized,
     current: Option<&str>,
     muted: Color,
     on_pick: impl Fn(Option<String>) -> PanelMsg + 'a,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     // Show the installed spelling when the document spells it differently.
     let shown = current.map(|name| {
@@ -59,11 +73,15 @@ pub(in crate::panels) fn font_family_row<'a>(
             .canonical(name)
             .unwrap_or(name)
     });
-    form_pick_row(
+    let choices = font_family_options(shown)
+        .into_iter()
+        .map(|option| family_choice(i18n, option))
+        .collect();
+    form_choice_row(
         label,
-        font_family_options(shown),
-        shown.unwrap_or(DEFAULT_OPTION).to_string(),
-        move |option| on_pick(family_from_option(option)),
+        choices,
+        family_choice(i18n, shown.unwrap_or(DEFAULT_OPTION).to_string()),
+        on_pick,
         muted,
     )
 }

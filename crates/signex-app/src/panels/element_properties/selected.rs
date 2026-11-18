@@ -9,6 +9,7 @@ use super::super::*;
 use super::rows::PanelStyle;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 #[cfg(test)]
 use super::rows::{h_align_from_row, justify_h_row, justify_v_row, rotation_degrees};
@@ -115,7 +116,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         col = col.push(
             ctx.collapsible(
                 "sel_wire_style",
-                "Style",
+                ids::PROPERTIES_SECTION_STYLE,
                 &ctx.collapsed_sections,
                 move || {
                     Column::new()
@@ -125,6 +126,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             width,
                             move |preset| PanelMsg::EditWireWidth(id, preset),
                             muted,
+                            &ctx.i18n,
                         ))
                         .push(crate::panels::wire_color_row(
                             color,
@@ -132,6 +134,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             std::rc::Rc::new(move |c| PanelMsg::EditWireColor(id, c)),
                             muted,
                             border_c,
+                            &ctx.i18n,
                         ))
                 },
             )
@@ -152,18 +155,23 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let locked = get("Locked") == "Yes";
         let item = signex_types::schematic::SelectedItem::new(id, kind);
         col = col.push(
-            ctx.collapsible("sel_state", "State", &ctx.collapsed_sections, move || {
-                Column::new()
-                    .spacing(0)
-                    .width(Length::Fill)
-                    .push(form_check_row(
-                        "Locked",
-                        locked,
-                        PanelMsg::ToggleItemLocked(item),
-                        muted,
-                        panel_bg,
-                    ))
-            })
+            ctx.collapsible(
+                "sel_state",
+                ids::PROPERTIES_SECTION_STATE,
+                &ctx.collapsed_sections,
+                move || {
+                    Column::new()
+                        .spacing(0)
+                        .width(Length::Fill)
+                        .push(form_check_row(
+                            t!(ctx.i18n, ids::PROPERTIES_LOCKED),
+                            locked,
+                            PanelMsg::ToggleItemLocked(item),
+                            muted,
+                            panel_bg,
+                        ))
+                },
+            )
             .boxed(),
         );
     }

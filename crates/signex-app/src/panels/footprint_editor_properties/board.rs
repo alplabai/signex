@@ -100,7 +100,7 @@ pub(super) fn view_board_section<'a>(
     col = col.push(form_label(t!(i18n, ids::BOARD_SKETCH_SECTION)));
     if board.is_edge {
         col = col.push(form_check_row(
-            &t!(i18n, ids::BOARD_SKETCH_OUTLINE).into_string(),
+            t!(i18n, ids::BOARD_SKETCH_OUTLINE),
             board.outline,
             edit(M::OutlineToggled {
                 id,
@@ -113,7 +113,7 @@ pub(super) fn view_board_section<'a>(
     if board.is_circle {
         let is_hole = board.hole.is_some();
         col = col.push(form_check_row(
-            &t!(i18n, ids::BOARD_SKETCH_HOLE).into_string(),
+            t!(i18n, ids::BOARD_SKETCH_HOLE),
             is_hole,
             edit(M::MountingHoleToggled { id, on: !is_hole }),
             muted,
@@ -122,13 +122,13 @@ pub(super) fn view_board_section<'a>(
     }
     if let Some(hole) = board.hole.as_ref() {
         col = col.push(form_edit_row(
-            &t!(i18n, ids::BOARD_SKETCH_HOLE_DRILL).into_string(),
+            t!(i18n, ids::BOARD_SKETCH_HOLE_DRILL),
             &hole.drill,
             muted,
             move |value| PanelMsg::BoardSketch(M::HoleDrillEdited { id, value }),
         ));
         col = col.push(form_check_row(
-            &t!(i18n, ids::BOARD_SKETCH_HOLE_PLATED).into_string(),
+            t!(i18n, ids::BOARD_SKETCH_HOLE_PLATED),
             hole.plated,
             edit(M::HolePlatedToggled {
                 id,
@@ -138,7 +138,7 @@ pub(super) fn view_board_section<'a>(
             surface,
         ));
         col = col.push(form_edit_row(
-            &t!(i18n, ids::BOARD_SKETCH_HOLE_NET).into_string(),
+            t!(i18n, ids::BOARD_SKETCH_HOLE_NET),
             &hole.net,
             muted,
             move |value| PanelMsg::BoardSketch(M::HoleNetEdited { id, value }),

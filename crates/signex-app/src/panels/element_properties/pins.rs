@@ -7,6 +7,7 @@ use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::row;
 use signex_engine::info_keys;
+use signex_i18n::{Translatable, ids, t};
 use std::collections::HashMap;
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -80,25 +81,37 @@ pub(super) fn push_focused_pin_section<'a>(
         return col;
     };
     let PanelPalette { input_bg, .. } = PanelPalette::from_tokens(&ctx.tokens);
-    let title = format!("Pin {}", pin.designator);
+    let i18n = &ctx.i18n;
+    let title = Translatable::new(ids::PROPERTIES_PIN_TITLE).arg("pin", pin.designator.as_str());
     col.push(
         ctx.collapsible(
             FOCUSED_PIN_SECTION_KEY,
-            &title,
+            title,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
-                let hidden = if pin.hidden { "Yes" } else { "No" };
+                let hidden = i18n.message_plain(
+                    if pin.hidden {
+                        ids::PROPERTIES_YES
+                    } else {
+                        ids::PROPERTIES_NO
+                    },
+                    &[],
+                );
                 let rows = [
-                    ("Designator", pin.designator.as_str()),
-                    ("Name", pin.name.as_str()),
-                    ("Electrical Type", pin.electrical_type.as_str()),
-                    ("Net", pin.net.as_deref().unwrap_or("")),
-                    ("Hidden", hidden),
+                    (ids::PROPERTIES_DESIGNATOR, pin.designator.as_str()),
+                    (ids::PROPERTIES_NAME, pin.name.as_str()),
+                    // raw: engine value (#2060).
+                    (
+                        ids::PROPERTIES_ELECTRICAL_TYPE,
+                        pin.electrical_type.as_str(),
+                    ),
+                    (ids::PROPERTIES_NET, pin.net.as_deref().unwrap_or("")),
+                    (ids::PROPERTIES_HIDDEN, hidden.as_str()),
                 ];
                 for (label, value) in rows {
-                    c = c.push(form_input_row(label, value, muted, input_bg));
+                    c = c.push(form_input_row(t!(i18n, label), value, muted, input_bg));
                 }
                 c
             },
@@ -129,12 +142,14 @@ pub(super) fn push_pins_section<'a>(
         return col;
     }
     let accent = PanelPalette::from_tokens(&ctx.tokens).accent;
-    let title = format!("Pins ({pin_count})");
+    let i18n = &ctx.i18n;
+    // The count goes in as `format!` wrote it, so English reads as before.
+    let title = Translatable::new(ids::PROPERTIES_PINS_TITLE).arg("count", pin_count.to_string());
     let info = &ctx.selection_info;
     col.push(
         ctx.collapsible(
             PINS_SECTION_KEY,
-            &title,
+            title,
             &ctx.collapsed_sections,
             move || {
                 let rows = pin_rows(info);
@@ -143,20 +158,29 @@ pub(super) fn push_pins_section<'a>(
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
                 c = c.push(table_row(
-                    ["Pin", "Name", "Type", "Net", "Hidden"].map(String::from),
+                    [
+                        ids::PROPERTIES_PINS_COLUMN_PIN,
+                        ids::PROPERTIES_PINS_COLUMN_NAME,
+                        ids::PROPERTIES_PINS_COLUMN_TYPE,
+                        ids::PROPERTIES_PINS_COLUMN_NET,
+                        ids::PROPERTIES_PINS_COLUMN_HIDDEN,
+                    ]
+                    .map(|id| i18n.message_plain(id, &[])),
                     show_net,
                     muted,
                     None,
                 ));
+                let yes = i18n.message_plain(ids::PROPERTIES_YES, &[]);
                 c = c.push(thin_sep(border_c));
                 for pin in rows {
                     let cells = [
                         pin.designator,
                         pin.name,
+                        // raw: engine value (#2060).
                         pin.electrical_type,
                         pin.net.unwrap_or_default(),
                         if pin.hidden {
-                            "Yes".to_owned()
+                            yes.clone()
                         } else {
                             String::new()
                         },
@@ -187,6 +211,7 @@ fn table_row<'a>(
             continue;
         }
         line = line.push(
+            // raw: a pin's data, or a column heading already rendered from the catalog.
             text(raw(cell))
                 .size(TS.body)
                 .color(colour)
