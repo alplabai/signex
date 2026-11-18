@@ -17,6 +17,7 @@ mod tests;
 use std::path::PathBuf;
 
 use signex_output::fab::{FabError, FabNote, FabOptions, OdbForm};
+pub use signex_types::project::FabOutputKinds;
 
 pub use notes::BoardNote;
 pub(crate) use notes::{
@@ -61,7 +62,7 @@ impl FabOutput {
     ];
 
     /// Whether `kinds` writes this kind.
-    pub fn is_on(self, kinds: &FabKinds) -> bool {
+    pub fn is_on(self, kinds: &FabOutputKinds) -> bool {
         match self {
             FabOutput::Gerber => kinds.gerber,
             FabOutput::Drill => kinds.drill,
@@ -75,7 +76,7 @@ impl FabOutput {
         }
     }
 
-    fn toggle(self, kinds: &mut FabKinds) {
+    fn toggle(self, kinds: &mut FabOutputKinds) {
         let flag = match self {
             FabOutput::Gerber => &mut kinds.gerber,
             FabOutput::Drill => &mut kinds.drill,
@@ -91,67 +92,22 @@ impl FabOutput {
     }
 }
 
-/// Which kinds of file Generate writes. The dialog opens with the kinds it
-/// was last used with; the name and the folder are the board's own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FabKinds {
-    pub gerber: bool,
-    pub drill: bool,
-    pub centroid: bool,
-    pub test_netlist: bool,
-    pub ipc2581: bool,
-    pub odb: bool,
-    /// The ODB++ job as its folder tree instead of one archive.
-    pub odb_folder: bool,
-    /// Both sides' assembly drawings as one PDF.
-    pub assembly_pdf: bool,
-    /// Each side's assembly drawing as an SVG file.
-    pub assembly_svg: bool,
-    /// The board and its parts as a STEP model.
-    pub step: bool,
-}
-
-impl Default for FabKinds {
-    /// The fabrication files, the IPC-2581 file, the ODB++ archive and the
-    /// assembly PDF; the SVG drawings and the STEP model when asked.
-    fn default() -> Self {
-        Self {
-            gerber: true,
-            drill: true,
-            centroid: true,
-            test_netlist: true,
-            ipc2581: true,
-            odb: true,
-            odb_folder: false,
-            assembly_pdf: true,
-            assembly_svg: false,
-            step: false,
-        }
-    }
-}
-
-impl FabKinds {
-    /// What `signex_output::fab::generate` writes, files named `name`.
-    pub fn fab_options(&self, name: &str) -> FabOptions {
-        let form = if self.odb_folder {
-            OdbForm::Directory
-        } else {
-            OdbForm::Archive
-        };
-        FabOptions {
-            name: name.to_string(),
-            gerber: self.gerber,
-            drill: self.drill,
-            centroid: self.centroid,
-            test_netlist: self.test_netlist,
-            ipc2581: self.ipc2581,
-            odb: self.odb.then_some(form),
-        }
-    }
-
-    /// Whether a kind `generate` writes is chosen.
-    pub fn has_fab_files(&self) -> bool {
-        self.gerber || self.drill || self.centroid || self.test_netlist || self.ipc2581 || self.odb
+/// What `signex_output::fab::generate` writes for `kinds`, files named
+/// `name`.
+pub fn fab_options(kinds: &FabOutputKinds, name: &str) -> FabOptions {
+    let form = if kinds.odb_folder {
+        OdbForm::Directory
+    } else {
+        OdbForm::Archive
+    };
+    FabOptions {
+        name: name.to_string(),
+        gerber: kinds.gerber,
+        drill: kinds.drill,
+        centroid: kinds.centroid,
+        test_netlist: kinds.test_netlist,
+        ipc2581: kinds.ipc2581,
+        odb: kinds.odb.then_some(form),
     }
 }
 
@@ -208,7 +164,10 @@ pub struct FabOutputsState {
     pub board_name: String,
     /// The file-name stem every file starts with.
     pub name: String,
-    pub kinds: FabKinds,
+    /// The kinds of file ticked. For a board its project names, the
+    /// project's stored kinds are the source (`Signex::fab_output_kinds`);
+    /// this is their copy as the dialog last set or read them.
+    pub kinds: FabOutputKinds,
     /// The output folder as typed or picked.
     pub folder: String,
     /// The generation of the write in flight; `None` when idle.
@@ -237,7 +196,7 @@ impl FabOutputsState {
             board,
             board_name,
             name,
-            kinds: FabKinds::default(),
+            kinds: FabOutputKinds::default(),
             folder,
             writing: None,
             outcome: None,
@@ -246,11 +205,11 @@ impl FabOutputsState {
         }
     }
 
-    /// Whether Generate can run: no write in flight, a kind chosen, a folder
-    /// and a name given.
-    pub fn can_generate(&self) -> bool {
+    /// Whether Generate can run with `kinds` ticked: no write in flight, a
+    /// kind chosen, a folder and a name given.
+    pub fn can_generate(&self, kinds: &FabOutputKinds) -> bool {
         self.writing.is_none()
-            && FabOutput::ALL.iter().any(|k| k.is_on(&self.kinds))
+            && FabOutput::ALL.iter().any(|k| k.is_on(kinds))
             && !self.folder.trim().is_empty()
             && !self.name.trim().is_empty()
     }

@@ -484,9 +484,6 @@ pub struct UiState {
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
-    /// The kinds of file Fabrication Outputs was last used with, for its
-    /// next opening (#2489).
-    pub fab_outputs_kinds: crate::app::FabKinds,
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,

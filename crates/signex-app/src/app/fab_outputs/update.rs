@@ -1,13 +1,15 @@
 use std::path::PathBuf;
 
 use iced::Task;
+use signex_engine::ProjectGeneralCommand;
 use signex_i18n::{ids, t};
 use signex_renderer::board3d::StepSchema;
 use signex_types::pcb::PcbBoard;
 
 use super::documents::{DocumentsJob, assembly_pdf_options, step_file_name};
 use super::write::{GenerateJob, run_generate};
-use super::{FabKinds, FabOutputsMsg, FabOutputsState, FabProblem};
+use super::{FabOutputKinds, FabOutputsMsg, FabOutputsState, FabProblem};
+use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
 impl Signex {
@@ -45,15 +47,57 @@ impl Signex {
         }
     }
 
-    /// A change of the kinds of file; the next opening starts from them.
-    fn edit_fab_kinds(&mut self, edit: impl FnOnce(&mut FabKinds)) {
-        self.with_fab_outputs(|s| edit(&mut s.kinds));
-        if let Some(state) = self.ui_state.fab_outputs.as_ref() {
-            self.ui_state.fab_outputs_kinds = state.kinds;
+    /// The kinds ticked for the open dialog's board: its project's stored
+    /// kinds (the defaults when it stores none), else the dialog's own for a
+    /// board no project names.
+    pub(crate) fn fab_output_kinds(&self, state: &FabOutputsState) -> FabOutputKinds {
+        match self.document_state.board_project(&state.board, None) {
+            Some(project) => project.data.fab_outputs.unwrap_or_default(),
+            None => state.kinds,
         }
     }
 
-    /// Open the dialog on the board in view with the kinds last used.
+    /// A tick changed. A board's project stores it as a project edit (one
+    /// undo step, the project dirty, written on Save); nothing is written
+    /// here.
+    fn edit_fab_kinds(&mut self, edit: impl FnOnce(&mut FabOutputKinds)) {
+        let Some(state) = self.ui_state.fab_outputs.as_deref() else {
+            return;
+        };
+        if state.writing.is_some() {
+            return;
+        }
+        let mut kinds = self.fab_output_kinds(state);
+        edit(&mut kinds);
+        let project = self
+            .document_state
+            .board_project(&state.board, None)
+            .map(|project| project.id);
+        self.with_fab_outputs(|s| s.kinds = kinds);
+        if let Some(project_id) = project {
+            self.store_fab_kinds(project_id, kinds);
+        }
+    }
+
+    /// Store `kinds` in project `project_id` through its General history,
+    /// as the Project tab's edits are.
+    fn store_fab_kinds(&mut self, project_id: ProjectId, kinds: FabOutputKinds) {
+        let document = &mut self.document_state;
+        document.note_project_clean_state(project_id);
+        let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
+            return;
+        };
+        let tab = document.project_tabs.entry(project_id).or_default();
+        let command = ProjectGeneralCommand::SetFabOutputs(kinds.stored());
+        if tab.general_history.apply(&mut project.data, command) {
+            tab.rules_step_newest = false;
+            // Not a rule or a sheet: ERC results stay current.
+            document.sync_project_history_dirty(project_id, false);
+            self.refresh_panel_ctx();
+        }
+    }
+
+    /// Open the dialog on the board in view with its project's kinds.
     /// Nothing is read or written.
     fn open_fab_outputs(&mut self) {
         if self.ui_state.fab_outputs.is_some() {
@@ -77,7 +121,7 @@ impl Signex {
             .and_then(|board| board.options.panel)
             .map(|p| (p.columns, p.rows));
         let mut state = FabOutputsState::new(path, board_name);
-        state.kinds = self.ui_state.fab_outputs_kinds;
+        state.kinds = self.fab_output_kinds(&state);
         state.panel = panel;
         state.whole_panel = panel.is_some();
         self.interaction_state.context_menu = None;
@@ -109,7 +153,7 @@ impl Signex {
     /// prints and where the parts' STEP models are read from.
     fn generate_job(&self, state: &FabOutputsState, board: PcbBoard) -> GenerateJob {
         let name = state.name.trim().to_string();
-        let kinds = state.kinds;
+        let kinds = self.fab_output_kinds(state);
         let pdf = kinds.assembly_pdf.then(|| {
             let options = assembly_pdf_options(&self.ui_state.board_output.print_options);
             let text = crate::app::board_output::print_text(&self.ui_state.i18n, &state.board_name);
@@ -143,7 +187,7 @@ impl Signex {
         let Some(state) = self.ui_state.fab_outputs.as_deref() else {
             return Task::none();
         };
-        if !state.can_generate() {
+        if !state.can_generate(&self.fab_output_kinds(state)) {
             return Task::none();
         }
         let job = self

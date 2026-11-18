@@ -17,9 +17,20 @@ The dialog has a tick box per kind of file (#2489): Gerber, drill, pick and
 place, the test netlist, IPC-2581, ODB++ (with a second box under it to
 write the job as its folder tree instead of one archive), the assembly
 drawing as a PDF, the assembly drawings as SVG, and the board's STEP model.
-A new dialog ticks every kind but the SVG drawings and the STEP model; after
-that it opens with the kinds it was last used with, for as long as Signex
-runs. The name and the folder are the board's own each time.
+By default every kind is ticked but the SVG drawings and the STEP model,
+and ODB++ is the archive.
+
+The ticks of a board its project names are saved in the project: the
+`.snxprj` key `fab_outputs`, an object of the ten booleans (`gerber`,
+`drill`, `centroid`, `test_netlist`, `ipc2581`, `odb`, `odb_folder`,
+`assembly_pdf`, `assembly_svg`, `step`; a missing one takes its default).
+The key is absent while the ticks are the defaults, so a project that never
+changed them re-saves byte-identical; a value that cannot be read opens as
+the defaults. A tick change is a project edit like the Project tab's: one
+undo step in the project's General history, the project marked dirty, and
+nothing written until Save. The dialog always shows the project's ticks,
+so an undo shows at once. A board no project names keeps its ticks in the
+open dialog only. The name and the folder are the board's own each time.
 
 Generate makes every ticked file first and only then writes them, so a file
 that cannot be made (no outline, a bad name, a drawing or a model that
@@ -257,7 +268,9 @@ Version 7.0, millimetres, one step `pcb`. `FabOptions::odb` picks the form:
 root folder is the job name; `OdbForm::Directory` writes the same tree under
 `<name>-odb/`, so the job folder is `<name>-odb/<job name>/`. The dialog
 writes the archive, or the folder while the box under its ODB++ row is
-ticked (#2489). Entity names (job, layers) are lowercase ASCII letters,
+ticked (#2489); Generate makes every folder of that tree before it writes a
+file, and refuses a name that would step out of the output folder. Entity
+names (job, layers) are lowercase ASCII letters,
 digits and `_ + - .`, at most 64 characters: a layer is named by its export
 name from the table above, lowercased (`topcopper`, `inner1copper`, a
 mechanical layer's own name such as `fold_lines`), and a name another layer

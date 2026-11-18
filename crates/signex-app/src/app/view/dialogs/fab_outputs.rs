@@ -10,7 +10,8 @@ use signex_widgets::{CheckboxLabel as _, checkbox, text, text_input};
 
 use super::sizes;
 use crate::app::fab_outputs::{
-    FabOutput, FabOutputsMsg, FabOutputsState, board_note_text, note_text, stale_text,
+    FabOutput, FabOutputKinds, FabOutputsMsg, FabOutputsState, board_note_text, note_text,
+    stale_text,
 };
 use crate::app::{Message, Signex};
 use crate::styles::{
@@ -79,7 +80,8 @@ impl Signex {
             super::header::DIALOG_HEADER_H,
             tokens,
         );
-        let body = scrollable(container(body(state, i18n, tokens)).padding([SP.l, SP.xl]))
+        let ticked = self.fab_output_kinds(state);
+        let body = scrollable(container(body(state, &ticked, i18n, tokens)).padding([SP.l, SP.xl]))
             .height(Length::Fill);
         // After a Generate the left button closes; before, it cancels.
         let dismiss = if state.outcome.is_some() {
@@ -95,7 +97,7 @@ impl Signex {
                     t!(i18n, ids::FAB_OUTPUTS_GENERATE),
                     super::graphite::call_to_action(tokens),
                     state
-                        .can_generate()
+                        .can_generate(&ticked)
                         .then(|| fo(FabOutputsMsg::GenerateRequested)),
                     tokens,
                 ),
@@ -111,8 +113,14 @@ impl Signex {
     }
 }
 
-/// The intro, the kinds of file, the name and folder, and the outcome.
-fn body<'a>(state: &'a FabOutputsState, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+/// The intro, the kinds of file (`ticked` on), the name and folder, and the
+/// outcome.
+fn body<'a>(
+    state: &'a FabOutputsState,
+    ticked: &FabOutputKinds,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let muted = tokens::muted_text(tokens);
     let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.l);
     col = col.push(
@@ -127,14 +135,14 @@ fn body<'a>(state: &'a FabOutputsState, i18n: &I18n, tokens: &ThemeTokens) -> El
             .push(caption(i18n, ids::FAB_OUTPUTS_FILES, tokens));
     for kind in FabOutput::ALL {
         kinds = kinds.push(tick(
-            kind.is_on(&state.kinds),
+            kind.is_on(ticked),
             t!(i18n, kind_label(kind)),
             FabOutputsMsg::OutputToggled(kind),
         ));
         // The ODB++ form, under its row while it is ticked.
-        if kind == FabOutput::Odb && state.kinds.odb {
+        if kind == FabOutput::Odb && ticked.odb {
             let folder = tick(
-                state.kinds.odb_folder,
+                ticked.odb_folder,
                 t!(i18n, ids::FAB_OUTPUTS_ODB_FOLDER),
                 FabOutputsMsg::OdbFolderToggled,
             );

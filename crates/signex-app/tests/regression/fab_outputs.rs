@@ -5,7 +5,8 @@
 //! job, the assembly drawings and the STEP model through the same dialog.
 
 use signex_app::app::{
-    CommandPaletteMsg, FabOutput, FabOutputsMsg, FabProblem, FileMsg, Message, Signex,
+    CommandPaletteMsg, FabOutput, FabOutputsMsg, FabProblem, FileMsg, LoadedProject, Message,
+    Signex,
 };
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
@@ -13,6 +14,7 @@ use signex_app::menu_bar::MenuMessage;
 use signex_output::fab::{FabError, FabNote};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Zone};
+use signex_types::project::{FabOutputKinds, parse_project};
 use uuid::Uuid;
 
 fn pad(n: u128, x: f64) -> Pad {
@@ -468,23 +470,78 @@ fn documents_alone_of_a_board_without_an_outline_write_nothing() {
     assert!(!out.exists(), "nothing is written");
 }
 
-/// The kinds of file are kept for the next opening; the name is the
-/// board's own each time.
+/// A fresh app with the saved project at `prj` loaded and its board
+/// `Oscar.snxpcb` open in view.
+fn load_project_and_board(prj: &std::path::Path) -> Signex {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: prj.to_path_buf(),
+        data: parse_project(prj).unwrap(),
+        pending_libraries: Default::default(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
+    });
+    app.document_state.active_project = Some(id);
+    let board_path = prj.with_file_name("Oscar.snxpcb");
+    if !board_path.exists() {
+        let text = SnxPcb::new(board(true)).write_string().unwrap();
+        std::fs::write(&board_path, text).unwrap();
+    }
+    send(&mut app, Message::File(FileMsg::Opened(Some(board_path))));
+    app
+}
+
+/// #2489: the ticks of a board its project names are a project edit: the
+/// project is dirty, nothing is written until Save, Save writes them in the
+/// `.snxprj`, and the next dialog on that project opens with them.
 #[test]
-fn the_next_dialog_opens_with_the_kinds_last_used() {
-    let (mut f, _out) = dialog_with_only(&[FabOutput::Step], "kept");
-    send(&mut f.app, fab(FabOutputsMsg::OdbFolderToggled));
-    send(&mut f.app, fab(FabOutputsMsg::NameEdited("rev-b".into())));
+fn the_projects_ticks_are_saved_with_it_and_open_the_next_dialog() {
+    let f = crate::project_tab_support::fixture();
+    let mut app = load_project_and_board(&f.prj);
+    let prj_dirty = |app: &Signex| {
+        let path = &app.document_state.projects[0].path;
+        app.document_state.is_document_dirty(path)
+    };
+    assert!(!prj_dirty(&app));
+    menu_row(&mut app);
+    send(&mut app, fab(FabOutputsMsg::OutputToggled(FabOutput::Step)));
+    send(&mut app, fab(FabOutputsMsg::OdbFolderToggled));
+    send(&mut app, fab(FabOutputsMsg::NameEdited("rev-b".into())));
+    let stored = app.document_state.projects[0]
+        .data
+        .fab_outputs
+        .expect("the project holds the ticks");
+    assert!(stored.step && stored.odb_folder && stored.gerber);
+    assert!(prj_dirty(&app), "a project edit");
+    assert_eq!(
+        parse_project(&f.prj).unwrap().fab_outputs,
+        None,
+        "nothing is written before Save"
+    );
+    send(&mut app, fab(FabOutputsMsg::CancelRequested));
+    crate::project_tab_support::open_tab(&mut app);
+    crate::project_tab_support::save(&mut app);
+    assert!(!prj_dirty(&app), "saved");
+    assert_eq!(parse_project(&f.prj).unwrap().fab_outputs, Some(stored));
+
+    let mut next = load_project_and_board(&f.prj);
+    menu_row(&mut next);
+    let state = next.ui_state.fab_outputs.as_ref().expect("the dialog");
+    assert_eq!(state.kinds, stored, "the project's ticks");
+    assert_eq!(state.name, "Oscar", "the name is the board's own");
+}
+
+/// A board no project names keeps its ticks in the dialog only: the next
+/// opening starts from the defaults.
+#[test]
+fn a_loose_boards_ticks_are_not_kept() {
+    let (mut f, _out) = dialog_with_only(&[FabOutput::Step], "loose");
     send(&mut f.app, fab(FabOutputsMsg::CancelRequested));
     menu_row(&mut f.app);
     let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
-    for kind in FabOutput::ALL {
-        assert_eq!(
-            kind.is_on(&state.kinds),
-            kind == FabOutput::Step,
-            "{kind:?}"
-        );
-    }
-    assert!(state.kinds.odb_folder);
-    assert_eq!(state.name, "board");
+    assert_eq!(state.kinds, FabOutputKinds::default());
 }

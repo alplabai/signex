@@ -7,7 +7,7 @@ use signex_output::fab::{FabExtras, FabNote, FabOptions, check_job, generate};
 use signex_types::pcb::PcbBoard;
 
 use super::documents::{DocumentsJob, MadeFile, make_documents};
-use super::{BoardNote, FabKinds, FabProblem};
+use super::{BoardNote, FabOutputKinds, FabProblem, fab_options};
 
 /// The extensions of the files Generate writes; a file of the same stem
 /// with one of them, left by an earlier run, is reported as stale.
@@ -38,7 +38,7 @@ pub(crate) struct GenerateJob {
     /// Write the board's panel (#2410) when it has one.
     pub whole_panel: bool,
     pub name: String,
-    pub kinds: FabKinds,
+    pub kinds: FabOutputKinds,
     pub documents: DocumentsJob,
     pub folder: PathBuf,
 }
@@ -52,7 +52,7 @@ pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
         .to_string();
     let mut made = Vec::new();
     let notes = if job.kinds.has_fab_files() {
-        fab_files(&board, &job.kinds.fab_options(&name), &mut made)?
+        fab_files(&board, &fab_options(&job.kinds, &name), &mut made)?
     } else {
         Vec::new()
     };
@@ -106,13 +106,23 @@ fn write_made(
     notes: Vec<FabNote>,
     board_notes: Vec<BoardNote>,
 ) -> Result<FabWritten, FabProblem> {
+    // Every name is checked before anything is written.
+    let paths = made
+        .iter()
+        .map(|file| file_path(folder, &file.name))
+        .collect::<Result<Vec<_>, _>>()?;
     std::fs::create_dir_all(folder)
         .map_err(|e| FabProblem::WriteFailed(format!("{}: {e}", folder.display())))?;
     let mut files = Vec::with_capacity(made.len());
-    for file in made {
-        let path = folder.join(&file.name);
-        signex_types::atomic_io::atomic_write(&path, &file.bytes)
-            .map_err(|e| FabProblem::WriteFailed(format!("{}: {e}", path.display())))?;
+    for (file, path) in made.into_iter().zip(paths) {
+        let failed =
+            |e: std::io::Error| FabProblem::WriteFailed(format!("{}: {e}", path.display()));
+        // The ODB++ folder form names files `<name>-odb/<job>/...`: every
+        // folder on the way is made here, not left to the write.
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(failed)?;
+        }
+        signex_types::atomic_io::atomic_write(&path, &file.bytes).map_err(failed)?;
         files.push(file.name);
     }
     // Every file is written by now, so a folder that cannot be listed is
@@ -128,6 +138,25 @@ fn write_made(
         board_notes,
         stale,
     })
+}
+
+/// Where the file named `name` (`/`-separated, as the writers name the
+/// ODB++ folder's files) goes under `folder`. A name that is empty, absolute
+/// or steps out of the folder is refused.
+fn file_path(folder: &Path, name: &str) -> Result<PathBuf, FabProblem> {
+    let mut path = folder.to_path_buf();
+    for part in name.split('/') {
+        let plain = std::path::Path::new(part)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)));
+        if part.is_empty() || !plain || part.contains('\\') {
+            return Err(FabProblem::WriteFailed(format!(
+                "{name}: not a file name inside the output folder"
+            )));
+        }
+        path.push(part);
+    }
+    Ok(path)
 }
 
 /// The board the files are made from: its whole panel (#2410) when asked
@@ -162,4 +191,69 @@ fn stale_files(folder: &Path, stem: &str, written: &[String]) -> std::io::Result
     }
     stale.sort();
     Ok(stale)
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::{MadeFile, file_path, write_made};
+    use crate::app::fab_outputs::FabProblem;
+
+    fn made(name: &str) -> MadeFile {
+        MadeFile {
+            name: name.to_string(),
+            bytes: b"x".to_vec(),
+        }
+    }
+
+    /// The ODB++ folder form: every folder on a file's way is made.
+    #[test]
+    fn a_nested_name_gets_every_folder_on_its_way() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+        let written = write_made(
+            vec![made("b-odb/b/matrix/matrix"), made("b-odb/b/misc/info")],
+            &out,
+            "b",
+            Vec::new(),
+            Vec::new(),
+        )
+        .expect("written");
+        assert_eq!(written.files.len(), 2);
+        assert!(
+            out.join("b-odb")
+                .join("b")
+                .join("matrix")
+                .join("matrix")
+                .is_file()
+        );
+        assert!(
+            out.join("b-odb")
+                .join("b")
+                .join("misc")
+                .join("info")
+                .is_file()
+        );
+    }
+
+    /// A name that steps out of the output folder writes nothing at all.
+    #[test]
+    fn a_name_outside_the_folder_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+        for name in ["b-odb/../../x", "", "b-odb//x", "/x"] {
+            assert!(file_path(&out, name).is_err(), "{name:?}");
+        }
+        let result = write_made(
+            vec![made("b-ok.gbr"), made("b-odb/../../x")],
+            &out,
+            "b",
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(
+            matches!(result, Err(FabProblem::WriteFailed(_))),
+            "{result:?}"
+        );
+        assert!(!out.exists(), "nothing was written");
+    }
 }
