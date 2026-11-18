@@ -146,19 +146,26 @@ impl Env {
     }
 
     /// Whether editing wire `index`, whose end `far` stays put, could make the
-    /// reconcile dot a T that had no dot (#107: no connection): `far` inside
-    /// another wire, or another wire's end inside this one.
+    /// reconcile dot a T that had no dot (#107: no connection) and that the
+    /// plain move would not dot: `far` inside another unselected wire, or an
+    /// unselected wire's end inside this one. A selected wire's contacts are
+    /// the plain move's own (it reconciles the moved wire too), and its moved
+    /// ends are where the follow takes this wire.
     fn edit_would_dot(&self, index: usize, far: Key) -> bool {
         let undotted = |k: Key| self.probe(k, &[index]).junctions.is_empty();
-        let probe = self.probe(far, &[index]);
-        if probe.interior && probe.junctions.is_empty() {
+        let foreign = |other: usize, w: &Wire| other != index && !self.selected.contains(&w.uuid);
+        let far_inside = (self.wires_near(far, far).into_iter()).any(|(other, w)| {
+            let (a, b) = (key(&w.start), key(&w.end));
+            foreign(other, w) && far != a && far != b && signex_net::point_on_segment(far, a, b)
+        });
+        if far_inside && undotted(far) {
             return true;
         }
         let wire = &self.wires[index];
         let (a, b) = (key(&wire.start), key(&wire.end));
         let inside = |k: Key| k != a && k != b && signex_net::point_on_segment(k, a, b);
         (self.wires_near(a, b).into_iter())
-            .filter(|(other, _)| *other != index)
+            .filter(|(other, w)| foreign(*other, w))
             .flat_map(|(_, w)| [key(&w.start), key(&w.end)])
             .any(|k| inside(k) && undotted(k))
     }
