@@ -2118,3 +2118,92 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
     );
     assert_eq!(e.take_unkept_pins().len(), 5);
 }
+
+/// Diagnostic for seed 0x5eed0963 case 238 of
+/// `random_rubber_band_moves_never_change_the_netlist` (a SHORT the keep-wires
+/// run makes and the plain move does not). Prints the sheet, then what each
+/// run changed; run with `--ignored --nocapture`.
+#[test]
+#[ignore = "diagnostic: prints one random case"]
+fn diagnose_seed_5eed0963_case_238() {
+    let mut rng = Lcg(0x5EED_0963);
+    let mut found = None;
+    for index in 0..=238 {
+        let case = random_case(&mut rng);
+        if index == 238 {
+            found = case;
+        }
+    }
+    let Some(Case { sheet, moves, .. }) = found else {
+        eprintln!("case 238 is empty for this generator");
+        return;
+    };
+    eprintln!("moves: {moves:?}");
+    eprintln!("BEFORE {}", describe(&sheet));
+    print_nets(&sheet);
+    for keep_wires in [false, true] {
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        let command = Command::MoveEach {
+            moves: moves.clone(),
+            keep_wires,
+        };
+        engine.execute(command).expect("move");
+        let warnings = engine.take_warnings();
+        eprintln!("--- keep_wires {keep_wires}, warnings {warnings:?} ---");
+        print_changes(&sheet, engine.document());
+        eprintln!("AFTER {}", describe(engine.document()));
+    }
+}
+
+fn spot(p: &Point) -> String {
+    format!("({}, {})", p.x, p.y)
+}
+
+fn print_nets(sheet: &SchematicSheet) {
+    for (name, pins) in net_shape(sheet) {
+        eprintln!("net {name:?}: {pins:?}");
+    }
+}
+
+/// The wires and dots `after` added, changed or removed against `before`,
+/// every pin tip, and the nets.
+fn print_changes(before: &SchematicSheet, after: &SchematicSheet) {
+    for wire in &after.wires {
+        let (a, b) = (spot(&wire.start), spot(&wire.end));
+        match before.wires.iter().find(|w| w.uuid == wire.uuid) {
+            None => eprintln!("wire added {}: {a} - {b}", wire.uuid),
+            Some(old) if old.start != wire.start || old.end != wire.end => {
+                let (c, d) = (spot(&old.start), spot(&old.end));
+                eprintln!("wire changed {}: {c} - {d} -> {a} - {b}", wire.uuid);
+            }
+            Some(_) => {}
+        }
+    }
+    for old in &before.wires {
+        if !after.wires.iter().any(|w| w.uuid == old.uuid) {
+            let (a, b) = (spot(&old.start), spot(&old.end));
+            eprintln!("wire removed {}: {a} - {b}", old.uuid);
+        }
+    }
+    for dot in &after.junctions {
+        if !before.junctions.iter().any(|j| j.uuid == dot.uuid) {
+            let at = spot(&dot.position);
+            eprintln!("junction added {at} minted={}", dot.minted);
+        }
+    }
+    for dot in &before.junctions {
+        if !after.junctions.iter().any(|j| j.uuid == dot.uuid) {
+            eprintln!("junction removed {}", spot(&dot.position));
+        }
+    }
+    for symbol in &after.symbols {
+        let pins = after.lib_symbols[&symbol.lib_id].pins.len();
+        let tips: Vec<String> = (0..pins)
+            .map(|i| spot(&pin_tip(after, symbol.uuid, i)))
+            .collect();
+        let (name, id, unit) = (&symbol.reference, symbol.uuid, symbol.unit);
+        let tips = tips.join(" ");
+        eprintln!("{name} {id} unit {unit}: {tips}");
+    }
+    print_nets(after);
+}
