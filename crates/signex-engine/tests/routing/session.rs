@@ -3,9 +3,7 @@
 //! landed as one undo step. Shared by the soak and the bench.
 
 use pcb_geom::route::{NewCopper, RouteWorld, rule_legs, shove_run};
-use pcb_geom::{
-    CopperItem, PointNm, collect_copper, copper_layers, layer_bit, mm_to_nm, ratsnest,
-};
+use pcb_geom::{CopperItem, PointNm, collect_copper, copper_layers, layer_bit, mm_to_nm, ratsnest};
 use signex_drc::DrcRules;
 use signex_engine::pcb::BoardEngine;
 use signex_engine::pcb::draw::TrackStyle;
@@ -150,8 +148,8 @@ pub fn route(
         grid_mm: grid_step_mm(board),
         budget: SEARCH_BUDGET,
     };
-    let style = TrackStyle::starting_at(board, plan.points[0], plan.layer)
-        .with_class_width(board, classes);
+    let style =
+        TrackStyle::starting_at(board, plan.points[0], plan.layer).with_class_width(board, classes);
     let mut draft = RouteDraft::default();
     for pair in plan.points.windows(2) {
         let leg = LegRequest {
@@ -169,7 +167,10 @@ pub fn route(
         return Ok(Routed::Refused);
     }
     if let Some(stray) = draft.tracks.iter().find(|t| t.net != style.net) {
-        return Err(format!("a routed track is off net {}: {stray:?}", style.net));
+        return Err(format!(
+            "a routed track is off net {}: {stray:?}",
+            style.net
+        ));
     }
     draft_fits(board, &draft, &clearance, route.reach)
         .map_err(|e| format!("a draft just routed does not fit its board: {e}"))?;
@@ -190,8 +191,8 @@ pub fn shove_rounds(
 ) -> Option<usize> {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let world = RouteWorld::with_reach(board, &clearance, rules.widest_clearance());
-    let style = TrackStyle::starting_at(board, plan.points[0], plan.layer)
-        .with_class_width(board, classes);
+    let style =
+        TrackStyle::starting_at(board, plan.points[0], plan.layer).with_class_width(board, classes);
     let a = PointNm::from_mm(*plan.points.first()?, "from").ok()?;
     let b = PointNm::from_mm(*plan.points.get(1)?, "to").ok()?;
     let radius = mm_to_nm(style.width_mm, "width").ok()?.abs() / 2;

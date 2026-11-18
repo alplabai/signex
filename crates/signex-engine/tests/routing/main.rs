@@ -74,7 +74,11 @@ fn a_soak_seed_replays_exactly() {
         (tally, serde_json::to_string(&board).expect("serializes"))
     };
     let first = run();
-    assert!(first.0.landed > 0, "the run routed something: {:?}", first.0);
+    assert!(
+        first.0.landed > 0,
+        "the run routed something: {:?}",
+        first.0
+    );
     assert_eq!(run(), first);
 }
 
@@ -100,6 +104,45 @@ fn assert_delta_and_convergence(benches: &[BoardBench]) {
             b.converged_share() * 100.0
         );
     }
+}
+
+/// The DRC delta check passes a new finding on the route's own copper and
+/// one it had before (its gap may move), and fails one off the route.
+#[test]
+fn the_drc_delta_check_tells_a_side_effect_from_the_route_own() {
+    use signex_engine::pcb::route::RouteDraft;
+    use signex_types::check::{CheckReport, Finding};
+    use signex_types::pcb::Segment;
+    use signex_types::violation::Severity;
+
+    let finding = |items: &[&str], message: &str| Finding {
+        rule: "builtin::clearance".into(),
+        severity: Severity::Error,
+        message: message.into(),
+        evidence: serde_json::Value::Null,
+        items: items.iter().map(|s| s.to_string()).collect(),
+        sheet: "board".into(),
+        key: message.into(),
+    };
+    let report = |findings| CheckReport::new("drc", findings, Vec::new(), Vec::new(), Vec::new());
+    let own = uuid::Uuid::from_u128(7);
+    let track: Segment = serde_json::from_value(serde_json::json!({
+        "uuid": own, "start": {"x": 0.0, "y": 0.0}, "end": {"x": 1.0, "y": 0.0},
+        "width": 0.25, "layer": "TopCopper", "net": 1
+    }))
+    .expect("a track");
+    let draft = RouteDraft {
+        tracks: vec![track],
+        ..RouteDraft::default()
+    };
+    let before = report(vec![finding(&["a", "b"], "0.1 mm")]);
+    let fine = report(vec![
+        finding(&["a", "b"], "0.15 mm"),
+        finding(&["c", &own.to_string()], "own"),
+    ]);
+    assert_eq!(bench::drc_delta(&before, &fine, &draft), Ok(()));
+    let side_effect = report(vec![finding(&["c", "d"], "pushed")]);
+    assert!(bench::drc_delta(&before, &side_effect, &draft).is_err());
 }
 
 /// Per-PR: the DRC delta and convergence on a short run per board.

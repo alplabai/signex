@@ -109,8 +109,12 @@ pub fn bench(fixture: &Fixture, seed: u64, actions: usize) -> BoardBench {
             continue;
         };
         if mode == RouteMode::Shove {
-            out.rounds
-                .extend(shove_rounds(engine.board(), &rules, &fixture.classes, &plan));
+            out.rounds.extend(shove_rounds(
+                engine.board(),
+                &rules,
+                &fixture.classes,
+                &plan,
+            ));
         }
         let before = drc(engine.board(), &rules, &fixture.name);
         let mut ids = || {
@@ -170,7 +174,11 @@ fn drc(board: &PcbBoard, rules: &DrcRules, name: &str) -> CheckReport {
 /// links (routing changes those by design), must each name a track or via
 /// the route added: a route has no side effects. A finding is the same
 /// finding when its rule and items are; its measured gap may move.
-pub fn drc_delta(before: &CheckReport, after: &CheckReport, draft: &RouteDraft) -> Result<(), String> {
+pub fn drc_delta(
+    before: &CheckReport,
+    after: &CheckReport,
+    draft: &RouteDraft,
+) -> Result<(), String> {
     let had: HashSet<(&str, &[String])> = before
         .findings
         .iter()

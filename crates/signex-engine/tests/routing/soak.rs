@@ -340,7 +340,8 @@ impl Soak<'_> {
     /// The board invariants after an action.
     fn check(&self) -> Result<(), String> {
         let board = self.engine.board();
-        if self.engine.undo_len() != self.undo.len() || self.engine.can_redo() == self.redo.is_empty()
+        if self.engine.undo_len() != self.undo.len()
+            || self.engine.can_redo() == self.redo.is_empty()
         {
             return Err(format!(
                 "history out of step: engine undo {} / redo {}, expected {} / {}",
@@ -374,7 +375,10 @@ impl Soak<'_> {
             return Err("a zero-length track appeared".into());
         }
         if let Some(line) = ratsnest(board).iter().find(|l| !known(l.net)) {
-            return Err(format!("the ratsnest names net {} the board lacks", line.net));
+            return Err(format!(
+                "the ratsnest names net {} the board lacks",
+                line.net
+            ));
         }
         Ok(())
     }
@@ -389,7 +393,12 @@ fn unique_ids(board: &PcbBoard) -> Result<(), String> {
         .map(|s| s.uuid)
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.footprints.iter().map(|f| f.uuid))
-        .chain(board.footprints.iter().flat_map(|f| f.pads.iter().map(|p| p.uuid)));
+        .chain(
+            board
+                .footprints
+                .iter()
+                .flat_map(|f| f.pads.iter().map(|p| p.uuid)),
+        );
     for id in ids {
         if !seen.insert(id) {
             return Err(format!("id {id} is on the board twice"));
@@ -411,7 +420,11 @@ fn repeats(board: &PcbBoard) -> Vec<Uuid> {
         .iter()
         .filter(|s| {
             let (a, b) = (s.start, s.end);
-            let (a, b) = if (a.x, a.y) <= (b.x, b.y) { (a, b) } else { (b, a) };
+            let (a, b) = if (a.x, a.y) <= (b.x, b.y) {
+                (a, b)
+            } else {
+                (b, a)
+            };
             !seen.insert(format!("{}|{}|{}|{a:?}|{b:?}", s.net, s.layer, s.width))
         })
         .map(|s| s.uuid)
