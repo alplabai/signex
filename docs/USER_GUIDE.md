@@ -1,7 +1,8 @@
 # Signex user guide
 
 This guide takes you from a downloaded Signex package to a saved schematic
-and an exported PDF. It assumes you have never used an EDA tool and have never
+and an exported PDF, and then from that schematic to a routed board and the
+files a board house needs. It assumes you have never used an EDA tool and have never
 installed Rust. You do not need either.
 
 <!-- The screenshots in this guide are rendered headlessly, not captured by hand.
@@ -32,6 +33,15 @@ Contents:
 
 For the whole flow in one pass, see the
 [walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
+
+The board chapters follow the walkthrough:
+
+- [Board 1. Create the board from the schematic](#board-1-create-the-board-from-the-schematic)
+- [Board 2. Outline, layer stack and the Layers panel](#board-2-outline-layer-stack-and-the-layers-panel)
+- [Board 3. Place the parts](#board-3-place-the-parts)
+- [Board 4. Route and pour copper](#board-4-route-and-pour-copper)
+- [Board 5. Design rules and DRC](#board-5-design-rules-and-drc)
+- [Board 6. Fabrication outputs](#board-6-fabrication-outputs)
 
 ## 1. Install
 
@@ -734,12 +744,354 @@ This walkthrough has not yet been followed end to end by a person with a fresh
 install; tell us in [Discussions](https://github.com/alplabai/signex/discussions)
 if a step does not match what you see.
 
+## Board 1. Create the board from the schematic
+
+A project holds one board, a `.snxpcb` file. You make it from the schematic
+and keep it in step with the schematic through **Update PCB**. The board
+chapters give the keys of the default shortcut profile; the menu path always
+works.
+
+Before you start, every part needs a footprint and a unique designator:
+
+- **Tools ▸ Assign Footprints** lists the project's parts with their
+  footprints. A part can take the footprints its library row offers.
+- Annotate the schematic (section 8), so no part is still `R?`.
+
+**Create the board and bring the parts over**
+
+1. With a schematic of the project open, choose **Design ▸ Update PCB
+   Document**. The dialog **Update PCB from Schematic** opens.
+2. A project with no board yet shows **This project has no board yet.** and a
+   **Create PCB** button. Press it.
+3. The **New PCB** dialog opens with the project's setup: the profile cards,
+   **Manufacturer rule template**, **Copper layers**, **Clearance**, **Track
+   width**, **Via size**, **Via drill**, **Board thickness** and a preview of
+   the stack-up. Change what you need and press **Create PCB**.
+4. The board is created as `<project name>.snxpcb` next to the `.snxprj`, and
+   the Update PCB list is read for it. A new board lists only adds: one row
+   per part (**Components**), per net (**Nets**) and per pad that gets a net
+   (**Pad nets**).
+5. Press **Execute** (it reads **Execute 12 changes**, for example). The
+   footprints land on the board with their nets, as one undo step.
+
+<!-- screenshot: the Update PCB from Schematic dialog on a new board, with the Add chip and the three groups -->
+
+The new board opens as an unsaved tab. Nothing is written to disk until you
+save it with `Ctrl+S` or **File ▸ Save**. **File ▸ New ▸ PCB** opens the same
+**New PCB** dialog directly.
+
+**Reading the list**
+
+- The chips **Add**, **Change**, **Remove** and **Problems** count the rows. A
+  click on a chip lists only those rows; a second click lists all of them.
+  **Show problems only** does what it says.
+- A row that cannot run is greyed and unticked, and its **Status** says why.
+  The fix sits next to it: **Choose footprint...** for a part with no
+  footprint, **Annotate...** for a part that is not annotated or shares its
+  designator, and the Cross Probe icon to show the part on its sheet.
+- **Validate** tries the ticked rows on a copy of the board and marks each
+  row that applies with ✓. **Report...** saves the list as text.
+- Keys: `Space` ticks the row you clicked last, `Enter` executes, `Esc`
+  closes.
+
+**After you change the schematic**
+
+Run **Design ▸ Update PCB Document** again. The list now holds only what
+changed: new parts, removed parts, a new footprint or value, renamed nets and
+pad nets. Untick a row to leave that change out. On the board itself the
+same command reads **Design ▸ Import Changes From `<project>`**.
+
+The schematic wins: a designator you changed on the board is renamed back by
+the next update. To carry board changes to the schematic instead, use
+**Design ▸ Update Schematics** (or **Tools ▸ Annotation ▸ Back Annotate
+Schematics…**).
+
+More detail: [UPDATE_PCB.md](UPDATE_PCB.md).
+
+## Board 2. Outline, layer stack and the Layers panel
+
+**Draw the board outline**
+
+A new board has no outline. The fabrication outputs refuse a board without
+one, so draw it first.
+
+1. Choose **Design ▸ Board Sketch** (or press `1` on the board). The board
+   enters sketch mode and the Active Bar shows the sketch tools.
+2. Draw the shape with **Line**, **Rectangle**, **Circle** or **Arc**. Add
+   dimensions and constraints as you would in the footprint editor.
+3. Select one edge of the shape. In the **Properties** panel, under
+   **Board**, tick **Board outline**. One tagged edge is enough for a closed
+   shape.
+4. Press **Leave** (or `Esc` with no tool armed) to apply the sketch to the
+   board and end the mode. **Apply** applies and stays in the mode;
+   **Discard** drops the changes.
+
+<!-- screenshot: sketch mode on a board, a rectangle with one edge selected and Board outline ticked in Properties -->
+
+The same sketch draws keepouts and cutouts (with **Role** in Properties) and
+mounting holes (tick **Mounting hole** on a circle, then set **Drill**,
+**Plated** and **Net**). The whole commit is one undo step. If the sketch
+cannot be turned into a board shape, for example an open loop, the reason is
+shown and the board stays as it was.
+
+Two other ways to get an outline:
+
+- **File ▸ Import ▸ DXF as Board Outline…** reads the outline from a DXF
+  file.
+- Select closed lines on the board and choose **Tools ▸ Board Shape from
+  Selection**.
+
+**The layer stack**
+
+The number of copper layers comes from the **New PCB** dialog. To change the
+stack later, choose **Design ▸ Layer Stack Manager…**. The **Layer Stack**
+panel lists the layers top to bottom with **Name**, **Type**, **Material**,
+**Thickness (mm)**, **Er** and **Weight (oz)**, and the total thickness
+above them.
+
+- **Add Signal**, **Add Plane** and **Add Dielectric** insert a layer below
+  the selected row. A new copper layer brings a dielectric with it.
+- **Remove** takes the selected row. A copper layer with items on it stays.
+- **Move Up** and **Move Down** swap a row with its neighbour.
+- Type a value and press `Enter`. Each edit is one undo step, and the board
+  thickness follows the stack's total.
+
+<!-- screenshot: the Layer Stack panel of a four-layer board -->
+
+**Layer tabs and the Layers panel**
+
+The tabs under the board list its layers. Click a tab to make that layer
+active; new tracks, pours and text go on the active layer. `+` and `-` step
+to the next and previous layer, `*` to the next signal layer. A right-click
+on a tab hides, highlights or shows layers, and its **Layer stack...** row
+opens the Layer Stack panel.
+
+**View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
+has an eye per layer to show or hide it and a colour chip to change its
+colour in this view. **Used On** lists only the layers the board uses, and
+**Layer Sets** switches between sets of layers. The **View Options** tab
+shows or hides each kind of object and switches 3D and **Single Layer Mode**.
+These are view settings; they never change the board file.
+
+<!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
+
+Other view rows: **View ▸ Toggle Ratsnest** (`N`), **View ▸ Single Layer
+Mode** (`Shift+S`), **View ▸ Flip Board View** to look from below, and
+**View ▸ 3D View** (`3`) to see the board in 3D.
+
+More detail: [PCB_SKETCH.md](PCB_SKETCH.md) and
+[PCB_LAYER_STACK.md](PCB_LAYER_STACK.md).
+
+## Board 3. Place the parts
+
+Update PCB puts new footprints beside the board, or inside the board area
+when the board is still empty. Thin lines, the ratsnest, join the pads that
+still need a connection.
+
+<!-- screenshot: a board after Update PCB, footprints beside the outline with the ratsnest -->
+
+Parts come from the schematic through Update PCB. **Place ▸ Component** on a
+board is greyed with the reason "not available on boards yet".
+
+- **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
+  Move**. Tracks joined to its pads come along. The move is one undo step.
+- **Turn:** `Space` turns the selection 90° counter-clockwise, `Shift+Space`
+  clockwise.
+- **Other side:** `L` (**Edit ▸ Move ▸ Flip Selection**) puts the part on the
+  bottom side, and a part on the cursor too.
+- **Exact position:** with one footprint selected, the **Properties** panel
+  shows its designator, value and position. Press `Enter` to apply a typed
+  value.
+- **Line up:** the Active Bar's Align button lines up two or more selected
+  footprints (Align Left, Distribute Horizontally, Align To Grid, ...).
+  **Tools ▸ Arrange in Box** packs the selected parts into a box you draw.
+- **Find a part:** select it on the schematic. With **Tools ▸ Cross Select
+  Mode** on (the default) it is selected on the board too. **Tools ▸ Cross
+  Probe** brings the other side forward and frames it.
+- **Move a designator:** drag the text; the part stays where it is.
+
+**Tools ▸ Re-Annotate Board…** renumbers designators by position on the
+board. Run **Design ▸ Update Schematics** afterwards to carry the new names
+to the schematic; otherwise the next Update PCB renames them back.
+
+## Board 4. Route and pour copper
+
+**Route a connection**
+
+1. Make the layer you want active (a layer tab, `+` or `-`).
+2. Choose **Place ▸ Interactive Routing**.
+3. Click on a pad. The route takes the pad's net.
+4. Click to add each leg. The route keeps the clearance the design rules ask
+   from other nets and finds its way around copper in the way. `Space` flips
+   the bend; `Shift+Space` steps the corner mode (90°, 45°, any angle).
+5. To change layer mid-route, make another copper layer active. A via goes
+   in at the end of the route.
+6. Click on the route's end, press `Esc` or right-click to finish. The whole
+   route lands as one undo step. Press `Esc` again to end the tool.
+
+The width comes from the net's class (**Design ▸ Net Classes**), else the
+board's setup.
+
+<!-- screenshot: Interactive Routing between two pads, the route preview on the cursor -->
+
+**Push and shove**
+
+By default the route walks around other nets' tracks. To push them aside
+instead, run the palette command (`Ctrl+Shift+P`) **Switch Interactive
+Routing between walking around and pushing other nets' tracks**. Run it again
+to go back. Pushed tracks move just far enough to keep the clearance. A
+locked track, a pad or a via is never pushed; the route walks around it.
+
+**Other routing tools**, all under **Place**:
+
+- **Track** (`P T`) draws exactly where you click and does not keep the
+  clearance.
+- **Differential Pair Routing** routes a `_P`/`_N` pair side by side.
+- **Multi-Route** routes the selected nets side by side as a bus.
+- **Quick Route** routes straight from the first click to the second.
+- **Via** (`P V`) places a through via per click.
+
+**Copper pours**
+
+1. Make the copper layer active.
+2. Choose **Place ▸ Polygon Pour** (`P G`).
+3. Click the corners. Start on a pad or track of the net you want, for
+   example `GND`; the pour takes the net under its first corner. Click the
+   first corner again to close the shape.
+4. The pour fills its area and keeps clear of other nets' copper.
+
+Select a pour to change its net, clearance, priority and island removal in
+**Properties**. **Place ▸ Pour Cutout** cuts a hole in a pour and **Place ▸
+Slice Pour** cuts a pour in two. The fill follows every board edit by
+itself; **Tools ▸ Repour All** and **Tools ▸ Repour Selected** fill again and
+report the result in the Messages panel.
+
+<!-- screenshot: a ground pour on the bottom layer with clearance around other nets -->
+
+More detail: [PCB_TOOLS.md](PCB_TOOLS.md).
+
+## Board 5. Design rules and DRC
+
+**Pick a fab tier**
+
+The rules start from a manufacturing tier, chosen in **Manufacturer rule
+template** in the New Project or **New PCB** dialog: **Standard fab**,
+**Advanced fab** or **HDI fab**. The tier writes seven `fab_*` rules (the
+floor of what the board house can build) into the project's rules:
+
+| Tier | Clearance | Track | Via / drill | Hole | Edge |
+|---|---|---|---|---|---|
+| Standard | 0.15 mm | 0.15 mm | 0.5 / 0.25 mm | 0.25 mm | 0.3 mm |
+| Advanced | 0.1 mm | 0.1 mm | 0.4 / 0.2 mm | 0.2 mm | 0.25 mm |
+| HDI | 0.075 mm | 0.075 mm | 0.3 / 0.15 mm | 0.1 mm | 0.2 mm |
+
+These are generic process classes, not one maker's numbers. Check them
+against your board house's published limits.
+
+**Edit the rules**
+
+**Design ▸ Rules…** opens the project's rules as a **Rules** tab. The
+sub-tabs **Clearance**, **Routing**, **Holes**, **Mask & paste** and
+**Silkscreen & courtyard** list the rules as a table. Edit a cell, or switch
+to **Text** to write rules, for example:
+
+```text
+rule hv_spacing on clearance when class == "HV" require clearance >= 0.8mm
+  then error "HV nets need 0.8 mm"
+```
+
+**Presets** applies a different tier (**Standard tier**, **Advanced tier**,
+**HDI tier**) and shows what changes first. A rule that asks less than the
+fab floor is still applied, but flagged. Save the project with `Ctrl+S` to
+keep the rules.
+
+Net classes give a group of nets its own width, clearance and via size:
+**Design ▸ Net Classes** opens the **Net Classes** panel, where **Add Class**
+adds one and **Add net** puts nets in it.
+
+<!-- screenshot: the Rules tab, Clearance sub-tab, with the fab_* rules -->
+
+**Run DRC**
+
+1. With the board in view, choose **Tools ▸ Design Rule Check** (`T D`), or
+   press **Run DRC** in the Messages panel.
+2. Choose **Tools ▸ DRC Results** to open the results, grouped by rule.
+3. Click a row: its objects are selected and the view centres on them.
+4. Fix the board and run DRC again. Results go stale when the board changes.
+
+DRC reports clearance violations, shorts, unconnected links (the ratsnest
+lines still open), keepout violations and every written rule. To accept a
+violation on purpose, press **Waive**, type why, and press **Waive** again.
+**Show waived** lists waived ones; **Unwaive** takes a waiver back.
+
+<!-- screenshot: the DRC Results panel with a clearance violation selected on the board -->
+
+More detail: [DRC_RULES.md](DRC_RULES.md).
+
+## Board 6. Fabrication outputs
+
+Run DRC until it is clean, save the board, then make the files.
+
+**Gerber, drill, pick-and-place and the whole-job files**
+
+1. Choose **File ▸ Fabrication Outputs…** (or the Active Bar's
+   **Fabrication Outputs** button).
+2. Under **Files**, tick what to write. All are ticked at first:
+   - **Gerber RS-274X with X2 attributes: copper, legend, solder mask, paste
+     and board profile**
+   - **Excellon drill: plated and non-plated holes, slots and a drill table**
+   - **Pick and place (CSV)**
+   - **IPC-D-356 test netlist**
+3. Check **File name** (the board's name) and **Output folder** (a
+   `fabrication` folder beside the board; **Browse…** picks another).
+4. Press **Generate**. The dialog lists what was written.
+
+<!-- screenshot: the Fabrication Outputs dialog after Generate -->
+
+Every run also writes the IPC-2581 file `<name>-ipc2581.xml`, the ODB++
+archive `<name>-odb.tar` and the Gerber job file `<name>-job.gbrjob`. Send
+the board house either the Gerber and drill files or one of the IPC-2581 and
+ODB++ files, whichever it asks for. The pick-and-place file is
+`<name>-centroid.csv`; it goes to the assembler.
+
+Generate writes the board as it is in memory, unsaved edits included, and
+replaces files of the same name. It never deletes: older files of the same
+name that this run did not write are listed, so you can remove them before
+you send the folder. Without a board outline nothing is written (Board 2).
+With a panel (**Tools ▸ Panelize Board**) a **Whole panel** box writes the
+whole panel.
+
+**Assembly drawings**
+
+- **Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
+  `<board>-assembly-top.svg` and `<board>-assembly-bottom.svg`.
+- For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
+  / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
+  under **Layer Sets** and press **Export PDF…**. The same dialog prints the
+  copper and mechanical layers.
+
+**STEP model**
+
+**File ▸ Export ▸ STEP 3D Model…** asks where to save and writes the board
+and its parts as a STEP file for a mechanical CAD tool. The board body has
+its holes and cutouts; each part is the body the 3D view shows.
+
+**Board reports**
+
+**Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
+and **Component Report…** show the board's tables; **Export Report as CSV…**
+saves the one in view.
+
+More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
+[BOARD_OUTPUT.md](BOARD_OUTPUT.md).
+
 ## 12. File types
 
 | Extension | What it is |
 |---|---|
 | `.snxprj` | A Signex project. Open this to load a project. |
 | `.snxsch` | One schematic sheet. This is what you edit and save. |
+| `.snxpcb` | The project's board. |
 | `.snxlib` | A component library. It is a folder, not a single file. |
 | `.snxsym` | A schematic symbol, edited in the symbol editor. |
 | `.snxfpt` | A PCB footprint, edited in the footprint editor. |
@@ -775,6 +1127,13 @@ Shortcuts used in this guide, in the default Altium profile:
 | Find / Find and Replace | `Ctrl+F` / `Ctrl+H` |
 | Next / previous Find result | `F3` / `Shift+F3` |
 | Toggle visible grid | `Ctrl+Shift+G` |
+| Board sketch (on a board) | `1` |
+| Next / previous layer (on a board) | `+` / `-` |
+| Toggle ratsnest (on a board) | `N` |
+| Flip to the other side (on a board) | `L` |
+| Place track / via / polygon pour | `P T` / `P V` / `P G` |
+| Run DRC (on a board) | `T D` |
+| 3D view (on a board) | `3` |
 | Keyboard shortcut reference | `F1` |
 | Preferences | `Ctrl+,` |
 
