@@ -38,6 +38,8 @@ The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 | `<name>-drill-table.csv` | per file and tool: diameter, hole and slot counts |
 | `<name>-centroid.csv` | pick and place |
 | `<name>-netlist.ipc` | IPC-D-356 bare-board test netlist |
+| `<name>-ipc2581.xml` | IPC-2581 revision C: the whole job in one file (#2484) |
+| `<name>-odb.tar`, or the folder `<name>-odb/` | the ODB++ job (#2485), as one archive or as its folder tree |
 | `<name>-job.gbrjob` | every file written, with its X2 file function |
 
 The copper stack is top and bottom always, every inner layer the board's
@@ -48,16 +50,18 @@ paste images are written only when they hold something.
 
 All files share one frame: x to the right and y up, from the board origin
 (#2384, `BoardOptions::origin`), as seen from the top: the coordinates the
-board shows. Gerber, drill, pick-and-place and IPC-D-356 all read it. The
+board shows. Gerber, drill, pick-and-place, IPC-D-356, IPC-2581 and ODB++ all read it. The
 board model's y grows down the screen, so every file mirrors y about the
 origin, and an angle that is counter-clockwise in the model is clockwise in
 the files (`FabFrame` in `fab/frame.rs` is the one place this lives). A part
 at model (10, 70) on a board whose origin is at model (0, 80) is written at
 (10, 10). A board saved without an origin counts from the model's zero.
 
-Output is deterministic: no date, no version, no hash-map order. The same
-board gives the same bytes, so a diff of two generations shows only real
-changes.
+Output is deterministic: no date, no version, no hash-map order. The
+IPC-2581 schema requires history dates, so that file carries the epoch
+(`1970-01-01T00:00:00Z`) to mean "not recorded", and the ODB++ `misc/info`
+file carries `19700101.000000` the same way. The same board gives the
+same bytes, so a diff of two generations shows only real changes.
 
 ## Gerber
 
@@ -166,7 +170,118 @@ pad.
 The Gerber job JSON shape: generation software, board size from the outline,
 copper layer count, thickness, and `FilesAttributes` (path, file function,
 polarity) for every image and drill file; the table, centroid and test
-netlist under `OtherFiles`.
+netlist, the IPC-2581 file and the ODB++ archive or folder (listed once, by
+its name) under `OtherFiles`.
+
+## Layer roles
+
+The whole-job exports (IPC-2581 #2484, ODB++ #2485) read one table,
+`fab/roles.rs`, keyed by the typed layer id, never by a display name, so
+renaming a layer row changes no output. Copper is a plane when the board's
+stack (stored, or derived from the layer table's `plane` type) pours it as
+one.
+
+| Typed layer | IPC-2581 `layerFunction` | ODB++ matrix type |
+|---|---|---|
+| Copper | `SIGNAL`, or `PLANE` | `SIGNAL`, or `POWER_GROUND` |
+| Silkscreen top / bottom | `LEGEND` | `SILK_SCREEN` |
+| Solder mask top / bottom | `SOLDERMASK` | `SOLDER_MASK` |
+| Paste top / bottom | `SOLDERPASTE` | `SOLDER_PASTE` |
+| Adhesive top / bottom | `GLUE` | `DOCUMENT` |
+| Board outline (`EdgeCuts`) | `BOARD_OUTLINE` | `ROUT`; the outline is also the step profile |
+| Assembly top / bottom | `ASSEMBLY` | `DOCUMENT` |
+| Courtyard top / bottom | `COURTYARD` | `DOCUMENT` |
+| Mechanical 1–32, and every other layer | `DOCUMENT` | `DOCUMENT` |
+| A drilled span (not a board layer) | `DRILL` | `DRILL` |
+
+A layer's side comes from the typed id too: top, bottom, inner copper
+(`INTERNAL`), or board-wide (`ALL`). A layer is named by its file token
+(`TopCopper`, `Inner1Copper`, `TopSolderMask`); a mechanical layer keeps the
+name its layer table gives it, or `Mechanical<n>` when it has none (and when
+that name is another layer's).
+
+## IPC-2581
+
+Revision C, millimetres, one XML file, one step named after the file stem.
+It holds:
+
+- **Layers and stackup.** Every stack row top to bottom (overlay, paste,
+  mask, copper, dielectric as `Dielectric<k>`, `DIELCORE`), then any other
+  layer that carries a drawing or that the layer table lists, the V-score
+  layer (`V_CUT`) when there are V-scores, and one drill layer per drilled
+  span (`Drill_PTH`, `Drill_NPTH`, `Drill_BLIND_L1_L2`, ...) with its span.
+  The stackup lists each stack row with its thickness.
+- **Features.** Every image's marks, on the same frame as the Gerber
+  images: pads as `Pad` with their pin (`padUsage` `TERMINATION`, `VIA`,
+  `MASK` for a mask or paste opening), tracks and drawings as round-pen
+  polylines, zone fills as contours with cutouts. Flashed shapes are written
+  once in the standard dictionary, unturned, with the turn on the feature.
+  Drawings on layers no Gerber image carries (fab, assembly, courtyard,
+  documentation, mechanical) are written on their document layers.
+- **Holes.** Each drill layer's holes and slots (`SlotCavity`, an oval from
+  end to end) with their plating.
+- **Profile.** The board outline and the board sketch's through cutouts.
+- **Parts.** One package per footprint kind with its pins in the
+  footprint's own frame, a component per part with a designator (rotation as
+  in the pick-and-place file, mirrored on the bottom), a BOM item per value
+  and footprint, and a logical net per net with the pins its pads carry.
+
+No person, company or date is recorded. The file is written with every
+generation; the dialog's own tick box for it is #2489.
+
+## ODB++
+
+Version 7.0, millimetres, one step `pcb`. `FabOptions::odb` picks the form:
+`OdbForm::Archive` writes one uncompressed POSIX tar, `<name>-odb.tar`, whose
+root folder is the job name; `OdbForm::Directory` writes the same tree under
+`<name>-odb/`, so the job folder is `<name>-odb/<job name>/`. The dialog
+writes the archive. Entity names (job, layers) are lowercase ASCII letters,
+digits and `_ + - .`, at most 64 characters: a layer is named by its export
+name from the table above, lowercased (`topcopper`, `inner1copper`, a
+mechanical layer's own name such as `fold_lines`), and a name another layer
+already has falls back to the layer's token, then takes `_2`, `_3`, ...
+Record words (nets, designators, parts, pins) turn spaces, `;` and
+non-ASCII characters into `_`; a net whose word another net already has
+takes `_2`, `_3`, ..., since net names are unique. The job holds:
+
+- **Matrix.** The layers in physical order: `comp_+_top` when parts sit on
+  the top, top legend, paste and mask, the stack's copper and dielectric
+  rows (`dielectric<k>`, type `DIELECTRIC`) with any copper the stack does
+  not list put in copper order, the bottom's mask, paste and legend,
+  `comp_+_bot`, then one drill layer per drilled span (`drill_pth`,
+  `drill_npth`, `drill_blind_l1_l2`, ...) from its first to its last copper
+  layer, then the V-score layer and every drawing layer as `MISC`
+  `DOCUMENT` layers. The outline layer is a `BOARD` `ROUT` layer from the
+  top copper to the bottom, holding everything the profile image holds:
+  the outline, the through cutouts and every cut drawn on `EdgeCuts` (a
+  slot in a footprint), which the step profile cannot carry.
+  The matrix gives the stack order; layer thicknesses are not written.
+- **Features.** Each layer's marks in the same frame as the Gerber images,
+  every feature positive (a mask layer holds its openings): pads with their
+  standard symbol (`r`, `rect`, `oval`, `rect…xr…`, sizes in micrometres)
+  unturned with the clockwise turn on the record, SMD copper pads with the
+  `.smd` attribute, tracks and drawings as lines and arcs, zone fills as
+  surfaces (island clockwise, holes counter-clockwise). A full circle is two
+  half arcs.
+- **Drills.** Each drill layer's holes as pads and slots as lines, with a
+  `tools` file listing each size, plated or not, hole or slot.
+- **Profile.** The outline as one surface with the through cutouts as
+  holes.
+- **Components and nets.** `eda/data` holds one package per footprint kind
+  with its pins in the footprint's own frame, and one net per net name.
+  Each net's subnets point at the copper features it is made of: one
+  toeprint subnet per pin, then traces, vias, and one plane subnet per
+  filled area. A pin whose pad carries no net is listed under `$NONE$`.
+  Each toeprint takes the copper of its own pad, so two pads numbered
+  alike and a panel's copies of one designator each keep their net.
+  Each side's `components` file places every designated part that has pads
+  (rotation clockwise, `M` on the bottom) with a toeprint per pin naming
+  its net and subnet. A toeprint is its package pin mirrored about the y
+  axis when `M`, then turned clockwise by the rotation, then moved to the
+  part's position. A part with no pads has no package and is left out.
+
+No date or user is recorded. The archive is written with every generation;
+the dialog's own choice of ODB++ and of its form is #2489.
 
 ## Refusals
 

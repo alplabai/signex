@@ -4,7 +4,10 @@
 //! `UPDATE_GOLDEN=1 cargo test -p signex-output fab`.
 
 pub(crate) mod fixture;
+mod ipc2581;
 mod layer_sizes;
+mod odb;
+mod odb_eda;
 mod origin;
 mod panel;
 mod same_net;
@@ -82,6 +85,8 @@ fn every_written_file_is_named_once_and_listed_in_the_job() {
             "fab-drill-table.csv",
             "fab-centroid.csv",
             "fab-netlist.ipc",
+            "fab-ipc2581.xml",
+            "fab-odb.tar",
             "fab-job.gbrjob",
         ]
     );
@@ -197,6 +202,8 @@ fn a_board_without_an_outline_or_a_selection_is_refused() {
         drill: false,
         centroid: false,
         test_netlist: false,
+        ipc2581: false,
+        odb: None,
         ..FabOptions::all("fab")
     };
     assert_eq!(
