@@ -502,11 +502,13 @@ pub enum FootprintEditorMsg {
     /// #1047 — a drag solve finished off the UI thread. Applied only if
     /// `generation` is still the editor's current one, i.e. no edit has
     /// moved the sketch since the snapshot it solved was taken; a stale
-    /// answer changes nothing.
+    /// answer changes nothing. `purpose` tells an edit's solve (baked) from
+    /// the display solve a footprint opens with (#2468, shown only).
     SketchSolved {
         instance: uuid::Uuid,
         generation: u64,
         footprint_idx: usize,
+        purpose: crate::library::editor::footprint::sketch_solve_task::SolvePurpose,
         outcome: std::sync::Arc<crate::library::editor::footprint::sketch_solve_task::SolveOutcome>,
     },
 

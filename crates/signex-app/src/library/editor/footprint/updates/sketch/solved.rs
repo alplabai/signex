@@ -18,7 +18,7 @@ use crate::library::editor::footprint::sketch_bake::{bake_solution, discard_fail
 use crate::library::editor::footprint::sketch_conflict::drop_dangling_selection;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
 use crate::library::editor::footprint::sketch_solve_task::{
-    SolveOutcome, UnsolvedEdits, run_solve_inline, snapshot_request,
+    SolveOutcome, SolvePurpose, UnsolvedEdits, run_solve_inline, snapshot_request,
 };
 use crate::library::editor::footprint::state::conflict::name_conflict;
 use crate::library::messages::FootprintEditorMsg;
@@ -31,12 +31,59 @@ pub(in crate::library::editor::footprint::updates) fn apply(
         instance,
         generation,
         footprint_idx,
+        purpose,
         outcome,
     } = msg
     else {
         unreachable!("non-SketchSolved variant routed to sketch/solved.rs");
     };
-    apply_solved(editor, instance, generation, footprint_idx, outcome);
+    match purpose {
+        SolvePurpose::Edit => apply_solved(editor, instance, generation, footprint_idx, outcome),
+        SolvePurpose::Display => {
+            apply_display_solve(editor, instance, generation, footprint_idx, &outcome)
+        }
+    }
+}
+
+/// Show the display solve a footprint opened with (#2468). Nothing is baked
+/// and the document stays clean. A stale answer changes nothing: another
+/// editor instance or footprint, an edit, undo or inline solve since the
+/// snapshot (each moves the generation), or a solve already shown.
+fn apply_display_solve(
+    editor: &mut FootprintDocument,
+    instance: Uuid,
+    generation: u64,
+    footprint_idx: usize,
+    outcome: &SolveOutcome,
+) {
+    let slot = &editor.state.sketch_solve;
+    let current = instance == slot.instance()
+        && generation == slot.generation()
+        && footprint_idx == editor.active_idx
+        && editor.state.last_solve.is_none();
+    if !current {
+        return;
+    }
+    match outcome {
+        SolveOutcome::Solved { out, .. } => {
+            editor
+                .state
+                .sketch_solve
+                .set_redundancy_owed(out.redundancy_pending);
+            editor.state.last_solve = Some((**out).clone());
+            editor.canvas_cache.clear();
+        }
+        SolveOutcome::ResolveFailed(e) => tracing::debug!(
+            target: "signex::sketch",
+            error = %e,
+            "the opened footprint's parameters did not resolve; it opens unsolved"
+        ),
+        SolveOutcome::SolveFailed(e) => tracing::debug!(
+            target: "signex::sketch",
+            error = %e,
+            "the opened footprint's sketch did not solve; it opens unsolved"
+        ),
+    }
 }
 
 /// Solve now, on this thread, whatever drag solve is owed — for the moment
