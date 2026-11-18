@@ -189,8 +189,8 @@ jobs:
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
-      # lfs: the routing soak and bench sample the routing corpus boards,
-      # which are stored in Git LFS (#2481).
+      # lfs: the routing tests load every routing corpus board, which is
+      # stored in Git LFS (#2481).
       - uses: actions/checkout@v5
         with:
           submodules: false
