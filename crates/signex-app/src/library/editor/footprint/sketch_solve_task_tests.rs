@@ -142,7 +142,10 @@ fn a_panicking_solve_becomes_a_reported_failure_and_frees_the_slot() {
 fn the_open_solve_is_shown_without_baking_or_dirtying() {
     use super::sketch_solve_task::{run_solve_inline, snapshot_display_request};
     let (mut editor, path, _) = point_editor("open-solve");
-    assert!(editor.state.last_solve.is_none(), "nothing solves in update");
+    assert!(
+        editor.state.last_solve.is_none(),
+        "nothing solves in update"
+    );
     let file_before = editor.file.clone();
     let _task = super::sketch_solve_task::dispatch_open_solve(&mut editor, &path);
     assert!(
@@ -152,7 +155,10 @@ fn the_open_solve_is_shown_without_baking_or_dirtying() {
     let answer = run_solve_inline(snapshot_display_request(&editor).expect("a sketch"));
     apply_footprint_primitive_edit(&mut editor, answer);
     assert!(editor.state.last_solve.is_some(), "the solve is shown");
-    assert!(!editor.is_dirty(), "showing a solve leaves the document clean");
+    assert!(
+        !editor.is_dirty(),
+        "showing a solve leaves the document clean"
+    );
     assert_eq!(editor.file, file_before, "nothing is baked");
 }
 
@@ -168,7 +174,10 @@ fn a_stale_open_solve_is_ignored() {
     let after_edit = editor.file.clone();
     let dirty = editor.is_dirty();
     apply_footprint_primitive_edit(&mut editor, answer);
-    assert!(editor.state.last_solve.is_none(), "a stale answer is not shown");
+    assert!(
+        editor.state.last_solve.is_none(),
+        "a stale answer is not shown"
+    );
     assert_eq!(editor.file, after_edit, "nor baked");
     assert_eq!(editor.is_dirty(), dirty, "nor does it touch the dirty flag");
 }

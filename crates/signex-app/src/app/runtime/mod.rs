@@ -119,10 +119,11 @@ impl Signex {
         } else {
             Task::none()
         };
-        let open_solves = crate::library::editor::footprint::sketch_solve_task::dispatch_open_solves(
-            &mut self.document_state.footprint_editors,
-        )
-        .map(Message::Library);
+        let open_solves =
+            crate::library::editor::footprint::sketch_solve_task::dispatch_open_solves(
+                &mut self.document_state.footprint_editors,
+            )
+            .map(Message::Library);
         Task::batch([
             open_solves,
             history,
