@@ -5,7 +5,7 @@
 //! The grid and snap settings count as tool state.
 
 use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
-use super::forms::Form::{Operand, StillRunsUnavailable};
+use super::forms::Form::{CloseInWindow, Operand, Query, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
@@ -22,12 +22,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[RenderCache],
     ),
+    // The offset is the grid margin past the sheet's content.
     (
         &["smart_paste", "paste_special"],
         Bridge,
-        &[Clipboard, RenderCache],
+        &[Clipboard, RenderCache, ToolState],
     ),
-    (&["paste"], Bridge, &[Clipboard]),
+    // The placement epoch and the grid of the pasted copy.
+    (&["paste"], Bridge, &[Clipboard, ToolState]),
     (
         &["select_board_net", "highlight_board_net"],
         Bridge,
@@ -43,11 +45,41 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[ActiveDocument, Selection],
     ),
+    // Save As of a background sheet is refused (`active_path`).
+    (&["save_document_as"], Operand, &[ActiveDocument]),
+    // The rfd picker (`save_as_dialog_for_active_tab`).
+    (&["save_document_as"], Bridge, &[DialogAnswer]),
+    // `close_tab` commits the sheet's title-block drafts and settles a board
+    // sketch, whose refused bake keeps the tab; an agent's close of another
+    // tab parks it in the background (`agent.serving`).
     (
-        &["save_document_as", "close_active_document"],
+        &["close_active_document"],
         Operand,
-        &[ActiveDocument],
+        &[ActiveDocument, InProgressEdit, AgentSession],
     ),
+    (&["close_active_document"], Bridge, &[InProgressEdit]),
+    (&["close_active_document"], CloseInWindow, &[InProgressEdit]),
+    // A wire drawn on the sheet, or rules text not applied, refuses the step.
+    (&["undo", "redo"], Operand, &[InProgressEdit]),
+    // Read: they act on the named document and their operands only.
+    (
+        &[
+            "save_document",
+            "assign_net_class",
+            "clear_all_net_colors",
+            "export_board_pdf",
+            "export_board_report",
+            "export_board_step",
+            "export_assembly_svg",
+            "board_assembly_drawing",
+        ],
+        Operand,
+        &[],
+    ),
+    // The listings narrow to an agent's documents (`document_entries`).
+    (&["list_documents", "resolve"], Query, &[AgentSession]),
+    // The grid the copy is stored on (`copy_selection`).
+    (&["copy", "cut", "duplicate"], Bridge, &[ToolState]),
     (&["new_document", "open_document"], Bridge, &[DialogAnswer]),
     (
         &["new_document", "open_document", "new_project_with_profile"],

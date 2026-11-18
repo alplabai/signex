@@ -3,11 +3,15 @@
 //! from the routing code, with the owner of the route and what it reads
 //! besides its operands. `testdata/parity.golden.tsv` pins it.
 //!
-//! Implicit inputs come from three places: what the form reads by itself
+//! Implicit inputs come from four places: what the form reads by itself
 //! ([`forms::Form::implied`]), the [`super::CommandContext`] facts the
 //! enablement gate in front of the route reads (probed, [`inputs::read_by`]),
-//! and the hand annotations ([`annotations::ANNOTATIONS`]) for what a
-//! handler reads past its gate.
+//! what resolving a `document` operand and the agent's one-step wrapping
+//! read (the agent session), and the hand annotations
+//! ([`annotations::ANNOTATIONS`]) for what a handler reads past its gate.
+//! The `basis` column says which: `handler` (the handler was read and
+//! annotated), `routing` (the form has no handler of its own to read) or
+//! `gate` (only the gate and the routing were read, not the handler).
 
 mod annotations;
 mod forms;
@@ -20,8 +24,29 @@ use std::collections::BTreeSet;
 use forms::{Form, Owner};
 use inputs::Input;
 
-use super::{CommandArgs, bridge, enablement, needs, operand_handlers};
+use super::{CommandArgs, agent_edits, bridge, needs, operand_handlers};
 use crate::keymap::{AppCommandId, all_command_ids, metadata_for};
+
+/// How a row's implicit inputs were found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Basis {
+    /// The handler was read; its inputs are annotated by hand.
+    Handler,
+    /// The form is routing only; the routing code was read.
+    Routing,
+    /// Only the gate and the routing were read, not the handler behind them.
+    Gate,
+}
+
+impl Basis {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Handler => "handler",
+            Self::Routing => "routing",
+            Self::Gate => "gate",
+        }
+    }
+}
 
 /// One `(id, form)` pair.
 struct Row {
@@ -30,16 +55,15 @@ struct Row {
     route: String,
     owner: Owner,
     inputs: BTreeSet<Input>,
-    /// The inputs are known to be complete: annotated by hand, or the form
-    /// reads nothing but its operands.
-    reviewed: bool,
+    basis: Basis,
 }
 
 impl Row {
-    /// The row has an implicit-inputs value: some input, or a review that
-    /// says it has none.
+    /// The row has an implicit-inputs value: some input, or a read of its
+    /// handler or routing that found none. A gate-only row that found
+    /// nothing says nothing, so it has none.
     fn has_value(&self) -> bool {
-        !self.inputs.is_empty() || self.reviewed
+        !self.inputs.is_empty() || self.basis != Basis::Gate
     }
 
     fn inputs_cell(&self) -> String {
@@ -84,12 +108,12 @@ fn row(
 ) -> Row {
     let id = metadata_for(command).expect("catalog id has metadata").id;
     let mut inputs: BTreeSet<Input> = form.implied().iter().copied().collect();
-    let mut reviewed = form.reads_only_operands();
     if form.is_gated() {
         inputs.extend(gate_inputs.into_iter().flatten());
     }
     match form {
-        Form::Operand if operand_handlers::names_its_document(command) => reviewed = true,
+        // A named document runs past the gate.
+        Form::Operand if operand_handlers::names_its_document(command) => {}
         // Without a `document` operand the handler acts on the active tab,
         // behind its gate.
         Form::Operand => {
@@ -100,14 +124,22 @@ fn row(
         }
         Form::StillRunsRefusal => {
             inputs.extend(inputs::read_by(|ctx| {
-                enablement::explains_refusal_in(command, ctx)
+                super::enablement::explains_refusal_in(command, ctx)
             }));
         }
         _ => {}
     }
+    if reads_the_agent_session(command, form) {
+        inputs.insert(Input::AgentSession);
+    }
+    let mut basis = if form.is_routing_only() {
+        Basis::Routing
+    } else {
+        Basis::Gate
+    };
     if let Some(annotated) = annotations::of(id, form) {
         inputs.extend(annotated.iter().copied());
-        reviewed = true;
+        basis = Basis::Handler;
     }
     Row {
         id,
@@ -115,8 +147,18 @@ fn row(
         route,
         owner: forms::owner(command, form, arms),
         inputs,
-        reviewed,
+        basis,
     }
+}
+
+/// The route reads whether an agent is being served: a `document` operand
+/// resolves among an agent's documents only (`document_entries`), and
+/// `run_operands` wraps an agent's single edit in one undo step.
+fn reads_the_agent_session(command: &AppCommandId, form: Form) -> bool {
+    let resolves_a_document =
+        matches!(form, Form::Operand | Form::Query | Form::Check) && takes_a_document(command);
+    let one_step = form == Form::Operand && agent_edits::runs_as_one_step(command);
+    resolves_a_document || one_step
 }
 
 /// `command` takes a `document` operand.
@@ -124,7 +166,7 @@ fn takes_a_document(command: &AppCommandId) -> bool {
     metadata_for(command).is_some_and(|meta| meta.operands.iter().any(|op| op.name == "document"))
 }
 
-const HEADER: &str = "# id\tform\troute\towner\timplicit_inputs";
+const HEADER: &str = "# id\tform\troute\towner\timplicit_inputs\tbasis";
 
 /// The table as the golden spells it.
 fn table_text(rows: &[Row]) -> String {
@@ -136,6 +178,7 @@ fn table_text(rows: &[Row]) -> String {
             &row.route,
             row.owner.name(),
             &row.inputs_cell(),
+            row.basis.name(),
         ];
         out.push_str(&cells.join("\t"));
         out.push('\n');

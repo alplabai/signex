@@ -4,7 +4,8 @@
 //! calls the same functions to list the forms each id reaches.
 
 use crate::app::document::{DocumentKey, UndoTarget};
-use crate::app::{ErcMsg, Message, PcbMsg, Signex};
+use crate::app::{ErcMsg, Message, PcbMsg, PcbViewMsg, Signex, ViewRotationMsg};
+use crate::canvas::CanvasEvent;
 use crate::keymap::AppCommandId;
 
 /// Undo and Redo: the ids the history routers take.
@@ -61,43 +62,48 @@ pub(super) struct WindowFacts {
     pub is_main: bool,
 }
 
-/// Where a resolved message runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Where a resolved message runs, carrying what that route sends, so no
+/// route can pair with a message it does not take.
+#[derive(Debug)]
 pub(super) enum InWindowRoute {
     /// A canvas event goes to the canvas of the window it was typed in (#525).
-    CanvasInWindow(iced::window::Id),
+    CanvasInWindow(iced::window::Id, CanvasEvent),
     /// A board-view command acts on the board the window shows (#2223).
-    BoardViewInWindow(iced::window::Id),
+    BoardViewInWindow(iced::window::Id, PcbViewMsg),
     /// A view turn turns that window's board (#2316).
-    BoardTurnInWindow(iced::window::Id),
+    BoardTurnInWindow(iced::window::Id, ViewRotationMsg),
     /// Any other command acts on the sheet the window shows (#1966).
-    DocumentWindow(iced::window::Id),
+    DocumentWindow(iced::window::Id, Message),
     /// Find Next / Previous from main take over a Sheet-scope Find owned by
     /// an undocked window.
-    FindFromMain,
+    FindFromMain(Message),
     /// The message runs as sent.
-    Plain,
+    Plain(Message),
 }
 
 /// Where `message`, typed in `window`, runs.
 pub(super) fn in_window_route(
-    message: &Message,
+    message: Message,
     window: Option<iced::window::Id>,
     facts: WindowFacts,
 ) -> InWindowRoute {
     match (message, window) {
-        (Message::CanvasEvent(_), Some(id)) if facts.has_canvas => {
-            InWindowRoute::CanvasInWindow(id)
+        (Message::CanvasEvent(event), Some(id)) if facts.has_canvas => {
+            InWindowRoute::CanvasInWindow(id, event)
         }
-        (Message::Pcb(PcbMsg::View(_)), Some(id)) if facts.shows_undocked_board => {
-            InWindowRoute::BoardViewInWindow(id)
+        (Message::Pcb(PcbMsg::View(event)), Some(id)) if facts.shows_undocked_board => {
+            InWindowRoute::BoardViewInWindow(id, event)
         }
-        (Message::Pcb(PcbMsg::ViewRotation(_)), Some(id)) if facts.shows_undocked_board => {
-            InWindowRoute::BoardTurnInWindow(id)
+        (Message::Pcb(PcbMsg::ViewRotation(event)), Some(id)) if facts.shows_undocked_board => {
+            InWindowRoute::BoardTurnInWindow(id, event)
         }
-        (_, Some(id)) if facts.is_document_window => InWindowRoute::DocumentWindow(id),
-        (message, _) if is_find_step(message) && facts.is_main => InWindowRoute::FindFromMain,
-        _ => InWindowRoute::Plain,
+        (message, Some(id)) if facts.is_document_window => {
+            InWindowRoute::DocumentWindow(id, message)
+        }
+        (message, _) if is_find_step(&message) && facts.is_main => {
+            InWindowRoute::FindFromMain(message)
+        }
+        (message, _) => InWindowRoute::Plain(message),
     }
 }
 
@@ -119,5 +125,41 @@ impl Signex {
             is_document_window: window.is_some_and(|id| self.is_document_window(id)),
             is_main: window.is_none_or(|id| self.ui_state.main_window_id == Some(id)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::app::state::ProjectId;
+
+    fn document(key: fn(PathBuf) -> DocumentKey) -> UndoTarget {
+        UndoTarget::Document(key(PathBuf::from("a")))
+    }
+
+    /// The undocked-window swap steps a sheet, a symbol or a footprint, never
+    /// a board, whose history the swap does not reach (#1546).
+    #[test]
+    fn the_window_swap_steps_no_board_and_nothing_without_a_history() {
+        assert!(!steps_through_window_swap(&document(DocumentKey::Pcb)));
+        assert!(!steps_through_window_swap(&UndoTarget::None));
+        assert!(steps_through_window_swap(&document(DocumentKey::Schematic)));
+        assert!(steps_through_window_swap(&document(DocumentKey::Footprint)));
+    }
+
+    /// A window with a document of its own steps it directly, except a
+    /// sheet (the swap's) and the ERC rules (the dialog's message), #1854.
+    #[test]
+    fn an_own_window_steps_neither_a_sheet_nor_the_erc_rules() {
+        assert!(!steps_own_document(&document(DocumentKey::Schematic)));
+        assert!(!steps_own_document(&UndoTarget::ProjectRules(
+            ProjectId::test_id(1)
+        )));
+        assert!(steps_own_document(&document(DocumentKey::Pcb)));
+        assert!(steps_own_document(&UndoTarget::RulesTab(
+            ProjectId::test_id(1)
+        )));
     }
 }

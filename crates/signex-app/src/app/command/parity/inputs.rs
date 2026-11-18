@@ -1,7 +1,7 @@
 //! The implicit inputs of a parity row: the closed vocabulary, the
 //! [`CommandContext`] facts each stands for, and which facts a gate reads.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::super::CommandContext;
 
@@ -18,10 +18,12 @@ pub(super) enum Input {
     RenderCache,
     Clipboard,
     DialogAnswer,
+    /// Whether an agent's socket call is being served (`agent.serving`).
+    AgentSession,
 }
 
 impl Input {
-    pub(super) const ALL: [Self; 10] = [
+    pub(super) const ALL: [Self; 11] = [
         Self::ActiveDocument,
         Self::Window,
         Self::Selection,
@@ -32,6 +34,7 @@ impl Input {
         Self::RenderCache,
         Self::Clipboard,
         Self::DialogAnswer,
+        Self::AgentSession,
     ];
 
     pub(super) fn word(self) -> &'static str {
@@ -46,6 +49,7 @@ impl Input {
             Self::RenderCache => "render cache",
             Self::Clipboard => "clipboard",
             Self::DialogAnswer => "dialog answer",
+            Self::AgentSession => "agent session",
         }
     }
 }
@@ -151,6 +155,8 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
         ("pcb.read_only", &[ActiveDocument], |c, v| {
             c.pcb.read_only = v
         }),
+        // Only 0 or 2: no gate reads the count, which
+        // `no_gate_reads_the_footprint_count` checks with 1 too.
         ("pcb.footprints", &[Selection], |c, v| {
             c.pcb.footprints = if v { 2 } else { 0 };
         }),
@@ -161,12 +167,18 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
     ]
 };
 
-/// Contexts the probe samples. A gate reads at most five facts, so each
-/// combination of those is drawn about 32 times.
+/// Contexts the probe samples. A fact that decides a gate only while `w`
+/// other facts hold given values is pivotal in about `SAMPLES / 2^w` of
+/// them, so one with `w` past about 10 could go unseen.
+/// `every_found_fact_is_pivotal_often` keeps the gates far from that.
 const SAMPLES: usize = 1024;
 
+/// The fewest samples in which each fact a gate reads must be pivotal:
+/// `SAMPLES / 2^6`, so no fact found needs more than 6 others set.
+pub(super) const MIN_PIVOTS: usize = 16;
+
 /// Random contexts, the same on every run (a fixed xorshift seed).
-fn samples() -> impl Iterator<Item = CommandContext> {
+pub(super) fn samples() -> impl Iterator<Item = CommandContext> {
     let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
     (0..SAMPLES).map(move |_| {
         let mut ctx = CommandContext::default();
@@ -185,19 +197,39 @@ pub(super) fn ever(gate: impl Fn(&CommandContext) -> bool) -> bool {
     samples().any(|ctx| gate(&ctx))
 }
 
-/// The inputs `gate` reads: those of every fact whose flip changes its
-/// answer in some sampled context.
+/// The inputs `gate` reads: those of every fact [`facts_read_by`] finds.
 pub(super) fn read_by(gate: impl Fn(&CommandContext) -> bool) -> BTreeSet<Input> {
-    let mut read = BTreeSet::new();
+    facts_read_by(gate)
+        .into_iter()
+        .flat_map(|name| inputs_of(name).iter().copied())
+        .collect()
+}
+
+/// The facts whose flip changes `gate`'s answer in some sampled context.
+pub(super) fn facts_read_by(gate: impl Fn(&CommandContext) -> bool) -> BTreeSet<&'static str> {
+    pivots_of(gate).into_keys().collect()
+}
+
+/// For each fact `gate` reads, in how many sampled contexts its flip
+/// changes the answer.
+pub(super) fn pivots_of(gate: impl Fn(&CommandContext) -> bool) -> BTreeMap<&'static str, usize> {
+    let mut pivots = BTreeMap::new();
     for ctx in samples() {
-        for (_, inputs, set) in FACTS {
+        for (name, _, set) in FACTS {
             let (mut on, mut off) = (ctx, ctx);
             set(&mut on, true);
             set(&mut off, false);
             if gate(&on) != gate(&off) {
-                read.extend(inputs.iter().copied());
+                *pivots.entry(*name).or_insert(0) += 1;
             }
         }
     }
-    read
+    pivots
+}
+
+fn inputs_of(fact: &str) -> &'static [Input] {
+    FACTS
+        .iter()
+        .find(|(name, _, _)| *name == fact)
+        .map_or(&[], |(_, inputs, _)| *inputs)
 }

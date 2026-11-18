@@ -14,7 +14,7 @@ use super::inputs::Input;
 use crate::app::document::{DocumentKey, UndoTarget};
 use crate::app::state::ProjectId;
 use crate::app::{Message, PcbMsg};
-use crate::keymap::{AppCommandId, CatalogTextExt, metadata_for};
+use crate::keymap::{AppCommandId, CatalogTextExt, HeadlessUse, metadata_for};
 use crate::toolbar::ToolMessage;
 
 /// A distinct route by which an id reaches its handler or its implicit
@@ -109,20 +109,24 @@ impl Form {
                 | Self::ActiveBar
                 | Self::Needs
                 | Self::StillRunsUnavailable
+                | Self::StillRunsRefusal
         )
     }
 
-    /// A form whose only inputs are its operands, so a row with no implicit
-    /// input needs no hand annotation.
-    pub(super) fn reads_only_operands(self) -> bool {
+    /// A form the routing code describes whole: a refusal, a router or a
+    /// rewrite, with no handler behind it that the row stands for.
+    pub(super) fn is_routing_only(self) -> bool {
         matches!(
             self,
-            Self::Query
-                | Self::Check
-                | Self::Needs
+            Self::Needs
                 | Self::NeedsOperands
                 | Self::HeadlessRefusal
                 | Self::HeadlessMissingOperand
+                | Self::UndoSheetWindow
+                | Self::UndoOwnWindow
+                | Self::UndoErcDialog
+                | Self::WindowDocument
+                | Self::InWindow
         )
     }
 
@@ -235,14 +239,16 @@ fn in_window_kinds(message: &Message) -> Vec<&'static str> {
             is_main: bits & 8 != 0,
         };
         for window in [Some(iced::window::Id::unique()), None] {
-            kinds.insert(match routing::in_window_route(message, window, facts) {
-                InWindowRoute::CanvasInWindow(_) => "canvas_in_window",
-                InWindowRoute::BoardViewInWindow(_) => "board_view_in_window",
-                InWindowRoute::BoardTurnInWindow(_) => "board_turn_in_window",
-                InWindowRoute::DocumentWindow(_) => "document_window",
-                InWindowRoute::FindFromMain => "find_from_main",
-                InWindowRoute::Plain => continue,
-            });
+            kinds.insert(
+                match routing::in_window_route(message.clone(), window, facts) {
+                    InWindowRoute::CanvasInWindow(..) => "canvas_in_window",
+                    InWindowRoute::BoardViewInWindow(..) => "board_view_in_window",
+                    InWindowRoute::BoardTurnInWindow(..) => "board_turn_in_window",
+                    InWindowRoute::DocumentWindow(..) => "document_window",
+                    InWindowRoute::FindFromMain(_) => "find_from_main",
+                    InWindowRoute::Plain(_) => continue,
+                },
+            );
         }
     }
     kinds.into_iter().collect()
@@ -361,23 +367,33 @@ fn headless_routes(command: &AppCommandId) -> Vec<(Form, String)> {
 /// The owner of `form` for `command`; `arms_a_tool` is what its bridge arm
 /// does.
 pub(super) fn owner(command: &AppCommandId, form: Form, arms_a_tool: bool) -> Owner {
-    use crate::keymap::HeadlessUse;
-    let Some(meta) = metadata_for(command) else {
-        return Owner::Undecided;
-    };
-    match meta.headless_use() {
+    // A headless run with no operands is refused the bridge's form, or skips it.
+    let headless_skips_the_bridge = arms_a_tool
+        || operands::missing_headless_operand(command).is_some()
+        || operand_handlers::runs_headless_without_operands(command);
+    owner_of(
+        metadata_for(command).and_then(|meta| meta.headless_use()),
+        form,
+        headless_skips_the_bridge,
+    )
+}
+
+/// [`owner`] from the catalog's headless use of the id.
+pub(super) fn owner_of(
+    headless: Option<HeadlessUse>,
+    form: Form,
+    headless_skips_the_bridge: bool,
+) -> Owner {
+    match headless {
         None => Owner::Undecided,
         Some(_) if form.is_headless() => Owner::Core,
         Some(HeadlessUse::WindowOnly) => Owner::Gui,
         Some(HeadlessUse::Runs) if form.needs_a_window() => Owner::Gui,
-        // A headless run with no operands is refused this form, or skips it.
         Some(HeadlessUse::Runs)
             if matches!(
                 form,
                 Form::Bridge | Form::BridgeContextMenu | Form::ActiveBar
-            ) && (arms_a_tool
-                || operands::missing_headless_operand(command).is_some()
-                || operand_handlers::runs_headless_without_operands(command)) =>
+            ) && headless_skips_the_bridge =>
         {
             Owner::Gui
         }

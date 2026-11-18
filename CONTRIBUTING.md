@@ -439,7 +439,8 @@ them, so the rest is on the author.
 - **Command parity table** ([ADR-0006](docs/architecture/adr-0006-application-core.md),
   slice C): `crates/signex-app/src/app/command/parity/testdata/parity.golden.tsv`
   lists every route by which a command id reaches its handler, with the
-  route's owner and the implicit inputs it reads. It is generated from the
+  route's owner, the implicit inputs it reads, and whether those come from
+  reading the handler or only its gate (`basis`). It is generated from the
   routing code and changes with every slice that moves a route, so it is not a
   decided-behaviour golden: review the diff, then regenerate it with
   `UPDATE_GOLDEN=1 cargo test -p signex-app golden_parity_table`. Hand

@@ -302,26 +302,26 @@ impl Signex {
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
         use routing::InWindowRoute as Route;
-        let route = routing::in_window_route(&message, window, self.window_facts(window));
-        match (route, message) {
-            (Route::CanvasInWindow(window_id), Message::CanvasEvent(event)) => {
+        let facts = self.window_facts(window);
+        match routing::in_window_route(message, window, facts) {
+            Route::CanvasInWindow(window_id, event) => {
                 self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
             }
-            (Route::BoardViewInWindow(window), Message::Pcb(PcbMsg::View(event))) => {
+            Route::BoardViewInWindow(window, event) => {
                 self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow { window, event }))
             }
-            (Route::BoardTurnInWindow(window), Message::Pcb(PcbMsg::ViewRotation(event))) => {
+            Route::BoardTurnInWindow(window, event) => {
                 self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow { window, event }))
             }
-            (Route::DocumentWindow(window_id), message) => {
+            Route::DocumentWindow(window_id, message) => {
                 self.run_command_in_window(window_id, message)
             }
             // `None` is main: F3, the menu and the palette.
-            (Route::FindFromMain, message) => match self.ui_state.main_window_id {
+            Route::FindFromMain(message) => match self.ui_state.main_window_id {
                 Some(main_id) => self.step_find_in_window(main_id, message),
                 None => self.dispatch_update(message),
             },
-            (_, message) => self.dispatch_update(message),
+            Route::Plain(message) => self.dispatch_update(message),
         }
     }
 }
