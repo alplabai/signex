@@ -12,15 +12,24 @@ fn rules_of(drc: &DrcRuleSet) -> Vec<String> {
     let text = drc.dsl.clone().unwrap_or_default();
     let rows = table(&text);
     assert!(!rows.is_unparsed(), "{text}");
-    rows.rows.iter().map(|r| r.text(&text).to_string()).collect()
+    rows.rows
+        .iter()
+        .map(|r| r.text(&text).to_string())
+        .collect()
 }
 
 #[test]
 fn each_tier_seeds_its_exact_fab_rule_set() {
     let expected = |c: [&str; 10]| {
         vec![
-            format!("rule fab_clearance on clearance require clearance >= {} then error", c[0]),
-            format!("rule fab_track on track require width >= {} then error", c[1]),
+            format!(
+                "rule fab_clearance on clearance require clearance >= {} then error",
+                c[0]
+            ),
+            format!(
+                "rule fab_track on track require width >= {} then error",
+                c[1]
+            ),
             format!(
                 "rule fab_via on via require diameter >= {} and drill >= {} then error",
                 c[2], c[3]
@@ -29,23 +38,41 @@ fn each_tier_seeds_its_exact_fab_rule_set() {
                 "rule fab_hole on hole require diameter >= {} and annular >= {} and spacing >= {} then error",
                 c[4], c[5], c[6]
             ),
-            format!("rule fab_edge on edge require clearance >= {} then error", c[7]),
-            format!("rule fab_mask on mask require sliver >= {} then warning", c[8]),
-            format!("rule fab_silk on silk require pad_clearance >= {} then warning", c[9]),
+            format!(
+                "rule fab_edge on edge require clearance >= {} then error",
+                c[7]
+            ),
+            format!(
+                "rule fab_mask on mask require sliver >= {} then warning",
+                c[8]
+            ),
+            format!(
+                "rule fab_silk on silk require pad_clearance >= {} then warning",
+                c[9]
+            ),
         ]
     };
     let cases = [
         (
             FabTemplate::Standard,
-            ["0.15mm", "0.15mm", "0.5mm", "0.25mm", "0.25mm", "0.125mm", "0.5mm", "0.3mm", "0.1mm", "0.15mm"],
+            [
+                "0.15mm", "0.15mm", "0.5mm", "0.25mm", "0.25mm", "0.125mm", "0.5mm", "0.3mm",
+                "0.1mm", "0.15mm",
+            ],
         ),
         (
             FabTemplate::Advanced,
-            ["0.1mm", "0.1mm", "0.4mm", "0.2mm", "0.2mm", "0.1mm", "0.4mm", "0.25mm", "0.075mm", "0.1mm"],
+            [
+                "0.1mm", "0.1mm", "0.4mm", "0.2mm", "0.2mm", "0.1mm", "0.4mm", "0.25mm", "0.075mm",
+                "0.1mm",
+            ],
         ),
         (
             FabTemplate::Hdi,
-            ["0.075mm", "0.075mm", "0.3mm", "0.15mm", "0.1mm", "0.075mm", "0.3mm", "0.2mm", "0.06mm", "0.075mm"],
+            [
+                "0.075mm", "0.075mm", "0.3mm", "0.15mm", "0.1mm", "0.075mm", "0.3mm", "0.2mm",
+                "0.06mm", "0.075mm",
+            ],
         ),
     ];
     for (tier, values) in cases {
@@ -73,12 +100,21 @@ fn re_choosing_a_tier_replaces_only_its_fab_rules() {
     let standard = with_tier(&start, FabTemplate::Standard).unwrap();
     let hdi = with_tier(&standard, FabTemplate::Hdi).unwrap();
     let text = hdi.dsl.clone().unwrap();
-    assert!(text.starts_with(mine), "the other rules stay as typed: {text}");
+    assert!(
+        text.starts_with(mine),
+        "the other rules stay as typed: {text}"
+    );
     assert_eq!(rules_of(&hdi).len(), 9, "{text}");
     assert!(text.contains("rule fab_track on track require width >= 0.075mm then error"));
-    assert!(!text.contains("width >= 0.15mm"), "no Standard rule is left: {text}");
+    assert!(
+        !text.contains("width >= 0.15mm"),
+        "no Standard rule is left: {text}"
+    );
     // The tier's own `then` governs its rules; the user's entry stays.
-    assert_eq!(hdi.severity.get("user::mine").map(String::as_str), Some("warning"));
+    assert_eq!(
+        hdi.severity.get("user::mine").map(String::as_str),
+        Some("warning")
+    );
     assert!(!hdi.severity.contains_key("user::fab_track"));
     // Picking the same tier again changes nothing.
     assert_eq!(with_tier(&hdi, FabTemplate::Hdi).unwrap(), hdi);

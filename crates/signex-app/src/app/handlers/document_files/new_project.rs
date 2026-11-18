@@ -748,8 +748,8 @@ mod tests {
         let rules = data.rules.clone().expect("rules stored");
         let shipped = signex_erc::project_rules::profile::builtin_profile();
         assert_eq!(rules.erc, shipped.erc, "the profile's rules are kept");
-        let expected = signex_drc_dsl::table::presets::with_tier(&shipped.drc, FabTemplate::Advanced)
-            .unwrap();
+        let expected =
+            signex_drc_dsl::table::presets::with_tier(&shipped.drc, FabTemplate::Advanced).unwrap();
         assert_eq!(rules.drc, expected);
         let dsl = rules.drc.dsl.unwrap_or_default();
         assert!(
@@ -768,7 +768,9 @@ mod tests {
         };
         let written =
             write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
-        let rules = signex_types::project::parse_project(&written).unwrap().rules;
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules;
         let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
         assert!(!dsl.contains("fab_"), "{dsl}");
     }

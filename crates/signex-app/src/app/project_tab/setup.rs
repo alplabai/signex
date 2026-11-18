@@ -147,7 +147,9 @@ impl Signex {
         // A tier pick also writes its `fab_*` rules (#2311), even when the
         // values it fills are already shown: an edited fab rule comes back.
         let tier_rules = match &msg {
-            NewProjectMsg::FabPicked(tier) => Some((*tier, self.rules_with_tier(project_id, *tier))),
+            NewProjectMsg::FabPicked(tier) => {
+                Some((*tier, self.rules_with_tier(project_id, *tier)))
+            }
             _ => None,
         };
         let tab = self

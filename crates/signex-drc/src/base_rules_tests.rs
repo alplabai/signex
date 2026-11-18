@@ -211,7 +211,10 @@ fn a_via_under_both_its_diameter_and_its_annular_ring_is_two_findings() {
     v.diameter = 0.4;
     v.drill = 0.3;
     let b = board(vec![], vec![], vec![v]);
-    let limits = vec![Limit::MinViaDiameter(500_000), Limit::MinAnnularRing(100_000)];
+    let limits = vec![
+        Limit::MinViaDiameter(500_000),
+        Limit::MinAnnularRing(100_000),
+    ];
     let found = report(&b, vec![rule("fab_via", limits)]);
     let mut kinds: Vec<_> = found
         .violations

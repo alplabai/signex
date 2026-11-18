@@ -329,8 +329,13 @@ fn a_fab_override_picks_the_tier() {
     assert_eq!(setup.fab, Some(FabTemplate::Hdi));
     assert_eq!(setup.pcb.track_width_mm, 0.075);
     assert_eq!(setup.pcb.clearance_mm, 0.2, "a later key wins");
-    let err = ProjectSetup::default().apply_overrides("fab=fancy").unwrap_err();
-    assert_eq!(err, "override `fab`: fancy is not standard, advanced or hdi");
+    let err = ProjectSetup::default()
+        .apply_overrides("fab=fancy")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        "override `fab`: fancy is not standard, advanced or hdi"
+    );
     for tier in FabTemplate::ALL {
         assert_eq!(FabTemplate::from_token(tier.token()), Some(tier));
     }

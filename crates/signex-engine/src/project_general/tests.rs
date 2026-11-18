@@ -502,7 +502,11 @@ fn a_fab_tier_step_undoes_its_rules_and_no_other_step_touches_them() {
     assert_eq!(data.rules, None);
     assert_eq!(data.project_defaults, Default::default());
     assert!(history.redo(&mut data));
-    assert_eq!(data.rules.as_ref(), Some(&other), "redo restores what undo found");
+    assert_eq!(
+        data.rules.as_ref(),
+        Some(&other),
+        "redo restores what undo found"
+    );
     assert_eq!(data.project_defaults, hdi.defaults());
 
     // The same tier with the same rules again is no step.
