@@ -132,8 +132,7 @@ pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> R
         .and_then(|pcb| {
             let typed = text(args, "designator");
             placement::by_designator(pcb, app.document_state.stored_reference_for(&board, typed))
-        })
-    {
+        }) {
         Ok(anchor) => anchor,
         Err(reason) => return refused(reason),
     };

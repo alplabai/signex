@@ -535,7 +535,11 @@ fn a_designator_given_with_the_sign_is_stored_without_it() {
     let lib = library();
     let mut app = app(&lib);
     let sheet = sheet_path();
-    let dir = sheet.parent().expect("a folder").to_string_lossy().to_string();
+    let dir = sheet
+        .parent()
+        .expect("a folder")
+        .to_string_lossy()
+        .to_string();
     let mut project = app_workspace(&dir, &["parts.snxsch"])
         .document_state
         .projects

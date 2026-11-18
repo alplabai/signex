@@ -64,7 +64,9 @@ fn the_fabrication_files_print_the_signed_designator() {
         .filter(|l| l.starts_with("CMP "))
         .collect();
     assert!(
-        components.iter().any(|l| l.split(' ').nth(6) == Some("-R1")),
+        components
+            .iter()
+            .any(|l| l.split(' ').nth(6) == Some("-R1")),
         "{components:?}"
     );
     let designators = test_netlist_designators(&set);

@@ -58,8 +58,7 @@ fn swap(app: &mut Signex, args: &CommandArgs, request: Result<SwapRequest, Strin
         .and_then(|pcb| {
             let stored = app.document_state.stored_reference_for(&board, &designator);
             placement::by_designator(pcb, stored)
-        })
-    {
+        }) {
         Ok(footprint) => footprint,
         Err(reason) => return refused(reason),
     };

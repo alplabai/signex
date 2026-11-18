@@ -47,7 +47,9 @@ fn a_swap_by_hand_keeps_each_reference_on_its_part() {
     let a = part("R1", "1kΩ");
     let b = part("R2", "2kΩ");
     let (a_id, b_id) = (a.uuid, b.uuid);
-    sheet.symbols.extend([a, b, part("R3", "= R1.Value + 2 * R2.Value")]);
+    sheet
+        .symbols
+        .extend([a, b, part("R3", "= R1.Value + 2 * R2.Value")]);
     let mut engine = Engine::new(sheet).expect("engine");
 
     // R1 -> R9, R2 -> R1, R9 -> R2: the second step passes through a name

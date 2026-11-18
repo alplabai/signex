@@ -112,7 +112,6 @@ fn an_unannotated_part_still_reads_its_own_fields() {
     assert_eq!(value_of(&[r], 0), Some(Ok("1kΩ".to_string())));
 }
 
-
 /// #1416: under the full-codes standard `-QAC1` is only how QAC1 is shown;
 /// typing the sign in an expression is an error, not a silent negation.
 #[test]

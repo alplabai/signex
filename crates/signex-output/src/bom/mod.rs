@@ -15,9 +15,9 @@ use crate::{ExportContext, Exporter};
 
 mod cells;
 pub(crate) mod csv;
-mod html;
 #[cfg(test)]
 mod expression_tests;
+mod html;
 #[cfg(test)]
 mod pricing_tests;
 mod units;

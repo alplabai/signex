@@ -574,7 +574,11 @@ mod tests {
                 .unwrap();
         }
         let symbols = &engine.document().symbols;
-        let renamed = &symbols.iter().find(|s| s.uuid == source_id).unwrap().reference;
+        let renamed = &symbols
+            .iter()
+            .find(|s| s.uuid == source_id)
+            .unwrap()
+            .reference;
         let reader = symbols.iter().find(|s| s.uuid == reader_id).unwrap();
         assert_eq!(reader.value, format!("= {renamed}.Value * 2"));
     }

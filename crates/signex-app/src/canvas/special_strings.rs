@@ -100,7 +100,8 @@ mod tests {
             ..Default::default()
         };
         // The part's own field, read as the PDF reads it (review finding 5).
-        part.fields.insert("Tolerance".to_string(), "1%".to_string());
+        part.fields
+            .insert("Tolerance".to_string(), "1%".to_string());
         let power = Symbol {
             reference: "#PWR1".to_string(),
             value: "${VCC}".to_string(),

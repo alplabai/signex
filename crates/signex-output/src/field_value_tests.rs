@@ -43,7 +43,10 @@ fn a_value_that_does_not_evaluate_shows_its_source_and_says_why() {
     let symbols = vec![part("R1", "= R9.Value")];
     let shown = shown_value(&ValueScope::of_sheet(&symbols, None), &symbols[0]);
     assert_eq!(shown.text, "= R9.Value");
-    assert_eq!(shown.error, Some(ExprError::Unknown("R9.Value".to_string())));
+    assert_eq!(
+        shown.error,
+        Some(ExprError::Unknown("R9.Value".to_string()))
+    );
 }
 
 #[test]

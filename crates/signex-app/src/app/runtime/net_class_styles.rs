@@ -358,7 +358,11 @@ impl Signex {
                 .active_path
                 .as_deref()
                 .and_then(|path| self.document_state.designator_standard_for(path)),
-            special_strings: self.interaction_state.active_canvas().special_strings.as_ref(),
+            special_strings: self
+                .interaction_state
+                .active_canvas()
+                .special_strings
+                .as_ref(),
         }
     }
 

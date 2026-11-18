@@ -39,6 +39,7 @@ pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
     ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,
 };
+pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::board::{
     BoardLayerSet, BoardPdfError, BoardPdfOutput, BoardPdfPage, BoardPrintOptions, BoardPrintPages,
@@ -55,7 +56,6 @@ pub use preview::{
     preview_raster_size,
 };
 pub use reference_display::show_board_references;
-pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
 pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};

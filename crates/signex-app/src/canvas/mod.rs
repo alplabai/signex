@@ -36,9 +36,9 @@ mod shape_preview;
 mod shift_selection;
 mod special_strings;
 mod surface;
-mod value_widths;
 #[cfg(test)]
 mod tool_click_tests;
+mod value_widths;
 mod viewport_resize;
 mod wheel;
 pub mod zoom_pill;
