@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use super::tests::{empty_board, empty_sheet, sample_symbol};
 use super::*;
 use crate::schematic::{
-    Bus, BusEntry, ChildSheet, Junction, Label, LabelType, NoConnect, Point, SchDrawing,
-    SchematicSheet, SheetPin, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, Junction, Label, LabelType, NoConnect, NoErcDirective, Point,
+    SchDrawing, SchematicSheet, SheetPin, TextNote, Wire,
 };
 
 fn load(text: &str) -> SchematicSheet {
@@ -233,10 +233,7 @@ fn every_uuid_kind_is_repaired() {
         position: origin,
         size: (2.0, 2.0),
     }];
-    sheet.no_erc_directives = vec![NoConnect {
-        uuid: id(9),
-        position: origin,
-    }];
+    sheet.no_erc_directives = vec![NoErcDirective::new(id(9), origin)];
     sheet.drawings = vec![
         SchDrawing::Line {
             uuid: id(9),

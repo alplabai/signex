@@ -347,7 +347,9 @@ fn every_placing_command_refuses_an_id_in_use() {
         Command::PlaceNoConnect {
             no_connect: point.clone(),
         },
-        Command::PlaceNoErcDirective { directive: point },
+        Command::PlaceNoErcDirective {
+            directive: signex_types::schematic::NoErcDirective::new(point.uuid, point.position),
+        },
         Command::PlaceLabel {
             label: Label {
                 uuid: taken,

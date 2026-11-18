@@ -41,6 +41,7 @@ impl Engine {
             labels: clip.labels,
             junctions: clip.junctions,
             no_connects: clip.no_connects,
+            no_erc_directives: clip.no_erc_directives,
             text_notes: clip.text_notes,
             ..Default::default()
         };
@@ -142,6 +143,9 @@ impl PlacementPayload {
         for nc in &f.no_connects {
             add(dot(&nc.position, 1.27));
         }
+        for d in &f.no_erc_directives {
+            add(dot(&d.position, 1.27));
+        }
         for tn in &f.text_notes {
             add(dot(&tn.position, 1.27));
         }
@@ -239,6 +243,40 @@ mod tests {
         let body = doc.body_of(placed).expect("the pasted part keeps its body");
         assert_eq!(placed.body_ref, body.body_ref());
         assert_eq!(doc.lib_symbols.len(), 1);
+    }
+
+    /// A copied No-ERC directive pastes with its rule list (#1699).
+    #[test]
+    fn a_no_erc_directive_copies_and_pastes_with_its_rules() {
+        let mut sheet = test_sheet();
+        let mut marker = signex_types::schematic::NoErcDirective::new(
+            Uuid::now_v7(),
+            Point::new(25.4, 25.4),
+        );
+        marker.rules = vec!["builtin::unused_pin".to_owned()];
+        let items = vec![SelectedItem::new(marker.uuid, SelectedKind::NoErcDirective)];
+        sheet.no_erc_directives.push(marker);
+        let engine = Engine::new(sheet).unwrap();
+
+        let copied = engine.copy_selection(&items, 1.27).unwrap().unwrap();
+        assert_eq!(copied.payload.item_count(), 1);
+        let mut target = Engine::new(test_sheet()).unwrap();
+        target
+            .execute_batch(
+                copied
+                    .payload
+                    .place_commands(
+                        copied.origin,
+                        &mut signex_types::object_id::SequentialIds::default(),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        let pasted = &target.document().no_erc_directives;
+        assert_eq!(pasted.len(), 1);
+        assert_eq!(pasted[0].rules, vec!["builtin::unused_pin".to_owned()]);
+        let at = pasted[0].position;
+        assert!((at.x - 25.4).abs() < 1e-9 && (at.y - 25.4).abs() < 1e-9);
     }
 
     #[test]

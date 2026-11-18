@@ -61,15 +61,16 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     out
 }
 
-/// Drop every diagnostic located on a No-ERC directive. Positional only: the
-/// directive silences all rules at its point. Diagnostics whose location is a
-/// placeholder or lives in another sheet's coordinates are never matched.
+/// Drop every diagnostic located on a No-ERC directive that silences its rule
+/// (every rule when the directive names none, #1699). Diagnostics whose
+/// location is a placeholder or lives in another sheet's coordinates are
+/// never matched.
 /// Then drop what [`directive_suppressed`] drops (#2420).
 fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
     if !ctx.no_erc_directives.is_empty() {
         diagnostics.retain(|d| {
             d.location_space != LocationSpace::ThisSheet
-                || !ctx.has_no_erc_directive_at(&d.location)
+                || !ctx.has_no_erc_directive_at(&d.location, d.rule_id.as_str())
         });
     }
     if !ctx.directives.is_empty() {

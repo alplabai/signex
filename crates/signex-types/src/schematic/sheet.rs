@@ -468,7 +468,7 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub drawings: Vec<SchDrawing>,
     #[serde(default)]
-    pub no_erc_directives: Vec<NoConnect>,
+    pub no_erc_directives: Vec<NoErcDirective>,
     /// Blankets, Compile Masks and Differential Pair directives (#2420).
     #[serde(default)]
     pub directives: Vec<super::SchDirective>,

@@ -5,6 +5,8 @@
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
+use signex_app::dock::DockMessage;
+use signex_app::panels::{NoErcRuleEdit, PanelMsg};
 use signex_types::schematic::{SchematicSheet, SelectedKind};
 use std::path::PathBuf;
 
@@ -94,4 +96,42 @@ fn a_placed_directive_can_be_selected_and_deleted() {
 
     let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
     assert!(doc(&app).no_erc_directives.is_empty());
+}
+
+fn edit_rules(app: &mut Signex, id: uuid::Uuid, edit: NoErcRuleEdit) {
+    let msg = PanelMsg::EditNoErcRules(id, edit);
+    let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
+}
+
+/// #1699: ticking rules in Properties narrows the directive to them, each
+/// tick is one undo step, and "All Rules" clears the list again.
+#[test]
+fn properties_rule_checkboxes_edit_the_list_one_undo_step_each() {
+    let mut app = app_with_empty_sheet();
+    arm_no_erc(&mut app);
+    click(&mut app, 10.0, 20.0);
+    let id = doc(&app).no_erc_directives[0].uuid;
+    assert!(doc(&app).no_erc_directives[0].rules.is_empty());
+
+    let tick = |rule_id: &str| NoErcRuleEdit::Rule {
+        rule_id: rule_id.to_string(),
+        silenced: true,
+    };
+    edit_rules(&mut app, id, tick("builtin::unused_pin"));
+    edit_rules(&mut app, id, tick("builtin::pin_type_conflict"));
+    assert_eq!(
+        doc(&app).no_erc_directives[0].rules,
+        vec!["builtin::unused_pin", "builtin::pin_type_conflict"]
+    );
+    assert!(!doc(&app).no_erc_directives[0].suppresses("builtin::orphan_label"));
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        doc(&app).no_erc_directives[0].rules,
+        vec!["builtin::unused_pin"]
+    );
+
+    edit_rules(&mut app, id, NoErcRuleEdit::AllRules);
+    assert!(doc(&app).no_erc_directives[0].rules.is_empty());
+    assert!(doc(&app).no_erc_directives[0].suppresses("builtin::orphan_label"));
 }

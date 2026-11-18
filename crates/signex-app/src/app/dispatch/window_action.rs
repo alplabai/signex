@@ -66,6 +66,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditLabelFontSizePt(..)
                 | P::EditTextNoteText(..)
                 | P::EditBlanket(..)
+                | P::EditNoErcRules(..)
                 | P::EditTextFontFamily(..)
                 | P::SetDocumentFontFamily(_)
                 | P::SetPageFormatMode(_)

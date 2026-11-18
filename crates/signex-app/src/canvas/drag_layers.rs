@@ -184,7 +184,7 @@ pub(super) fn split_ghost(
     kind!(directives, signex_types::schematic::SchDirective::uuid);
     kind!(
         no_erc_directives,
-        |d: &signex_types::schematic::NoConnect| d.uuid
+        |d: &signex_types::schematic::NoErcDirective| d.uuid
     );
     DragFrame {
         moving: Rc::new(moving),

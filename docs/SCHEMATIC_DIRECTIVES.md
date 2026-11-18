@@ -98,8 +98,34 @@ Pair two short parallel strokes. A region is picked by a click near its
 edge, so a click inside it still reaches what it covers
 (`schematic_runtime/directives.rs`).
 
+## No-ERC rule list
+
+A No-ERC directive (`signex_types::schematic::NoErcDirective`, held in
+`SchematicSheet::no_erc_directives`) is a point marker, not one of the
+directives above. It silences ERC findings located on its point. Its `rules`
+list names the ERC rule ids it silences (`builtin::...`, `user::...`, or `*`);
+an empty list silences every rule (#1699). On disk it is an entry of
+`no_erc_directives` in `[extras.sheet]`; `rules` is left out when empty, so a
+marker without a list, including every marker saved before the list existed,
+re-saves byte-identical and loads as "every rule". A build that predates the
+list drops it on re-save and the marker silences every rule again; the format
+version of #2207 is what will refuse that save.
+
+Every suppression path asks the one test, `no_erc_rules_suppress`: the
+per-sheet run (`drop_suppressed` and the rules that check the marker
+themselves, "Pin type conflict" and "Net has multiple names") and the
+project-wide "Net has multiple names" and "Part units not placed" passes.
+
+Properties lists one checkbox per ERC rule under Suppressed Rules, plus All
+Rules, checked while the list is empty. Ticking a rule while All Rules is
+checked narrows the marker to that rule; unticking the last listed rule
+leaves the list empty, which is every rule again. Each checkbox is one undo
+step (`Command::SetNoErcRules`, patch `DocumentPatch::NO_ERC_DIRECTIVES`).
+Copy, cut and paste carry No-ERC directives with their lists.
+
 ## Not yet
 
-Copy and paste do not carry directives. Blanket classes are not applied to
-the project netlist, and nothing on the board reads `diff_pairs` yet; #1278
-and the router's differential pairs build on it.
+Copy and paste do not carry Blankets, Compile Masks or Differential Pair
+directives. Blanket classes are not applied to the project netlist, and
+nothing on the board reads `diff_pairs` yet; #1278 and the router's
+differential pairs build on it.

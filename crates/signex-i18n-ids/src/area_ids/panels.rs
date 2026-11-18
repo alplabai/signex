@@ -51,6 +51,8 @@ define_ids! {
     PANELS_DIRECTIVE_NET_CLASS = "panels-directive-net-class";
     PANELS_DIRECTIVE_ERC_EXCLUSIONS = "panels-directive-erc-exclusions";
     PANELS_DIRECTIVE_ALL_RULES = "panels-directive-all-rules";
+    PANELS_NO_ERC_RULES = "panels-no-erc-rules";
+    PANELS_NO_ERC_ALL_RULES = "panels-no-erc-all-rules";
     PANELS_STATUS_BAR_X = "panels-status-bar-x";
     PANELS_STATUS_BAR_Y = "panels-status-bar-y";
     PANELS_STATUS_BAR_ZOOM = "panels-status-bar-zoom";

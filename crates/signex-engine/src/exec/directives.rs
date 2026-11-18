@@ -1,6 +1,7 @@
 //! `Command::PlaceDirective` and `Command::UpdateDirective` (#2420): a
 //! Blanket, Compile Mask or Differential Pair directive placed or edited as
-//! one undo step.
+//! one undo step. `Command::SetNoErcRules` (#1699) edits a No-ERC
+//! directive's rule list the same way.
 
 use crate::*;
 use signex_types::schematic::SchDirective;
@@ -28,6 +29,9 @@ impl Engine {
         before: SchematicSheet,
         cmd: Command,
     ) -> Result<CommandResult, EngineError> {
+        if let Command::SetNoErcRules { id, rules } = cmd {
+            return self.exec_set_no_erc_rules(before, id, rules);
+        }
         // An update is recorded as a typing run: consecutive edits of one
         // directive share one undo step (`Engine::end_field_edit_run`).
         let (semantic, run) = match cmd {
@@ -70,6 +74,33 @@ impl Engine {
             Some(id) => self.record_field_edit(before, patch_pair, id, DIRECTIVE_RUN_KEY),
             None => self.record_history(before, patch_pair),
         }
+        Ok(CommandResult::changed(patch_pair))
+    }
+
+    /// `Command::SetNoErcRules` (#1699): one undo step per change.
+    fn exec_set_no_erc_rules(
+        &mut self,
+        before: SchematicSheet,
+        id: uuid::Uuid,
+        rules: Vec<String>,
+    ) -> Result<CommandResult, EngineError> {
+        let Some(slot) = self
+            .document
+            .no_erc_directives
+            .iter_mut()
+            .find(|d| d.uuid == id)
+        else {
+            return Err(EngineError::DirectiveNotFound { kind: "No ERC", id });
+        };
+        if slot.rules == rules {
+            return Ok(CommandResult::unchanged());
+        }
+        slot.rules = rules;
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::NO_ERC_DIRECTIVES,
+        };
+        self.record_history(before, patch_pair);
         Ok(CommandResult::changed(patch_pair))
     }
 }
