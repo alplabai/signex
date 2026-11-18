@@ -26,6 +26,7 @@ fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
     WireWidths {
         class_styles: Some(styles),
         defaults: Default::default(),
+        designator_standard: None,
     }
 }
 
@@ -235,6 +236,7 @@ fn a_project_wire_width_widens_the_hit_area_and_the_box() {
             wire_width_mm: 2.0,
             ..signex_types::schematic::SchematicDefaults::BUILT_IN
         },
+        designator_standard: None,
     };
     let none = Designators::new();
     let hit = |widths| hit_test::hit_test_styled(&sheet, &none, 30.0, 11.5, widths);

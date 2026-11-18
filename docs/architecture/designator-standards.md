@@ -99,9 +99,26 @@ it (`QAC1`): annotation, the duplicate-designator ERC check, Re-prefix, Find
 Similar and every other tool work on the stored form, and each code counts on
 its own (`QAC1`, `QAC2` beside `Q1`). The sign is added only where a reference
 is shown or exported, by one helper,
-`signex_types::designator::display_reference`: the schematic canvas and the
-schematic outputs built from the export scope (PDF, SVG, print preview, BOM,
-netlist, ERC report).
+`signex_types::designator::display_reference`:
+
+- the schematic canvas, where the reference field is also boxed and hit on
+  the drawn text;
+- the schematic outputs built from the export scope (PDF, SVG, print preview,
+  BOM, netlist, ERC report);
+- the PCB canvas designators (`PcbSnapshot::with_designator_standard`);
+- the board outputs, written from a copy of the board whose footprint
+  references and designator texts are signed
+  (`signex_output::show_board_references`): pick and place, IPC-D-356, the
+  legend text on the Gerbers, the board PDF and the board reports. An
+  IPC-D-356 designator field holds 6 characters, so `-QAC123` is cut there.
+  The IPC-2581 and ODB++ writers (PR #2499) are not on trunk yet and do not
+  sign yet.
+
+The PCB selection index still boxes a designator on its stored text.
+
+Going the other way, `stored_reference` drops a `-` the user types in front of
+a reference (as it is shown) when the edit is committed, so `-QAC9` is stored
+as `QAC9` and annotation keeps working.
 
 Re-prefix counts a full code and its main-class letter as issued for each
 other, so a project can move between the single-letter and the full-code

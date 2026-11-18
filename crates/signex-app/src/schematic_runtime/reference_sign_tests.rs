@@ -56,3 +56,39 @@ fn full_class_codes_draw_with_the_product_aspect_sign_and_stay_stored_bare() {
         assert_eq!(drawn_references(&sheet, standard), ["QAC1", "RAC2"]);
     }
 }
+
+/// The reference field is boxed on the drawn `-QAC1`, so its box is wider
+/// than the stored `QAC1`'s by the sign, and a click on the sign hits it.
+#[test]
+fn the_reference_box_measures_the_drawn_text() {
+    use signex_types::schematic::{HAlign, SelectedItem, SelectedKind, TextProp, VAlign};
+
+    use super::{Designators, WireWidths, selection::selection_bounds};
+
+    let mut sheet = sheet();
+    sheet.symbols.truncate(1);
+    sheet.symbols[0].ref_text = Some(TextProp {
+        position: Point::new(20.0, 15.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        font_family: None,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Bottom,
+        hidden: false,
+    });
+    let field = [SelectedItem::new(sheet.symbols[0].uuid, SelectedKind::SymbolRefField)];
+    let width = |standard| {
+        let widths = WireWidths {
+            designator_standard: standard,
+            ..WireWidths::default()
+        };
+        let Some(bounds) = selection_bounds(&sheet, &field, &Designators::new(), widths) else {
+            panic!("the reference field has a box");
+        };
+        bounds.max_x - bounds.min_x
+    };
+    let stored = width(None);
+    let drawn = width(Some(DesignatorStandard::Iec81346_2Full));
+    assert!(drawn > stored, "{drawn} > {stored}");
+    assert_eq!(width(Some(DesignatorStandard::Iec81346_2)), stored);
+}

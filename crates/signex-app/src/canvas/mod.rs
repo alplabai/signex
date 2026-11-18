@@ -649,6 +649,7 @@ impl CanvasViewPrefs<'_> {
         crate::schematic_runtime::WireWidths {
             class_styles: Some(self.wire_class_styles),
             defaults: self.schematic_defaults,
+            designator_standard: self.designator_standard,
         }
     }
 

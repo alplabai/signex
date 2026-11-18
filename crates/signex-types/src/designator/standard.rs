@@ -69,6 +69,18 @@ pub fn display_reference(standard: Option<DesignatorStandard>, reference: &str) 
     Cow::Owned(format!("-{reference}"))
 }
 
+/// The reference to store for text a user typed: the inverse of
+/// [`display_reference`]. Under [`DesignatorStandard::Iec81346_2Full`] a
+/// leading product-aspect sign (`-QAC1`, as the reference is shown) is
+/// dropped, so annotation keeps working on `QAC1`; any other standard
+/// stores the text as typed.
+pub fn stored_reference(standard: Option<DesignatorStandard>, typed: &str) -> &str {
+    if !standard.is_some_and(DesignatorStandard::shows_product_aspect_sign) {
+        return typed;
+    }
+    typed.trim_start().strip_prefix('-').unwrap_or(typed)
+}
+
 impl std::fmt::Display for DesignatorStandard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
@@ -309,6 +321,20 @@ mod tests {
             assert_eq!(display_reference(Some(Iec81346_2Full), stored), stored);
         }
         assert!(matches!(display_reference(Some(Ieee315), "R1"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn a_typed_sign_is_stored_bare_only_under_the_full_codes_standard() {
+        use DesignatorStandard::*;
+        assert_eq!(stored_reference(Some(Iec81346_2Full), "-QAC1"), "QAC1");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), " -QAC1"), "QAC1");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), "QAC1"), "QAC1");
+        for standard in [None, Some(Ieee315), Some(Iec81346_2)] {
+            assert_eq!(stored_reference(standard, "-QAC1"), "-QAC1");
+        }
+        // What is shown is stored back unchanged.
+        let shown = display_reference(Some(Iec81346_2Full), "QAC7");
+        assert_eq!(stored_reference(Some(Iec81346_2Full), &shown), "QAC7");
     }
 
     #[test]

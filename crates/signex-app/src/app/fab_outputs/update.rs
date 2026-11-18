@@ -101,10 +101,12 @@ impl Signex {
         let (board_path, options) = (state.board.clone(), state.options.clone());
         let whole_panel = state.whole_panel;
         let folder = PathBuf::from(state.folder.trim());
+        // The copy the files are written from: designators as the project's
+        // standard shows them (#1416).
         let board = self
             .document_state
-            .board_engine(&board_path)
-            .map(|engine| engine.board().clone());
+            .pcb_board_shown(&board_path)
+            .map(std::borrow::Cow::into_owned);
         self.ui_state.fab_outputs_writes += 1;
         let generation = self.ui_state.fab_outputs_writes;
         let Some(state) = self.ui_state.fab_outputs.as_mut() else {

@@ -408,9 +408,10 @@ standard does not name (such as Generic, or a crystal under EN IEC 81346-2)
 uses the symbol's own letters. EN IEC 81346-2 uses its single-letter main
 classes. EN IEC 81346-2 (full codes) uses the three-letter class codes, for
 example `QAC` for a transistor, and each code is numbered on its own
-(`QAC1`, `QAC2`). The project stores `QAC1`; the canvas, the BOM, the
-netlist, the PDF and the other schematic outputs show it with the
-product-aspect sign, `-QAC1`. The letters and the pages of the standards they
+(`QAC1`, `QAC2`). The project stores `QAC1`; the schematic and PCB canvases,
+the BOM, the netlist, the PDF and the board and fabrication outputs show it
+with the product-aspect sign, `-QAC1`. Typing `-QAC9` as a reference stores
+`QAC9`. The letters and the pages of the standards they
 come from are listed in
 `docs/architecture/designator-standards.md`. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.

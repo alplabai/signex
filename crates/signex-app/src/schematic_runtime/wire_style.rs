@@ -108,6 +108,9 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
 pub struct WireWidths<'a> {
     pub class_styles: Option<&'a WireClassStyles>,
     pub defaults: SchematicDefaults,
+    /// The project's designator standard: a reference field is boxed on the
+    /// text the canvas draws (`-QAC1`, #1416), not the stored one.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 impl WireWidths<'_> {

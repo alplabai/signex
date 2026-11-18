@@ -6,6 +6,7 @@
 //! knowing about standards. The document is never touched.
 
 use signex_types::designator::{DesignatorStandard, display_reference};
+use signex_types::pcb::PcbBoard;
 use signex_types::schematic::SchematicSheet;
 
 use crate::ExportContext;
@@ -32,6 +33,24 @@ impl ExportContext {
             .flat_map(|net| net.terminals.iter_mut());
         for terminal in terminals {
             terminal.reference = display_reference(standard, &terminal.reference).into_owned();
+        }
+    }
+}
+
+/// The board-output copy of [`ExportContext::show_references_for`]: every
+/// footprint's reference and its designator text (the `Reference`
+/// property) as `standard` shows them, so the board PDF, the reports and
+/// the fabrication files (centroid, IPC-D-356, legend text) print `-QAC1`.
+/// The caller passes a copy of the board, never the document's own.
+pub fn show_board_references(board: &mut PcbBoard, standard: Option<DesignatorStandard>) {
+    if !standard.is_some_and(DesignatorStandard::shows_product_aspect_sign) {
+        return;
+    }
+    let key = pcb_geom::BoardTextField::Designator.key();
+    for footprint in &mut board.footprints {
+        footprint.reference = display_reference(standard, &footprint.reference).into_owned();
+        for property in footprint.properties.iter_mut().filter(|p| p.key == key) {
+            property.value = display_reference(standard, &property.value).into_owned();
         }
     }
 }

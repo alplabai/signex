@@ -51,6 +51,7 @@ pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
     preview_raster_size,
 };
+pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 

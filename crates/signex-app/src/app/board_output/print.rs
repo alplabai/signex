@@ -121,7 +121,7 @@ impl Signex {
         board: &Path,
         options: &BoardPrintOptions,
     ) -> Result<BoardPdfOutput, Option<Translatable>> {
-        let pcb = self.document_state.pcb_board(board).ok_or(None)?;
+        let pcb = self.document_state.pcb_board_shown(board).ok_or(None)?;
         let title = self
             .document_state
             .tabs
@@ -129,7 +129,7 @@ impl Signex {
             .find(|tab| tab.path.as_path() == board)
             .map_or_else(|| super::file_title(board), |tab| tab.title.clone());
         let text = print_text(&self.ui_state.i18n, &title);
-        board_pdf(pcb, options, &text)
+        board_pdf(&pcb, options, &text)
             .map_err(|e| Some(Translatable::new(ids::BOARD_PRINT_FAILED).arg("why", e.to_string())))
     }
 

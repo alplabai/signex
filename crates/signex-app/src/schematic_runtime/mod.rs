@@ -617,12 +617,17 @@ fn collect_item_bounds_with(
             .as_ref()
             .filter(|p| !p.hidden && symbol.draws_reference())
         {
+            // Boxed on the text the canvas draws (#1200, #1416).
+            let drawn = signex_types::designator::display_reference(
+                widths.designator_standard,
+                designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+            );
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb_with(
                     Some(WidthSources::of(snapshot)),
                     TextField::SymbolReference,
-                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    &drawn,
                     ref_text,
                     symbol,
                     document_family,

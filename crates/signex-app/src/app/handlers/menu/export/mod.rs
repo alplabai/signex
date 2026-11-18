@@ -736,6 +736,9 @@ fn isolate_undeclared_current(
         }
         .for_placement(placement, ""),
     ];
+    // The page read from the engine prints as the scope's do (#1416); the
+    // rest are already shown, and showing is idempotent.
+    ctx.show_references_for(document_state.designator_standard_for(source));
     ctx.current_sheet = Some(source.to_path_buf());
     true
 }

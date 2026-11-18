@@ -134,7 +134,7 @@ impl SchematicCanvas<'_> {
                 && b.sheet.matches(
                     revision,
                     class_revision,
-                    &widths.defaults,
+                    &widths,
                     &self.designators,
                 )
         });
@@ -142,7 +142,7 @@ impl SchematicCanvas<'_> {
             halos.generations += 1;
             halos.base = Some(BaseBoxes {
                 generation: halos.generations,
-                sheet: SheetKey::new(revision, class_revision, widths.defaults, &self.designators),
+                sheet: SheetKey::new(revision, class_revision, &widths, &self.designators),
                 selected: self.selected.clone(),
                 boxes: selection_boxes(base_sheet, &self.selected, &self.designators, widths),
             });
