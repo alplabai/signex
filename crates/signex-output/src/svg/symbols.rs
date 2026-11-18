@@ -169,57 +169,6 @@ pub(super) fn push_symbol_pins(
     }
 }
 
-/// A symbol field's drawn text (#1596): its markup evaluated with
-/// `eval_ctx` (the part's fields over the sheet's variables), then its
-/// `${TOKEN}` special strings resolved. A power port's value is a net name
-/// and resolves no special string. The stored field never changes.
-pub(super) fn symbol_field_text(
-    text: &str,
-    is_power: bool,
-    eval_ctx: &ExpressionEvalContext<'_>,
-    special: Option<&crate::SubstitutionContext<'_>>,
-) -> String {
-    let evaluated = normalize_standard_text_with_ctx(text, eval_ctx);
-    match special {
-        Some(special) if !is_power => crate::resolve(&evaluated, special),
-        _ => evaluated,
-    }
-}
-
-/// A symbol's drawn value: an `=` expression evaluated through the parts of
-/// its sheet and the variables (#1986), with its unit; else
-/// [`symbol_field_text`]. A power port's value is a net name and is never
-/// evaluated.
-pub(super) fn symbol_value_text(
-    symbols: &[Symbol],
-    sym: &Symbol,
-    eval_ctx: &ExpressionEvalContext<'_>,
-    special: Option<&crate::SubstitutionContext<'_>>,
-) -> String {
-    if !sym.is_power
-        && let Some(value) = crate::resolve_part_field(symbols, sym, "Value", special)
-    {
-        return value;
-    }
-    symbol_field_text(&sym.value, sym.is_power, eval_ctx, special)
-}
-
-pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
-    let mut vars = sym.fields.clone();
-    for prop in &sym.custom_properties {
-        if !prop.key.is_empty() {
-            vars.insert(prop.key.clone(), prop.value.clone());
-        }
-    }
-    vars.entry("refdes".to_string())
-        .or_insert_with(|| sym.reference.clone());
-    vars.entry("reference".to_string())
-        .or_insert_with(|| sym.reference.clone());
-    vars.entry("value".to_string())
-        .or_insert_with(|| sym.value.clone());
-    vars
-}
-
 #[cfg(test)]
 #[path = "symbols_tests.rs"]
 mod tests;

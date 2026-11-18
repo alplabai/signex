@@ -131,34 +131,15 @@ impl Engine {
             self.connectivity_revision = connectivity;
             return Ok(false);
         }
-        follow_renumbered_parts(&mut self.document.symbols, &before.symbols);
+        // A field expression naming a renumbered part follows it, through
+        // its uuid while it has no number (#1986).
+        signex_types::part_keys::follow_part_keys(&mut self.document.symbols, &before.symbols);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SymbolFieldsUpdated,
             document: DocumentPatch::SYMBOLS,
         };
         self.record_grouped_history(before, patch_pair, scope.undo_group);
         Ok(true)
-    }
-}
-
-/// A field expression naming a renumbered part follows it (#1986):
-/// `= R1.Value` becomes `= R5.Value` when R1 is renumbered to R5 on this
-/// sheet. A designator reset to `R?` names no part, so it renames nothing.
-fn follow_renumbered_parts(symbols: &mut [Symbol], before: &[Symbol]) {
-    let numbered = |reference: &str| !reference.is_empty() && !reference.contains('?');
-    let renames: HashMap<String, String> = symbols
-        .iter()
-        .zip(before)
-        .filter(|(now, was)| {
-            now.reference != was.reference && numbered(&now.reference) && numbered(&was.reference)
-        })
-        .map(|(now, was)| (was.reference.clone(), now.reference.clone()))
-        .collect();
-    if renames.is_empty() {
-        return;
-    }
-    for symbol in symbols.iter_mut() {
-        signex_types::part_fields::rename_part_references_in(symbol, &renames);
     }
 }
 
@@ -570,5 +551,31 @@ mod tests {
         assert_eq!(symbols[1].value, format!("= {renamed}.Value * 2"));
         engine.undo().unwrap();
         assert_eq!(engine.document().symbols[1].value, "= R5.Value * 2");
+    }
+
+    /// #1986 review: Reset Designators then Annotate keeps `= R5.Value` on
+    /// the part it named, not on whichever part is numbered R5 afterwards.
+    #[test]
+    fn a_field_reference_follows_its_part_through_reset_then_annotate() {
+        let mut sheet = test_sheet();
+        let mut other = symbol("R1", 0.0);
+        other.value = "2kΩ".to_string();
+        let mut source = symbol("R5", 1.0);
+        source.value = "1kΩ".to_string();
+        let source_id = source.uuid;
+        let mut reader = symbol("R7", 2.0);
+        reader.value = "= R5.Value * 2".to_string();
+        let reader_id = reader.uuid;
+        sheet.symbols.extend([other, source, reader]);
+        let mut engine = Engine::new(sheet).unwrap();
+        for mode in [AnnotateMode::ResetOnly, AnnotateMode::Incremental] {
+            engine
+                .annotate_with_seed(mode, &mut HashMap::new(), AnnotateOrder::default())
+                .unwrap();
+        }
+        let symbols = &engine.document().symbols;
+        let renamed = &symbols.iter().find(|s| s.uuid == source_id).unwrap().reference;
+        let reader = symbols.iter().find(|s| s.uuid == reader_id).unwrap();
+        assert_eq!(reader.value, format!("= {renamed}.Value * 2"));
     }
 }

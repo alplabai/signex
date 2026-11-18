@@ -124,7 +124,7 @@ impl SchematicCanvas<'_> {
             return None;
         }
         let cam = self.camera();
-        let widths = self.prefs.wire_widths();
+        let widths = self.wire_widths();
         let class_revision = self.prefs.wire_class_revision;
         let now = selection_boxes(moving, &self.selected, &self.designators, widths);
 

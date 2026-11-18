@@ -16,6 +16,7 @@ pub mod bom;
 pub mod erc;
 mod expression;
 pub mod fab;
+pub mod field_value;
 mod markup_escape;
 pub mod netlist;
 pub mod pdf;
@@ -54,7 +55,8 @@ pub use preview::{
     preview_raster_size,
 };
 pub use reference_display::show_board_references;
-pub use substitution::{SubstitutionContext, resolve, resolve_part_field, resolve_text};
+pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
+pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 

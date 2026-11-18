@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 
 mod directives;
 mod drawings;
+mod drawn_value;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
@@ -641,12 +642,16 @@ fn collect_item_bounds_with(
             .as_ref()
             .filter(|p| !p.hidden && !symbol.is_power)
         {
+            // Boxed on the drawn text too (#1986): `20kΩ`, not `= 2 * R1.Value`.
+            let special = widths.special_strings;
+            let standard = widths.designator_standard;
+            let drawn = drawn_value::drawn_value(&snapshot.symbols, symbol, special, standard);
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
                 bbox: text_prop_aabb_with(
                     Some(WidthSources::of(snapshot)),
                     TextField::SymbolValue,
-                    &symbol.value,
+                    &drawn,
                     val_text,
                     symbol,
                     document_family,

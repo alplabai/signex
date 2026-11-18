@@ -122,7 +122,7 @@ impl SchematicCanvas<'_> {
                             &self.designators,
                             wx,
                             wy,
-                            self.prefs.wire_widths(),
+                            self.wire_widths(),
                         ) {
                             let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                             (sel, !sel)

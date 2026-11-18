@@ -100,8 +100,14 @@ same evaluator and the same model, one layer further in: the parts of the
 sheet (`PartFields`, names `<designator>.<field>`), then the sheet's and the
 project's variables. Before a part's expression is evaluated, every bare name
 that is one of its own fields is qualified with its key (`Value` in R2
-becomes `R2.Value`; an unannotated `R?` uses its uuid), so a single
-evaluation follows references across parts and a cycle between two parts is
-an `ExprError::Cycle`. Annotation rewrites `R1.` references after it
-renumbers a part (`rename_part_references`). The markup lookups stay text
+becomes `R2.Value`), so a single evaluation follows references across parts
+and a cycle between two parts is an `ExprError::Cycle`. The key is the
+designator while it names the part alone, else `_u<uuid hex>`
+(`signex_types::part_keys`); annotation and a designator edit call
+`follow_part_keys`, which rewrites every reference from each part's old key
+to its new one in the same undo step. The markup lookups stay text
 substitution over the same resolvers; there is no second evaluator.
+
+What a value shows is decided once, by `signex_output::shown_value`: the
+canvas, PDF, SVG, print preview, BOM and netlist call it; ERC and the Net
+Inspector read `part_fields::evaluated_value` (no page special strings).

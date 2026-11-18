@@ -17,8 +17,6 @@
 
 use std::collections::BTreeMap;
 
-use signex_types::part_fields::part_field_display;
-use signex_types::schematic::Symbol;
 use signex_types::variables::{
     FieldText, Layered, Resolver, TextTable, classify, display_text, variable_display,
 };
@@ -144,24 +142,6 @@ pub fn resolve_text(input: &str, ctx: &SubstitutionContext<'_>) -> String {
         }
         FieldText::Literal(literal) => resolve(literal, ctx),
     }
-}
-
-/// What `field` of `symbol` draws when it is an `=` expression (#1986): its
-/// value with its unit, through the parts of its sheet (`symbols`) and the
-/// sheet's and project's variables of `ctx`; its source when it does not
-/// evaluate. `None` for a literal field, which resolves as text.
-pub fn resolve_part_field(
-    symbols: &[Symbol],
-    symbol: &Symbol,
-    field: &str,
-    ctx: Option<&SubstitutionContext<'_>>,
-) -> Option<String> {
-    let Some(ctx) = ctx else {
-        return part_field_display(symbols, symbol, field, &[]);
-    };
-    let [sheet, project] = ctx.variable_tables();
-    let variables: [&dyn Resolver; 2] = [&sheet, &project];
-    part_field_display(symbols, symbol, field, &variables)
 }
 
 /// Replace every `${IDENT}` in `input` with its resolved value. Unknown

@@ -256,12 +256,12 @@ pub fn build_renderer_snapshot(
         // The value shows its special strings resolved and an `=` expression
         // evaluated; the stored value, which the editor shows, keeps the
         // source (#1596, #1986).
-        let value = match overrides.special_strings {
-            Some(special) => special.resolve_value(&snapshot.symbols, symbol),
-            None if symbol.is_power => symbol.value.clone(),
-            None => signex_output::resolve_part_field(&snapshot.symbols, symbol, "Value", None)
-                .unwrap_or_else(|| symbol.value.clone()),
-        };
+        let value = super::drawn_value::drawn_value(
+            &snapshot.symbols,
+            symbol,
+            overrides.special_strings,
+            overrides.designator_standard,
+        );
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(
                 symbol,

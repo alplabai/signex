@@ -24,6 +24,8 @@ pub(crate) mod transaction;
 #[cfg(test)]
 mod change_component_tests;
 #[cfg(test)]
+mod designator_follow_tests;
+#[cfg(test)]
 mod designator_in_tests;
 #[cfg(test)]
 mod directives_tests;

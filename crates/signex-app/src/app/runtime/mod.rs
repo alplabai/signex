@@ -313,6 +313,7 @@ impl Signex {
                 engine.document(),
                 details.selected_uuid,
                 &project,
+                self.document_state.designator_standard_for(&path),
             );
             self.document_state.panel_ctx.selection_info.extend(rows);
             if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
