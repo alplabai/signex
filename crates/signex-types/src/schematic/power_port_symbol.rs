@@ -41,6 +41,10 @@ const TRIANGLE_DEPTH_MM: f64 = 1.27;
 const GROUND_HALF_MM: f64 = 1.27;
 /// Depth of the earth hatch, mm.
 const EARTH_HATCH_MM: f64 = 0.762;
+/// Depth of the chassis tines, mm.
+const CHASSIS_TINE_MM: f64 = 0.762;
+/// Sideways splay of the two outer chassis tines, mm.
+const CHASSIS_SPLAY_MM: f64 = 0.4572;
 /// Height of the wave head's offset and swing, mm.
 const WAVE_OFFSET_MM: f64 = 0.508;
 const WAVE_SWING_MM: f64 = 0.4;
@@ -57,11 +61,12 @@ pub enum PowerPortStyle {
     PowerGround,
     SignalGround,
     Earth,
+    Chassis,
 }
 
 impl PowerPortStyle {
     /// Every style, in the order the Properties panel lists them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Bar,
         Self::Arrow,
         Self::Wave,
@@ -69,6 +74,7 @@ impl PowerPortStyle {
         Self::PowerGround,
         Self::SignalGround,
         Self::Earth,
+        Self::Chassis,
     ];
 
     /// The style a `lib_id` names. Anything unrecognised, such as
@@ -76,7 +82,10 @@ impl PowerPortStyle {
     #[must_use]
     pub fn of(lib_id: &str) -> Self {
         let lid = lib_id.to_lowercase();
-        if lid.contains("gndref") {
+        // Chassis first: `power:GND_Chassis` is a chassis port, not a GND.
+        if lid.contains("chassis") {
+            Self::Chassis
+        } else if lid.contains("gndref") {
             Self::SignalGround
         } else if lid.contains("earth") {
             Self::Earth
@@ -104,10 +113,12 @@ impl PowerPortStyle {
             Self::PowerGround => "Power Ground",
             Self::SignalGround => "Signal Ground",
             Self::Earth => "Earth",
+            Self::Chassis => "Chassis",
         }
     }
 
-    /// The `power:<tag>` keyword that selects this style.
+    /// The `power:<tag>` keyword that selects this style. Saved sheets carry
+    /// `power:<tag>` as the port's `lib_id`, so a tag never changes.
     #[must_use]
     pub fn lib_tag(self) -> &'static str {
         match self {
@@ -118,6 +129,7 @@ impl PowerPortStyle {
             Self::PowerGround => "GND",
             Self::SignalGround => "GNDREF",
             Self::Earth => "Earth",
+            Self::Chassis => "Chassis",
         }
     }
 
@@ -125,7 +137,10 @@ impl PowerPortStyle {
     /// rather than rising above it.
     #[must_use]
     pub fn hangs_down(self) -> bool {
-        matches!(self, Self::PowerGround | Self::SignalGround | Self::Earth)
+        matches!(
+            self,
+            Self::PowerGround | Self::SignalGround | Self::Earth | Self::Chassis
+        )
     }
 }
 
@@ -197,6 +212,23 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
             }
             out
         }
+        // A bar with three tines: the outer two splay out, the middle one
+        // drops straight, so it never reads as the earth rake.
+        PowerPortStyle::Chassis => {
+            let tip = -top - CHASSIS_TINE_MM;
+            vec![
+                line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top)),
+                line(
+                    (-GROUND_HALF_MM, -top),
+                    (-GROUND_HALF_MM - CHASSIS_SPLAY_MM, tip),
+                ),
+                line((0.0, -top), (0.0, tip)),
+                line(
+                    (GROUND_HALF_MM, -top),
+                    (GROUND_HALF_MM + CHASSIS_SPLAY_MM, tip),
+                ),
+            ]
+        }
         PowerPortStyle::Wave => {
             let y = top + WAVE_OFFSET_MM;
             vec![Graphic::Polyline {
@@ -229,6 +261,7 @@ fn head_reach_mm(style: PowerPortStyle) -> f64 {
         PowerPortStyle::Circle => stem + 2.0 * HEAD_HALF_MM,
         PowerPortStyle::Wave => stem + WAVE_OFFSET_MM + WAVE_SWING_MM,
         PowerPortStyle::Earth => stem + EARTH_HATCH_MM,
+        PowerPortStyle::Chassis => stem + CHASSIS_TINE_MM,
     }
 }
 
@@ -390,6 +423,81 @@ mod tests {
         assert_eq!(PowerPortStyle::of("power:arrow"), PowerPortStyle::Arrow);
         assert_eq!(PowerPortStyle::of("power:wave"), PowerPortStyle::Wave);
         assert_eq!(PowerPortStyle::of("power:circle"), PowerPortStyle::Circle);
+        for lib_id in ["power:Chassis", "power:GND_Chassis", "power:chassis"] {
+            assert_eq!(
+                PowerPortStyle::of(lib_id),
+                PowerPortStyle::Chassis,
+                "{lib_id}"
+            );
+        }
+    }
+
+    /// #1284 - saved sheets carry `power:Chassis`; the tag is pinned.
+    #[test]
+    fn the_chassis_tag_is_pinned() {
+        assert_eq!(PowerPortStyle::Chassis.lib_tag(), "Chassis");
+        assert_eq!(PowerPortStyle::Chassis.label(), "Chassis");
+        assert!(PowerPortStyle::Chassis.hangs_down());
+    }
+
+    /// #1284 - the chassis head is a bar with three tines, the outer two
+    /// splayed outward, so it differs from the earth rake.
+    #[test]
+    fn the_chassis_head_is_a_bar_with_splayed_tines() {
+        let head = power_port_head(PowerPortStyle::Chassis);
+        let segs: Vec<((f64, f64), (f64, f64))> = head
+            .iter()
+            .map(|g| match g {
+                Graphic::Polyline { points, .. } => {
+                    assert_eq!(points.len(), 2);
+                    ((points[0].x, points[0].y), (points[1].x, points[1].y))
+                }
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        let top = -GROUND_STEM_MM;
+        let tip = top - CHASSIS_TINE_MM;
+        let half = GROUND_HALF_MM;
+        let splay = CHASSIS_SPLAY_MM;
+        let want = [
+            ((-half, top), (half, top)),
+            ((-half, top), (-half - splay, tip)),
+            ((0.0, top), (0.0, tip)),
+            ((half, top), (half + splay, tip)),
+        ];
+        assert_eq!(segs, want);
+        assert_ne!(
+            format!("{head:?}"),
+            format!("{:?}", power_port_head(PowerPortStyle::Earth))
+        );
+        let reach = head_reach_mm(PowerPortStyle::Chassis);
+        assert!((reach - GROUND_STEM_MM - CHASSIS_TINE_MM).abs() < 1e-12);
+    }
+
+    /// #1284 - a chassis port saves as `power:Chassis` and reloads as the
+    /// chassis style, byte-identical on re-save.
+    #[test]
+    fn a_chassis_port_round_trips_through_the_file() {
+        use crate::format::SnxSchematic;
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: uuid::Uuid::from_u128(1284),
+                lib_id: "power:Chassis".into(),
+                value: "Chassis".into(),
+                is_power: true,
+                unit: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let text = SnxSchematic::new(sheet).write_string().unwrap();
+        let back = SnxSchematic::parse(&text).unwrap().sheet;
+        assert_eq!(back.symbols[0].lib_id, "power:Chassis");
+        assert_eq!(
+            PowerPortStyle::of(&back.symbols[0].lib_id),
+            PowerPortStyle::Chassis
+        );
+        assert_eq!(SnxSchematic::new(back).write_string().unwrap(), text);
     }
 
     #[test]

@@ -86,6 +86,7 @@ define_ids! {
     PROPERTIES_POWER_STYLE_POWER_GROUND = "properties-power-style-power-ground";
     PROPERTIES_POWER_STYLE_SIGNAL_GROUND = "properties-power-style-signal-ground";
     PROPERTIES_POWER_STYLE_EARTH = "properties-power-style-earth";
+    PROPERTIES_POWER_STYLE_CHASSIS = "properties-power-style-chassis";
     PROPERTIES_PHYSICAL_NAME = "properties-physical-name";
     PROPERTIES_POWER_NET = "properties-power-net";
     PROPERTIES_HIGH_SPEED = "properties-high-speed";
