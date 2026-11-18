@@ -1,13 +1,13 @@
-//! Graphite button looks: `primary` fill, copper accent fill, ghost. All use
-//! the button radius; the dialog kit picks them for Graphite themes only.
+//! Graphite button looks: `primary` fill and ghost. Both use the button
+//! radius; the dialog kit picks them for Graphite themes only.
 
 use iced::widget::button;
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 
 use super::radii::Radii;
+use super::ti;
 use super::tokens::{self, Overlay, composite_over, resolve};
-use super::{accent_button, ti};
 
 fn fill(c: Color) -> Option<Background> {
     Some(Background::Color(c))
@@ -40,18 +40,6 @@ pub fn primary_button(
         text_color: ink,
         border: rounded(),
         ..button::Style::default()
-    }
-}
-
-/// [`accent_button`] with the Graphite button radius.
-pub fn accent_button_rounded(
-    tokens: &ThemeTokens,
-) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let base = accent_button(tokens);
-    move |theme: &Theme, status: button::Status| {
-        let mut style = base(theme, status);
-        style.border.radius = Radii::GRAPHITE.button.into();
-        style
     }
 }
 

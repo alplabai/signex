@@ -122,7 +122,6 @@ fn panel_rows_show_their_panel_and_check_it() {
         ("Properties", PanelKind::Properties),
         ("ERC", PanelKind::Erc),
         ("Messages", PanelKind::Messages),
-        ("Signex AI", PanelKind::SignexAi),
         ("Layers", PanelKind::Layers),
     ] {
         let mut app = one_symbol_selected();

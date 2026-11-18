@@ -74,8 +74,6 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
-    /// Signex AI panel mode; view-only, kept across context rebuilds.
-    pub signal_mode: super::signal::SignalMode,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).

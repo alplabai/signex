@@ -268,12 +268,6 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         panel_item(
             ctx,
-            ids::PANELS_KIND_SIGNEX_AI,
-            PanelKind::SignexAi,
-            MenuMessage::OpenSignexAiPanel,
-        ),
-        panel_item(
-            ctx,
             ids::PANELS_KIND_LAYERS,
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
