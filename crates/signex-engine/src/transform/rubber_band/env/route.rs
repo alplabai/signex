@@ -95,9 +95,8 @@ impl Env {
         if single_target && !plain && !probe.stationary_pin {
             self.carry_no_connects(at, group[0].new, &mut probe, out);
         }
-        // A child-sheet pin is anchored to the wire it sits on, interior or end,
-        // and so is a point a dragged wire carries.
-        let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin || m.wire.is_some());
+        // A child-sheet pin is anchored to the wire it sits on, interior or end.
+        let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin);
         // A wire end on a pin is a connection; a pin tip on a pin tip is not.
         let pin_held = probe.stationary_pin && wire.is_some();
         // A locked wire is never stretched: it keeps its place and the carried
@@ -118,6 +117,12 @@ impl Env {
             || self.holds_the_tip(at, &probe, !attached.is_empty());
         if !anchored && single_target && self.try_follow(at, &attached, new, out) {
             self.carry_dots(&probe.junctions, new, out);
+            return;
+        }
+        // A point a dragged wire carries that another wire passes through with
+        // no dot was no connection there (#107): a new path ending on it would
+        // make one through a T dot, so the contact is left as the move left it.
+        if wire.is_some() && probe.interior && probe.junctions.is_empty() {
             return;
         }
         self.add_paths(group, &attached, &skip, out);
