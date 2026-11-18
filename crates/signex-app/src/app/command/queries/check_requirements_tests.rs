@@ -202,8 +202,8 @@ fn a_baseline_of_another_check_is_refused() {
 #[test]
 fn parts_and_cost_are_checked_on_the_closed_sheets_parts() {
     let dir = tempfile::tempdir().unwrap();
-    write_child_with_parts(&dir);
     let mut app = project_app(&dir);
+    write_child_with_parts(&dir);
     set_requirements(
         &mut app,
         json!([
