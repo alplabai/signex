@@ -1274,7 +1274,8 @@ pub(crate) fn check_closure_oracle(
     // A selected wire keeps its joins as it moves and makes new ones where it
     // lands (`wire_contacts`): it bridges its net before the move and its net
     // after the plain move.
-    stable.extend(carried_wires(before, plain, after));
+    let carried = carried_wires(before, plain, after);
+    stable.extend(carried.iter().copied());
     let (b, p, r) = (
         items_per_net(before, &stable),
         items_per_net(plain, &stable),
@@ -1342,6 +1343,9 @@ pub(crate) fn check_closure_oracle(
                     nets[*i]
                         .iter()
                         .filter(|m| !moved_pins.contains(m))
+                        // A carried wire joins what it carries; the warned pin
+                        // is judged on what it joins itself.
+                        .filter(|m| !matches!(m, Item::Wire(id) if carried.contains(id)))
                         .cloned()
                         .collect()
                 })
