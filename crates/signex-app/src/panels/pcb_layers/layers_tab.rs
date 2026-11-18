@@ -248,7 +248,7 @@ fn all_layers_row<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Element<'a,
 /// Whether the row of `layer` named `label` is listed: it passes the search
 /// and, with Used On, the board uses it.
 fn listed(panel: &PcbLayersPanel, ui: &LayersPanelUi, layer: PcbLayer, label: &Localized) -> bool {
-    panel.lists(layer) && ui.matches(label)
+    panel.lists(layer) && ui.matches(&panel.i18n, label)
 }
 
 fn copper_rows<'a>(
@@ -313,7 +313,7 @@ fn pair_rows<'a>(
     let mut rows: Vec<Element<'a, PanelMsg>> = Vec::new();
     for pair in LayerPair::ALL {
         let name = t!(i18n, ids::PCB_LAYERS_PAIR, "pair" => pair_token(pair));
-        if !ui.matches(&name) {
+        if !ui.matches(i18n, &name) {
             continue;
         }
         let Some((top, bottom)) = pair.layers() else {
@@ -434,11 +434,11 @@ fn other_rows<'a>(
     let drill = PcbLayer::Technical(TechnicalLayer::DrillDrawing);
     rows.extend(plain_row(panel, ui, drill, ctx));
     let guide = t!(i18n, ids::PCB_LAYERS_DRILL_GUIDE);
-    if panel.used.is_none() && ui.matches(&guide) {
+    if panel.used.is_none() && ui.matches(i18n, &guide) {
         rows.push(greyed_row(panel, guide, ctx));
     }
     let multi = t!(i18n, ids::PCB_LAYER_MULTI_LAYER);
-    if ui.matches(&multi) {
+    if ui.matches(i18n, &multi) {
         let toggled = PanelMsg::PcbLayers(PcbViewMsg::MultiLayerVisibilityToggled);
         let hidden = panel.multi_layer_hidden;
         let colour = layer_style::multi_layer_colour();
@@ -509,7 +509,7 @@ fn system_rows<'a>(
         .into_iter()
         .filter_map(|token| {
             let label = t!(i18n, ids::PCB_LAYERS_SYSTEM, "row" => token);
-            if panel.used.is_some() || !ui.matches(&label) {
+            if panel.used.is_some() || !ui.matches(i18n, &label) {
                 return None;
             }
             let row = match token {

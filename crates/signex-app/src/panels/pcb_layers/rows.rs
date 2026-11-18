@@ -10,7 +10,7 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget}
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{BoardPaint, DIMMED_ALPHA};
 use signex_types::pcb_layer::PcbLayer;
-use signex_widgets::{Label, button, raw, text};
+use signex_widgets::{Label, button, text};
 
 use super::{LayersPanelMsg, LayersPanelUi, PcbLayersPanel, SP, TS, eye_handle, row_button};
 use crate::app::PcbViewMsg;
@@ -200,7 +200,8 @@ pub(super) fn layer_row<'a>(
     let muted = resolve(tokens).ink3;
     let mut name = row![].spacing(SP.s).align_y(Alignment::Center);
     if let Some(number) = number {
-        name = name.push(text(raw(number.to_string())).size(TS.caption).color(muted));
+        let number = t!(panel.i18n, ids::PCB_LAYERS_COPPER_NUMBER, "number" => number);
+        name = name.push(text(number).size(TS.caption).color(muted));
     }
     name = name.push(text(label).size(TS.body).color(ink).width(Length::Fill));
     if let Some(kind) = kind {

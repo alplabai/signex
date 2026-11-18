@@ -20,6 +20,8 @@ pcb-layers-system-colors = System Colors
 # The type column of a copper row.
 pcb-layers-type-signal = Signal
 pcb-layers-type-plane = Plane
+# The copper number in front of a copper row's name.
+pcb-layers-copper-number = { $number }
 # The column headers of the Component Layer Pairs table.
 pcb-layers-pair-top = Top
 pcb-layers-pair-layer = Layer

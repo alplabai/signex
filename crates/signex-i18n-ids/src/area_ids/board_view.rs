@@ -16,6 +16,7 @@ define_ids! {
     PCB_LAYERS_SYSTEM_COLORS = "pcb-layers-system-colors";
     PCB_LAYERS_TYPE_SIGNAL = "pcb-layers-type-signal";
     PCB_LAYERS_TYPE_PLANE = "pcb-layers-type-plane";
+    PCB_LAYERS_COPPER_NUMBER = "pcb-layers-copper-number";
     PCB_LAYERS_PAIR_TOP = "pcb-layers-pair-top";
     PCB_LAYERS_PAIR_LAYER = "pcb-layers-pair-layer";
     PCB_LAYERS_PAIR_BOTTOM = "pcb-layers-pair-bottom";

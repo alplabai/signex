@@ -265,14 +265,14 @@ impl LayersPanelUi {
         true
     }
 
-    /// Whether a row named `label` passes the search.
-    pub fn matches(&self, label: &impl std::fmt::Display) -> bool {
+    /// Whether a row named `label` passes the search, both sides folded
+    /// with the UI language's case rules.
+    pub fn matches(&self, i18n: &I18n, label: &impl std::fmt::Display) -> bool {
         let query = self.search.trim();
         query.is_empty()
-            || label
-                .to_string()
-                .to_lowercase()
-                .contains(&query.to_lowercase())
+            || i18n
+                .fold_for_search(&label.to_string())
+                .contains(&i18n.fold_for_search(query))
     }
 }
 
