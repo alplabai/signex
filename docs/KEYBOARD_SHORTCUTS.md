@@ -238,7 +238,8 @@ as usual. Neither adds an undo step; only a committed segment does.
 `copy_attributes_or_add_vertex` (Altium profile: `Insert`) fixes a vertex at the
 cursor while a wire, bus, line or polyline is drawn, as a click there would, and
 the run goes on; mid rectangle, circle or arc it says so in Messages and does
-nothing; outside a draw it copies attributes (#1669).
+nothing. With any other tool it copies attributes, also while Measure, a sheet
+symbol or a directive region has its first point placed (#1669).
 
 `cycle_wiring_mode` (Altium profile: `Ctrl+Space`) steps how the wires that
 follow a moved part bend in a drag and in click-click move: Auto (the corner
