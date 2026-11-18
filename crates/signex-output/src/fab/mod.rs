@@ -64,8 +64,9 @@ pub struct FabOptions {
 /// How the ODB++ job is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OdbForm {
-    /// A folder `<name>-odb/` holding the job tree; each file's name is
-    /// its path under the output folder, `/` separated.
+    /// A folder `<name>-odb/` holding the archive's tree, the job folder
+    /// named by the job name; each file's name is its path under the
+    /// output folder, `/` separated.
     Directory,
     /// One uncompressed tar archive, `<name>-odb.tar`.
     Archive,
@@ -345,17 +346,19 @@ fn drill_files(
     }
 }
 
-/// The ODB++ job as one archive, or as one file per job file under the
-/// `<name>-odb/` folder.
+/// The ODB++ job as one archive, or as one file per job file under
+/// `<name>-odb/<job>/`: the archive's tree, whose job folder is the job
+/// name a reader takes, an entity name.
 fn odb_files(form: OdbForm, name: &str, job: Vec<odb::JobFile>, files: &mut Vec<FabFile>) {
+    let job_name = odb::job_name(name);
     match form {
         OdbForm::Archive => files.push(FabFile {
             name: format!("{name}-odb.tar"),
             kind: FabFileKind::Odb,
-            contents: odb::archive(&odb::job_name(name), &job),
+            contents: odb::archive(&job_name, &job),
         }),
         OdbForm::Directory => files.extend(job.into_iter().map(|(path, contents)| FabFile {
-            name: format!("{name}-odb/{path}"),
+            name: format!("{name}-odb/{job_name}/{path}"),
             kind: FabFileKind::Odb,
             contents,
         })),

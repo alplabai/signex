@@ -19,14 +19,14 @@ use super::collect;
 use super::documents::{board_marks, collect_documents, used_layers};
 use super::drill::{self, DrillFile, Hole};
 use super::frame::FabFrame;
-use super::layers::{CopperStack, FabLayer, Face};
+use super::layers::{CopperStack, FabLayer};
 use super::marks::Mark;
 use super::notes::Tally;
 use super::parts::Parts;
 use super::roles::board_stack;
 use eda::{CopperFeatures, Eda};
 use features::{Features, round_symbol};
-use matrix::{MatrixLayer, MatrixPlan, Source, component_layer, write_matrix};
+use matrix::{MatrixPlan, Source, write_matrix};
 use text::{entity_name, um};
 
 pub(crate) use tar::archive;
@@ -72,7 +72,7 @@ pub(crate) fn write_odb(
             parts
                 .placed
                 .iter()
-                .any(|(f, package)| package.is_some() && Side::of_layer(&f.layer) == side)
+                .any(|(_, f, package)| package.is_some() && Side::of_layer(&f.layer) == side)
         }),
         v_score: images.contains_key(&FabLayer::VScore),
         drills: &drills,
@@ -115,24 +115,16 @@ pub(crate) fn write_odb(
     }
     let eda = Eda::of(&parts, frame, &copper_features, &mut tally.skipped);
     files.push((format!("{step}/eda/data"), eda.data()));
-    for face in component_faces(&layers) {
-        files.push((
-            format!("{step}/layers/{}/components", component_layer(face)),
-            eda.components(face),
-        ));
+    for layer in &layers {
+        if let Source::Components(face) = layer.source {
+            files.push((
+                format!("{step}/layers/{}/components", layer.name),
+                eda.components(face),
+            ));
+        }
     }
     files.sort_by(|a, b| a.0.cmp(&b.0));
     files
-}
-
-fn component_faces(layers: &[MatrixLayer]) -> Vec<Face> {
-    layers
-        .iter()
-        .filter_map(|l| match l.source {
-            Source::Components(face) => Some(face),
-            _ => None,
-        })
-        .collect()
 }
 
 /// The `misc/info` file.

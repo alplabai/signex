@@ -3,7 +3,7 @@
 //! component layers' `components` files, whose toeprints name their net
 //! and subnet.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 use pcb_geom::{Placement, PointNm, Side, mm_to_nm};
@@ -13,7 +13,7 @@ use super::text::{cw_degrees, mm, word};
 use crate::fab::collect::pad_aperture;
 use crate::fab::frame::{FabFrame, fab_angle_udeg};
 use crate::fab::layers::Face;
-use crate::fab::marks::{ApertureShape, Function, Mark};
+use crate::fab::marks::{ApertureShape, Function, Mark, PadKey};
 use crate::fab::parts::{PackagePin, Parts, oem_number, package_pins, pin_box};
 
 /// The net a toeprint whose pad carries none is listed under.
@@ -89,7 +89,9 @@ impl<'a> Eda<'a> {
         skipped: &mut usize,
     ) -> Self {
         let mut nets: BTreeMap<String, NetCopper> = BTreeMap::new();
-        let mut pins: BTreeMap<(String, String), (Option<String>, Vec<Fid>)> = BTreeMap::new();
+        // Keyed by the pad itself: a designator and pad number repeat (two
+        // pads numbered alike, a panel's copies of one part).
+        let mut pins: BTreeMap<PadKey, (Option<String>, Vec<Fid>)> = BTreeMap::new();
         for (layer, features) in copper.iter().enumerate() {
             for (mark, range) in &features.marks {
                 let fids = range.clone().map(|f| (layer, f));
@@ -98,9 +100,9 @@ impl<'a> Eda<'a> {
                         function,
                         attributes,
                         ..
-                    } => match (&attributes.pin, &attributes.net) {
-                        (Some(pin), net) => {
-                            let entry = pins.entry(pin.clone()).or_default();
+                    } => match (attributes.pad, &attributes.net) {
+                        (Some(pad), net) => {
+                            let entry = pins.entry(pad).or_default();
                             entry.0 = entry.0.take().or_else(|| net.clone());
                             entry.1.extend(fids);
                         }
@@ -131,7 +133,7 @@ impl<'a> Eda<'a> {
             }
         }
         let mut components: [Vec<Component>; 2] = Default::default();
-        for (footprint, package) in &parts.placed {
+        for (index, footprint, package) in &parts.placed {
             let Some(package) = package
                 .as_ref()
                 .and_then(|name| parts.packages.iter().position(|(n, _)| n == name))
@@ -152,8 +154,10 @@ impl<'a> Eda<'a> {
                 let Ok((_, at)) = pad_aperture(frame, footprint, pad, pad.size) else {
                     continue;
                 };
-                let key = (footprint.reference.clone(), pad.number.clone());
-                let (net, fids) = pins.remove(&key).unwrap_or_default();
+                let pad_index = footprint.pads.iter().position(|p| std::ptr::eq(p, pad));
+                let (net, fids) = pad_index
+                    .and_then(|pad_index| pins.remove(&(*index, pad_index)))
+                    .unwrap_or_default();
                 let kind = SubnetKind::Toeprint {
                     face,
                     component,
@@ -180,19 +184,20 @@ impl<'a> Eda<'a> {
                 toeprints,
             });
         }
-        // A pad no toeprint stands for (no number, or a second part of one
-        // designator) is still copper of its net.
+        // A pad no toeprint stands for (no number, or a part with no
+        // designator or no package) is still copper of its net.
         for (net, fids) in pins.into_values() {
             if let Some(net) = net {
                 nets.entry(net).or_default().trace.extend(fids);
             }
         }
+        let mut names = BTreeSet::new();
         let nets = nets
             .into_iter()
             .enumerate()
             .map(|(number, (name, net_copper))| {
                 let subnets = subnets(number, net_copper, &mut components);
-                (word(&name), subnets)
+                (unique_word(&mut names, &name), subnets)
             })
             .collect();
         Self {
@@ -294,6 +299,19 @@ fn subnets(net: usize, copper: NetCopper, components: &mut [Vec<Component>; 2]) 
         add(SubnetKind::Plane, plane);
     }
     subnets
+}
+
+/// `name` as a record word, with `_2`, `_3`, ... when another net's name
+/// became the same word (`VCC 3V3` and `VCC_3V3`): net names are unique.
+fn unique_word(taken: &mut BTreeSet<String>, name: &str) -> String {
+    let base = word(name);
+    let mut candidate = base.clone();
+    let mut n = 1;
+    while !taken.insert(candidate.clone()) {
+        n += 1;
+        candidate = format!("{base}_{n}");
+    }
+    candidate
 }
 
 fn side(face: Face) -> usize {

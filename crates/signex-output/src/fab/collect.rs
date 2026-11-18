@@ -16,7 +16,7 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use super::draw::{Drawing, Drawn, Pen, draw};
 use super::frame::{FabFrame, fab_angle_udeg, is_quarter_turn, swaps_axes};
 use super::layers::{CopperStack, FabLayer, Face};
-use super::marks::{ApertureShape, Attributes, Function, Mark, Step, doubled_area};
+use super::marks::{ApertureShape, Attributes, Function, Mark, PadKey, Step, doubled_area};
 use super::notes::Tally;
 use super::{FabExtras, FabStroke};
 
@@ -35,8 +35,16 @@ pub(crate) fn collect(
     let mut images = Images::new();
     let frame = FabFrame::of(board);
     zone_fills(&mut images, extras, frame, tally);
-    for footprint in &board.footprints {
-        footprint_marks(&mut images, board, footprint, stack, frame, tally);
+    for (index, footprint) in board.footprints.iter().enumerate() {
+        footprint_marks(
+            &mut images,
+            board,
+            footprint,
+            Some(index),
+            stack,
+            frame,
+            tally,
+        );
     }
     // Free pads (#2373) are marked as pads of the board's own frame.
     if !board.free.pads.is_empty() {
@@ -44,7 +52,7 @@ pub(crate) fn collect(
             pads: board.free.pads.clone(),
             ..signex_types::pcb_free::free_pad_frame()
         };
-        footprint_marks(&mut images, board, &free, stack, frame, tally);
+        footprint_marks(&mut images, board, &free, None, stack, frame, tally);
     }
     tracks(&mut images, board, frame, tally);
     arcs(&mut images, board, frame, tally);
@@ -193,16 +201,20 @@ fn zone_polygons(
     regions
 }
 
+/// A footprint's pads and drawings; `index` is its place in the board's
+/// footprints, `None` for the free pads' frame.
 fn footprint_marks(
     images: &mut Images,
     board: &PcbBoard,
     footprint: &Footprint,
+    index: Option<usize>,
     stack: &CopperStack,
     frame: FabFrame,
     tally: &mut Tally,
 ) {
-    for pad in &footprint.pads {
-        if pad_marks(images, board, footprint, pad, stack, frame).is_err() {
+    for (pad_index, pad) in footprint.pads.iter().enumerate() {
+        let key = index.map(|index| (index, pad_index));
+        if pad_marks(images, board, footprint, (pad, key), stack, frame).is_err() {
             tally.skipped += 1;
         }
     }
@@ -350,11 +362,13 @@ fn round_radius(pad: &Pad, w: i64, h: i64) -> i64 {
     ((pad.roundrect_ratio * short as f64).round() as i64).clamp(0, short / 2)
 }
 
+/// A pad's copper flashes and mask and paste openings; `key` names the
+/// pad on its copper flashes.
 fn pad_marks(
     images: &mut Images,
     board: &PcbBoard,
     footprint: &Footprint,
-    pad: &Pad,
+    (pad, key): (&Pad, Option<PadKey>),
     stack: &CopperStack,
     frame: FabFrame,
 ) -> Result<(), GeomError> {
@@ -387,6 +401,7 @@ fn pad_marks(
         let attributes = Attributes {
             net: net.clone(),
             pin: pin.clone(),
+            pad: key,
         };
         push(
             images,

@@ -68,21 +68,22 @@ impl LayerRole {
         }
     }
 
-    /// The ODB++ matrix layer type; `None` for the board outline, which is
-    /// the step profile there, not a matrix layer.
-    pub(crate) fn odb_matrix_type(self) -> Option<&'static str> {
-        Some(match self {
+    /// The ODB++ matrix layer type. The board outline is also the step
+    /// profile; its layer is a rout layer that keeps every cut drawn on it
+    /// (a slot or cutout in a footprint), which the profile cannot hold.
+    pub(crate) fn odb_matrix_type(self) -> &'static str {
+        match self {
             LayerRole::Signal => "SIGNAL",
             LayerRole::Plane => "POWER_GROUND",
             LayerRole::Legend => "SILK_SCREEN",
             LayerRole::SolderMask => "SOLDER_MASK",
             LayerRole::SolderPaste => "SOLDER_PASTE",
             LayerRole::Drill => "DRILL",
-            LayerRole::BoardOutline => return None,
+            LayerRole::BoardOutline => "ROUT",
             LayerRole::Glue | LayerRole::Assembly | LayerRole::Courtyard | LayerRole::Document => {
                 "DOCUMENT"
             }
-        })
+        }
     }
 }
 
@@ -215,48 +216,28 @@ mod tests {
                 PcbLayer::Copper(CopperLayer::Top),
                 false,
                 "SIGNAL",
-                Some("SIGNAL"),
+                "SIGNAL",
             ),
             (
                 PcbLayer::Copper(CopperLayer::Bottom),
                 true,
                 "PLANE",
-                Some("POWER_GROUND"),
+                "POWER_GROUND",
             ),
-            (
-                tech(T::SilkscreenBottom),
-                false,
-                "LEGEND",
-                Some("SILK_SCREEN"),
-            ),
-            (
-                tech(T::SolderMaskTop),
-                false,
-                "SOLDERMASK",
-                Some("SOLDER_MASK"),
-            ),
-            (
-                tech(T::PasteBottom),
-                false,
-                "SOLDERPASTE",
-                Some("SOLDER_PASTE"),
-            ),
-            (tech(T::AdhesiveTop), false, "GLUE", Some("DOCUMENT")),
-            (tech(T::EdgeCuts), false, "BOARD_OUTLINE", None),
-            (tech(T::DrillDrawing), false, "DOCUMENT", Some("DOCUMENT")),
-            (tech(T::FabBottom), false, "DOCUMENT", Some("DOCUMENT")),
-            (tech(T::AssemblyTop), false, "ASSEMBLY", Some("DOCUMENT")),
-            (
-                tech(T::CourtyardBottom),
-                false,
-                "COURTYARD",
-                Some("DOCUMENT"),
-            ),
+            (tech(T::SilkscreenBottom), false, "LEGEND", "SILK_SCREEN"),
+            (tech(T::SolderMaskTop), false, "SOLDERMASK", "SOLDER_MASK"),
+            (tech(T::PasteBottom), false, "SOLDERPASTE", "SOLDER_PASTE"),
+            (tech(T::AdhesiveTop), false, "GLUE", "DOCUMENT"),
+            (tech(T::EdgeCuts), false, "BOARD_OUTLINE", "ROUT"),
+            (tech(T::DrillDrawing), false, "DOCUMENT", "DOCUMENT"),
+            (tech(T::FabBottom), false, "DOCUMENT", "DOCUMENT"),
+            (tech(T::AssemblyTop), false, "ASSEMBLY", "DOCUMENT"),
+            (tech(T::CourtyardBottom), false, "COURTYARD", "DOCUMENT"),
             (
                 PcbLayer::Mechanical(MechanicalLayer::new(7).unwrap()),
                 false,
                 "DOCUMENT",
-                Some("DOCUMENT"),
+                "DOCUMENT",
             ),
         ];
         for (layer, plane, ipc, odb) in cases {

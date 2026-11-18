@@ -19,7 +19,7 @@ impl Parts<'_> {
     pub(crate) fn write_bom(&self, xml: &mut Xml, bom: &str, step: &str) {
         let mut items: BTreeMap<String, Vec<(&Footprint, &Option<String>)>> = BTreeMap::new();
         let mut named = BTreeSet::new();
-        for (footprint, package) in &self.placed {
+        for (_, footprint, package) in &self.placed {
             if named.insert(qualified(&footprint.reference)) {
                 items
                     .entry(oem_number(footprint))
@@ -78,7 +78,7 @@ impl Parts<'_> {
         for (name, footprint) in &self.packages {
             write_package(xml, dictionary, name, footprint);
         }
-        for (footprint, package) in &self.placed {
+        for (_, footprint, package) in &self.placed {
             let Ok(placement) = Placement::of_footprint(footprint) else {
                 *skipped += 1;
                 continue;

@@ -184,7 +184,7 @@ one.
 | Solder mask top / bottom | `SOLDERMASK` | `SOLDER_MASK` |
 | Paste top / bottom | `SOLDERPASTE` | `SOLDER_PASTE` |
 | Adhesive top / bottom | `GLUE` | `DOCUMENT` |
-| Board outline (`EdgeCuts`) | `BOARD_OUTLINE` | the step profile |
+| Board outline (`EdgeCuts`) | `BOARD_OUTLINE` | `ROUT`; the outline is also the step profile |
 | Assembly top / bottom | `ASSEMBLY` | `DOCUMENT` |
 | Courtyard top / bottom | `COURTYARD` | `DOCUMENT` |
 | Mechanical 1–32, and every other layer | `DOCUMENT` | `DOCUMENT` |
@@ -230,12 +230,15 @@ generation; the dialog's own tick box for it is #2489.
 Version 7.0, millimetres, one step `pcb`. `FabOptions::odb` picks the form:
 `OdbForm::Archive` writes one uncompressed POSIX tar, `<name>-odb.tar`, whose
 root folder is the job name; `OdbForm::Directory` writes the same tree under
-`<name>-odb/`. The dialog writes the archive. Entity names (job, layers) are
-lowercase ASCII letters, digits and `_ + - .`, at most 64 characters: a layer
-is named by its export name from the table above, lowercased
-(`topcopper`, `inner1copper`, a mechanical layer's own name such as
-`fold_lines`); record words (nets, designators, parts, pins) turn spaces,
-`;` and non-ASCII characters into `_`. The job holds:
+`<name>-odb/`, so the job folder is `<name>-odb/<job name>/`. The dialog
+writes the archive. Entity names (job, layers) are lowercase ASCII letters,
+digits and `_ + - .`, at most 64 characters: a layer is named by its export
+name from the table above, lowercased (`topcopper`, `inner1copper`, a
+mechanical layer's own name such as `fold_lines`), and a name another layer
+already has falls back to the layer's token, then takes `_2`, `_3`, ...
+Record words (nets, designators, parts, pins) turn spaces, `;` and
+non-ASCII characters into `_`; a net whose word another net already has
+takes `_2`, `_3`, ..., since net names are unique. The job holds:
 
 - **Matrix.** The layers in physical order: `comp_+_top` when parts sit on
   the top, top legend, paste and mask, the stack's copper and dielectric
@@ -244,7 +247,10 @@ is named by its export name from the table above, lowercased
   `comp_+_bot`, then one drill layer per drilled span (`drill_pth`,
   `drill_npth`, `drill_blind_l1_l2`, ...) from its first to its last copper
   layer, then the V-score layer and every drawing layer as `MISC`
-  `DOCUMENT` layers. The board outline is the step profile, not a layer.
+  `DOCUMENT` layers. The outline layer is a `BOARD` `ROUT` layer from the
+  top copper to the bottom, holding everything the profile image holds:
+  the outline, the through cutouts and every cut drawn on `EdgeCuts` (a
+  slot in a footprint), which the step profile cannot carry.
   The matrix gives the stack order; layer thicknesses are not written.
 - **Features.** Each layer's marks in the same frame as the Gerber images,
   every feature positive (a mask layer holds its openings): pads with their
@@ -262,9 +268,13 @@ is named by its export name from the table above, lowercased
   Each net's subnets point at the copper features it is made of: one
   toeprint subnet per pin, then traces, vias, and one plane subnet per
   filled area. A pin whose pad carries no net is listed under `$NONE$`.
+  Each toeprint takes the copper of its own pad, so two pads numbered
+  alike and a panel's copies of one designator each keep their net.
   Each side's `components` file places every designated part that has pads
   (rotation clockwise, `M` on the bottom) with a toeprint per pin naming
-  its net and subnet. A part with no pads has no package and is left out.
+  its net and subnet. A toeprint is its package pin mirrored about the y
+  axis when `M`, then turned clockwise by the rotation, then moved to the
+  part's position. A part with no pads has no package and is left out.
 
 No date or user is recorded. The archive is written with every generation;
 the dialog's own choice of ODB++ and of its form is #2489.

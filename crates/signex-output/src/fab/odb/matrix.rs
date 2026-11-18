@@ -1,7 +1,8 @@
 //! The ODB++ matrix: the job's layers in physical order top to bottom
 //! (top components, legend, paste, mask, the copper and dielectric rows of
 //! the stack, the bottom's in reverse), then the drill layers, then the
-//! drawing layers. Each board layer's type comes from `fab::roles`.
+//! outline's rout layer and the drawing layers. Each board layer's type
+//! comes from `fab::roles`.
 
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::PcbBoard;
@@ -52,7 +53,7 @@ impl MatrixPlan<'_> {
         use TechnicalLayer as T;
         let mut out: Vec<MatrixLayer> = Vec::new();
         if self.parts_on[0] {
-            out.push(components(Face::Top));
+            push_components(&mut out, Face::Top);
         }
         for layer in [T::SilkscreenTop, T::PasteTop, T::SolderMaskTop] {
             self.add_if_used(&mut out, PcbLayer::Technical(layer));
@@ -63,8 +64,9 @@ impl MatrixPlan<'_> {
                 StackRow::Layer(layer) => self.add(&mut out, layer),
                 StackRow::Dielectric => {
                     dielectrics += 1;
+                    let name = unique(&out, format!("dielectric{dielectrics}"), None);
                     out.push(MatrixLayer {
-                        name: format!("dielectric{dielectrics}"),
+                        name,
                         source: Source::Dielectric,
                         context: "BOARD",
                         kind: "DIELECTRIC",
@@ -77,11 +79,11 @@ impl MatrixPlan<'_> {
             self.add_if_used(&mut out, PcbLayer::Technical(layer));
         }
         if self.parts_on[1] {
-            out.push(components(Face::Bottom));
+            push_components(&mut out, Face::Bottom);
         }
         self.add_drills(&mut out);
         if self.v_score {
-            let name = unique(&out, "vscore".into(), "v_score".into());
+            let name = unique(&out, "vscore".into(), Some("v_score".into()));
             out.push(MatrixLayer {
                 name,
                 source: Source::VScore,
@@ -130,7 +132,8 @@ impl MatrixPlan<'_> {
         }
     }
 
-    /// A board layer, once; the outline is the step profile, not a layer.
+    /// A board layer, once. The outline's rout layer runs through the
+    /// whole board, top copper to bottom.
     fn add(&self, out: &mut Vec<MatrixLayer>, layer: PcbLayer) {
         if out.iter().any(|l| l.source == Source::Board(layer)) {
             return;
@@ -139,80 +142,98 @@ impl MatrixPlan<'_> {
             .copper()
             .is_some_and(|c| plane_layers(self.stack).contains(&c));
         let role = LayerRole::of(layer, plane);
-        let Some(kind) = role.odb_matrix_type() else {
-            return;
-        };
         let context = match role {
             LayerRole::Signal
             | LayerRole::Plane
             | LayerRole::Legend
             | LayerRole::SolderMask
-            | LayerRole::SolderPaste => "BOARD",
+            | LayerRole::SolderPaste
+            | LayerRole::BoardOutline => "BOARD",
             _ => "MISC",
+        };
+        let span = if role == LayerRole::BoardOutline {
+            let bottom = self.copper.count();
+            Some((self.copper_name(out, 1), self.copper_name(out, bottom)))
+        } else {
+            None
         };
         let name = unique(
             out,
             entity_name(&layer_label(self.board, layer)),
-            entity_name(&pcb_layer_token(layer)),
+            Some(entity_name(&pcb_layer_token(layer))),
         );
         out.push(MatrixLayer {
             name,
             source: Source::Board(layer),
             context,
-            kind,
-            span: None,
+            kind: role.odb_matrix_type(),
+            span,
         });
+    }
+
+    /// The matrix name of the `n`-th copper layer from the top (from 1).
+    fn copper_name(&self, out: &[MatrixLayer], n: usize) -> String {
+        let layer = PcbLayer::Copper(self.copper.layers()[n - 1]);
+        out.iter()
+            .find(|l| l.source == Source::Board(layer))
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| entity_name(&pcb_layer_token(layer)))
     }
 
     /// One drill layer per drilled span, running between its copper.
     fn add_drills(&self, out: &mut Vec<MatrixLayer>) {
         let count = self.copper.count();
         for file in self.drills {
-            let copper_name = |n: usize| {
-                let layer = PcbLayer::Copper(self.copper.layers()[n - 1]);
-                out.iter()
-                    .find(|l| l.source == Source::Board(layer))
-                    .map(|l| l.name.clone())
-                    .unwrap_or_else(|| entity_name(&pcb_layer_token(layer)))
-            };
-            let span = (copper_name(file.span.from), copper_name(file.span.to));
+            let span = (
+                self.copper_name(out, file.span.from),
+                self.copper_name(out, file.span.to),
+            );
             let wanted = format!("drill_{}", file.suffix(count).replace('-', "_"));
             out.push(MatrixLayer {
-                name: unique(out, wanted.clone(), format!("{wanted}_1")),
+                name: unique(out, wanted, None),
                 source: Source::Drill(*file),
                 context: "BOARD",
-                kind: LayerRole::Drill.odb_matrix_type().unwrap_or("DRILL"),
+                kind: LayerRole::Drill.odb_matrix_type(),
                 span: Some(span),
             });
         }
     }
 }
 
-fn components(face: Face) -> MatrixLayer {
-    MatrixLayer {
-        name: component_layer(face).to_string(),
+fn push_components(out: &mut Vec<MatrixLayer>, face: Face) {
+    let wanted = match face {
+        Face::Top => "comp_+_top",
+        Face::Bottom => "comp_+_bot",
+    };
+    out.push(MatrixLayer {
+        name: unique(out, wanted.into(), None),
         source: Source::Components(face),
         context: "BOARD",
         kind: "COMPONENT",
         span: None,
-    }
-}
-
-/// The name of a side's component layer.
-pub(crate) fn component_layer(face: Face) -> &'static str {
-    match face {
-        Face::Top => "comp_+_top",
-        Face::Bottom => "comp_+_bot",
-    }
+    });
 }
 
 /// `name`, or `fallback` when another layer already has `name` (a
-/// mechanical layer named like another layer).
-fn unique(out: &[MatrixLayer], name: String, fallback: String) -> String {
-    if out.iter().any(|l| l.name == name) {
-        fallback
-    } else {
-        name
+/// mechanical layer named like another layer), or the first of them with
+/// `_2`, `_3`, ... that no layer has: two rows never share a name.
+fn unique(out: &[MatrixLayer], name: String, fallback: Option<String>) -> String {
+    let free = |candidate: &str| !out.iter().any(|l| l.name == candidate);
+    if free(&name) {
+        return name;
+    }
+    let base = match fallback {
+        Some(fallback) if free(&fallback) => return fallback,
+        Some(fallback) => fallback,
+        None => name,
+    };
+    let mut n = 2;
+    loop {
+        let candidate = format!("{base}_{n}");
+        if free(&candidate) {
+            return candidate;
+        }
+        n += 1;
     }
 }
 

@@ -7,6 +7,7 @@ pub(crate) mod fixture;
 mod ipc2581;
 mod layer_sizes;
 mod odb;
+mod odb_eda;
 mod origin;
 mod panel;
 mod same_net;

@@ -8,7 +8,7 @@ use signex_types::pcb::{BoardGraphic, LayerDef, PcbBoard};
 
 use super::fixture::fixture_board;
 use super::{FabExtras, FabOptions, golden_path};
-use crate::fab::odb::read_archive;
+use crate::fab::odb::{job_name, read_archive};
 use crate::fab::{FabFileKind, OdbForm, generate};
 
 fn real_board(name: &str) -> PcbBoard {
@@ -31,10 +31,11 @@ fn options(name: &str, form: OdbForm) -> FabOptions {
     }
 }
 
-/// The job as a folder: each file's path under `<name>-odb/` and its text.
-fn job(board: &PcbBoard, extras: &FabExtras, name: &str) -> BTreeMap<String, String> {
+/// The job as a folder: each file's path under `<name>-odb/<job>/` and its
+/// text.
+pub(super) fn job(board: &PcbBoard, extras: &FabExtras, name: &str) -> BTreeMap<String, String> {
     let set = generate(board, extras, &options(name, OdbForm::Directory)).expect("generates");
-    let prefix = format!("{name}-odb/");
+    let prefix = format!("{name}-odb/{}/", job_name(name));
     set.files
         .iter()
         .filter(|f| f.kind == FabFileKind::Odb)
@@ -89,7 +90,7 @@ fn the_archive_holds_the_folder_under_the_job_name() {
 
 /// The matrix's layers: each `NAME` with its `CONTEXT`, `TYPE`,
 /// `START_NAME` and `END_NAME`, in row order.
-fn matrix(job: &BTreeMap<String, String>) -> Vec<[String; 5]> {
+pub(super) fn matrix(job: &BTreeMap<String, String>) -> Vec<[String; 5]> {
     let text = &job["matrix/matrix"];
     text.split("LAYER {")
         .skip(1)
@@ -131,9 +132,9 @@ fn the_layers_take_their_type_from_the_typed_layer_in_physical_order() {
         layers[row("drill_pth")][1..].join(" "),
         "BOARD DRILL topcopper bottomcopper"
     );
-    assert!(
-        !layers.iter().any(|l| l[0].contains("edge")),
-        "the outline is the profile"
+    assert_eq!(
+        layers[row("edgecuts")][1..].join(" "),
+        "BOARD ROUT topcopper bottomcopper"
     );
     assert!(row("comp_+_top") < row("topsilkscreen"));
     assert!(row("topsoldermask") < row("topcopper"));
@@ -149,10 +150,20 @@ fn the_layers_take_their_type_from_the_typed_layer_in_physical_order() {
     assert!(!job["matrix/matrix"].to_lowercase().contains("gnd plane"));
 }
 
-#[test]
-fn every_toeprint_and_feature_reference_resolves() {
-    let board = real_board("sensor-4layer");
-    let job = job(&board, &FabExtras::of_board(&board), "s");
+/// One toeprint as the job resolves it: its part, its pin, the name of
+/// the net it is listed under and how many copper features its subnet has.
+#[derive(Debug)]
+pub(super) struct Resolved {
+    pub part: String,
+    pub pin: String,
+    pub net: String,
+    pub fids: usize,
+}
+
+/// Every toeprint of the job, top side first, after checking that every
+/// `FID` names a feature of its layer and every toeprint's net and subnet
+/// point back at its own `SNT TOP` record.
+pub(super) fn resolve(job: &BTreeMap<String, String>) -> Vec<Resolved> {
     let data = &job["steps/pcb/eda/data"];
     let layers: Vec<&str> = data
         .lines()
@@ -160,12 +171,14 @@ fn every_toeprint_and_feature_reference_resolves() {
         .expect("LYR")
         .split(' ')
         .collect();
-    let mut nets: Vec<Vec<String>> = Vec::new();
+    // Each net's name and its subnets: the `SNT` record and its FID count.
+    let mut nets: Vec<(String, Vec<(String, usize)>)> = Vec::new();
     for line in data.lines() {
-        if line.starts_with("NET ") {
-            nets.push(Vec::new());
+        if let Some(name) = line.strip_prefix("NET ") {
+            nets.push((name.to_string(), Vec::new()));
         } else if line.starts_with("SNT ") {
-            nets.last_mut().expect("a net").push(line.to_string());
+            let net = nets.last_mut().expect("a net");
+            net.1.push((line.to_string(), 0));
         } else if let Some(fid) = line.strip_prefix("FID C ") {
             let [layer, feature] = [0, 1].map(|i| {
                 fid.split(' ')
@@ -179,15 +192,18 @@ fn every_toeprint_and_feature_reference_resolves() {
                 .filter(|l| ["P ", "L ", "A ", "S "].iter().any(|r| l.starts_with(r)))
                 .count();
             assert!(feature < records, "FID C {layer} {feature}");
+            let net = nets.last_mut().expect("a net");
+            net.1.last_mut().expect("a subnet").1 += 1;
         }
     }
-    let mut placed = 0;
+    let mut resolved = Vec::new();
     for (side, file) in [("T", "comp_+_top"), ("B", "comp_+_bot")] {
         let Some(components) = job.get(&format!("steps/pcb/layers/{file}/components")) else {
             continue;
         };
         let mut on_side = 0;
         let mut toeprint = 0;
+        let mut part = String::new();
         for line in components.lines() {
             let fields: Vec<&str> = line.split(' ').collect();
             let component = on_side.max(1) - 1;
@@ -195,30 +211,50 @@ fn every_toeprint_and_feature_reference_resolves() {
                 "CMP" => {
                     assert_eq!(fields.len(), 8, "{line}");
                     on_side += 1;
-                    placed += 1;
                     toeprint = 0;
+                    part = fields[6].to_string();
                 }
                 "TOP" => {
                     let net: usize = fields[6].parse().expect("net");
                     let subnet: usize = fields[7].parse().expect("subnet");
+                    let (net_name, subnets) = &nets[net];
                     assert_eq!(
-                        nets[net][subnet],
+                        subnets[subnet].0,
                         format!("SNT TOP {side} {component} {toeprint}"),
                         "{line}"
                     );
+                    resolved.push(Resolved {
+                        part: part.clone(),
+                        pin: fields[8].to_string(),
+                        net: net_name.clone(),
+                        fids: subnets[subnet].1,
+                    });
                     toeprint += 1;
                 }
                 _ => {}
             }
         }
     }
+    resolved
+}
+
+#[test]
+fn every_toeprint_and_feature_reference_resolves() {
+    let board = real_board("sensor-4layer");
+    let job = job(&board, &FabExtras::of_board(&board), "s");
+    assert!(!resolve(&job).is_empty());
+    let placed: usize = ["comp_+_top", "comp_+_bot"]
+        .iter()
+        .filter_map(|file| job.get(&format!("steps/pcb/layers/{file}/components")))
+        .map(|text| text.lines().filter(|l| l.starts_with("CMP ")).count())
+        .sum();
     let designated = board
         .footprints
         .iter()
         .filter(|f| !f.reference.is_empty() && !f.pads.is_empty())
         .count();
     assert_eq!(placed, designated);
-    assert!(data.contains("\nNET GND\n"), "{data}");
+    assert!(job["steps/pcb/eda/data"].contains("\nNET GND\n"));
 }
 
 #[test]

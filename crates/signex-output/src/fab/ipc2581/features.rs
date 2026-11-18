@@ -305,6 +305,7 @@ mod tests {
             attributes: Attributes {
                 net: Some("A:B".into()),
                 pin: Some(("R1".into(), "2".into())),
+                pad: None,
             },
         };
         layer_feature(&mut xml, &mut dictionary, "TopCopper", &[pad]);

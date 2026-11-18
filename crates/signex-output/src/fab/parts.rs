@@ -15,8 +15,9 @@ pub(crate) type PackagePin<'a> = (&'a Pad, ApertureShape, PointNm);
 
 /// The board's parts.
 pub(crate) struct Parts<'a> {
-    /// Placed parts with a designator, in board order, and their package.
-    pub(crate) placed: Vec<(&'a Footprint, Option<String>)>,
+    /// Placed parts with a designator, in board order: each one's index in
+    /// the board's footprints, the footprint and its package.
+    pub(crate) placed: Vec<(usize, &'a Footprint, Option<String>)>,
     /// Each package's name and the footprint that shapes it.
     pub(crate) packages: Vec<(String, &'a Footprint)>,
 }
@@ -28,9 +29,12 @@ impl<'a> Parts<'a> {
     pub(crate) fn of(board: &'a PcbBoard, name: fn(&str) -> String) -> Self {
         let mut packages: Vec<(String, &Footprint)> = Vec::new();
         let mut placed = Vec::new();
-        for footprint in board.footprints.iter().filter(|f| !f.reference.is_empty()) {
+        for (index, footprint) in board.footprints.iter().enumerate() {
+            if footprint.reference.is_empty() {
+                continue;
+            }
             let package = package_of(&mut packages, footprint, name);
-            placed.push((footprint, package));
+            placed.push((index, footprint, package));
         }
         Self { placed, packages }
     }
