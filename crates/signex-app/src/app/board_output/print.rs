@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 use signex_i18n::{I18n, MessageId, Translatable, ids, t};
 use signex_output::{BoardLayerSet, BoardPdfOutput, BoardPrintOptions, BoardPrintText, board_pdf};
+use signex_types::pcb_layer::BoardSide;
 
 use super::{BoardOutputDialog, BoardOutputMsg, BoardPrintState};
 use crate::app::{Message, Signex};
@@ -48,6 +49,28 @@ impl Signex {
                 board_name,
                 options,
             })));
+    }
+
+    /// Open Board Print / PDF with only the assembly set of `side` chosen,
+    /// both assembly sets when `side` is `None`. The other options are the
+    /// ones last used; the choice is remembered once the dialog is edited.
+    pub(super) fn open_assembly_print(&mut self, side: Option<BoardSide>) {
+        if self.board_in_view().is_none() {
+            // Says why; an earlier dialog is left as it was.
+            self.open_board_print();
+            return;
+        }
+        self.open_board_print();
+        let sets = match side {
+            Some(BoardSide::Top) => vec![BoardLayerSet::AssemblyTop],
+            Some(BoardSide::Bottom) => vec![BoardLayerSet::AssemblyBottom],
+            None => vec![BoardLayerSet::AssemblyTop, BoardLayerSet::AssemblyBottom],
+        };
+        if let Some(BoardOutputDialog::Print(state)) =
+            self.ui_state.board_output.dialog.as_deref_mut()
+        {
+            state.options.sets = sets;
+        }
     }
 
     /// Change the open dialog's options; the next opening starts from them.

@@ -660,8 +660,6 @@ pub enum PanelMsg {
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
-    /// Signex AI panel: the Assistant / Generator switch (view-only state).
-    Signal(super::signal::SignalMsg),
     /// Graphite Projects panel: file filter and group chevrons (view-only).
     Projects(super::ProjectsMsg),
     /// A Layers panel row: an eye, or the row itself to make a copper layer

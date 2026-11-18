@@ -226,10 +226,6 @@ fn open_sample(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) {
     let _ = draw(r, app);
 }
 
-fn select_signal(app: &mut Signex) {
-    select_panel(app, PanelKind::SignexAi);
-}
-
 fn select_panel(app: &mut Signex, kind: PanelKind) {
     for pos in [
         PanelPosition::Left,
@@ -283,11 +279,6 @@ fn screens() -> Vec<(&'static str, Build)> {
             open_sample(app, r, fx);
             mount_stock(app, fx);
             select_panel(app, PanelKind::Components);
-            Ok(())
-        }),
-        ("schematic-signal", |app, r, fx| {
-            open_sample(app, r, fx);
-            select_signal(app);
             Ok(())
         }),
         ("pcb", |app, r, fx| {

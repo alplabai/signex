@@ -268,7 +268,8 @@ non-copper layer active the tool says so and draws nothing.
 
 ## Keepout
 
-`place_board_keepout` (no default key). Drawn like a Solid Region, on the
+`place_board_keepout` (`P K` in the default profile, `K` in Classic, on a
+board). Drawn like a Solid Region, on the
 active layer when it is a copper layer or a keep-out layer (Top or Bottom
 Keep-Out Layer); on any other layer the tool says so and draws nothing.
 

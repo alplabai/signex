@@ -20,12 +20,13 @@ use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReport,
     BoardReportKind,
 };
+use signex_types::pcb_layer::BoardSide;
 
 pub(crate) use print::{print_text, set_label};
 pub use step::BoardStepBuilt;
 pub(crate) use step::{StepContext, make_step_of};
 
-pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg};
+pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg, side_operand};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
     export_board_pdf, export_board_report, export_board_step,
@@ -57,6 +58,9 @@ pub enum BoardOutputMsg {
     },
     /// `print` or `export_board_pdf` on a board: Board Print / PDF opens.
     PrintRequested,
+    /// `board_assembly_drawing` in a window: Board Print / PDF opens with
+    /// the assembly set of `side` chosen, both sets when no side is named.
+    AssemblyPrintRequested(Option<BoardSide>),
     PrintSetToggled(BoardLayerSet),
     PrintPagesPicked(BoardPrintPages),
     PrintScalePicked(BoardPrintScale),
@@ -187,6 +191,7 @@ impl crate::app::Signex {
                 return self.write_board_report_csv(&board, kind, path);
             }
             M::PrintRequested => self.open_board_print(),
+            M::AssemblyPrintRequested(side) => self.open_assembly_print(side),
             M::PrintSetToggled(set) => self.edit_board_print(|o| {
                 if let Some(at) = o.sets.iter().position(|s| *s == set) {
                     o.sets.remove(at);

@@ -18,7 +18,8 @@ pub enum McadError {
         operation: &'static str,
         message: String,
     },
-    /// The kernel stopped with a panic; it was contained here.
+    /// The kernel stopped with a panic; it was contained here (native
+    /// targets only; a `wasm32` build aborts on panic).
     #[error("{operation} stopped in the kernel: {message}")]
     KernelPanicked {
         operation: &'static str,
@@ -50,7 +51,8 @@ impl McadError {
 }
 
 /// Runs one kernel call: a kernel error becomes [`McadError::Kernel`], a
-/// panic becomes [`McadError::KernelPanicked`].
+/// panic becomes [`McadError::KernelPanicked`] on native targets (see
+/// [`contained`]).
 pub(crate) fn kernel_call<T>(
     operation: &'static str,
     call: impl FnOnce() -> solidcore::Result<T>,
@@ -59,6 +61,9 @@ pub(crate) fn kernel_call<T>(
 }
 
 /// Runs `call` and turns a panic inside it into [`McadError::KernelPanicked`].
+///
+/// Native targets only: `catch_unwind` needs unwinding, and `wasm32` builds
+/// abort on panic, so there a kernel panic still ends the program.
 ///
 /// Every public operation builds its own kernel state, so nothing a panic
 /// left half-done is reused afterwards.
