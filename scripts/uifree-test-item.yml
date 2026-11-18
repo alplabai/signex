@@ -1,0 +1,34 @@
+# ast-grep rule for scripts/check_uifree_state.sh: every item (and struct
+# field) directly under a `#[cfg(test)]` attribute, other attributes and
+# comments in between allowed. Its line range is test code: the gate skips
+# the imports and fields inside it. `cfg(all(test, ..))` is not matched, so
+# such code counts as production (fail-safe). Kept out of ast-grep/rules on
+# purpose, like scripts/catalog-command-id.yml.
+id: uifree-test-item
+language: rust
+rule:
+  any:
+    - kind: mod_item
+    - kind: use_declaration
+    - kind: function_item
+    - kind: impl_item
+    - kind: struct_item
+    - kind: enum_item
+    - kind: union_item
+    - kind: const_item
+    - kind: static_item
+    - kind: trait_item
+    - kind: type_item
+    - kind: macro_definition
+    - kind: macro_invocation
+    - kind: extern_crate_declaration
+    - kind: foreign_mod_item
+    - kind: field_declaration
+  follows:
+    stopBy:
+      not:
+        any:
+          - kind: attribute_item
+          - kind: line_comment
+          - kind: block_comment
+    pattern: '#[cfg(test)]'

@@ -1,0 +1,35 @@
+# ast-grep rule for scripts/check_uifree_state.sh: every field of every
+# struct, with $STRUCT (the struct name), $NAME (the field name; unset for a
+# tuple field) and $TYPE (the field type). Kept out of ast-grep/rules on
+# purpose: `ast-grep scan --error` would report each field as a lint hit.
+id: uifree-struct-field
+language: rust
+rule:
+  any:
+    - kind: field_declaration
+      all:
+        - has: {field: name, pattern: $NAME}
+        - has: {field: type, pattern: $TYPE}
+    - all:
+        - any:
+            - kind: type_identifier
+            - kind: generic_type
+            - kind: scoped_type_identifier
+            - kind: primitive_type
+            - kind: reference_type
+            - kind: tuple_type
+            - kind: array_type
+            - kind: function_type
+            - kind: dynamic_type
+            - kind: abstract_type
+            - kind: pointer_type
+            - kind: unit_type
+            - kind: never_type
+            - kind: bounded_type
+            - kind: macro_invocation
+        - inside: {kind: ordered_field_declaration_list, field: type}
+        - pattern: $TYPE
+  inside:
+    kind: struct_item
+    stopBy: end
+    has: {field: name, pattern: $STRUCT}
