@@ -51,9 +51,12 @@ fn font_name(family: Option<&String>, sheet_default: &str) -> String {
 
 impl Signex {
     pub(super) fn copy_attributes_at(&mut self, at: Option<(f64, f64)>) -> Task<Message> {
-        if self.interaction_state.wire_drawing
+        // Any run or shape mid-draw: a wire or bus, a line or shape anchor,
+        // arc or polyline points (`is_drawing_on`).
+        let is_drawing = self.interaction_state.wire_drawing
             || self.interaction_state.active_canvas().drawing_mode
-        {
+            || (self.document_state.active_path.as_deref()).is_some_and(|p| self.is_drawing_on(p));
+        if is_drawing {
             return self.add_vertex_while_drawing(at);
         }
         let Some(target) = self.fragment_target("Copy attributes") else {

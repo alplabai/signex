@@ -259,6 +259,106 @@ fn add_vertex_without_a_cursor_adds_nothing() {
     );
 }
 
+/// A `tool` shape started with a click at (152.4, 152.4), the cursor on
+/// `cursor` and the label selected, so a copy would arm the Label tool.
+fn shape_run_with_cursor(tool: Tool, cursor: Option<(f64, f64)>) -> Signex {
+    let mut app = app_with_sheet(populated_sheet());
+    select(&mut app, &[], true);
+    app.interaction_state.current_tool = tool;
+    click(&mut app, (152.4, 152.4));
+    if let Some((x, y)) = cursor {
+        app.ui_state.cursor_x = x;
+        app.ui_state.cursor_y = y;
+        app.ui_state.cursor_document = app.document_state.active_path.clone();
+    }
+    app
+}
+
+fn line_ends(app: &Signex) -> Vec<(Point, Point)> {
+    doc(app)
+        .drawings
+        .iter()
+        .filter_map(|d| match d {
+            SchDrawing::Line { start, end, .. } => Some((*start, *end)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// #1669 - mid line the key fixes a vertex as a click there does: the
+/// segment is placed and the next one starts at the cursor.
+#[test]
+fn add_vertex_while_a_line_is_drawn_is_a_click_at_the_cursor() {
+    let cursor = (177.8, 152.4);
+    let mut keyed = shape_run_with_cursor(Tool::Line, Some(cursor));
+    assert!(keyed.interaction_state.shape_anchor.is_some(), "line open");
+    let lines = line_ends(&keyed).len();
+    let _ = extras(
+        &mut keyed,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+    let mut clicked = shape_run_with_cursor(Tool::Line, None);
+    click(&mut clicked, cursor);
+
+    assert_eq!(line_ends(&keyed).len(), lines + 1, "one segment placed");
+    assert_eq!(line_ends(&keyed), line_ends(&clicked), "same as a click");
+    assert_eq!(keyed.interaction_state.current_tool, Tool::Line);
+    assert_eq!(
+        keyed.interaction_state.shape_anchor,
+        Some(Point::new(cursor.0, cursor.1)),
+        "the line goes on from the new vertex"
+    );
+}
+
+/// #1669 - mid polyline the key adds the cursor as the next point, as a
+/// click there does; nothing is committed and the tool stays.
+#[test]
+fn add_vertex_while_a_polyline_is_drawn_is_a_click_at_the_cursor() {
+    let cursor = (177.8, 177.8);
+    let mut keyed = shape_run_with_cursor(Tool::Polyline, Some(cursor));
+    let drawings = doc(&keyed).drawings.len();
+    let _ = extras(
+        &mut keyed,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+    let mut clicked = shape_run_with_cursor(Tool::Polyline, None);
+    click(&mut clicked, cursor);
+
+    assert_eq!(
+        keyed.interaction_state.polyline_points,
+        vec![Point::new(152.4, 152.4), Point::new(cursor.0, cursor.1)]
+    );
+    assert_eq!(
+        keyed.interaction_state.polyline_points, clicked.interaction_state.polyline_points,
+        "same as a click"
+    );
+    assert_eq!(doc(&keyed).drawings.len(), drawings, "nothing committed");
+    assert_eq!(keyed.interaction_state.current_tool, Tool::Polyline);
+}
+
+/// #1669 - mid rectangle there is no vertex to add: the key says so in
+/// Messages and leaves the shape and the tool as they are.
+#[test]
+fn add_vertex_while_a_rectangle_is_drawn_says_so_and_changes_nothing() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut app = shape_run_with_cursor(Tool::Rectangle, Some((177.8, 177.8)));
+    let anchor = app.interaction_state.shape_anchor;
+    assert!(anchor.is_some(), "rectangle open");
+    let drawings = doc(&app).drawings.len();
+    let _ = extras(
+        &mut app,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+    assert_eq!(app.interaction_state.shape_anchor, anchor);
+    assert_eq!(doc(&app).drawings.len(), drawings);
+    assert_eq!(app.interaction_state.current_tool, Tool::Rectangle);
+    let logged = signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .starts_with("Add vertex: works while drawing a wire")
+    });
+    assert!(logged, "the refusal must reach the Messages panel");
+}
+
 /// #1669 - with the Wire tool shown but no run open the key still copies
 /// attributes, as before.
 #[test]
