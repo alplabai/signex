@@ -16,7 +16,6 @@ use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::tokens::resolve;
 
 pub(super) fn view<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let i18n = &panel.i18n;
     let sections = [
         section(
             ctx,

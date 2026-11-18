@@ -26,7 +26,6 @@ pub(super) fn view<'a>(
     ui: &'a LayersPanelUi,
     ctx: &'a PanelContext,
 ) -> Element<'a, PanelMsg> {
-    let i18n = &panel.i18n;
     let mut body = Column::<Element<'a, PanelMsg>>::new()
         .spacing(SP.xs)
         .width(Length::Fill)

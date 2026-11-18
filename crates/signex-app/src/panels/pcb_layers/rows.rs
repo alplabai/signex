@@ -151,9 +151,9 @@ pub(super) fn colour_editor<'a>(
     let set = move |colour| PanelMsg::PcbLayers(PcbViewMsg::LayerColourSet { layer, colour });
     let on_clear = panel.paint.colour(layer).map(|_| set(None));
     Some(color_field(ColorFieldProps {
-        label: &panel.colour_label,
+        label: t!(panel.i18n, ids::PCB_LAYERS_COLOUR).into(),
         current: Some(rgba),
-        none_label: &panel.palette_label,
+        none_label: t!(panel.i18n, ids::PCB_LAYERS_COLOUR_PALETTE).into(),
         show_palette: true,
         show_advanced: advanced,
         muted: resolve(&ctx.tokens).ink3,
@@ -163,7 +163,7 @@ pub(super) fn colour_editor<'a>(
         on_cancel: PanelMsg::LayersPanel(LayersPanelMsg::CustomColourClosed),
         on_pick: Rc::new(move |[r, g, b, _]: [u8; 4]| set(Some([r, g, b]))),
         on_clear,
-    }))
+    }, &panel.i18n))
 }
 
 /// What one layer row shows and does.

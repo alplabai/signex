@@ -97,9 +97,6 @@ pub struct PcbLayersPanel {
     pub board_3d: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
-    /// The colour field's labels, which it borrows as text.
-    pub colour_label: String,
-    pub palette_label: String,
     pub i18n: Arc<I18n>,
 }
 
@@ -124,8 +121,6 @@ impl Default for PcbLayersPanel {
             grid_visible: true,
             board_3d: false,
             board_open: false,
-            colour_label: String::new(),
-            palette_label: String::new(),
             i18n: I18n::en_us(),
         }
     }
@@ -166,8 +161,6 @@ impl PcbLayersPanel {
                 .collect(),
             layer_set: view.layer_set().map(|set| set.id.clone()),
             board_open: true,
-            colour_label: t!(i18n, ids::PCB_LAYERS_COLOUR).into_string(),
-            palette_label: t!(i18n, ids::PCB_LAYERS_COLOUR_PALETTE).into_string(),
             i18n,
             ..Self::default()
         }
