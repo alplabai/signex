@@ -196,6 +196,83 @@ fn copy_attributes_while_a_wire_is_drawn_leaves_the_tool_alone() {
     assert!(app.interaction_state.placement.is_none());
 }
 
+/// A wire run started at (152.4, 152.4) with the cursor on `cursor`.
+fn wire_run_with_cursor(cursor: Option<(f64, f64)>) -> Signex {
+    let mut app = app_with_sheet(populated_sheet());
+    select(&mut app, &[], false);
+    app.interaction_state.current_tool = Tool::Wire;
+    click(&mut app, (152.4, 152.4));
+    assert!(app.interaction_state.wire_drawing, "the run is open");
+    if let Some((x, y)) = cursor {
+        app.ui_state.cursor_x = x;
+        app.ui_state.cursor_y = y;
+        app.ui_state.cursor_document = app.document_state.active_path.clone();
+    }
+    app
+}
+
+fn wire_ends(app: &Signex) -> Vec<(Point, Point)> {
+    doc(app).wires.iter().map(|w| (w.start, w.end)).collect()
+}
+
+/// #1669 - while a wire is drawn the key fixes a vertex at the cursor, as a
+/// click there does, and the run goes on from it.
+#[test]
+fn add_vertex_while_a_wire_is_drawn_fixes_the_cursor_point_and_the_draw_goes_on() {
+    let cursor = (177.8, 152.4);
+    let mut keyed = wire_run_with_cursor(Some(cursor));
+    let wires = doc(&keyed).wires.len();
+    let _ = extras(
+        &mut keyed,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+
+    let mut clicked = wire_run_with_cursor(None);
+    click(&mut clicked, cursor);
+
+    assert_eq!(doc(&keyed).wires.len(), wires + 1, "one segment fixed");
+    assert_eq!(wire_ends(&keyed), wire_ends(&clicked), "same as a click");
+    assert!(keyed.interaction_state.wire_drawing, "the draw goes on");
+    assert_eq!(
+        keyed.interaction_state.wire_points,
+        vec![Point::new(cursor.0, cursor.1)],
+        "the next segment starts at the new vertex"
+    );
+    assert!(keyed.interaction_state.placement.is_none());
+}
+
+/// #1669 - with no cursor on the sheet the key adds nothing and the run
+/// stays open.
+#[test]
+fn add_vertex_without_a_cursor_adds_nothing() {
+    let mut app = wire_run_with_cursor(None);
+    let before = wire_ends(&app);
+    let _ = extras(
+        &mut app,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+    assert_eq!(wire_ends(&app), before);
+    assert!(app.interaction_state.wire_drawing);
+    assert_eq!(
+        app.interaction_state.wire_points,
+        vec![Point::new(152.4, 152.4)]
+    );
+}
+
+/// #1669 - with the Wire tool shown but no run open the key still copies
+/// attributes, as before.
+#[test]
+fn copy_attributes_with_the_wire_tool_idle_still_copies() {
+    let mut app = app_with_sheet(populated_sheet());
+    select(&mut app, &[], true);
+    app.interaction_state.current_tool = Tool::Wire;
+    let _ = extras(
+        &mut app,
+        PlacementExtrasMsg::CopyAttributesRequested { at: None },
+    );
+    assert_eq!(app.interaction_state.current_tool, Tool::Label);
+}
+
 /// The block as the reader hands it back: the populated sheet with the
 /// bodies its parts use.
 fn block_sheet() -> Arc<SchematicSheet> {
