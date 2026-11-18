@@ -320,7 +320,8 @@ never renames anything
   is written back on save. Every save stamps `"format": "snxprj/1"`. A file
   with no token predates it and loads as version 1. A file with any other
   token (a newer `snxprj/2`, or garbage) is refused with
-  `ProjectError::UnsupportedFormat` and is never rewritten: a newer version may
+  `ProjectError::UnsupportedFormat` (the shared policy in
+  `docs/FORMAT_VERSIONS.md`) and is never rewritten: a newer version may
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.
