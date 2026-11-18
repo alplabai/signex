@@ -237,12 +237,19 @@ fn erc_clean_runs_the_projects_erc() {
     );
     let project = project_path(&app);
     let value = report(&mut app, &project, &[]);
+    // The fixture's ERC has warnings and no error: only the requirement
+    // that allows warnings passes.
+    assert_eq!(value["passed"], json!(["req::loose"]), "{value}");
+    let findings = value["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{value}");
+    let evidence = &findings[0]["evidence"];
+    assert_eq!(findings[0]["rule"], "req::erc");
+    assert_eq!(evidence["check"], "erc");
     assert_eq!(
-        value["passed"],
-        json!(["req::erc", "req::loose"]),
+        (&evidence["errors"], &evidence["warnings"], &evidence["info"]),
+        (&json!(0), &json!(4), &json!(2)),
         "{value}"
     );
-    assert_eq!(value["findings"], json!([]), "{value}");
 }
 
 #[test]
