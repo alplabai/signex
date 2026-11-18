@@ -552,7 +552,7 @@ impl Signex {
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
-                times: Default::default(),
+                times: crate::app::state::DocumentTimes::from_clock(),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
                 pad_clipboard: None,

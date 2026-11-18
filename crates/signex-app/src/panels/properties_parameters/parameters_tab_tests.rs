@@ -243,6 +243,9 @@ fn an_empty_date_shows_today_and_a_typed_one_round_trips() {
     let date = saved.title_block.get("date");
     assert_eq!(date, None, "an empty Date stores nothing");
 
+    // A fresh sheet: the recorder writes nothing to disk, so a second Save
+    // of the same sheet would find its file missing and hold the write.
+    let (mut app, path, recorder) = app_on_sheet();
     apply(&mut app, TitleBlockField::Date, "2026-01-02");
     app.refresh_panel_ctx();
     let special = app.special_strings_for_path(&path).expect("the open sheet");
