@@ -234,16 +234,19 @@ profile `Space` and `Shift+Space` stay bound to `rotate_counterclockwise` and
 the rotate handler bends the run instead: `rotate_counterclockwise` flips the
 corner and `rotate_clockwise` steps the corner mode. Outside a run they rotate
 as usual. Neither adds an undo step; only a committed segment does.
+
 `copy_attributes_or_add_vertex` (Altium profile: `Insert`) fixes a vertex at the
 cursor while a wire, bus, line or polyline is drawn, as a click there would, and
-the run goes on; outside a draw it copies attributes (#1669).
+the run goes on; mid rectangle, circle or arc it says so in Messages and does
+nothing; outside a draw it copies attributes (#1669).
 
 `cycle_wiring_mode` (Altium profile: `Ctrl+Space`) steps how the wires that
-follow a dragged part bend: Auto (the corner the rubber band picks), horizontal
-first, vertical first, and straight (no corner, any slope). Press it during the
-drag and the ghost changes at once; the drop commits what the ghost shows. The
-mode holds for later drags, and the status bar names it while it is not Auto.
-Move By, align and distribute, position edits, rotate and mirror always use Auto (#1669).
+follow a moved part bend in a drag and in click-click move: Auto (the corner
+the rubber band picks), horizontal first, vertical first, and straight (no
+corner, any slope). Press it during the move and the ghost changes at once; the
+drop commits what the ghost shows. The mode holds for later moves, and the
+status bar names it while it is not Auto. Move By, align and distribute,
+position edits, rotate and mirror always use Auto (#1669).
 
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
