@@ -10,6 +10,18 @@
 //! - Strings that look like tokens but aren't (whitespace, punctuation
 //!   inside the braces) pass through verbatim — the scanner doesn't match.
 //! - Works in any text object, not just title blocks.
+//! - A name that is no built-in token is a variable (#1987): the sheet's
+//!   variables first, then the project's. A value that is an `=` expression
+//!   shows its evaluated text, or its source when it does not evaluate (the
+//!   error is reported in Messages). See `signex_types::variables`.
+
+use std::collections::BTreeMap;
+
+use signex_types::part_fields::part_field_display;
+use signex_types::schematic::Symbol;
+use signex_types::variables::{
+    FieldText, Layered, Resolver, TextTable, classify, display_text, variable_display,
+};
 
 use crate::ProjectMetadata;
 
@@ -38,9 +50,32 @@ pub struct SubstitutionContext<'a> {
 }
 
 impl<'a> SubstitutionContext<'a> {
-    /// Look up a single token. Returns `None` for unknown tokens — the
-    /// resolver renders that as an empty string.
+    /// The variable tables of this sheet, innermost first: the sheet's
+    /// variables, then the project's (the project parameters with the
+    /// sheet's title-block values over them).
+    pub fn variable_tables(&self) -> [TextTable<'a, BTreeMap<String, String>>; 2] {
+        let m = self.metadata;
+        [TextTable(&m.sheet_variables), TextTable(&m.custom_fields)]
+    }
+
+    /// Run `f` with the sheet's variable model as one resolver.
+    fn with_model<R>(&self, f: impl FnOnce(&dyn Resolver) -> R) -> R {
+        let [sheet, project] = self.variable_tables();
+        f(&Layered::new(vec![&sheet as &dyn Resolver, &project]))
+    }
+
+    /// Look up a single token: a built-in special string, else a variable.
+    /// Returns `None` for unknown tokens — the resolver renders that as an
+    /// empty string.
     fn lookup(&self, token: &str) -> Option<String> {
+        self.with_model(|model| match self.builtin(token) {
+            Some(raw) => Some(display_text(&raw, model).unwrap_or(raw)),
+            None => variable_display(model, token),
+        })
+    }
+
+    /// The stored text of a built-in token; `None` for any other name.
+    fn builtin(&self, token: &str) -> Option<String> {
         let m = self.metadata;
         match token {
             "TITLE" => Some(m.title.clone()),
@@ -92,9 +127,41 @@ impl<'a> SubstitutionContext<'a> {
                     .cloned()
                     .unwrap_or_default(),
             ),
-            other => m.custom_fields.get(other).cloned(),
+            _ => None,
         }
     }
+}
+
+/// [`resolve`] under the `=` rule (#1987), for a text note: a text that is
+/// an `=` expression shows its evaluated value (its source when it does not
+/// evaluate); any other text has its `${TOKEN}`s replaced. The stored text
+/// is never changed.
+pub fn resolve_text(input: &str, ctx: &SubstitutionContext<'_>) -> String {
+    match classify(input) {
+        FieldText::Expression(_) => {
+            let shown = ctx.with_model(|model| display_text(input, model));
+            shown.unwrap_or_else(|_| input.to_string())
+        }
+        FieldText::Literal(literal) => resolve(literal, ctx),
+    }
+}
+
+/// What `field` of `symbol` draws when it is an `=` expression (#1986): its
+/// value with its unit, through the parts of its sheet (`symbols`) and the
+/// sheet's and project's variables of `ctx`; its source when it does not
+/// evaluate. `None` for a literal field, which resolves as text.
+pub fn resolve_part_field(
+    symbols: &[Symbol],
+    symbol: &Symbol,
+    field: &str,
+    ctx: Option<&SubstitutionContext<'_>>,
+) -> Option<String> {
+    let Some(ctx) = ctx else {
+        return part_field_display(symbols, symbol, field, &[]);
+    };
+    let [sheet, project] = ctx.variable_tables();
+    let variables: [&dyn Resolver; 2] = [&sheet, &project];
+    part_field_display(symbols, symbol, field, &variables)
 }
 
 /// Replace every `${IDENT}` in `input` with its resolved value. Unknown
@@ -441,3 +508,7 @@ mod special_string_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "substitution_variable_tests.rs"]
+mod variable_tests;

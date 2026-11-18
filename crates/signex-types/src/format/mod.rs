@@ -86,6 +86,8 @@ mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
+mod part_field_expression_tests;
+#[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
 mod pcb_component_tests;
@@ -109,6 +111,8 @@ mod pcb_uuid_repair_tests;
 mod sheet_frame_tests;
 #[cfg(test)]
 mod sheet_page_tests;
+#[cfg(test)]
+mod sheet_variables_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -655,6 +659,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
+            variables: sheet_extras.variables,
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
             text_extents,

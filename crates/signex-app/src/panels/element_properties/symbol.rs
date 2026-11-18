@@ -23,6 +23,9 @@ pub(super) fn push_symbol_sections<'a>(
     let get = |key: &str| info_row(&ctx.selection_info, key);
     let reference = get("Reference");
     let value = get("Value");
+    // What an `=` value evaluates to, or why not (#1986).
+    let value_shows = get("Value Shows");
+    let value_error = get("Value Error");
     let description = get("Description");
     let datasheet = get("Datasheet");
     let footprint = get("Footprint");
@@ -93,6 +96,9 @@ pub(super) fn push_symbol_sections<'a>(
                         muted,
                         move |s| PanelMsg::EditSymbolValue(id, s),
                     ));
+                    if let Some(note) = value_note(ctx, &value_shows, &value_error, muted) {
+                        c = c.push(note);
+                    }
                     if !description.is_empty() {
                         c = c.push(form_input_row(
                             t!(i18n, ids::PROPERTIES_DESCRIPTION),
@@ -205,4 +211,31 @@ pub(super) fn push_symbol_sections<'a>(
         col = super::pins::push_pins_section(col, ctx, muted, primary, border_c);
     }
     col
+}
+
+/// The caption under an `=` value (#1986): the field shows its source, the
+/// caption what it evaluates to or why it does not. `None` for a literal.
+fn value_note<'a>(
+    ctx: &'a PanelContext,
+    shows: &str,
+    error: &str,
+    muted: Color,
+) -> Option<Element<'a, PanelMsg>> {
+    let i18n = &ctx.i18n;
+    let (note, color) = if !error.is_empty() {
+        let error = error.to_string();
+        let color = crate::styles::ti(ctx.tokens.error);
+        (t!(i18n, ids::PROPERTIES_VALUE_ERROR, "error" => error), color)
+    } else if !shows.is_empty() {
+        let value = shows.to_string();
+        (t!(i18n, ids::PROPERTIES_VALUE_SHOWS, "value" => value), muted)
+    } else {
+        return None;
+    };
+    let caption = crate::styles::TypeScale::DEFAULT.caption;
+    Some(
+        container(text(note).size(caption).color(color))
+            .padding([0, PROPERTY_ROW_PAD_X])
+            .boxed(),
+    )
 }

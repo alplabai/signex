@@ -1,11 +1,12 @@
 //! Integration tests for the recursive-descent expression parser
-//! (`crates/signex-sketch/src/expr/parse.rs`).
+//! (`crates/signex-expr/src/parse.rs`). The sketch's array-index cases
+//! are in `signex-sketch/tests/integration/expr_array_index.rs`.
 //!
 //! Covers Task 4.3 of `docs/internal/SKETCH_MODE_v0.13_PLAN.md`.
 
-use signex_sketch::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
-use signex_sketch::expr::parse::parse;
-use signex_sketch::unit::{Quantity, Unit};
+use signex_expr::ast::{BinOp, ExprNode, UnaryOp};
+use signex_expr::parse::parse;
+use signex_expr::unit::{Quantity, Unit};
 
 const EPS: f64 = 1e-12;
 
@@ -158,7 +159,7 @@ fn parse_unary_not() {
     }
 }
 
-// -- references / array index --------------------------------------------
+// -- references -----------------------------------------------------------
 
 #[test]
 fn parse_ref() {
@@ -166,31 +167,6 @@ fn parse_ref() {
     match e {
         ExprNode::Ref(name) => assert_eq!(name, "pad_pitch"),
         other => panic!("expected Ref, got {other:?}"),
-    }
-}
-
-#[test]
-fn parse_array_index_i() {
-    let e = parse("i").unwrap();
-    assert!(matches!(e, ExprNode::ArrayIndex(ArrayIndex::I)));
-}
-
-#[test]
-fn parse_array_index_j() {
-    let e = parse("j").unwrap();
-    assert!(matches!(e, ExprNode::ArrayIndex(ArrayIndex::J)));
-}
-
-#[test]
-fn parse_long_ident_is_ref_not_index() {
-    // Anything longer than a single 'i' or 'j' must remain a Ref —
-    // the array-index reservation is exact-match only.
-    for src in ["ix", "j_max", "ij", "ii", "jj"] {
-        let e = parse(src).unwrap();
-        match e {
-            ExprNode::Ref(name) => assert_eq!(name, src),
-            other => panic!("expected Ref({src}), got {other:?}"),
-        }
     }
 }
 

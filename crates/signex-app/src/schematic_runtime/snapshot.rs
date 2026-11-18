@@ -251,10 +251,19 @@ pub fn build_renderer_snapshot(
         {
             reference_value_texts.push(text);
         }
+        // The value shows its special strings resolved and an `=` expression
+        // evaluated; the stored value, which the editor shows, keeps the
+        // source (#1596, #1986).
+        let value = match overrides.special_strings {
+            Some(special) => special.resolve_value(&snapshot.symbols, symbol),
+            None if symbol.is_power => symbol.value.clone(),
+            None => signex_output::resolve_part_field(&snapshot.symbols, symbol, "Value", None)
+                .unwrap_or_else(|| symbol.value.clone()),
+        };
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                &symbol.value,
+                &value,
                 snapshot.drawn_value_text(symbol).as_deref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
@@ -385,7 +394,7 @@ pub fn build_renderer_snapshot(
         }
 
         let content = match overrides.special_strings {
-            Some(special) => special.resolve(&note.text),
+            Some(special) => special.resolve_text(&note.text),
             None => note.text.clone(),
         };
         let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);

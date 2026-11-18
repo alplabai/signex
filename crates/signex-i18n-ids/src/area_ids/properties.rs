@@ -156,4 +156,12 @@ define_ids! {
     PROPERTIES_TITLE_BLOCK_FROM_PROJECT = "properties-title-block-from-project";
     PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT = "properties-title-block-overrides-project";
     PROPERTIES_TITLE_BLOCK_HINT = "properties-title-block-hint";
+    PROPERTIES_SECTION_SHEET_VARIABLES = "properties-section-sheet-variables";
+    PROPERTIES_SHEET_VARIABLE_ADD = "properties-sheet-variable-add";
+    PROPERTIES_SHEET_VARIABLE_REMOVE = "properties-sheet-variable-remove";
+    PROPERTIES_SHEET_VARIABLE_SHOWS = "properties-sheet-variable-shows";
+    PROPERTIES_SHEET_VARIABLE_ERROR = "properties-sheet-variable-error";
+    PROPERTIES_SHEET_VARIABLES_HINT = "properties-sheet-variables-hint";
+    PROPERTIES_VALUE_SHOWS = "properties-value-shows";
+    PROPERTIES_VALUE_ERROR = "properties-value-error";
 }

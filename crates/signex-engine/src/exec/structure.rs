@@ -439,6 +439,23 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSheetVariable { name, value } => {
+                if self.document.variables.get(&name) == value.as_ref() {
+                    return Ok(CommandResult::unchanged());
+                }
+                match value {
+                    Some(value) => self.document.variables.insert(name, value),
+                    None => self.document.variables.remove(&name),
+                };
+                // Rides the PAPER patch with the title block: both change
+                // what special strings resolve to.
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetDocumentFontFamily { font_family } => {
                 let font_family = signex_types::font::normalize_family(font_family);
                 if self.document.font_family == font_family {

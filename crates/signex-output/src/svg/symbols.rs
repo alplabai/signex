@@ -11,6 +11,7 @@ use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
+use signex_types::variables::{Resolver, TextTable};
 use signex_types::schematic::{
     FillType, LibSymbol, PinLabelKind, Point, SchematicDefaults, Symbol, SymbolPrimitive,
     lower_pin_labels, lower_placed_symbol,
@@ -141,10 +142,11 @@ pub(super) fn push_symbol_pins(
     pin_net_names: Option<&HashMap<String, String>>,
     palette: &SchematicPalette,
 ) {
+    let pin_nets = pin_net_names.map(TextTable);
     for label in lower_pin_labels(lib, sym) {
         let mut pin_eval_ctx = eval_ctx.clone();
         pin_eval_ctx.current_pin = Some(label.pin_number.as_str());
-        pin_eval_ctx.net_name_by_pin = pin_net_names;
+        pin_eval_ctx.net_name_by_pin = pin_nets.as_ref().map(|t| t as &dyn Resolver);
         let (font_alias, fill_rgb) = match label.kind {
             PinLabelKind::Name => ("F1", palette.pin),
             PinLabelKind::Number => ("F3", palette.field_text),
@@ -165,6 +167,41 @@ pub(super) fn push_symbol_pins(
             text: normalize_standard_text_with_ctx(&label.text, &pin_eval_ctx),
         });
     }
+}
+
+/// A symbol field's drawn text (#1596): its markup evaluated with
+/// `eval_ctx` (the part's fields over the sheet's variables), then its
+/// `${TOKEN}` special strings resolved. A power port's value is a net name
+/// and resolves no special string. The stored field never changes.
+pub(super) fn symbol_field_text(
+    text: &str,
+    is_power: bool,
+    eval_ctx: &ExpressionEvalContext<'_>,
+    special: Option<&crate::SubstitutionContext<'_>>,
+) -> String {
+    let evaluated = normalize_standard_text_with_ctx(text, eval_ctx);
+    match special {
+        Some(special) if !is_power => crate::resolve(&evaluated, special),
+        _ => evaluated,
+    }
+}
+
+/// A symbol's drawn value: an `=` expression evaluated through the parts of
+/// its sheet and the variables (#1986), with its unit; else
+/// [`symbol_field_text`]. A power port's value is a net name and is never
+/// evaluated.
+pub(super) fn symbol_value_text(
+    symbols: &[Symbol],
+    sym: &Symbol,
+    eval_ctx: &ExpressionEvalContext<'_>,
+    special: Option<&crate::SubstitutionContext<'_>>,
+) -> String {
+    if !sym.is_power
+        && let Some(value) = crate::resolve_part_field(symbols, sym, "Value", special)
+    {
+        return value;
+    }
+    symbol_field_text(&sym.value, sym.is_power, eval_ctx, special)
 }
 
 pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {

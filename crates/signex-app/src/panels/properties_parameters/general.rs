@@ -542,6 +542,10 @@ pub fn view_properties_general<'a>(
     col = col.push(thin_sep(hairline));
     col = col.push(super::view_title_block_section(ctx));
 
+    // Sheet Variables (collapsible, #1987)
+    col = col.push(thin_sep(hairline));
+    col = col.push(super::view_sheet_variables_section(ctx));
+
     col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx).boxed());
 

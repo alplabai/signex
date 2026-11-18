@@ -18,7 +18,7 @@ pub(super) fn build_page_content(
     // Explicit two-step pipeline:
     // schematic sheet -> SVG render context -> PDF content stream operators.
     let cell = sheet_cell_value(sheet);
-    let sheet_metadata = ctx.metadata.for_sheet(&sheet.schematic.title_block);
+    let sheet_metadata = ctx.metadata.for_schematic(&sheet.schematic);
     let special = super::frame::sheet_substitution(sheet, opts, &sheet_metadata);
     let eval_inputs = SvgEvaluatorInputs {
         special_strings: Some(&special),

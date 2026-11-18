@@ -692,6 +692,8 @@ mod project_tab;
 mod project_tab_rename;
 #[path = "regression/project_tab_saves.rs"]
 mod project_tab_saves;
+#[path = "regression/sheet_variables.rs"]
+mod sheet_variables;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
 

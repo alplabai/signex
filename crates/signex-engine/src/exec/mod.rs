@@ -44,4 +44,6 @@ mod replace_lib_symbol_tests;
 #[cfg(test)]
 mod sheet_page_tests;
 #[cfg(test)]
+mod sheet_variable_tests;
+#[cfg(test)]
 mod symbol_body_tests;

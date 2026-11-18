@@ -196,6 +196,8 @@ pub struct PanelContext {
     /// The parameters of the project that owns the active sheet (#1080): the
     /// values a field falls back to while the sheet leaves it empty.
     pub project_parameters: std::collections::BTreeMap<String, String>,
+    /// The active sheet's variables (#1987), as stored: name to source text.
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
     /// The app's one store of half-typed title-block fields and custom
     /// paper edges (#2027): a handle the view reads, never a copy.
     pub drafts: super::PanelDrafts,
