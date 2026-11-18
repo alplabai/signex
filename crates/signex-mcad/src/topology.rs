@@ -1,7 +1,9 @@
 //! Read-only walks over the kernel's topology.
 
+use solidcore::Kernel;
 use solidcore::nurbs::b_spline_surface_n_lib::p2::OrientType;
 use solidcore::topology::edgeuse::p1::{edge, face, faceuse_loopuses, loopuse_edgeuses};
+use solidcore::topology::edgeuse::p3::get_or_create_uv_trim_curve;
 use solidcore::topology::{Brep, EdgeId, EdgeuseId, FaceId};
 
 use crate::error::McadError;
@@ -20,6 +22,20 @@ pub(crate) fn face_loops(brep: &Brep, f: FaceId) -> Result<Vec<Vec<EdgeuseId>>, 
         .into_iter()
         .map(|lu| loopuse_edgeuses(brep, lu).map_err(McadError::kernel(OP)))
         .collect()
+}
+
+/// Gives every edge use on a face loop a UV trim curve. A boolean leaves some
+/// edge uses with only their 3D curve; tessellation needs the UV one.
+pub(crate) fn complete_trim_curves(kernel: &Kernel, brep: &mut Brep) -> Result<(), McadError> {
+    const OP: &str = "make trim curves";
+    for f in brep.face_list().to_vec() {
+        for eu in face_loops(brep, f)?.into_iter().flatten() {
+            let fetch = get_or_create_uv_trim_curve(kernel, brep, eu, false, false, true)
+                .map_err(McadError::kernel(OP))?;
+            fetch.status.map_err(McadError::kernel(OP))?;
+        }
+    }
+    Ok(())
 }
 
 /// The edge an edge use runs along.

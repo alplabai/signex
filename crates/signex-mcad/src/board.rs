@@ -12,7 +12,7 @@ use solidcore::{Kernel, Point3, Vec3};
 use crate::error::{McadError, contained, kernel_call};
 use crate::naming::{FaceName, NameTable};
 use crate::solid::Solid;
-use crate::topology::face_vertex_points;
+use crate::topology::{complete_trim_curves, face_vertex_points};
 
 /// A hole through the board, in the outline's frame (mm).
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +98,7 @@ fn build(outline: &[[f64; 2]], holes: &[Hole], thickness: f64) -> Result<Solid, 
         let blank = body;
         body = kernel_call("cut hole", || boolean_difference(&mut kernel, blank, tool))?;
     }
+    complete_trim_curves(&kernel, &mut body)?;
     Ok(Solid { brep: body, names })
 }
 
