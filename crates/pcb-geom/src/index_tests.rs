@@ -476,3 +476,76 @@ fn an_item_is_found_by_its_uuid() {
     );
     assert_eq!(item_by_uuid(&b, id(9)), None);
 }
+
+/// #899: a click or box inside a zone's hole does not pick the zone, while
+/// the copper around the hole and the hole's edge do. A hole the fill cannot
+/// use (one crossing the outline) is copper and does not cut the pick.
+#[test]
+fn a_zone_is_not_picked_inside_its_holes() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let square = |x: f64, y: f64, side: f64| {
+        vec![
+            Point::new(x, y),
+            Point::new(x + side, y),
+            Point::new(x + side, y + side),
+            Point::new(x, y + side),
+        ]
+    };
+    let mut pour = area(
+        id(7),
+        "pour",
+        &[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+    );
+    pour.holes = vec![square(4.0, 4.0, 2.0), square(-1.0, 7.0, 2.0)];
+    assert_eq!(
+        pour.usable_holes(),
+        vec![0],
+        "the second hole crosses the outline"
+    );
+    b.zones = vec![pour];
+    let index = BoardIndex::build_selectable(&b);
+    let zone = ItemRef::Zone {
+        zone: id(7),
+        kind: PickKind::Polygons,
+    };
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    assert_eq!(index.hit_point(at(2.0, 2.0), 0), vec![zone], "the copper");
+    assert!(
+        index.hit_point(at(5.0, 5.0), 0).is_empty(),
+        "inside the hole"
+    );
+    assert!(
+        index.hit_point(at(5.0, 5.0), MM / 10).is_empty(),
+        "inside the hole, the edge out of reach"
+    );
+    assert_eq!(
+        index.hit_point(at(4.0, 5.0), 0),
+        vec![zone],
+        "the hole's edge"
+    );
+    assert_eq!(
+        index.hit_point(at(4.05, 5.0), MM / 10),
+        vec![zone],
+        "within reach of the hole's edge"
+    );
+    assert_eq!(
+        index.hit_point(at(0.5, 8.0), 0),
+        vec![zone],
+        "an unusable hole is copper"
+    );
+
+    let in_hole = RectNm::new(at(4.5, 4.5), at(5.5, 5.5));
+    assert!(index.hit_rect(&in_hole, RectSelect::Touching).is_empty());
+    let out_of_hole = RectNm::new(at(4.5, 4.5), at(7.0, 5.5));
+    assert_eq!(
+        index.hit_rect(&out_of_hole, RectSelect::Touching),
+        vec![zone],
+        "a box from the hole onto the copper"
+    );
+    let on_copper = RectNm::new(at(1.0, 1.0), at(2.0, 2.0));
+    assert_eq!(index.hit_rect(&on_copper, RectSelect::Touching), vec![zone]);
+    let whole = RectNm::new(at(-2.0, -1.0), at(11.0, 11.0));
+    assert_eq!(index.hit_rect(&whole, RectSelect::Inside), vec![zone]);
+    let outline_only = RectNm::new(at(-1.0, -1.0), at(11.0, 3.0));
+    assert!(index.hit_rect(&outline_only, RectSelect::Inside).is_empty());
+}

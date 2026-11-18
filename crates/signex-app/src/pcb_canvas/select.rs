@@ -802,6 +802,53 @@ mod tests {
         assert_eq!(state.index_builds(), 1);
     }
 
+    /// #899: a click inside a pour's hole selects nothing; a click on the
+    /// copper around the hole selects the pour.
+    #[test]
+    fn a_click_inside_a_zone_hole_does_not_select_the_zone() {
+        let square = |x: f64, y: f64, side: f64| {
+            vec![
+                Point::new(x, y),
+                Point::new(x + side, y),
+                Point::new(x + side, y + side),
+                Point::new(x, y + side),
+            ]
+        };
+        let mut board = board();
+        board.zones = vec![signex_types::pcb::Zone {
+            uuid: Uuid::from_u128(20),
+            net: 0,
+            net_name: String::new(),
+            layer: "TopCopper".into(),
+            outline: square(10.0, 10.0, 10.0),
+            holes: vec![square(14.0, 14.0, 2.0)],
+            priority: 0,
+            fill_type: "pour".into(),
+            thermal_relief: false,
+            thermal_gap: 0.0,
+            thermal_width: 0.0,
+            clearance: 0.0,
+            min_thickness: 0.0,
+            min_island_area: 0.0,
+            remove_dead_islands: false,
+            unknown: Default::default(),
+        }];
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let in_hole = Point::new(15.0, 15.0);
+        assert!(!state.click(&board, in_hole, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+        assert_eq!(state.item_at(&board, in_hole, 0.1), None);
+        assert!(state.click(&board, Point::new(12.0, 12.0), 0.1, ClickMode::Replace));
+        assert!(matches!(
+            state.selection().items().collect::<Vec<_>>()[..],
+            [ItemRef::Zone { zone, .. }] if zone == Uuid::from_u128(20)
+        ));
+        // A click in the hole is a click on empty board: it clears.
+        assert!(state.click(&board, in_hole, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+    }
+
     #[test]
     fn a_clean_board_reports_nothing() {
         let mut state = PcbSelectionState::default();

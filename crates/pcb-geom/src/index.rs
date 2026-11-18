@@ -15,10 +15,11 @@ use crate::body::footprint_body;
 use crate::free::{arc_is_copper, arc_shapes, dimension_shapes, free_pad_shape, text_shape};
 use crate::pick_filter::PickKind;
 use crate::rect::RectNm;
+use crate::region::Polygon;
 use crate::shape::Shape;
-use crate::shape_overlap::point_in_polygon;
 use crate::transform::pad_shape;
 use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
+use crate::zone_fill::zone_area;
 
 /// A model item the index holds, by identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -129,19 +130,20 @@ pub struct BoardIndex {
     parts: BTreeMap<ItemRef, usize>,
 }
 
-/// A drawn area's or board drawing's outline: its edges are in the tree,
-/// one entry each.
+/// A drawn area's or board drawing's outline: its edges, a zone's hole
+/// edges among them, are in the tree, one entry each.
 #[derive(Debug, Clone)]
 pub(crate) struct Area {
     pub(crate) item: ItemRef,
-    pub(crate) ring: Vec<PointNm>,
+    /// The outline and, for a zone, its usable holes (#899).
+    pub(crate) region: Polygon,
     pub(crate) bounds: RectNm,
     /// How many tree entries the item has: a box holds the item wholly
     /// when it holds every one.
     pub(crate) edges: usize,
-    /// A click or box inside `ring`, clear of its edges, takes the item:
-    /// an area, a text frame's box. An outline drawing is taken on its
-    /// stroke only.
+    /// A click or box inside `region`, clear of its edges and outside its
+    /// holes, takes the item: an area, a text frame's box. An outline
+    /// drawing is taken on its stroke only.
     pub(crate) inside: bool,
 }
 
@@ -328,12 +330,13 @@ impl BoardIndex {
             .locate_in_envelope_intersecting(&query)
             .filter(|entry| entry.shape.contains(p, tolerance))
             .collect();
-        // Inside an area, off its edges: one of its edges answers for it.
+        // Inside an area, off its edges and out of its holes: one of its
+        // edges answers for it.
         for area in &self.areas {
             if !area.inside
                 || hits.iter().any(|h| h.item == area.item)
                 || !area.bounds.contains_point(p)
-                || !point_in_polygon(&area.ring, p)
+                || !area.region.contains_point(p)
             {
                 continue;
             }
@@ -449,7 +452,7 @@ impl BoardIndex {
             let selected = match mode {
                 RectSelect::Inside => hit == area.edges,
                 RectSelect::Touching => {
-                    hit > 0 || (area.inside && point_in_polygon(&area.ring, probe))
+                    hit > 0 || (area.inside && area.region.contains_point(probe))
                 }
             };
             if selected {
@@ -461,7 +464,8 @@ impl BoardIndex {
 }
 
 /// Index `zone` as an area when it is a kind the board editor picks: one
-/// zero-width capsule per edge and its ring. A zone whose identity another
+/// zero-width capsule per edge of its outline and of each usable hole, and
+/// the region they bound. A zone whose identity another
 /// area already has, or whose outline cannot convert, is listed as refused.
 fn add_area(
     zone: &Zone,
@@ -495,28 +499,34 @@ fn add_area(
         .map(|p| PointNm::from_mm(*p, "zone.outline"))
         .collect();
     let edges = ring.and_then(|ring| {
-        let edges = (0..ring.len())
-            .map(|i| {
-                let shape = Shape::Capsule {
-                    a: ring[i],
-                    b: ring[(i + 1) % ring.len()],
-                    radius: 0,
-                };
-                IndexedItem::new(item, shape)
+        // The holes the fill and both render paths cut out (#899).
+        let holes = zone_area(zone).map(|area| area.holes).unwrap_or_default();
+        let region = Polygon::new(ring, holes);
+        let edges = std::iter::once(&region.outer)
+            .chain(&region.holes)
+            .flat_map(|ring| {
+                (0..ring.len()).map(|i| {
+                    let shape = Shape::Capsule {
+                        a: ring[i],
+                        b: ring[(i + 1) % ring.len()],
+                        radius: 0,
+                    };
+                    IndexedItem::new(item, shape)
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok((ring, edges))
+        Ok((region, edges))
     });
     match edges {
-        Ok((ring, edges)) => {
-            let Some(bounds) = RectNm::bounding(ring.iter().copied()) else {
+        Ok((region, edges)) => {
+            let Some(bounds) = region.bounds() else {
                 return;
             };
             let count = edges.len();
             items.extend(edges);
             areas.push(Area {
                 item,
-                ring,
+                region,
                 bounds,
                 edges: count,
                 inside: true,

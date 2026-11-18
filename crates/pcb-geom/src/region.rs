@@ -17,6 +17,7 @@ use i_overlay::mesh::int::outline::offset::IntOutlineOffset;
 use i_overlay::mesh::int::style::{IntLineJoin, IntOutlineStyle};
 
 use crate::rect::RectNm;
+use crate::shape_overlap::point_in_polygon;
 use crate::units::PointNm;
 
 /// Points a full turn of an offset's rounded corner is cut into (a power
@@ -42,6 +43,17 @@ impl Polygon {
     /// The bounds of the outer ring; `None` for an empty one.
     pub fn bounds(&self) -> Option<RectNm> {
         RectNm::bounding(self.outer.iter().copied())
+    }
+
+    /// Whether `p` lies in or on the outer ring and in none of the holes. A
+    /// point on a hole's edge counts as in the hole.
+    pub fn contains_point(&self, p: PointNm) -> bool {
+        self.outer.len() >= 3
+            && point_in_polygon(&self.outer, p)
+            && !self
+                .holes
+                .iter()
+                .any(|hole| hole.len() >= 3 && point_in_polygon(hole, p))
     }
 
     /// Twice the area, exact: the outer ring's less the holes'.
