@@ -538,6 +538,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_move_library",
                     "project_set_annotate_undo",
                     "project_set_version_control",
+                    "project_add_requirement",
+                    "project_set_requirement",
+                    "project_remove_requirement",
+                    "project_enable_requirement",
+                    "project_run_requirements",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",

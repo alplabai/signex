@@ -16,8 +16,10 @@
 //!
 //! The Sheets, Variants, Libraries, ERC and annotation and Version control
 //! sections (#1689-#1693) edit through the same history; their commands are
-//! in `sections` and each is a step of its own.
+//! in `sections` and each is a step of its own. So do the Requirements
+//! section's edits (#2339, `requirements`).
 
+mod requirements;
 mod sections;
 
 use std::collections::BTreeMap;
@@ -31,6 +33,7 @@ use signex_types::project::{
     SchematicDefaultOverrides,
 };
 
+pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
 use sections::SectionsSnapshot;
 
@@ -290,10 +293,30 @@ impl ProjectGeneralHistory {
         data: &mut ProjectData,
         command: &ProjectSectionCommand,
     ) -> Result<bool, signex_types::project::VariantProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one Requirements edit (#2339) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_requirement(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectRequirementCommand,
+    ) -> Result<bool, signex_types::project::RequirementProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Run `edit` as a step of its own: recorded when a field changed,
+    /// nothing recorded when it changed nothing or was refused.
+    fn apply_step<E>(
+        &mut self,
+        data: &mut ProjectData,
+        edit: impl FnOnce(&mut ProjectData) -> Result<(), E>,
+    ) -> Result<bool, E> {
         let before = GeneralSnapshot::of(data);
         self.run_open = false;
         self.run_field = None;
-        command.apply(data)?;
+        edit(data)?;
         if GeneralSnapshot::of(data) == before {
             return Ok(false);
         }

@@ -201,3 +201,42 @@ fn clearing_the_annotate_choice_over_an_unreadable_section_records_nothing() {
         "undo puts the section back"
     );
 }
+
+#[test]
+fn a_requirement_edit_is_one_undo_step_and_a_refused_one_records_nothing() {
+    use signex_types::project::{RequirementField, RequirementProblem};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let add = ProjectRequirementCommand::Add {
+        kind: "board_size".into(),
+        id: None,
+    };
+    assert_eq!(history.apply_requirement(&mut data, &add), Ok(true));
+    let set = ProjectRequirementCommand::SetField {
+        index: 0,
+        field: RequirementField::MaxWidthMm,
+        text: "50".into(),
+    };
+    assert_eq!(history.apply_requirement(&mut data, &set), Ok(true));
+    let after_set = data.requirements.clone();
+    let refused = ProjectRequirementCommand::SetField {
+        index: 0,
+        field: RequirementField::MaxWidthMm,
+        text: "-1".into(),
+    };
+    assert_eq!(
+        history.apply_requirement(&mut data, &refused),
+        Err(RequirementProblem::NotPositive("-1".into()))
+    );
+    assert_eq!(data.requirements, after_set);
+    assert!(history.undo(&mut data), "the refused edit recorded no step");
+    assert_eq!(
+        data.requirements[0].raw()["max_width_mm"],
+        serde_json::json!(100)
+    );
+    assert!(history.undo(&mut data));
+    assert!(data.requirements.is_empty());
+    assert!(history.redo(&mut data));
+    assert!(history.redo(&mut data));
+    assert_eq!(data.requirements, after_set);
+}

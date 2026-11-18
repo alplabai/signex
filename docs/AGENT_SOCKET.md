@@ -152,7 +152,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`
-  (#1689-#1693; `document` is the project or any document of it). A test
+  (#1689-#1693; `document` is the project or any document of it), and the
+  Requirements section's `project_add_requirement`,
+  `project_set_requirement`, `project_remove_requirement`,
+  `project_enable_requirement` and `project_run_requirements` (#2339). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

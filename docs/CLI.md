@@ -805,8 +805,8 @@ a deterministic check that passes or fails with evidence, and
 report in the shape `check_erc` and `check_drc` use (above). It is a Community
 feature, read-only like the other checks: it writes nothing to a panel, the
 ERC or DRC results or Messages, and it is a query on the agent channel and in
-`signex-cli`. The list is edited in the project file for now; there is no
-editor yet.
+`signex-cli`. The list is edited in the Project tab's Requirements section
+or with the `project_*_requirement` commands ([PROJECT_TAB.md](PROJECT_TAB.md)).
 
 ```bash
 signex-cli run demo.snxprj check_requirements --arg document=demo.snxprj
@@ -816,7 +816,9 @@ The list is the top-level `requirements` key of the `.snxprj`, beside
 `rules`, not inside it: it is not part of the rule set's hash, a rule profile
 or Update from profile. Each entry is an object with an `id` (unique in the
 list), a `kind`, an optional `severity` (`error`, the default, `warning` or
-`info`; the severity of the findings it raises) and the kind's fields. A
+`info`; the severity of the findings it raises), an optional `enabled`
+(`true`, the default; a requirement with `false` is kept, not checked, never
+in `passed`, and named in the report's `warnings`) and the kind's fields. A
 project save writes every entry back as it was read: defaults left out stay
 left out and `100` stays `100` (keys come out sorted, as in the rest of the
 file).

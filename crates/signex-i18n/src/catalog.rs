@@ -6,7 +6,7 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 41] = [
+pub(crate) const EN_US_SOURCES: [&str; 42] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
     include_str!("../locales/en-US/board_query.ftl"),
     include_str!("../locales/en-US/board_sketch.ftl"),
@@ -48,6 +48,7 @@ pub(crate) const EN_US_SOURCES: [&str; 41] = [
     include_str!("../locales/en-US/pcb_graphics.ftl"),
     include_str!("../locales/en-US/board_panel.ftl"),
     include_str!("../locales/en-US/panel_body.ftl"),
+    include_str!("../locales/en-US/requirements.ftl"),
 ];
 
 /// Every locale negotiation may pick, in language-code order.

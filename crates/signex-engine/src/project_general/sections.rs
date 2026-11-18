@@ -5,7 +5,9 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use signex_types::project::{AnnotateUndo, ListMove, ProjectData, VariantProblem};
+use signex_types::project::{
+    AnnotateUndo, ListMove, ProjectData, RequirementEntry, VariantProblem,
+};
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -83,6 +85,8 @@ pub(super) struct SectionsSnapshot {
     variants: Vec<String>,
     active_variant: Option<String>,
     enable_git: bool,
+    /// The Requirements section (#2339): the whole list; only it writes it.
+    requirements: Vec<RequirementEntry>,
 }
 
 impl SectionsSnapshot {
@@ -93,6 +97,7 @@ impl SectionsSnapshot {
             variants: data.variant_definitions.clone(),
             active_variant: data.active_variant.clone(),
             enable_git: data.enable_git,
+            requirements: data.requirements.clone(),
         }
     }
 
@@ -102,5 +107,6 @@ impl SectionsSnapshot {
         data.variant_definitions = self.variants;
         data.active_variant = self.active_variant;
         data.enable_git = self.enable_git;
+        data.requirements = self.requirements;
     }
 }

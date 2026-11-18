@@ -305,6 +305,22 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_set_version_control",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    (
+        "project_add_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_enable_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =

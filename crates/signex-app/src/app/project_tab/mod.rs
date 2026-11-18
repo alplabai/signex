@@ -19,6 +19,7 @@ mod general;
 mod libraries;
 mod open;
 mod parameters;
+mod requirements;
 mod schematic_defaults;
 mod setup;
 mod sheets;
@@ -51,6 +52,11 @@ pub(crate) use commands::{
     project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
+pub(crate) use requirements::{
+    project_add_requirement, project_enable_requirement, project_remove_requirement,
+    project_run_requirements, project_set_requirement,
+};
+pub use requirements::{RequirementsMsg, RequirementsRun, RequirementsTabState};
 pub(crate) use open::project_tab_title;
 
 use crate::app::state::ProjectId;
@@ -76,11 +82,13 @@ pub enum ProjectSection {
     SchematicDefaults,
     /// What new PCBs and sheets start from (#2232).
     Setup,
+    /// The project's requirements and their checks (#2339).
+    Requirements,
 }
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 9] = [
+    pub const ALL: [ProjectSection; 10] = [
         ProjectSection::General,
         ProjectSection::Parameters,
         ProjectSection::Sheets,
@@ -90,6 +98,7 @@ impl ProjectSection {
         ProjectSection::VersionControl,
         ProjectSection::SchematicDefaults,
         ProjectSection::Setup,
+        ProjectSection::Requirements,
     ];
 
     /// The section's name in the list.
@@ -105,6 +114,7 @@ impl ProjectSection {
             ProjectSection::VersionControl => ids::PROJECT_SECTION_VERSION_CONTROL,
             ProjectSection::SchematicDefaults => ids::PROJECT_SECTION_SCHEMATIC_DEFAULTS,
             ProjectSection::Setup => ids::PROJECT_SECTION_SETUP,
+            ProjectSection::Requirements => ids::PROJECT_SECTION_REQUIREMENTS,
         }
     }
 }
@@ -149,6 +159,8 @@ pub struct ProjectTabState {
     pub variant_rename: Option<VariantRenameDraft>,
     /// Why the last variant edit was refused; cleared by the next edit.
     pub variant_problem: Option<signex_types::project::VariantProblem>,
+    /// The Requirements section's drafts, refusal and last run (#2339).
+    pub requirements: RequirementsTabState,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -288,5 +300,10 @@ pub enum ProjectTabMsg {
     /// Enable Version Control…: the project tree's dialog.
     EnableVersionControlRequested {
         project_id: ProjectId,
+    },
+    /// The Requirements section (#2339).
+    Requirements {
+        project_id: ProjectId,
+        msg: RequirementsMsg,
     },
 }
