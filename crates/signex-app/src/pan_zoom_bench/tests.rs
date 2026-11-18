@@ -76,7 +76,10 @@ fn config_reads_defaults_and_overrides() {
     assert_eq!(config.board, cwd.join("b/pcb-10k.snxpcb"));
     assert_eq!(config.out, cwd.join("b/pcb-10k.pan-zoom.csv"));
     assert_eq!(config.seconds, DEFAULT_SECONDS);
-    assert_eq!(config.summary_path(), cwd.join("b/pcb-10k.pan-zoom.summary.txt"));
+    assert_eq!(
+        config.summary_path(),
+        cwd.join("b/pcb-10k.pan-zoom.summary.txt")
+    );
 
     let config = BenchConfig::from_vars(
         vars(&[
@@ -123,7 +126,14 @@ fn the_script_is_a_closed_loop() {
         (0..CYCLE_LEN).map(|i| step_at(i).label()).collect();
     assert_eq!(
         labels.into_iter().collect::<Vec<_>>(),
-        ["pan_down", "pan_left", "pan_right", "pan_up", "zoom_in", "zoom_out"]
+        [
+            "pan_down",
+            "pan_left",
+            "pan_right",
+            "pan_up",
+            "zoom_in",
+            "zoom_out"
+        ]
     );
     // And repeats.
     for index in 0..CYCLE_LEN {
@@ -138,7 +148,11 @@ fn a_run_waits_fits_settles_then_times_every_frame() {
     assert!(actions[..5].iter().all(|a| *a == FrameAction::Wait));
     assert_eq!(actions[5], FrameAction::FitBoard);
     let settle = SETTLE_FRAMES as usize;
-    assert!(actions[6..6 + settle].iter().all(|a| *a == FrameAction::Wait));
+    assert!(
+        actions[6..6 + settle]
+            .iter()
+            .all(|a| *a == FrameAction::Wait)
+    );
     // From then on every frame moves the camera by the next script step.
     for (index, action) in actions[6 + settle..].iter().enumerate() {
         assert_eq!(*action, FrameAction::Apply(step_at(index)));

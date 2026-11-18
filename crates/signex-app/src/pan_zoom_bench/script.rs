@@ -43,7 +43,12 @@ pub const CYCLE_LEN: usize = 2 * ZOOM_FRAMES + 2 * PAN_X_FRAMES + 2 * PAN_Y_FRAM
 /// The move for frame `index` of the timed run.
 pub fn step_at(index: usize) -> BenchStep {
     let legs = [
-        (ZOOM_FRAMES, BenchStep::Zoom { factor: ZOOM_FACTOR }),
+        (
+            ZOOM_FRAMES,
+            BenchStep::Zoom {
+                factor: ZOOM_FACTOR,
+            },
+        ),
         (
             PAN_X_FRAMES,
             BenchStep::Pan {

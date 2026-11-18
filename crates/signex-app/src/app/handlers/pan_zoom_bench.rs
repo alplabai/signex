@@ -30,9 +30,9 @@ impl Signex {
             return Subscription::none();
         }
         iced::event::listen_raw(|event, _status, window| match event {
-            iced::Event::Window(iced::window::Event::RedrawRequested(at)) => Some(
-                Message::PanZoomBench(BenchMsg::FrameStarted { window, at }),
-            ),
+            iced::Event::Window(iced::window::Event::RedrawRequested(at)) => {
+                Some(Message::PanZoomBench(BenchMsg::FrameStarted { window, at }))
+            }
             _ => None,
         })
     }
@@ -60,7 +60,10 @@ impl Signex {
                         let config = bench.config.clone();
                         let canvas = &self.interaction_state.pcb_canvas;
                         let mount = if canvas.gpu_render { "gpu" } else { "cpu" };
-                        let view = (viewport.width.round() as u32, viewport.height.round() as u32);
+                        let view = (
+                            viewport.width.round() as u32,
+                            viewport.height.round() as u32,
+                        );
                         write_report_task(config, report, mount, view)
                     }
                 }
