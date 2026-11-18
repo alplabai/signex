@@ -9,9 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::pcb_canvas::PcbCanvasMsg;
-use signex_types::schematic::{
-    ChildSheet, FillType, Label, LabelType, SelectedItem, SelectedKind,
-};
+use signex_types::schematic::{ChildSheet, FillType, Label, LabelType, SelectedItem, SelectedKind};
 
 use super::*;
 
@@ -94,7 +92,9 @@ fn two_sheet_fixture() -> Fixture {
         ProjectDefaults::default(),
     );
     let amp = f.sheet.with_file_name("amp.snxsch");
-    let text = SnxSchematic::new(amp_sheet(&f._lib)).write_string().unwrap();
+    let text = SnxSchematic::new(amp_sheet(&f._lib))
+        .write_string()
+        .unwrap();
     std::fs::write(&amp, text).unwrap();
     let project = &mut f.app.document_state.projects[0].data;
     project.sheets.push(sheet_entry("amp.snxsch"));
@@ -225,7 +225,11 @@ fn a_two_sheet_schematic_becomes_a_board_with_every_net_as_ratsnest() {
     let within_root = pad_net(&f, "R1", "2").expect("R1.2 has a net");
     assert_eq!(pad_net(&f, "R2", "1"), Some(within_root));
     let across = pad_net(&f, "R2", "2").expect("R2.2 has a net");
-    assert_eq!(pad_net(&f, "R10", "1"), Some(across), "SIG joins the sheets");
+    assert_eq!(
+        pad_net(&f, "R10", "1"),
+        Some(across),
+        "SIG joins the sheets"
+    );
     let within_amp = pad_net(&f, "R10", "2").expect("R10.2 has a net");
     assert_eq!(pad_net(&f, "R11", "1"), Some(within_amp));
 
