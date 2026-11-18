@@ -237,7 +237,11 @@ fn erc_clean_runs_the_projects_erc() {
     );
     let project = project_path(&app);
     let value = report(&mut app, &project, &[]);
-    assert_eq!(value["passed"], json!(["req::erc", "req::loose"]), "{value}");
+    assert_eq!(
+        value["passed"],
+        json!(["req::erc", "req::loose"]),
+        "{value}"
+    );
     assert_eq!(value["findings"], json!([]), "{value}");
 }
 

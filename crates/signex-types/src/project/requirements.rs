@@ -125,8 +125,14 @@ const COMMON_FIELDS: [&str; 3] = ["id", "severity", "kind"];
 /// its number forms; the check reports an unreadable entry as not checked.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RequirementEntry {
-    Known { requirement: Requirement, raw: Value },
-    Unreadable { raw: Value, reason: String },
+    Known {
+        requirement: Requirement,
+        raw: Value,
+    },
+    Unreadable {
+        raw: Value,
+        reason: String,
+    },
 }
 
 impl RequirementEntry {
