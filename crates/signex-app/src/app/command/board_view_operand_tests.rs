@@ -274,6 +274,7 @@ fn a_kind_the_view_cannot_honour_is_refused() {
         ("set_object_transparency", vec!["kind=texts", "value=10"]),
         ("set_object_transparency", vec!["kind=tracks", "value=150"]),
         ("set_layer_visible", vec!["layer=Nowhere", "on=true"]),
+        ("set_layer_color", vec!["layer=TopKeepout", "color=#00ff00"]),
     ] {
         assert!(
             matches!(

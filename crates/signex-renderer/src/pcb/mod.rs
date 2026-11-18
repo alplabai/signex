@@ -38,6 +38,9 @@ pub struct TraceInput {
     pub dimmed: bool,
     /// Whose colour it is drawn in.
     pub ink: CopperInk,
+    /// The View Options row it belongs to, Tracks or Arcs: its
+    /// transparency (#2363).
+    pub object: BoardObject,
 }
 
 #[derive(Clone, Debug)]
@@ -198,7 +201,7 @@ pub use graphics::{GraphicInput, GraphicShapeInput};
 pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
-    signal_layers,
+    plane_layers, signal_layers,
 };
 pub use layer_sets::{
     BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
@@ -552,6 +555,7 @@ mod tests {
                     net,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    object: BoardObject::Tracks,
                 })
                 .collect(),
             ..PcbSnapshot::default()

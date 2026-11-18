@@ -480,7 +480,10 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
         let Some(kind) = graphic.kind() else {
             continue;
         };
-        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+        // A text frame is a text: hidden with Texts.
+        let text_off = kind == signex_types::pcb_graphic::BoardGraphicKind::TextFrame
+            && !view.shows_object(BoardObject::Texts);
+        if text_off || !view.shows_any(std::slice::from_ref(&graphic.layer)) {
             hidden.insert(ItemRef::Graphic {
                 graphic: graphic.uuid,
                 kind: pcb_geom::PickKind::of_graphic(kind),
@@ -706,6 +709,57 @@ mod tests {
         view.show_all();
         state.set_view(&view);
         assert!(state.click(&board, on_bottom, 0.1, ClickMode::Replace));
+    }
+
+    /// #2363: a kind the View Options hide is not picked, on any layer, and
+    /// can be picked again once shown.
+    #[test]
+    fn a_hidden_object_kind_cannot_be_hit() {
+        let board = two_layer_board();
+        let on_top = Point::new(2.0, 0.0);
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Tracks, false);
+        state.set_view(&view);
+        assert!(!state.click(&board, on_top, 0.1, ClickMode::Replace));
+        assert!(state.selection().is_empty());
+
+        view.set_object_visible(BoardObject::Tracks, true);
+        state.set_view(&view);
+        assert!(state.click(&board, on_top, 0.1, ClickMode::Replace));
+    }
+
+    /// #2363: hiding Texts hides a text frame, drawing and all; a plain
+    /// drawing on the same layer stays pickable.
+    #[test]
+    fn hiding_texts_hides_a_text_frame_but_not_a_drawing() {
+        let drawing = |n: u128, kind: &str| signex_types::pcb::BoardGraphic {
+            uuid: Uuid::from_u128(n),
+            graphic_type: kind.to_owned(),
+            layer: "TopSilkscreen".to_owned(),
+            width: 0.1,
+            start: Some(Point::new(0.0, 0.0)),
+            end: Some(Point::new(4.0, 2.0)),
+            center: None,
+            radius: 0.0,
+            points: Vec::new(),
+            text: "NOTE".to_owned(),
+            font_size: 1.0,
+        };
+        let mut board = board();
+        board.graphics = vec![drawing(20, "text_frame"), drawing(21, "line")];
+        let mut view = PcbLayerView::default();
+        view.set_object_visible(BoardObject::Texts, false);
+        let hidden = hidden_items(&board, &view);
+        let ids: Vec<Uuid> = hidden
+            .iter()
+            .filter_map(|item| match item {
+                ItemRef::Graphic { graphic, .. } => Some(*graphic),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [Uuid::from_u128(20)]);
     }
 
     /// Review finding 4 / S1 on #2271: selecting a list of items (a DRC pick,

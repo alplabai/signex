@@ -353,6 +353,7 @@ mod tests {
                 net: 1,
                 dimmed: false,
                 ink: CopperInk::Layer(CopperLayer::Top),
+                object: signex_renderer::pcb::BoardObject::Tracks,
             }],
             pads: vec![pad(CopperLayer::Top), pad(CopperLayer::Bottom)],
             ..PcbSnapshot::default()

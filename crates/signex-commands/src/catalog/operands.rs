@@ -340,7 +340,7 @@ pub const OBJECT_VISIBLE: &[Operand] = &[
 ];
 
 /// How transparent a kind of object of the named board's view is drawn
-/// (#2363): `value` in percent, 0 to 100; `kind` is `pads`, `vias`,
+/// (#2363): `value` in percent, 0 to 100; `kind` is `pads`, `vias`, `arcs`,
 /// `tracks`, `polygons`, `regions` or `fills`.
 pub const OBJECT_TRANSPARENCY: &[Operand] = &[
     required("kind", OperandKind::Text),

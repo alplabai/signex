@@ -652,19 +652,24 @@ which keeps the rows whose name holds the text, and two tabs.
 A click on a layer's name makes it the active layer. A click on a chip opens
 the colours under the row: twelve presets, Custom... and the palette colour
 again. The colour is an override on top of the one board palette for this
-board view only; the canvas, the chip and the board texts draw it.
+board view only; the canvas (the Board Outline colour draws the board edge
+too), the chip and the board texts draw it. The Keep-Out chips are greyed:
+the board's keepout regions keep the palette colour.
 
 **View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
 Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All
 Objects (Mixed while the rows differ) and one row per kind of object, each
 with an eye, Draft (greyed) and a Transparency slider. Pads, Vias, Arcs,
 Tracks, Polygons, Regions, Fills, Texts, Dimensions and Keepouts can be
-hidden; a hidden kind is neither drawn nor picked. Pads, Vias, Tracks,
-Polygons, Regions and Fills can be drawn transparent. Mask and Dim Settings
-and the Additional Options chips are greyed until the view can draw them.
+hidden; a hidden kind is neither drawn nor picked. Texts covers footprint
+texts, board strings and text frames, box and all. Pads, Vias, Arcs (copper
+arcs; Tracks never fades them), Tracks, Polygons, Regions and Fills can be
+drawn transparent. Mask and Dim Settings and the Additional Options chips
+are greyed until the view can draw them.
 
 All of this is the board view's state, for the session; nothing touches the
-board file. Every control has a catalog command that names its board with
+board file. Saving the view, presets and every greyed control are tracked in
+#2480. Every control has a catalog command that names its board with
 `document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
 (without `color`, the palette colour again), `show_used_layers_only`,
 `set_object_visible` (`kind=all` for All Objects) and

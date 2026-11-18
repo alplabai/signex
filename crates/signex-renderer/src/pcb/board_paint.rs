@@ -3,7 +3,7 @@
 //! object is drawn. Session state of one view, never written to the
 //! `.snxpcb`; the colours are overrides on top of the one board palette.
 
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 /// A kind of object on a board, as the View Options tab lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -84,11 +84,18 @@ impl BoardObject {
     }
 
     /// Whether the board view can draw this kind transparent: the copper
-    /// it draws in its scene.
+    /// it draws in its scene (copper arcs too; drawn arcs on other layers
+    /// stay opaque).
     pub fn can_fade(self) -> bool {
         matches!(
             self,
-            Self::Pads | Self::Vias | Self::Tracks | Self::Polygons | Self::Regions | Self::Fills
+            Self::Pads
+                | Self::Vias
+                | Self::Arcs
+                | Self::Tracks
+                | Self::Polygons
+                | Self::Regions
+                | Self::Fills
         )
     }
 
@@ -107,6 +114,16 @@ pub struct BoardPaint {
 }
 
 impl BoardPaint {
+    /// Whether the board view draws everything on `layer` in the colour
+    /// given to it. Not yet for the keep-out layers: the board's keepout
+    /// regions keep the palette colour.
+    pub fn can_recolour(layer: PcbLayer) -> bool {
+        !matches!(
+            layer,
+            PcbLayer::Technical(TechnicalLayer::KeepoutTop | TechnicalLayer::KeepoutBottom)
+        )
+    }
+
     /// The colour the user picked for `layer`, if any.
     pub fn colour(&self, layer: PcbLayer) -> Option<[u8; 3]> {
         self.colours

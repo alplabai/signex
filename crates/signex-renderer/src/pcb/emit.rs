@@ -10,6 +10,7 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         net: segment.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        object: BoardObject::Tracks,
     }
 }
 
@@ -26,6 +27,7 @@ pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInpu
             net: arc.net,
             dimmed: false,
             ink: CopperInk::Unknown,
+            object: BoardObject::Arcs,
         })
         .collect()
 }
@@ -249,7 +251,7 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
     for trace in &snapshot.traces {
         let color = faded(
             theme,
-            BoardObject::Tracks,
+            trace.object,
             copper_color(theme, trace.ink, ColorSlot::Wire),
         );
         scene.lines.push(LineSegment {

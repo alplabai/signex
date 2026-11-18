@@ -17,6 +17,7 @@ use signex_types::pcb::{
     BoardGraphic, BoardText, Footprint, FpGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
     PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard,
 };
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::PcbLayer;
 
 use super::board_features::{line, push_loop};
@@ -126,12 +127,14 @@ pub(super) fn board_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out:
         let Some((layer, dimmed)) = shown_layer(&graphic.layer, view) else {
             continue;
         };
+        // A text frame is a text: hiding Texts drops its box too.
+        if !texts && graphic.kind() == Some(BoardGraphicKind::TextFrame) {
+            continue;
+        }
         if let Ok(Some(placed)) = pcb_geom::board_graphic_placement(graphic) {
             out.graphics.extend(graphic_input(&placed, layer, dimmed));
         }
-        if texts {
-            out.texts.extend(frame_lines(graphic, layer));
-        }
+        out.texts.extend(frame_lines(graphic, layer));
     }
     for text in board.texts.iter().filter(|_| texts) {
         let Some((layer, _)) = shown_layer(&text.layer, view) else {

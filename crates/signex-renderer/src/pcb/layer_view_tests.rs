@@ -584,3 +584,33 @@ fn a_transparency_fades_the_tracks() {
         assert!((b.color[3] - a.color[3] * 0.5).abs() < 1e-6);
     }
 }
+
+/// #2363: a copper arc answers to the Arcs row only: the Tracks
+/// transparency leaves it, the Arcs transparency fades it.
+#[test]
+fn a_copper_arc_fades_with_arcs_not_tracks() {
+    let mut board = board();
+    board.segments.clear();
+    board.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: uuid::Uuid::from_u128(77),
+        start: signex_types::pcb::Point::new(0.0, 0.0),
+        mid: signex_types::pcb::Point::new(5.0, 5.0),
+        end: signex_types::pcb::Point::new(10.0, 0.0),
+        width: 0.25,
+        layer: "TopCopper".to_owned(),
+        net: 1,
+    });
+    let mut view = PcbLayerView::default();
+    let (snapshot, before) = lines_of(&board, &view);
+    assert!(!snapshot.traces.is_empty(), "the arc is drawn as chords");
+    view.set_object_transparency(BoardObject::Tracks, 80);
+    let (_, tracks) = lines_of(&board, &view);
+    for (a, b) in before.lines.iter().zip(&tracks.lines) {
+        assert_eq!(a.color, b.color, "the Tracks row leaves arcs");
+    }
+    view.set_object_transparency(BoardObject::Arcs, 50);
+    let (_, arcs) = lines_of(&board, &view);
+    for (a, b) in before.lines.iter().zip(&arcs.lines) {
+        assert!((b.color[3] - a.color[3] * 0.5).abs() < 1e-6);
+    }
+}

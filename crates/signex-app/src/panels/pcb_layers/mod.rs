@@ -21,9 +21,9 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, ids, t};
 use signex_renderer::pcb::{
     BoardObject, BoardPaint, LayerSetId, PcbLayerView, board_copper_layers, board_layers,
-    used_layers,
+    plane_layers, used_layers,
 };
-use signex_types::pcb::{LayerDef, PcbBoard};
+use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input};
@@ -131,26 +131,17 @@ impl Default for PcbLayersPanel {
     }
 }
 
-/// Whether the stackup marks a copper layer as a plane.
-fn is_plane(layers: &[LayerDef], layer: PcbLayer) -> bool {
-    layers.iter().any(|def| {
-        signex_types::format::parse_pcb_layer(&def.name) == Some(layer)
-            && ["plane", "power"]
-                .iter()
-                .any(|kind| def.layer_type.eq_ignore_ascii_case(kind))
-    })
-}
-
 impl PcbLayersPanel {
     pub fn new(board: &PcbBoard, view: &PcbLayerView, i18n: Arc<I18n>) -> Self {
         let layers = &board.layers;
+        let planes = plane_layers(layers);
         let copper = board_copper_layers(layers)
             .into_iter()
             .enumerate()
             .map(|(i, c)| CopperRow {
                 layer: PcbLayer::Copper(c),
                 number: i + 1,
-                plane: is_plane(layers, PcbLayer::Copper(c)),
+                plane: planes.contains(&c),
             })
             .collect();
         let hidden = PcbLayer::all()

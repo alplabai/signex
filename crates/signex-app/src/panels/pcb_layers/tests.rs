@@ -4,6 +4,7 @@ use crate::layout_probe::{
     LaidOutText, draw_pixels, find, lay_out_texts, messages_on_click, messages_on_click_at,
 };
 use iced::{Point, Size};
+use signex_renderer::pcb::BOARD_OUTLINE;
 use signex_types::pcb_layer::{CopperLayer, TechnicalLayer};
 
 const WINDOW: Size = Size::new(320.0, 2600.0);
@@ -371,5 +372,89 @@ fn the_panel_state_opens_and_closes_a_chip() {
     assert!(
         !ui.apply(&LayersPanelMsg::Board3dToggled),
         "the app's to run"
+    );
+}
+
+/// The Board Outline row's eye toggles the layer that gates the drawn edge.
+#[test]
+fn the_board_outline_eye_toggles_the_board_edge() {
+    let ctx = context(&PcbLayerView::default());
+    let beside = shown(&left_of(&ctx, "Board Outline"));
+    let eye = PanelMsg::PcbLayers(PcbViewMsg::LayerVisibilityToggled(BOARD_OUTLINE));
+    assert!(beside.contains(&format!("{eye:?}")), "{beside:?}");
+}
+
+/// #2357/#2359: any layer can be the active one, so a technical row's name
+/// picks its layer, as its tab under the canvas does.
+#[test]
+fn a_technical_layer_name_picks_it_as_the_active_layer() {
+    let ctx = context(&PcbLayerView::default());
+    let drill = PcbLayer::Technical(TechnicalLayer::DrillDrawing);
+    for (label, layer) in [("Board Outline", BOARD_OUTLINE), ("Drill Drawing", drill)] {
+        let at = row_text(&ctx, label).center();
+        let clicked = messages_on_click_at(panel(&ctx), WINDOW, None, at);
+        assert_eq!(
+            shown(&clicked),
+            shown(&[PanelMsg::PcbLayers(PcbViewMsg::ActiveLayerPicked(layer))]),
+            "{label}"
+        );
+    }
+}
+
+/// The keep-out chips are greyed: the board's keepout regions cannot take a
+/// view colour yet. The eyes still work.
+#[test]
+fn the_keep_out_chips_open_no_colours() {
+    let ctx = context(&PcbLayerView::default());
+    let sent = messages_along(&ctx, "Keep-Out", 0.0, WINDOW.width);
+    assert!(
+        !sent.iter().any(|m| matches!(
+            m,
+            PanelMsg::LayersPanel(LayersPanelMsg::ColourChipToggled(_))
+        )),
+        "{sent:?}"
+    );
+    assert!(
+        sent.iter().any(|m| matches!(
+            m,
+            PanelMsg::PcbLayers(PcbViewMsg::LayerVisibilityToggled(_))
+        )),
+        "{sent:?}"
+    );
+}
+
+/// The pixels of the panel in the band of the row named `label`.
+fn row_band(view: &PcbLayerView, label: &str) -> Vec<u8> {
+    let ctx = context(view);
+    let bounds = row_text(&ctx, label);
+    let pixels = draw_pixels(panel(&ctx), WINDOW);
+    let stride = WINDOW.width as usize * 4;
+    let y0 = bounds.y.floor() as usize;
+    let y1 = (bounds.y + bounds.height).ceil() as usize;
+    pixels[y0 * stride..y1 * stride].to_vec()
+}
+
+/// Graphite look: the active row, and a hidden layer's eye, chip and name,
+/// each draw differently from the plain row. Only the row's own band is
+/// compared, so the Active Layer dropdown and the All Layers eye do not
+/// count.
+#[test]
+fn the_active_row_and_a_hidden_layer_are_drawn_differently() {
+    let plain = row_band(&PcbLayerView::default(), "Bottom Layer");
+
+    let mut active = PcbLayerView::default();
+    active.set_active(CopperLayer::Bottom);
+    assert_ne!(
+        plain,
+        row_band(&active, "Bottom Layer"),
+        "the active row is tinted"
+    );
+
+    let mut hidden = PcbLayerView::default();
+    hidden.toggle_visibility(BOTTOM);
+    assert_ne!(
+        plain,
+        row_band(&hidden, "Bottom Layer"),
+        "a hidden layer is struck and faint"
     );
 }

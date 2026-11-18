@@ -3,6 +3,7 @@
 //! and the 3D switch run what the layer set button and View ▸ 3D View run.
 
 use iced::Task;
+use signex_renderer::pcb::LayerSetId;
 
 use crate::app::{Board3dMsg, LayerSetMsg, Message, PcbMsg, Signex};
 use crate::panels::LayersPanelMsg;
@@ -18,10 +19,10 @@ impl Signex {
                 window: None,
                 name: name.clone(),
             }),
-            LayersPanelMsg::SetSaved => {
-                let name = std::mem::take(&mut ui.set_name);
-                PcbMsg::LayerSet(LayerSetMsg::Saved { window: None, name })
-            }
+            LayersPanelMsg::SetSaved => PcbMsg::LayerSet(LayerSetMsg::Saved {
+                window: None,
+                name: ui.set_name.clone(),
+            }),
             LayersPanelMsg::SetDeleted(name) => {
                 PcbMsg::LayerSet(LayerSetMsg::Deleted(name.clone()))
             }
@@ -35,6 +36,12 @@ impl Signex {
         };
         let task = self.update(Message::Pcb(event));
         self.refresh_panel_ctx();
+        // The typed name goes once the view shows the set saved under it.
+        let ctx = &mut self.document_state.panel_ctx;
+        let saved = LayerSetId::Saved(ctx.pcb_layers_ui.set_name.trim().to_string());
+        if matches!(msg, LayersPanelMsg::SetSaved) && ctx.pcb_layers.layer_set == Some(saved) {
+            ctx.pcb_layers_ui.set_name.clear();
+        }
         task
     }
 }

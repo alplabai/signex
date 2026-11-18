@@ -5,7 +5,7 @@
 //! undo step.
 
 use iced::Task;
-use signex_renderer::pcb::BoardObject;
+use signex_renderer::pcb::{BoardObject, BoardPaint};
 
 use super::layer_strip_operands::{layer_operand, on_named_board, text_operand};
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -49,7 +49,13 @@ pub(super) fn set_layer_color(app: &mut Signex, args: &CommandArgs) -> Ran {
         Some(OperandValue::Color(r, g, b)) => Some([*r, *g, *b]),
         _ => None,
     };
-    let event = layer_operand(args).map(|layer| PcbViewMsg::LayerColourSet { layer, colour });
+    let event = layer_operand(args).and_then(|layer| {
+        if BoardPaint::can_recolour(layer) {
+            Ok(PcbViewMsg::LayerColourSet { layer, colour })
+        } else {
+            Err("the board view cannot recolour this layer yet".to_string())
+        }
+    });
     on_named_board(app, args, event)
 }
 

@@ -8,7 +8,7 @@ use iced::widget::tooltip::Position;
 use iced::widget::{Column, Space, container, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{Localized, ids, t};
-use signex_renderer::pcb::DIMMED_ALPHA;
+use signex_renderer::pcb::{BoardPaint, DIMMED_ALPHA};
 use signex_types::pcb_layer::PcbLayer;
 use signex_widgets::{Label, button, raw, text};
 
@@ -78,7 +78,8 @@ pub(super) fn eye<'a>(
 }
 
 /// A colour chip: a click opens the colours of `layer`; without a layer it
-/// only shows `colour`, greyed.
+/// only shows `colour`, greyed; a layer the view cannot recolour yet (the
+/// keep-out pair) adds the "not yet" tooltip.
 pub(super) fn chip<'a>(
     panel: &PcbLayersPanel,
     colour: Color,
@@ -111,6 +112,13 @@ pub(super) fn chip<'a>(
     let Some(layer) = layer else {
         return container(swatch).padding([SP.xs, SP.xs]).boxed();
     };
+    if !BoardPaint::can_recolour(layer) {
+        return not_yet(
+            container(swatch).padding([SP.xs, SP.xs]).boxed(),
+            panel,
+            ctx,
+        );
+    }
     let chip = button(swatch)
         .padding([SP.xs, SP.xs])
         .style(row_button(&ctx.tokens))
