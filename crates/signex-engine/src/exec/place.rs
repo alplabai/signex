@@ -311,7 +311,8 @@ impl Engine {
         let mut bailed = Vec::new();
         if let (Some(contacts), Some(owners)) = (contacts.filter(|c| !c.is_empty()), &ownership) {
             let pin_owned = owners.pin_owned();
-            let carried = crate::follow_moved_wires(&mut self.document, &contacts, &items, &pin_owned);
+            let carried =
+                crate::follow_moved_wires(&mut self.document, &contacts, &items, &pin_owned);
             followed.extend(carried.touched);
             bailed = carried.bailed;
         }
