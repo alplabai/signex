@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use signex_net::{point_on_segment, pt_key, uf::Key};
+use signex_types::object_id::IdSource;
 use signex_types::schematic::{
     Junction, Point, SchematicSheet, SelectedItem, SelectedKind, Symbol, SymbolTransform, Wire,
     instance_pins,
@@ -102,24 +103,20 @@ pub fn bare_pin_taps(sheet: &SchematicSheet) -> Vec<Point> {
         .collect()
 }
 
-/// A minted dot at `at`: drawn and saved like any junction, and checked
-/// again on every wire edit like the dots wires mint.
-fn pin_dot(at: Point) -> Junction {
-    Junction {
-        uuid: uuid::Uuid::now_v7(),
-        position: at,
-        minted: true,
-        ..Junction::default()
-    }
-}
-
 /// The repair of [`bare_pin_taps`]: one dot per bare contact, as commands to
 /// run as one batch (one undo step). Empty when there is nothing to repair.
+/// Each dot is an automatic one, drawn and saved like any junction and
+/// checked again on every later edit; its id comes from `ids` (#2429).
 #[must_use]
-pub fn pin_junction_repairs(sheet: &SchematicSheet) -> Vec<Command> {
+pub fn pin_junction_repairs(sheet: &SchematicSheet, ids: &mut dyn IdSource) -> Vec<Command> {
     (bare_pin_taps(sheet).into_iter())
         .map(|at| Command::PlaceJunction {
-            junction: pin_dot(at),
+            junction: Junction {
+                uuid: ids.next_id(),
+                position: at,
+                minted: true,
+                ..Junction::default()
+            },
         })
         .collect()
 }
@@ -158,7 +155,8 @@ pub(crate) fn pin_dots_for(sheet: &SchematicSheet, items: &[SelectedItem]) -> Ve
     candidates
         .into_iter()
         .filter(|tip| taken.insert(pt_key(tip)))
-        .map(pin_dot)
+        // An automatic dot, made where the T dots of a reconcile are made.
+        .map(super::autoplace::junction_at)
         .collect()
 }
 
@@ -177,6 +175,7 @@ mod tests {
     use super::*;
     use crate::rubber_band_tests::{add_wire, lib_pin, lib_symbol, place};
     use crate::test_support::test_sheet;
+    use signex_types::object_id::SequentialIds;
 
     fn sheet_with_tap() -> SchematicSheet {
         let mut sheet = test_sheet();
@@ -199,14 +198,16 @@ mod tests {
     #[test]
     fn a_dot_on_the_tap_ends_the_report_and_the_repair_adds_one_dot() {
         let mut sheet = sheet_with_tap();
-        let repairs = pin_junction_repairs(&sheet);
+        let mut ids = SequentialIds::default();
+        let repairs = pin_junction_repairs(&sheet, &mut ids);
         assert_eq!(repairs.len(), 1);
         let Command::PlaceJunction { junction } = &repairs[0] else {
             panic!("a repair places a junction");
         };
         assert!(junction.minted);
+        assert_eq!(junction.uuid, uuid::Uuid::from_u128(1), "the caller's id");
         sheet.junctions.push(junction.clone());
         assert!(bare_pin_taps(&sheet).is_empty());
-        assert!(pin_junction_repairs(&sheet).is_empty());
+        assert!(pin_junction_repairs(&sheet, &mut ids).is_empty());
     }
 }
