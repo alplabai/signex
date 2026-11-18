@@ -171,7 +171,7 @@ fn an_export_over_existing_drawings_says_it_replaced_them() {
         "board-assembly-bottom.svg".to_string(),
     ];
     let replaced = super::assembly::existing_files(dir.path(), &names);
-    assert_eq!(replaced, [top.clone()], "only the top file was there");
+    assert_eq!(replaced, std::slice::from_ref(&top), "only the top file was there");
 
     crate::diagnostics::init_logging().ignore("the logger may already be installed");
     let since = crate::diagnostics::recent_entries().last().map(|e| e.id);
