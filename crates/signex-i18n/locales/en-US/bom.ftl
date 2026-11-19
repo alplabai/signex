@@ -34,6 +34,8 @@ bom-column-designator = Designator
 bom-column-value = Value
 bom-column-footprint = Footprint
 bom-column-lib-ref = LibRef
+# The legacy column that lists the designators, under its old name.
+bom-column-reference = Reference
 bom-column-qty = Qty
 bom-column-unit-price = Unit Price
 bom-column-buy-qty = Buy Qty
@@ -79,10 +81,14 @@ bom-issue-count-errors = { $n ->
     [one] { $count } error
    *[other] { $count } errors
 }
+# As above: $n picks the plural form; $count is the same number written
+# without grouping. Write { $count }, not { $n }.
 bom-issue-count-warnings = { $n ->
     [one] { $count } warning
    *[other] { $count } warnings
 }
+# As above: $n picks the plural form; $count is the same number written
+# without grouping. Write { $count }, not { $n }.
 bom-issue-count-notes = { $n ->
     [one] { $count } note
    *[other] { $count } notes

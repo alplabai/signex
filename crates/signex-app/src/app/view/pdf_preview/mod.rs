@@ -10,6 +10,8 @@ use super::*;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 
+#[cfg(test)]
+mod controls_tests;
 mod page_setup;
 mod preview;
 mod settings;

@@ -60,7 +60,7 @@ fn the_page_setup_names_keep_their_english() {
 }
 
 /// A preview with default options and no pages, for laying out controls.
-fn empty_preview() -> crate::app::state::PreviewState {
+pub(super) fn empty_preview() -> crate::app::state::PreviewState {
     let pdf_options = signex_output::PdfOptions::default();
     crate::app::state::PreviewState {
         source: std::path::PathBuf::new(),
@@ -104,14 +104,18 @@ fn the_margin_row_shows_the_catalog_edge_names() {
     for edge in ["Top", "Right", "Bottom", "Left"] {
         assert!(en.iter().any(|t| t == edge), "{edge} in {en:?}");
     }
+    // The edges read in `MarginEdge::ALL` order, as the fields beside them.
+    let edges: Vec<&str> = en
+        .iter()
+        .map(String::as_str)
+        .filter(|t| ["Top", "Right", "Bottom", "Left"].contains(t))
+        .collect();
+    assert_eq!(edges, ["Top", "Right", "Bottom", "Left"]);
     let pref = LanguagePref::Locale("en-XA".to_owned());
     let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
     let xa = shown(&app);
     assert!(!xa.iter().any(|t| t == "Top"), "{xa:?}");
-    let top = app
-        .ui_state
-        .i18n
-        .message_plain(ids::BOARD_PANEL_RAIL_TOP, &[]);
+    let top = app.ui_state.i18n.message_plain(ids::PDF_MARGIN_TOP, &[]);
     assert!(xa.contains(&top), "{xa:?}");
 }
 

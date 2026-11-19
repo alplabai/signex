@@ -33,7 +33,7 @@ pub(super) fn column_name(c: &signex_output::BomColumn) -> Option<signex_i18n::M
         BomColumn::Name => ids::BOM_COLUMN_NAME,
         BomColumn::Designator => ids::BOM_COLUMN_DESIGNATOR,
         BomColumn::LibRef => ids::BOM_COLUMN_LIB_REF,
-        BomColumn::Reference => ids::DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE,
+        BomColumn::Reference => ids::BOM_COLUMN_REFERENCE,
         BomColumn::Qty => ids::BOM_COLUMN_QTY,
         BomColumn::Value => ids::BOM_COLUMN_VALUE,
         BomColumn::Footprint => ids::BOM_COLUMN_FOOTPRINT,

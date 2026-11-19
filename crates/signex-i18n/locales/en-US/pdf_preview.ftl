@@ -95,3 +95,11 @@ pdf-page-size-us-legal = US Legal
 pdf-page-size-tabloid = Tabloid
 # Scale picker: print at the percentage typed next to it.
 pdf-scale-percent = Percent
+# A page margin edge, beside its width.
+pdf-margin-top = Top
+# A page margin edge, beside its width.
+pdf-margin-right = Right
+# A page margin edge, beside its width.
+pdf-margin-bottom = Bottom
+# A page margin edge, beside its width.
+pdf-margin-left = Left

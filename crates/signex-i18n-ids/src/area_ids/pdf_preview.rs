@@ -84,4 +84,8 @@ define_ids! {
     PDF_PAGE_SIZE_US_LEGAL = "pdf-page-size-us-legal";
     PDF_PAGE_SIZE_TABLOID = "pdf-page-size-tabloid";
     PDF_SCALE_PERCENT = "pdf-scale-percent";
+    PDF_MARGIN_TOP = "pdf-margin-top";
+    PDF_MARGIN_RIGHT = "pdf-margin-right";
+    PDF_MARGIN_BOTTOM = "pdf-margin-bottom";
+    PDF_MARGIN_LEFT = "pdf-margin-left";
 }

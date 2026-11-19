@@ -31,6 +31,7 @@ define_ids! {
     BOM_COLUMN_VALUE = "bom-column-value";
     BOM_COLUMN_FOOTPRINT = "bom-column-footprint";
     BOM_COLUMN_LIB_REF = "bom-column-lib-ref";
+    BOM_COLUMN_REFERENCE = "bom-column-reference";
     BOM_COLUMN_QTY = "bom-column-qty";
     BOM_COLUMN_UNIT_PRICE = "bom-column-unit-price";
     BOM_COLUMN_BUY_QTY = "bom-column-buy-qty";

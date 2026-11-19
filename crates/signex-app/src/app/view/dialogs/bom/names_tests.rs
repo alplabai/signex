@@ -13,8 +13,10 @@ fn xa() -> I18n {
     I18n::new(&LanguagePref::Locale("en-XA".to_owned()))
 }
 
-fn plain(text: impl ToString) -> String {
-    text.to_string().replace(['\u{2068}', '\u{2069}'], "")
+/// The text exactly as the footer shows it, bidi marks included: the
+/// former `summary()` text had none, so none may appear.
+fn plain(text: signex_i18n::Localized) -> String {
+    text.into_string()
 }
 
 /// Every standard column reads as its exported header; a custom-field

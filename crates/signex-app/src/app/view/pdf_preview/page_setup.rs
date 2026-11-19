@@ -271,9 +271,9 @@ pub(super) fn scale_mode_label(mode: PdfScaleMode) -> MessageId {
 pub(super) fn margin_edge_label(edge: MarginEdge) -> MessageId {
     use signex_i18n::ids;
     match edge {
-        MarginEdge::Top => ids::BOARD_PANEL_RAIL_TOP,
-        MarginEdge::Right => ids::BOARD_PANEL_RAIL_RIGHT,
-        MarginEdge::Bottom => ids::BOARD_PANEL_RAIL_BOTTOM,
-        MarginEdge::Left => ids::BOARD_PANEL_RAIL_LEFT,
+        MarginEdge::Top => ids::PDF_MARGIN_TOP,
+        MarginEdge::Right => ids::PDF_MARGIN_RIGHT,
+        MarginEdge::Bottom => ids::PDF_MARGIN_BOTTOM,
+        MarginEdge::Left => ids::PDF_MARGIN_LEFT,
     }
 }
