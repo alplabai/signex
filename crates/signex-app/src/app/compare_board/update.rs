@@ -409,9 +409,7 @@ impl Signex {
         else {
             return;
         };
-        let linked = target
-            .footprint
-            .and_then(|id| self.footprint_part(&board, id));
+        let linked = target.footprint.and_then(|id| self.linked_part(&board, id));
         let (part, net) = match side {
             JumpSide::Schematic => (target.part.clone().or(linked), target.schematic_net.clone()),
             JumpSide::Board => (
@@ -432,7 +430,7 @@ impl Signex {
 
     /// The part the footprint `id` of `board` is linked to, by its first
     /// unit.
-    fn footprint_part(&self, board: &Path, id: uuid::Uuid) -> Option<PartOccurrence> {
+    fn linked_part(&self, board: &Path, id: uuid::Uuid) -> Option<PartOccurrence> {
         let engine = self.document_state.board_engine(board)?;
         let footprint = engine.board().footprints.iter().find(|f| f.uuid == id)?;
         let link = footprint.schematic_link.as_ref()?;

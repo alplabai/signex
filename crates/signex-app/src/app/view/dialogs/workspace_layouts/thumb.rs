@@ -125,7 +125,8 @@ pub(super) fn thumbnail<'a>(
     line = line.push(
         container(centre)
             .width(Length::FillPortion(DOCUMENT_PORTION))
-            .height(Length::Fill),
+            .height(Length::Fill)
+            .boxed(),
     );
     if let Some(portion) = side_portion(right) {
         line = line.push(region_block(

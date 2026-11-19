@@ -417,11 +417,12 @@ fn chips_bar<'a>(
         },
     );
     let line = chips
-        .push(Space::new().width(Length::Fill))
+        .push(Space::new().width(Length::Fill).boxed())
         .push(
             text(t!(i18n, ids::COMPARE_BOARD_SET_SHOWN))
                 .size(TS.caption)
-                .color(r.ink4),
+                .color(r.ink4)
+                .boxed(),
         )
         .push(shown);
     container(line)

@@ -93,7 +93,7 @@ fn unavailable_text(i18n: &I18n, why: &Unavailable) -> Localized {
 
 /// A row line: fixed height, a hairline under it, an optional fill.
 fn line_box<'a>(
-    content: Row<'a, Message>,
+    content: Row<Element<'a, Message>>,
     fill: Option<Color>,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -202,7 +202,8 @@ pub(super) fn view<'a>(
             scrollable(body)
                 .height(Length::Fill)
                 .direction(crate::styles::thin_vertical())
-                .style(crate::styles::scrollbar_style(tokens)),
+                .style(crate::styles::scrollbar_style(tokens))
+                .boxed(),
         )
         .height(Length::Fill)
         .boxed()
@@ -225,7 +226,8 @@ fn group_row<'a>(
                     weight: Weight::Medium,
                     ..Font::DEFAULT
                 })
-                .wrapping(Wrapping::None),
+                .wrapping(Wrapping::None)
+                .boxed(),
         )
         .spacing(SP.s)
         .align_y(Alignment::Center);
@@ -234,7 +236,8 @@ fn group_row<'a>(
             text(UserText::new(count.to_string()))
                 .size(TS.section)
                 .color(r.ink3)
-                .font(mono()),
+                .font(mono())
+                .boxed(),
         );
     }
     line_box(line, Some(r.sunken), tokens)
@@ -242,11 +245,11 @@ fn group_row<'a>(
 
 /// The notes of both lists under a NOTES group row; none, nothing.
 fn push_notes<'a>(
-    mut body: Column<'a, Message>,
+    mut body: Column<Element<'a, Message>>,
     report: &CompareReport,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Column<'a, Message> {
+) -> Column<Element<'a, Message>> {
     let notes: Vec<Localized> = report
         .eco_notes()
         .iter()
@@ -444,7 +447,8 @@ fn action_cell<'a>(
             text(caption)
                 .size(TS.caption)
                 .color(r.ink4)
-                .wrapping(Wrapping::None),
+                .wrapping(Wrapping::None)
+                .boxed(),
         )
         .spacing(SP.m)
         .align_y(Alignment::Center)
@@ -490,7 +494,7 @@ fn direction_control<'a>(
                 ..Font::DEFAULT
             });
         }
-        face = face.push(label);
+        face = face.push(label.boxed());
         let (fill, shadow) = (r.raised, r.shadow);
         let segment = button(face)
             .padding([0.0, m.segment_pad_h])

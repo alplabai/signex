@@ -257,7 +257,7 @@ fn check<'a>(
         .text_size(TS.body)
         .style(form_look::checkbox_style)
         .on_toggle(move |on| cr(msg(on)));
-    let mut col: Column<'a, Message> = column![tick].spacing(SP.xs);
+    let mut col: Column<Element<'a, Message>> = column![tick].spacing(SP.xs);
     if let Some(desc) = desc {
         col = col.push(caption(t!(i18n, desc), tokens));
     }
@@ -271,7 +271,8 @@ fn left_column<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = resolve(tokens);
-    let mut list: Column<'a, Message> = column![group(ids::ROOMS_GROUP_SHEETS, i18n, tokens)];
+    let mut list: Column<Element<'a, Message>> =
+        column![group(ids::ROOMS_GROUP_SHEETS, i18n, tokens)];
     for row_ in rows.iter().filter(|r| !r.channel) {
         list = list.push(room_row(row_, i18n, tokens));
     }
@@ -279,7 +280,9 @@ fn left_column<'a>(
     let channels: Vec<&RoomRow> = rows.iter().filter(|r| r.channel).collect();
     if channels.is_empty() {
         list = list.push(
-            container(caption(t!(i18n, ids::ROOMS_CHANNELS_NONE), tokens)).padding([SP.s, SP.m]),
+            container(caption(t!(i18n, ids::ROOMS_CHANNELS_NONE), tokens))
+                .padding([SP.s, SP.m])
+                .boxed(),
         );
     }
     for row_ in channels {

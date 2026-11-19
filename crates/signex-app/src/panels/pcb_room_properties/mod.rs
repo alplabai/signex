@@ -98,7 +98,7 @@ fn msg(m: RoomMsg) -> PanelMsg {
 pub(crate) fn room_colour(hex: &str) -> Color {
     signex_types::theme::Color::parse_hex(hex)
         .or_else(|| signex_types::theme::Color::parse_hex(signex_types::pcb::room::ROOM_PALETTE[0]))
-        .map_or(Color::WHITE, |c| ti(c))
+        .map_or(Color::WHITE, ti)
 }
 
 fn semibold() -> Font {
@@ -479,7 +479,7 @@ fn parts_section<'a>(
     for part in &facts.parts {
         chips = chips.push(chip(part, i18n, tokens));
     }
-    let buttons: Row<'a, PanelMsg> = row![
+    let buttons: Row<Element<'a, PanelMsg>> = row![
         small_button(
             t!(i18n, ids::ROOMS_PULL),
             msg(RoomMsg::PullRequested { room })
@@ -496,7 +496,7 @@ fn parts_section<'a>(
 fn rule_section<'a>(facts: &RoomFacts, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
     let room = facts.room.uuid;
     let keep = facts.room.keep_parts_inside;
-    let dependents: Column<'a, PanelMsg> = column![
+    let dependents: Column<Element<'a, PanelMsg>> = column![
         text(t!(i18n, ids::ROOMS_KEEP_CAPTION))
             .size(TS.caption)
             .color(resolve(tokens).ink3),
@@ -519,9 +519,9 @@ fn rule_section<'a>(facts: &RoomFacts, i18n: &I18n, tokens: &ThemeTokens) -> Ele
         .on_toggle(move |keep| msg(RoomMsg::KeepToggled { room, keep }))
         .view(
             super::enable_section::enable_section_style(tokens),
-            dependents,
+            dependents.boxed(),
         );
-    let mut col: Column<'a, PanelMsg> = column![switch].spacing(SP.s);
+    let mut col: Column<Element<'a, PanelMsg>> = column![switch].spacing(SP.s);
     if let Some(worst) = facts.outside().first() {
         col = col.push(banner(facts, worst, i18n, tokens));
     }
