@@ -66,10 +66,12 @@
 //! and [`Claim`] are the shape it would migrate to, so please extend
 //! this module rather than inventing a parallel one.
 
+mod key_repeat;
+
 use super::*;
-use crate::app::command::key_repeat::{HeldKeyContext, runs_on_key_repeat};
 use crate::keymap::{KeyStroke, ModifiersExt as _};
 use iced::keyboard;
+use key_repeat::{HeldKeyContext, runs_on_key_repeat};
 
 /// Where an input event landed, and therefore what the user can see
 /// while pressing the key.
@@ -715,8 +717,6 @@ impl Signex {
     /// ([`runs_on_key_repeat`]): the command after the pending chord prefix,
     /// or, when that sequence is no binding and no prefix, the stroke's own
     /// command.
-    ///
-    /// [`runs_on_key_repeat`]: crate::app::command::key_repeat::runs_on_key_repeat
     fn repeat_is_ignored(
         &self,
         window: iced::window::Id,

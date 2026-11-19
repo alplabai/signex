@@ -1,6 +1,6 @@
 //! A held key runs some commands once (`docs/DECISIONS.md`, "Held keys"):
 //! the auto-repeat `KeyPressed` events after the first press are swallowed
-//! when `command::key_repeat::runs_on_key_repeat` says so, still run for the
+//! when `key_repeat::runs_on_key_repeat` says so, still run for the
 //! rest, and never abandon a pending chord. Every event goes the app's own
 //! key path, `Message::Input(KeyInput)`.
 

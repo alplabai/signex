@@ -49,5 +49,5 @@ pub(crate) fn runs_on_key_repeat(command: &AppCommandId, ctx: HeldKeyContext) ->
 }
 
 #[cfg(test)]
-#[path = "key_repeat_tests.rs"]
+#[path = "key_repeat_policy_tests.rs"]
 mod tests;
