@@ -669,10 +669,14 @@ known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, 
 
 The title block of every sheet is filled from **project parameters**. Open the
 project's **Project** tab (project tree, **Project Options**) and choose
-**Parameters**: title, document number, revision, date, company, drawn by,
-checked by and approved by apply to every sheet, and **Custom parameters** adds
-your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
-to the `.snxprj` with `Ctrl+S`.
+**Parameters**: the **Title block** group (title, document number, revision,
+date, company, drawn by, checked by and approved by) applies to every sheet, and
+the **Variables** group holds your own name/value pairs. Add one with the Name
+field and **Add** at the end of the list, remove one with × on its row, and
+rename one by typing over its name and pressing Enter. The filter above the
+list finds a row by its name or value, and a group's header folds it shut.
+Edits there are undoable with `Ctrl+Z` and are saved to the `.snxprj` with
+`Ctrl+S`.
 
 A sheet can override a value: in the sheet's **Properties** panel, **Title
 Block** section, type the value for that sheet. The label shows `(project)`

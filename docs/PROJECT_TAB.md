@@ -8,6 +8,20 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Sections (#1689-#1693)
 
+- **Parameters** (#1080) — the values every sheet inherits, in one list
+  with two groups, each folded shut by its header: Title block (the eight
+  title-block fields; a sheet's own Title Block value overrides one) and
+  Variables (every other parameter). The filter above keeps the rows whose
+  shown name or value holds the typed text, ignoring case; the caption
+  beside it counts all of them. A value box shows its outline on hover or
+  focus; an empty value reads "Not set". A variable's name is edited in
+  place: Enter renames it as one undo step, keeping its value. A name that
+  is blank, holds a control character, is a title-block key (`title`,
+  `rev`, ...) or is already used (names are case-sensitive) is refused: the
+  name stays in its box with the reason under the row and nothing changes.
+  × on a hovered row removes the variable; Name and Add at the end of
+  Variables add one with an empty value. The filter and the folded groups
+  are tab state, not project data.
 - **Sheets** — the project's sheets in list order (the Sheet N of M a
   sheet's title block shows on the canvas, and the project tree order):
   page, name, file. The root sheet carries a `root` pill and a page whose
