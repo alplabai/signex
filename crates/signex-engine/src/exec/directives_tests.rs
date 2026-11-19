@@ -201,7 +201,7 @@ fn the_properties_rows_name_the_directive_and_its_parameters() {
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.clone())
     };
-    assert_eq!(row("Type").as_deref(), Some("Blanket"));
+    assert_eq!(row("Type").as_deref(), Some("Net Blanket"));
     assert_eq!(row("Net Class").as_deref(), Some("HighSpeed"));
     assert_eq!(
         row("ERC Exclusions").as_deref(),

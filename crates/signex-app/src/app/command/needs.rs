@@ -371,6 +371,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_blanket"
         | "place_compile_mask"
         | "place_diff_pair"
+        // #1281: the Net Parameters flag sits on a wire of the sheet in view.
+        | "place_parameter_set"
         | "edit_blanket"
         // #1699: a No-ERC directive's rule list.
         | "edit_no_erc_rules"
@@ -467,6 +469,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #1489: the class dialog edits the project.
+        "open_diff_pair_classes" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.

@@ -411,3 +411,74 @@ fn the_netlist_reads_what_the_directive_commands_placed() {
     undo(&mut app);
     assert_eq!(netlist(&app).nets.len(), 1);
 }
+
+/// #1281: `place_parameter_set` puts a Net Parameters flag on the wire under
+/// `at` with its class and rules, answers with the net, gives the net its
+/// class (over a Blanket's), and is refused off a wire.
+#[test]
+fn place_parameter_set_takes_its_operands_and_is_refused_off_a_wire() {
+    let mut app = tool_app();
+    with_clk_p_net(&mut app);
+    let off = run(
+        &mut app,
+        "place_parameter_set",
+        &[&format!("at={}", pt(grid(40.0, 40.0)))],
+    );
+    assert!(
+        !matches!(off, CommandOutcome::Answered(_)),
+        "refused off a wire: {off:?}"
+    );
+    assert!(doc(&app).directives.is_empty());
+
+    answered(run(
+        &mut app,
+        "place_blanket",
+        &[
+            &format!("start={}", pt(grid(8.0, 8.0))),
+            &format!("end={}", pt(grid(22.0, 12.0))),
+            "class=Blanketed",
+        ],
+    ));
+    let answer = answered(run(
+        &mut app,
+        "place_parameter_set",
+        &[
+            &format!("at={}", pt(grid(15.0, 10.0))),
+            "class=POWER_IN",
+            "width=0.8",
+            "clearance=0.3",
+            "via_diameter=0.6",
+            "via_hole=0.3",
+            "current=3",
+        ],
+    ));
+    assert_eq!(answer["kind"], json!("net_parameters"));
+    assert_eq!(answer["net"], json!("CLK_P"));
+    let Some(SchDirective::NetParameters {
+        net_class, rules, ..
+    }) = doc(&app).directives.last().cloned()
+    else {
+        panic!("a Net Parameters directive: {:?}", doc(&app).directives);
+    };
+    assert_eq!(net_class.as_deref(), Some("POWER_IN"));
+    assert_eq!(
+        (rules.width_mm, rules.clearance_mm, rules.current_a),
+        (Some(0.8), Some(0.3), Some(3.0))
+    );
+    assert_eq!(
+        signex_net::build_netlist(doc(&app)).nets[0].class,
+        Some(signex_types::net::NetClassId("POWER_IN".into())),
+        "Net Parameters outrank the Blanket"
+    );
+    let refused = run(
+        &mut app,
+        "place_parameter_set",
+        &[&format!("at={}", pt(grid(15.0, 10.0))), "width=wide"],
+    );
+    assert!(
+        !matches!(refused, CommandOutcome::Answered(_)),
+        "{refused:?}"
+    );
+    undo(&mut app);
+    assert_eq!(doc(&app).directives.len(), 1, "one undo step");
+}

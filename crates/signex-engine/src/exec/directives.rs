@@ -142,7 +142,7 @@ impl Engine {
                 include_edge_nets,
                 ..
             } => {
-                info.push(("Type".into(), "Blanket".into()));
+                info.push(("Type".into(), "Net Blanket".into()));
                 info.push(("Start".into(), at(start)));
                 info.push(("End".into(), at(end)));
                 info.push(("Net Class".into(), net_class.clone().unwrap_or_default()));

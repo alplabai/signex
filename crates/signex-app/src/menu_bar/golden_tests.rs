@@ -461,6 +461,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),
     ("place_diff_pair", "PlaceDiffPair"),
+    // #1281, #1489: Net Parameters goes live; the diff-pair class dialog.
+    ("place_parameter_set", "PlaceParameterSet"),
+    ("open_diff_pair_classes", "OpenDiffPairClasses"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

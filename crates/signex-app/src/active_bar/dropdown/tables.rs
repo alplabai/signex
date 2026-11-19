@@ -335,7 +335,7 @@ pub(super) const PORT: &[EntrySpec] = &[
 pub(super) const DIRECTIVES: &[EntrySpec] = &[
     EntrySpec::item(
         ic::icon_dd_param_set,
-        "Parameter Set",
+        "Net Parameters",
         ActiveBarAction::PlaceParameterSet,
     ),
     EntrySpec::item(
@@ -350,7 +350,7 @@ pub(super) const DIRECTIVES: &[EntrySpec] = &[
     ),
     EntrySpec::item(
         ic::icon_dd_blanket,
-        "Blanket",
+        "Net Blanket",
         ActiveBarAction::PlaceBlanket,
     ),
     EntrySpec::item(

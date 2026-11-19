@@ -164,6 +164,15 @@ pub fn build_renderer_snapshot(
         &mut wires,
         &mut wire_line_styles,
     );
+    directives::push_flag_texts(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        document_family,
+        &mut parameter_texts,
+    );
 
     // A dot takes the colour most of its wires share, else its own rule.
     let from_wires = signex_types::schematic::junction_wire_colors(snapshot, |wire| {

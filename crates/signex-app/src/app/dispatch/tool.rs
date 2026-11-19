@@ -386,9 +386,10 @@ impl Signex {
                     Tool::SheetEntry => Some("Sheet Entry".to_string()),
                     Tool::Measure => Some("Measure".to_string()),
                     Tool::BreakWire => Some("Break Wire".to_string()),
-                    Tool::Blanket => Some("Blanket".to_string()),
+                    Tool::Blanket => Some("Net Blanket".to_string()),
                     Tool::CompileMask => Some("Compile Mask".to_string()),
                     Tool::DiffPair => Some("Differential Pair".to_string()),
+                    Tool::NetParameters => Some("Net Parameters".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

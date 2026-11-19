@@ -440,11 +440,7 @@ fn place_menu_greys_only_the_planned_tools() {
         if let DropdownEntry::Item(it) = entry {
             let planned = matches!(
                 it.label.as_str(),
-                "Parameter Set"
-                    | "Signal Harness"
-                    | "Harness Connector"
-                    | "Harness Entry"
-                    | "Device Sheet Symbol"
+                "Signal Harness" | "Harness Connector" | "Harness Entry" | "Device Sheet Symbol"
             );
             assert_eq!(it.disabled, planned, "{}", it.label);
             assert_eq!(
@@ -555,10 +551,10 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "VCC Power Port",
             "+5 Power Port",
             "+12 Power Port",
-            "Parameter Set",
+            "Net Parameters",
             "Generic No ERC",
             "Differential Pair",
-            "Blanket",
+            "Net Blanket",
             "Compile Mask",
             "Signal Harness",
             "Harness Connector",

@@ -325,6 +325,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
+        // #1489: Design ▸ Differential Pair Classes….
+        "open_diff_pair_classes" => Message::from(crate::app::DiffPairClassesMsg::Requested),
         // #2404, #2402, #2488: Board Reports on a table, its CSV, Board Print /
         // PDF, the STEP model.
         "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),

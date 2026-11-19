@@ -115,3 +115,82 @@ fn a_diff_pair_mark_is_selectable() {
     click(&mut app, 30.0, 30.0);
     assert!(selected_directive(&app));
 }
+
+/// #1281: a sheet with one wire from (0, 0) to (20, 0).
+fn app_with_wire() -> Signex {
+    let mut app = app_with_empty_sheet();
+    let path = PathBuf::from("directives.snxsch");
+    let mut sheet = doc(&app).clone();
+    sheet.wires.push(signex_types::schematic::Wire {
+        start: signex_types::schematic::Point::new(0.0, 0.0),
+        end: signex_types::schematic::Point::new(20.0, 0.0),
+        ..Default::default()
+    });
+    app.document_state
+        .engines
+        .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+    app
+}
+
+fn net_parameters_rules(app: &Signex) -> Option<signex_types::schematic::NetRules> {
+    doc(app).directives.iter().find_map(|d| match d {
+        signex_types::schematic::SchDirective::NetParameters { rules, .. } => Some(rules.clone()),
+        _ => None,
+    })
+}
+
+#[test]
+fn net_parameters_go_on_a_wire_and_are_refused_off_one() {
+    let mut app = app_with_wire();
+    arm(&mut app, ActiveBarAction::PlaceParameterSet);
+    assert_eq!(app.interaction_state.current_tool, Tool::NetParameters);
+    click(&mut app, 60.0, 60.0);
+    assert!(doc(&app).directives.is_empty(), "nothing off a wire");
+    assert!(doc(&app).labels.is_empty(), "never a net label (#1248)");
+    click(&mut app, 10.0, 0.0);
+    assert_eq!(doc(&app).directives.len(), 1);
+    assert!(net_parameters_rules(&app).is_some());
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).directives.is_empty(), "one undo step");
+}
+
+#[test]
+fn a_typed_rule_is_one_undo_step_and_a_checkbox_another() {
+    use signex_app::dock::DockMessage;
+    use signex_app::panels::{DirectivePanelMsg, NetParametersEdit, NetRule, PanelMsg};
+    let mut app = app_with_wire();
+    arm(&mut app, ActiveBarAction::PlaceParameterSet);
+    click(&mut app, 10.0, 0.0);
+    let id = doc(&app).directives[0].uuid();
+    let send = |app: &mut Signex, edit: NetParametersEdit| {
+        let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Directive(
+            DirectivePanelMsg::NetParametersEdited(id, edit),
+        ))));
+    };
+    for typed in ["0", "0.", "0.8"] {
+        send(
+            &mut app,
+            NetParametersEdit::Rule(NetRule::Width, typed.to_string()),
+        );
+    }
+    send(&mut app, NetParametersEdit::ShowOnFlag(true));
+    assert_eq!(net_parameters_rules(&app).unwrap().width_mm, Some(0.8));
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        net_parameters_rules(&app).unwrap().width_mm,
+        Some(0.8),
+        "the checkbox was its own step"
+    );
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        net_parameters_rules(&app).unwrap().width_mm,
+        None,
+        "the typing run was one step"
+    );
+    assert_eq!(
+        doc(&app).directives.len(),
+        1,
+        "the placement is still there"
+    );
+}

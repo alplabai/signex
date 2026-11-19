@@ -1,6 +1,7 @@
-//! #1248 - the planned Parameter Set action must not be remembered as the
-//! Directives group's last tool, and no dispatch path may create a Net
-//! label named `PARAM=VALUE`.
+//! #1248 / #1249 - a planned tool (Reuse Block) must not be remembered as
+//! its group's last tool, and no dispatch path may place anything for it.
+//! Net Parameters, the tool #1248 was about, is live since #1281; its own
+//! tests are in `tests/regression/schematic_directives.rs`.
 
 use super::super::super::*;
 use crate::active_bar::{ActiveBarAction, ActiveBarMsg};
@@ -29,8 +30,8 @@ fn app_with_empty_sheet() -> Signex {
     app
 }
 
-/// Drive every dispatch path that can name Parameter Set, then click twice
-/// on the canvas; return the doc's labels.
+/// Drive every dispatch path that can name Reuse Block, then click twice
+/// on the canvas; nothing may land on the sheet or be remembered.
 fn assert_clean(app: &mut Signex, label: &str) {
     for (x, y) in [(10.0, 10.0), (30.0, 30.0)] {
         let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
@@ -51,6 +52,8 @@ fn assert_clean(app: &mut Signex, label: &str) {
         doc.labels
     );
     assert!(doc.labels.is_empty(), "{label}: label created");
+    assert!(doc.child_sheets.is_empty(), "{label}: sheet symbol created");
+    assert!(doc.directives.is_empty(), "{label}: directive created");
     assert!(
         !app.interaction_state
             .last_tool
@@ -59,26 +62,26 @@ fn assert_clean(app: &mut Signex, label: &str) {
         "{label}: planned action recorded in last_tool"
     );
     assert!(
-        !app.interaction_state.last_tool.contains_key("directives"),
-        "{label}: directives group was updated"
+        !app.interaction_state.last_tool.contains_key("sheet"),
+        "{label}: sheet group was updated"
     );
 }
 
 #[test]
-fn active_bar_path_neither_labels_nor_records() {
+fn active_bar_path_neither_places_nor_records() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
-        ActiveBarAction::PlaceParameterSet,
+        ActiveBarAction::PlaceReuseBlock,
     )));
     assert_clean(&mut app, "active bar");
 }
 
 #[test]
-fn context_menu_path_neither_labels_nor_records() {
+fn context_menu_path_neither_places_nor_records() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::Action(
         ContextAction::Command {
-            id: AppCommandId::new("place_parameter_set").unwrap(),
+            id: AppCommandId::new("place_reuse_block").unwrap(),
             project: None,
         },
     )));
@@ -86,25 +89,41 @@ fn context_menu_path_neither_labels_nor_records() {
 }
 
 #[test]
-fn palette_and_keymap_command_path_neither_labels_nor_records() {
+fn palette_and_keymap_command_path_neither_places_nor_records() {
     // The command palette and keymap profiles both resolve the stable
     // command id through `dispatch_command`.
     let mut app = app_with_empty_sheet();
-    let id = AppCommandId::new("place_parameter_set").unwrap();
+    let id = AppCommandId::new("place_reuse_block").unwrap();
     let _ = app.dispatch_command(&id, CommandArgs::none(), None);
     assert_clean(&mut app, "palette/keymap");
 }
 
 #[test]
-fn no_default_keymap_binding_reaches_parameter_set_label() {
+fn no_default_keymap_binding_reaches_a_live_reuse_block() {
     // Whatever the profile, the id only ever resolves to the inert action.
     assert_eq!(
-        crate::app::command::active_bar::action_for_id("place_parameter_set"),
-        Some(ActiveBarAction::PlaceParameterSet)
+        crate::app::command::active_bar::action_for_id("place_reuse_block"),
+        Some(ActiveBarAction::PlaceReuseBlock)
     );
     assert!(crate::active_bar::is_planned(
+        &ActiveBarAction::PlaceReuseBlock
+    ));
+}
+
+#[test]
+fn net_parameters_is_live_and_recorded_with_the_directives() {
+    let mut app = app_with_empty_sheet();
+    assert!(!crate::active_bar::is_planned(
         &ActiveBarAction::PlaceParameterSet
     ));
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::PlaceParameterSet,
+    )));
+    assert_eq!(app.interaction_state.current_tool, Tool::NetParameters);
+    assert_eq!(
+        app.interaction_state.last_tool.get("directives"),
+        Some(&ActiveBarAction::PlaceParameterSet)
+    );
 }
 
 #[test]

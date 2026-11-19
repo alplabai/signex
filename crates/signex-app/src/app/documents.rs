@@ -1049,6 +1049,8 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// One click on a wire places a Net Parameters flag there (#1281).
+    NetParameters,
 }
 
 impl std::fmt::Display for Tool {
@@ -1073,9 +1075,10 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
-            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::Blanket => write!(f, "Place Net Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::NetParameters => write!(f, "Place Net Parameters"),
         }
     }
 }
