@@ -83,6 +83,7 @@ pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'s
         editor.shipped,
         editor.changed_only,
         editor.filter,
+        i18n,
     );
     if sections.is_empty() {
         list = list.push(

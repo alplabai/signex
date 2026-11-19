@@ -19,7 +19,7 @@ fn listed(sections: &[RuleSection]) -> Vec<RuleKind> {
 
 #[test]
 fn the_unfiltered_list_holds_every_rule_under_its_group() {
-    let sections = rule_sections(&HashMap::new(), &shipped(), false, "");
+    let sections = rule_sections(&HashMap::new(, signex_i18n::I18n::en_us_ref()), &shipped(), false, "");
     let groups: Vec<RuleGroup> = sections.iter().map(|s| s.group).collect();
     assert_eq!(groups, RuleGroup::ALL);
     assert_eq!(listed(&sections).len(), RuleKind::ALL.len());
@@ -45,7 +45,7 @@ fn changed_only_keeps_only_the_rules_that_differ_from_the_shipped_profile() {
         // An on/off-only rule switched "on" at another level is still on.
         (RuleKind::PinTypeConflict, Severity::Warning),
     ]);
-    let sections = rule_sections(&overrides, &shipped(), true, "");
+    let sections = rule_sections(&overrides, &shipped(, signex_i18n::I18n::en_us_ref()), true, "");
     assert_eq!(
         listed(&sections),
         [RuleKind::UnusedPin, RuleKind::PartWithoutMpn]
@@ -62,14 +62,14 @@ fn changed_only_keeps_only_the_rules_that_differ_from_the_shipped_profile() {
 
 #[test]
 fn changed_only_with_nothing_changed_lists_nothing() {
-    assert!(rule_sections(&HashMap::new(), &shipped(), true, "").is_empty());
+    assert!(rule_sections(&HashMap::new(, signex_i18n::I18n::en_us_ref()), &shipped(), true, "").is_empty());
 }
 
 #[test]
 fn the_filter_matches_rule_names_ignoring_case() {
-    let sections = rule_sections(&HashMap::new(), &shipped(), false, "  BUS LABEL ");
+    let sections = rule_sections(&HashMap::new(, signex_i18n::I18n::en_us_ref()), &shipped(), false, "  BUS LABEL ");
     assert_eq!(listed(&sections), [RuleKind::BusLabelOnWire]);
-    let sections = rule_sections(&HashMap::new(), &shipped(), false, "sheet pin");
+    let sections = rule_sections(&HashMap::new(, signex_i18n::I18n::en_us_ref()), &shipped(), false, "sheet pin");
     assert_eq!(
         listed(&sections),
         [
@@ -78,7 +78,7 @@ fn the_filter_matches_rule_names_ignoring_case() {
             RuleKind::SheetPinDirectionConflict
         ]
     );
-    assert!(rule_sections(&HashMap::new(), &shipped(), false, "no such rule").is_empty());
+    assert!(rule_sections(&HashMap::new(, signex_i18n::I18n::en_us_ref()), &shipped(), false, "no such rule").is_empty());
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn the_filter_and_changed_only_combine() {
         (RuleKind::UnusedPin, Severity::Off),
         (RuleKind::OrphanLabel, Severity::Error),
     ]);
-    let sections = rule_sections(&overrides, &shipped(), true, "label");
+    let sections = rule_sections(&overrides, &shipped(, signex_i18n::I18n::en_us_ref()), true, "label");
     assert_eq!(listed(&sections), [RuleKind::OrphanLabel]);
 }
 

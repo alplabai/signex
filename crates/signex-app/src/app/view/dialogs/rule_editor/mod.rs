@@ -154,9 +154,9 @@ pub(crate) fn changed_rule_count(
 
 /// Whether the name of `rule` holds `filter`, ignoring case; an empty filter
 /// keeps every rule.
-fn name_matches(rule: RuleKind, filter: &str) -> bool {
-    let needle = filter.trim().to_lowercase();
-    needle.is_empty() || rule.label().to_lowercase().contains(&needle)
+fn name_matches(rule: RuleKind, filter: &str, i18n: &I18n) -> bool {
+    let needle = i18n.fold_for_search(filter.trim());
+    needle.is_empty() || i18n.fold_for_search(rule.label()).contains(&needle)
 }
 
 /// The rule list: every group in order, holding the rules that pass
@@ -166,6 +166,7 @@ pub(crate) fn rule_sections(
     shipped: &ResolvedRules,
     changed_only: bool,
     filter: &str,
+    i18n: &I18n,
 ) -> Vec<RuleSection> {
     RuleGroup::ALL
         .into_iter()
@@ -178,7 +179,7 @@ pub(crate) fn rule_sections(
                     changed: rule_differs(severity, shipped, rule),
                 })
                 .filter(|row| !changed_only || row.changed)
-                .filter(|row| name_matches(row.rule, filter))
+                .filter(|row| name_matches(row.rule, filter, i18n))
                 .collect();
             (!rows.is_empty()).then_some(RuleSection { group, rows })
         })
