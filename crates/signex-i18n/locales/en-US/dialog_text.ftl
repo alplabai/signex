@@ -11,25 +11,32 @@ dialog-subtitle-bom = BOM preview
 
 dialog-remove-title = Remove from Project
 dialog-remove-unsaved-title = Exclude from Project — Unsaved Edits
-# Option cards; the arrow marks a choice.
-dialog-remove-exclude = → Exclude from project
+# Radio cards: a title, then what the choice does.
+dialog-remove-exclude = Exclude from project
 dialog-remove-exclude-outside = Library is shared or lives outside this project's folder. It will be excluded from the project and is not deleted from disk.
-dialog-remove-exclude-inside = File will be excluded from project but left in local folder. Not recommended for projects stored in version control.
-dialog-remove-delete = → Delete file
+dialog-remove-exclude-inside = The file stays on disk, but the project no longer lists it.
+# The project folder is a Git repository.
+dialog-remove-exclude-inside-git = The file stays on disk and in Git, but the project no longer lists it.
+dialog-remove-delete = Delete file
 dialog-remove-delete-package = The library package is deleted whole, with everything inside it, and the library is closed.
 dialog-remove-delete-library = The library file is permanently deleted and the library closed. Its symbol, footprint, simulation and datasheet files are deleted too when the folder is the library's own; in a folder that also holds another library or a project or design file, only the library file goes. Other files are left.
-dialog-remove-delete-file = File will be removed from project and permanently deleted.
+dialog-remove-delete-file = The file is removed from the project and permanently deleted.
+# Footer buttons that carry out the selected card.
+dialog-remove-action-exclude = Exclude
+dialog-remove-action-delete = Delete file
 # $name is the document's name in the project tree.
 dialog-remove-question = Remove "{ $name }"?
-# $name is the document's name in the project tree.
-dialog-remove-question-detail = Please choose how to remove file "{ $name }"
+dialog-remove-question-detail = Choose how to remove it.
 # $parents lists the sheets that also place this one.
 dialog-remove-placed-by = It is also placed by { $parents }, so it cannot be deleted from here.
 # $reason says why the project could not be read, in English.
 dialog-remove-placement-unknown = It cannot be deleted from here: whether another sheet places it is not known yet ({ $reason }). You can exclude it from the project.
 # $count is how many sheet symbols (a whole number); $symbols names them.
-# The English keeps "symbol(s)" for every count.
-dialog-remove-dangling = Deleting it leaves { $count } sheet symbol(s) pointing at a missing file: { $symbols }. ERC and netlist export will report them until they are removed.
+dialog-remove-dangling =
+    { $count ->
+        [one] Deleting it leaves { $count } sheet symbol pointing at a missing file: { $symbols }. ERC and netlist export report it until it is removed.
+       *[other] Deleting it leaves { $count } sheet symbols pointing at a missing file: { $symbols }. ERC and netlist export report them until they are removed.
+    }
 # $symbols names the sheet symbols that place the file.
 dialog-remove-still-placed = Excluding it does not take it out of the design: a sheet symbol still places it ({ $symbols }).
 dialog-remove-not-a-page = It is not a page of this project, so there is nothing to exclude.
@@ -42,21 +49,52 @@ dialog-exclude-dirty-question = Save the unsaved edits first?
 
 dialog-close-project-unsaved-title = Close Project — Unsaved Edits
 dialog-close-project-question = Save changes before closing?
+# The project settings (its .snxprj) are counted apart, by the -settings
+# messages below.
 dialog-close-project-detail =
     { $kind ->
         [items]
             { $count ->
-                [one] '{ $project }' has { $count } unsaved item. What would you like to do?
-               *[other] '{ $project }' has { $count } unsaved items. What would you like to do?
+                [one] '{ $project }' has { $count } unsaved item.
+               *[other] '{ $project }' has { $count } unsaved items.
             }
        *[documents]
             { $count ->
-                [one] '{ $project }' has { $count } unsaved document. What would you like to do?
-               *[other] '{ $project }' has { $count } unsaved documents. What would you like to do?
+                [one] '{ $project }' has { $count } unsaved document.
+               *[other] '{ $project }' has { $count } unsaved documents.
             }
     }
-# $names lists the documents kept open.
-dialog-close-project-kept = Kept open, not provably this project's alone: { $names }
+dialog-close-project-detail-settings =
+    { $kind ->
+        [items]
+            { $count ->
+                [one] '{ $project }' has { $count } unsaved item and unsaved project settings.
+               *[other] '{ $project }' has { $count } unsaved items and unsaved project settings.
+            }
+       *[documents]
+            { $count ->
+                [one] '{ $project }' has { $count } unsaved document and unsaved project settings.
+               *[other] '{ $project }' has { $count } unsaved documents and unsaved project settings.
+            }
+    }
+# $project is the project's name.
+dialog-close-project-detail-settings-only = '{ $project }' has unsaved project settings.
+# $count is how many documents stay open (a whole number); $names lists
+# them. Another open project uses them, or that cannot be ruled out.
+dialog-close-project-kept =
+    { $count ->
+        [one] { $names } stays open because another open project may use it.
+       *[other] { $names } stay open because other open projects may use them.
+    }
+# What each unsaved row is, beside its name.
+dialog-close-project-kind-schematic = Schematic
+dialog-close-project-kind-pcb = PCB
+dialog-close-project-kind-settings = Project settings
+dialog-close-project-kind-library = Library
+dialog-close-project-kind-symbol = Symbol
+dialog-close-project-kind-footprint = Footprint
+dialog-close-project-kind-component = Component
+dialog-close-project-kind-file = File
 # macOS says "Quit", other systems "Exit": each wording has its own message.
 dialog-quit-unsaved-title = Quit { -brand-name } — Unsaved Edits
 dialog-exit-unsaved-title = Exit { -brand-name } — Unsaved Edits

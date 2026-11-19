@@ -16,6 +16,7 @@ mod board_output;
 mod board_reannotate;
 mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
+mod close_project;
 mod confirms;
 mod create_child_sheet;
 mod erc;
@@ -25,6 +26,8 @@ mod graphite_annotate;
 mod header;
 pub(crate) mod new_project;
 mod project;
+/// `pub(crate)`: the window sizing and the Enter key read its `content`.
+pub(crate) mod remove;
 mod rule_editor;
 mod sheet_numbering;
 mod sizes;

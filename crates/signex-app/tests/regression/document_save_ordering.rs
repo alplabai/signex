@@ -244,6 +244,7 @@ fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         &mut app,

@@ -155,6 +155,7 @@ fn the_remove_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,
@@ -206,6 +207,7 @@ fn the_remove_unsaved_edits_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: true,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,

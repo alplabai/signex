@@ -27,6 +27,21 @@ const MESSAGE_MAX: f32 = 200.0;
 /// padding, the two-line intro, the one-line hint and the footer, with no list
 /// area (13 + 33 + 9 + 17 + 13 + 53 px on the legacy layout).
 const STOCK_COPY_EMPTY: f32 = 140.0;
+/// Height of one row of the Close Project list (`dialog_row`).
+pub(crate) const DIALOG_ROW_HEIGHT: f32 = 30.0;
+/// The most the Close Project list grows to before it scrolls.
+pub(crate) const CLOSE_LIST_MAX_HEIGHT: f32 = 180.0;
+/// A one-line info or warning callout and the gap above it.
+const CALLOUT_HEIGHT: f32 = 39.0;
+/// How much narrower than its column a callout's text runs: its padding,
+/// icon and gap.
+const CALLOUT_INSET: f32 = 40.0;
+/// A Remove card with a one-line description, and the gap above it; the
+/// base height holds two.
+const REMOVE_CARD_HEIGHT: f32 = 66.0;
+/// How much narrower than the window a Remove card's text runs: the body
+/// and card padding, the borders, the radio and its gap.
+const REMOVE_CARD_INSET: f32 = 80.0;
 
 /// Height a Graphite theme adds to `modal`'s window over the legacy layout
 /// the sizes here were measured on: what the shell's intro adds over the
@@ -103,7 +118,66 @@ fn library_intro_growth(modal: ModalId, width: f32, texts: ((&str, &str), (&str,
     )
 }
 
+/// Extra height of body-size `text` wrapping in a column `width` px wide,
+/// beyond its first line.
+fn body_growth(width: f32, text: &str) -> f32 {
+    let ts = crate::styles::TypeScale::DEFAULT;
+    // `note_growth` measures caption text: narrow the column by the size
+    // ratio for the same characters per line, then scale the lines back up.
+    note_growth(width * ts.caption / ts.body, 0.0, text) * ts.body / ts.caption
+}
+
 impl Signex {
+    /// Window height of the Close Project confirm: its rows up to the list
+    /// cap, then a callout each for the kept documents and the reason
+    /// Discard All is withheld.
+    fn close_confirm_height(&self, c: &crate::app::ProjectCloseConfirmState, width: f32) -> f32 {
+        let column = width - 2.0 * crate::styles::Spacing::DEFAULT.l - CALLOUT_INSET;
+        let rows = (c.dirty_paths.len() + c.dirty_rows.len()) as f32 * DIALOG_ROW_HEIGHT;
+        let mut height = LIST_DIALOG_BASE + rows.min(CLOSE_LIST_MAX_HEIGHT);
+        if !c.kept_paths.is_empty() {
+            let names: Vec<String> = c
+                .kept_paths
+                .iter()
+                .map(|p| crate::app::state::sheet_refs::file_label(p))
+                .collect();
+            let kept = signex_i18n::t!(
+                self.ui_state.i18n.as_ref(),
+                signex_i18n::ids::DIALOG_CLOSE_PROJECT_KEPT,
+                "count" => c.kept_paths.len(),
+                "names" => crate::app::state::sheet_refs::bounded_names(&names)
+            );
+            height += CALLOUT_HEIGHT + body_growth(column, &kept.to_string());
+        }
+        if let Some(reason) = c.sheet_refs.discard_blocked_reason() {
+            height += CALLOUT_HEIGHT + body_growth(column, &reason);
+        }
+        height
+    }
+
+    /// Height the first stage of the Remove modal needs beyond its base
+    /// (two cards with one-line descriptions): the notes, the lines a
+    /// description wraps to, the warnings inside the cards, less a card a
+    /// blocker hides.
+    fn remove_dialog_growth(&self, dialog: &crate::app::RemoveDialogState, width: f32) -> f32 {
+        let content = self.remove_content(dialog, self.ui_state.i18n.as_ref());
+        let note_column = width - 2.0 * crate::styles::Spacing::DEFAULT.l - CALLOUT_INSET;
+        let card_column = width - REMOVE_CARD_INSET;
+        let hidden = 2usize.saturating_sub(content.cards.len());
+        let mut growth = -(hidden as f32) * REMOVE_CARD_HEIGHT;
+        for note in &content.notes {
+            growth += CALLOUT_HEIGHT + body_growth(note_column, &note.plain());
+        }
+        for card in &content.cards {
+            growth += body_growth(card_column, &card.description.to_string());
+            if let Some(warning) = &card.warning {
+                growth +=
+                    CALLOUT_HEIGHT + body_growth(card_column - CALLOUT_INSET, &warning.to_string());
+            }
+        }
+        growth
+    }
+
     /// The size `modal`'s window should have right now.
     #[cfg(test)]
     pub(crate) fn modal_window_size(&self, modal: ModalId) -> Size {
@@ -129,20 +203,15 @@ impl Signex {
                         0.0
                     }
             }),
-            ModalId::ProjectCloseConfirm => ui.project_close_confirm.as_ref().map(|c| {
-                LIST_DIALOG_BASE
-                    + list_height(c.dirty_paths.len() + c.dirty_rows.len())
-                    + if c.kept_paths.is_empty() {
-                        0.0
-                    } else {
-                        NOTE_HEIGHT
-                    }
-                    + if c.sheet_refs.discard_blocked_reason().is_some() {
-                        NOTE_HEIGHT
-                    } else {
-                        0.0
-                    }
-            }),
+            ModalId::ProjectCloseConfirm => ui
+                .project_close_confirm
+                .as_ref()
+                .map(|c| self.close_confirm_height(c, fixed.width)),
+            ModalId::RemoveDialog => ui
+                .remove_dialog
+                .as_ref()
+                .filter(|d| !d.unsaved_prompt)
+                .map(|d| fixed.height + self.remove_dialog_growth(d, fixed.width)),
             ModalId::ErrorNotice => self.document_state.error_notice.as_ref().map(|n| {
                 let detail = n.detail_text(&self.ui_state.i18n);
                 130.0 + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
