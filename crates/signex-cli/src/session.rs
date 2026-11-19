@@ -58,7 +58,7 @@ impl Session {
                 // CLI output stays en-US whatever the UI language.
                 .map_or_else(
                     || "nothing was loaded".to_string(),
-                    |n| n.detail.render_en_us(),
+                    |n| n.detail_line_en_us(),
                 );
             return Err(format!("could not open {}: {detail}", project.display()));
         }
@@ -202,7 +202,7 @@ impl Session {
         let (status, reason, mut data) = verdict(
             approved.command.as_str(),
             outcome,
-            notice.map(|n| format!("{}: {}", n.title.render_en_us(), n.detail.render_en_us())),
+            notice.map(|n| format!("{}: {}", n.title.render_en_us(), n.detail_line_en_us())),
         );
         if let Some(data) = data.as_mut() {
             scrub_sheets(data, &named_by_call);

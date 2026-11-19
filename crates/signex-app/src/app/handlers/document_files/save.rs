@@ -234,10 +234,12 @@ impl Signex {
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
         if self.document_state.error_notice.is_none() {
-            // `context` is the caller's English log label (#2061).
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
-                crate::app::state::untranslated(format!("{context}: {error:#}")),
-            ));
+            // `context` is the caller's English log label (#2061); the error
+            // chain (path and OS error) is the card's system block.
+            self.document_state.error_notice = Some(
+                crate::app::state::ErrorNotice::save(crate::app::state::untranslated(context))
+                    .with_system(format!("{error:#}")),
+            );
         }
     }
 

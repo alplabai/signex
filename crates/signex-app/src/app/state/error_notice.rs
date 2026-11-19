@@ -1,6 +1,7 @@
-//! The user-visible error card: a short heading plus the detail line.
+//! The user-visible error card: a short heading, the readable sentence and,
+//! apart from it, the system part (path and OS error).
 
-use signex_i18n::{I18n, Translatable, UserText, ids};
+use signex_i18n::{I18n, MessageId, Translatable, UserText, ids};
 
 /// A user-visible error card: a short heading plus the detail line.
 ///
@@ -16,9 +17,51 @@ pub struct ErrorNotice {
     pub title: Translatable,
     /// What went wrong, in the user's terms. May span several lines.
     pub detail: Translatable,
+    /// The system's own words (a path, an OS or library error chain), shown
+    /// as they are in a mono block under the sentence; `None` when the
+    /// sentence says it all.
+    pub system: Option<UserText>,
     /// A choice the card offers beside dismissing it; `None` for a plain
     /// notice, whose only button is OK.
     pub action: Option<NoticeAction>,
+}
+
+/// How bad what the card reports is; picks its heading glyph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeSeverity {
+    /// The operation failed or was refused (red).
+    Error,
+    /// The operation stopped to ask, or finished with something to review
+    /// (amber).
+    Warn,
+}
+
+/// The headings whose card is a warning; every other heading is an error.
+const WARNING_TITLES: [MessageId; 5] = [
+    ids::NOTICE_DISK_CHANGED_TITLE,
+    ids::NOTICE_DISK_MISSING_TITLE,
+    ids::NOTICE_DISK_FOLDER_MISSING_TITLE,
+    ids::NOTICE_IMPORTED_WITH_APPROXIMATIONS,
+    ids::NOTICE_BOM_EXPORTED_WITH_ISSUES,
+];
+
+/// The choices of a File Changed on Disk card with what each does, as
+/// `(button label, effect)`, in the order the card lists them. Save As is
+/// left out where it cannot run (a board has no Save As).
+pub fn disk_changed_choices(save_as: bool) -> Vec<(MessageId, MessageId)> {
+    let mut choices = Vec::with_capacity(3);
+    if save_as {
+        choices.push((
+            ids::DIALOG_DISK_CONFLICT_SAVE_AS,
+            ids::NOTICE_DISK_CHANGED_SAVE_AS,
+        ));
+    }
+    choices.push((ids::DIALOG_OVERWRITE, ids::NOTICE_DISK_CHANGED_OVERWRITE));
+    choices.push((
+        ids::DIALOG_DISK_CONFLICT_RELOAD,
+        ids::NOTICE_DISK_CHANGED_RELOAD,
+    ));
+    choices
 }
 
 /// The choice a notice card offers. Dismissing the card is always "Cancel".
@@ -37,8 +80,18 @@ impl ErrorNotice {
         Self {
             title: title.into(),
             detail: detail.into(),
+            system: None,
             action: None,
         }
+    }
+
+    /// `self` with `text` as its system part: the path and the OS or library
+    /// error, kept apart from the readable sentence.
+    #[must_use]
+    pub fn with_system(mut self, text: impl Into<String>) -> Self {
+        let text = text.into();
+        self.system = (!text.trim().is_empty()).then(|| UserText::new(text));
+        self
     }
 
     /// The heading in `i18n`'s language.
@@ -49,6 +102,50 @@ impl ErrorNotice {
     /// The detail in `i18n`'s language.
     pub fn detail_text(&self, i18n: &I18n) -> String {
         self.detail.render(i18n)
+    }
+
+    /// The sentence and, after a colon, the system part, as one en-US line:
+    /// the text that leaves the screen (a CLI reason), as the card read
+    /// before the system part had its own block.
+    pub fn detail_line_en_us(&self) -> String {
+        let detail = self.detail.render(&I18n::en_us());
+        match &self.system {
+            Some(system) => format!("{detail}: {system}"),
+            None => detail,
+        }
+    }
+
+    /// Red for a failure or refusal, amber for a card that asks or warns,
+    /// keyed on the heading.
+    pub fn severity(&self) -> NoticeSeverity {
+        match self.title.id() {
+            Some(id) if WARNING_TITLES.contains(&id) => NoticeSeverity::Warn,
+            _ => NoticeSeverity::Error,
+        }
+    }
+
+    /// What the card's Copy button puts on the clipboard for a bug report:
+    /// the heading, the sentence and the system part, a blank line apart.
+    pub fn copy_text(&self, i18n: &I18n) -> String {
+        let mut parts = vec![self.title_text(i18n), self.detail_text(i18n)];
+        if let Some(system) = &self.system {
+            parts.push(system.as_str().to_owned());
+        }
+        parts.retain(|part| !part.trim().is_empty());
+        parts.join("\n\n")
+    }
+
+    /// Whether the card offers Save As…: a File Changed on Disk card of a
+    /// document that has a Save As (a sheet, symbol or footprint; not a
+    /// board).
+    pub fn offers_save_as(&self) -> bool {
+        matches!(
+            &self.action,
+            Some(NoticeAction::DiskChanged {
+                path,
+                drift: crate::persist::DiskDrift::Changed,
+            }) if !crate::app::is_pcb_path(path)
+        )
     }
 
     /// A save would overwrite a change made outside Signex (or re-create a
@@ -78,6 +175,7 @@ impl ErrorNotice {
         Self {
             title: title.into(),
             detail: detail.arg("name", name),
+            system: None,
             action: Some(NoticeAction::DiskChanged { path, drift }),
         }
     }

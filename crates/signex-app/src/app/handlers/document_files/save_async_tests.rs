@@ -347,11 +347,15 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     assert!(!path.exists());
     assert!(no_commit_requested(&app));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
+    // The sentence names the operation; the reason is the error chain, shown
+    // in the card's system block (m11).
+    assert_eq!(notice.detail.render_en_us(), "Failed to save PCB");
     assert!(
         notice
-            .detail
-            .render_en_us()
-            .contains("read-only (newer format)")
+            .system
+            .as_ref()
+            .is_some_and(|system| system.as_str().contains("read-only (newer format)")),
+        "{notice:?}"
     );
 }
 

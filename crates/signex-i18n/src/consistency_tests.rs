@@ -422,7 +422,6 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             "This symbol has no pins yet. Open the Symbol Editor to add some.",
         ),
         (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
-        (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
         (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
         (
             ids::PREFERENCES_SECTION_ANNOTATION,

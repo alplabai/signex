@@ -32,6 +32,9 @@ define_ids! {
     NOTICE_DISK_FOLDER_MISSING_TITLE = "notice-disk-folder-missing-title";
     NOTICE_LIBRARY_READ_ONLY_DETAIL = "notice-library-read-only-detail";
     NOTICE_DISK_CHANGED = "notice-disk-changed";
+    NOTICE_DISK_CHANGED_SAVE_AS = "notice-disk-changed-save-as";
+    NOTICE_DISK_CHANGED_OVERWRITE = "notice-disk-changed-overwrite";
+    NOTICE_DISK_CHANGED_RELOAD = "notice-disk-changed-reload";
     NOTICE_DISK_MISSING = "notice-disk-missing";
     NOTICE_DISK_FOLDER_MISSING = "notice-disk-folder-missing";
     NOTICE_ROW_NOT_SAVED = "notice-row-not-saved";

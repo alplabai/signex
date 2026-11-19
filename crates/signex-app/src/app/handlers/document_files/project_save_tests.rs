@@ -580,13 +580,15 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     assert!(project.pending_libraries.contains_key(&fx.lib_id));
     assert!(project.data.libraries.is_empty());
     let notice = fx.app.document_state.error_notice.clone().expect("card");
+    // The sentence names the operation; the reason is the error chain, shown
+    // in the card's system block (m11).
+    assert_eq!(notice.detail.render_en_us(), "Failed to save project file");
     assert!(
         notice
-            .detail
-            .render_en_us()
-            .contains("partly created library"),
-        "{}",
-        notice.detail.render_en_us()
+            .system
+            .as_ref()
+            .is_some_and(|system| system.as_str().contains("partly created library")),
+        "{notice:?}"
     );
     assert!(crate::diagnostics::logged_count(&needle) > before);
 }

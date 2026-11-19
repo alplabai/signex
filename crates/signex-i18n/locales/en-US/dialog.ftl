@@ -174,6 +174,8 @@ dialog-parameter-manager-column-footprint = Footprint
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
+# Writes the open document to a new file and leaves the changed one as it is.
+dialog-disk-conflict-save-as = Save As…
 dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
 # Footer of Print Preview when no file is ticked for export.
