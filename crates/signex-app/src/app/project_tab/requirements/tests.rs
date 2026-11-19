@@ -561,4 +561,8 @@ fn a_refusal_stays_with_its_entry_through_a_remove_of_another() {
 
     answer(&mut app, "project_remove_requirement", &["requirement=b"]);
     assert_eq!(shown_at(&app), None, "gone with b");
+
+    // A new b is a new entry: the old b's refusal must not come back on it.
+    add_by_catalog(&mut app, "b");
+    assert_eq!(shown_at(&app), None, "not on the re-added b");
 }
