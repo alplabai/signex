@@ -699,10 +699,10 @@ panels-placed-name = Name
 panels-placed-direction = Direction
 panels-placed-sheet = Sheet
 panels-placed-sheet-file = Sheet File
-# Properties section of a selected Blanket directive: a drawn region whose
-# parameters apply to every net inside it.
-panels-directive-blanket = Blanket
-panels-directive-net-class = Net Class
+# The UI name of a Blanket directive: a drawn region whose parameters apply
+# to every net inside it.
+panels-directive-blanket = Net Blanket
+panels-directive-net-class = Net class
 # Section title: the ERC rules a Blanket does not report inside its region.
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
@@ -737,3 +737,70 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## c13 sch-net-directives
+## Properties of a Net Parameters directive (#1281): a flag on one wire that
+## sets its net's class, diff-pair class and routing rules.
+
+# Caption under the header: the net the flag sits on and the sheet file.
+panels-np-caption = on { $net } · { $sheet }
+# Caption when the flag sits on no wire.
+panels-np-caption-no-net = on no wire · { $sheet }
+panels-np-classes = Classes
+panels-np-diff-pair-class = Diff-pair class
+# A class dropdown entry: no class.
+panels-np-none = None
+# The diff-pair class dropdown while the net is not half of a pair.
+panels-np-single-net = None (single net)
+panels-np-rules = Rules
+# Column headings of the rule list.
+panels-np-rule = Rule
+panels-np-value = Value
+panels-np-width = Width
+panels-np-clearance = Clearance
+# Two inputs: the via diameter and the via hole.
+panels-np-via = Via dia / hole
+# The via on the flag and its illustration callout.
+panels-np-via-short = Via
+panels-np-current = Current
+# Beside Current: the value is information only, no rule is made.
+panels-np-info = info
+panels-np-unit-mm = mm
+# Unit of current: ampere.
+panels-np-unit-a = A
+panels-np-becomes-rules = Becomes PCB rules Width_{ $class } and Clearance_{ $class } on Update PCB.
+panels-np-display = Display
+panels-np-show-on-flag = Show parameters on the flag
+# The first line of the flag on the sheet and in the illustration.
+panels-np-flag-class = Net Class = { $class }
+panels-np-flag-no-class = Net Parameters
+panels-np-flag-hidden = parameters hidden on the flag
+panels-np-current-info = current (info) { $current } A
+
+## Properties of a Net Blanket (#1281).
+
+# Caption under the header: the sheet file and the outline size.
+panels-blanket-caption = { $sheet } · { $width } × { $height } mm
+panels-blanket-outline = Outline
+panels-blanket-xy = X / Y
+panels-blanket-size = Width / Height
+panels-blanket-directive = Directive
+# The width of the tracks of the caught nets, not of the outline.
+panels-blanket-track-width = Track width
+# How copper pours treat the nets under this blanket.
+panels-blanket-pour = Pour on nets
+panels-blanket-pour-normal = Normal
+panels-blanket-pour-keep-short = Keep short
+# Section title with the number of nets the blanket catches.
+panels-blanket-nets = Nets under the blanket · { $count }
+# A net row whose wires only cross the outline, left out.
+panels-blanket-edge-only = edge only
+# A net row whose wires only cross the outline, included.
+panels-blanket-edge-included = edge · included
+panels-blanket-no-nets = No net is under the blanket.
+panels-blanket-include-edge = Include nets that only cross the edge
+panels-blanket-hover-hint = Hover a net row to highlight it on the sheet. Power nets (GND) are never caught.
+# Note under the illustration.
+panels-blanket-caught-note = accent = caught by the blanket
+# Messages line: the Net Parameters tool was clicked away from a wire.
+panels-np-off-wire = Net Parameters sit on a wire: click on a wire. Nothing was placed.

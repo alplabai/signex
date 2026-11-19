@@ -552,6 +552,7 @@ impl Signex {
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
+        let directive_panel = self.document_state.panel_ctx.directive_panel.take();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
         let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
@@ -723,6 +724,7 @@ impl Signex {
             selected_drawing,
             selected_drawing_placement,
             selected_child_sheet,
+            directive_panel,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,
             child_sheet_border_advanced_open,

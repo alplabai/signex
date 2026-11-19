@@ -162,6 +162,9 @@ pub struct PanelContext {
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// The selected Net Parameters directive or Net Blanket, as its
+    /// Properties read it (#1281).
+    pub directive_panel: Option<super::DirectivePanel>,
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,

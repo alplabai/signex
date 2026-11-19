@@ -852,24 +852,55 @@ fn a_wires_facts_sit_under_properties() {
     assert_eq!(beside(&shown, "End"), "1, 2");
 }
 
-/// A Blanket's two sections keep their titles above their rows.
+/// A Net Blanket's sections keep their titles above their rows (#1281:
+/// Outline, Directive with the net class, the nets under it, then the ERC
+/// exclusions as before).
 #[test]
 fn a_blankets_sections_keep_their_titles() {
-    let ctx = one_selected(
+    let mut ctx = one_selected(
         SelectedKindForTest::Directive,
-        &[("Type", "Blanket"), ("Net Class", "PWR")],
+        &[("Type", "Net Blanket"), ("Net Class", "PWR")],
+    );
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    sheet
+        .directives
+        .push(signex_types::schematic::SchDirective::Blanket {
+            uuid: uuid::Uuid::from_u128(7),
+            start: signex_types::schematic::Point::new(10.0, 10.0),
+            end: signex_types::schematic::Point::new(60.8, 40.48),
+            net_class: Some("PWR".to_string()),
+            erc_exclusions: Vec::new(),
+            track_width: None,
+            pour: signex_types::schematic::BlanketPour::Normal,
+            include_edge_nets: false,
+        });
+    ctx.directive_panel = crate::panels::DirectivePanel::build(
+        &sheet,
+        uuid::Uuid::from_u128(7),
+        "power_in.snxsch",
+        vec!["PWR".to_string()],
+        Vec::new(),
     );
     let shown = texts(&ctx);
     let all = plain(&shown);
     let at = |text: &str| all.iter().position(|t| *t == text);
     assert!(
-        at("BLANKET").is_some() && at("BLANKET") < at("Net Class"),
+        at("OUTLINE").is_some() && at("OUTLINE") < at("Width / Height"),
         "{all:?}"
     );
+    assert!(
+        at("DIRECTIVE").is_some() && at("DIRECTIVE") < at("Net class"),
+        "{all:?}"
+    );
+    assert!(at("Net class") < at("Track width"), "{all:?}");
     assert!(
         at("ERC EXCLUSIONS").is_some() && at("ERC EXCLUSIONS") < at("All Rules"),
         "{all:?}"
     );
+    assert!(at("Track width") < at("ERC EXCLUSIONS"), "{all:?}");
 }
 
 /// A text note pairs each justification row with its own value.
