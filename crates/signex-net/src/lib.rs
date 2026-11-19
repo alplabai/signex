@@ -62,3 +62,11 @@ pub use project::{
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
 };
+pub use project::{
+    EntryBuses, build_project_netlist_indexed_named, build_project_netlist_named, channel_uuid,
+};
+
+mod compiled;
+#[cfg(test)]
+mod compiled_tests;
+pub use compiled::{CompiledDesign, CompiledNet, CompiledSheet, compile_design};

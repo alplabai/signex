@@ -142,6 +142,9 @@ pub enum RuleKind {
     SheetPinUnconnected,
     /// Two or more sheet pins set to `output` drive one net.
     SheetPinDirectionConflict,
+    /// A `Repeat(<net>)` entry on a repeated sheet symbol meets no bus, or a
+    /// bus with fewer members than the symbol has channels (#1279).
+    RepeatEntryNeedsBus,
 }
 
 impl RuleKind {
@@ -181,6 +184,7 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "Net carries only labels",
             RuleKind::SheetPinUnconnected => "Sheet pin not connected",
             RuleKind::SheetPinDirectionConflict => "Sheet pin direction conflict",
+            RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
         }
     }
 
@@ -204,7 +208,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 33] = [
+    pub const ALL: [RuleKind; 34] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -238,6 +242,7 @@ impl RuleKind {
         RuleKind::LabelsOnlyNet,
         RuleKind::SheetPinUnconnected,
         RuleKind::SheetPinDirectionConflict,
+        RuleKind::RepeatEntryNeedsBus,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -250,6 +255,7 @@ impl RuleKind {
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
+            | RuleKind::RepeatEntryNeedsBus
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin
             | RuleKind::PowerPortShort

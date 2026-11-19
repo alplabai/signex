@@ -41,13 +41,15 @@ mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
 pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
+mod repeat_entry;
+pub(crate) use repeat_entry::repeat_entry_needs_bus;
 
 use std::collections::{HashMap, HashSet};
 
 use signex_net::{SegmentIndex, SheetConnectivity, pt_key, uf::Key};
 use signex_types::schematic::{
     LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
-    normalized_lib_id,
+    normalized_lib_id, repeated_entry_name,
 };
 
 use crate::context::ErcContext;
@@ -568,8 +570,12 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .filter_map(|l| l.port_name())
             .collect();
 
+        // A `Repeat(<net>)` entry (#1279) is matched by the child's port `<net>`.
+        fn port_of(name: &str) -> Option<&str> {
+            normalize_port_name(name).map(|n| repeated_entry_name(n).unwrap_or(n))
+        }
         for pin in &child.pins {
-            let matched = normalize_port_name(&pin.name).is_some_and(|n| {
+            let matched = port_of(&pin.name).is_some_and(|n| {
                 hier_text.contains(n) || bus_hier::has_bus_counterpart(n, hier_text.iter().copied())
             });
             if !matched {
@@ -587,11 +593,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             }
         }
 
-        let parent_pins: HashSet<&str> = child
-            .pins
-            .iter()
-            .filter_map(|p| normalize_port_name(&p.name))
-            .collect();
+        let parent_pins: HashSet<&str> =
+            child.pins.iter().filter_map(|p| port_of(&p.name)).collect();
         for lbl in child_ctx
             .labels
             .iter()

@@ -892,6 +892,13 @@ pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
+mod repeat;
+#[cfg(test)]
+mod repeat_tests;
+pub use repeat::{
+    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, channel_alpha,
+    check_format, repeated_entry_name,
+};
 
 #[cfg(test)]
 mod default_tests;

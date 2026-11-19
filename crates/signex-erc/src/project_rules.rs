@@ -51,6 +51,7 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "labels_only_net",
             RuleKind::SheetPinUnconnected => "sheet_pin_unconnected",
             RuleKind::SheetPinDirectionConflict => "sheet_pin_direction_conflict",
+            RuleKind::RepeatEntryNeedsBus => "repeat_entry_needs_bus",
         }
     }
 

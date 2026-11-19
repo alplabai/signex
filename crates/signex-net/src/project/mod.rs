@@ -39,8 +39,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{
-    InstancePath, Label, LabelType, Point, SchematicSheet, normalize_port_name,
+    ChannelOccurrence, InstancePath, Label, LabelType, Point, SchematicSheet, normalize_port_name,
 };
 use uuid::Uuid;
 
@@ -52,6 +53,9 @@ use crate::build::{
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 mod buses;
+mod channels;
+#[cfg(test)]
+mod channels_tests;
 mod components;
 mod designators;
 mod members;
@@ -61,6 +65,8 @@ mod net_index;
 mod root_order;
 mod sheet_numbers;
 
+pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
+pub use channels::{EntryBuses, channel_uuid};
 pub use components::{ComponentPin, ComponentReport, PlacedSymbol};
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use name_changes::{ProjectNetChange, project_name_changes};
@@ -229,6 +235,12 @@ struct Occ<'a> {
     /// the child's resolved key). Occurrences that share a key are instances
     /// of one sheet.
     key: SheetKey,
+    /// The channels this occurrence sits in, outermost first (empty outside
+    /// any repeated sheet); its designators are renamed through each. The
+    /// chain entry of a channel occurrence is the channel name (`CH1`).
+    channels: Vec<ChannelOccurrence>,
+    /// Set on the occurrence a repeated placement walks directly.
+    channel: Option<channels::ChannelScope>,
 }
 
 /// Per-occurrence level-1 analysis, sampled after every level-1 union.
@@ -291,9 +303,24 @@ pub fn build_project_netlist(graph: &ProjectGraph) -> ProjectNetlist {
     stitch_project(graph, Want::Netlist).netlist
 }
 
+/// [`build_project_netlist`] with repeated sheets named through `naming`
+/// rather than the default channel naming.
+pub fn build_project_netlist_named(graph: &ProjectGraph, naming: &ChannelNaming) -> ProjectNetlist {
+    stitch_named(graph, Want::Netlist, naming).netlist
+}
+
 /// [`build_project_netlist`] plus the [`NetIndex`] of what sits on each net.
 pub fn build_project_netlist_indexed(graph: &ProjectGraph) -> (ProjectNetlist, NetIndex) {
-    let stitched = stitch_project(graph, Want::Members);
+    build_project_netlist_indexed_named(graph, &ChannelNaming::default())
+}
+
+/// [`build_project_netlist_indexed`] with repeated sheets named through
+/// `naming`.
+pub fn build_project_netlist_indexed_named(
+    graph: &ProjectGraph,
+    naming: &ChannelNaming,
+) -> (ProjectNetlist, NetIndex) {
+    let stitched = stitch_named(graph, Want::Members, naming);
     (
         stitched.netlist,
         NetIndex::from_members(stitched.members, stitched.placements, stitched.symbols),
@@ -329,6 +356,10 @@ struct Stitched {
 }
 
 fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
+    stitch_named(graph, want, &ChannelNaming::default())
+}
+
+fn stitch_named(graph: &ProjectGraph, want: Want, naming: &ChannelNaming) -> Stitched {
     let masked = crate::directives::masked_sheets(graph.sheets);
     let graph = &masked
         .as_ref()
@@ -341,12 +372,16 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
 
     let (occs, edges) = walk_occurrences(graph, &mut issues);
 
-    detect_shared_references(&occs, &mut issues);
+    detect_shared_references(&occs, naming, &mut issues);
 
     // ---- Level 1: per-occurrence analysis (all unions before any sampling) --
     let analyses: Vec<Analysis> = occs
         .iter()
-        .map(|o| analyze(o.sheet, &o.path, want_members))
+        .map(|o| {
+            let mut a = analyze(o.sheet, &o.path, want_members);
+            channels::rename_terminals(&mut a, o, naming);
+            a
+        })
         .collect();
 
     // ---- Level 2: union net roots across occurrences ------------------------
@@ -426,6 +461,10 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
         }
     }
 
+    // Rule 3c (#1279): a `Repeat(<net>)` entry joins channel k to member k of
+    // the parent bus it meets.
+    channels::join_repeat_entries(&mut l2, &occs, &edges, &analyses);
+
     // Seed every net-root node so terminal-only nets (no label/binding) still
     // form their own group.
     for (oid, a) in analyses.iter().enumerate() {
@@ -459,7 +498,7 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
             sorted.sort_unstable();
             listed = members::collect_members(&sorted, &occs, &analyses, &mut points);
         }
-        let mut net = assemble_net(nodes, &occs, &analyses, want_names);
+        let mut net = assemble_net(nodes, &occs, &analyses, want_names, naming);
         if !net.terminals.is_empty() {
             net.members = listed;
             raw.push(net);
@@ -550,7 +589,7 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
             Vec::new()
         },
         symbols: if want_members {
-            components::placed_symbols(&occs)
+            components::placed_symbols(&occs, naming)
         } else {
             Vec::new()
         },
@@ -580,6 +619,7 @@ fn assemble_net(
     occs: &[Occ],
     analyses: &[Analysis],
     want_names: bool,
+    naming: &ChannelNaming,
 ) -> RawNet {
     members.sort_unstable();
 
@@ -595,12 +635,7 @@ fn assemble_net(
     // (Power > Global > Hierarchical > Net), with ties broken on the fully
     // qualified text so the winner never depends on member or file order.
     let qualify = |oid: usize, qualifiable: bool, text: &str| {
-        let chain = &occs[oid].name_chain;
-        if qualifiable && !chain.is_empty() {
-            format!("{}/{}", chain.join("/"), text)
-        } else {
-            text.to_string()
-        }
+        channels::scoped_name(&occs[oid], qualifiable, text, naming)
     };
     let mut best: Option<(u8, String)> = None;
     for &(oid, root) in &members {
@@ -645,7 +680,7 @@ fn assemble_net(
     }
 
     let names = want_names
-        .then(|| names::multi_name_sources(&members, occs, analyses, name.as_deref()))
+        .then(|| names::multi_name_sources(&members, occs, analyses, name.as_deref(), naming))
         .flatten();
     RawNet {
         sort_key: members[0],
@@ -781,12 +816,17 @@ fn walk_occurrences<'a>(
             continue;
         };
         path.clear();
+        let root = Occ {
+            sheet,
+            name_chain: Vec::new(),
+            path: InstancePath::root(),
+            key,
+            channels: Vec::new(),
+            channel: None,
+        };
         visit(
             graph,
-            &key,
-            sheet,
-            Vec::new(),
-            InstancePath::root(),
+            root,
             &mut path,
             &mut occs,
             &mut edges,
@@ -802,17 +842,11 @@ fn walk_occurrences<'a>(
 /// issues (missing children, cycles).
 ///
 /// Every key this walk reaches is inserted into `visited`, so the caller can
-/// tell which of its remaining roots are already covered (#430).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "10 arguments: the hierarchy DFS threads its accumulators explicitly so the caller can inspect them (#430)"
-)]
+/// tell which of its remaining roots are already covered (#430). A repeated
+/// placement (#1279) is walked once per channel.
 fn visit<'a>(
     graph: &ProjectGraph<'a>,
-    key: &SheetKey,
-    sheet: &'a SchematicSheet,
-    name_chain: Vec<String>,
-    inst_path: InstancePath,
+    occ: Occ<'a>,
     path: &mut Vec<SheetKey>,
     occs: &mut Vec<Occ<'a>>,
     edges: &mut Vec<(usize, usize, usize)>,
@@ -820,21 +854,17 @@ fn visit<'a>(
     issues: &mut Vec<StitchIssue>,
 ) -> usize {
     let my_id = occs.len();
-    let parent_path = if name_chain.is_empty() {
-        key.to_string()
+    let parent_path = if occ.name_chain.is_empty() {
+        occ.key.to_string()
     } else {
-        name_chain.join("/")
+        occ.name_chain.join("/")
     };
-    occs.push(Occ {
-        sheet,
-        name_chain,
-        path: inst_path,
-        key: key.clone(),
-    });
+    let (key, sheet) = (occ.key.clone(), occ.sheet);
+    occs.push(occ);
     path.push(key.clone());
     visited.insert(key.clone());
 
-    let submap = graph.resolved.get(key);
+    let submap = graph.resolved.get(&key);
     for (cs_index, cs) in sheet.child_sheets.iter().enumerate() {
         let Some(child_key) = submap.and_then(|m| m.get(cs.filename.as_str())) else {
             issues.push(StitchIssue::MissingChild {
@@ -858,22 +888,39 @@ fn visit<'a>(
                 filename: cs.filename.clone(),
             }),
             Some(child_sheet) => {
-                let mut child_chain = occs[my_id].name_chain.clone();
-                child_chain.push(cs.name.clone());
-                let child_path = occs[my_id].path.child(cs.uuid);
-                let cid = visit(
-                    graph,
-                    child_key,
-                    child_sheet,
-                    child_chain,
-                    child_path,
-                    path,
-                    occs,
-                    edges,
-                    visited,
-                    issues,
-                );
-                edges.push((my_id, cs_index, cid));
+                let parent = &occs[my_id];
+                let child = |chain_entry: String,
+                             placement: Uuid,
+                             scope: Option<channels::ChannelScope>| {
+                    let mut name_chain = parent.name_chain.clone();
+                    name_chain.push(chain_entry);
+                    let mut inside = parent.channels.clone();
+                    if let Some(scope) = &scope {
+                        inside.push(scope.channel.clone());
+                    }
+                    Occ {
+                        sheet: child_sheet,
+                        name_chain,
+                        path: parent.path.child(placement),
+                        key: child_key.clone(),
+                        channels: inside,
+                        channel: scope,
+                    }
+                };
+                let children: Vec<Occ<'a>> = match channels::channel_scopes(cs) {
+                    None => vec![child(cs.name.clone(), cs.uuid, None)],
+                    Some(scopes) => scopes
+                        .into_iter()
+                        .map(|s| {
+                            let id = channels::channel_uuid(cs.uuid, s.channel.number);
+                            child(s.channel.name.clone(), id, Some(s))
+                        })
+                        .collect(),
+                };
+                for child_occ in children {
+                    let cid = visit(graph, child_occ, path, occs, edges, visited, issues);
+                    edges.push((my_id, cs_index, cid));
+                }
             }
         }
     }
@@ -899,7 +946,7 @@ fn bucket_join(l2: &mut HashMap<L2, L2>, bucket: &mut HashMap<String, L2>, name:
 /// distinct; the designators collide only when their placements carry no
 /// distinguishing instance entry (or carry the same one). One issue per
 /// `(key, designator)`, in sorted-key then document order.
-fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
+fn detect_shared_references(occs: &[Occ], naming: &ChannelNaming, issues: &mut Vec<StitchIssue>) {
     let mut by_key: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, o) in occs.iter().enumerate() {
         by_key.entry(o.key.as_str()).or_default().push(i);
@@ -914,18 +961,20 @@ fn detect_shared_references(occs: &[Occ], issues: &mut Vec<StitchIssue>) {
         // Instances of one sheet share the same symbols; report each
         // colliding designator once, in the sheet's document order.
         let sheet = occs[occ_ids[0]].sheet;
-        let mut seen: HashSet<&str> = HashSet::new();
+        let mut seen: HashSet<String> = HashSet::new();
         for sym in &sheet.symbols {
-            let mut resolved: HashSet<&str> = HashSet::new();
+            let mut resolved: HashSet<String> = HashSet::new();
             for &oid in occ_ids {
-                let designator = sym.designator_in(&occs[oid].path);
+                let occ = &occs[oid];
+                let base = sym.designator_in(&occ.path);
+                let designator = channels::channel_designator(base, &occ.channels, naming);
                 if designator.is_empty() {
                     continue;
                 }
-                if !resolved.insert(designator) && seen.insert(designator) {
+                if !resolved.insert(designator.to_string()) && seen.insert(designator.to_string()) {
                     issues.push(StitchIssue::SharedReferenceAcrossInstances {
                         filename: key.to_string(),
-                        reference: designator.to_string(),
+                        reference: designator.into_owned(),
                     });
                 }
             }
