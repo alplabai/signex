@@ -264,7 +264,8 @@ fn tile<'a, M: Clone + 'a>(
                 .color(style.caption)
                 .wrapping(Wrapping::None)
                 .ellipsis(Ellipsis::End)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         )
         .width(Length::Fill);
     let padding = Padding::from([metrics.pad_v, metrics.pad_h]);

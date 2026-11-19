@@ -47,6 +47,7 @@ impl Signex {
                     &ctx.diagnostics,
                     &self.ui_state.validation_panels.messages,
                     verbose,
+                    &self.ui_state.i18n,
                 );
                 let text = crate::panels::messages_copy_text(&rows, &self.ui_state.i18n);
                 iced::clipboard::write(text).discard()

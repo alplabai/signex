@@ -118,8 +118,9 @@ pub(crate) fn shown<'e>(
     entries: &'e [DiagnosticEntry],
     view: &MessagesView,
     verbose: bool,
+    i18n: &I18n,
 ) -> Vec<&'e DiagnosticEntry> {
-    let query = view.query.trim().to_lowercase();
+    let query = i18n.fold_for_search(view.query.trim());
     visible(entries, view, verbose)
         .into_iter()
         .filter(|e| {
@@ -130,7 +131,7 @@ pub(crate) fn shown<'e>(
                 .is_none_or(|s| MessageSource::of_code(&e.code) == s)
         })
         .filter(|_| view.document.is_none())
-        .filter(|e| query.is_empty() || e.message.to_lowercase().contains(&query))
+        .filter(|e| query.is_empty() || i18n.fold_for_search(&e.message).contains(&query))
         .collect()
 }
 
@@ -392,7 +393,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if visible.is_empty() {
         return empty_state(ctx);
     }
-    let rows = shown(&ctx.diagnostics, view, verbose);
+    let rows = shown(&ctx.diagnostics, view, verbose, i18n);
     let r = resolve(tokens);
     let (sunken, line, ink3, ink4, err_soft) = (r.sunken, r.line_soft, r.ink3, r.ink4, r.err_soft);
     let ink = theme_ext::text_primary(tokens);

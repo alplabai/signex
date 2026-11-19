@@ -60,19 +60,29 @@ fn the_chips_count_each_level_and_debug_rows_are_hidden_by_default() {
 #[test]
 fn a_level_chip_source_and_text_filter_narrow_the_rows() {
     let entries = log();
+    let i18n = I18n::en_us();
     let mut view = MessagesView::default();
     view.apply(MessagesPanelMsg::LevelPicked(MessageLevel::Info), None);
-    let ids: Vec<u64> = shown(&entries, &view, false).iter().map(|e| e.id).collect();
+    let ids: Vec<u64> = shown(&entries, &view, false, &i18n)
+        .iter()
+        .map(|e| e.id)
+        .collect();
     assert_eq!(ids, [6, 1]);
     view.apply(
         MessagesPanelMsg::SourcePicked(Some(MessageSource::Erc)),
         None,
     );
-    let ids: Vec<u64> = shown(&entries, &view, false).iter().map(|e| e.id).collect();
+    let ids: Vec<u64> = shown(&entries, &view, false, &i18n)
+        .iter()
+        .map(|e| e.id)
+        .collect();
     assert_eq!(ids, [6]);
     view = MessagesView::default();
     view.apply(MessagesPanelMsg::QueryEdited("REPORT".into()), None);
-    let ids: Vec<u64> = shown(&entries, &view, false).iter().map(|e| e.id).collect();
+    let ids: Vec<u64> = shown(&entries, &view, false, &i18n)
+        .iter()
+        .map(|e| e.id)
+        .collect();
     assert_eq!(ids, [3], "the filter text matches any case");
 }
 
@@ -103,8 +113,8 @@ fn copy_writes_the_shown_rows_as_tab_separated_lines() {
         level: MessageLevel::Error,
         ..MessagesView::default()
     };
-    let text =
-        copy_text(&shown(&entries, &view, false), &i18n).replace(['\u{2068}', '\u{2069}'], "");
+    let text = copy_text(&shown(&entries, &view, false, &i18n), &i18n)
+        .replace(['\u{2068}', '\u{2069}'], "");
     let cells: Vec<&str> = text.split('\t').collect();
     assert_eq!(cells.len(), 4, "{text}");
     assert_eq!(cells[0], "ERROR");
