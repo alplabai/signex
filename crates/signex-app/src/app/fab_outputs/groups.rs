@@ -18,7 +18,9 @@ pub enum FabGroup {
 
 impl FabGroup {
     /// Every group: the first two in the left column, the others in the
-    /// right.
+    /// right. The dialog lists them through [`Self::COLUMNS`]; the tests
+    /// check that the columns hold every group once.
+    #[cfg(test)]
     pub const ALL: [FabGroup; 4] = [
         FabGroup::Fabrication,
         FabGroup::SingleFile,
