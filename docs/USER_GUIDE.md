@@ -274,6 +274,21 @@ the one the schematic treats as the part's datasheet. Selecting a placed part
 lists all of its documents in the Properties panel. A document left empty is
 not saved.
 
+**Library updates.** When a schematic opens and some of its placed parts are
+older than their library rows, a library in the Personal workflow updates them
+silently, except a part with a conflict (below). Otherwise **Library Updates
+Available** opens, with a pill per change size (major, minor, patch) beside the
+count. Its table lists each part: the designator and Internal PN, the library,
+the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
+pill. Patch changes start ticked, minor and major changes unticked. Parts that
+share one library symbol share one tick. The checkbox in the table heading
+ticks every row, or clears them all when every row is ticked. When both your
+part and the library row changed a field, a line under the part shows
+**yours** and **library now**; choose **Keep mine** (the default) or **Use
+library value**, and answering ticks the part. **Update Selected Components**
+updates the ticked parts, each answer in the same **Undo** step as its part;
+**Skip All** and **Cancel** close without updating.
+
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
 snapped to the grid. The rotate and mirror keys turn the whole group about the
