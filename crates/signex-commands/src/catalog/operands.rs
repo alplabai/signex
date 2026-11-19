@@ -423,6 +423,9 @@ pub const COLOR_NET: &[Operand] = &[
 /// The document a command acts on, by id or path. A headless or CLI run names
 /// it every time and never falls back to the active one (#2172).
 pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A sheet edit that takes nothing but the sheet: the one in view, or the one
+/// `document` names (a CLI or an agent's edit list).
+pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
 /// A board report written as CSV (#2404): which board, which report
 /// (`bom`, `netlist`, `net_length`, `components`) and the file.
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[

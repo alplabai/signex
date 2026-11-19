@@ -8,7 +8,9 @@
 use signex_engine::pcb::placement::grid_for;
 use signex_i18n::{ids, t};
 use signex_types::pcb::Point;
-use signex_types::pcb_options::{BoardOrigin, GridUse};
+use std::path::Path;
+
+use signex_types::pcb_options::{BoardOptions, BoardOrigin, GridUse};
 use signex_types::pcb_origin::nearest_area_corner;
 
 use crate::app::Signex;
@@ -19,10 +21,12 @@ impl Signex {
         match event {
             BoardOriginMsg::SetPicked => self.arm_pcb_origin_place(),
             BoardOriginMsg::ResetPicked => {
-                let Some(outline) = self.editable_board_outline() else {
+                let Some(path) = self.active_tab_path() else {
                     return;
                 };
-                self.set_pcb_origin(BoardOrigin::of_new_board(&outline).at);
+                if let Err(why) = self.reset_pcb_origin_at(&path) {
+                    crate::diagnostics::log_info(format!("Reset origin: {why}"));
+                }
             }
             BoardOriginMsg::SnapToCornerPicked => self.snap_pcb_origin_to_corner(),
         }
@@ -87,15 +91,34 @@ impl Signex {
         self.set_pcb_origin(nearest_area_corner(&outline, pointer));
     }
 
+    /// Reset on the board at `path`, the menu row's and the
+    /// `reset_board_origin` command's one path: the origin to the bottom-left
+    /// of the outline (of the board area without one), one undo step.
+    /// Whether it moved; why not when the board is not open or read-only.
+    pub(crate) fn reset_pcb_origin_at(&mut self, path: &Path) -> Result<bool, String> {
+        let board = self
+            .document_state
+            .pcb_board(path)
+            .ok_or("the board is not open")?;
+        if board.unknown.newer_minor_source.is_some() {
+            return Err("the board opens read-only".to_string());
+        }
+        let at = BoardOrigin::of_new_board(&board.outline).at;
+        Ok(self.edit_pcb_board_options_at(path, |options| move_origin(options, at)))
+    }
+
     /// Move the origin to `at`: one undo step, nothing when it is there.
     fn set_pcb_origin(&mut self, at: Point) {
-        self.edit_pcb_board_options(|options| {
-            let origin = BoardOrigin::new(at);
-            let moved = options.origin != origin;
-            options.origin = origin;
-            moved
-        });
+        self.edit_pcb_board_options(|options| move_origin(options, at));
     }
+}
+
+/// Put the origin of `options` at `at`; whether it moved.
+fn move_origin(options: &mut BoardOptions, at: Point) -> bool {
+    let origin = BoardOrigin::new(at);
+    let moved = options.origin != origin;
+    options.origin = origin;
+    moved
 }
 
 #[cfg(test)]

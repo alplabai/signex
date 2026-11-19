@@ -26,6 +26,7 @@ use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
+use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
 use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
@@ -116,6 +117,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
     ("set_sheet_variable", placed::set_sheet_variable),
+    ("repair_pin_junctions", repair_reset::repair_pin_junctions),
+    ("reset_board_origin", repair_reset::reset_board_origin),
+    ("reset_layer_colors", repair_reset::reset_layer_colors),
     ("view_rotate", view_rotate),
     ("show_layer_set", strip::show_layer_set),
     ("save_layer_set", strip::save_layer_set),

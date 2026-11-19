@@ -212,6 +212,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("gloss_selected_routes", BOARD_EDIT),
     // Layer colours are saved with the board (2026-11-18): a board step.
     ("set_layer_color", BOARD_EDIT),
+    ("reset_layer_colors", BOARD_EDIT),
+    ("reset_board_origin", BOARD_EDIT),
     ("board_shape_from_selection", BOARD_EDIT),
     ("keepout_from_selection", BOARD_EDIT),
     ("arrange_in_box", BOARD_EDIT),
@@ -509,6 +511,8 @@ mod tests {
             "place_text",
             "place_text_string",
             "place_wire",
+            // The sheet's bare pin touches get their dots.
+            "repair_pin_junctions",
             "set_object_position",
             "set_object_rotation",
             "set_sheet_symbol_size",
@@ -543,7 +547,9 @@ mod tests {
             ("import_graphics", "takes a file path"),
             ("create_sheet_symbol_from_sheet", "takes a file path"),
             ("set_layer_color", "edits a board"),
-            ("repair_pin_junctions", "not runnable headless"),
+            ("reset_layer_colors", "edits a board"),
+            ("reset_board_origin", "edits a board"),
+            ("set_board_origin", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");
