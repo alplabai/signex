@@ -716,3 +716,8 @@ mod preferences_shell;
 // error, the snap preview's pitch labels and the Increment step stepper.
 #[path = "regression/preferences_pages.rs"]
 mod preferences_pages;
+
+// #145 / #2509 — Preferences ▸ Keyboard shortcuts page: context chips, the
+// conflict banner's Show, Delete on a built-in profile.
+#[path = "regression/preferences_keymap_page.rs"]
+mod preferences_keymap_page;

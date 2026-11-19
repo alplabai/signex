@@ -203,6 +203,44 @@ Built-in profiles are immutable. Editing starts by creating a custom profile
 copied from the currently active profile. Custom profiles can then be selected,
 edited, deleted, imported, and exported from Preferences > Keyboard Shortcuts.
 
+### The Keyboard shortcuts page (#145)
+
+The page (`preferences/keymap/`) reads top to bottom:
+
+- **Profile row**, on one line: the Profile picker, whose entries read
+  `<name> · <n> bindings` for a built-in and `<name> (custom) · <n> bindings`
+  for a custom profile; **Create** (a custom copy of the active profile);
+  **Delete** (inert on a built-in profile); then **Import…** and **Export…**,
+  which open the file dialogs.
+- **Conflict banner**, a warning shown only when the active profile has a
+  conflict. It counts the conflicts and names the first one: the keys as
+  keycaps and the two commands bound to them (or, for a chord macOS keeps,
+  the one command). **Show** turns on the Conflicts chip.
+- The shortcuts-file banner (#595), the backup row with Restore and Delete
+  (#603), and the status line of the last action stay above the table.
+- **Filter row**: the search field (label, command id or keys) and the
+  context chips **All**, **Global**, **Schematic**, **PCB**, **Footprint**,
+  **Library** and **Conflicts** (with the conflict count). One chip is on at
+  a time. A row shows under the chip of its context; rows of dialogs, text
+  fields, the palette and placement show under All only. Conflicts lists
+  the rows that take part in a conflict of the active profile. The chip is
+  page view state (`KeymapViewState`): it never marks Preferences dirty and
+  starts on All each time Preferences opens.
+- **Table**: Command, Category, Context, Shortcut and State, sorted by
+  command name. Keys show as keycaps, with "then" between the strokes of a
+  sequence; a pointer gesture shows as text; a command with no key shows a
+  dash. State tones: Conflict and Invalid as error pills, Unbound in muted
+  italics, Gesture and Reserved by macOS as neutral pills, Editable and
+  Create custom as a quiet caption. A row whose keys a fixed app key takes
+  first (F1, Esc) names that key in its tooltip ("Overridden by …").
+- **Edit** shows while the pointer is over a keyboard row of a custom
+  profile. It opens the **recorder popover**, anchored under that row over
+  the table: the command, a recording box with the captured keycaps, the
+  current keys, a help line, a warning when a fixed app key would swallow
+  the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
+  OK puts the new keys in the working copy; like every Preferences change
+  they are saved by the dialog's Apply or OK.
+
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 
 - command label and category from command metadata

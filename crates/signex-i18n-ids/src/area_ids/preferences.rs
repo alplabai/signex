@@ -155,4 +155,20 @@ define_ids! {
     PREFERENCES_EDITING_SNAP_HELP = "preferences-editing-snap-help";
     PREFERENCES_EDITING_INCREMENT_DOWN = "preferences-editing-increment-down";
     PREFERENCES_EDITING_INCREMENT_UP = "preferences-editing-increment-up";
+    // Keyboard shortcuts page (#145)
+    PREFERENCES_KEYMAP_PROFILE_OPTION_BUILT_IN = "preferences-keymap-profile-option-built-in";
+    PREFERENCES_KEYMAP_PROFILE_OPTION_CUSTOM = "preferences-keymap-profile-option-custom";
+    PREFERENCES_KEYMAP_IMPORT = "preferences-keymap-import";
+    PREFERENCES_KEYMAP_EXPORT = "preferences-keymap-export";
+    PREFERENCES_KEYMAP_CONFLICT_LEAD = "preferences-keymap-conflict-lead";
+    PREFERENCES_KEYMAP_CONFLICT_PAIR = "preferences-keymap-conflict-pair";
+    PREFERENCES_KEYMAP_CONFLICT_RESERVED = "preferences-keymap-conflict-reserved";
+    PREFERENCES_KEYMAP_SHOW = "preferences-keymap-show";
+    PREFERENCES_KEYMAP_FILTER_ALL = "preferences-keymap-filter-all";
+    PREFERENCES_KEYMAP_FILTER_CONFLICTS = "preferences-keymap-filter-conflicts";
+    PREFERENCES_KEYMAP_SORTED_ASCENDING = "preferences-keymap-sorted-ascending";
+    PREFERENCES_KEYMAP_THEN = "preferences-keymap-then";
+    PREFERENCES_KEYMAP_NO_SHORTCUT = "preferences-keymap-no-shortcut";
+    PREFERENCES_KEYMAP_NO_ROWS_IN_FILTER = "preferences-keymap-no-rows-in-filter";
+    PREFERENCES_KEYMAP_RECORDING_LIVE = "preferences-keymap-recording-live";
 }

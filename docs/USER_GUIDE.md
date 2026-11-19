@@ -1208,3 +1208,22 @@ whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
 (each sheet is undone on its own). It applies to the next annotate run. What a
 pasted part is called is set on Editing (Designators on paste); the Annotation
 page links to it.
+
+<!-- Preferences: Keyboard shortcuts page (#145); belongs with section 13. -->
+### Editing keyboard shortcuts
+
+**Tools ▸ Preferences… ▸ Keyboard shortcuts** shows the active profile's
+bindings in one table sorted by command. Pick a profile in the Profile list
+(each entry says how many bindings it has); **Create** makes an editable copy
+of it, **Delete** removes a custom profile, and **Import…** / **Export…** read
+and write a profile file.
+
+When two commands share the same keys, a warning banner names them; **Show**
+lists only the clashing rows. The chips next to the search field narrow the
+table to one context (Global, Schematic, PCB, Footprint, Library) or to the
+conflicts.
+
+In a custom profile, point at a row and press **Edit**. Press the keys you want
+(Esc counts as a key), then **OK**; **Clear** starts over, **Stop** ends the
+recording and **Cancel** closes without a change. The new keys are saved when
+you press **Apply** or **OK** in Preferences.
