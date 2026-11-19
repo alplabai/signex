@@ -1,6 +1,7 @@
 //! Selection Filter (#2353): one chip per object kind. It decides what a
 //! click, a box and the hover pick on the board; the header menu shows the
-//! same chips. Under them, the saved presets (#2383).
+//! same chips. Under them `All - On` and the saved presets (#2383). Closed by
+//! default, with the count of kinds on in its header (#2523, m93).
 
 use iced::widget::{Column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -11,10 +12,10 @@ use signex_widgets::{Label, text_input};
 
 use crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
 use crate::panels::form_look;
-use crate::styles::TypeScale;
+use crate::styles::{PillTone, TypeScale};
 
-use super::chrome::Form;
-use super::{PanelMsg, PcbBoardMsg, PcbBoardSummary, SP};
+use super::chrome::{Form, Head};
+use super::{PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, header};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -29,6 +30,7 @@ pub(super) fn section<'a>(
     let refs: Vec<&Localized> = labels.iter().collect();
     let chips = form.row(&refs, chips(form, &board.filter));
     let names: Vec<Localized> = [
+        ids::PCB_BOARD_FILTER_ALL_ON,
         ids::PCB_BOARD_FILTER_PRESETS,
         ids::PCB_BOARD_FILTER_PRESET_ADD,
     ]
@@ -36,28 +38,21 @@ pub(super) fn section<'a>(
     .map(|id| form.t(id))
     .collect();
     let name_refs: Vec<&Localized> = names.iter().collect();
-    let caption = form.row(
-        &name_refs,
-        form.caption(form.t(ids::PCB_BOARD_FILTER_PRESETS)),
-    );
     let saved = form.row(&name_refs, presets(form, board));
-    form.section(
+    let count = form.pill(header::filter_count(form, board), PillTone::Neutral);
+    form.section_with(
         "pcb_board_filter",
         ids::PCB_BOARD_SECTION_FILTER,
-        vec![chips, caption, saved],
+        Head::closed().summary(count),
+        vec![chips, saved],
     )
 }
 
-/// The `All - On` chip, then one chip per kind. A kind the board editor
-/// cannot pick is inert, with a tooltip saying so.
+/// One chip per kind. A kind the board editor cannot pick is inert and
+/// dimmed, with a tooltip saying so.
 pub(super) fn chips<'a>(form: &Form<'a>, filter: &PickFilter) -> Element<'a, PanelMsg> {
     let msg = |m: PcbBoardMsg| Some(PanelMsg::PcbBoard(m));
-    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(SP.s).push(form.chip(
-        form.t(ids::PCB_BOARD_FILTER_ALL_ON),
-        filter.is_all_on(),
-        msg(PcbBoardMsg::FilterAllToggled),
-        None,
-    ));
+    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(SP.s);
     for kind in PickKind::ALL {
         let label = form.t(kind_label(kind));
         let chip = if kind.is_pickable() {
@@ -73,7 +68,7 @@ pub(super) fn chips<'a>(form: &Form<'a>, filter: &PickFilter) -> Element<'a, Pan
         };
         wrap = wrap.push(chip);
     }
-    iced::widget::container(wrap).padding([SP.xs, SP.l]).boxed()
+    container(wrap).padding([SP.xs, SP.l]).boxed()
 }
 
 pub(crate) fn kind_label(kind: PickKind) -> MessageId {
@@ -94,11 +89,26 @@ pub(crate) fn kind_label(kind: PickKind) -> MessageId {
     }
 }
 
-/// The saved presets (#2383): a chip per preset that applies it, Add, and
-/// for the preset last applied or added its name, Save Chips and Delete.
+/// `All - On` (every kind on, or off when all are on), the 'Presets'
+/// caption, a chip per saved preset (#2383) that applies it and Add Preset;
+/// for the preset last applied or added, its name, Save Chips and Delete.
 fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
     let msg = |m: PcbBoardMsg| Some(PanelMsg::PcbBoard(m));
-    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(SP.s);
+    let all_on = form.chip(
+        form.t(ids::PCB_BOARD_FILTER_ALL_ON),
+        board.filter.is_all_on(),
+        msg(PcbBoardMsg::FilterAllToggled),
+        None,
+    );
+    let caption = signex_widgets::text(form.t(ids::PCB_BOARD_FILTER_PRESETS))
+        .size(TS.caption)
+        .color(form.faint());
+    let caption = container(caption).padding([SP.xs, 0.0]).boxed();
+    let mut wrap = Wrap::new()
+        .spacing(SP.s)
+        .line_spacing(SP.s)
+        .push(all_on)
+        .push(caption);
     for (idx, preset) in board.presets.iter().enumerate() {
         let label: Label<'a> = if preset.name.trim().is_empty() {
             t!(form.i18n, ids::PANELS_FILTERS_UNNAMED, "number" => idx + 1).into()

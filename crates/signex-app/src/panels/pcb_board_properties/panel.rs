@@ -10,7 +10,7 @@ use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_panel::{BoardPanel, PanelField, PanelFieldKind, PanelSeparation};
 
-use super::chrome::{Form, Segment, Shown};
+use super::chrome::{Form, Head, Segment, Shown};
 use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, fields};
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
@@ -107,7 +107,8 @@ pub(super) fn section<'a>(
         let add = form.t(ids::BOARD_PANEL_ADD);
         let button = form.action(add.clone(), live(PcbBoardMsg::PanelizeClicked), why);
         rows.push(form.row(&[&title, &add], button));
-        return form.section("pcb_board_panel", ids::BOARD_PANEL_SECTION, rows);
+        let head = Head::closed().summary(form.header_caption(form.t(ids::PCB_BOARD_PANEL_NONE)));
+        return form.section_with("pcb_board_panel", ids::BOARD_PANEL_SECTION, head, rows);
     };
     for field in ARRAY {
         rows.push(setting(form, board, panel, field));
@@ -132,7 +133,13 @@ pub(super) fn section<'a>(
     let remove = form.t(ids::BOARD_PANEL_REMOVE);
     let button = form.action(remove.clone(), live(PcbBoardMsg::PanelRemoveClicked), why);
     rows.push(form.row(&[&title, &remove], button));
-    form.section("pcb_board_panel", ids::BOARD_PANEL_SECTION, rows)
+    // Closed by default (#2523, m93), as without a panel.
+    form.section_with(
+        "pcb_board_panel",
+        ids::BOARD_PANEL_SECTION,
+        Head::closed(),
+        rows,
+    )
 }
 
 /// Label | the setting's field, or its value when the board is read-only.

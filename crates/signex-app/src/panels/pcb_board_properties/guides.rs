@@ -8,11 +8,12 @@
 
 use iced::widget::{Column, container};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb_options::{BoardGuide, GuideKind};
 
-use super::chrome::{Form, Shown};
+use super::chrome::{Form, Head, Shown};
 use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, cards, fields};
+use crate::styles::PillTone;
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
@@ -36,7 +37,14 @@ pub(super) fn section<'a>(
         let add = form.t(ids::PCB_BOARD_GUIDE_ADD);
         rows.push(form.row(&[&title, &add], add_menu(form, board)));
     }
-    form.section("pcb_board_guides", ids::PCB_BOARD_SECTION_GUIDES, rows)
+    // Closed by default, with the guide count in its header (#2523, m93).
+    let count = t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => board.options.guides.len());
+    form.section_with(
+        "pcb_board_guides",
+        ids::PCB_BOARD_SECTION_GUIDES,
+        Head::closed().summary(form.pill(count, PillTone::Neutral)),
+        rows,
+    )
 }
 
 pub(super) fn kind_label(kind: GuideKind) -> MessageId {
