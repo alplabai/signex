@@ -86,8 +86,8 @@ pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use assign_footprints::{
-    AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
-    PartAccess,
+    AssignFilter, AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer,
+    FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_output::{
