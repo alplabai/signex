@@ -6,6 +6,34 @@ one undo step of the project's history (Ctrl+Z in the tab, or `undo
 document=<.snxprj>`). Storing ERC rules is a step of the project's rule
 history, which the ERC dialog and the Rules tab share.
 
+## Page tabs (#2523)
+
+The Project tab and the Rules tab are page tabs: document tabs that show one
+of a project's pages rather than a drawing. The later page kinds (Layer Stack
+Manager, Length Matching, Polygon Manager, BOM Studio, Export Job, Variant
+Manager, Design Notebook) join them. Two rules hold for every page tab, in
+`app/page_tab.rs`:
+
+- **Title.** `<project> — <page>`, for example `dcdc-buck — Rules` or
+  `sensor-node — Layer Stack`. The project part is the project's name (the
+  `.snxprj` file stem when the name is blank) and follows a project rename;
+  the page part is a catalog message, read in the current language. The tab
+  strip also shows the kind glyph and the close button.
+- **Dirty.** A page tab has no unsaved state of its own. It shows the accent
+  dot exactly when the file it saves into, its owner, has unsaved work: the
+  `.snxprj` for Project and Rules, the board for a Layer Stack tab. The
+  owner's path is the tab's path, so a page kind never adds a second dirty
+  source (#661).
+
+The page body sits in the shared shell, `signex_widgets::doc_tab_shell`:
+from the top a toolbar row (items from the left, wrapping when the tab is
+narrow, and an end group of totals or pills at the right), a strip of
+sub-tabs (the active one in the ink colour with an accent underline; a
+sub-tab may carry a tag such as "proposal" or a count), the body, and a
+footer with a status line and an optional note at the right. The shell holds
+no state: the caller passes the selected sub-tab and maps a press to its own
+message. The chrome catalog draws a sample of it.
+
 ## Sections (#1689-#1693)
 
 - **Sheets** — the project's sheets in list order (the Sheet N of M a

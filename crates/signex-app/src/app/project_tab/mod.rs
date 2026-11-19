@@ -52,7 +52,6 @@ pub(crate) use commands::{
     project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
-pub(crate) use open::project_tab_title;
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,

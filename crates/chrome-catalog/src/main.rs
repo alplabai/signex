@@ -4,6 +4,7 @@ mod catalog;
 mod chips;
 mod constraint_grid;
 mod dimension_label;
+mod doc_tab_shell;
 mod enable_section;
 mod flow_progress;
 mod graphite_tokens;

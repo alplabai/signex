@@ -8,6 +8,7 @@ pub mod chevron;
 pub mod chips;
 pub mod constraint_grid;
 pub mod dimension_label;
+pub mod doc_tab_shell;
 pub mod dropdown_style;
 pub mod enable_section;
 pub mod flow_progress;

@@ -688,6 +688,8 @@ mod planned_tools;
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
 mod project_tab;
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_tab_rename.rs"]
 mod project_tab_rename;
 #[path = "regression/project_tab_saves.rs"]
