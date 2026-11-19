@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use iced::Task;
 use signex_engine::ProjectRequirementCommand;
 use signex_types::check::CheckReport;
-use signex_types::project::{RequirementField, RequirementProblem};
+use signex_types::project::{RequirementEntry, RequirementField, RequirementProblem};
 
 pub(crate) use commands::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
@@ -45,9 +45,10 @@ pub struct RequirementsRun {
 /// the last refusal, and the last run.
 #[derive(Debug, Clone, Default)]
 pub struct RequirementsTabState {
-    /// Fields as typed, by entry and field, until Enter commits them or an
-    /// undo, redo or section switch shows the stored values again.
-    pub drafts: HashMap<(usize, RequirementField), String>,
+    /// Fields as typed, by requirement id and field, until Enter commits them,
+    /// the entry is removed, an undo or redo changes it, or a section switch
+    /// shows the stored values again (#2547).
+    pub drafts: HashMap<(String, RequirementField), String>,
     /// Why the last edit was refused, and the entry it was for (`None`: an
     /// add); cleared by the next edit.
     pub problem: Option<(Option<usize>, RequirementProblem)>,
@@ -61,6 +62,61 @@ impl RequirementsTabState {
         self.drafts.clear();
         self.problem = None;
     }
+
+    /// An edit moved the list from `before` to `after` (ids by place): a
+    /// renamed entry's drafts follow it, a removed entry's go with it, and
+    /// every other entry keeps its drafts.
+    fn follow_edit(&mut self, before: &[Option<String>], after: &[Option<String>]) {
+        if before.len() == after.len() {
+            for (old, new) in before.iter().zip(after) {
+                if let (Some(old), Some(new)) = (old, new)
+                    && old != new
+                {
+                    self.rename_drafts(old, new);
+                }
+            }
+        }
+        self.drafts
+            .retain(|(id, _), _| after.iter().flatten().any(|kept| kept == id));
+    }
+
+    fn rename_drafts(&mut self, old: &str, new: &str) {
+        let moved: Vec<RequirementField> = self
+            .drafts
+            .keys()
+            .filter(|(id, _)| id == old)
+            .map(|(_, field)| *field)
+            .collect();
+        for field in moved {
+            if let Some(text) = self.drafts.remove(&(old.to_string(), field)) {
+                self.drafts.insert((new.to_string(), field), text);
+            }
+        }
+    }
+
+    /// An undo or redo moved the list from `before` to `after`: the boxes of
+    /// an entry it changed, added or removed show the stored values again;
+    /// every other entry keeps its drafts.
+    pub(super) fn follow_step(&mut self, before: &[RequirementEntry], after: &[RequirementEntry]) {
+        let raw_of = |list: &[RequirementEntry], id: &str| {
+            list.iter()
+                .find(|entry| entry.id() == Some(id))
+                .map(|entry| entry.raw().clone())
+        };
+        self.drafts.retain(|(id, _), _| {
+            let now = raw_of(after, id);
+            now.is_some() && now == raw_of(before, id)
+        });
+        self.problem = None;
+    }
+}
+
+/// The ids of `entries` by place.
+fn ids_of(entries: &[RequirementEntry]) -> Vec<Option<String>> {
+    entries
+        .iter()
+        .map(|entry| entry.id().map(str::to_string))
+        .collect()
 }
 
 /// Messages of the Requirements section, under `ProjectTabMsg::Requirements`.
@@ -129,15 +185,22 @@ impl Signex {
                     .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::FieldEdited { index, field, text } => {
+                let Some(requirement) = self.requirement_id_at(project_id, index) else {
+                    return Task::none();
+                };
                 let tab = self.requirements_tab(project_id);
-                tab.drafts.insert((index, field), text);
+                tab.drafts.insert((requirement, field), text);
                 tab.problem = None;
             }
             RequirementsMsg::FieldSubmitted { index, field } => {
+                // The draft of the entry at `index` now: never another's.
+                let Some(requirement) = self.requirement_id_at(project_id, index) else {
+                    return Task::none();
+                };
                 let Some(text) = self
                     .requirements_tab(project_id)
                     .drafts
-                    .get(&(index, field))
+                    .get(&(requirement, field))
                 else {
                     return Task::none();
                 };
@@ -178,6 +241,13 @@ impl Signex {
             .requirements
     }
 
+    /// The id of the requirement at `index` of project `project_id`.
+    fn requirement_id_at(&self, project_id: ProjectId, index: usize) -> Option<String> {
+        let project = self.document_state.project_by_id(project_id)?;
+        let entry = project.data.requirements.get(index)?;
+        entry.id().map(str::to_string)
+    }
+
     fn commit_requirement_field(
         &mut self,
         project_id: ProjectId,
@@ -190,9 +260,12 @@ impl Signex {
             .edit_requirements_from_tab(project_id, Some(index), &command)
             .is_ok()
         {
-            self.requirements_tab(project_id)
-                .drafts
-                .remove(&(index, field));
+            // Read after the commit: a committed id moved the entry's drafts.
+            if let Some(requirement) = self.requirement_id_at(project_id, index) {
+                self.requirements_tab(project_id)
+                    .drafts
+                    .remove(&(requirement, field));
+            }
         }
     }
 
@@ -216,8 +289,8 @@ impl Signex {
     /// Apply one Requirements edit to the project's data as one step of its
     /// General history and mark the `.snxprj` dirty: the tab's and the
     /// catalog commands' one commit path. `Ok(false)` when nothing changed
-    /// or the project is no longer loaded. Drafts are keyed by list place,
-    /// so an add or a remove, from the tab or a command, forgets them.
+    /// or the project is no longer loaded. Drafts are keyed by requirement
+    /// id: an edit from the tab or a command keeps every other entry's.
     pub(crate) fn apply_project_requirement(
         &mut self,
         project_id: ProjectId,
@@ -232,6 +305,7 @@ impl Signex {
             return Ok(false);
         };
         let tab = document.project_tabs.entry(project_id).or_default();
+        let before = ids_of(&project.data.requirements);
         if !tab
             .general_history
             .apply_requirement(&mut project.data, command)?
@@ -239,12 +313,8 @@ impl Signex {
             return Ok(false);
         }
         tab.rules_step_newest = false;
-        if matches!(
-            command,
-            ProjectRequirementCommand::Add { .. } | ProjectRequirementCommand::Remove { .. }
-        ) {
-            tab.requirements.drafts.clear();
-        }
+        tab.requirements
+            .follow_edit(&before, &ids_of(&project.data.requirements));
         document.sync_project_history_dirty(project_id, true);
         self.after_project_general_change(false);
         Ok(true)

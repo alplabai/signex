@@ -78,6 +78,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         let card = Entry {
             project_id,
             index,
+            id: entry.id(),
             tab,
             report,
             i18n,
@@ -179,6 +180,8 @@ fn user_note<'a>(words: String, tokens: &ThemeTokens) -> Element<'a, Message> {
 struct Entry<'s> {
     project_id: ProjectId,
     index: usize,
+    /// The entry's id: its drafts' key.
+    id: Option<&'s str>,
     tab: Option<&'s RequirementsTabState>,
     report: Option<&'s CheckReport>,
     i18n: &'s I18n,
@@ -349,7 +352,8 @@ impl Entry<'_> {
         let (project_id, index) = (self.project_id, self.index);
         let draft = self
             .tab
-            .and_then(|tab| tab.drafts.get(&(index, field)))
+            .zip(self.id)
+            .and_then(|(tab, id)| tab.drafts.get(&(id.to_string(), field)))
             .cloned();
         let shown = draft.unwrap_or_else(|| stored_text(field, raw));
         let hint = if field.is_optional() {

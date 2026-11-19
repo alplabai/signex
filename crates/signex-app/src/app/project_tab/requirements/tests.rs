@@ -140,7 +140,7 @@ fn a_field_commits_on_enter_and_a_refused_value_stays_with_its_reason() {
     assert_eq!(
         state
             .drafts
-            .get(&(0, RequirementField::MaxWidthMm))
+            .get(&("board_size".to_string(), RequirementField::MaxWidthMm))
             .map(String::as_str),
         Some("-2"),
         "the typed text stays in its box"
@@ -339,11 +339,111 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
     let _ = app.view_project_tab(id);
 }
 
-/// Drafts are keyed by list place: a remove through the catalog forgets
-/// them, so Enter afterwards cannot commit a draft to the entry that moved
-/// into its place.
+/// The texts typed and not committed, in no order.
+fn drafted(app: &Signex, id: ProjectId) -> Vec<String> {
+    let mut texts: Vec<String> = tab(app, id).drafts.values().cloned().collect();
+    texts.sort();
+    texts
+}
+
+fn add_by_catalog(app: &mut Signex, name: &str) {
+    let id_operand = format!("id={name}");
+    answer(
+        app,
+        "project_add_requirement",
+        &["kind=board_size", &id_operand],
+    );
+}
+
+fn index_of(app: &Signex, name: &str) -> usize {
+    stored(app)
+        .iter()
+        .position(|entry| entry["id"] == name)
+        .expect("the entry")
+}
+
+/// #2547: a draft on requirement b survives an add and a remove of other
+/// entries, from the tab, the catalog, undo and redo; Enter then commits it
+/// into b and nowhere else.
 #[test]
-fn a_catalog_remove_forgets_the_drafts_so_none_lands_on_the_wrong_entry() {
+fn a_draft_survives_an_add_or_remove_of_another_requirement_from_any_origin() {
+    let (mut app, id, _dir) = app();
+    for name in ["a", "b", "c"] {
+        add_by_catalog(&mut app, name);
+    }
+    let field = RequirementField::MaxWidthMm;
+    let edited = RequirementsMsg::FieldEdited {
+        index: 1,
+        field,
+        text: "55".into(),
+    };
+    let _ = send(&mut app, id, edited);
+
+    add_by_catalog(&mut app, "d");
+    assert_eq!(drafted(&app, id), ["55"], "an agent's add");
+    let _ = send(&mut app, id, RequirementsMsg::Removed { index: 0 });
+    assert_eq!(drafted(&app, id), ["55"], "the person's remove of a");
+    assert!(undo(&mut app, id, true));
+    assert_eq!(drafted(&app, id), ["55"], "the undo that brings a back");
+    assert!(undo(&mut app, id, false));
+    assert_eq!(drafted(&app, id), ["55"], "the redo that removes a again");
+    answer(&mut app, "project_remove_requirement", &["requirement=c"]);
+    assert_eq!(drafted(&app, id), ["55"], "an agent's remove of c");
+
+    let at = index_of(&app, "b");
+    let _ = send(
+        &mut app,
+        id,
+        RequirementsMsg::FieldSubmitted { index: at, field },
+    );
+    for entry in stored(&app) {
+        let expected = if entry["id"] == "b" {
+            json!(55)
+        } else {
+            json!(100)
+        };
+        assert_eq!(entry["max_width_mm"], expected, "{entry}");
+    }
+    assert!(drafted(&app, id).is_empty(), "committed");
+}
+
+/// #2547: the removed entry's drafts go with it; a later entry in its place,
+/// even one given its id, starts from its stored values, and Enter there
+/// commits nothing.
+#[test]
+fn the_removed_requirements_drafts_go_with_it_and_never_land_elsewhere() {
+    let (mut app, id, _dir) = app();
+    for name in ["a", "b"] {
+        add_by_catalog(&mut app, name);
+    }
+    let field = RequirementField::MaxWidthMm;
+    let edited = RequirementsMsg::FieldEdited {
+        index: 0,
+        field,
+        text: "33".into(),
+    };
+    let _ = send(&mut app, id, edited);
+    answer(&mut app, "project_remove_requirement", &["requirement=a"]);
+    assert!(drafted(&app, id).is_empty(), "a's draft went with a");
+
+    add_by_catalog(&mut app, "a");
+    for index in 0..2 {
+        let _ = send(
+            &mut app,
+            id,
+            RequirementsMsg::FieldSubmitted { index, field },
+        );
+    }
+    for entry in stored(&app) {
+        assert_eq!(entry["max_width_mm"], json!(100), "{entry}");
+    }
+}
+
+/// Drafts are keyed by requirement id (#2547): a remove through the catalog
+/// keeps the other entries' drafts, and Enter afterwards cannot commit a
+/// draft to the entry that moved into the removed one's place.
+#[test]
+fn a_catalog_remove_keeps_other_drafts_and_none_lands_on_the_wrong_entry() {
     let (mut app, id, _dir) = app();
     for name in ["a", "b", "c"] {
         let id_operand = format!("id={name}");
@@ -363,7 +463,11 @@ fn a_catalog_remove_forgets_the_drafts_so_none_lands_on_the_wrong_entry() {
     assert!(!tab(&app, id).drafts.is_empty(), "a draft on entry b");
 
     answer(&mut app, "project_remove_requirement", &["requirement=a"]);
-    assert!(tab(&app, id).drafts.is_empty(), "the remove forgot it");
+    assert_eq!(
+        tab(&app, id).drafts.get(&("b".to_string(), field)),
+        Some(&"55".to_string()),
+        "b keeps its draft through the remove of a",
+    );
     let _ = send(
         &mut app,
         id,
