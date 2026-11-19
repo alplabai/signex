@@ -9,6 +9,7 @@ mod board_query;
 mod board_view;
 mod bom;
 mod chrome;
+mod command_log;
 mod dialog;
 mod dialog_text;
 mod drc_rules;
@@ -43,6 +44,7 @@ pub use board_query::*;
 pub use board_view::*;
 pub use bom::*;
 pub use chrome::*;
+pub use command_log::*;
 pub use dialog::*;
 pub use dialog_text::*;
 pub use drc_rules::*;
@@ -81,6 +83,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_view::BOARD_VIEW,
         bom::BOM,
         chrome::CHROME,
+        command_log::COMMAND_LOG,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
         drc_rules::DRC_RULES,

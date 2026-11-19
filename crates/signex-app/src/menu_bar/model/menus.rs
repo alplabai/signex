@@ -266,6 +266,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Messages,
             MenuMessage::OpenMessagesPanel,
         ),
+        // #2458: docs/MENU_BAR.md#view-command-log
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_COMMAND_LOG,
+            PanelKind::CommandLog,
+            MenuMessage::OpenCommandLogPanel,
+        ),
         panel_item(
             ctx,
             ids::PANELS_KIND_LAYERS,

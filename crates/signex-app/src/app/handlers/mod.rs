@@ -10,6 +10,7 @@ pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
+pub(crate) mod command_log;
 mod component_history;
 mod cross_probe;
 #[cfg(test)]

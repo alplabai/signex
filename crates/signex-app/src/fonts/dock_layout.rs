@@ -103,6 +103,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         SchFilter => "sch_filter",
         SchList => "sch_list",
         Messages => "messages",
+        CommandLog => "command_log",
         Drc => "drc",
         BomStudio => "bom_studio",
         Favorites => "favorites",
@@ -136,6 +137,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "sch_filter" => SchFilter,
         "sch_list" => SchList,
         "messages" => Messages,
+        "command_log" => CommandLog,
         "drc" => Drc,
         "bom_studio" => BomStudio,
         "favorites" => Favorites,
@@ -302,6 +304,23 @@ mod tests {
         assert_eq!(
             dock.preferred_width(PanelPosition::Right),
             crate::dock::DEFAULT_RIGHT_DOCK_WIDTH
+        );
+    }
+
+    /// #2458: the Command Log is saved as `command_log` and loads back.
+    #[test]
+    fn the_command_log_round_trips_under_its_key() {
+        assert_eq!(panel_kind_key(PanelKind::CommandLog), "command_log");
+        assert_eq!(parse_panel_kind("command_log"), Some(PanelKind::CommandLog));
+        let json = serde_json::json!({
+            "dock": {
+                "bottom": { "panels": ["messages", "command_log"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::Messages, PanelKind::CommandLog]
         );
     }
 }

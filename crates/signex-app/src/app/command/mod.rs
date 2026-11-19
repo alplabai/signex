@@ -185,7 +185,23 @@ impl Signex {
     /// ([`enablement::explains_when_unavailable`]): that one still runs, and
     /// is reported as `Disabled` too, so a caller is never told `Ran` for a
     /// command that had nothing to act on.
+    ///
+    /// Every call adds one Command Log row (#2458); a call made while
+    /// another runs (an undocked window's undo, an agent request) does not.
     pub(crate) fn dispatch_command_reporting(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        args: CommandArgs,
+        window: Option<iced::window::Id>,
+    ) -> (CommandOutcome, Task<Message>) {
+        let operands = crate::app::handlers::command_log::operands_of(&args);
+        self.logged_command(command, operands, window, |app| {
+            app.dispatch_command_unlogged(command, args, window)
+        })
+    }
+
+    /// [`Self::dispatch_command_reporting`] without the Command Log row.
+    fn dispatch_command_unlogged(
         &mut self,
         command: &crate::keymap::AppCommandId,
         args: CommandArgs,

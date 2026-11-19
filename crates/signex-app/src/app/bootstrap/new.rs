@@ -526,6 +526,7 @@ impl Signex {
                     chrono::Utc::now(),
                 )),
                 tab_overflow_menu_open: false,
+                command_log: Default::default(),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
@@ -628,6 +629,7 @@ impl Signex {
                     component_sheet: None,
                     pcb_nets: None,
                     net_inspector: Default::default(),
+                    command_log: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
                     selection_count: 0,

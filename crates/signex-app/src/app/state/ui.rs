@@ -703,6 +703,9 @@ pub struct UiState {
     /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
     /// the main window's strip has no room for.
     pub tab_overflow_menu_open: bool,
+    /// The Command Log (#2458): every command this session ran and what its
+    /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
+    pub command_log: Box<crate::panels::CommandLogState>,
 }
 
 impl UiState {

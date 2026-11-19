@@ -28,6 +28,8 @@ mod board_sketch_attr;
 pub use board_sketch_attr::BoardSketchAttrMsg;
 mod board_net_classes;
 mod color_field;
+pub mod command_log;
+pub use command_log::{CommandLogMsg, CommandLogState};
 mod context;
 mod drafts;
 mod drc;
@@ -185,6 +187,8 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
+    /// Every catalog command this session ran (#2458).
+    CommandLog,
     Drc,
     LayerStack,
     /// The layers of the active tab (#2223, #2359): a board's layers with
@@ -242,6 +246,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchList,
     PanelKind::Erc,
     PanelKind::Messages,
+    PanelKind::CommandLog,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -297,6 +302,7 @@ impl PanelKind {
             PanelKind::Filter => ids::PANELS_KIND_FILTER,
             PanelKind::Erc => ids::PANELS_KIND_ERC,
             PanelKind::Messages => ids::PANELS_KIND_MESSAGES,
+            PanelKind::CommandLog => ids::PANELS_KIND_COMMAND_LOG,
             PanelKind::Drc => ids::PANELS_KIND_DRC,
             PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
             PanelKind::Layers => ids::PANELS_KIND_LAYERS,
@@ -329,6 +335,7 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
+            PanelKind::CommandLog => "Command Log",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::Layers => "Layers",
@@ -374,6 +381,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         ),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
+        // The log keeps its header and footer in place and scrolls its rows.
+        PanelKind::CommandLog => return command_log::view(ctx),
         PanelKind::Drc => drc_results::view(ctx),
         PanelKind::LayerStack => layer_stack::view(ctx),
         // One Layers panel follows the active tab (#2359): a footprint's

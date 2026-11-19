@@ -64,6 +64,7 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         PanelKind::Messages | PanelKind::Erc | PanelKind::Drc | PanelKind::History => {
             PanelGroup::Verify
         }
+        PanelKind::CommandLog => PanelGroup::Verify,
         PanelKind::SchLibrary | PanelKind::FootprintLibrary | PanelKind::SymbolPins => {
             PanelGroup::Library
         }
@@ -154,7 +155,7 @@ mod tests {
         );
         assert_eq!(
             members(PanelGroup::Verify),
-            [K::Erc, K::Messages, K::Drc, K::History]
+            [K::Erc, K::Messages, K::CommandLog, K::Drc, K::History]
         );
         assert_eq!(
             members(PanelGroup::Library),

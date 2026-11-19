@@ -110,6 +110,9 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Command Log as `UiState::command_log` held it at its last change
+    /// (#2458); shared, so a context rebuild copies a pointer.
+    pub command_log: std::sync::Arc<super::CommandLogState>,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).

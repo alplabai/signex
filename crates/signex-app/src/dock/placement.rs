@@ -145,6 +145,8 @@ impl PanelPosition {
             | PanelKind::Library
             | PanelKind::PcbNets => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
+            // A wide table, like the mock's bottom dock (#2458).
+            PanelKind::CommandLog => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
             | PanelKind::Messages
