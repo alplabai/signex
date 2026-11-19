@@ -4,6 +4,7 @@
 use super::*;
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_for_events, messages_on_click};
 use signex_i18n::{Arg, I18n, MessageId, ids};
+use signex_types::schematic::WireWidthPreset;
 
 const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
 
