@@ -64,6 +64,29 @@ fn a_preset_makes_its_own_type_and_two_types_have_none() {
 }
 
 #[test]
+fn every_numbered_type_has_its_designation() {
+    let codes: Vec<Option<&str>> = Ipc4761::ALL.into_iter().map(Ipc4761::code).collect();
+    assert_eq!(
+        codes,
+        [
+            None,
+            Some("I-a"),
+            Some("I-b"),
+            Some("II"),
+            Some("III-a"),
+            Some("III-b"),
+            Some("IV-a"),
+            Some("IV-b"),
+            Some("V"),
+            Some("VI-a"),
+            Some("VI-b"),
+            Some("VII"),
+            None,
+        ]
+    );
+}
+
+#[test]
 fn a_via_reads_its_stored_tenting_and_no_fill_or_cap() {
     let mut via = Via {
         uuid: Uuid::from_u128(1),

@@ -100,6 +100,25 @@ impl Ipc4761 {
         Self::Custom,
     ];
 
+    /// The standard's designation, "I-b"; `None` for open and custom,
+    /// which the standard does not number.
+    pub fn code(self) -> Option<&'static str> {
+        Some(match self {
+            Self::IA => "I-a",
+            Self::IB => "I-b",
+            Self::II => "II",
+            Self::IIIA => "III-a",
+            Self::IIIB => "III-b",
+            Self::IVA => "IV-a",
+            Self::IVB => "IV-b",
+            Self::V => "V",
+            Self::VIA => "VI-a",
+            Self::VIB => "VI-b",
+            Self::VII => "VII",
+            Self::Open | Self::Custom => return None,
+        })
+    }
+
     /// The settings picking this type sets. `None` for [`Self::II`] (its
     /// second cover coat is not stored) and [`Self::Custom`] (no one set of
     /// settings). A one-sided type covers the top.
