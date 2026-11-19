@@ -32,7 +32,7 @@ pub(crate) use general::seg_text;
 pub(crate) use general::{chip_label, graphite_filter_chip};
 pub use general::{props_tab_btn, seg_btn, view_properties_general, view_properties_parameters};
 pub use net_params::{
-    empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
-    net_params_tabs, preplacement_justification_grid,
+    empty_section_row, justification_grid, label_anchor, net_params_add_bar, net_params_tabs,
+    preplacement_justification_grid,
 };
 pub use title_block::{TitleBlockDraft, TitleBlockField, view_title_block_section};

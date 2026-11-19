@@ -584,7 +584,7 @@ fn document_options() -> PanelContext {
 /// entry: a non-first value per list, read from the closed list.
 #[test]
 fn each_pick_list_shows_the_stored_entry() {
-    use signex_types::schematic::{PageOrigin, SheetOrientation, SheetSize, WireWidthPreset};
+    use signex_types::schematic::{PageOrigin, SheetOrientation, SheetSize};
     let mut ctx = document_options();
     ctx.sheet_color = SchematicSheetColor::Preset(SheetColor::Cream);
     ctx.paper_size = SheetSize::parse("A4").0.token(SheetOrientation::Portrait);
@@ -612,10 +612,9 @@ fn each_pick_list_shows_the_stored_entry() {
     check("Origin", beside(&shown, "Origin"), "Lower Left");
     check("Line", beside(&shown, "Line"), "Dashed");
 
-    let mut wire = one_selected(SelectedKindForTest::Wire, &[("Type", "Wire")]);
-    wire.selected_wire_style = Some((WireWidthPreset::Medium, None));
-    check("Width", beside(&texts(&wire), "Width"), "Medium");
-
+    // A wire's Width and a power port's Style are segmented controls and
+    // tile grids now (#43, #45); `selected::tests` and `power_port::tests`
+    // check the entry they mark.
     let body = one_selected(
         SelectedKindForTest::Symbol,
         &[("Type", "Symbol"), ("Body Style", "Alternate")],
@@ -625,12 +624,6 @@ fn each_pick_list_shows_the_stored_entry() {
         beside(&texts(&body), "Body"),
         "Alternate (De Morgan)",
     );
-
-    let port = one_selected(
-        SelectedKindForTest::Symbol,
-        &[("Type", "Power Port"), ("Library ID", "power:Earth")],
-    );
-    check("Style", beside(&texts(&port), "Style"), "Earth");
 
     let note = one_selected(
         SelectedKindForTest::TextNote,
@@ -647,7 +640,8 @@ fn each_pick_list_shows_the_stored_entry() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// Picking the next power-port style asks for that style's library id.
+/// Pressing a power-port style tile asks for that style's library id (#45:
+/// the Style list became a grid of toggle tiles).
 #[test]
 fn picking_a_power_port_style_asks_for_its_library_id() {
     let ctx = one_selected(
@@ -655,20 +649,21 @@ fn picking_a_power_port_style_asks_for_its_library_id() {
         &[("Type", "Power Port"), ("Library ID", "power:bar")],
     );
     let shown = texts(&ctx);
-    let label = shown.iter().find(|t| t.text == "Style").expect("Style row");
-    let over_list = iced::Point::new(WINDOW.width - 60.0, label.bounds.center_y());
+    let tile = shown
+        .iter()
+        .find(|t| t.text == "Arrow")
+        .expect("Arrow tile");
+    let over_tile = iced::Point::new(tile.bounds.center_x(), tile.bounds.center_y());
     let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
         )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
     ];
     let asked: Vec<String> = messages_for_events(
         view_panel(PanelKind::Properties, &ctx),
         WINDOW,
-        over_list,
+        over_tile,
         &events,
     )
     .into_iter()
@@ -746,19 +741,25 @@ fn the_net_class_field_rows_keep_their_names_and_order() {
     assert!(rows.ends_with(&fields), "{rows:?}");
 }
 
-/// A wire's facts sit under a Properties section, its own title.
+/// A sheet entry's facts sit under a Properties section, its own title. (A
+/// wire's End and Length moved into Location, #43; `placed_rows_tests`
+/// covers them.)
 #[test]
-fn a_wires_facts_sit_under_properties() {
+fn a_sheet_entrys_facts_sit_under_properties() {
     let ctx = one_selected(
-        SelectedKindForTest::Wire,
-        &[("Type", "Wire"), ("End", "1, 2"), ("Length", "3")],
+        SelectedKindForTest::SheetPin,
+        &[
+            ("Type", "Sheet Entry"),
+            ("Name", "VIN"),
+            ("Direction", "input"),
+        ],
     );
     let shown = texts(&ctx);
     let all = plain(&shown);
     let title = all.iter().position(|t| *t == "PROPERTIES");
-    let end = all.iter().position(|t| *t == "End");
-    assert!(title.is_some() && title < end, "{all:?}");
-    assert_eq!(beside(&shown, "End"), "1, 2");
+    let name = all.iter().position(|t| *t == "Name");
+    assert!(title.is_some() && title < name, "{all:?}");
+    assert_eq!(beside(&shown, "Name"), "VIN");
 }
 
 /// A Blanket's two sections keep their titles above their rows.
@@ -781,9 +782,11 @@ fn a_blankets_sections_keep_their_titles() {
     );
 }
 
-/// A text note pairs each justification row with its own value.
+/// A text note's Rotation and Justify rows are segmented controls (#47):
+/// each row lays its own steps out on its line, in order. Which step is on
+/// is read from the engine's keys (`text_note::tests`).
 #[test]
-fn a_text_notes_justify_rows_pair_with_their_values() {
+fn a_text_notes_rows_lay_out_their_own_steps() {
     let ctx = one_selected(
         SelectedKindForTest::TextNote,
         &[
@@ -794,9 +797,21 @@ fn a_text_notes_justify_rows_pair_with_their_values() {
         ],
     );
     let shown = texts(&ctx);
-    assert_eq!(beside(&shown, "Rotation"), "90");
-    assert_eq!(beside(&shown, "Justify H"), "Left");
-    assert_eq!(beside(&shown, "Justify V"), "Top");
+    let line = |label: &str| {
+        let at = shown.iter().find(|t| t.text == label).expect(label);
+        let mut cells: Vec<&LaidOutText> = (shown.iter())
+            .filter(|t| (t.bounds.center_y() - at.bounds.center_y()).abs() < 4.0)
+            .filter(|t| t.bounds.x > at.bounds.x)
+            .collect();
+        cells.sort_by(|a, b| a.bounds.x.total_cmp(&b.bounds.x));
+        cells
+            .into_iter()
+            .map(|t| t.text.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(line("Rotation"), ["0°", "90°", "180°", "270°"]);
+    assert_eq!(line("Justify H"), ["Left", "Center", "Right"]);
+    assert_eq!(line("Justify V"), ["Top", "Middle", "Bottom"]);
 }
 
 /// A selected net label titles its section "Properties" (trunk's id).

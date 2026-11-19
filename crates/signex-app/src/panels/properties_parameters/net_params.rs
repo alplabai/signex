@@ -1,144 +1,52 @@
-//! Net-attribute rows and the Parameters (Net) section chrome (tabs /
-//! header / empty-state / add-bar) plus the two 3x3 justification-grid
-//! pickers. Moved verbatim from the former single-file
+//! The Net Parameters chrome of a power port (the All / Parameters / Rules /
+//! Classes tabs, the empty card and its Add button) plus the two 3x3
+//! justification-grid pickers. Moved from the former single-file
 //! `properties_parameters` module.
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
+use signex_i18n::{MessageId, ids};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Net-attribute row: label | checkbox | text value | unit. Used for
-/// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".
-pub fn net_numeric_row<'a>(
-    label: signex_i18n::Localized,
-    value: &str,
-    unit: &str,
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            property_label(label, label_c),
-            signex_widgets::checkbox(false)
-                .on_toggle(|_| PanelMsg::Noop)
-                .size(TS.label)
-                .spacing(SP.s),
-            // raw: a number, not language.
-            container(text(raw(value.to_string())).size(TS.body).color(label_c),)
-                .padding([3, 6])
-                .width(Length::Fill)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(input_bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_bdr,
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }),
-            // raw: an SI unit symbol (V, Hz), not language.
-            text(raw(unit.to_string())).size(TS.caption).color(label_c),
-        ]
-        .spacing(6.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .boxed()
-}
-
-/// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
+/// Net Parameters tabs — All / Parameters / Rules / Classes, as a segmented
+/// control. A net holds no parameters, rules or classes here yet, so All
+/// stays on and every tab shows the same empty card.
 pub fn net_params_tabs<'a>(
     i18n: &signex_i18n::I18n,
     primary: Color,
+    muted: Color,
     input_bg: Color,
-    input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
-    let tab = |label: signex_i18n::MessageId, active: bool| -> Element<'static, PanelMsg> {
-        let bg_active = input_bdr;
-        let fg_active = Color::WHITE;
-        let fg_inactive = primary;
-        signex_widgets::button(
-            text(signex_i18n::t!(i18n, label))
-                .size(TS.body)
-                .color(if active { fg_active } else { fg_inactive })
-                .align_x(iced::alignment::Horizontal::Center),
+    let tab = |label: MessageId, active: bool| {
+        super::seg_btn(
+            signex_i18n::t!(i18n, label),
+            active,
+            PanelMsg::Noop,
+            input_bg,
+            primary,
+            muted,
         )
-        .padding([3.0, SP.l])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    bg_active
-                } else if hovered {
-                    input_bdr
-                } else {
-                    input_bg
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: input_bdr,
-                    ..Border::default()
-                },
-                text_color: if active { fg_active } else { fg_inactive },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .boxed()
     };
     container(
-        row![
-            tab(signex_i18n::ids::PROPERTIES_TAB_ALL, true),
-            tab(signex_i18n::ids::PROPERTIES_TAB_PARAMETERS, false),
-            tab(signex_i18n::ids::PROPERTIES_TAB_RULES, false),
-            tab(signex_i18n::ids::PROPERTIES_TAB_CLASSES, false),
-        ]
-        .spacing(SP.s),
+        container(
+            row![
+                tab(ids::PROPERTIES_TAB_ALL, true),
+                tab(ids::PROPERTIES_TAB_PARAMETERS, false),
+                tab(ids::PROPERTIES_TAB_RULES, false),
+                tab(ids::PROPERTIES_TAB_CLASSES, false),
+            ]
+            .spacing(0)
+            .width(Length::Fill),
+        )
+        .padding(SP.xs)
+        .style(crate::panels::form_look::segmented_frame),
     )
     .padding([4, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .boxed()
-}
-
-/// Two-column Name / Value header for the Parameters (Net) table.
-pub fn net_params_header<'a>(
-    i18n: &signex_i18n::I18n,
-    label_c: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    use signex_i18n::{ids, t};
-    container(
-        row![
-            text(t!(i18n, ids::PROPERTIES_NET_PARAMS_NAME))
-                .size(TS.body)
-                .color(label_c)
-                .width(PROPERTY_LABEL_COLUMN),
-            text(t!(i18n, ids::PROPERTIES_NET_PARAMS_VALUE))
-                .size(TS.body)
-                .color(label_c)
-                .width(Length::Fill),
-        ]
-        .spacing(SP.s),
-    )
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        border: Border {
-            width: 1.0,
-            radius: 0.0.into(),
-            color: border_c,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    })
     .boxed()
 }
 
@@ -167,59 +75,18 @@ pub fn empty_section_row<'a>(
     .boxed()
 }
 
-/// Add / edit / delete toolbar at the bottom of the Parameters table.
-pub fn net_params_add_bar<'a>(
-    i18n: &signex_i18n::I18n,
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        // raw: an edit or delete glyph, not language.
-        signex_widgets::button(text(raw(label.to_string())).size(TS.caption).color(label_c))
-            .padding([SP.s, SP.m])
-            .on_press(PanelMsg::Noop)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(input_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                    ..Border::default()
-                },
-                text_color: label_c,
-                ..iced::widget::button::Style::default()
-            })
-            .boxed()
-    };
+/// The Add ▾ button under the Net Parameters card.
+pub fn net_params_add_bar<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     container(
         row![
             Space::new().width(Length::Fill),
             signex_widgets::button(
-                text(signex_i18n::t!(
-                    i18n,
-                    signex_i18n::ids::PROPERTIES_NET_PARAMS_ADD
-                ))
-                .size(TS.body)
-                .color(Color::WHITE)
+                text(signex_i18n::t!(i18n, ids::PROPERTIES_NET_PARAMS_ADD)).size(TS.body)
             )
             .padding([SP.s, SP.l])
             .on_press(PanelMsg::Noop)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(input_bdr)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                    ..Border::default()
-                },
-                text_color: Color::WHITE,
-                ..iced::widget::button::Style::default()
-            }),
-            icon_btn("\u{270E}"),
-            icon_btn("\u{1F5D1}"),
+            .style(crate::panels::form_look::ghost_button),
         ]
-        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
     .padding([6, PROPERTY_ROW_PAD_X])
@@ -227,9 +94,44 @@ pub fn net_params_add_bar<'a>(
     .boxed()
 }
 
-/// Altium-style 3x3 justification picker with proper SVG arrow icons.
-/// Only horizontal is wired to state for now; vertical slots toggle visually
-/// but don't mutate the label.
+/// Which way a label's text runs from its anchor: the four directions the
+/// 3x3 grid maps its nine cells onto.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LabelDir {
+    Left,
+    Up,
+    Right,
+    Down,
+}
+
+/// The direction a label turned `rotation_deg` and justified `h` reads in.
+fn label_direction(rotation_deg: f64, h: signex_types::schematic::HAlign) -> LabelDir {
+    use signex_types::schematic::HAlign;
+    let turn = (rotation_deg.round() as i32).rem_euclid(360);
+    // Right-justified text runs left of its anchor, unless turned upside down.
+    let runs_right = (h == HAlign::Right) == (turn == 180);
+    match turn {
+        90 => LabelDir::Up,
+        270 => LabelDir::Down,
+        _ if runs_right => LabelDir::Right,
+        _ => LabelDir::Left,
+    }
+}
+
+/// The word beside the justification grid that names the label's anchor:
+/// where on its text the anchor sits.
+pub fn label_anchor(rotation_deg: f64, h: signex_types::schematic::HAlign) -> MessageId {
+    match label_direction(rotation_deg, h) {
+        LabelDir::Right => ids::PROPERTIES_ANCHOR_BOTTOM_LEFT,
+        LabelDir::Left => ids::PROPERTIES_ANCHOR_BOTTOM_RIGHT,
+        LabelDir::Up => ids::PROPERTIES_ANCHOR_BOTTOM,
+        LabelDir::Down => ids::PROPERTIES_ANCHOR_TOP,
+    }
+}
+
+/// The 3x3 justification picker of a selected label, with SVG arrow icons.
+/// A label reads in four directions, so the nine cells map onto them
+/// (corners follow their edge; the centre re-sends the current one).
 pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
@@ -245,7 +147,7 @@ pub fn justification_grid(
         ..
     } = palette;
 
-    // Cell size mimics Altium's compact 24×24 px anchor picker.
+    // A compact 24 x 24 px anchor cell.
     const CELL_SIZE: f32 = 24.0;
     let cell = |handle: iced::widget::svg::Handle,
                 active: bool,
@@ -295,39 +197,7 @@ pub fn justification_grid(
         })
         .boxed()
     };
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum LabelDir {
-        Left,
-        Up,
-        Right,
-        Down,
-    }
-
-    let normalize_rot = |deg: f64| {
-        let r = (deg.round() as i32) % 360;
-        if r < 0 { r + 360 } else { r }
-    };
-
-    let current_dir = {
-        match normalize_rot(rotation_deg) {
-            90 => LabelDir::Up,
-            270 => LabelDir::Down,
-            180 => {
-                if matches!(h, HAlign::Right) {
-                    LabelDir::Right
-                } else {
-                    LabelDir::Left
-                }
-            }
-            _ => {
-                if matches!(h, HAlign::Right) {
-                    LabelDir::Left
-                } else {
-                    LabelDir::Right
-                }
-            }
-        }
-    };
+    let current_dir = label_direction(rotation_deg, h);
 
     let to_msg = |dir: LabelDir| -> PanelMsg {
         match dir {
