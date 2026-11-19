@@ -441,6 +441,38 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_title_block_draft() 
     assert!(!app.document_state.is_document_dirty(&a));
 }
 
+/// #2546 review: the close route refuses a paper-edge draft as the request
+/// gate does (`drafts.has_sheet`), and names it.
+#[test]
+fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_paper_edge_draft() {
+    let mut app = app_at_work();
+    let a = path("a.snxsch");
+    let edge = crate::panels::PaperEdge::Width;
+    app.document_state.drafts.set_paper_edge(&a, edge, "4");
+    let command = crate::keymap::AppCommandId::new("close_active_document").unwrap();
+    let operand = format!("document={}", doc("a.snxsch"));
+    let args =
+        crate::app::command::CommandArgs::parse_operands(&command, &[operand.as_str()]).unwrap();
+
+    app.agent.serving = true;
+    let (outcome, _task) = app.run_operands(&command, &args);
+    app.agent.serving = false;
+
+    let crate::app::command::CommandOutcome::Disabled { reason } = outcome else {
+        panic!("the close was not refused: {outcome:?}");
+    };
+    assert!(reason.contains("page-settings draft"), "{reason}");
+    assert_eq!(
+        app.document_state
+            .drafts
+            .paper_edge_text(&a, edge)
+            .as_deref(),
+        Some("4"),
+        "the draft stays pending"
+    );
+    assert!(app.document_state.tabs.iter().any(|t| t.path == a));
+}
+
 #[test]
 fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft_stays() {
     let mut app = app_at_work();

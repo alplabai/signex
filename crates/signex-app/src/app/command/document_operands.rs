@@ -321,7 +321,8 @@ pub(super) fn save_as(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// closing the active one moves the active tab to a neighbour, as that button
 /// does (a headless run opens a document and closes it by name). A close the
 /// tab survives (a refused board sketch bake) is refused with the reason, and
-/// so is an agent's close of a sheet holding the person's title-block draft.
+/// so is an agent's close of a sheet holding the person's title-block or
+/// page-settings draft.
 pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let entry = match named(app, args) {
         Ok(entry) => entry,
@@ -342,15 +343,17 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let tab_path = app.document_state.tabs[index].path.clone();
     // An agent's close of another tab leaves the person's session alone.
     let task = if app.agent.serving && index != app.document_state.active_tab {
-        // The person's typed title-block text is theirs to commit or drop.
-        if app
-            .document_state
-            .drafts
-            .title_block_sheets()
-            .contains(&tab_path)
-        {
+        // The person's typed title-block or page-settings text is theirs to
+        // commit or drop; the same check as the request gate.
+        let drafts = &app.document_state.drafts;
+        if drafts.has_sheet(&tab_path) {
+            let which = if drafts.title_block_sheets().contains(&tab_path) {
+                "title-block draft"
+            } else {
+                "page-settings draft"
+            };
             return refused(format!(
-                "{} holds the person's pending title-block draft; it stays open until they commit or drop it",
+                "{} holds the person's pending {which}; it stays open until they commit or drop it",
                 entry.name
             ));
         }

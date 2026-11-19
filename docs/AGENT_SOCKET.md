@@ -199,8 +199,8 @@ The last three are open to agents by the maintainer's decision (#1924):
   own, since closing it would move their tab or close that window, and when the
   person has a pending title-block or paper-edge draft for that sheet, since
   closing would drop their unconfirmed typing. The close route itself refuses
-  an agent's close of a sheet with a pending title-block draft, naming the
-  draft, so the person's text is never committed or dropped by an agent (#2546).
+  an agent's close of a sheet with a pending title-block or paper-edge draft,
+  naming the draft, so the person's text is never committed or dropped by an agent (#2546).
   A close that leaves the tab open, because the board's sketch could not be
   applied, is refused with that reason, never reported as run, for every
   caller.
