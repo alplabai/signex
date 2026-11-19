@@ -48,6 +48,9 @@ struct Reference<'r> {
     moved: &'r SchematicSheet,
     plain: &'r SchematicSheet,
     plain_dots: &'r [Point],
+    /// Dotless T points of the moved sheet the plain move leaves bare: an edit
+    /// of a wire there must not dot them (#107: no connection).
+    bare: &'r HashSet<signex_net::uf::Key>,
 }
 
 #[cfg(test)]
@@ -163,10 +166,16 @@ impl Engine {
         fold(self);
         let plain = std::mem::take(&mut self.document);
         let plain_dots = crate::transform::new_pin_dots(&moved, &plain);
+        let dotted: HashSet<signex_net::uf::Key> = (plain.junctions.iter())
+            .map(|j| signex_net::pt_key(&j.position))
+            .collect();
+        let mut bare = crate::transform::bare_t_keys(&moved);
+        bare.retain(|k| !dotted.contains(k));
         let reference = Reference {
             moved: &moved,
             plain: &plain,
             plain_dots: &plain_dots,
+            bare: &bare,
         };
         let contacts = self.needed_contacts(contacts, &moved, &plain);
         self.guarded_rounds(before, &contacts, items, followed, &reference, fold)
@@ -264,7 +273,11 @@ impl Engine {
             let held: Vec<Point> = held_tips.iter().filter_map(|&i| tips_now[i]).collect();
             let dots = crate::pin_dots_to_keep(at.plain_dots, &held);
             let mut patch = DocumentPatch::from_selected_items(&touched);
-            if self.reconcile_wire_junctions_frozen(&touched, Some(dots.as_slice())) {
+            let frozen = crate::transform::Frozen {
+                pin_dots: &dots,
+                bare: at.bare,
+            };
+            if self.reconcile_wire_junctions_frozen(&touched, Some(&frozen)) {
                 patch |= DocumentPatch::JUNCTIONS;
             }
             patch |= fold(self);

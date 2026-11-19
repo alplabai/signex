@@ -260,6 +260,17 @@ pub(crate) fn pin_dots_for(
         .collect()
 }
 
+/// Where a wire end lies strictly inside another wire of `sheet` with no dot:
+/// a dotless T, no connection (#107).
+pub(crate) fn bare_t_keys(sheet: &SchematicSheet) -> HashSet<Key> {
+    let dots = dot_keys(sheet);
+    let lines = WireLines::of(&sheet.wires);
+    (sheet.wires.iter())
+        .flat_map(|wire| [pt_key(&wire.start), pt_key(&wire.end)])
+        .filter(|k| !dots.contains(k) && !lines.through(*k).is_empty())
+        .collect()
+}
+
 /// The pin dots of [`pin_dots_for`] when they were decided on another sheet:
 /// a dot at each place of `frozen` where a wire still passes strictly through
 /// and no dot stands yet. Geometry only; the no-short verdict is the one the

@@ -167,14 +167,16 @@ impl Engine {
         self.reconcile_wire_junctions_frozen(items, None)
     }
 
-    /// [`Self::reconcile_wire_junctions`] with the pin dots decided already:
-    /// `frozen` lists the only places a pin dot may be minted (a guarded move
-    /// takes them from its plain move, see `exec::place`), judged by geometry
-    /// alone and never by the candidate's own nets. `None` decides them here.
+    /// [`Self::reconcile_wire_junctions`] with its choices decided already (a
+    /// guarded move takes them from its plain move, see `exec::guarded`):
+    /// `frozen.pin_dots` lists the only places a pin dot may be minted, judged
+    /// by geometry alone and never by the candidate's own nets, and no wire dot
+    /// is minted on `frozen.bare`, a dotless T the plain move leaves bare (#107:
+    /// no connection). `None` decides them here.
     pub(super) fn reconcile_wire_junctions_frozen(
         &mut self,
         items: &[SelectedItem],
-        frozen: Option<&[signex_types::schematic::Point]>,
+        frozen: Option<&Frozen<'_>>,
     ) -> bool {
         // Each item's first wire of that id, found in one pass over the wires.
         let wanted: std::collections::HashSet<uuid::Uuid> = items
@@ -216,7 +218,7 @@ impl Engine {
         // that judges it: the local and the full-scan commit then agree.
         let before = self.taps_before.as_deref();
         let mut pin_dots = match frozen {
-            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen),
+            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen.pin_dots),
             None => pin_junctions::pin_dots_for(&self.document, items, before),
         };
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
@@ -237,7 +239,10 @@ impl Engine {
         );
         let mut changed = false;
         for wire in touched {
-            let minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
+            let mut minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
+            if let Some(frozen) = frozen {
+                minted.retain(|dot| !frozen.bare.contains(&signex_net::pt_key(&dot.position)));
+            }
             changed |= !minted.is_empty();
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
@@ -691,6 +696,16 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
+pub(crate) use pin_junctions::bare_t_keys;
+
+/// The choices a guarded round's reconcile takes from its plain move (see
+/// `Engine::reconcile_wire_junctions_frozen`).
+pub(crate) struct Frozen<'f> {
+    /// The only places a pin dot may be minted.
+    pub(crate) pin_dots: &'f [signex_types::schematic::Point],
+    /// Dotless T points the plain move leaves bare: no wire dot goes there.
+    pub(crate) bare: &'f std::collections::HashSet<signex_net::uf::Key>,
+}
 pub use pin_junctions::{
     bare_pin_taps, bare_tap_keys, new_pin_dots, pin_junction_repairs, pin_owners,
 };
