@@ -59,6 +59,7 @@ pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
+pub mod unions;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;

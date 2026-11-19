@@ -646,6 +646,8 @@ pub struct CanvasViewPrefs<'a> {
     /// treat the Component tool as a placing tool then, not only the one
     /// whose canvas holds the cursor ghost (#1776).
     pub power_port_pending: bool,
+    /// The unions hidden on the sheet in view and their inks (#158).
+    pub unions: crate::schematic_runtime::unions::UnionView<'a>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
@@ -1100,6 +1102,12 @@ mod tests {
             selection_filters: filters,
             placement: None,
             power_port_pending: false,
+            unions: crate::schematic_runtime::unions::UnionView {
+                hidden: &[],
+                ink: crate::schematic_runtime::unions::UnionInk::from_tokens(
+                    &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+                ),
+            },
             device_px_per_logical_px: 1.0,
         }
     }

@@ -142,4 +142,34 @@ define_ids! {
     DIALOG_DPC_N_NET = "dialog-dpc-n-net";
     DIALOG_DPC_NO_PROJECT = "dialog-dpc-no-project";
     DIALOG_DPC_PROJECT_CLOSED = "dialog-dpc-project-closed";
+    // c13 unions-change-paste: the Smart Paste dialog (#155).
+    SMART_PASTE_TITLE = "dialog-smart-paste-title";
+    SMART_PASTE_SUBTITLE = "dialog-smart-paste-subtitle";
+    SMART_PASTE_CLOSE = "dialog-smart-paste-close";
+    SMART_PASTE_PLACE = "dialog-smart-paste-place";
+    SMART_PASTE_ONCE = "dialog-smart-paste-once";
+    SMART_PASTE_ARRAY = "dialog-smart-paste-array";
+    SMART_PASTE_OFFSET = "dialog-smart-paste-offset";
+    SMART_PASTE_COPIES = "dialog-smart-paste-copies";
+    SMART_PASTE_STEP = "dialog-smart-paste-step";
+    SMART_PASTE_MM = "dialog-smart-paste-mm";
+    SMART_PASTE_DESIGNATORS = "dialog-smart-paste-designators";
+    SMART_PASTE_NEXT_FREE = "dialog-smart-paste-next-free";
+    SMART_PASTE_NEXT_FREE_PLAIN = "dialog-smart-paste-next-free-plain";
+    SMART_PASTE_KEEP_DESIGNATORS = "dialog-smart-paste-keep-designators";
+    SMART_PASTE_NET_NAMES = "dialog-smart-paste-net-names";
+    SMART_PASTE_KEEP_NETS = "dialog-smart-paste-keep-nets";
+    SMART_PASTE_REWRITE_NETS = "dialog-smart-paste-rewrite-nets";
+    SMART_PASTE_PATTERN = "dialog-smart-paste-pattern";
+    SMART_PASTE_START = "dialog-smart-paste-start";
+    SMART_PASTE_NET = "dialog-smart-paste-net";
+    SMART_PASTE_AFTER = "dialog-smart-paste-after";
+    SMART_PASTE_KEPT_POWER = "dialog-smart-paste-kept-power";
+    SMART_PASTE_JOINS = "dialog-smart-paste-joins";
+    SMART_PASTE_PREVIEW = "dialog-smart-paste-preview";
+    SMART_PASTE_COPY_COUNT = "dialog-smart-paste-copy-count";
+    SMART_PASTE_DRAG_HINT = "dialog-smart-paste-drag-hint";
+    SMART_PASTE_FOOTER = "dialog-smart-paste-footer";
+    SMART_PASTE_PASTE = "dialog-smart-paste-paste";
+    SMART_PASTE_PASTE_COPIES = "dialog-smart-paste-paste-copies";
 }

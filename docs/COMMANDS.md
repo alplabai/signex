@@ -213,6 +213,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_to_union` | Add the selection to the selected union | edit | — | — |
 | `align_bottom` | Align bottom | modify | — | — |
 | `align_horizontal_centers` | Align horizontal centers | modify | — | — |
 | `align_left` | Align left | modify | — | — |
@@ -226,6 +227,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `back_annotate_schematics` | Back-annotate the board's designators and values to the schematic | pcb_sync | — | — |
+| `break_union` | Break the selected union | edit | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
@@ -236,6 +238,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `compile_project` | Compile the project | design | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
+| `create_union` | Create a union from the selection | edit | `Mod+G` | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |
 | `drag` | Drag | modify | — | — |
@@ -312,6 +315,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
 | `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |

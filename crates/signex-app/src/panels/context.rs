@@ -113,6 +113,8 @@ pub struct PanelContext {
     /// The Compiled Design panel, and the multi-channel rows of a sheet
     /// symbol and a channel tab in Properties (#1279, #1308).
     pub compiled_design: super::compiled_design::CompiledDesignView,
+    /// The Unions panel's rows and foot; filled only while it is open (#158).
+    pub unions: crate::app::unions::UnionsPanelView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).

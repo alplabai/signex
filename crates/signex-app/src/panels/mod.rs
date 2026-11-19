@@ -68,6 +68,7 @@ mod sch_filter;
 pub use sch_filter::SchFilterMsg;
 mod status;
 mod symbol_context;
+pub(crate) mod unions;
 mod widgets;
 mod wire_style_rows;
 
@@ -239,6 +240,8 @@ pub enum PanelKind {
     /// The compiled hierarchy: repeated sheets expanded into channels, with
     /// part and net counts per sheet (#1308).
     CompiledDesign,
+    /// Named unions of the sheet in view or the project (#158).
+    Unions,
 }
 
 /// All available panel kinds for the panel list button.
@@ -271,6 +274,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::History,
     PanelKind::NetInspector,
     PanelKind::CompiledDesign,
+    PanelKind::Unions,
 ];
 
 impl PanelKind {
@@ -330,6 +334,7 @@ impl PanelKind {
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
             PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
+            PanelKind::Unions => ids::PANELS_KIND_UNIONS,
         }
     }
 
@@ -363,6 +368,7 @@ impl PanelKind {
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
             PanelKind::CompiledDesign => "Compiled Design",
+            PanelKind::Unions => "Unions",
         }
     }
 }
@@ -428,6 +434,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
         PanelKind::CompiledDesign => return compiled_design::view(ctx),
+        PanelKind::Unions => return unions::view(ctx),
     };
 
     panel_scrollable(content).boxed()

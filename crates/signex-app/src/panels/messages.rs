@@ -723,6 +723,8 @@ pub enum PanelMsg {
     /// The Compiled Design panel and the multi-channel Properties rows
     /// (#1279, #1308).
     CompiledDesign(crate::app::CompiledDesignMsg),
+    /// The Unions panel (#158).
+    Unions(crate::app::unions::UnionsMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

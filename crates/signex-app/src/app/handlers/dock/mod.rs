@@ -71,6 +71,9 @@ impl Signex {
             }
             if let crate::panels::PanelMsg::CompiledDesign(msg) = panel_msg {
                 return self.dispatch_compiled_design_message(msg.clone());
+            if let crate::panels::PanelMsg::Unions(unions_msg) = panel_msg {
+                let task = self.handle_unions_message(unions_msg.clone());
+                return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);

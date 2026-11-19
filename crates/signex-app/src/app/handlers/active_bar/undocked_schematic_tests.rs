@@ -367,6 +367,10 @@ fn an_undocked_windows_size_places_its_overlays() {
 #[test]
 fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
     let mut f = fixture();
+    // The at-once paste of a run without a window (#155): in a window the
+    // follow-up opens the Smart Paste dialog, whose events take the same
+    // route to the undocked window's sheet.
+    f.app.ui_state.io = crate::io_ports::IoPorts::headless(Default::default());
     let _ = f
         .app
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));

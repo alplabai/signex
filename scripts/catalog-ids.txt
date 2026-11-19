@@ -5,6 +5,7 @@ add_board_graphic
 add_net_class
 add_table_of_contents
 add_teardrops
+add_to_union
 align_bottom
 align_horizontal_centers
 align_left
@@ -31,6 +32,7 @@ board_report_net_length
 board_report_netlist
 board_shape_from_selection
 board_sketch
+break_union
 break_wire
 bring_drawings_forward
 bring_drawings_to_front
@@ -55,6 +57,7 @@ copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
+create_union
 cross_probe
 cut
 cycle_arc_mode
@@ -275,6 +278,7 @@ reannotate_board
 redo
 refresh_view
 remove_board_panel
+remove_from_union
 remove_last_vertex
 remove_teardrops
 rename_net_class

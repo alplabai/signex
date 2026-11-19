@@ -50,6 +50,7 @@ pub mod io_ports;
 pub mod pan_zoom_bench;
 pub mod paste_array;
 pub mod paste_prefs;
+pub mod smart_paste;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
 mod ignore;

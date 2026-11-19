@@ -707,6 +707,20 @@ From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276).
 
+Unions (#158) holds Create Union… (`create_union`, live with a selection,
+`Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the
+union picked in the Unions panel), Remove Selection from Union
+(`remove_from_union`) and Break Union (`break_union`), the last two live when
+the selection holds a member of a union. See
+[SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
+
+Paste Special (`smart_paste`, #155) opens the Smart Paste dialog in a window:
+one copy at an offset or an array of copies, the designators Next free or
+kept, the net labels kept or rewritten with a pattern (power nets never). Its
+Paste puts every copy on the cursor and one click places them as one undo
+step; Esc cancels. A headless run of `smart_paste` places the copy at once
+beside the sheet's content, as before. Duplicate keeps its fixed offset.
+
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 
 Design ▸ Create Sheet Symbol From Sheet... (`create_sheet_symbol_from_sheet`,
@@ -742,7 +756,6 @@ Class row of Properties. Planned rows, greyed with a tooltip saying what each
 will do:
 
 - **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
-- **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
 - **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.
 - **Supplier Links**: link the selected part to supplier part numbers and prices through the library's distributor adapter.
 

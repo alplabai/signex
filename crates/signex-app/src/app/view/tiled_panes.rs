@@ -181,6 +181,7 @@ impl Signex {
             wire_class_revision: class_styles.revision_in(shown.as_ref()),
             wire_tool_active: false,
             placement: None,
+            unions: self.union_view(Some(path)),
             ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))

@@ -45,6 +45,7 @@ pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 use text_width::{WidthSlot, WidthSources};
 pub mod text;
+pub mod unions;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -230,6 +231,8 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::HARNESS) {
         dst.harness.clone_from(&src.harness);
+    if invalidation.intersects(R::UNIONS) {
+        dst.unions.clone_from(&src.unions);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(&src.child_sheets);

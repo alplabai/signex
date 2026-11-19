@@ -22,6 +22,7 @@ mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
 pub(crate) mod transaction;
+mod unions;
 mod wire_end;
 
 #[cfg(test)]
@@ -55,3 +56,5 @@ mod symbol_body_tests;
 mod harness;
 #[cfg(test)]
 mod harness_tests;
+#[cfg(test)]
+mod unions_tests;

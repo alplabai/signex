@@ -667,5 +667,14 @@ define_ids! {
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
         CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
         CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";
+        // c13 unions-change-paste (#158).
+        CMD_CREATE_UNION = "cmd-create-union";
+        CMD_MENU_CREATE_UNION = "cmd-menu-create-union";
+        CMD_ADD_TO_UNION = "cmd-add-to-union";
+        CMD_MENU_ADD_TO_UNION = "cmd-menu-add-to-union";
+        CMD_REMOVE_FROM_UNION = "cmd-remove-from-union";
+        CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
+        CMD_BREAK_UNION = "cmd-break-union";
+        CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
     }
 }

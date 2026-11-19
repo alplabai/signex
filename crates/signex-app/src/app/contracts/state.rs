@@ -51,6 +51,9 @@ pub enum ContextSubmenu {
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
+    /// "Unions ›": create a union from the selection, add or remove the
+    /// selection, break the union (#158). Shown with a selection.
+    Unions,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.

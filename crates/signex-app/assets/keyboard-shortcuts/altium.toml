@@ -189,10 +189,13 @@ context = "global"
 "W V" = "tile_windows_vertically"
 
 # #2416: the sheet's placement tools with no key before (sheet tabs only).
+# #158: `Mod+G` makes a union of the selection; a sheet-only reuse of the
+# key, so the footprint editor's own use of it stays free (XF-15).
 [[keyboard_shortcuts.sections]]
 context = "schematic"
 
 [keyboard_shortcuts.sections.bindings]
+"Mod+G" = "create_union"
 "P C" = "place_off_sheet_connector"
 "P R" = "place_port"
 "P S" = "place_sheet_symbol"

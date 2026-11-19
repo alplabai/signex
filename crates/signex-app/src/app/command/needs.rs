@@ -398,7 +398,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "draw_bezier"
         | "place_table"
         | "place_linear_dimension"
-        | "place_aligned_dimension" => Needs::Schematic,
+        | "place_aligned_dimension"
+        // #158: the unions of the sheet in view; the handler says what to
+        // select when nothing fits.
+        | "create_union"
+        | "add_to_union"
+        | "remove_from_union"
+        | "break_union" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         // #1300: the contents sheet of the active sheet's project.
         "add_table_of_contents" => Needs::Sheets,

@@ -116,6 +116,9 @@ pub enum EngineError {
     InvalidHarnessWire,
     #[error("a harness entry needs a name")]
     EmptyHarnessEntryName,
+    /// A named-union command refused (#158).
+    #[error(transparent)]
+    Union(#[from] crate::unions::UnionRefusal),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

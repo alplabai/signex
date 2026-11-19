@@ -322,3 +322,47 @@ dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.
 dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+## c13 unions-change-paste
+
+# The Smart Paste dialog (#155).
+dialog-smart-paste-title = Smart Paste
+# $parts lists the copied designators; $wires and $labels count the rest.
+dialog-smart-paste-subtitle = Clipboard: { $parts } · { $wires ->
+    [one] 1 wire
+   *[other] { $wires } wires
+} · { $labels ->
+    [one] 1 net label
+   *[other] { $labels } net labels
+}
+dialog-smart-paste-close = ×
+dialog-smart-paste-place = Place
+dialog-smart-paste-once = Once, with offset
+dialog-smart-paste-array = Array
+dialog-smart-paste-offset = Offset X / Y
+dialog-smart-paste-copies = Copies
+dialog-smart-paste-step = Step X / Y
+dialog-smart-paste-mm = mm
+dialog-smart-paste-designators = Designators
+# $mapping is "R4 → R6, R5 → R7" (one copy) or "R4 → R6, R8; R5 → R7, R9" (several).
+dialog-smart-paste-next-free = Next free ({ $mapping })
+dialog-smart-paste-next-free-plain = Next free
+dialog-smart-paste-keep-designators = Keep, annotate later
+dialog-smart-paste-net-names = Net names
+dialog-smart-paste-keep-nets = Keep (pasted nets join the originals)
+dialog-smart-paste-rewrite-nets = Rewrite with a pattern
+dialog-smart-paste-pattern = Pattern
+dialog-smart-paste-start = Start n at
+dialog-smart-paste-net = Net
+dialog-smart-paste-after = After paste
+dialog-smart-paste-kept-power = kept · power net
+# $net is the copied net's name.
+dialog-smart-paste-joins = { $net } (joins original)
+dialog-smart-paste-preview = Preview
+dialog-smart-paste-copy-count = { $count ->
+    [one] 1 copy
+   *[other] { $count } copies
+}
+dialog-smart-paste-drag-hint = Ghosts show where the copies land; drag the first copy to set the offset (1.27 mm grid).
+dialog-smart-paste-footer = Paste places at the cursor; Esc cancels.
+dialog-smart-paste-paste = Paste
+dialog-smart-paste-paste-copies = Paste { $count } copies

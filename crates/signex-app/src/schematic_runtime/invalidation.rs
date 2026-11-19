@@ -27,6 +27,8 @@ impl RenderInvalidation {
     pub const DIRECTIVES: Self = Self(1 << 14);
     /// Signal harness connectors, wires and typed sheet entries (#1280).
     pub const HARNESS: Self = Self(1 << 15);
+    /// Named unions (#158): drawn in the selection layer only.
+    pub const UNIONS: Self = Self(1 << 20);
     pub const FULL: Self = Self(u32::MAX);
 
     /// True when any bit of `mask` is also set in `self`.
@@ -51,7 +53,7 @@ impl std::ops::BitOrAssign for RenderInvalidation {
 
 /// The render collections each document change redraws. The sheet default
 /// font is inherited by every kind of text, so it redraws all four.
-const PROJECTION: [(DocumentPatch, RenderInvalidation); 17] = {
+const PROJECTION: [(DocumentPatch, RenderInvalidation); 18] = {
     use RenderInvalidation as R;
     [
         (DocumentPatch::SYMBOLS, R::SYMBOLS),
@@ -70,6 +72,7 @@ const PROJECTION: [(DocumentPatch, RenderInvalidation); 17] = {
         (DocumentPatch::LIB_SYMBOLS, R::LIB_SYMBOLS),
         (DocumentPatch::PAPER, R::PAPER),
         (DocumentPatch::NET_COLORS, R::NET_COLORS),
+        (DocumentPatch::UNIONS, R::UNIONS),
         (
             DocumentPatch::FONT_FAMILY,
             R(R::SYMBOLS.0 | R::LABELS.0 | R::TEXT_NOTES.0 | R::CHILD_SHEETS.0),

@@ -40,6 +40,7 @@ mod exec;
 mod find;
 mod find_similar;
 mod graphics_import;
+pub mod unions;
 
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -179,6 +180,7 @@ pub use transform::rubber_band::{
 pub(crate) use transform::rubber_band::{
     WirePoint, bailing_wires, carried_points, carry_points, held_at, pin_dots_to_keep,
 };
+pub use unions::UnionRefusal;
 
 pub(crate) use transform::{PreWires, TouchingPairs};
 
@@ -792,7 +794,7 @@ impl Engine {
         };
         self.crossed_taps.clear();
 
-        let result = match cmd {
+        let mut result = match cmd {
             Command::ReplaceDocument { .. }
             | Command::UpdateText { .. }
             | Command::UpdateLabelProps { .. }
@@ -869,7 +871,12 @@ impl Engine {
             | Command::PlaceHarnessEntry { .. }
             | Command::PlaceHarnessWire { .. }
             | Command::SetHarnessEntryType { .. } => self.exec_harness(before, cmd),
+            Command::CreateUnion { .. }
+            | Command::UpdateUnion { .. }
+            | Command::SetUnionMembers { .. }
+            | Command::BreakUnion { .. } => self.exec_unions(before, cmd),
         };
+        self.prune_union_members(&mut result);
         self.taps_before = None;
         // A pin end the edit left bare where wires of two nets overlap: no dot
         // merges two nets (2026-11-19), and the user is told which. A drag

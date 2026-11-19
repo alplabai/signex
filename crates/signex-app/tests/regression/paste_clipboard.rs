@@ -10,7 +10,8 @@ use crate::paste_support::sheet::{
     app_with_sheet, click, empty_sheet, populated_sheet, references, select,
 };
 use crate::paste_support::{
-    paste, paste_with_clipboard, reads_clipboard, send_and_settle, smart_paste, written_text,
+    paste, paste_with_clipboard, reads_clipboard, send_and_settle, smart_paste, smart_paste_dialog,
+    written_text,
 };
 
 /// The selection that exercises every designator mode: a resistor and the
@@ -53,10 +54,16 @@ fn a_paste_request_asks_the_system_clipboard() {
     let (mut app, _text) = app_with_copied_parts();
     // Keep reads no project numbers first, so the clipboard read comes first.
     app.ui_state.paste_designators = PasteDesignators::Keep;
-    for message in [EditMsg::Paste, EditMsg::SmartPaste] {
-        let task = app.update(Message::Edit(message));
-        assert!(reads_clipboard(task));
-    }
+    let task = app.update(Message::Edit(EditMsg::Paste));
+    assert!(reads_clipboard(task));
+    // #155: Smart Paste in a window offers Next free in its dialog, so it
+    // reads the project's numbers first, then the clipboard.
+    let seeding = app.update(Message::Edit(EditMsg::SmartPaste));
+    let seeded = crate::library_place_symbol::run(seeding)
+        .into_iter()
+        .find(|m| matches!(m, Message::Edit(EditMsg::PasteCountersSeeded { .. })))
+        .expect("the numbering read answers");
+    assert!(reads_clipboard(app.update(seeded)));
 }
 
 #[test]
@@ -159,6 +166,9 @@ fn next_free_takes_the_next_number_and_units_still_share_one() {
     );
 }
 
+/// #155: a headless Smart Paste and Duplicate follow the preference; in a
+/// window Smart Paste numbers as its dialog says (Next free or Keep), and
+/// the copy lands at the click as one undo step.
 #[test]
 fn smart_paste_and_duplicate_follow_the_preference() {
     for (mode, expected) in [
@@ -174,5 +184,37 @@ fn smart_paste_and_duplicate_follow_the_preference() {
         app.ui_state.paste_designators = mode;
         send_and_settle(&mut app, EditMsg::Duplicate, PasteIntent::Duplicate);
         assert_eq!(pasted_references(&app), expected, "duplicate, {mode:?}");
+    }
+    for (choice, expected) in [
+        (
+            signex_app::smart_paste::DesignatorChoice::NextFree,
+            ["R4", "U2", "U2"],
+        ),
+        (
+            signex_app::smart_paste::DesignatorChoice::Keep,
+            ["R2", "U1", "U1"],
+        ),
+    ] {
+        let (mut app, _text) = app_with_copied_parts();
+        // The preference does not decide a dialog paste.
+        app.ui_state.paste_designators = PasteDesignators::Reset;
+        smart_paste_dialog(&mut app, |app| {
+            let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+                signex_app::smart_paste::SmartPasteMsg::DesignatorsPicked(choice),
+            )));
+        });
+        assert!(
+            app.interaction_state.placement.is_some(),
+            "Paste puts the copy on the cursor"
+        );
+        let undo_before = app.document_state.active_engine().unwrap().undo_position();
+        click(&mut app, (80.0, 80.0));
+        assert_eq!(pasted_references(&app), expected, "dialog, {choice:?}");
+        let undo_after = app.document_state.active_engine().unwrap().undo_position();
+        assert_eq!(undo_after, undo_before + 1, "one undo step");
+        assert!(
+            app.interaction_state.placement.is_none(),
+            "a paste is single-shot"
+        );
     }
 }

@@ -704,10 +704,14 @@ mod sheet_variables;
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/smart_paste_dialog.rs"]
+mod smart_paste_dialog;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/unions.rs"]
+mod unions;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 

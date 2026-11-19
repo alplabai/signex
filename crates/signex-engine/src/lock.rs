@@ -97,6 +97,8 @@ impl Engine {
         for w in doc.harness.wires.iter().filter(|w| w.locked) {
             out.insert(w.uuid, format!("harness wire {}", at(&w.start)));
         }
+        // A locked union freezes its members the same way (#158).
+        crate::unions::insert_locked_members(doc, &mut out);
         out
     }
 }
@@ -221,7 +223,13 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetNetColors { .. }
         | Command::PlaceHarnessConnector { .. }
         | Command::PlaceHarnessWire { .. }
-        | Command::SetHarnessEntryType { .. } => return None,
+        | Command::SetHarnessEntryType { .. }
+        // A union command edits the union, not its objects; a locked union
+        // refuses its own changes in `exec/unions.rs`.
+        | Command::CreateUnion { .. }
+        | Command::UpdateUnion { .. }
+        | Command::SetUnionMembers { .. }
+        | Command::BreakUnion { .. } => return None,
     };
     Some(target)
 }
