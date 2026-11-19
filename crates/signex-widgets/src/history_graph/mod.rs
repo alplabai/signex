@@ -17,7 +17,7 @@ mod style;
 #[cfg(test)]
 mod tests;
 
-use iced::widget::{Canvas, Column, row};
+use iced::widget::{Canvas, Column};
 use iced::{Element, Length, Padding, Widget};
 use signex_i18n::I18n;
 
@@ -139,7 +139,7 @@ impl<'a, M: Clone + 'a> HistoryGraph<'a, M> {
         .width(width)
         .height(height);
 
-        iced::widget::container(row![lanes, rows])
+        iced::widget::container(iced::widget::row![lanes, rows])
             .width(Length::Fill)
             .padding(Padding {
                 left: s.em(GRAPH_INSET_EM),

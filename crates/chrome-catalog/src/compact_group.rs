@@ -170,6 +170,7 @@ impl CompactGroupSample {
         .width(Length::Shrink)
         .boxed()
         .map(Message::CompactGroup)
+        .boxed()
     }
 }
 
