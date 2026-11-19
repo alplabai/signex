@@ -53,6 +53,7 @@ fn options() -> BoardOptions {
             rule: "builtin::clearance".into(),
             note: "Checked by hand: \"tested\" on rev A\nsecond line".into(),
             fingerprint: String::new(),
+            author: "C. Alp".into(),
         }],
         panel: Some(panel()),
     }
@@ -85,6 +86,7 @@ fn a_waived_finding_round_trips_with_its_note() {
         rule: "user::hv".into(),
         note: String::new(),
         fingerprint: String::new(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board.clone()).write_string().expect("writes");
     assert!(text.contains("drc_waivers"), "{text}");
@@ -103,6 +105,7 @@ fn a_waiver_without_a_fingerprint_loads_and_re_saves_unchanged() {
         rule: "builtin::clearance".into(),
         note: "old".into(),
         fingerprint: String::new(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board).write_string().expect("writes");
     assert!(!text.contains("fingerprint"), "{text}");
@@ -120,6 +123,7 @@ fn a_waiver_fingerprint_round_trips() {
         rule: "builtin::clearance".into(),
         note: String::new(),
         fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board.clone()).write_string().expect("writes");
     assert!(
@@ -128,6 +132,45 @@ fn a_waiver_fingerprint_round_trips() {
     );
     let back = SnxPcb::parse(&text).expect("reads back").board;
     assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// AV-13: a waiver's author (multi-line reason and all) is written and read
+/// back, and a second save is byte-identical.
+#[test]
+fn a_waiver_author_round_trips() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: "Checked on the prototype\nby the layout review".into(),
+        fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: "C. Alp".into(),
+    }];
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("author = \"C. Alp\""), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// AV-13: a board saved before waivers had an author (no `author` key)
+/// loads with an empty one and re-saves without the key.
+#[test]
+fn a_waiver_without_an_author_loads_and_re_saves_unchanged() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: "old".into(),
+        fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: String::new(),
+    }];
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    assert!(!text.contains("author"), "{text}");
+    let back = SnxPcb::parse(&text).expect("an old board loads").board;
+    assert_eq!(back.options.drc_waivers[0].author, "");
+    assert_eq!(back.options.drc_waivers[0].note, "old");
     assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
 }
 

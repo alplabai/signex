@@ -186,6 +186,13 @@ impl Signex {
         // The rows now in the cache were produced under this rule set; only a
         // successful, current run may name it in the report header.
         self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
+        let [sheets, symbols, nets] = outcome.checked;
+        self.ui_state.validation_panels.erc_checked = Some(crate::panels::ErcChecked {
+            sheets,
+            symbols,
+            nets,
+            at: chrono::Utc::now(),
+        });
         self.ui_state.erc_epoch = self.ui_state.erc_run_epoch;
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);

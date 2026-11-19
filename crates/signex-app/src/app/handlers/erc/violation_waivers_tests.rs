@@ -54,6 +54,13 @@ fn send(app: &mut Signex, msg: ErcWaiverMsg) {
     let _ = app.handle_erc_waiver(&msg);
 }
 
+/// `reason` typed into the empty Reason field (the shared form's editor).
+fn typed_reason(reason: String) -> ErcWaiverMsg {
+    ErcWaiverMsg::ReasonActed(iced::widget::text_editor::Action::Edit(
+        iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(reason)),
+    ))
+}
+
 /// Waive the `NET_T` finding through the panel flow with `reason`.
 fn waive_net_t(app: &mut Signex, reason: &str) {
     let entry = app
@@ -69,7 +76,7 @@ fn waive_net_t(app: &mut Signex, reason: &str) {
             sheet: entry.sheet_path,
         },
     );
-    send(app, ErcWaiverMsg::ReasonChanged(reason.into()));
+    send(app, typed_reason(reason.into()));
     send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
     send(app, ErcWaiverMsg::Confirmed);
     app.run_erc_blocking();
@@ -183,7 +190,7 @@ fn waive_where(
             sheet: entry.sheet_path.clone(),
         },
     );
-    send(app, ErcWaiverMsg::ReasonChanged("accepted".into()));
+    send(app, typed_reason("accepted".into()));
     send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
     send(app, ErcWaiverMsg::Confirmed);
     entry
@@ -308,7 +315,7 @@ fn confirm_refuses_a_finding_whose_objects_changed_since_the_run() {
         w.end.x = 50.8;
     }
     open_with(&mut app.document_state, &top_path, moved);
-    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, typed_reason("ok".into()));
     send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     let draft = app
@@ -348,7 +355,7 @@ fn confirm_refuses_a_finding_whose_objects_changed_since_the_run() {
         },
     );
     open_with(&mut app.document_state, &dir2.join("top.snxsch"), top);
-    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, typed_reason("ok".into()));
     send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     let draft = app
@@ -386,7 +393,7 @@ fn a_waive_started_before_a_rerun_still_targets_its_finding() {
             sheet: entry.sheet_path.clone(),
         },
     );
-    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, typed_reason("ok".into()));
     send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     app.run_erc_blocking();
@@ -486,7 +493,7 @@ fn reopening_the_same_finding_keeps_the_typed_reason() {
     };
     let on_wire = |e: &crate::panels::ErcDiagnosticEntry| e.select.is_some_and(|s| s.uuid == wire);
     start(&mut app, &on_wire);
-    send(&mut app, ErcWaiverMsg::ReasonChanged("test stub".into()));
+    send(&mut app, typed_reason("test stub".into()));
     send(&mut app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
     // The sheet changes, Confirm is refused, the user re-runs and waives again.
     let mut nudged = sheet;
@@ -510,5 +517,77 @@ fn reopening_the_same_finding_keeps_the_typed_reason() {
     start(&mut app, &|e| e.rule_id == RULE);
     let draft = app.ui_state.erc_waive_draft.as_ref().expect("editor");
     assert!(draft.reason.is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// AV-13: a new form's Author is the cached user identity; opening it reads
+/// nothing itself (an identity already known is not asked again).
+#[test]
+fn a_new_form_starts_with_the_cached_identity_as_author() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    app.ui_state.validation_panels.identity = crate::panels::UserIdentity::Known("C. Alp".into());
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.rule_id == RULE)
+        .expect("row");
+    send(
+        &mut app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.expect("waivable"),
+            message: entry.message,
+            sheet: entry.sheet_path,
+        },
+    );
+    let draft = app.ui_state.erc_waive_draft.as_ref().expect("editor");
+    assert_eq!(draft.author, "C. Alp");
+    assert_eq!(
+        app.ui_state.validation_panels.identity,
+        crate::panels::UserIdentity::Known("C. Alp".into())
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// AV-13: a form opened before the identity is known starts empty and takes
+/// the name when it lands, unless the user typed an Author first.
+#[test]
+fn the_identity_fills_an_empty_author_when_it_lands() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.rule_id == RULE)
+        .expect("row");
+    send(
+        &mut app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.expect("waivable"),
+            message: entry.message,
+            sheet: entry.sheet_path,
+        },
+    );
+    assert_eq!(
+        app.ui_state.validation_panels.identity,
+        crate::panels::UserIdentity::Asking
+    );
+    assert_eq!(
+        app.ui_state
+            .erc_waive_draft
+            .as_ref()
+            .expect("editor")
+            .author,
+        ""
+    );
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    assert_eq!(
+        app.ui_state
+            .erc_waive_draft
+            .as_ref()
+            .expect("editor")
+            .author,
+        "C. Alp"
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
