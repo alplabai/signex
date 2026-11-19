@@ -21,7 +21,7 @@ use super::{
     pad_hole_tolerance_minus_msg, pad_hole_tolerance_plus_msg, pad_plated_msg,
     pad_thermal_relief_msg,
 };
-use crate::library::editor::footprint::state::pad_field;
+use crate::library::editor::footprint::pad_field;
 use crate::panels::enable_section::enable_section_style;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};

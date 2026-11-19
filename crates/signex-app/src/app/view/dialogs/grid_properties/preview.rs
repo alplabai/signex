@@ -19,7 +19,7 @@ use signex_widgets::property_illustration::{
 };
 
 use crate::app::GridPropertiesState;
-use crate::library::editor::footprint::state::GridDisplay;
+use crate::library::editor::footprint::GridDisplay;
 
 /// The multipliers the dialog offers, smallest first.
 pub(crate) const MULTIPLIERS: [u32; 4] = [1, 2, 5, 10];

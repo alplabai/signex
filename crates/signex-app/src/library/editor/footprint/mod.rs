@@ -63,5 +63,13 @@ pub(crate) use canvas::graphite_look_for;
 pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
 pub(crate) use updates::apply_footprint_primitive_edit;
 
+// What the footprint Properties panel, the Grid Properties dialog and the pad
+// edit handlers read, named here so they do not reach into `state`.
+pub(crate) use state::COURTYARD_SLACK_MM;
+pub use state::{
+    EditorPad, FootprintEditorState, GridDef, GridDisplay, NextPadDefaults, PadSide, PadStackTab,
+    SnappingMode, pad_field, pad_field_buffer_key,
+};
+
 #[cfg(test)]
 mod tests;

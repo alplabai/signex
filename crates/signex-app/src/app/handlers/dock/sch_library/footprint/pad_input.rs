@@ -4,7 +4,7 @@
 //! value. A value that is taken drops the entry.
 
 use crate::app::Signex;
-use crate::library::editor::footprint::state::pad_field_buffer_key;
+use crate::library::editor::footprint::pad_field_buffer_key;
 
 /// What an optional-mm field's text asks for: `Some(None)` clears the
 /// value, `Some(Some(v))` stores `v`, and `None` is not a number, so the

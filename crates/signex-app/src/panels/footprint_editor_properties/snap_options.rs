@@ -14,7 +14,7 @@ use super::body::{
 };
 use super::illustration::linked_field;
 use super::rows::{edit_row, edit_row_note};
-use crate::library::editor::footprint::state::SnappingMode;
+use crate::library::editor::footprint::SnappingMode;
 
 const KEY: &str = "fp_snap_options";
 

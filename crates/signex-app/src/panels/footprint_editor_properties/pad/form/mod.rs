@@ -19,7 +19,7 @@ use signex_widgets::{Label, raw, text, text_input};
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
-use crate::library::editor::footprint::state::{PadSide, pad_field_buffer_key};
+use crate::library::editor::footprint::{PadSide, pad_field_buffer_key};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 

@@ -700,7 +700,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         numeric_buffers: editor.state.numeric_buffers.clone(),
         illustration_hover: editor.state.properties_hover.clone(),
         courtyard_extent_mm: courtyard_extent_mm(&editor.state),
-        courtyard_expansion_mm: crate::library::editor::footprint::state::COURTYARD_SLACK_MM,
+        courtyard_expansion_mm: crate::library::editor::footprint::COURTYARD_SLACK_MM,
         pad_outlines: editor
             .state
             .pads
@@ -724,7 +724,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
 /// The courtyard's extent: the generated rectangle, else the extent of the
 /// outline-following polygon.
 fn courtyard_extent_mm(
-    state: &crate::library::editor::footprint::state::FootprintEditorState,
+    state: &crate::library::editor::footprint::FootprintEditorState,
 ) -> Option<[f64; 4]> {
     if let Some(c) = state.courtyard_mm {
         return Some([c.min_x, c.min_y, c.max_x, c.max_y]);

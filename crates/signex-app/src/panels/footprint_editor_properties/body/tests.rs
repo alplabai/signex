@@ -10,7 +10,7 @@ use iced::Widget as _;
 use super::{BodyState, body_state, view_body};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
-use crate::library::editor::footprint::state::SnappingMode;
+use crate::library::editor::footprint::SnappingMode;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::{
     FootprintEditorPanelContext, FootprintModeKind, FootprintSketchEntitySummary,

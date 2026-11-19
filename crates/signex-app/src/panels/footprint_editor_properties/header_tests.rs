@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use super::pad::selected_pad_heading;
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
-use crate::library::editor::footprint::state::{PadSide, PadStackTab};
+use crate::library::editor::footprint::{PadSide, PadStackTab};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::{FootprintEditorPanelContext, PanelMsg};
 use signex_library::{Footprint, FootprintFile, Pad, PadKind};
@@ -217,7 +217,7 @@ fn click(app: &mut Signex, label: &str, pick: impl Fn(&PanelMsg) -> bool) {
     panel(app, msg);
 }
 
-fn selected_pad_3(app: &Signex) -> &crate::library::editor::footprint::state::EditorPad {
+fn selected_pad_3(app: &Signex) -> &crate::library::editor::footprint::EditorPad {
     &app.document_state.footprint_editors[&PathBuf::from(PATH)]
         .state
         .pads[2]

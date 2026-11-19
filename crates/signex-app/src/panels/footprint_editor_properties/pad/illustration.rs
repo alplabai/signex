@@ -16,7 +16,7 @@ use signex_widgets::{Label, text};
 
 use super::super::super::PanelMsg;
 use super::form::{Form, PadClass};
-use crate::library::editor::footprint::state::{PadSide, PadStackTab};
+use crate::library::editor::footprint::{PadSide, PadStackTab};
 use crate::styles::board_palette::BoardPalette;
 use crate::styles::{PillTone, Spacing, TypeScale};
 

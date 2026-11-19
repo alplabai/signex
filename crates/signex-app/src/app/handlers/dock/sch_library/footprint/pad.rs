@@ -9,7 +9,7 @@
 use super::super::*;
 use super::pad_input::optional_mm_edit;
 use super::pad_trapezoid::size_fits_shape;
-use crate::library::editor::footprint::state::pad_field;
+use crate::library::editor::footprint::pad_field;
 
 impl Signex {
     /// v0.16.3 — sibling of [`Self::active_symbol_editor_mut`] for
@@ -200,7 +200,7 @@ impl Signex {
         &mut self,
         field: &str,
         value: &str,
-        set: impl FnOnce(&mut crate::library::editor::footprint::state::NextPadDefaults, Option<f64>),
+        set: impl FnOnce(&mut crate::library::editor::footprint::NextPadDefaults, Option<f64>),
     ) -> bool {
         match optional_mm_edit(value) {
             Some(parsed) => {
@@ -580,7 +580,7 @@ impl Signex {
         idx: usize,
         (field, undo_key): (&'static str, &'static str),
         value: &str,
-        set: impl FnOnce(&mut crate::library::editor::footprint::state::EditorPad, Option<f64>),
+        set: impl FnOnce(&mut crate::library::editor::footprint::EditorPad, Option<f64>),
     ) -> bool {
         match optional_mm_edit(value) {
             Some(parsed) => {

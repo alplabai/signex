@@ -25,7 +25,7 @@ use signex_widgets::{Label, LengthFormat, SegmentedStyle, segmented, text, text_
 use super::*;
 use crate::app::GridPropertiesState;
 use crate::app::state::ModalId;
-use crate::library::editor::footprint::state::GridDisplay;
+use crate::library::editor::footprint::GridDisplay;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti};
 use preview::{MULTIPLIERS, PreviewSize};
 

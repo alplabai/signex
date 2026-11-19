@@ -20,7 +20,7 @@ use super::{
     pad_mask_tented_top_msg, pad_mask_top_msg, pad_paste_bottom_msg, pad_paste_enabled_bottom_msg,
     pad_paste_enabled_top_msg, pad_paste_top_msg,
 };
-use crate::library::editor::footprint::state::{PadSide, pad_field};
+use crate::library::editor::footprint::{PadSide, pad_field};
 use crate::panels::enable_section::enable_section_style;
 use crate::styles::tokens::resolve;
 

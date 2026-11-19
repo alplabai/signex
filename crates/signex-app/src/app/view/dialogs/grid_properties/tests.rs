@@ -5,7 +5,7 @@ use signex_widgets::property_illustration::Primitive;
 use super::preview::{self, PreviewLabel, PreviewSize};
 use super::{coarse_caption, footer_buttons};
 use crate::app::{GridPropertiesMsg, GridPropertiesState};
-use crate::library::editor::footprint::state::GridDisplay;
+use crate::library::editor::footprint::GridDisplay;
 use crate::styles::DialogButtonKind;
 
 fn draft(

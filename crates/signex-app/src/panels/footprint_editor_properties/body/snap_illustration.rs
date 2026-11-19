@@ -12,7 +12,7 @@ use signex_widgets::property_illustration::{
 };
 
 use super::fields;
-use crate::library::editor::footprint::state::{GridDisplay, SnappingMode};
+use crate::library::editor::footprint::{GridDisplay, SnappingMode};
 use crate::panels::FootprintEditorPanelContext;
 
 const VIEW_W: f32 = 264.0;

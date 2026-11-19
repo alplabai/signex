@@ -20,7 +20,7 @@ use super::{
     pad_corner_radius_msg, pad_input_row_w, pad_pick_row_w, pad_shape_msg, pad_size_x_msg,
     pad_size_y_msg, pad_trapezoid_delta_x_msg, pad_trapezoid_delta_y_msg,
 };
-use crate::library::editor::footprint::state::{PadSide, PadStackTab, pad_field};
+use crate::library::editor::footprint::{PadSide, PadStackTab, pad_field};
 use crate::pcb_canvas::layer_style::copper_name;
 use crate::styles::Spacing;
 

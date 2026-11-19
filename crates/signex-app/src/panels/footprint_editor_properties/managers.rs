@@ -11,7 +11,7 @@ use signex_widgets::{checkbox, raw, text, text_input};
 use super::super::PanelMsg;
 use super::body::{Ctx, caption, fields, ghost, is_open, rule, section};
 use super::illustration::linked_field;
-use crate::library::editor::footprint::state::{GridDef, GridDisplay};
+use crate::library::editor::footprint::{GridDef, GridDisplay};
 use crate::panels::form_look;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale, ti};

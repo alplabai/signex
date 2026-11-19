@@ -14,7 +14,7 @@ use super::{
     pad_net_msg, pad_pick_row_w, pad_rotation_msg, pad_side_msg, pad_template_library_msg,
     pad_template_msg,
 };
-use crate::library::editor::footprint::state::{PadSide, pad_field};
+use crate::library::editor::footprint::{PadSide, pad_field};
 use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;

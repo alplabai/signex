@@ -10,7 +10,7 @@ use signex_widgets::{button, text};
 
 use super::super::super::{FootprintEditorPanelContext, FootprintModeKind, PanelMsg};
 use super::form::PadEditTarget;
-use crate::library::editor::footprint::state::PadSide;
+use crate::library::editor::footprint::PadSide;
 use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Spacing, TypeScale, ti};
 
