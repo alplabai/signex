@@ -19,6 +19,9 @@ struct Catalog {
     theme: ThemeId,
     tokens: ThemeTokens,
     passive_calculator: CalculatorControl,
+    history_commits: Vec<signex_widgets::history_graph::GraphCommit>,
+    /// SHA of the selected history-graph sample row.
+    history_selected: String,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +30,10 @@ pub(crate) enum Message {
     PassiveCalculator(CalculatorMessage),
     /// A project-tree sample row was interacted with; the samples are static.
     TreeInteracted,
+    /// A history-graph sample row was clicked; carries its SHA.
+    HistoryCommitSelected(String),
+    /// A history-graph sample button was pressed; the samples are static.
+    HistorySampleCommitPressed,
 }
 
 impl Catalog {
@@ -35,6 +42,8 @@ impl Catalog {
             theme: ThemeId::DEFAULT,
             tokens: theme_tokens(ThemeId::DEFAULT),
             passive_calculator: CalculatorControl::default(),
+            history_commits: crate::history_graph::sample_commits(),
+            history_selected: "9e01f4d".into(),
         }
     }
 
@@ -46,6 +55,8 @@ impl Catalog {
             }
             Message::PassiveCalculator(message) => self.passive_calculator.update(message),
             Message::TreeInteracted => {}
+            Message::HistoryCommitSelected(sha) => self.history_selected = sha,
+            Message::HistorySampleCommitPressed => {}
         }
     }
 
@@ -121,6 +132,11 @@ impl Catalog {
                 "Dimension labels",
                 tokens,
                 crate::dimension_label::view(tokens)
+            ),
+            section::view(
+                "History graph (Graphite Light and Dark)",
+                tokens,
+                crate::history_graph::view(&self.history_commits, &self.history_selected),
             ),
         ]
         .spacing(20)
