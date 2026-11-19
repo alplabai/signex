@@ -426,8 +426,12 @@ fn the_pin_table_opens_from_the_pins_tab_and_toggles_hidden_in_place() {
         &texts,
         &t!(fx.i18n, ids::EDITORS_PINS_COLUMN_ORIENTATION).into_string(),
     );
+    // The table is wider than `DOCK` and scrolls sideways; its Shown cell
+    // lies past the dock edge, where no click reaches it. Click it in a
+    // dock wide enough to show the whole table.
+    let wide = Size::new(800.0, DOCK.height);
     let shown = t!(fx.i18n, ids::EDITORS_PINS_SHOWN).into_string();
-    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), DOCK, &shown);
+    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), wide, &shown);
     assert!(
         messages
             .iter()
