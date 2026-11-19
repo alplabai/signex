@@ -4,11 +4,13 @@
 // This module was written without reference to GPL-licensed software.
 // Sources: wgpu/WGSL public docs.
 
-// Mirrors `MeshUniform` in camera3d.rs: 96 bytes.
+// Mirrors `MeshUniform` in camera3d.rs field for field: 112 bytes.
 struct Camera {
     view_proj: mat4x4<f32>,
     light_dir: vec4<f32>,
     highlight: vec4<f32>,
+    // Light colour (rgb) and the ambient share of the shading (a).
+    light: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> camera: Camera;
@@ -34,15 +36,17 @@ fn vs_main(input: VertexIn) -> VertexOut {
 }
 
 // Flat shading from the face's own slope, so meshes need no normals; both
-// faces are lit alike, so winding never darkens a face.
+// faces are lit alike, so winding never darkens a face. The lighting
+// preset sets the light's colour and its ambient share.
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let edge = cross(dpdx(input.world), dpdy(input.world));
     let len = length(edge);
     let normal = select(vec3<f32>(0.0, 0.0, 1.0), edge / len, len > 1e-12);
     let diffuse = abs(dot(normal, camera.light_dir.xyz));
-    let shade = 0.35 + 0.65 * diffuse;
-    return vec4<f32>(input.color.rgb * shade, input.color.a);
+    let ambient = camera.light.a;
+    let shade = ambient + (1.0 - ambient) * diffuse;
+    return vec4<f32>(input.color.rgb * camera.light.rgb * shade, input.color.a);
 }
 
 // The selection wash, drawn over a part already in the depth buffer.
