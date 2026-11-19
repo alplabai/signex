@@ -468,10 +468,8 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
         }
         DrcPanelMsg::BaseRulesToggled => view.base_rules_closed = !view.base_rules_closed,
         DrcPanelMsg::RowEntered(key) => view.hovered = Some(key),
-        DrcPanelMsg::RowLeft(key) => {
-            if view.hovered.as_deref() == Some(key.as_str()) {
-                view.hovered = None;
-            }
+        DrcPanelMsg::RowLeft(key) if view.hovered.as_deref() == Some(key.as_str()) => {
+            view.hovered = None;
         }
         _ => {}
     }

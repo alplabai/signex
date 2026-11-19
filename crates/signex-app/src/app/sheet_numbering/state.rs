@@ -103,8 +103,6 @@ pub(crate) struct NumberedRow<'a> {
     pub(crate) draft: &'a str,
     /// The draft is not a sheet number.
     pub(crate) invalid: bool,
-    /// Apply changes this row.
-    pub(crate) changed: bool,
     /// Another page has the same number.
     pub(crate) clash: bool,
     /// The number is above the page count.
@@ -188,7 +186,6 @@ impl SheetNumberingState {
 
     /// The rows the view lists, in hierarchy order.
     pub(crate) fn numbered_rows(&self) -> Vec<NumberedRow<'_>> {
-        let edits = self.edits();
         let issues = self.issues();
         let clashing = |index: usize| {
             issues.iter().any(|issue| {
@@ -207,7 +204,6 @@ impl SheetNumberingState {
                 row,
                 draft: self.drafts.get(index).map_or("", String::as_str),
                 invalid: self.parsed(index).is_none(),
-                changed: edits.iter().any(|edit| edit.row == index),
                 clash: clashing(index),
                 out_of_range: above(index),
                 automatic: self.is_automatic(index),

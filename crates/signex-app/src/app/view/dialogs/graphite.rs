@@ -38,19 +38,6 @@ pub(super) fn call_to_action(_theme_tokens: &ThemeTokens) -> DialogButtonKind {
     DialogButtonKind::Accent
 }
 
-/// Row tint of an Annotate row whose designator changes: the soft accent
-/// fill. Unchanged rows stay unfilled.
-pub(super) fn changed_row(
-    theme_tokens: &ThemeTokens,
-    changing: bool,
-) -> impl Fn(&Theme) -> container::Style + 'static {
-    let fill = changing.then(|| tokens::resolve(theme_tokens).accent_soft);
-    move |_| container::Style {
-        background: fill.map(Background::Color),
-        ..container::Style::default()
-    }
-}
-
 /// Ink of a proposed designator that changes.
 pub(super) fn changed_ink(theme_tokens: &ThemeTokens) -> iced::Color {
     tokens::resolve(theme_tokens).accent_text
