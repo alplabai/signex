@@ -119,7 +119,7 @@ pub(super) fn recorder_popover<'a>(
     )
     .filter(|_| !recorder.strokes.is_empty())
     {
-        body = body.push(text(warning).size(TS.caption).color(ti(t.warning)));
+        body = body.push(text(warning).size(TS.caption).color(ti(t.warning)).boxed());
     }
     body = body.push(action_row(i18n, recorder.recording, t));
 

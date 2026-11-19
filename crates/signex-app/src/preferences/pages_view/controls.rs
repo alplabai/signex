@@ -325,7 +325,7 @@ pub(in crate::preferences) fn preview_block<'a>(
         });
     let mut body = column![header, frame].spacing(SP.s).width(Length::Fill);
     if let Some(footer) = block.footer {
-        body = body.push(text(footer).size(TS.caption).color(r.ink4));
+        body = body.push(text(footer).size(TS.caption).color(r.ink4).boxed());
     }
     if !block.expanded {
         let soft = r.line_soft;

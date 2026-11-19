@@ -99,7 +99,7 @@ pub(in crate::preferences) fn page_heading<'a>(
             .size(TS.heading)
             .font(semibold())
             .color(ti(t.text)),
-        container(text(intro).size(TS.body).color(ink3)).max_width(INTRO_MAX_W),
+        container(text(intro).size(TS.body).color(ink3)).width(Length::Fit.max(INTRO_MAX_W)),
     ]
     .spacing(SP.xs)
     .padding(Padding {
@@ -183,7 +183,7 @@ pub(in crate::preferences) fn setting_row<'a>(
     }
     let mut left = column![name].spacing(SP.xs).width(Length::Fill);
     if let Some(help) = help {
-        left = left.push(container(help).max_width(HELP_MAX_W).boxed());
+        left = left.push(container(help).width(Length::Fit.max(HELP_MAX_W)).boxed());
     }
     let failed = error.is_some();
     if let Some(error) = error {
