@@ -501,7 +501,7 @@ pub(super) fn render_with_hints(
                     let row = PowerRow {
                         icon: icon(tid),
                         short: *short,
-                        full: *full,
+                        full,
                         ink: power_ink,
                     };
                     row.entry(i18n, action, sel, nc)
