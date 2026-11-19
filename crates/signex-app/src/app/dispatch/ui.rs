@@ -408,10 +408,14 @@ impl Signex {
                 use crate::app::view::dialogs::grid_properties::preview;
                 let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 let focus = match self.ui_state.grid_properties.as_mut() {
-                    Some(state) if preview::label_edited(state, event, &i18n) => {
-                        state.preview_labels.focus_input()
+                    Some(state) => {
+                        if preview::label_edited(state, event, &i18n) {
+                            state.preview_labels.focus_input()
+                        } else {
+                            Task::none()
+                        }
                     }
-                    _ => Task::none(),
+                    None => Task::none(),
                 };
                 Task::batch([focus, self.finish_update()])
             }

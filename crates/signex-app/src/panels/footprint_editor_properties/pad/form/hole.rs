@@ -190,7 +190,7 @@ fn thermal_relief<'a>(form: &Form<'_>) -> Element<'a, PanelMsg> {
         ));
     let section = EnableSection::new(t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF), is_on)
         .on_toggle(move |on| pad_thermal_relief_msg(target, on))
-        .view(enable_section_style(tokens), body);
+        .view(enable_section_style(tokens), body.boxed());
     let caption = (!is_on).then(|| t!(i18n, ids::EDITORS_FP_PAD_THERMAL_OFF));
     with_header_caption(section, caption, tokens)
 }

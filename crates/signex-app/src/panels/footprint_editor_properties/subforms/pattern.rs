@@ -310,7 +310,7 @@ fn centre_row<'a>(
     Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .push(container(value_box(value)).width(Length::Fill))
+        .push(container(value_box(value)).width(Length::Fill).boxed())
         .push(action)
         .boxed()
 }

@@ -168,7 +168,7 @@ fn courtyard_section<'a>(
         fp.auto_fit_courtyard,
     )
     .on_toggle(|_| PanelMsg::FpEditorToggleAutoFitCourtyard)
-    .view(enable_section_style(tokens), body);
+    .view(enable_section_style(tokens), body.boxed());
     let Some([x0, y0, x1, y1]) = fp.courtyard_extent_mm else {
         return col.push(courtyard);
     };

@@ -241,6 +241,7 @@ pub(super) fn value_box<'a>(value: impl Into<Label<'a>>) -> Element<'a, PanelMsg
                     width: 1.0,
                     color: line,
                     radius: radius.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }

@@ -43,7 +43,9 @@ pub(super) fn view_pad_stack_check<'a>(
     .width(Length::Fill);
     if let Some(n) = fp.legacy_pad_stack_offer {
         body = body.push(
-            text(t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_OFFER, "count" => n)).size(TS.caption),
+            text(t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_OFFER, "count" => n))
+                .size(TS.caption)
+                .boxed(),
         );
         body = body.push(
             row![
@@ -58,7 +60,8 @@ pub(super) fn view_pad_stack_check<'a>(
                     true,
                 ),
             ]
-            .spacing(SP.s),
+            .spacing(SP.s)
+            .boxed(),
         );
     }
     if !fp.paste_disabled_smd_pads.is_empty() {
@@ -84,7 +87,8 @@ pub(super) fn view_pad_stack_check<'a>(
                 "count" => total,
                 "pads" => listed.join(", ")
             ))
-            .size(TS.caption),
+            .size(TS.caption)
+            .boxed(),
         );
     }
     let card = container(body)
