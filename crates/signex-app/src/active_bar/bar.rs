@@ -24,7 +24,7 @@ const PILL_INSET: f32 = 2.0;
 /// Hover text for a bar button: its name, plus the shared "planned" note
 /// when the button's left-click action is a placeholder tool (#1249), so a
 /// greyed Harness button explains itself like the rows in its dropdown.
-fn button_tooltip(left: &ActiveBarMsg, name: MessageId, i18n: &I18n) -> String {
+pub(super) fn button_tooltip(left: &ActiveBarMsg, name: MessageId, i18n: &I18n) -> String {
     let name = i18n.message_plain(name, &[]);
     match left {
         ActiveBarMsg::Action(action) if is_planned(action) => i18n.message_plain(
