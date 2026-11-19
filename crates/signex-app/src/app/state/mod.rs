@@ -19,7 +19,6 @@ pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
-mod document_times;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
@@ -64,11 +63,11 @@ mod window_sizes;
 mod window_tab;
 
 pub use crate::app::core::case_fold::CaseFold;
+pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
-pub use document_times::DocumentTimes;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
