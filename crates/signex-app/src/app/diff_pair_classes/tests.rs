@@ -24,6 +24,8 @@ fn state(names: &[&str], members: &[(&str, &str)]) -> DiffPairClassesState {
         project: PROJECT,
         project_name: "dcdc-buck".to_string(),
         classes: names.iter().map(|n| class(n)).collect(),
+        original_names: names.iter().map(|n| Some(n.to_string())).collect(),
+        has_closed_sheets: false,
         selected: 0,
         menu: None,
         members: members
@@ -96,10 +98,64 @@ fn classes_of(app: &Signex) -> Vec<DiffPairClass> {
 /// Open the dialog on the test project directly: no document is in view.
 fn open(app: &mut Signex) {
     let classes = classes_of(app);
+    let original_names = classes.iter().map(|c| Some(c.name.clone())).collect();
     app.ui_state.diff_pair_classes = Some(Box::new(DiffPairClassesState {
         classes,
+        original_names,
         ..state(&[], &[])
     }));
+}
+
+fn dialog(app: &Signex) -> &DiffPairClassesState {
+    app.ui_state.diff_pair_classes.as_deref().expect("open")
+}
+
+/// Directives name a class, and a rename is not carried to them: a class
+/// with pairs keeps its name, so renaming it cannot slip past the guard
+/// that keeps it from being deleted.
+#[test]
+fn a_class_with_pairs_can_be_neither_renamed_nor_then_deleted() {
+    let mut app = app_with_project(vec![class("USB")]);
+    open(&mut app);
+    if let Some(s) = app.ui_state.diff_pair_classes.as_mut() {
+        s.members = state(&[], &[("USB", "USB_D")]).members;
+    }
+    send(&mut app, DiffPairClassesMsg::NameEdited("USB3".into()));
+    assert_eq!(dialog(&app).classes[0].name, "USB", "the name is kept");
+    assert_eq!(dialog(&app).pair_count(0), 1);
+    send(&mut app, DiffPairClassesMsg::ClassDeleted(0));
+    assert_eq!(dialog(&app).classes.len(), 1, "and it is not deleted");
+    send(&mut app, DiffPairClassesMsg::OkRequested);
+    assert_eq!(classes_of(&app), [class("USB")]);
+}
+
+/// The pair count follows the name the class had when the dialog opened.
+#[test]
+fn pairs_are_counted_by_the_original_name() {
+    let mut s = state(&["USB", "HDMI"], &[("USB", "USB_D")]);
+    s.classes[0].name = "renamed".to_string();
+    assert_eq!(s.pair_count(0), 1);
+    assert!(!s.can_delete(0));
+}
+
+/// Pairs on sheets that are not open are unknown, so no class that was in
+/// the project may be renamed or deleted; one added here may.
+#[test]
+fn closed_sheets_lock_every_existing_class() {
+    let mut app = app_with_project(vec![class("USB")]);
+    open(&mut app);
+    if let Some(s) = app.ui_state.diff_pair_classes.as_mut() {
+        s.has_closed_sheets = true;
+    }
+    assert_eq!(dialog(&app).lock(0), Some(super::ClassLock::SheetsClosed));
+    send(&mut app, DiffPairClassesMsg::NameEdited("USB3".into()));
+    send(&mut app, DiffPairClassesMsg::ClassDeleted(0));
+    assert_eq!(dialog(&app).classes, [class("USB")]);
+    send(&mut app, DiffPairClassesMsg::ClassAdded);
+    assert_eq!(dialog(&app).classes[1].name, "DIFF");
+    assert_eq!(dialog(&app).lock(1), None, "a new class is free");
+    send(&mut app, DiffPairClassesMsg::ClassDeleted(1));
+    assert_eq!(dialog(&app).classes.len(), 1);
 }
 
 fn send(app: &mut Signex, msg: DiffPairClassesMsg) {

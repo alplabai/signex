@@ -11,7 +11,8 @@ use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_app::panels::compiled_design::CompiledStatus;
 use signex_types::schematic::{
-    ChildSheet, FillType, Point, SchematicSheet, SelectedItem, SelectedKind, Symbol,
+    ChildSheet, FillType, Point, SchDrawing, SchTable, SchematicSheet, SelectedItem, SelectedKind,
+    Symbol, TableSource,
 };
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -86,58 +87,13 @@ fn fixture(designator: &str, active_child: bool) -> Fixture {
     });
     write_sheet(&root_path, root.clone());
     write_sheet(&child_path, child.clone());
-    let data = signex_types::project::ProjectData {
-        document_id: None,
-        description: None,
-        name: "Proj".to_string(),
-        dir: dir.to_string_lossy().into_owned(),
-        schematic_root: Some("root.snxsch".to_string()),
-        pcb_file: None,
-        sheets: vec![entry("root.snxsch"), entry("child.snxsch")],
-        variant_definitions: Vec::new(),
-        active_variant: None,
-        libraries: Vec::new(),
-        enable_git: false,
-        rules: Default::default(),
-        net_classes: Default::default(),
-        annotation: None,
-        schematic_defaults: Default::default(),
-        project_defaults: Default::default(),
-        agent_journal: Default::default(),
-        fab_outputs: None,
-        requirements: Default::default(),
-        parameters: Default::default(),
-        schematic_design: Default::default(),
-        unknown: Default::default(),
-    };
-    let prj = dir.join("Proj.snxprj");
-    signex_types::project::write_project(&prj, &data).expect("write project");
+    let (prj, data) = write_project_file(&dir, "Proj", &["root.snxsch", "child.snxsch"]);
 
     let (mut app, _task) = Signex::new();
-    let project = app.document_state.mint_project_id();
-    app.document_state
-        .projects
-        .push(signex_app::app::LoadedProject {
-            id: project,
-            path: prj,
-            data,
-            pending_libraries: std::collections::HashMap::new(),
-            case_fold: Default::default(),
-            case_probed: false,
-            case_decided: false,
-        });
+    let project = load_project(&mut app, prj, data);
     app.document_state.active_project = Some(project);
     for (title, path, sheet) in [("root", &root_path, root), ("child", &child_path, child)] {
-        let engine =
-            signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine");
-        app.document_state.engines.insert(path.clone(), engine);
-        app.document_state.tabs.push(signex_app::app::TabInfo {
-            title: title.to_string(),
-            path: path.clone(),
-            cached_document: None,
-            project_id: Some(project),
-            kind: signex_app::app::TabKind::Schematic,
-        });
+        open_tab(&mut app, project, title, path, sheet);
     }
     let (tab, path) = if active_child {
         (1, child_path.clone())
@@ -154,6 +110,103 @@ fn fixture(designator: &str, active_child: bool) -> Fixture {
         part,
         _dir: tmp,
     }
+}
+
+/// `<name>.snxprj` in `dir` over `sheets`, the first being the root.
+fn write_project_file(
+    dir: &std::path::Path,
+    name: &str,
+    sheets: &[&str],
+) -> (std::path::PathBuf, signex_types::project::ProjectData) {
+    let data = signex_types::project::ProjectData {
+        document_id: None,
+        description: None,
+        name: name.to_string(),
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: sheets.first().map(|s| s.to_string()),
+        pcb_file: None,
+        sheets: sheets.iter().map(|s| entry(s)).collect(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        rules: Default::default(),
+        net_classes: Default::default(),
+        annotation: None,
+        schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
+        agent_journal: Default::default(),
+        fab_outputs: None,
+        requirements: Default::default(),
+        parameters: Default::default(),
+        schematic_design: Default::default(),
+        unknown: Default::default(),
+    };
+    let prj = dir.join(format!("{name}.snxprj"));
+    signex_types::project::write_project(&prj, &data).expect("write project");
+    (prj, data)
+}
+
+fn load_project(
+    app: &mut Signex,
+    path: std::path::PathBuf,
+    data: signex_types::project::ProjectData,
+) -> signex_app::app::ProjectId {
+    let project = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id: project,
+            path,
+            data,
+            pending_libraries: std::collections::HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    project
+}
+
+fn open_tab(
+    app: &mut Signex,
+    project: signex_app::app::ProjectId,
+    title: &str,
+    path: &std::path::Path,
+    sheet: SchematicSheet,
+) {
+    let engine =
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())).expect("engine");
+    app.document_state.engines.insert(path.to_path_buf(), engine);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: title.to_string(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        project_id: Some(project),
+        kind: signex_app::app::TabKind::Schematic,
+    });
+}
+
+/// A sheet holding one empty contents table (bound to the project's pages).
+fn sheet_with_contents_table() -> SchematicSheet {
+    let mut table = SchTable::new_typed(Uuid::now_v7(), Point::new(25.4, 35.56));
+    table.source = TableSource::ProjectSheets { per_channel: true };
+    table.columns = SchTable::columns_for(&table.source);
+    table.rows = Vec::new();
+    let mut sheet = sheet();
+    sheet.drawings.push(SchDrawing::Table(table));
+    sheet
+}
+
+fn contents_rows(app: &Signex, path: &std::path::Path) -> Vec<Vec<String>> {
+    app.document_state.engines[path]
+        .document()
+        .drawings
+        .iter()
+        .find_map(|d| match d {
+            SchDrawing::Table(t) => Some(t.rows.clone()),
+            _ => None,
+        })
+        .expect("a contents table")
 }
 
 fn send(app: &mut Signex, msg: CompiledDesignMsg) {
@@ -232,6 +285,42 @@ fn compile_project_fills_the_panel_with_the_channels() {
     assert_eq!(names, ["root", "child", "CH1", "CH2"]);
     assert_eq!(panel.totals.parts, 2, "CH1_R5 and CH2_R5");
     assert_eq!(panel.totals.channels, 2);
+}
+
+/// The compile of one project refreshes that project's contents tables and
+/// never another open project's (#1300 review).
+#[test]
+fn a_compile_refreshes_only_its_own_projects_contents_tables() {
+    let mut f = fixture("Repeat(CH, 1, 2)", false);
+    // Project A's root gets a contents table.
+    let mut root = f.app.document_state.engines[&f.root].document().clone();
+    root.drawings
+        .extend(sheet_with_contents_table().drawings.into_iter());
+    let engine =
+        signex_engine::Engine::new_with_path(root, Some(f.root.clone())).expect("engine");
+    f.app.document_state.engines.insert(f.root.clone(), engine);
+    // Project B, open alongside, with its own contents sheet.
+    let other = TempDir::new().expect("tempdir");
+    let b_path = other.path().join("contents.snxsch");
+    write_sheet(&b_path, sheet_with_contents_table());
+    let (b_prj, b_data) = write_project_file(other.path(), "Other", &["contents.snxsch"]);
+    let b = load_project(&mut f.app, b_prj, b_data);
+    open_tab(&mut f.app, b, "contents", &b_path, sheet_with_contents_table());
+
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+
+    assert!(
+        !contents_rows(&f.app, &f.root).is_empty(),
+        "the compiled project's contents table lists its pages"
+    );
+    assert!(
+        contents_rows(&f.app, &b_path).is_empty(),
+        "another project's contents table is left alone"
+    );
+    assert!(
+        !f.app.document_state.engines[&b_path].can_undo(),
+        "and gets no undo step"
+    );
 }
 
 #[test]

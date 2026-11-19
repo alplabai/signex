@@ -197,6 +197,15 @@ keeps it as an unknown key. The schematic wins: a rule edited in the Rules
 tab is rewritten on the next Update PCB unless the directive changes too.
 The Rules tab shows "from schematic" under such a rule.
 
+A rule for a net (a directive with no class) is made only on a root page,
+and only when the board has a net of that name: on a sheet placed under a
+sheet symbol, and on every channel of a repeated sheet, the net takes
+another name on the board, so the rule would match nothing. Update PCB
+leaves such a rule out and says so in Messages; a net class carries the
+rule instead. The rule name keeps letters, digits and `_` of the class or
+net name, so two names can give one rule name (`V+BUS` and `V-BUS` both
+give `Width_V_BUS`): the first keeps it and Messages names the other.
+
 ## Drawing
 
 All four use the directive colour the No-ERC diamond uses (`no_connect`): a

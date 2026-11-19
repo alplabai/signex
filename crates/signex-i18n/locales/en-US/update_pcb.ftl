@@ -156,3 +156,8 @@ update-pcb-rule-unchanged = up to date
 # The rule as the Rules tab has it now. $text is a line of rule text.
 update-pcb-rule-was = now: { $text }
 update-pcb-rules-note = Execute writes these into the project's design rules, marked "from schematic" in the Rules tab.
+# Messages: a Net Parameters directive with no class whose net is not a board net
+# by that name (it sits on a placed or repeated sheet). $net is the sheet's net name.
+update-pcb-rule-net-not-on-board = Update PCB: no rule for net { $net }: that name is not a board net (a net on a placed or repeated sheet takes another name on the board). Give its Net Parameters directive a net class to make a rule.
+# Messages: two scopes give one rule name. $rule is the rule, $kept and $dropped the class or net names.
+update-pcb-rule-name-clash = Update PCB: { $kept } and { $dropped } both make rule { $rule }; it is kept for { $kept } and nothing is made for { $dropped }. Rename one of them.

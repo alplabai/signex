@@ -264,14 +264,14 @@ fn pin_table(app: &Signex) -> SchTable {
 #[test]
 fn the_refresh_rebuilds_a_pin_table_as_one_undo_step_and_only_when_stale() {
     let mut app = app_with_sheet(sheet_with_pin_table());
-    app.refresh_bound_tables();
+    app.refresh_bound_tables(None);
     let t = pin_table(&app);
     assert_eq!(t.cell(0, 0), "1", "sorted by pin number");
     assert_eq!(t.cell(0, 1), "BOOT");
     assert_eq!(t.cell(1, 1), "VIN");
     assert_eq!(t.cell(1, 3), "Power input");
     // Nothing changed since: no second step.
-    app.refresh_bound_tables();
+    app.refresh_bound_tables(None);
     undo(&mut app);
     assert_eq!(
         pin_table(&app).cell(0, 1),
@@ -285,7 +285,7 @@ fn a_table_whose_part_is_gone_keeps_its_rows() {
     let mut sheet = sheet_with_pin_table();
     sheet.symbols.clear();
     let mut app = app_with_sheet(sheet);
-    app.refresh_bound_tables();
+    app.refresh_bound_tables(None);
     assert_eq!(pin_table(&app).cell(0, 1), "OLD");
     assert!(super::source_is_missing(doc(&app), &pin_table(&app)));
 }

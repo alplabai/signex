@@ -15,9 +15,6 @@ use crate::app::{Message, Signex};
 /// The id of the class Name field, focused by Rename.
 pub(crate) const NAME_INPUT_ID: &str = "diff-pair-class-name";
 
-/// The name a new class starts with.
-const NEW_CLASS_NAME: &str = "DIFF";
-
 impl Signex {
     pub(crate) fn dispatch_diff_pair_classes_message(
         &mut self,
@@ -36,22 +33,34 @@ impl Signex {
                 if let Some(class) = s.classes.get(index).cloned() {
                     let mut copy = class;
                     copy.name = free_name(&s.classes, &copy.name);
-                    s.classes.insert(index + 1, copy);
+                    s.insert_new(index + 1, copy);
                     select(s, index + 1);
                 }
             }),
             M::ClassDeleted(index) => self.with_dpc(|s| {
                 if s.can_delete(index) {
-                    s.classes.remove(index);
+                    s.remove(index);
                     select(s, index.min(s.classes.len().saturating_sub(1)));
                 }
             }),
-            M::ClassAdded => self.with_dpc(|s| {
-                let name = free_name(&s.classes, NEW_CLASS_NAME);
-                s.classes.push(new_class(name));
-                select(s, s.classes.len() - 1);
-            }),
+            M::ClassAdded => {
+                let base = signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_DPC_NEW_CLASS_NAME
+                )
+                .into_string();
+                self.with_dpc(|s| {
+                    let name = free_name(&s.classes, &base);
+                    let at = s.classes.len();
+                    s.insert_new(at, new_class(name));
+                    select(s, at);
+                });
+            }
+            // A locked class keeps its name: its directives use it.
             M::NameEdited(name) => self.with_dpc(|s| {
+                if s.lock(s.selected).is_some() {
+                    return;
+                }
                 if let Some(class) = s.classes.get_mut(s.selected) {
                     class.name = name;
                 }
@@ -94,18 +103,38 @@ impl Signex {
         let id = project.id;
         let classes = project.data.schematic_design.diff_pair_classes.clone();
         let project_name = project.data.name.clone();
+        let has_closed_sheets = self.project_has_closed_sheets(project);
         let members = self.project_pair_members(id, &classes);
+        let original_names = classes.iter().map(|c| Some(c.name.clone())).collect();
         self.interaction_state.context_menu = None;
         self.ui_state.diff_pair_classes = Some(Box::new(DiffPairClassesState {
             project: id,
             project_name,
             classes,
+            original_names,
+            has_closed_sheets,
             selected: 0,
             menu: None,
             members,
             drafts: Vec::new(),
             problem: None,
         }));
+    }
+
+    /// Whether a page of `project` has no open tab, so the pairs on it are
+    /// not counted.
+    fn project_has_closed_sheets(&self, project: &crate::app::state::LoadedProject) -> bool {
+        use crate::app::sheet_hierarchy::normalised_key;
+        let fold = crate::app::state::project_case::fold_of(Some(project));
+        let open: std::collections::HashSet<String> = self
+            .document_state
+            .engines
+            .keys()
+            .map(|path| normalised_key(path, fold))
+            .collect();
+        crate::app::project_sheets::project_pages(Some(project))
+            .iter()
+            .any(|page| !open.contains(&normalised_key(page, fold)))
     }
 
     /// The classed pairs of project `id`'s sheets that are open, sheet by

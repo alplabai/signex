@@ -52,4 +52,6 @@ define_ids! {
     UPDATE_PCB_RULE_UNCHANGED = "update-pcb-rule-unchanged";
     UPDATE_PCB_RULE_WAS = "update-pcb-rule-was";
     UPDATE_PCB_RULES_NOTE = "update-pcb-rules-note";
+    UPDATE_PCB_RULE_NET_NOT_ON_BOARD = "update-pcb-rule-net-not-on-board";
+    UPDATE_PCB_RULE_NAME_CLASH = "update-pcb-rule-name-clash";
 }

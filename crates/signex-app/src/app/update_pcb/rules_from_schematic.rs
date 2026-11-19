@@ -8,9 +8,11 @@
 //! schematic wins: a rule of the same name edited in the Rules tab is
 //! rewritten (DECISIONS, "schematic wins on Update PCB").
 
+use std::collections::HashSet;
+
 use signex_drc::NetScope;
 use signex_drc_dsl::table::{self, EditError, LimitField, RowLimit, RuleDraft, RuleKind};
-use signex_types::schematic::{NetRules, SchDirective, SchematicSheet};
+use signex_types::schematic::{InstancePath, NetRules, SchDirective, SchematicSheet};
 
 /// One rule the schematic asks for.
 #[derive(Debug, Clone, PartialEq)]
@@ -103,14 +105,73 @@ fn rules_for(scope: &NetScope, scope_name: &str, rules: &NetRules) -> Vec<Schema
     out
 }
 
-/// Every rule the Net Parameters directives of `sheets` ask for, in sheet
-/// and directive order; a later directive asking for a rule name already
-/// asked for is left out (the first one wins, as for a class).
+/// A wanted rule that Update PCB leaves out, said in Messages.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum RuleProblem {
+    /// A directive with no class on a net that is not one board net by that
+    /// name: a sheet placed under a sheet symbol (its nets are renamed by
+    /// the placement, or per channel) or a name the project does not have.
+    NetNotOnBoard { net: String },
+    /// Two scopes map to one rule name (`V+BUS` and `V-BUS` both give
+    /// `Width_V_BUS`); the first scope keeps it.
+    NameClash {
+        rule: String,
+        kept: String,
+        dropped: String,
+    },
+}
+
+/// The Messages line of a rule left out.
+pub(crate) fn problem_line(
+    i18n: &signex_i18n::I18n,
+    problem: &RuleProblem,
+) -> signex_i18n::Localized {
+    use signex_i18n::{ids, t};
+    match problem {
+        RuleProblem::NetNotOnBoard { net } => {
+            t!(i18n, ids::UPDATE_PCB_RULE_NET_NOT_ON_BOARD, "net" => net.as_str())
+        }
+        RuleProblem::NameClash {
+            rule,
+            kept,
+            dropped,
+        } => t!(
+            i18n,
+            ids::UPDATE_PCB_RULE_NAME_CLASH,
+            "rule" => rule.as_str(),
+            "kept" => kept.as_str(),
+            "dropped" => dropped.as_str()
+        ),
+    }
+}
+
+/// The class or net a scope names.
+fn scope_label(scope: &NetScope) -> String {
+    match scope {
+        NetScope::Class(name) | NetScope::Net(name) => name.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Every rule the Net Parameters directives of the placed `sheets` ask
+/// for, in walk and directive order, and the rules left out. A directive
+/// with no class makes a net rule only on a root page whose net is a net
+/// of the stitched `project_nets`; elsewhere its net name is local and
+/// would match no board net. A later directive asking for a rule name
+/// already asked for on the same scope is left out (the first one wins, as
+/// for a class); on another scope it is a clash and reported.
 pub(crate) fn schematic_rules<'s>(
-    sheets: impl IntoIterator<Item = &'s SchematicSheet>,
-) -> Vec<SchematicRule> {
+    sheets: impl IntoIterator<Item = (&'s InstancePath, &'s SchematicSheet)>,
+    project_nets: &HashSet<&str>,
+) -> (Vec<SchematicRule>, Vec<RuleProblem>) {
     let mut out: Vec<SchematicRule> = Vec::new();
-    for sheet in sheets {
+    let mut problems: Vec<RuleProblem> = Vec::new();
+    let mut note = |problem: RuleProblem| {
+        if !problems.contains(&problem) {
+            problems.push(problem);
+        }
+    };
+    for (path, sheet) in sheets {
         if !sheet
             .directives
             .iter()
@@ -122,16 +183,30 @@ pub(crate) fn schematic_rules<'s>(
         for on in signex_net::net_parameters(sheet, &netlist) {
             let (scope, name) = match &on.net_class {
                 Some(class) => (NetScope::Class(class.clone()), class.clone()),
-                None => (NetScope::Net(on.net_name.clone()), on.net_name.clone()),
+                None if path.is_root() && project_nets.contains(on.net_name.as_str()) => {
+                    (NetScope::Net(on.net_name.clone()), on.net_name.clone())
+                }
+                None => {
+                    note(RuleProblem::NetNotOnBoard {
+                        net: on.net_name.clone(),
+                    });
+                    continue;
+                }
             };
             for rule in rules_for(&scope, &name, &on.rules) {
-                if !out.iter().any(|r| r.name == rule.name) {
-                    out.push(rule);
+                match out.iter().find(|r| r.name == rule.name) {
+                    None => out.push(rule),
+                    Some(kept) if kept.draft.scope == rule.draft.scope => {}
+                    Some(kept) => note(RuleProblem::NameClash {
+                        rule: rule.name.clone(),
+                        kept: scope_label(&kept.draft.scope),
+                        dropped: scope_label(&rule.draft.scope),
+                    }),
                 }
             }
         }
     }
-    out
+    (out, problems)
 }
 
 /// How each of `rules` stands against the rule text `dsl`: changed rows
@@ -285,6 +360,110 @@ mod tests {
             },
         );
         assert_eq!(by_net[0].name, "Width_V_BUS");
+    }
+
+    /// One labelled wire per `(net, class)` with a resistor pin on its start
+    /// (a net needs a terminal), each with a Net Parameters directive asking
+    /// for a 1 mm track on it.
+    fn sheet_with(nets: &[(&str, Option<&str>)]) -> SchematicSheet {
+        use signex_types::schematic::{
+            Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol,
+            Wire,
+        };
+        let mut sheet = SchematicSheet::default();
+        let mut body: LibSymbol = serde_json::from_str(r#"{"id":"R"}"#).expect("body");
+        body.pins = vec![LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::Passive,
+                shape_style: PinShapeStyle::Plain,
+                position: Point::ZERO,
+                rotation: 0.0,
+                length: 0.0,
+                name: String::new(),
+                number: "1".into(),
+                visible: true,
+                name_visible: true,
+                number_visible: true,
+            },
+        }];
+        sheet.lib_symbols.insert("R".to_string(), body);
+        for (i, (net, class)) in nets.iter().enumerate() {
+            let y = 20.0 * i as f64;
+            sheet.symbols.push(Symbol {
+                uuid: uuid::Uuid::from_u128(200 + i as u128),
+                lib_id: "R".into(),
+                reference: format!("R{}", i + 1),
+                position: Point::new(0.0, y),
+                ..Default::default()
+            });
+            sheet.wires.push(Wire {
+                uuid: uuid::Uuid::from_u128(i as u128 + 1),
+                start: Point::new(0.0, y),
+                end: Point::new(10.0, y),
+                ..Default::default()
+            });
+            sheet
+                .labels
+                .push(Label::new(*net, Point::new(0.0, y), LabelType::Net));
+            sheet.directives.push(SchDirective::NetParameters {
+                uuid: uuid::Uuid::from_u128(100 + i as u128),
+                position: Point::new(5.0, y),
+                net_class: class.map(str::to_string),
+                diff_pair_class: None,
+                rules: NetRules {
+                    width_mm: Some(1.0),
+                    ..NetRules::default()
+                },
+                show_on_flag: false,
+            });
+        }
+        sheet
+    }
+
+    fn names(rules: &[SchematicRule]) -> Vec<&str> {
+        rules.iter().map(|r| r.name.as_str()).collect()
+    }
+
+    #[test]
+    fn a_net_rule_comes_only_from_a_root_page_net_the_board_has() {
+        let sheet = sheet_with(&[("VBUS", None), ("SDA", Some("I2C"))]);
+        let board: HashSet<&str> = ["VBUS", "SDA"].into_iter().collect();
+        let root = InstancePath::root();
+        let (rules, problems) = schematic_rules([(&root, &sheet)], &board);
+        assert_eq!(names(&rules), ["Width_VBUS", "Width_I2C"]);
+        assert!(problems.is_empty(), "{problems:?}");
+
+        // The same sheet placed under a sheet symbol (or repeated): its net
+        // takes another name on the board, so no net rule, and it is said.
+        let placed = InstancePath::from_chain(vec![uuid::Uuid::from_u128(7)]);
+        let (rules, problems) = schematic_rules([(&placed, &sheet)], &board);
+        assert_eq!(names(&rules), ["Width_I2C"], "a class rule still applies");
+        assert_eq!(
+            problems,
+            [RuleProblem::NetNotOnBoard {
+                net: "VBUS".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn two_scopes_on_one_rule_name_keep_the_first_and_say_so() {
+        let sheet = sheet_with(&[("V+BUS", None), ("V-BUS", None)]);
+        let board: HashSet<&str> = ["V+BUS", "V-BUS"].into_iter().collect();
+        let root = InstancePath::root();
+        let (rules, problems) = schematic_rules([(&root, &sheet)], &board);
+        assert_eq!(names(&rules), ["Width_V_BUS"]);
+        assert_eq!(rules[0].draft.scope, NetScope::Net("V+BUS".to_string()));
+        assert_eq!(
+            problems,
+            [RuleProblem::NameClash {
+                rule: "Width_V_BUS".to_string(),
+                kept: "V+BUS".to_string(),
+                dropped: "V-BUS".to_string(),
+            }]
+        );
     }
 
     #[test]

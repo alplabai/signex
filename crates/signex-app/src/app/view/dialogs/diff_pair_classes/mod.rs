@@ -14,7 +14,8 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{CheckboxLabel as _, button, checkbox, text, text_input};
 
 use crate::app::diff_pair_classes::{
-    DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, field_value,
+    ClassLock, DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem,
+    field_value,
 };
 use crate::app::{Message, Signex};
 use crate::styles::{
@@ -30,6 +31,8 @@ const SIZE: (f32, f32) = (760.0, 640.0);
 const LIST_W: f32 = 200.0;
 /// The label column of the Class group.
 const LABEL_W: f32 = 110.0;
+/// The class Name field: 220 px at the 12 px body.
+const NAME_W: f32 = TS.body * 220.0 / 12.0;
 
 fn dpc(msg: DiffPairClassesMsg) -> Message {
     Message::from(msg)
@@ -85,7 +88,7 @@ impl Signex {
         );
         let r = tokens::resolve(tokens);
         let divider = container(Space::new())
-            .width(Length::Fixed(1.0))
+            .width(Length::Fixed(signex_widgets::theme_ext::HAIRLINE))
             .height(Length::Fill)
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(r.line_soft)),
@@ -223,8 +226,18 @@ fn class_list<'a>(
     .boxed()
 }
 
-/// A class row's menu: Rename, Duplicate, and Delete, greyed while the
-/// class has pairs (it says how many).
+/// Why a class keeps its name and cannot be deleted, as one line.
+fn lock_reason(lock: ClassLock, i18n: &I18n) -> signex_i18n::Localized {
+    match lock {
+        ClassLock::UsedByPairs(pairs) => {
+            t!(i18n, ids::DIALOG_DPC_LOCKED_BY_PAIRS, "count" => pairs as u32)
+        }
+        ClassLock::SheetsClosed => t!(i18n, ids::DIALOG_DPC_LOCKED_BY_CLOSED_SHEETS),
+    }
+}
+
+/// A class row's menu: Rename, Duplicate, and Delete; Rename and Delete
+/// greyed while the class is locked (pairs use it, or sheets are closed).
 fn class_menu<'a>(
     state: &DiffPairClassesState,
     index: usize,
@@ -241,19 +254,20 @@ fn class_menu<'a>(
         }
         b.boxed()
     };
-    let deletable = state.can_delete(index);
-    let pairs = state.pair_count(index) as u32;
-    let mut delete = Row::new()
-        .push(item(
-            ids::DIALOG_DPC_DELETE,
-            deletable.then_some(DiffPairClassesMsg::ClassDeleted(index)),
-        ))
-        .align_y(iced::Alignment::Center);
-    if !deletable {
+    let lock = state.lock(index);
+    let unlocked = lock.is_none();
+    let mut delete = Column::new().push(item(
+        ids::DIALOG_DPC_DELETE,
+        state
+            .can_delete(index)
+            .then_some(DiffPairClassesMsg::ClassDeleted(index)),
+    ));
+    if let Some(lock) = lock {
         delete = delete.push(
-            text(t!(i18n, ids::DIALOG_DPC_PAIRS, "count" => pairs))
+            text(lock_reason(lock, i18n))
                 .size(TS.caption)
                 .color(muted)
+                .wrapping(iced::widget::text::Wrapping::Word)
                 .boxed(),
         );
     }
@@ -262,7 +276,7 @@ fn class_menu<'a>(
         column![
             item(
                 ids::DIALOG_DPC_RENAME,
-                Some(DiffPairClassesMsg::ClassRenameStarted(index))
+                unlocked.then_some(DiffPairClassesMsg::ClassRenameStarted(index))
             ),
             item(
                 ids::DIALOG_DPC_DUPLICATE,
@@ -355,19 +369,33 @@ fn class_form<'a>(
             .boxed();
     };
     let mm = || t!(i18n, ids::DIALOG_DPC_UNIT_MM);
-    let name = text_input(
+    // A locked class's name is read-only: its directives use the name.
+    let lock = state.lock(state.selected);
+    let name_input = text_input(
         signex_i18n::UserText::new(String::new()),
         class.name.clone(),
     )
     .id(iced::widget::Id::new(
         crate::app::diff_pair_classes::NAME_INPUT_ID,
     ))
-    .on_input(|t| dpc(DiffPairClassesMsg::NameEdited(t)))
+    .on_input_maybe(
+        lock.is_none()
+            .then_some(|t| dpc(DiffPairClassesMsg::NameEdited(t))),
+    )
     .size(TS.body)
     .padding([SP.xs, SP.s])
     .style(crate::panels::form_look::text_input_style)
-    .width(Length::Fixed(220.0))
-    .boxed();
+    .width(Length::Fixed(NAME_W));
+    let mut name = Column::new().spacing(SP.xs).push(name_input);
+    if let Some(lock) = lock {
+        name = name.push(
+            text(lock_reason(lock, i18n))
+                .size(TS.caption)
+                .color(muted)
+                .wrapping(iced::widget::text::Wrapping::Word),
+        );
+    }
+    let name = name.boxed();
     let impedance = row![
         value_box(
             state,
@@ -427,7 +455,7 @@ fn class_form<'a>(
         muted,
     ));
     let mut any = false;
-    for m in state.members.iter().filter(|m| m.class == class.name) {
+    for m in state.pairs_of(state.selected) {
         any = true;
         let source =
             t!(i18n, ids::DIALOG_DPC_SOURCE_DIRECTIVE, "sheet" => m.sheet.as_str()).into_string();

@@ -8,6 +8,7 @@ use signex_types::schematic::{SchDrawing, SchTable, SchematicSheet, TableRefresh
 
 use super::rows::{ContentsEntry, contents_table_rows, pin_table_rows};
 use crate::app::Signex;
+use crate::app::state::ProjectId;
 
 /// The pages a contents table lists, from the last compile.
 pub(crate) type Contents = Vec<ContentsEntry>;
@@ -60,12 +61,21 @@ pub(crate) fn refresh_commands(
 
 impl Signex {
     /// Rebuild the rows and links of every bound table (refresh On compile)
-    /// of every open sheet, as one undo step per changed sheet. Called after
-    /// each successful compile.
-    pub(crate) fn refresh_bound_tables(&mut self) {
-        let contents = self.compiled_contents();
+    /// of the open sheets of `project` (`None`: the sheets outside any
+    /// project), as one undo step per changed sheet. Contents tables read
+    /// that project's own last compile. Called after each successful compile
+    /// with the compiled project, so another project's sheets are never
+    /// touched.
+    pub(crate) fn refresh_bound_tables(&mut self, project: Option<ProjectId>) {
+        let contents = project.and_then(|id| self.compiled_contents_of(id));
         let pages = |per_channel: bool| contents.as_ref().map(|c| c.pages(per_channel));
-        let mut paths: Vec<PathBuf> = self.document_state.engines.keys().cloned().collect();
+        let mut paths: Vec<PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|path| self.document_state.document_project(path).map(|p| p.id) == project)
+            .cloned()
+            .collect();
         paths.sort();
         let active = self.document_state.active_path.clone();
         let mut changed_any = false;
@@ -106,21 +116,24 @@ impl Signex {
         }
     }
 
-    /// The project's pages as the last compile walked them, with the title
-    /// block of each sheet that is open; `None` before a compile.
+    /// The active project's pages as its last compile walked them; `None`
+    /// before a compile.
     pub(super) fn compiled_contents(&self) -> Option<CompiledPages> {
-        let design = self.compiled_design()?;
+        self.compiled_contents_of(self.compile_target()?)
+    }
+
+    /// `project`'s pages as its last compile walked them, with the title
+    /// block of each sheet that is open (found by the path the compile read
+    /// it from, never by bare file name); `None` before a compile.
+    pub(super) fn compiled_contents_of(&self, project: ProjectId) -> Option<CompiledPages> {
+        let result = self.document_state.compiled_design.results.get(&project)?;
+        let design = result.design.as_ref();
         let mut sheets = Vec::with_capacity(design.sheets.len());
         for s in &design.sheets {
-            let title_block = self
-                .document_state
-                .engines
-                .iter()
-                .find(|(path, _)| {
-                    path.file_name()
-                        .is_some_and(|n| n.to_string_lossy() == s.file.as_str())
-                })
-                .map(|(_, engine)| engine.document().title_block.clone())
+            let title_block = result
+                .path_of(&s.key)
+                .and_then(|path| self.document_state.engines.get(path))
+                .map(|engine| engine.document().title_block.clone())
                 .unwrap_or_default();
             let field = |key: &str| title_block.get(key).cloned().unwrap_or_default();
             sheets.push(CompiledPage {

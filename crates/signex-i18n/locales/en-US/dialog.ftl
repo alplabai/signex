@@ -322,6 +322,14 @@ dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.
 dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+# Why a class's name and Delete are greyed. $count is a whole number.
+dialog-dpc-locked-by-pairs = { $count ->
+        [one] { $count } pair uses this class: it keeps its name and cannot be deleted.
+       *[other] { $count } pairs use this class: it keeps its name and cannot be deleted.
+    }
+dialog-dpc-locked-by-closed-sheets = Some sheets of the project are not open, so their pairs cannot be counted. Open every sheet to rename or delete a class.
+# The name a new class starts with (a net-class style name, not a sentence).
+dialog-dpc-new-class-name = DIFF
 
 ## c13 unions-change-paste
 

@@ -73,6 +73,12 @@ pub struct DiffPairClassesState {
     pub project: ProjectId,
     pub project_name: String,
     pub classes: Vec<DiffPairClass>,
+    /// The name each class had when the dialog opened, index for index
+    /// with `classes`; `None` for a class added or duplicated here.
+    /// Directives name a class, so pairs are counted by this name.
+    pub original_names: Vec<Option<String>>,
+    /// The project has sheets that are not open: their pairs are unknown.
+    pub has_closed_sheets: bool,
     pub selected: usize,
     /// The class row whose menu is open.
     pub menu: Option<usize>,
@@ -89,6 +95,16 @@ pub struct DiffPairClassesState {
 pub enum PairClassProblem {
     BlankName,
     DuplicateName,
+}
+
+/// Why a class keeps its name and cannot be deleted: directives refer to a
+/// class by name, and the rename is not carried to them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassLock {
+    /// Pairs on the open sheets use it.
+    UsedByPairs(usize),
+    /// Some sheets of the project are not open, so its pairs are unknown.
+    SheetsClosed,
 }
 
 /// A fresh class: pairs by suffix, nothing else set.
@@ -113,19 +129,54 @@ impl DiffPairClassesState {
         self.classes.get(self.selected)
     }
 
-    /// How many pairs class `index` has.
+    /// How many pairs on the open sheets class `index` has, matched by the
+    /// name it had when the dialog opened (the name the directives use).
     pub fn pair_count(&self, index: usize) -> usize {
-        self.classes.get(index).map_or(0, |class| {
-            self.members
-                .iter()
-                .filter(|m| m.class == class.name)
-                .count()
-        })
+        self.pairs_of(index).count()
     }
 
-    /// Whether class `index` may be deleted: only while it has no pairs.
+    /// The pairs on the open sheets that use class `index`.
+    pub fn pairs_of(&self, index: usize) -> impl Iterator<Item = &PairMemberRow> {
+        let name = self.original_name(index);
+        self.members
+            .iter()
+            .filter(move |m| name.is_some_and(|n| m.class == n))
+    }
+
+    fn original_name(&self, index: usize) -> Option<&str> {
+        self.original_names.get(index)?.as_deref()
+    }
+
+    /// Why class `index` keeps its name and cannot be deleted; `None` when
+    /// it may be renamed and deleted. A class added in this dialog never is
+    /// locked.
+    pub fn lock(&self, index: usize) -> Option<ClassLock> {
+        self.original_name(index)?;
+        match self.pair_count(index) {
+            0 if self.has_closed_sheets => Some(ClassLock::SheetsClosed),
+            0 => None,
+            pairs => Some(ClassLock::UsedByPairs(pairs)),
+        }
+    }
+
+    /// Whether class `index` may be deleted: only while it is not locked.
     pub fn can_delete(&self, index: usize) -> bool {
-        index < self.classes.len() && self.pair_count(index) == 0
+        index < self.classes.len() && self.lock(index).is_none()
+    }
+
+    /// Insert `class` at `index`, a class new to the project.
+    pub fn insert_new(&mut self, index: usize, class: DiffPairClass) {
+        self.classes.insert(index, class);
+        let at = index.min(self.original_names.len());
+        self.original_names.insert(at, None);
+    }
+
+    /// Remove class `index` and its original name.
+    pub fn remove(&mut self, index: usize) {
+        self.classes.remove(index);
+        if index < self.original_names.len() {
+            self.original_names.remove(index);
+        }
     }
 
     /// The draft of `field`, if one is typed.

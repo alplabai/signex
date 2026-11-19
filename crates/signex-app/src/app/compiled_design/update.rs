@@ -216,6 +216,6 @@ impl Signex {
         let ui = &mut self.ui_state.compiled_design;
         ui.folded.clear();
         ui.selected = None;
-        self.refresh_bound_tables();
+        self.refresh_bound_tables(Some(outcome.project));
     }
 }
