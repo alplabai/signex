@@ -2,9 +2,57 @@
 //! (#2398). Each edit goes through the same path as its `rules_*` command
 //! and is one undo step; a refusal is kept for the tab to show.
 
+use iced::Task;
+use signex_drc_dsl::table::RuleTable;
+use signex_drc_dsl::table::matrix::CellKey;
+use signex_types::coord::Unit;
+use signex_widgets::LengthFormat;
+use signex_widgets::constraint_grid::{ClassPair, MatrixChange, MatrixMessage};
+
+use super::matrix::{ClassClearances, MatrixDefaults, mm_text, typed_value};
 use super::{ClearanceView, MatrixEdit, RulesPanel, RulesTabMsg, SetFormField};
-use crate::app::Signex;
 use crate::app::state::ProjectId;
+use crate::app::{Message, Signex};
+
+/// What the matrix widget reads its clearances from: the class names, the
+/// rows of the stored text and the fallbacks.
+struct MatrixBook {
+    classes: Vec<String>,
+    table: RuleTable,
+    defaults: MatrixDefaults,
+}
+
+impl MatrixBook {
+    fn values(&self) -> ClassClearances<'_> {
+        ClassClearances {
+            classes: &self.classes,
+            table: &self.table,
+            defaults: &self.defaults,
+        }
+    }
+}
+
+/// A value typed on the preview drawing: written to the pinned matrix cell
+/// or object-pair row as one undo step.
+#[allow(
+    dead_code,
+    reason = "the preview drawing's value editor calls it through update.rs"
+)]
+pub(super) fn preview_committed(
+    app: &mut Signex,
+    project_id: ProjectId,
+    value_mm: f64,
+) -> Task<Message> {
+    let Some(key) = app.rules_tab_mut(project_id).matrix_pin.clone() else {
+        return Task::none();
+    };
+    if !value_mm.is_finite() || value_mm < 0.0 {
+        return Task::none();
+    }
+    let result = app.set_matrix_cell(project_id, &key, &mm_text(value_mm));
+    app.note_rules_result(project_id, result);
+    Task::none()
+}
 
 impl Signex {
     pub(super) fn apply_rules_panel_message(&mut self, msg: RulesTabMsg) {
@@ -16,20 +64,12 @@ impl Signex {
                 tab.matrix_edit = None;
                 if view == ClearanceView::List {
                     tab.matrix_open = None;
+                    tab.matrix_hover = None;
+                    tab.matrix_pin = None;
                 }
             }
             RulesTabMsg::MatrixCellOpened { project_id, key } => {
-                let src = self.rules_text_of(project_id).map(|(text, _)| text);
-                let rows = signex_drc_dsl::table::table(&src.unwrap_or_default());
-                let text = signex_drc_dsl::table::matrix::cell(&rows, &key)
-                    .and_then(|row| {
-                        row.limit(signex_drc_dsl::table::LimitField::MinClearance)
-                            .map(|l| l.value.clone())
-                    })
-                    .unwrap_or_default();
-                let tab = self.rules_tab_mut(project_id);
-                tab.matrix_open = Some((key.a.clone(), key.b.clone()));
-                tab.matrix_edit = Some(MatrixEdit { key, text });
+                self.open_matrix_cell(project_id, key);
             }
             RulesTabMsg::MatrixCellEdited { project_id, text } => {
                 if let Some(edit) = self.rules_tab_mut(project_id).matrix_edit.as_mut() {
@@ -40,7 +80,8 @@ impl Signex {
                 let Some(edit) = self.rules_tab_mut(project_id).matrix_edit.clone() else {
                     return;
                 };
-                let result = self.set_matrix_cell(project_id, &edit.key, &edit.text);
+                let value = typed_value(&edit.text);
+                let result = self.set_matrix_cell(project_id, &edit.key, &value);
                 if self.note_rules_result(project_id, result).is_some() {
                     self.rules_tab_mut(project_id).matrix_edit = None;
                 }
@@ -65,6 +106,32 @@ impl Signex {
                 let tab = self.rules_tab_mut(project_id);
                 tab.matrix_open = None;
                 tab.matrix_edit = None;
+                tab.matrix_hover = None;
+                // The preview stays on the class pair the card was for.
+                if let Some(pin) = tab.matrix_pin.as_mut() {
+                    pin.pair = None;
+                }
+            }
+            RulesTabMsg::MatrixActed { project_id, msg } => self.act_on_matrix(project_id, msg),
+            RulesTabMsg::MatrixHovered { project_id, key } => {
+                self.rules_tab_mut(project_id).matrix_hover = key;
+            }
+            RulesTabMsg::MatrixPairPinned { project_id, key } => {
+                self.rules_tab_mut(project_id).matrix_pin = Some(key);
+            }
+            RulesTabMsg::MatrixPairTyped {
+                project_id,
+                key,
+                text,
+            } => {
+                // One cell is typed in at a time: a row of the card, or the
+                // matrix cell.
+                if self.rules_tab_mut(project_id).matrix.edit().is_some() {
+                    self.matrix_widget_update(project_id, MatrixMessage::EditCancelled);
+                }
+                let tab = self.rules_tab_mut(project_id);
+                tab.matrix_pin = Some(key.clone());
+                tab.matrix_edit = Some(MatrixEdit { key, text });
             }
             RulesTabMsg::PanelPicked { project_id, panel } => {
                 let tab = self.rules_tab_mut(project_id);
@@ -117,8 +184,11 @@ impl Signex {
             }
             RulesTabMsg::OpenRequested { .. }
             | RulesTabMsg::DomainPicked { .. }
-            | RulesTabMsg::FilterPicked { .. }
-            | RulesTabMsg::SearchEdited { .. }
+            | RulesTabMsg::GridActed { .. }
+            | RulesTabMsg::PreviewActed { .. }
+            | RulesTabMsg::SetsToggled { .. }
+            | RulesTabMsg::InheritedToggled { .. }
+            | RulesTabMsg::OverriddenOnlyToggled { .. }
             | RulesTabMsg::RowSelected { .. }
             | RulesTabMsg::CellOpened { .. }
             | RulesTabMsg::CellEdited { .. }
@@ -135,6 +205,101 @@ impl Signex {
             | RulesTabMsg::DrcRequested { .. }
             | RulesTabMsg::PresetsListRequested { .. } => {}
         }
+    }
+
+    /// Type in the cell or object-pair row at `key`, seeded with what is
+    /// written there; its class pair is pinned and its object pairs shown.
+    fn open_matrix_cell(&mut self, id: ProjectId, key: CellKey) {
+        let src = self.rules_text_of(id).map(|(text, _)| text);
+        let rows = signex_drc_dsl::table::table(&src.unwrap_or_default());
+        let text = signex_drc_dsl::table::matrix::cell(&rows, &key)
+            .and_then(|row| {
+                row.limit(signex_drc_dsl::table::LimitField::MinClearance)
+                    .map(|l| l.value.clone())
+            })
+            .unwrap_or_default();
+        self.pin_matrix_cell(id, &key);
+        let tab = self.rules_tab_mut(id);
+        tab.matrix_open = Some((key.a.clone(), key.b.clone()));
+        tab.matrix_pin = Some(key.clone());
+        tab.matrix_edit = Some(MatrixEdit { key, text });
+    }
+
+    /// The class names, rule rows and fallbacks the matrix reads.
+    fn matrix_book(&self, id: ProjectId) -> MatrixBook {
+        let src = self
+            .rules_text_of(id)
+            .map(|(text, _)| text)
+            .unwrap_or_default();
+        MatrixBook {
+            classes: self.rules_classes(id).into_iter().map(|c| c.name).collect(),
+            table: signex_drc_dsl::table::table(&src),
+            defaults: self.rules_matrix_defaults(id),
+        }
+    }
+
+    /// Hand `msg` to the matrix widget; the value change it returns, if any.
+    fn matrix_widget_update(&mut self, id: ProjectId, msg: MatrixMessage) -> Option<MatrixChange> {
+        self.sync_rules_matrix(id);
+        let book = self.matrix_book(id);
+        let format = LengthFormat::new(&self.ui_state.i18n, Unit::Mm);
+        let tab = &mut self
+            .document_state
+            .project_tabs
+            .entry(id)
+            .or_default()
+            .rules;
+        tab.matrix.update(msg, &book.values(), format)
+    }
+
+    /// Pin the matrix cell of `key`'s classes without typing in it.
+    fn pin_matrix_cell(&mut self, id: ProjectId, key: &CellKey) {
+        let book = self.matrix_book(id);
+        let Some(pair) = book.values().pair_of(&key.a, &key.b) else {
+            return;
+        };
+        self.matrix_widget_update(id, MatrixMessage::CellPressed(pair));
+        self.matrix_widget_update(id, MatrixMessage::EditCancelled);
+    }
+
+    /// A message of the matrix widget. Only the lower triangle is live: a
+    /// pair is folded onto it before the widget sees it. A pressed cell
+    /// opens its object pairs and pins the preview; a value change is
+    /// written as one undo step.
+    fn act_on_matrix(&mut self, id: ProjectId, msg: MatrixMessage) {
+        let msg = match msg {
+            MatrixMessage::CellPressed(pair) => {
+                MatrixMessage::CellPressed(ClassPair::new(pair.row, pair.col))
+            }
+            MatrixMessage::CellCleared(pair) => {
+                MatrixMessage::CellCleared(ClassPair::new(pair.row, pair.col))
+            }
+            other => other,
+        };
+        let pressed = match &msg {
+            MatrixMessage::CellPressed(pair) => Some(*pair),
+            _ => None,
+        };
+        let change = self.matrix_widget_update(id, msg);
+        let book = self.matrix_book(id);
+        if let Some(key) = pressed.and_then(|pair| book.values().key(pair)) {
+            let tab = self.rules_tab_mut(id);
+            tab.matrix_open = Some((key.a.clone(), key.b.clone()));
+            tab.matrix_pin = Some(key);
+            tab.matrix_edit = None;
+        }
+        let Some(change) = change else {
+            return;
+        };
+        let (pair, value) = match change {
+            MatrixChange::ClearanceSet { pair, mm } => (pair, mm_text(mm)),
+            MatrixChange::ClearanceCleared { pair } => (pair, String::new()),
+        };
+        let Some(key) = book.values().key(pair) else {
+            return;
+        };
+        let result = self.set_matrix_cell(id, &key, &value);
+        self.note_rules_result(id, result);
     }
 
     /// Apply the previewed preset; the preview closes once it is applied.

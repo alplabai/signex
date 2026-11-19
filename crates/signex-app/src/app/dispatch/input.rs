@@ -147,6 +147,9 @@ enum InputConsumer {
     /// Preferences ▸ Keyboard Shortcuts, while recording a chord.
     KeymapRecorder,
     CommandPalette,
+    /// Tab, Shift+Tab and Esc on a Rules tab drawing's open value label or
+    /// held handle (#2530); passes when none is open.
+    RulePreview,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
     /// Enter creates the project while the New Project dialog is open (#2232).
@@ -171,9 +174,10 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 9] = [
+const CLAIM_ORDER: [InputConsumer; 10] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
+    InputConsumer::RulePreview,
     InputConsumer::Escape,
     InputConsumer::NewProject,
     InputConsumer::UpdatePcb,
@@ -334,6 +338,10 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
+            InputConsumer::RulePreview => match (target, self.rules_drawing_key(event)) {
+                (InputTarget::Main, Some(message)) => Claim::consume(message),
+                _ => Claim::Pass,
+            },
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
@@ -816,6 +824,7 @@ mod tests {
         for consumer in [
             InputConsumer::KeymapRecorder,
             InputConsumer::CommandPalette,
+            InputConsumer::RulePreview,
             InputConsumer::Escape,
             InputConsumer::NewProject,
             InputConsumer::UpdatePcb,

@@ -69,7 +69,7 @@ pub(crate) struct RulePreview {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum PreviewMsg {
+pub enum PreviewMsg {
     Labels(DimensionLabelMessage),
     ExpandToggled,
 }

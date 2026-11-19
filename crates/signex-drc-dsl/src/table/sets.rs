@@ -4,7 +4,7 @@
 //! every rule it wrote, so the rule text stays the format Run DRC reads.
 //! The set itself (`NamedRuleSet`) lives beside the text in `rules.drc`.
 //! The Rules grid shows them as constraint sets and reads which set wrote a
-//! rule ([`writer_of`]). See `docs/DRC_RULES.md`, "Rule sets".
+//! rule ([`writer_of`]). See `docs/DRC_RULES.md`, "Constraint sets".
 
 use std::collections::BTreeMap;
 
