@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::SheetKey;
 use super::members::{NetMember, NetMemberKind, NetMembers};
+use super::part_pins::PartPins;
 
 /// The element a navigation or highlight started from: stable across a
 /// rebuild of the index, unlike a net's position in it.
@@ -80,9 +81,40 @@ pub struct NetIndex {
     /// The placements the walk reaches each sheet through.
     placements: HashMap<SheetKey, Vec<InstancePath>>,
     by_name: HashMap<String, usize>,
+    /// Every part with all of its pins, wired or not.
+    parts: Vec<PartPins>,
 }
 
 impl NetIndex {
+    pub(super) fn with_parts(mut self, parts: Vec<PartPins>) -> Self {
+        self.parts = parts;
+        self
+    }
+
+    /// Every part of the project with all of its pins, in walk order.
+    pub fn parts(&self) -> &[PartPins] {
+        &self.parts
+    }
+
+    /// The net pin `pin` of unit `symbol` on placement `occurrence` of
+    /// `sheet` is on; `None` for an unconnected pin.
+    pub fn net_of_pin(
+        &self,
+        sheet: &SheetKey,
+        symbol: Uuid,
+        occurrence: &InstancePath,
+        pin: &str,
+    ) -> Option<usize> {
+        self.nets_of(sheet, symbol).iter().copied().find(|&net| {
+            self.nets[net].members.iter().any(|m| {
+                m.id == symbol
+                    && &m.sheet == sheet
+                    && &m.occurrence == occurrence
+                    && matches!(&m.kind, NetMemberKind::Pin { pin: p, .. } if p == pin)
+            })
+        })
+    }
+
     pub(super) fn from_members(nets: Vec<NetMembers>, walk: Vec<(SheetKey, InstancePath)>) -> Self {
         let mut by_element: HashMap<ElementKey, Vec<usize>> = HashMap::new();
         let mut placements: HashMap<SheetKey, Vec<InstancePath>> = HashMap::new();
@@ -106,6 +138,7 @@ impl NetIndex {
             by_element,
             placements,
             by_name,
+            parts: Vec::new(),
         }
     }
 
