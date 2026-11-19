@@ -189,6 +189,21 @@ panel header asks where to add a library (**Project**, **Installed** or
 library. Type in **Filter components…** to narrow the components. Clicking a
 part row opens its Component Preview tab.
 
+**The Library panel.** One panel browses what the open libraries hold. Its
+chips switch between **Symbols** (the symbols of the `.snxsym` open in the
+symbol editor), **Footprints** (the footprints of the `.snxfpt` open in the
+footprint editor) and **Parts** (the rows of every open library), each with
+its count. It opens on the kind of the editor tab in front: Symbols in the
+symbol editor, Footprints in the footprint editor, Parts anywhere else; a chip
+you click holds while that tab stays in front. Under the chips sit the
+breadcrumb (library, file and count), one filter and the toolbar: **Place**,
+**Add**, **Edit** and, at the right end, **Delete**. In Parts the filter
+matches part numbers, MPNs and manufacturers and opens each library with a
+match, and the toolbar acts on the highlighted row (a greyed tool has nothing
+it can do there). The folder button in the panel's title bar is **Open
+Library…**. The **SCH Library** and **Footprint Library** rows of the panel
+list open this panel in Symbols or Footprints.
+
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
 **Copy to Library** dialog asks which writable library receives a copy (or

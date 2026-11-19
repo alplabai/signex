@@ -605,6 +605,8 @@ pub enum PickerMsg {
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),
+    /// A kind chip of the Library panel was pressed (#119).
+    PanelKindPicked(super::state::LibraryPanelKind),
 }
 
 /// Edit Component Details modal sub-message tree — keeps

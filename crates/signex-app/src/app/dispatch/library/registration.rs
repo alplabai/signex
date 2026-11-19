@@ -300,6 +300,10 @@ impl Signex {
             PickerMsg::PanelComponentClicked(key) => {
                 return self.handle_panel_component_clicked(key);
             }
+            PickerMsg::PanelKindPicked(kind) => {
+                self.pick_library_panel_kind(kind);
+                return Task::none();
+            }
             _ => {}
         }
         let Some(picker) = self.library.picker.as_mut() else {
@@ -308,7 +312,8 @@ impl Signex {
         match msg {
             PickerMsg::PanelSearchChanged(_)
             | PickerMsg::PanelLibraryToggled(_)
-            | PickerMsg::PanelComponentClicked(_) => {}
+            | PickerMsg::PanelComponentClicked(_)
+            | PickerMsg::PanelKindPicked(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
                 self.library.sync_view_caches_in(&self.ui_state.i18n);

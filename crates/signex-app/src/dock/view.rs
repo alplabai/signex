@@ -78,7 +78,7 @@ impl DockArea {
             return self.view_rail(position, region, ctx);
         }
 
-        // ── Altium-style flat tabs with accent underline ──
+        // ── Flat tabs with an accent underline ──
         // Every tab is shown: when the natural widths do not fit the strip,
         // the wider tabs shrink and their labels end in an ellipsis
         // (`tab_fit::fit_widths`), so no tab is cut at the strip edge.
@@ -244,15 +244,21 @@ impl DockArea {
             .size(graphite::TITLE_SIZE)
             .font(graphite::title_font())
             .color(styles::ti(ctx.tokens.text));
-        let title_bar = row![
+        let mut title_bar = row![
             container(title_text).padding([0, 10]),
             Space::new().width(Length::Fill),
-            collapse_btn,
-            close_btn,
         ]
         .spacing(0)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
+        if let Some(open) = region
+            .panels
+            .get(region.active)
+            .and_then(|panel| open_library_button(*panel, ctx))
+        {
+            title_bar = title_bar.push(open);
+        }
+        let title_bar = title_bar.push(collapse_btn).push(close_btn);
 
         // The tab strip (built above) holds just the tab buttons. Collapse /
         // close moved up to the title bar so they're always visible
@@ -262,14 +268,10 @@ impl DockArea {
         let content: Element<'_, DockMessage> =
             if let Some(panel) = region.panels.get(region.active) {
                 match *panel {
-                    PanelKind::Library => {
-                        // v0.9 Library panel — content lives in the
-                        // library subsystem, not in `panels::view_panel`.
-                        // Wrap the LibraryMessage in DockMessage::Library
-                        // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
-                            .map(DockMessage::Library)
-                            .boxed()
+                    // The Library panel, and its alias rows should one ever
+                    // be docked, are drawn by the library subsystem.
+                    PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
+                        crate::library::panel::view(library, ctx)
                     }
                     PanelKind::Components => {
                         // v0.9 Stage 9 Components Panel — three mount
@@ -340,7 +342,7 @@ impl DockArea {
         region: &'a DockRegion,
         ctx: &'a panels::PanelContext,
     ) -> Element<'a, DockMessage> {
-        // Altium-style collapsed panel: vertical tabs with full panel names
+        // Collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
 
@@ -446,9 +448,9 @@ impl DockArea {
         let label = t!(ctx.i18n, kind.message());
 
         let content: Element<'a, DockMessage> = match kind {
-            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
-                .map(DockMessage::Library)
-                .boxed(),
+            PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
+                crate::library::panel::view(library, ctx)
+            }
             PanelKind::Components => {
                 panels::components_panel::view(library, ctx, &ctx.tokens, grid)
                     .map(DockMessage::Library)
@@ -470,10 +472,13 @@ impl DockArea {
                 )
                 .padding([0, 10])
                 .width(Length::Fill),
+            ]
+            .extend(open_library_button(kind, ctx))
+            .push(
                 icon_button(icons::icon_close(ctx.theme_id), &ctx.tokens)
                     .on_press(DockMessage::DockFloating(idx))
                     .boxed(),
-            ]
+            )
             .align_y(iced::Alignment::Center),
         )
         .width(Length::Fill)
@@ -495,6 +500,33 @@ impl DockArea {
         .style(graphite::floating_card(&ctx.tokens));
         Some(card.boxed())
     }
+}
+
+/// The Library panel's folder button in its title bar: Open Library…
+/// (#119). `None` for every other panel.
+fn open_library_button<'a>(
+    panel: PanelKind,
+    ctx: &panels::PanelContext,
+) -> Option<Element<'a, DockMessage>> {
+    if !matches!(
+        panel,
+        PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary
+    ) {
+        return None;
+    }
+    let open = icon_button_of(
+        crate::library::panel::open_library_glyph(&ctx.tokens),
+        &ctx.tokens,
+    )
+    .on_press(DockMessage::Library(
+        crate::library::messages::LibraryMessage::OpenLibraryDialog,
+    ));
+    Some(panels::graphite::hint_tooltip(
+        open.boxed(),
+        t!(ctx.i18n, ids::LIBRARY_PANEL_OPEN_LIBRARY_ACTION),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
+    ))
 }
 
 /// The name of a collapsed panel on the side rail, in `i18n`'s language.
