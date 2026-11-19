@@ -82,7 +82,8 @@ impl Signex {
         let current = match preview.pdf_options.page_range {
             PageRange::All => PagesChoice::All,
             PageRange::Current => PagesChoice::Current,
-            PageRange::Specific(_) => PagesChoice::Specific,
+            // A range is a list of specific pages; the dialog never sets one.
+            PageRange::Specific(_) | PageRange::Range(..) => PagesChoice::Specific,
         };
         let options = [
             (PagesChoice::All, ids::PDF_PAGES_ALL),
