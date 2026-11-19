@@ -1,0 +1,64 @@
+# Schematic tables
+
+A table is a drawing on a schematic sheet (#1300): placed, moved, locked,
+copied, arranged and printed like the other drawings, and never part of the
+netlist or ERC. Its rows are typed in, imported from CSV, or built from the
+design.
+
+## Placing a table
+
+Place ▸ Graphics ▸ Table (`place_table`, also in the Active Bar's Drawing
+Tools) places a typed table with three empty columns and three rows at the
+click; the tool then goes back to Select. Properties shows it with a
+`N rows · M columns` caption, an illustration of its style, and three
+sections: Data source, Columns and Style.
+
+## Sources
+
+| Source | Rows | Refresh |
+|---|---|---|
+| Component pins | One row per pin of the chosen part on this sheet (every unit placed here): pin number, name, net, electrical type, unit, pin length. Sorted by pin number (2 before 10) or by name. | On compile (default) or Off |
+| Typed / CSV | Typed or imported; never rebuilt. | — |
+| Project sheets | One row per page of the project in hierarchy order: page number, sheet name, title, revision, last changed (the title block's date). One row per channel of a repeated sheet (`buck_channel · CH1`) or one per sheet. Each row remembers the sheet file it opens. | On compile (default) or Off |
+
+The net of a pin is read from the sheet's own connectivity. A table keeps a
+cell for every column, hidden ones included: unchecking a column in
+Properties hides it on the sheet, checking it shows it again.
+
+## Refresh
+
+Bound tables are rebuilt only after a successful compile
+(`Signex::refresh_bound_tables`), never on every edit, so a table does not
+change under the cursor. Every open sheet whose tables changed gets one undo
+step; a sheet whose tables are already current gets none. A table set to
+Refresh Off keeps its rows. A table whose part left the sheet keeps its rows,
+and Properties says the part is gone.
+
+## CSV
+
+A typed table's Import… reads a CSV file (comma separated, quoted fields may
+hold commas, quotes and line breaks; the first line is the column titles) and
+replaces its columns and rows in one undo step. Export… writes the shown
+columns and every row. Both run their file dialog and file IO off the update
+loop; an export is an atomic write.
+
+## Table of contents sheet
+
+Project ▸ Add Table of Contents Sheet (`add_table_of_contents`) writes
+`contents.snxsch` next to the project's root sheet: a heading
+(`<project> · Contents`) and a Project sheets table, filled from the last
+compile when there is one. The write is atomic and refuses a file that is
+already there. The new sheet is then added to the project the way Add
+Existing adds a file. Double-clicking a row of the contents table opens that
+row's sheet.
+
+## Not built yet
+
+- Editing a cell in place on the sheet: a cell edit is applied through
+  `TablesMsg::CellEdited` (one undo step per cell), but the double-click
+  editor on the canvas is not there yet.
+- The contents sheet as page 1 of the numbering, and its tab's `auto` pill.
+- Rows of the contents table as links in the exported PDF (they build on the
+  PDF bookmarks work).
+- Formulas in a typed table (the table is plain text, as drawn).
+- The Properties illustration does not light a field's callout on hover yet.
