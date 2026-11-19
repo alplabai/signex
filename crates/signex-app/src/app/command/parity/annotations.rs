@@ -559,21 +559,24 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         ActiveBar,
         &[],
     ),
+    (&["highlight_net_under_cursor"], Bridge, &[Cursor]),
     (
-        &[
-            "copy_attributes_or_add_vertex",
-            "highlight_net_under_cursor",
-        ],
-        Bridge,
-        &[Cursor],
-    ),
-    (
-        &[
-            "copy_attributes_or_add_vertex",
-            "highlight_net_under_cursor",
-        ],
+        &["highlight_net_under_cursor"],
         BridgeContextMenu,
         &[ActiveDocument],
+    ),
+    // `copy_attributes_at` (#1669): mid-draw it adds a vertex through the
+    // canvas click path (tool state, the draw in progress); otherwise it
+    // copies from the object under the point or the selection.
+    (
+        &["copy_attributes_or_add_vertex"],
+        Bridge,
+        &[Cursor, Selection, ToolState, InProgressEdit],
+    ),
+    (
+        &["copy_attributes_or_add_vertex"],
+        BridgeContextMenu,
+        &[ActiveDocument, Selection, ToolState, InProgressEdit],
     ),
     (
         &[

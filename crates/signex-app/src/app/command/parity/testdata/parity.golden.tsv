@@ -165,8 +165,8 @@ color_net	headless_missing_operand	needs `at`	core	none	routing
 copy	bridge	Edit(Copy)	core	active document,selection,tool state	handler
 copy	in_window_rewrite	document_window	gui	window	routing
 copy	refusal_needs	CopyTarget	core	active document,selection	routing
-copy_attributes_or_add_vertex	bridge	Edit(Extras(CopyAttributesRequested { at: None }))	gui	cursor	handler
-copy_attributes_or_add_vertex	bridge_context_menu	Edit(Extras(CopyAttributesRequested { at: Some((1.0, 2.0)) }))	gui	active document	handler
+copy_attributes_or_add_vertex	bridge	Edit(Extras(CopyAttributesRequested { at: None }))	gui	selection,cursor,tool state,in-progress edit	handler
+copy_attributes_or_add_vertex	bridge_context_menu	Edit(Extras(CopyAttributesRequested { at: Some((1.0, 2.0)) }))	gui	active document,selection,tool state,in-progress edit	handler
 copy_attributes_or_add_vertex	in_window_rewrite	document_window	gui	window	routing
 copy_attributes_or_add_vertex	headless_refusal	headless_refusal	core	none	routing
 create_sheet_from_sheet_symbol	bridge	ContextMenu(Action(CreateChildSheet))	gui	selection	handler
