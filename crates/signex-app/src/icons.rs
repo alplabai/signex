@@ -391,6 +391,37 @@ canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
 
+// ─── Menu glyphs (project tree menu, #20) ──────────────────────────
+//
+// 24×24 single-ink strokes (2 px, round caps); the menu card tints them, so
+// they carry no accent sentinel.
+
+canonical_icon!(icon_menu_board, "menu/board.svg");
+canonical_icon!(icon_menu_close, "menu/close.svg");
+canonical_icon!(icon_menu_cloud, "menu/cloud.svg");
+canonical_icon!(icon_menu_diff, "menu/diff.svg");
+canonical_icon!(icon_menu_export, "menu/export.svg");
+canonical_icon!(icon_menu_file, "menu/file.svg");
+canonical_icon!(icon_menu_folder, "menu/folder.svg");
+canonical_icon!(icon_menu_gear, "menu/gear.svg");
+canonical_icon!(icon_menu_git, "menu/git.svg");
+canonical_icon!(icon_menu_layers, "menu/layers.svg");
+canonical_icon!(icon_menu_library, "menu/library.svg");
+canonical_icon!(icon_menu_more, "menu/more.svg");
+canonical_icon!(icon_menu_notebook, "menu/notebook.svg");
+canonical_icon!(icon_menu_open, "menu/open.svg");
+canonical_icon!(icon_menu_package, "menu/package.svg");
+canonical_icon!(icon_menu_pen, "menu/pen.svg");
+canonical_icon!(icon_menu_plus, "menu/plus.svg");
+canonical_icon!(icon_menu_printer, "menu/printer.svg");
+canonical_icon!(icon_menu_refresh, "menu/refresh.svg");
+canonical_icon!(icon_menu_save, "menu/save.svg");
+canonical_icon!(icon_menu_share, "menu/share.svg");
+canonical_icon!(icon_menu_sheet, "menu/sheet.svg");
+canonical_icon!(icon_menu_shield, "menu/shield.svg");
+canonical_icon!(icon_menu_sync, "menu/sync.svg");
+canonical_icon!(icon_menu_trash, "menu/trash.svg");
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,5 +494,47 @@ mod tests {
         let b = tinted_handle("test/identical_b.svg", BYTES, theme);
         assert_eq!(handle_cache_len(), before + 2);
         assert_eq!(a, b);
+    }
+
+    /// #20: the menu glyphs are 24×24 single-ink strokes, each its own
+    /// drawing.
+    #[test]
+    fn menu_glyphs_are_distinct_24px_strokes() {
+        let glyphs: [&str; 25] = [
+            include_str!("../assets/icons/menu/board.svg"),
+            include_str!("../assets/icons/menu/close.svg"),
+            include_str!("../assets/icons/menu/cloud.svg"),
+            include_str!("../assets/icons/menu/diff.svg"),
+            include_str!("../assets/icons/menu/export.svg"),
+            include_str!("../assets/icons/menu/file.svg"),
+            include_str!("../assets/icons/menu/folder.svg"),
+            include_str!("../assets/icons/menu/gear.svg"),
+            include_str!("../assets/icons/menu/git.svg"),
+            include_str!("../assets/icons/menu/layers.svg"),
+            include_str!("../assets/icons/menu/library.svg"),
+            include_str!("../assets/icons/menu/more.svg"),
+            include_str!("../assets/icons/menu/notebook.svg"),
+            include_str!("../assets/icons/menu/open.svg"),
+            include_str!("../assets/icons/menu/package.svg"),
+            include_str!("../assets/icons/menu/pen.svg"),
+            include_str!("../assets/icons/menu/plus.svg"),
+            include_str!("../assets/icons/menu/printer.svg"),
+            include_str!("../assets/icons/menu/refresh.svg"),
+            include_str!("../assets/icons/menu/save.svg"),
+            include_str!("../assets/icons/menu/share.svg"),
+            include_str!("../assets/icons/menu/sheet.svg"),
+            include_str!("../assets/icons/menu/shield.svg"),
+            include_str!("../assets/icons/menu/sync.svg"),
+            include_str!("../assets/icons/menu/trash.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 24 24""#), "{svg}");
+            assert!(svg.contains(r#"stroke-width="2""#), "{svg}");
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
     }
 }

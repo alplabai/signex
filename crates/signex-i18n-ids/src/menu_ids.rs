@@ -49,6 +49,7 @@ define_ids! {
         MENU_HELP_REPORT_ISSUE = "menu-help-report-issue";
         MENU_APP_TITLE = "menu-app-title";
         MENU_PLANNED_TOOLTIP = "menu-planned-tooltip";
+        MENU_PLANNED_BADGE = "menu-planned-badge";
         CTX_PART_ACTIONS = "ctx-part-actions";
         CTX_SHEET_ACTIONS = "ctx-sheet-actions";
         CTX_REFERENCES = "ctx-references";
@@ -97,8 +98,6 @@ define_ids! {
         CTX_ADD_PCB_LIBRARY = "ctx-add-pcb-library";
         CTX_ADD_OUTPUT_JOB = "ctx-add-output-job";
         CTX_ADD_DESIGN_NOTEBOOK = "ctx-add-design-notebook";
-        CTX_ADD_CONSTRAINT_FILE = "ctx-add-constraint-file";
-        CTX_ADD_VHDL_FILE = "ctx-add-vhdl-file";
         CTX_TREE_REFRESH_PRICING = "ctx-tree-refresh-pricing";
         CTX_TREE_NO_PRICING_CLIENT = "ctx-tree-no-pricing-client";
         CTX_TREE_LIBRARY_NOT_FOUND = "ctx-tree-library-not-found";
@@ -114,9 +113,6 @@ define_ids! {
         CTX_TREE_RELEASER = "ctx-tree-releaser";
         CTX_TREE_SHARE = "ctx-tree-share";
         CTX_TREE_ENABLE_VERSION_CONTROL = "ctx-tree-enable-version-control";
-        CTX_TREE_ADD_NEW_COMPONENT = "ctx-tree-add-new-component";
-        CTX_TREE_ADD_NEW_SYMBOL_LIBRARY = "ctx-tree-add-new-symbol-library";
-        CTX_TREE_ADD_NEW_FOOTPRINT_LIBRARY = "ctx-tree-add-new-footprint-library";
         CTX_TREE_COLLAPSE = "ctx-tree-collapse";
         CTX_TREE_EXPAND = "ctx-tree-expand";
         CTX_TREE_REFRESH = "ctx-tree-refresh";
@@ -126,6 +122,11 @@ define_ids! {
         CTX_TREE_SHOW_DIFFERENCES = "ctx-tree-show-differences";
         CTX_TREE_EXPAND_ALL = "ctx-tree-expand-all";
         CTX_TREE_COLLAPSE_ALL = "ctx-tree-collapse-all";
+        CTX_TREE_PLANNED = "ctx-tree-planned";
+        CTX_TREE_LIBRARY_ADD_NEW = "ctx-tree-library-add-new";
+        CTX_TREE_LIBRARY_ADD_COMPONENT = "ctx-tree-library-add-component";
+        CTX_TREE_LIBRARY_ADD_SYMBOL_LIBRARY = "ctx-tree-library-add-symbol-library";
+        CTX_TREE_LIBRARY_ADD_FOOTPRINT_LIBRARY = "ctx-tree-library-add-footprint-library";
         CTX_SHAPE_RECTANGLE = "ctx-shape-rectangle";
         CTX_SHAPE_CIRCLE = "ctx-shape-circle";
         CTX_SHAPE_ARC = "ctx-shape-arc";

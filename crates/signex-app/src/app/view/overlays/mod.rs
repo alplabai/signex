@@ -518,8 +518,9 @@ impl Signex {
         )
     }
 
-    /// Projects-panel tree right-click menu (+ its AddNewToProject
-    /// submenu). Pushes dismiss, then the placed menu and its flyout.
+    /// Projects-panel tree right-click menu (+ its Add New to Project,
+    /// Planned or library Add New flyout). Pushes dismiss, then the placed
+    /// menu and its flyout.
     pub(super) fn project_tree_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -535,11 +536,18 @@ impl Signex {
         let card = self.view_project_tree_context_menu(tree_ctx);
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (tree_ctx.x, tree_ctx.y));
-        // Only AddNewToProject opens from this menu.
-        if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
-            (interaction.context_submenu, card.flyout_offset)
+        // Only the tree's own flyouts open from this menu; the offset is
+        // there only while one of its launchers is open.
+        if let (
+            Some(
+                kind @ (ContextSubmenu::AddNewToProject
+                | ContextSubmenu::ProjectPlanned
+                | ContextSubmenu::AddNewToLibrary),
+            ),
+            Some(offset),
+        ) = (interaction.context_submenu, card.flyout_offset)
         {
-            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id);
+            let submenu = self.view_context_submenu(kind, window_id);
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)

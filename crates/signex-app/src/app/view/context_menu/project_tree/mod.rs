@@ -3,22 +3,27 @@
 //! Data-to-view (#269): the menu is assembled as a `Vec<DropdownEntry>`
 //! rendered by the shared `signex_widgets::active_bar_dropdown` widget. The
 //! clicked node's [`TreeNodeRole`] (pure, unit-tested) selects which item
-//! set the `&self` builder produces.
+//! set the `&self` builder produces: the project root (`root`), a library
+//! (`library`), a document leaf (`leaf`), or a folder. The two flyouts
+//! these menus open live in `planned` and `library`.
 
 use super::*;
 
-use super::items::{
-    command_text, dd_command, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher, text,
-};
+use super::items::{dd_disabled, dd_msg, text};
 use iced::Widget as _;
 use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
+mod leaf;
+pub(super) mod library;
+pub(super) mod planned;
+mod root;
+
 /// Role a project-tree node plays, which selects its right-click menu.
-/// Precedence matches the historic `if/else if` chain: a single-segment
-/// path is always the project root, then a depth-3 `SnxLibrary` leaf, then
-/// any file-backed openable leaf, then a container branch, else unknown.
+/// Precedence: a single-segment path is always the project root, then a
+/// depth-3 `SnxLibrary` leaf, then any file-backed openable leaf, then a
+/// container branch, else unknown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TreeNodeRole {
     Root,
@@ -94,6 +99,39 @@ pub(super) fn refresh_pricing_entry(
     }
 }
 
+/// The Refresh row (rebuild the tree), with an optional `icon`.
+fn refresh_row(i18n: &I18n, icon: Option<iced::widget::svg::Handle>) -> DropdownEntry<Message> {
+    dd_msg(
+        icon,
+        &text(i18n, menu_ids::CTX_TREE_REFRESH),
+        "",
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            crate::app::ProjectTreeAction::Refresh,
+        )),
+    )
+}
+
+/// Collapse or Expand for the node at `key`, by whether it is `expanded`.
+fn toggle_row(
+    i18n: &I18n,
+    key: &signex_widgets::tree_view::TreeKey,
+    expanded: bool,
+) -> DropdownEntry<Message> {
+    let label = if expanded {
+        text(i18n, menu_ids::CTX_TREE_COLLAPSE)
+    } else {
+        text(i18n, menu_ids::CTX_TREE_EXPAND)
+    };
+    dd_msg(
+        None,
+        &label,
+        "",
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            crate::app::ProjectTreeAction::ToggleNode(key.clone()),
+        )),
+    )
+}
+
 impl Signex {
     /// Whether "Enable Version Control..." is offered for `dir`: a pure read
     /// of the probed Model fact, never the disk (#1098).
@@ -104,11 +142,19 @@ impl Signex {
         self.document_state.project_fs.facts.lacks_git(dir)
     }
 
+    /// The directory of the project the tree row at `path` belongs to:
+    /// multi-project gates read the *clicked* project, not the active one
+    /// (#54).
+    fn clicked_project_dir(&self, path: &[usize]) -> Option<&std::path::Path> {
+        path.first()
+            .and_then(|idx| self.document_state.projects.get(*idx))
+            .and_then(|p| p.path.parent())
+    }
+
     /// Build the Projects-panel tree-view right-click menu. The item set
-    /// is derived from the clicked node's [`TreeNodeRole`] — project root
-    /// vs library leaf vs openable leaf vs container branch — so the menu
-    /// matches what Altium shows in each context. An empty-area click gets
-    /// the one New Project row.
+    /// is derived from the clicked node's [`TreeNodeRole`]: project root,
+    /// library leaf, openable leaf or container branch. An empty-area click
+    /// gets the one New Project row.
     ///
     /// Returns the card fitted to its labels; an empty placeholder when the
     /// click names no live row. The overlay places it at the click.
@@ -144,12 +190,11 @@ impl Signex {
             .window
             .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
         let i18n = &*self.ui_state.i18n;
-        let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
         // An empty-area click offers New Project (#2232), the dialog every
         // other New Project entry opens.
         let Some(key) = ctx.key.as_ref() else {
-            v.push(dd_msg(
+            return Some(vec![dd_msg(
                 None,
                 &signex_i18n::t!(
                     self.ui_state.i18n,
@@ -158,388 +203,44 @@ impl Signex {
                 .into_string(),
                 &self.keymap_shortcut_label("new_document"),
                 Message::Menu(crate::menu_bar::MenuMessage::NewProject),
-            ));
-            return Some(v);
+            )]);
         };
         // Resolve the stored key against the tree as it is NOW, so the
         // actions below carry indices of the row the user right-clicked
         // even if the tree was rebuilt since. A row that no longer exists
         // yields no menu rather than a menu for whatever took its place.
-        let path_vec = resolve_path(panel_ctx.project_tree.as_slice(), key)?;
-        let path = &path_vec;
-        let node = get_node(panel_ctx.project_tree.as_slice(), path)?;
+        let path = resolve_path(panel_ctx.project_tree.as_slice(), key)?;
+        let node = get_node(panel_ctx.project_tree.as_slice(), &path)?;
 
-        let role = tree_node_role(&node.icon, path.len(), !node.children.is_empty());
-        let has_schematic = panel_ctx.has_schematic;
-        let active_submenu = self.interaction_state.context_submenu;
-
-        match role {
-            TreeNodeRole::Root => {
-                // Project root — Altium's "right-click project" menu. Items
-                // not yet wired carry a "vX.Y" right-column badge so the
-                // user knows which release lands the feature rather than
-                // staring at a silently-greyed row.
-                let has_tabs = !self.document_state.tabs.is_empty();
-                // Multi-project: gate on the *clicked* project's directory,
-                // not the active project's (#54).
-                let has_project_dir = path
-                    .first()
-                    .and_then(|idx| self.document_state.projects.get(*idx))
-                    .and_then(|p| p.path.parent())
-                    .is_some();
-                // Save writes the active document and the active project, so
-                // the row follows the same gate as Ctrl+S and File ▸ Save,
-                // not the clicked project's own state.
-                let can_save = crate::keymap::AppCommandId::new("save_document").is_ok_and(|id| {
-                    crate::app::command::is_enabled(&id, &self.command_context(ctx.window))
-                });
-
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_MAKE_AVAILABLE_ONLINE),
-                    None,
-                ));
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_VALIDATE_PROJECT),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ValidateProject(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(submenu_launcher(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW),
-                    ContextSubmenu::AddNewToProject,
-                    active_submenu == Some(ContextSubmenu::AddNewToProject),
-                ));
-                // #1312: the Update PCB dialog for the clicked project.
-                v.push(dd_msg(
-                    None,
-                    &signex_i18n::t!(self.ui_state.i18n, signex_i18n::ids::UPDATE_PCB_TREE_ROW)
-                        .into_string(),
-                    &self.keymap_shortcut_label("update_pcb_from_schematic"),
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::UpdatePcb(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_ADD_EXISTING),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::AddExistingToProject(key.clone()),
-                    )),
-                ));
-                v.push(save_entry(
-                    i18n,
-                    can_save,
-                    &self.keymap_shortcut_label("save_document"),
-                ));
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_RENAME),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::OpenProjectRenameDialog(key.clone()),
-                    )),
-                ));
-                v.push(DropdownEntry::Separator);
-                v.push(if has_tabs {
-                    dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_CLOSE_DOCUMENTS),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::CloseAllDocuments,
-                        )),
-                    )
-                } else {
-                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_CLOSE_DOCUMENTS), None)
-                });
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::MENU_PROJECT_CLOSE),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseProject(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(if has_project_dir {
-                    dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_EXPLORE),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(key.clone()),
-                        )),
-                    )
-                } else {
-                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_EXPLORE), None)
-                });
-                v.push(DropdownEntry::Separator);
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_VARIANTS),
-                    None,
-                ));
-                v.push(DropdownEntry::Separator);
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_PACKAGER),
-                    None,
-                ));
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_RELEASER),
-                    None,
-                ));
-                v.push(DropdownEntry::Separator);
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_SHARE),
-                    None,
-                ));
-                v.push(dd_command(
-                    i18n,
-                    None,
-                    "open_project_options",
-                    &self.keymap_shortcut_label("open_project_options"),
-                    key.first().cloned(),
-                ));
-                // Enable Version Control — only surfaced when the project
-                // dir has no `.git/` yet.
-                let no_git_yet = path
-                    .first()
-                    .and_then(|idx| self.document_state.projects.get(*idx))
-                    .and_then(|p| p.path.parent())
-                    .map(|dir| self.offers_enable_version_control(dir))
-                    .unwrap_or(false);
-                if no_git_yet {
-                    v.push(dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_ENABLE_VERSION_CONTROL),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenEnableVersionControl(key.clone()),
-                        )),
-                    ));
-                }
-            }
-            TreeNodeRole::Library => {
-                // Identity of the right-clicked library, so the actions
-                // below cannot be retargeted by a tree rebuild (#742).
-                let library_ref = self.library_row_ref(path.as_slice());
-                // Library node menu — mirrors Altium's "Add New ▸" submenu:
-                // Component opens the New Component modal; Symbol / Footprint
-                // create FILES via the adapter. The basic expand / refresh
-                // actions stay so empty libraries are still navigable.
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW_COMPONENT),
-                    "",
-                    Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
-                ));
-                // F31 — these create FILES, not individual primitives. A
-                // `.snxsym` file holds many symbols (Altium parity).
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW_SYMBOL_LIBRARY),
-                    "",
-                    Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
-                ));
-                // Footprint editor gated off for release; hide the create
-                // entry so the user never reaches a dead flow.
-                if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
-                    v.push(dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_ADD_NEW_FOOTPRINT_LIBRARY),
-                        "",
-                        Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
-                    ));
-                }
-                v.push(DropdownEntry::Separator);
-                v.push(refresh_pricing_entry(
-                    i18n,
-                    library_ref.clone(),
-                    self.library
-                        .settings
-                        .preferred_order
-                        .iter()
-                        .any(|s| signex_library::source_supports_pricing(*s)),
-                ));
-                v.push(DropdownEntry::Separator);
-                // Enable Version Control on the library directory itself —
-                // hidden once the library has a `.git/`.
-                if let Some(library_ref) = library_ref.clone()
-                    && let Some(lib_dir) = library_ref.root.parent()
-                    && self.offers_enable_version_control(lib_dir)
-                {
-                    v.push(dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_ENABLE_VERSION_CONTROL),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenLibraryEnableVersionControl(library_ref),
-                        )),
-                    ));
-                    v.push(DropdownEntry::Separator);
-                }
-                let toggle_label = if node.expanded {
-                    text(i18n, menu_ids::CTX_TREE_COLLAPSE)
-                } else {
-                    text(i18n, menu_ids::CTX_TREE_EXPAND)
-                };
-                v.push(dd_msg(
-                    None,
-                    &toggle_label,
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
-                ));
-                // F23 — "Remove from Project" reuses the RemoveDialog flow.
-                v.push(DropdownEntry::Separator);
-                v.push(match library_ref {
-                    Some(library_ref) => dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_REMOVE_LIBRARY),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
-                            library_ref,
-                        ))),
-                    ),
-                    None => dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_REMOVE_LIBRARY), None),
-                });
-            }
+        let rows = match tree_node_role(&node.icon, path.len(), !node.children.is_empty()) {
+            TreeNodeRole::Root => self.project_root_rows(ctx, key, &path),
+            TreeNodeRole::Library => self.library_rows(key, &path, node.expanded),
             TreeNodeRole::OpenableLeaf => {
-                // Sheet / PCB / library leaf — Altium's per-document menu.
-                // Open + Explore are wired; Print fires whenever a schematic
-                // tab is open; other items are version-badged stubs.
-                let has_project_dir = path
-                    .first()
-                    .and_then(|idx| self.document_state.projects.get(*idx))
-                    .and_then(|p| p.path.parent())
-                    .is_some();
-
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_OPEN),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenNode(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(DropdownEntry::Separator);
-                v.push(if has_project_dir {
-                    dd_msg(
-                        None,
-                        &text(i18n, menu_ids::CTX_TREE_EXPLORE),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(key.clone()),
-                        )),
-                    )
-                } else {
-                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_EXPLORE), None)
-                });
-                v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_RENAME),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRenameDialog(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_REMOVE),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(DropdownEntry::Separator);
-                // Print exports / prints the active document — enabled
-                // whenever a schematic tab is open, regardless of which
-                // tree row was clicked.
-                v.push(if has_schematic {
-                    dd_msg(
-                        None,
-                        &command_text(i18n, "print"),
-                        "",
-                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::PrintActive)),
-                    )
-                } else {
-                    dd_disabled(None, &command_text(i18n, "print"), None)
-                });
-                v.push(dd_planned(
-                    i18n,
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_SHOW_DIFFERENCES),
-                    None,
-                ));
+                self.document_leaf_rows(key, &path, panel_ctx.has_schematic)
             }
-            TreeNodeRole::Container => {
-                // Source Documents / Libraries / Settings folders. Minimum
-                // useful action is the tree-widget's own expand/collapse.
-                let label = if node.expanded {
-                    text(i18n, menu_ids::CTX_TREE_COLLAPSE)
-                } else {
-                    text(i18n, menu_ids::CTX_TREE_EXPAND)
-                };
-                v.push(dd_msg(
-                    None,
-                    &label,
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        key.clone(),
-                    ))),
-                ));
-                v.push(dd_msg(
+            // Source Documents / Libraries / Settings folders: the tree's
+            // own expand and collapse, then Refresh.
+            TreeNodeRole::Container => vec![
+                toggle_row(i18n, key, node.expanded),
+                dd_msg(
                     None,
                     &text(i18n, menu_ids::CTX_TREE_EXPAND_ALL),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ExpandAll)),
-                ));
-                v.push(dd_msg(
+                ),
+                dd_msg(
                     None,
                     &text(i18n, menu_ids::CTX_TREE_COLLAPSE_ALL),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CollapseAll)),
-                ));
-                v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
-                ));
-            }
-            TreeNodeRole::Unknown => {
-                // Unknown role — give the user at least Refresh so a stale
-                // tree can be rebuilt without restarting.
-                v.push(dd_msg(
-                    None,
-                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
-                ));
-            }
-        }
-
-        Some(v)
+                ),
+                DropdownEntry::Separator,
+                refresh_row(i18n, None),
+            ],
+            // Unknown role: at least Refresh, so a stale tree can be rebuilt
+            // without restarting.
+            TreeNodeRole::Unknown => vec![refresh_row(i18n, None)],
+        };
+        Some(rows)
     }
 }
