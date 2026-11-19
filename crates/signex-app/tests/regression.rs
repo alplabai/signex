@@ -711,3 +711,7 @@ mod wire_tab_options;
 // or high number; Assign Footprints filter chips, ticked bar and reason pills.
 #[path = "regression/sheet_tools_graphite.rs"]
 mod sheet_tools_graphite;
+
+// #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
+#[path = "regression/board_sync_graphite.rs"]
+mod board_sync_graphite;
