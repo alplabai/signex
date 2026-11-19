@@ -1,271 +1,277 @@
-//! Variants section of the Project tab (#1690): Base and the project's
-//! variant definitions in a table, the active one checked, each name editable
-//! in place (Enter renames), Remove per row and Add under the table. Every
-//! edit is one step of the General history; a refused one shows its reason
-//! and changes nothing.
+//! Variants section of the Project tab in the Variant Manager layout (#1690,
+//! #1293): a top bar (active variant, parts filter, Only rows that differ),
+//! the variant list with the selected variant's actions, a summary card per
+//! variant and the parts by variants matrix, read off the UI thread from the
+//! project's sheets. Every variant edit is one step of the General history; a
+//! refused one shows its reason and changes nothing. The matrix is read-only
+//! here. See `docs/PROJECT_TAB.md`, "Variants".
 
-use iced::widget::row;
-use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, Localized, UserText, ids, t};
-use signex_types::project::{MAX_VARIANT_NAME_CHARS, VariantProblem};
+mod bar;
+mod edits;
+mod empty;
+mod list;
+mod matrix;
+mod read;
+mod summary;
+#[cfg(test)]
+mod tests;
+
+use iced::font::Weight;
+use iced::widget::{Column, column, container, row, svg};
+use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, ids, t};
+use signex_output::VariantMatrix;
+use signex_types::project::is_base_variant;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{radio, text_input};
+use signex_widgets::text;
 
-use super::general::tab_message;
-use super::table::{SP, TS, action, heading_row, problem, section, table_row, word_cell};
-use super::{ProjectTabMsg, ProjectTabState, VariantRenameDraft};
+use super::ProjectTabState;
+use super::table::{SP, TS, note, problem};
+use crate::app::Message;
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{Message, Signex};
+use crate::styles::{PillTone, Radii, ti};
 
-/// Width of the Active column, in `body`-size characters.
-const ACTIVE_EMS: f32 = 6.0;
-/// Width of the Remove column, in `body`-size characters.
-const ACTIONS_EMS: f32 = 8.0;
+/// The parts read, as the view shows it.
+#[derive(Clone, Copy)]
+enum Parts<'v> {
+    Reading,
+    Failed(&'v str),
+    Read(&'v VariantMatrix),
+}
 
-/// The words of a refused variant edit.
-pub(super) fn problem_words(problem: &VariantProblem, i18n: &I18n) -> Localized {
-    match problem {
-        VariantProblem::Empty => t!(i18n, ids::PROJECT_VARIANT_EMPTY),
-        VariantProblem::TooLong => {
-            t!(i18n, ids::PROJECT_VARIANT_TOO_LONG, "max" => MAX_VARIANT_NAME_CHARS)
+/// Everything the Variants views read, borrowed from the model.
+struct Manager<'v> {
+    project_id: ProjectId,
+    /// The variant definitions, live from the project.
+    definitions: &'v [String],
+    /// The active variant's definition; `None` is Base.
+    active: Option<&'v str>,
+    /// The variant selected in the list; `None` is Base.
+    selected: Option<&'v str>,
+    tab: Option<&'v ProjectTabState>,
+    parts: Parts<'v>,
+    /// The parts were read before the latest sheet edit, or for other
+    /// variant names than the project has now.
+    stale: bool,
+    i18n: &'v I18n,
+    tokens: &'v ThemeTokens,
+}
+
+impl<'v> Manager<'v> {
+    fn new(
+        project: &'v LoadedProject,
+        tab: Option<&'v ProjectTabState>,
+        sheet_epoch: u64,
+        i18n: &'v I18n,
+        tokens: &'v ThemeTokens,
+    ) -> Self {
+        let definitions = project.data.variant_definitions.as_slice();
+        let find = |name: &str| {
+            definitions
+                .iter()
+                .find(|defined| defined.eq_ignore_ascii_case(name.trim()))
+                .map(String::as_str)
+        };
+        let active = project
+            .data
+            .active_variant
+            .as_deref()
+            .filter(|name| !is_base_variant(name))
+            .and_then(find);
+        let selected = match tab.and_then(|tab| tab.variant_selected.as_deref()) {
+            None => active,
+            Some(name) if is_base_variant(name) => None,
+            Some(name) => find(name).or(active),
+        };
+        let parts = match tab.and_then(|tab| tab.variant_parts.as_deref()) {
+            None => Parts::Reading,
+            Some(Err(why)) => Parts::Failed(why),
+            Some(Ok(matrix)) => Parts::Read(matrix),
+        };
+        let stale = match (parts, tab) {
+            (Parts::Read(matrix), Some(tab)) => {
+                tab.variant_parts_epoch != sheet_epoch || !read_for(matrix, definitions)
+            }
+            _ => false,
+        };
+        Self {
+            project_id: project.id,
+            definitions,
+            active,
+            selected,
+            tab,
+            parts,
+            stale,
+            i18n,
+            tokens,
         }
-        VariantProblem::Invalid => t!(i18n, ids::PROJECT_VARIANT_INVALID),
-        VariantProblem::Reserved => t!(i18n, ids::PROJECT_VARIANT_RESERVED),
-        VariantProblem::Taken(name) => {
-            t!(i18n, ids::PROJECT_VARIANT_TAKEN, "name" => name.as_str())
+    }
+
+    fn matrix(&self) -> Option<&'v VariantMatrix> {
+        match self.parts {
+            Parts::Read(matrix) => Some(matrix),
+            _ => None,
         }
-        VariantProblem::Unknown(name) => {
-            t!(i18n, ids::PROJECT_VARIANT_UNKNOWN, "name" => name.as_str())
+    }
+
+    /// The matrix column of `variant` (`None` is Base), when it was read.
+    fn column(&self, variant: Option<&str>) -> Option<usize> {
+        self.matrix().and_then(|matrix| matrix.column(variant))
+    }
+
+    /// Base, then each definition, as the list, cards and columns show them.
+    fn variants(&self) -> impl Iterator<Item = Option<&'v str>> + 'v {
+        let definitions: &'v [String] = self.definitions;
+        std::iter::once(None).chain(definitions.iter().map(|name| Some(name.as_str())))
+    }
+
+    /// A variant's name as shown: Base's from the catalog.
+    fn name(&self, variant: Option<&str>) -> String {
+        match variant {
+            None => self.i18n.message_plain(ids::PROJECT_VARIANTS_BASE, &[]),
+            Some(name) => name.to_string(),
         }
+    }
+
+    fn is_active(&self, variant: Option<&str>) -> bool {
+        variant == self.active
     }
 }
 
+/// Whether `matrix` was read for the names the project defines now.
+fn read_for(matrix: &VariantMatrix, definitions: &[String]) -> bool {
+    matrix.variants.len() == definitions.len()
+        && matrix
+            .variants
+            .iter()
+            .zip(definitions)
+            .all(|(read, defined)| read.eq_ignore_ascii_case(defined))
+}
+
+/// The section: its title and help, then the Variant Manager filling the
+/// rest of the tab.
 pub(super) fn view<'a>(
     project: &LoadedProject,
     tab: Option<&ProjectTabState>,
+    sheet_epoch: u64,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let project_id = project.id;
-    let data = &project.data;
-    let active_w = Length::Fixed(TS.body * ACTIVE_EMS);
-    let actions = Length::Fixed(TS.body * ACTIONS_EMS);
-    let columns = [
-        (ids::PROJECT_VARIANTS_COL_ACTIVE, active_w),
-        (ids::PROJECT_VARIANTS_COL_NAME, Length::Fill),
-    ];
-    // `None` is Base; a radio needs one value type for every row.
-    let active: Option<usize> = data.active_variant.as_deref().and_then(|name| {
-        data.variant_definitions
-            .iter()
-            .position(|defined| defined.eq_ignore_ascii_case(name))
-    });
-    // Row 0 is Base, row `i + 1` the definition `i`.
-    let selected = Some(active.map_or(0, |index| index + 1));
-    let names = data.variant_definitions.clone();
-    let on_pick = move |row: usize| {
-        tab_message(ProjectTabMsg::ActiveVariantPicked {
-            project_id,
-            name: row.checked_sub(1).and_then(|i| names.get(i).cloned()),
-        })
+    let manager = Manager::new(project, tab, sheet_epoch, i18n, tokens);
+    let centre = if manager.definitions.is_empty() {
+        empty::view(&manager)
+    } else {
+        main(&manager)
     };
-    let mut body: Vec<Element<'a, Message>> =
-        vec![heading_row(&columns, Some(actions), i18n, tokens)];
-    body.push(table_row(vec![
-        (
-            radio(
-                UserText::new(String::new()),
-                0usize,
-                selected,
-                on_pick.clone(),
-            )
-            .size(TS.body)
-            .boxed(),
-            active_w,
-        ),
-        (
-            word_cell(t!(i18n, ids::PROJECT_VARIANTS_BASE), tokens),
-            Length::Fill,
-        ),
-        (
-            iced::widget::Row::<Element<'_, Message>>::new().boxed(),
-            actions,
-        ),
-    ]));
-    let draft = tab.and_then(|tab| tab.variant_rename.as_ref());
-    for (index, name) in data.variant_definitions.iter().enumerate() {
-        let shown = match draft {
-            Some(VariantRenameDraft { from, text }) if from == name => text.clone(),
-            _ => name.clone(),
-        };
-        let from = name.clone();
-        let field = text_input(t!(i18n, ids::PROJECT_VARIANTS_COL_NAME), shown)
-            .on_input(move |text| {
-                tab_message(ProjectTabMsg::VariantRenameEdited {
-                    project_id,
-                    from: from.clone(),
-                    text,
-                })
-            })
-            .on_submit(tab_message(ProjectTabMsg::VariantRenameSubmitted {
-                project_id,
-            }))
-            .style(crate::panels::form_look::text_input_style)
-            .size(TS.body)
-            .padding(SP.xs)
-            .width(Length::Fill);
-        let remove = tab_message(ProjectTabMsg::VariantRemoved {
-            project_id,
-            name: name.clone(),
+    let body = row![list::view(&manager), centre].height(Length::Fill);
+    let line = ti(tokens.border);
+    let panel = ti(tokens.panel_bg);
+    let frame = container(column![bar::top(&manager), body, bar::status(&manager)])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(panel)),
+            border: Border {
+                width: 1.0,
+                color: line,
+                radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
         });
-        body.push(table_row(vec![
-            (
-                radio(
-                    UserText::new(String::new()),
-                    index + 1,
-                    selected,
-                    on_pick.clone(),
-                )
-                .size(TS.body)
-                .boxed(),
-                active_w,
-            ),
-            (field.boxed(), Length::Fill),
-            (
-                action(t!(i18n, ids::PROJECT_VARIANTS_REMOVE), Some(remove), tokens),
-                actions,
-            ),
-        ]));
-    }
-    body.push(add_row(project_id, tab, i18n, tokens));
-    if let Some(refused) = tab.and_then(|tab| tab.variant_problem.as_ref()) {
-        body.push(problem(problem_words(refused, i18n), tokens));
-    }
-    section(
-        ids::PROJECT_SECTION_VARIANTS,
-        ids::PROJECT_VARIANTS_HELP,
-        body,
-        i18n,
-        tokens,
-    )
-}
-
-/// The new variant's name box and Add.
-fn add_row<'a>(
-    project_id: ProjectId,
-    tab: Option<&ProjectTabState>,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let typed = tab.map_or_else(String::new, |tab| tab.new_variant_name.clone());
-    let add =
-        (!typed.trim().is_empty()).then(|| tab_message(ProjectTabMsg::VariantAdded { project_id }));
-    let field = text_input(t!(i18n, ids::PROJECT_VARIANTS_NEW), typed)
-        .on_input(move |text| tab_message(ProjectTabMsg::NewVariantNameEdited { project_id, text }))
-        .on_submit_maybe(add.clone())
-        .style(crate::panels::form_look::text_input_style)
-        .size(TS.body)
-        .padding(SP.xs)
-        .width(Length::Fill);
-    row![
-        field,
-        action(t!(i18n, ids::PROJECT_VARIANTS_ADD), add, tokens),
+    column![
+        text(t!(i18n, ids::PROJECT_SECTION_VARIANTS))
+            .size(TS.heading)
+            .color(ti(tokens.text)),
+        note(t!(i18n, ids::PROJECT_VARIANTS_HELP), tokens),
+        frame,
     ]
-    .spacing(SP.s)
-    .padding([0.0, SP.m])
-    .align_y(iced::Alignment::Center)
+    .spacing(SP.l)
+    .padding(SP.xl)
+    .height(Length::Fill)
     .boxed()
 }
 
-impl Signex {
-    pub(super) fn edit_new_variant_name(&mut self, project_id: ProjectId, text: String) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.new_variant_name = text;
-            tab.variant_problem = None;
-        }
-    }
+/// The centre: the summary cards over the matrix, or where the read stands.
+fn main<'a>(m: &Manager<'_>) -> Element<'a, Message> {
+    let mut col: Column<Element<'a, Message>> = column![summary::view(m)]
+        .spacing(SP.l)
+        .padding(SP.l)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    col = col.push(match m.parts {
+        Parts::Reading => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
+        Parts::Failed(why) => problem(
+            t!(m.i18n, ids::PROJECT_VARIANTS_READ_FAILED, "reason" => why),
+            m.tokens,
+        ),
+        Parts::Read(matrix) => matrix::view(m, matrix),
+    });
+    col.boxed()
+}
 
-    /// Add: the typed name as a new variant, or the reason it is refused.
-    pub(super) fn add_typed_variant(&mut self, project_id: ProjectId) {
-        let Some(name) = self
-            .document_state
-            .project_tabs
-            .get(&project_id)
-            .map(|tab| tab.new_variant_name.clone())
-        else {
-            return;
-        };
-        let command = signex_engine::ProjectSectionCommand::AddVariant { name };
-        let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            match outcome {
-                Ok(_) => {
-                    tab.new_variant_name.clear();
-                    tab.variant_problem = None;
-                }
-                Err(refused) => tab.variant_problem = Some(refused),
-            }
-        }
-    }
+/// Horizontal padding of a pill, as a share of `SP.m`.
+const PILL_PAD_RATIO: f32 = 0.75;
 
-    pub(super) fn edit_variant_rename(
-        &mut self,
-        project_id: ProjectId,
-        from: String,
-        text: String,
-    ) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.variant_rename = Some(VariantRenameDraft { from, text });
-            tab.variant_problem = None;
-        }
-    }
+/// A rounded pill of catalog words in `tone`.
+fn pill<'a>(words: Localized, tone: PillTone, tokens: &ThemeTokens) -> Element<'a, Message> {
+    container(text(words).size(TS.caption).font(medium()))
+        .padding([0.0, SP.m * PILL_PAD_RATIO])
+        .style(crate::styles::pill(tokens, tone))
+        .boxed()
+}
 
-    /// Enter in a name box: rename the variant to what was typed. A refused
-    /// name stays in the box with its reason.
-    pub(super) fn submit_variant_rename(&mut self, project_id: ProjectId) {
-        let Some(draft) = self
-            .document_state
-            .project_tabs
-            .get_mut(&project_id)
-            .and_then(|tab| tab.variant_rename.take())
-        else {
-            return;
-        };
-        if draft.text == draft.from {
-            return;
-        }
-        let command = signex_engine::ProjectSectionCommand::RenameVariant {
-            from: draft.from.clone(),
-            to: draft.text.clone(),
-        };
-        let outcome = self.apply_project_section(project_id, &command);
-        if let (Err(refused), Some(tab)) = (
-            outcome,
-            self.document_state.project_tabs.get_mut(&project_id),
-        ) {
-            tab.variant_problem = Some(refused);
-            tab.variant_rename = Some(draft);
-        }
-    }
+/// A 16 × 16 stroke glyph (`currentColor`) drawn `size` square in `color`.
+fn glyph<'a>(bytes: &'static [u8], size: f32, color: Color) -> Element<'a, Message> {
+    svg(svg::Handle::from_memory(bytes))
+        .width(size)
+        .height(size)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(color),
+            ..Default::default()
+        })
+        .boxed()
+}
 
-    pub(super) fn remove_project_variant(&mut self, project_id: ProjectId, name: String) {
-        let command = signex_engine::ProjectSectionCommand::RemoveVariant { name: name.clone() };
-        let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            // A half-typed rename of the removed variant goes with it.
-            if tab.variant_rename.as_ref().is_some_and(|d| d.from == name) {
-                tab.variant_rename = None;
-            }
-            tab.variant_problem = outcome.err();
-        }
-    }
+const GLYPH_PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>"#;
+const GLYPH_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8.4l2.6 2.6L12 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
+const GLYPH_CROSS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>"#;
 
-    /// The Active radio of a row; `None` is Base.
-    pub(super) fn pick_active_variant(&mut self, project_id: ProjectId, name: Option<String>) {
-        let command = signex_engine::ProjectSectionCommand::SetActiveVariant { name };
-        let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.variant_problem = outcome.err();
-        }
+fn medium() -> Font {
+    weighted(Weight::Medium)
+}
+
+fn semibold() -> Font {
+    weighted(Weight::Semibold)
+}
+
+fn weighted(weight: Weight) -> Font {
+    Font {
+        weight,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     }
+}
+
+fn mono() -> Font {
+    crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
+}
+
+/// The mono face at medium weight: a designator.
+fn weighted_mono() -> Font {
+    Font {
+        weight: Weight::Medium,
+        ..mono()
+    }
+}
+
+/// `color` at `share` of its strength over the panel.
+fn tint_over_panel(color: Color, share: f32, tokens: &ThemeTokens) -> Color {
+    crate::styles::tokens::composite_over(
+        Color {
+            a: color.a * share,
+            ..color
+        },
+        ti(tokens.panel_bg),
+    )
 }

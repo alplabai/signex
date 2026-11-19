@@ -17,12 +17,29 @@ history, which the ERC dialog and the Rules tab share.
   numbers pages by the sheet hierarchy (the root sheet, then the other
   pages by file key), and changing that would renumber the nets of an
   exported netlist.
-- **Variants** — Base and the variant definitions, the active one picked
-  with its radio. A name is edited in place (Enter renames; the active
-  variant follows), Remove makes Base active when it removes the active
-  one, Add appends. Names are trimmed, at most 64 characters, no control
+- **Variants** — the Variant Manager layout (#1293). The top bar holds the
+  Active variant select (Base or a definition), the parts filter (designator
+  or value; terms split at commas and spaces, `U*` a wildcard over the whole
+  text, a plain term such as `10k` anywhere in it) and Only rows that differ
+  with its count. The list on the left shows Base and each definition with
+  how many parts it fits and how many it fits differently from Base, and the
+  active pill. A click selects a variant (the selection is not the active
+  variant); a double-click or Rename opens its name in place (Enter renames;
+  the active variant follows), Delete removes it (removing the active one
+  makes Base active). Base cannot be renamed or deleted. `+` (and New
+  variant from Base when the project has Base only) adds the first free
+  "Variant N" and opens its name. The centre shows a card per variant
+  (parts fitted, cost "—" while no prices are known, changes against Base)
+  and the parts matrix: one row per part, a column per variant, Fitted or
+  Not fitted, only cells that differ from Base coloured. The matrix is
+  read-only here. Its parts are read off the UI thread from every sheet of
+  the project, open ones with their unsaved edits, each child sheet once per
+  placement as the BOM counts it, with the BOM's own fit rule
+  (`signex_output::variant_fit`); after a sheet edit the status line offers
+  Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
-  shows its reason and changes nothing.
+  shows its reason and changes nothing. Changing a cell, Duplicate, Set as
+  default, Compare variants and Open in BOM Studio are not built yet.
 - **Libraries** — the project's libraries in list order, with the path as
   stored, the kind (in the project, shared, global) and the mount state read
   from the app (mounted, mounted read-only, missing at the last probe, not
