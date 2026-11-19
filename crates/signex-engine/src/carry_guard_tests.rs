@@ -168,16 +168,25 @@ pub(crate) fn check_allowed(
             continue;
         }
         let (x, y) = (bags[a].name.clone(), bags[b].name.clone());
-        if !x.is_empty() && !y.is_empty() && x != y {
-            continue;
-        }
         let gone = std::mem::replace(&mut bags[b], empty());
-        bags[a].terminals.extend(gone.terminals);
-        bags[a].labels.extend(gone.labels);
-        bags[a].sheet_pins.extend(gone.sheet_pins);
-        if bags[a].name.is_empty() {
-            bags[a].name = gone.name;
-        }
+        let mut joined = bags[a].clone();
+        joined.terminals.extend(gone.terminals.iter().cloned());
+        joined.labels.extend(gone.labels.iter().copied());
+        joined.sheet_pins.extend(gone.sheet_pins.iter().copied());
+        joined.name = if x.is_empty() || x == y {
+            y
+        } else if y.is_empty() {
+            x
+        } else {
+            match netlist_name(plain, &joined) {
+                Some(name) => name,
+                None => {
+                    bags[b] = gone;
+                    continue;
+                }
+            }
+        };
+        bags[a] = joined;
         parent[b] = a;
     }
     let project = |net: &NetSignature| {
@@ -187,7 +196,12 @@ pub(crate) fn check_allowed(
         }
         let identified =
             !(net.terminals.is_empty() && net.labels.is_empty() && net.sheet_pins.is_empty());
-        identified.then_some(net)
+        // A lone pin with nothing at its tip is on no net of a netlist.
+        let lone_pin = net.terminals.len() == 1
+            && net.labels.is_empty()
+            && net.sheet_pins.is_empty()
+            && net.name.is_empty();
+        (identified && !lone_pin).then_some(net)
     };
     let want: BTreeSet<NetSignature> = bags.iter().filter_map(&project).collect();
     let got: BTreeSet<NetSignature> = net_signatures(after).iter().filter_map(&project).collect();
@@ -284,4 +298,23 @@ fn every_contact_plain_commits_the_plain_move() {
         }
     }
     assert!(checked > 1000, "only {checked} cases");
+}
+
+/// The name the netlist gives a join of two named nets: the best of its
+/// labels with the values of the name-carrying ports on it; `None` with no
+/// label.
+fn netlist_name(sheet: &SchematicSheet, net: &NetSignature) -> Option<String> {
+    let labels: Vec<_> = (sheet.labels.iter())
+        .filter(|l| net.labels.contains(&l.uuid))
+        .collect();
+    if labels.is_empty() {
+        return None;
+    }
+    let carriers = signex_net::name_carrying_ports(sheet);
+    let values: Vec<&str> = (carriers.iter())
+        .filter(|(id, _)| net.terminals.iter().any(|(s, _)| s == id))
+        .map(|(_, value)| *value)
+        .collect();
+    let named = labels.iter().map(|l| (l.label_type, l.text.as_str()));
+    signex_net::best_net_name_of(named, &values).map(|(_, name)| name)
 }

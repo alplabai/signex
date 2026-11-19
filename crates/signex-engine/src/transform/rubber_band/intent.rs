@@ -54,15 +54,17 @@ impl Slot {
 
 /// The intent's nets: `nets` and the `lone` ones with each pair of `joins`
 /// made one net. A join is left out when (spec gap (b)) either side holds a
-/// warned pin (`warned`), or when both sides carry different names, which no
-/// join here can settle: the candidate that makes it then differs and the
-/// contact goes down the ladder. Emptied nets stay in the list; the caller
-/// drops every net with nothing to identify it.
+/// warned pin (`warned`). When both sides carry different names the joined
+/// net is named as the netlist names it (`name_of`, from its labels and
+/// ports); a join it cannot name is left out, so the candidate that makes it
+/// differs and the contact goes down the ladder. Emptied nets stay in the
+/// list; the caller drops every net with nothing to identify it.
 pub(super) fn join_nets(
     nets: Vec<NetSignature>,
     lone: BTreeMap<Key, NetSignature>,
     joins: &[(Slot, Slot)],
     warned: impl Fn(&NetSignature) -> bool,
+    name_of: impl Fn(&NetSignature) -> Option<String>,
 ) -> Vec<NetSignature> {
     let named = nets.len();
     let mut all = nets;
@@ -93,18 +95,23 @@ pub(super) fn join_nets(
         if !WARNED_PIN_MAY_JOIN_CARRIED_NET && (warned(&all[a]) || warned(&all[b])) {
             continue;
         }
-        let names = (&all[a].name, &all[b].name);
-        if !names.0.is_empty() && !names.1.is_empty() && names.0 != names.1 {
-            continue;
-        }
-        let gone = std::mem::replace(&mut all[b], super::guard::empty_net());
-        let into = &mut all[a];
-        into.terminals.extend(gone.terminals);
-        into.labels.extend(gone.labels);
-        into.sheet_pins.extend(gone.sheet_pins);
-        if into.name.is_empty() {
-            into.name = gone.name;
-        }
+        let mut joined = all[a].clone();
+        joined.terminals.extend(all[b].terminals.iter().cloned());
+        joined.labels.extend(all[b].labels.iter().copied());
+        joined.sheet_pins.extend(all[b].sheet_pins.iter().copied());
+        let (x, y) = (&all[a].name, &all[b].name);
+        joined.name = if x.is_empty() || x == y {
+            y.clone()
+        } else if y.is_empty() {
+            x.clone()
+        } else {
+            let Some(name) = name_of(&joined) else {
+                continue;
+            };
+            name
+        };
+        all[a] = joined;
+        all[b] = super::guard::empty_net();
         parent[b] = a;
     }
     all

@@ -212,7 +212,7 @@ impl LocalGuard {
         if want == got {
             return Some((true, None));
         }
-        let at = wire_nets(&self.wires, &self.wire_at, &self.plain.added);
+        let at = wire_nets(&self.wires, &self.wire_at, &self.plain.added, &self.wire_pins);
         Some((false, Guard::blame(tips, &at, policy, edited, &want, &got)))
     }
 
@@ -260,7 +260,13 @@ impl LocalGuard {
             policy,
         );
         let warned = warned_idents(tips, policy, |tip| guard.was_connected(tip));
-        let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
+        let joined = intent::join_nets(
+            nets,
+            lone,
+            &joins,
+            |net| holds_any(net, &warned),
+            |net| guard.joined_name(net),
+        );
         let want = (joined.into_iter())
             .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
             .collect();

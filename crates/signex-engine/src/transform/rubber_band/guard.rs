@@ -561,7 +561,13 @@ impl<'a> Guard<'a> {
             policy,
         );
         let warned = warned_idents(tips, policy, |tip| self.was_connected(tip));
-        let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
+        let joined = intent::join_nets(
+            nets,
+            lone,
+            &joins,
+            |net| holds_any(net, &warned),
+            |net| self.joined_name(net),
+        );
         let mut want: Vec<NetSignature> = joined
             .into_iter()
             .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
@@ -622,6 +628,25 @@ impl<'a> Guard<'a> {
                 !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty())
             });
         }
+    }
+
+    /// The name the netlist gives `net` (a join of two named nets): the best
+    /// of its labels, with the values of the name-carrying ports on it; `None`
+    /// with no label, where the port order decides and the intent cannot.
+    pub(super) fn joined_name(&self, net: &NetSignature) -> Option<String> {
+        let labels: Vec<_> = (self.plain_sheet.labels.iter())
+            .filter(|l| net.labels.contains(&l.uuid))
+            .collect();
+        if labels.is_empty() {
+            return None;
+        }
+        let carriers = name_carrying_ports(self.plain_sheet);
+        let values: Vec<&str> = (carriers.iter())
+            .filter(|(id, _)| net.terminals.iter().any(|(s, _)| s == id))
+            .map(|(_, value)| *value)
+            .collect();
+        let named = labels.iter().map(|l| (l.label_type, l.text.as_str()));
+        best_net_name_of(named, &values).map(|(_, name)| name)
     }
 
     /// The `Global` / `Power` labels of the plain sheet with text `value`: the
@@ -785,7 +810,7 @@ impl<'a> Guard<'a> {
             return (true, None);
         }
         let view = self.plain_view(tips);
-        let at = wire_nets(&self.wires, &view.wire_at, &view.nets);
+        let at = wire_nets(&self.wires, &view.wire_at, &view.nets, &self.wire_pins);
         let blamed = Self::blame(tips, &at, policy, edited, &want, &got);
         (false, blamed)
     }
@@ -797,7 +822,7 @@ impl<'a> Guard<'a> {
     /// edited something (`edited`); `None` when there are none either.
     pub(super) fn blame(
         tips: &[PinTip],
-        wire_nets: &[(Key, Vec<&NetSignature>)],
+        wire_nets: &[(Key, Vec<NetSignature>)],
         policy: &Policy,
         edited: &[Key],
         want: &Projected,
@@ -834,7 +859,7 @@ impl<'a> Guard<'a> {
         let live_wires = || (wire_nets.iter()).filter(|(k, _)| !policy.plain.contains(k));
         blamed.extend(
             live_wires()
-                .filter(|(_, nets)| nets.iter().any(|net| named(net)))
+                .filter(|(_, nets)| nets.iter().any(&named))
                 .map(|(k, _)| *k),
         );
         if blamed.is_empty() {
@@ -843,6 +868,15 @@ impl<'a> Guard<'a> {
                 .chain(live_wires().map(|(k, _)| *k))
                 .filter(|key| edited.contains(key))
                 .collect();
+            // With the plain move as the reference every difference is the
+            // pass's: one nothing explains takes every live contact a step
+            // down, so the rounds end at the plain move at worst.
+            if blamed.is_empty() {
+                blamed = live()
+                    .map(PinTip::old_key)
+                    .chain(live_wires().map(|(k, _)| *k))
+                    .collect();
+            }
             if blamed.is_empty() {
                 return None;
             }
@@ -862,15 +896,23 @@ fn holds_any_terminal(idents: &[&PinIdent], symbol: Uuid, pin: &str) -> bool {
 
 /// Per carried point, its old key and the plain move's named nets at its old
 /// place and where its wire landed: what a difference must touch to blame it.
-pub(super) fn wire_nets<'n>(
+pub(super) fn wire_nets(
     wires: &[WirePoint],
     at: &[(Found, Found)],
-    nets: &'n [NetSignature],
-) -> Vec<(Key, Vec<&'n NetSignature>)> {
-    (wires.iter().zip(at))
-        .map(|(w, (old, new))| {
+    nets: &[NetSignature],
+    pins: &[Terminals],
+) -> Vec<(Key, Vec<NetSignature>)> {
+    (wires.iter().zip(at).enumerate())
+        .map(|(i, (w, (old, new)))| {
             let named = [old.1, new.1].into_iter().flatten();
-            (w.old_key(), named.filter_map(|n| nets.get(n)).collect())
+            let mut held: Vec<NetSignature> = named.filter_map(|n| nets.get(n).cloned()).collect();
+            // The pins alone at the old place, on no net of the plain move.
+            if let Some(pins) = pins.get(i).filter(|pins| !pins.is_empty()) {
+                let mut alone = empty_net();
+                alone.terminals.clone_from(pins);
+                held.push(alone);
+            }
+            (w.old_key(), held)
         })
         .collect()
 }
