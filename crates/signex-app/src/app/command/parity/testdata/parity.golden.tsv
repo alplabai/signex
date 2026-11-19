@@ -293,7 +293,7 @@ draw_round_rectangle	refusal_needs	Planned	gui	none	routing
 draw_round_rectangle	disabled_still_runs	explains_when_unavailable	gui	none	handler
 draw_round_rectangle	headless_refusal	headless_refusal	core	none	routing
 draw_wire	active_bar	DrawWire	gui	active document	gate
-draw_wire	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,render cache,origin	handler
+draw_wire	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_wire	in_window_rewrite	document_window	gui	window	routing
 draw_wire	refusal_needs	Schematic	core	active document	routing
 draw_wire	headless_missing_operand	needs `start`	core	none	routing
@@ -886,7 +886,7 @@ place_text_string	in_window_rewrite	document_window	gui	window	routing
 place_text_string	refusal_needs	Schematic	core	active document	routing
 place_text_string	headless_missing_operand	needs `at`	core	none	routing
 place_wire	bridge	ActiveBar(Action(DrawWire))	gui	active document	gate
-place_wire	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,render cache,origin	handler
+place_wire	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_wire	in_window_rewrite	document_window	gui	window	routing
 place_wire	refusal_needs	Schematic	core	active document	routing
 place_wire	headless_missing_operand	needs `start`	core	none	routing
