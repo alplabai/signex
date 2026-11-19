@@ -52,7 +52,7 @@ fn label<'a>(
 }
 
 impl Signex {
-    pub(in crate::app::view) fn view_new_project_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app) fn view_new_project_dialog(&self) -> Element<'_, Message> {
         self.wrap_centred_dialog(self.view_new_project_card(false), sizes::NEW_PROJECT)
     }
 
