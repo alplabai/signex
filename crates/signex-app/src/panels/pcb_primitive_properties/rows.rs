@@ -136,13 +136,9 @@ impl<'a> Section<'a> {
             return Some(col.boxed());
         };
         let is_closed = collapse.is_closed(self.look.ctx);
-        let header = super::linked::section_header(
-            self.look,
-            title,
-            !is_closed,
-            collapse.summary,
-            collapse.set_key(),
-        );
+        let set_key = collapse.set_key();
+        let header =
+            super::linked::section_header(self.look, title, !is_closed, collapse.summary, set_key);
         let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
         if !is_closed {
             for r in self.rows {
