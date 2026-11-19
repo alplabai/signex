@@ -431,6 +431,8 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
         cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
+        // #1300: writes contents.snxsch and adds it to the project.
+        cmd_item_gated(ctx, cmd("add_table_of_contents", "")),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(

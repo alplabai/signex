@@ -1049,6 +1049,15 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// Four clicks draw a cubic Bezier: start, C1, C2, end (#1267).
+    Bezier,
+    /// Two points, then the line: a horizontal or vertical dimension, by
+    /// the drag direction (#1267).
+    LinearDimension,
+    /// Two points, then the line: a dimension along the two points (#1267).
+    AlignedDimension,
+    /// One click places a typed table (#1300).
+    Table,
 }
 
 impl std::fmt::Display for Tool {
@@ -1076,6 +1085,10 @@ impl std::fmt::Display for Tool {
             Tool::Blanket => write!(f, "Place Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::Bezier => write!(f, "Draw Bezier"),
+            Tool::LinearDimension => write!(f, "Place Linear Dimension"),
+            Tool::AlignedDimension => write!(f, "Place Aligned Dimension"),
+            Tool::Table => write!(f, "Place Table"),
         }
     }
 }

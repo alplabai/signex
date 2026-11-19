@@ -386,8 +386,15 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
-        | "repair_pin_junctions" => Needs::Schematic,
+        | "repair_pin_junctions"
+        // #1267, #1300: the Bezier, dimension and table tools.
+        | "draw_bezier"
+        | "place_table"
+        | "place_linear_dimension"
+        | "place_aligned_dimension" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
+        // #1300: the contents sheet of the active sheet's project.
+        "add_table_of_contents" => Needs::Sheets,
         "run_drc"
         | "reannotate_board"
         | "fabrication_outputs"

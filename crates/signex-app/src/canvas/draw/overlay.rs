@@ -39,6 +39,7 @@ impl SchematicCanvas<'_> {
             self.draw_net_color_pen(&mut frame, cursor_pos);
             self.draw_shape_preview(&mut frame, bounds, cursor_pos);
             self.draw_polyline_preview(&mut frame, bounds, cursor_pos);
+            self.draw_annotation_preview(&mut frame, bounds, cursor_pos);
             self.draw_arc_preview(&mut frame, bounds, cursor_pos);
             self.draw_lasso_preview(&mut frame, bounds, cursor_pos);
             self.draw_wire_preview(&mut frame, bounds, cursor_pos, hotspot);

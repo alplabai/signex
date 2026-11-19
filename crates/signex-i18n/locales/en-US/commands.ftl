@@ -673,3 +673,13 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## c13 sch-drawing-tables
+cmd-place-table = Place table
+cmd-menu-place-table = Table
+cmd-place-linear-dimension = Place linear dimension
+cmd-menu-place-linear-dimension = Linear
+cmd-place-aligned-dimension = Place aligned dimension
+cmd-menu-place-aligned-dimension = Aligned
+cmd-add-table-of-contents = Add table of contents sheet
+cmd-menu-add-table-of-contents = Add Table of Contents Sheet

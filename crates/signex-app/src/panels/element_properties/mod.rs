@@ -6,8 +6,11 @@
 //! editor live in sibling submodules split out of the former
 //! single-file module.
 
+mod annotation;
+mod bezier;
 mod body_row;
 mod child_sheet;
+mod dimension;
 mod directive;
 mod drawing;
 mod drawing_preview;
@@ -28,8 +31,10 @@ mod rows;
 mod selected;
 mod symbol;
 mod symbol_field;
+mod table;
 mod text_note;
 
+pub use annotation::{AnnotationField, AnnotationPanelMsg, AnnotationPanelState};
 pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };

@@ -187,6 +187,8 @@ impl<Message> canvas::Program<Message> for DrawingPreview {
                     }
                 }
             }
+            // Their own Properties illustrations draw these (#1267, #1300).
+            SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
         }
 
         vec![frame.into_geometry()]
@@ -234,6 +236,9 @@ fn shape_preview_bbox(d: &signex_types::schematic::SchDrawing) -> (f64, f64, f64
                 max_y = max_y.max(p.y);
             }
             (min_x, min_y, max_x, max_y)
+        }
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+            (-1.0, -1.0, 1.0, 1.0)
         }
     }
 }

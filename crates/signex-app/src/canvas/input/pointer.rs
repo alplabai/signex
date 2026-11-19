@@ -42,7 +42,11 @@ impl SchematicCanvas<'_> {
             | Tool::BreakWire
             | Tool::Blanket
             | Tool::CompileMask
-            | Tool::DiffPair => true,
+            | Tool::DiffPair
+            | Tool::Bezier
+            | Tool::LinearDimension
+            | Tool::AlignedDimension
+            | Tool::Table => true,
         }
     }
 

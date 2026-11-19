@@ -389,6 +389,10 @@ impl Signex {
                     Tool::Blanket => Some("Blanket".to_string()),
                     Tool::CompileMask => Some("Compile Mask".to_string()),
                     Tool::DiffPair => Some("Differential Pair".to_string()),
+                    Tool::Bezier => Some("Bezier".to_string()),
+                    Tool::LinearDimension => Some("Linear Dimension".to_string()),
+                    Tool::AlignedDimension => Some("Aligned Dimension".to_string()),
+                    Tool::Table => Some("Table".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
@@ -396,6 +400,9 @@ impl Signex {
                 // presets (Label/Power port/etc.) re-arm their specific
                 // ghost after the dispatch.
                 self.clear_ghost_previews();
+                // The Bezier and dimension tools' hint bar (#1267); cleared
+                // for every other tool.
+                self.sync_annotation_draft();
                 // A port the previous pick armed is not this tool's: a
                 // placement that wants one sets it after this arm (#1920).
                 self.interaction_state.pending_port = None;

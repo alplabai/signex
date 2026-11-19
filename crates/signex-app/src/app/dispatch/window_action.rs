@@ -84,6 +84,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::NumericFieldSubmitted(..)
                 | P::UpdateDrawingEdit(..)
                 | P::DrawingFieldTyping(..)
+                | P::Annotation(..)
                 | P::MultiEdit(..)
                 | P::PlacedEdit(..)
                 | P::UpdateSymbolFromLibrary(_)

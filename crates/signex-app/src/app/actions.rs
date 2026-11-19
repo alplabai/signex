@@ -196,6 +196,7 @@ impl Signex {
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
         self.interaction_state.shape_anchor = None;
+        self.interaction_state.annotation_tool.points.clear();
 
         // The main slot plus `canvases` is the full set of windows.
         let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
@@ -203,6 +204,7 @@ impl Signex {
                 canvas.wire_preview.clear();
                 canvas.drawing_mode = false;
             }
+            canvas.annotation_draft = None;
             canvas.arc_points.clear();
             canvas.polyline_points.clear();
             canvas.shape_anchor = None;

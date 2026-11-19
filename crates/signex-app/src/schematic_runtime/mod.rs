@@ -21,12 +21,16 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod bezier;
+mod dimension;
 mod directives;
 mod drawings;
+pub(crate) use drawings::annotation_aabb;
 mod drawn_value;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
+mod sch_table;
 pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
@@ -1056,6 +1060,9 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
             } else {
                 Aabb::new(0.0, 0.0, 0.0, 0.0)
             }
+        }
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+            annotation_aabb(drawing)
         }
     }
 }

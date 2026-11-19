@@ -58,15 +58,20 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     let is_placed_part =
         !is_power_port && selected_kind == Some(signex_types::schematic::SelectedKind::Symbol);
 
+    // A Bezier, dimension or table has its own panel and header (#1267, #1300).
+    let mut annotation = super::annotation::view_annotation_properties(ctx);
+
     // ── Header ──
-    col = col.push(super::header::selection_header(
-        ctx,
-        elem_type,
-        is_placed_part,
-        &get("Description"),
-        primary,
-    ));
-    col = col.push(thin_sep(border_c));
+    if annotation.is_none() {
+        col = col.push(super::header::selection_header(
+            ctx,
+            elem_type,
+            is_placed_part,
+            &get("Description"),
+            primary,
+        ));
+        col = col.push(thin_sep(border_c));
+    }
 
     if is_power_port && let Some(id) = uuid {
         col = super::power_port::push_power_port_sections(col, ctx, id, st);
@@ -88,7 +93,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             col = super::text_note::push_text_note_sections(col, ctx, uuid, st);
         }
         Some(signex_types::schematic::SelectedKind::Drawing) => {
-            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+            col = col.push(
+                annotation
+                    .take()
+                    .unwrap_or_else(|| view_drawing_properties(ctx, muted, primary, border_c)),
+            );
         }
         Some(signex_types::schematic::SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));

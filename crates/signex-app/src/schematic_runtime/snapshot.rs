@@ -353,6 +353,7 @@ pub fn build_renderer_snapshot(
 
     let mut drawings = Vec::with_capacity(snapshot.drawings.len());
     let mut drawings_front = Vec::new();
+    let power_nets = drawings::power_nets_if_tables(snapshot);
     for drawing in &snapshot.drawings {
         let bbox = drawing_aabb(drawing);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
@@ -373,6 +374,13 @@ pub fn build_renderer_snapshot(
             transform.scale,
             &overrides.defaults,
             out,
+        );
+        drawings::push_drawing_texts(
+            drawing,
+            colors,
+            focus_set,
+            &power_nets,
+            &mut parameter_texts,
         );
     }
 

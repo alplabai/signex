@@ -19,6 +19,8 @@ use super::dd_item;
 /// renderer (#457, epic #278).
 pub(super) enum EntrySpec {
     Separator,
+    /// A bold, non-clickable group title (the Drawing Tools' Dimension).
+    Header(signex_i18n::MessageId),
     Item {
         icon: fn(ThemeId) -> svg::Handle,
         label: &'static str,
@@ -401,6 +403,19 @@ pub(super) const SHAPES: &[EntrySpec] = &[
     ),
     EntrySpec::item(ic::icon_dd_polygon, "Polygon", ActiveBarAction::DrawPolygon),
     EntrySpec::item(ic::icon_dd_bezier, "Bezier", ActiveBarAction::DrawBezier),
+    EntrySpec::item(ic::icon_dd_table, "Table", ActiveBarAction::DrawTable),
+    EntrySpec::Separator,
+    EntrySpec::Header(signex_i18n::menu_ids::MENU_PLACE_DIMENSION),
+    EntrySpec::item(
+        ic::icon_pcb_dimension,
+        "Linear",
+        ActiveBarAction::PlaceLinearDimension,
+    ),
+    EntrySpec::item(
+        ic::icon_pcb_dimension,
+        "Aligned",
+        ActiveBarAction::PlaceAlignedDimension,
+    ),
     EntrySpec::Separator,
     EntrySpec::item(
         ic::icon_dd_graphic,
@@ -424,6 +439,7 @@ pub(super) fn render(
         .iter()
         .map(|spec| match spec {
             EntrySpec::Separator => DropdownEntry::Separator,
+            EntrySpec::Header(title) => DropdownEntry::Header(i18n.message_plain(*title, &[])),
             EntrySpec::Item {
                 icon,
                 label,

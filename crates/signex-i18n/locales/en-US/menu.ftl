@@ -214,3 +214,7 @@ ctx-fp-silk-header = { $kind } (silk)
 ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
+
+## c13 sch-drawing-tables
+# Place > Graphics > Dimension, and the Drawing Tools group header of the same name.
+menu-place-dimension = Dimension

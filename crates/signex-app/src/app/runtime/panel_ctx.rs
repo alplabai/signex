@@ -551,6 +551,7 @@ impl Signex {
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
+        let annotation = self.annotation_panel_state();
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
@@ -722,6 +723,7 @@ impl Signex {
             drawing_edit_buf_page,
             selected_drawing,
             selected_drawing_placement,
+            annotation,
             selected_child_sheet,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,

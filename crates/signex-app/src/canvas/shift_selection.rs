@@ -120,6 +120,9 @@ pub(super) fn shift_snapshot_for_selection(
         if !is_selected(uuid, SelectedKind::Drawing) {
             continue;
         }
+        if d.map_annotation_points(shift) {
+            continue;
+        }
         match d {
             SchDrawing::Line { start, end, .. } => {
                 *start = shift(*start);
@@ -144,6 +147,8 @@ pub(super) fn shift_snapshot_for_selection(
                     *p = shift(*p);
                 }
             }
+            // Shifted by `map_annotation_points` above.
+            SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
         }
     }
     out

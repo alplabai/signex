@@ -47,12 +47,14 @@ pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
 mod rules_tab;
+pub(crate) mod sch_tables;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
+pub use sch_tables::TablesMsg;
 pub(crate) mod design_read;
 pub(crate) mod designator_scan;
 #[cfg(test)]

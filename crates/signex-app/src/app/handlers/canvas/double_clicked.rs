@@ -49,6 +49,13 @@ impl Signex {
         // Shape commits snap to the grid exactly like the single-click
         // path (`handle_canvas_clicked`); hit-testing keeps the raw cursor.
         let (snapped_x, snapped_y) = self.snap_to_grid(world_x, world_y);
+        // A contents table's row opens its sheet (#1300).
+        if self.interaction_state.current_tool == Tool::Select
+            && let Some(open) =
+                self.table_row_double_clicked(signex_types::schematic::Point::new(world_x, world_y))
+        {
+            return open;
+        }
         match self.interaction_state.current_tool {
             Tool::Sheet => {
                 return self.place_sheet_click(world_x, world_y);
@@ -56,6 +63,12 @@ impl Signex {
             tool @ (Tool::Blanket | Tool::CompileMask) => {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 self.directive_region_point(tool, p, ClickKind::DoubleClick);
+                return Task::none();
+            }
+            // A quick next click of the Bezier or dimension tool (#1267).
+            tool @ (Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension) => {
+                let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
+                self.annotation_tool_point(tool, p);
                 return Task::none();
             }
             tool => {

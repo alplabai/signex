@@ -706,3 +706,9 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #1267, #1300: Bezier, dimension and table tools; schematic tables.
+#[path = "regression/drawing_tools.rs"]
+mod drawing_tools;
+#[path = "regression/schematic_tables.rs"]
+mod schematic_tables;
