@@ -83,4 +83,25 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_ERC_RUN_BUTTON = "panels-erc-run-button";
+    PANELS_ERC_CLEAR_TOOLTIP = "panels-erc-clear-tooltip";
+    PANELS_ERC_STALE_BANNER = "panels-erc-stale-banner";
+    PANELS_ERC_TILE_ERRORS = "panels-erc-tile-errors";
+    PANELS_ERC_TILE_WARNINGS = "panels-erc-tile-warnings";
+    PANELS_ERC_TILE_INFO = "panels-erc-tile-info";
+    PANELS_ERC_CLEAN = "panels-erc-clean";
+    PANELS_ERC_CLEAN_DETAIL = "panels-erc-clean-detail";
+    PANELS_ERC_FINDING_PLACE = "panels-erc-finding-place";
+    PANELS_ERC_SHOW = "panels-erc-show";
+    PANELS_ERC_WAIVED_GROUP = "panels-erc-waived-group";
+    PANELS_ERC_NET_WAIVER_TITLE = "panels-erc-net-waiver-title";
+    PANELS_ERC_WAIVED_BY = "panels-erc-waived-by";
+    PANELS_WAIVER_NEEDS_BOTH = "panels-waiver-needs-both";
+    PANELS_MESSAGES_LEVEL_ALL = "panels-messages-level-all";
+    PANELS_MESSAGES_ALL_SOURCES = "panels-messages-all-sources";
+    PANELS_MESSAGES_ALL_DOCUMENTS = "panels-messages-all-documents";
+    PANELS_MESSAGES_FILTER_HINT = "panels-messages-filter-hint";
+    PANELS_MESSAGES_COPY_TOOLTIP = "panels-messages-copy-tooltip";
+    PANELS_MESSAGES_CLEAR_TOOLTIP = "panels-messages-clear-tooltip";
+    PANELS_MESSAGES_NONE_MATCH = "panels-messages-none-match";
 }
