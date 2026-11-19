@@ -352,6 +352,7 @@ impl Signex {
                             .active_document_project()
                             .map(|p| p.data.name.as_str()),
                         i18n: &ui.i18n,
+                        projects: &document.projects,
                     },
                     &document.panel_ctx.tokens,
                 )
