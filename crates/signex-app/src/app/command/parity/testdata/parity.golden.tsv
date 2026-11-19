@@ -7,7 +7,7 @@ add_net_class	operand_handler	run_operands: named document	core	origin	handler
 add_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 add_net_class	headless_missing_operand	needs `document`	core	none	routing
 add_teardrops	bridge	Pcb(Tools(TeardropsAddRequested))	gui	active document	gate
-add_teardrops	operand_handler	run_operands: named document	core	origin	handler
+add_teardrops	operand_handler	run_operands: named document	core	origin,settings	handler
 add_teardrops	in_window_rewrite	document_window	gui	window	routing
 add_teardrops	refusal_needs	Pcb	core	active document	routing
 add_teardrops	headless_missing_operand	needs `document`	core	none	routing
@@ -39,7 +39,7 @@ apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unle
 apply_selection_filter_preset	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_selection_filter_preset	headless_missing_operand	needs `name`	core	none	routing
 arrange_in_box	bridge	Pcb(Tools(ArrangeRequested))	gui	active document,selection	gate
-arrange_in_box	operand_handler	run_operands: named document	core	origin	handler
+arrange_in_box	operand_handler	run_operands: named document	core	origin,settings	handler
 arrange_in_box	in_window_rewrite	document_window	gui	window	routing
 arrange_in_box	refusal_needs	SwapFootprints	core	active document,selection	routing
 arrange_in_box	headless_missing_operand	needs `document`	core	none	routing
@@ -93,7 +93,7 @@ board_report_netlist	in_window_rewrite	document_window	gui	window	routing
 board_report_netlist	refusal_needs	Pcb	core	active document	routing
 board_report_netlist	headless_missing_operand	needs `document`	core	none	routing
 board_shape_from_selection	bridge	Pcb(Tools(BoardShapeRequested))	gui	active document,selection	gate
-board_shape_from_selection	operand_handler	run_operands: named document	core	origin	handler
+board_shape_from_selection	operand_handler	run_operands: named document	core	origin,settings	handler
 board_shape_from_selection	in_window_rewrite	document_window	gui	window	routing
 board_shape_from_selection	refusal_needs	PcbSelection	core	active document,selection	routing
 board_shape_from_selection	headless_missing_operand	needs `document`	core	none	routing
@@ -334,7 +334,7 @@ export_assembly_svg	in_window_rewrite	document_window	gui	window	routing
 export_assembly_svg	refusal_needs	Pcb	core	active document	routing
 export_assembly_svg	headless_missing_operand	needs `document`	core	none	routing
 export_board_pdf	bridge	Pcb(Output(PrintRequested))	gui	active document	gate
-export_board_pdf	operand_handler	run_operands: named document	core	origin	handler
+export_board_pdf	operand_handler	run_operands: named document	core	origin,settings	handler
 export_board_pdf	in_window_rewrite	document_window	gui	window	routing
 export_board_pdf	refusal_needs	Pcb	core	active document	routing
 export_board_pdf	headless_missing_operand	needs `document`	core	none	routing
@@ -418,7 +418,7 @@ force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routi
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
 gloss_selected_routes	bridge	Pcb(Tools(GlossRequested))	gui	active document,selection	gate
-gloss_selected_routes	operand_handler	run_operands: named document	core	origin	handler
+gloss_selected_routes	operand_handler	run_operands: named document	core	origin,settings	handler
 gloss_selected_routes	in_window_rewrite	document_window	gui	window	routing
 gloss_selected_routes	refusal_needs	PcbSelection	core	active document,selection	routing
 gloss_selected_routes	headless_missing_operand	needs `document`	core	none	routing
@@ -462,7 +462,7 @@ import_graphics	in_window_rewrite	document_window	gui	window	routing
 import_graphics	refusal_needs	Schematic	core	active document	routing
 import_graphics	headless_missing_operand	needs `at`	core	none	routing
 keepout_from_selection	bridge	Pcb(Tools(KeepoutRequested))	gui	active document,selection	gate
-keepout_from_selection	operand_handler	run_operands: named document	core	origin	handler
+keepout_from_selection	operand_handler	run_operands: named document	core	origin,settings	handler
 keepout_from_selection	in_window_rewrite	document_window	gui	window	routing
 keepout_from_selection	refusal_needs	PcbSelection	core	active document,selection	routing
 keepout_from_selection	headless_missing_operand	needs `document`	core	none	routing
@@ -993,7 +993,7 @@ remove_last_vertex	in_window_rewrite	document_window	gui	window	routing
 remove_last_vertex	refusal_needs	VertexTarget	gui	active document,selection,in-progress edit	routing
 remove_last_vertex	headless_refusal	headless_refusal	core	none	routing
 remove_teardrops	bridge	Pcb(Tools(TeardropsRemoveRequested))	gui	active document	gate
-remove_teardrops	operand_handler	run_operands: named document	core	origin	handler
+remove_teardrops	operand_handler	run_operands: named document	core	origin,settings	handler
 remove_teardrops	in_window_rewrite	document_window	gui	window	routing
 remove_teardrops	refusal_needs	Pcb	core	active document	routing
 remove_teardrops	headless_missing_operand	needs `document`	core	none	routing
@@ -1087,10 +1087,10 @@ rules_set_create	headless_missing_operand	needs `document`	core	none	routing
 rules_set_edit	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_set_edit	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_set_edit	headless_missing_operand	needs `document`	core	none	routing
-run_drc	bridge	Pcb(DrcRequested)	core	active document	handler
+run_drc	bridge	Pcb(DrcRequested)	core	active document,settings	handler
 run_drc	in_window_rewrite	document_window	gui	window	routing
 run_drc	refusal_needs	Pcb	core	active document	routing
-run_erc	bridge	Erc(Run)	core	active document,render cache	handler
+run_erc	bridge	Erc(Run)	core	active document,render cache,settings	handler
 run_erc	in_window_rewrite	document_window	gui	window	routing
 run_erc	refusal_needs	Sheets	core	active document	routing
 save_board_reuse_block	bridge	Pcb(ReuseBlock(SaveRequested))	gui	active document,selection	gate
@@ -1252,7 +1252,7 @@ smart_paste	in_window_rewrite	document_window	gui	window	routing
 smart_paste	refusal_needs	PasteTarget	core	active document,clipboard	routing
 smart_paste	disabled_still_runs_refusal	explains_refusal_in	core	active document,tool state,render cache,clipboard	handler
 stitch_vias	bridge	Pcb(Tools(StitchRequested))	gui	active document	gate
-stitch_vias	operand_handler	run_operands: named document	core	origin	handler
+stitch_vias	operand_handler	run_operands: named document	core	origin,settings	handler
 stitch_vias	in_window_rewrite	document_window	gui	window	routing
 stitch_vias	refusal_needs	Pcb	core	active document	routing
 stitch_vias	headless_missing_operand	needs `document`	core	none	routing
@@ -1340,12 +1340,12 @@ tool_select	active_bar	ToolSelect	gui	none	handler
 tool_select	in_window_rewrite	document_window	gui	window	routing
 tool_select	headless_refusal	headless_refusal	core	none	routing
 tune_diff_pair	bridge	Pcb(Tune(DiffPairRequested))	gui	active document	gate
-tune_diff_pair	operand_handler	run_operands: named document	core	active document,selection,origin	handler
+tune_diff_pair	operand_handler	run_operands: named document	core	active document,selection,origin,settings	handler
 tune_diff_pair	in_window_rewrite	document_window	gui	window	routing
 tune_diff_pair	refusal_needs	Pcb	core	active document	routing
 tune_diff_pair	headless_missing_operand	needs `document`	core	none	routing
 tune_net_length	bridge	Pcb(Tune(NetLengthRequested))	gui	active document	gate
-tune_net_length	operand_handler	run_operands: named document	core	active document,selection,origin	handler
+tune_net_length	operand_handler	run_operands: named document	core	active document,selection,origin,settings	handler
 tune_net_length	in_window_rewrite	document_window	gui	window	routing
 tune_net_length	refusal_needs	Pcb	core	active document	routing
 tune_net_length	headless_missing_operand	needs `document`	core	none	routing

@@ -13,6 +13,10 @@
 //! `handler` (the handler was read and annotated), `routing` (the form has
 //! no handler of its own to read) or `gate` (only the gate and the routing
 //! were read, not the handler); no core row may be `gate`.
+//!
+//! The table follows the synchronous route only: the follow-up messages of
+//! a returned `Task` (a save's completion, `ErcFinished` / `DrcFinished`, a
+//! requirements run's result) run later against live state and are not rows.
 
 mod annotations;
 mod forms;
@@ -128,6 +132,15 @@ fn derive_apply_edits(rows: &mut [Row]) {
     for row in rows.iter().filter(|row| row.form == Form::Operand) {
         let command = AppCommandId::new(row.id).expect("catalog id is valid");
         if agent_edits::runs_as_one_step(&command) {
+            // The exclusion below holds for the wire snap alone; a member
+            // that reaches the render cache some other way must be argued
+            // here first.
+            assert!(
+                !row.inputs.contains(&Input::RenderCache)
+                    || matches!(row.id, "place_wire" | "draw_wire"),
+                "{} reads the render cache inside an edit list; check it before excluding",
+                row.id
+            );
             read.extend(row.inputs.iter().copied());
         }
     }

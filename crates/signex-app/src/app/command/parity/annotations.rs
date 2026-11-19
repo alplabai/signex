@@ -2,7 +2,13 @@
 //! which the routing code does not say. Read from the handlers; a regenerate
 //! (`UPDATE_GOLDEN=1`) keeps them, since they live here and not in the
 //! golden. An empty list says the route was read and reads nothing implicit.
-//! The grid and snap settings count as tool state.
+//!
+//! Tool state or settings: a value the person flips while working (grid,
+//! snap, Move Keeps Wires, the Shift+E hotspots) is tool state, even when it
+//! is persisted. A saved library or profile value (machine rules, saved
+//! layer sets, filter presets, new-project defaults, the locale where it
+//! shapes what a command writes or answers) is settings. A translated
+//! refusal, log line or undo label is not a read of the locale.
 
 use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
@@ -12,7 +18,9 @@ use super::inputs::Input::{self, *};
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Core edits and runs that read past their gate.
-    (&["run_erc"], Bridge, &[RenderCache]),
+    // A project without rules runs with the machine's ERC overrides
+    // (`erc_rule_settings`).
+    (&["run_erc"], Bridge, &[RenderCache, Settings]),
     (
         &[
             "select_all",
@@ -41,11 +49,30 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Selection, Cursor],
     ),
+    // The clearances come from `board_design_rules`, which falls back on the
+    // machine rules (`drc_inputs`).
     (
         &["tune_net_length", "tune_diff_pair"],
         Operand,
-        &[ActiveDocument, Selection],
+        &[ActiveDocument, Selection, Settings],
     ),
+    // The board tools' clearances: `run` -> `clearance_rules` ->
+    // `board_design_rules` -> `drc_inputs` (board_tools, handlers/pcb_drc.rs).
+    (
+        &[
+            "stitch_vias",
+            "add_teardrops",
+            "remove_teardrops",
+            "gloss_selected_routes",
+            "board_shape_from_selection",
+            "keepout_from_selection",
+            "arrange_in_box",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // The PDF's printed text is in the UI locale (`print_text`).
+    (&["export_board_pdf"], Operand, &[Settings]),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).
@@ -99,13 +126,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     // Read: they act on the named document and their operands only. A board
-    // tool repaints the board's canvas when that board is in view; the
+    // edit repaints the board's canvas when that board is in view; the
     // repaint is a projection and reads nothing into the result.
     (
         &[
             "clear_all_net_colors",
             "color_net",
-            "export_board_pdf",
             "export_board_report",
             "export_board_step",
             "export_assembly_svg",
@@ -137,13 +163,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_object_transparency",
             "set_board_graphic",
             "set_footprint_text",
-            "stitch_vias",
-            "add_teardrops",
-            "remove_teardrops",
-            "gloss_selected_routes",
-            "board_shape_from_selection",
-            "keepout_from_selection",
-            "arrange_in_box",
             "repour_all",
             "panelize_board",
             "remove_board_panel",
@@ -322,8 +341,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[ActiveDocument, DialogAnswer],
     ),
     (&["save_document_as"], StillRunsUnavailable, &[DialogAnswer]),
-    // DRC of the board in view, unless one is running for it.
-    (&["run_drc"], Bridge, &[ActiveDocument]),
+    // DRC of the board in view, unless one is running for it; a project
+    // without rules is checked with the machine rules (`start_pcb_drc` ->
+    // `drc_inputs`).
+    (&["run_drc"], Bridge, &[ActiveDocument, Settings]),
     // Checks read from memory, the active tab's render snapshot not used
     // (`erc_check_inputs`), confined by the origin. A project without rules
     // is checked with the machine's ERC overrides (`erc_rule_settings_quiet`)
