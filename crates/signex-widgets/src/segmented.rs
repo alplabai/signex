@@ -191,7 +191,7 @@ mod tests {
 
     /// Fixture text for the tests.
     fn sample(text: &str) -> Label<'static> {
-        signex_i18n::UserText::new(text).into()
+        crate::raw(text.to_owned())
     }
     use crate::Label;
 

@@ -154,8 +154,8 @@ fn unit_fit() -> Fit {
 #[test]
 fn long_callout_points_heads_outward_from_its_ends() {
     let metrics = Metrics::new(10.0);
-    let callout = Callout::new(Point::new(10.0, 50.0), Point::new(90.0, 50.0))
-        .label(signex_i18n::UserText::new("Width"));
+    let callout =
+        Callout::new(Point::new(10.0, 50.0), Point::new(90.0, 50.0)).label(crate::raw("Width"));
     let g = callout_geometry(&callout, &unit_fit(), &metrics);
     assert!(approx_point(g.line.0, Point::new(10.0, 50.0)));
     assert!(approx_point(g.line.1, Point::new(90.0, 50.0)));

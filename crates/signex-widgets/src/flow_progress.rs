@@ -591,18 +591,17 @@ mod tests {
     fn builds_with_and_without_a_click_handler() {
         let style = FlowProgressStyle::from_tokens(&theme_tokens(ThemeId::DEFAULT), 12.0);
         let stages = || {
-            vec![
-                FlowStage {
-                    name: crate::Label::from(signex_i18n::UserText::new("VALIDATE".to_owned())),
-                    detail: crate::Label::from(signex_i18n::UserText::new("3 of 3".to_owned())),
-                    state: StageState::Done,
-                },
-                FlowStage {
-                    name: crate::Label::from(signex_i18n::UserText::new("GENERATE".to_owned())),
-                    detail: crate::Label::from(signex_i18n::UserText::new("4 of 11".to_owned())),
-                    state: StageState::Running,
-                },
+            [
+                ("VALIDATE", "3 of 3", StageState::Done),
+                ("GENERATE", "4 of 11", StageState::Running),
             ]
+            .into_iter()
+            .map(|(name, detail, state)| FlowStage {
+                name: crate::raw(name),
+                detail: crate::raw(detail),
+                state,
+            })
+            .collect::<Vec<_>>()
         };
         let _: Element<'_, Msg> = FlowProgress::new(stages(), style).view();
         let _: Element<'_, Msg> = FlowProgress::new(stages(), style)

@@ -4,23 +4,19 @@
 use iced::widget::column;
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::Label;
 use signex_widgets::flow_progress::{FlowProgress, FlowProgressStyle, FlowStage, StageCounts};
+use signex_widgets::theme_ext::TypeScale;
+use signex_widgets::{Label, raw};
 
 use crate::catalog::Message;
-use signex_i18n::UserText;
 
-/// Sample text for this page: fixture content, not UI copy.
-fn sample_text(text: impl Into<String>) -> Label<'static> {
-    UserText::new(text).into()
-}
+/// The body step of the type scale.
+const BODY: f32 = TypeScale::DEFAULT.body;
 
-/// The app's default body size (`styles::typography::DEFAULT_BASE_SIZE`).
-const BODY: f32 = 12.0;
-
-/// Sample text; the real stages take catalog messages.
+/// Sample text; the real stages take catalog messages. The one `raw` site
+/// of the page.
 fn sample(text: &'static str) -> Label<'static> {
-    sample_text(text)
+    raw(text)
 }
 
 /// One pipeline sample: (name, detail, counts) per stage.

@@ -6,23 +6,24 @@ use iced::Widget;
 use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens, canvas_colors, theme_tokens};
-use signex_widgets::{Label, text};
+use signex_widgets::theme_ext::{Spacing, TypeScale};
+use signex_widgets::{Label, raw, text};
 
 use crate::catalog::Message;
 use crate::theme;
-use signex_i18n::UserText;
 
-/// Sample text for this page: fixture content, not UI copy.
+/// Sample text for this page: fixture content, not catalog copy. The one
+/// `raw` site of the page.
 fn sample_text(text: impl Into<String>) -> Label<'static> {
-    UserText::new(text).into()
+    raw(text.into())
 }
 
 /// The body text size the catalog samples are sized from.
-const BODY: f32 = 12.0;
+const BODY: f32 = TypeScale::DEFAULT.body;
 /// A swatch chip, one text line square.
 const CHIP: f32 = BODY;
-const GAP: f32 = BODY * 8.0 / 11.0;
-const PAD: f32 = BODY * 12.0 / 11.0;
+const GAP: f32 = Spacing::DEFAULT.m;
+const PAD: f32 = Spacing::DEFAULT.l;
 
 pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     column![board_legend(), line_art(tokens)]

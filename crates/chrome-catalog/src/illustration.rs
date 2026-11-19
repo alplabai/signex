@@ -4,18 +4,18 @@
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Point, Rectangle, Size, Widget};
-use signex_i18n::UserText;
 use signex_types::theme::{BoardLayerColors, ThemeId, ThemeTokens, canvas_colors};
 use signex_widgets::property_illustration::{
     Anchor, Callout, Cap, FieldId, Illustration, IllustrationHover, IllustrationMsg, Ink, Leader,
     Paint, Part, Primitive, Style, Text, TextLabel, TextRole, Tint, Weight, property_illustration,
 };
-use signex_widgets::theme_ext::to_color;
+use signex_widgets::raw;
+use signex_widgets::theme_ext::{TypeScale, to_color};
 
 use crate::catalog::Message;
 
 /// The caption step of the panel type scale the samples are drawn at.
-const CAPTION: f32 = 11.0;
+const CAPTION: f32 = TypeScale::DEFAULT.caption;
 /// Width of one sample, as wide as the Properties panel, in captions.
 const PANEL_EM: f32 = 24.0;
 /// The view box of the approved drawings.
@@ -28,9 +28,9 @@ fn layers() -> BoardLayerColors {
 }
 
 /// Sample label text. The samples stand for catalog messages and user text;
-/// one helper keeps them in one place.
+/// one helper keeps them to a single `raw` site.
 fn sample_text(text: &'static str) -> Text {
-    UserText::new(text).into()
+    raw(text)
 }
 
 fn label(at: Point, text: &'static str, anchor: Anchor, role: TextRole) -> TextLabel {

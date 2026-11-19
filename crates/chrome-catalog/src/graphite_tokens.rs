@@ -9,14 +9,14 @@ use signex_types::theme::{Color as SxColor, ThemeId, ThemeTokens, canvas_colors,
 use signex_widgets::theme_ext::{
     self, ChromeMetrics, HAIRLINE, Radii, Spacing, TypeScale, to_color,
 };
-use signex_widgets::{Label, button, text};
+use signex_widgets::{Label, button, raw, text};
 
 use crate::catalog::Message;
-use signex_i18n::UserText;
 
-/// Sample text for this page: fixture content, not UI copy.
+/// Sample text for this page: fixture content, not catalog copy. The one
+/// `raw` site of the page.
 fn sample_text(text: impl Into<String>) -> Label<'static> {
-    UserText::new(text).into()
+    raw(text.into())
 }
 
 const TS: TypeScale = TypeScale::DEFAULT;
