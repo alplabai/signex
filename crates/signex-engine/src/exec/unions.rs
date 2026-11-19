@@ -195,8 +195,10 @@ impl Engine {
     }
 
     /// After a changed edit: drop members the sheet no longer holds and the
-    /// unions that leaves empty, in the step the edit recorded. The patch of
-    /// the result and of that history step then covers the unions too.
+    /// unions this edit leaves empty, in the step the edit recorded. The
+    /// patch of the result and of that history step then covers the unions
+    /// too. A union that was empty already (the loader keeps one) is left
+    /// alone, so an unrelated edit never changes it.
     pub(crate) fn prune_union_members(&mut self, result: &mut Result<CommandResult, EngineError>) {
         let Ok(done) = result.as_mut() else { return };
         if !done.changed || self.document.unions.is_empty() {
@@ -204,14 +206,18 @@ impl Engine {
         }
         let kinds = object_kinds(&self.document);
         let mut pruned = false;
+        let mut emptied: Vec<Uuid> = Vec::new();
         for union in &mut self.document.unions {
             let count = union.members.len();
             union.members.retain(|id| kinds.contains_key(id));
-            pruned |= union.members.len() != count;
+            if union.members.len() != count {
+                pruned = true;
+                if union.members.is_empty() {
+                    emptied.push(union.uuid);
+                }
+            }
         }
-        let count = self.document.unions.len();
-        self.document.unions.retain(|u| !u.members.is_empty());
-        pruned |= self.document.unions.len() != count;
+        self.document.unions.retain(|u| !emptied.contains(&u.uuid));
         if !pruned {
             return;
         }

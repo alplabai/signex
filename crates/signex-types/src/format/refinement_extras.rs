@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, HashSet};
 
 use uuid::Uuid;
 
-use super::FormatError;
-use crate::schematic::SchematicSheet;
+use super::{FormatError, SheetLoadRepair};
+use crate::schematic::{SchematicSheet, union_member_kinds};
 
 /// The table `harness_entry_types` is stored under, for error messages.
 const ENTRY_TYPES_TABLE: &str = "extras.sheet.harness_entry_types";
@@ -58,43 +58,42 @@ pub(in crate::format) fn entry_types_from_read(
         .collect()
 }
 
-/// Every object uuid on the sheet a union can list: placed objects, sheet
-/// pins, harness objects and other unions.
-fn object_ids(sheet: &SchematicSheet) -> HashSet<Uuid> {
-    let mut ids: HashSet<Uuid> = HashSet::new();
-    ids.extend(sheet.symbols.iter().map(|o| o.uuid));
-    ids.extend(sheet.wires.iter().map(|o| o.uuid));
-    ids.extend(sheet.junctions.iter().map(|o| o.uuid));
-    ids.extend(sheet.labels.iter().map(|o| o.uuid));
-    ids.extend(sheet.child_sheets.iter().map(|o| o.uuid));
-    ids.extend(sheet_pin_ids(sheet));
-    ids.extend(sheet.no_connects.iter().map(|o| o.uuid));
-    ids.extend(sheet.text_notes.iter().map(|o| o.uuid));
-    ids.extend(sheet.buses.iter().map(|o| o.uuid));
-    ids.extend(sheet.bus_entries.iter().map(|o| o.uuid));
-    ids.extend(sheet.drawings.iter().map(|o| o.uuid()));
-    ids.extend(sheet.no_erc_directives.iter().map(|o| o.uuid));
-    ids.extend(sheet.directives.iter().map(|o| o.uuid()));
-    for connector in &sheet.harness.connectors {
-        ids.insert(connector.uuid);
-        ids.extend(connector.entries.iter().map(|e| e.uuid));
-    }
-    ids.extend(sheet.harness.wires.iter().map(|o| o.uuid));
-    ids.extend(sheet.unions.iter().map(|o| o.uuid));
-    ids
-}
-
 /// On load, after uuid repair: an entry type whose sheet pin is gone and a
-/// union member that names no object on the sheet are dropped, as entries
-/// for missing drawings are. A union left with no member is kept.
-pub(in crate::format) fn drop_dangling_references(sheet: &mut SchematicSheet) {
+/// union member that is no object a union can hold
+/// ([`union_member_kinds`], the rule the engine keeps too) are dropped,
+/// each with a load repair so Messages says so. A union left with no member
+/// is kept.
+pub(in crate::format) fn drop_dangling_references(
+    sheet: &mut SchematicSheet,
+) -> Vec<SheetLoadRepair> {
+    let mut repairs = Vec::new();
     let pins = sheet_pin_ids(sheet);
-    sheet.harness.entry_types.retain(|id, _| pins.contains(id));
+    sheet.harness.entry_types.retain(|id, harness_type| {
+        let kept = pins.contains(id);
+        if !kept {
+            repairs.push(SheetLoadRepair::HarnessEntryTypeDropped {
+                pin: *id,
+                harness_type: harness_type.clone(),
+            });
+        }
+        kept
+    });
     if sheet.unions.is_empty() {
-        return;
+        return repairs;
     }
-    let ids = object_ids(sheet);
+    let kinds = union_member_kinds(sheet);
     for union in &mut sheet.unions {
-        union.members.retain(|member| ids.contains(member));
+        let name = union.name.clone();
+        union.members.retain(|member| {
+            let kept = kinds.contains_key(member);
+            if !kept {
+                repairs.push(SheetLoadRepair::UnionMemberDropped {
+                    union: name.clone(),
+                    member: *member,
+                });
+            }
+            kept
+        });
     }
+    repairs
 }

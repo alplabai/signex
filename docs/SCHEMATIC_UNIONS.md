@@ -11,11 +11,13 @@ is the reference for how unions behave; the code is in
 
 - A union has an id, a name, tags and a list of members, each an object id
   of the sheet: a part, a wire, a bus, a bus entry, a junction, a no-connect,
-  a No-ERC directive, a directive, a label, a text note, a sheet symbol or a
-  drawing. A sheet entry belongs to its sheet symbol and a part's fields to
-  the part, so neither is a member of its own.
-- It is saved with the sheet (`unions`, format 1.3). A member that names an
-  object the sheet no longer holds is dropped when the sheet is read.
+  a No-ERC directive, a directive, a label, a text note, a sheet symbol, a
+  drawing, a harness connector or a harness wire. A sheet entry belongs to
+  its sheet symbol, a harness entry to its connector and a part's fields to
+  the part, so none is a member of its own. The loader and the engine share
+  this rule (`signex_types::schematic::union_member_kinds`).
+- It is saved with the sheet (`unions`, format 1.3). A member that is no such
+  object is dropped when the sheet is read, and Messages lists each one.
 - **One union per object.** Create Union and Add Selection refuse an object
   that is already in another union, and say which union holds it.
 - **One sheet per union.** A union lists objects of its own sheet only; tags
@@ -37,7 +39,9 @@ Every change is an engine command, so it is one undo step:
 
 Deleting an object removes it from its union in the same undo step; a union
 left with no members goes in that step too. The same holds for any edit that
-removes objects (a wire merged into another, a replaced document).
+removes objects (a wire merged into another, a replaced document). A union
+that was already empty (one the loader kept) is left alone by an unrelated
+edit.
 
 ## Selecting
 

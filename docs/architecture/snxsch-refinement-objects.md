@@ -98,16 +98,18 @@ locked = true
 
 `harness_entry_types` marks a sheet entry (a sheet pin of a sheet symbol on
 this sheet) as harness-typed. Keys are sheet-pin uuids. On save, an entry whose
-sheet pin no longer exists is not written; on load it is dropped. A key that is
-not a uuid refuses the file, naming the key, rather than dropping the entry.
+sheet pin no longer exists is not written; on load it is dropped with a load
+repair, so Messages says so. A key that is not a uuid refuses the file, naming
+the key, rather than dropping the entry.
 
 ### Unions
 
-A union lists its members by uuid: any object on the sheet (placed objects,
-sheet pins, harness connectors, entries and wires, other unions). `tags` is
-omitted when empty, `locked` when not set. On load, a member that names no
-object on the sheet is dropped, as entries for missing drawings are; a union
-left with no members is kept.
+A union lists its members by uuid: placed objects, harness connectors and
+harness wires (`schematic::union_member_kinds`, the rule the engine keeps
+too). A sheet pin, a harness entry and another union are not members. `tags`
+is omitted when empty, `locked` when not set. On load, a member that is no
+such object is dropped with a load repair, so Messages says so; a union left
+with no members is kept.
 
 ### Harness definitions
 

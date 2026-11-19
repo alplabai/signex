@@ -97,6 +97,13 @@ pub enum SheetLoadRepair {
         repointed: Option<String>,
         versions: usize,
     },
+    /// A union named `member`, which is no object a union can hold on the
+    /// sheet (gone, or a sheet pin, harness object or union); it was dropped
+    /// from the union.
+    UnionMemberDropped { union: String, member: Uuid },
+    /// A harness entry type was set for sheet pin `pin`, which is not on the
+    /// sheet; it was dropped.
+    HarnessEntryTypeDropped { pin: Uuid, harness_type: String },
 }
 
 impl RepairedObject {
@@ -174,6 +181,14 @@ impl SheetLoadRepair {
             } => format!(
                 "{} draws with library symbol version {missing}, which the sheet does not                  hold ({versions} other versions here); it draws without pins until                  updated from the library",
                 object.label()
+            ),
+            Self::UnionMemberDropped { union, member } => format!(
+                "{} {union} listed {member}, which is no object a union holds on this sheet; dropped from it",
+                kind::UNION
+            ),
+            Self::HarnessEntryTypeDropped { pin, harness_type } => format!(
+                "harness type {harness_type} was set for {} {pin}, which is not on this sheet; dropped",
+                kind::SHEET_PIN
             ),
         }
     }

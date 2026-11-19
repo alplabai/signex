@@ -903,7 +903,7 @@ pub use harness::{
     HarnessDefinitionEntry, HarnessEntry, HarnessWire, SheetHarness,
 };
 mod union;
-pub use union::SchUnion;
+pub use union::{SchUnion, union_member_kinds};
 mod drawing_bezier;
 mod drawing_dimension;
 mod sch_table;

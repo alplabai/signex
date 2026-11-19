@@ -40,65 +40,9 @@ fn objects_word(count: &usize) -> String {
     }
 }
 
-/// Every object of `sheet` a union can hold, by id, with the kind it is
-/// selected as. A sheet pin belongs to its sheet symbol and a symbol field
-/// to its symbol, so neither is a member of its own.
-#[must_use]
-pub fn object_kinds(sheet: &SchematicSheet) -> HashMap<Uuid, SelectedKind> {
-    let mut out = HashMap::new();
-    let mut put = |id: Uuid, kind: SelectedKind| {
-        out.insert(id, kind);
-    };
-    sheet
-        .symbols
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::Symbol));
-    sheet
-        .wires
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::Wire));
-    sheet
-        .buses
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::Bus));
-    sheet
-        .bus_entries
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::BusEntry));
-    sheet
-        .junctions
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::Junction));
-    sheet
-        .no_connects
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::NoConnect));
-    sheet
-        .no_erc_directives
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::NoErcDirective));
-    sheet
-        .directives
-        .iter()
-        .for_each(|o| put(o.uuid(), SelectedKind::Directive));
-    sheet
-        .labels
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::Label));
-    sheet
-        .text_notes
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::TextNote));
-    sheet
-        .child_sheets
-        .iter()
-        .for_each(|o| put(o.uuid, SelectedKind::ChildSheet));
-    sheet
-        .drawings
-        .iter()
-        .for_each(|o| put(o.uuid(), SelectedKind::Drawing));
-    out
-}
+/// Every object of a sheet a union can hold, by id, with the kind it is
+/// selected as: the loader drops other members by the same rule.
+pub use signex_types::schematic::union_member_kinds as object_kinds;
 
 /// The union `id` of `sheet`.
 #[must_use]

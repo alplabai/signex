@@ -417,7 +417,7 @@ fn union_members_naming_missing_objects_are_dropped_on_load() {
     let ghost = id(0x7f);
     let mut sheet = full_sheet();
     sheet.unions = vec![
-        union(0x50, vec![id(0x70), ghost, id(0x11), id(0x41)]),
+        union(0x50, vec![id(0x70), ghost, id(0x10), id(0x11), id(0x41)]),
         SchUnion {
             uuid: id(0x52),
             name: "Gone".into(),
@@ -432,12 +432,60 @@ fn union_members_naming_missing_objects_are_dropped_on_load() {
         "written as held:\n{text}"
     );
     let back = load(&text);
-    // A wire, a harness entry and a sheet pin are all objects a union can list.
-    assert_eq!(back.unions[0].members, vec![id(0x70), id(0x11), id(0x41)]);
+    // A wire and a harness connector are objects a union holds; a harness
+    // entry belongs to its connector and a sheet pin to its sheet symbol,
+    // by the rule the engine keeps too (`union_member_kinds`).
+    assert_eq!(back.unions[0].members, vec![id(0x70), id(0x10)]);
     // A union left without members is kept.
     assert_eq!(back.unions.len(), 2);
     assert!(back.unions[1].members.is_empty());
     assert!(!save(&back).contains(&ghost.to_string()));
+    // Every dropped member is a load repair, so Messages says so.
+    let dropped: Vec<(&str, Uuid)> = back
+        .unknown
+        .load_repairs
+        .iter()
+        .filter_map(|repair| match repair {
+            SheetLoadRepair::UnionMemberDropped { union, member } => {
+                Some((union.as_str(), *member))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        dropped,
+        vec![
+            ("Buck stage", ghost),
+            ("Buck stage", id(0x11)),
+            ("Buck stage", id(0x41)),
+            ("Gone", ghost),
+        ]
+    );
+}
+
+#[test]
+fn an_entry_type_for_a_missing_sheet_pin_is_dropped_with_a_repair() {
+    let mut sheet = base_sheet();
+    let gone = id(0x7e);
+    sheet.harness.entry_types.insert(id(0x41), "SPI_BUS".into());
+    sheet.harness.entry_types.insert(gone, "UART".into());
+    let text = save(&sheet);
+    // `entry_types_for_write` leaves it out; hand-written files may not.
+    let text = text.replace(
+        "[extras.sheet.harness_entry_types]\n",
+        &format!("[extras.sheet.harness_entry_types]\n{gone} = \"UART\"\n"),
+    );
+    let back = load(&text);
+    assert!(!back.harness.entry_types.contains_key(&gone));
+    assert_eq!(back.harness.entry_types[&id(0x41)], "SPI_BUS");
+    assert!(
+        back.unknown.load_repairs.contains(&SheetLoadRepair::HarnessEntryTypeDropped {
+            pin: gone,
+            harness_type: "UART".into(),
+        }),
+        "{:?}",
+        back.unknown.load_repairs
+    );
 }
 
 #[test]
