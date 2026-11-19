@@ -22,6 +22,13 @@ mod selection;
 mod selection_payload;
 mod sheet;
 mod sheet_entry;
+mod sheet_file_rules;
+#[cfg(test)]
+mod sheet_file_rules_tests;
+pub use sheet_file_rules::{
+    SheetFilePlacement, SheetFileRefusal, SheetGraph, SheetGraphNode, SubtreeFacts,
+    carries_reaching_name, check_sheet_file, subtree_facts,
+};
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;

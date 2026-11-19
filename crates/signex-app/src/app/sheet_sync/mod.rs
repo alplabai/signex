@@ -23,8 +23,8 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_engine::SheetSyncDirection;
-use signex_types::schematic::SchematicSheet;
 
+pub use create::SymbolSheetReads;
 pub use state::{ChildRead, SheetSyncPreviews, SheetSyncProblem, SheetSyncState};
 
 use crate::app::{Message, Signex};
@@ -43,12 +43,8 @@ pub enum SheetSyncMsg {
     CreateSymbolRequested,
     /// The file dialog answered; `None` when it was cancelled.
     CreateSymbolPicked(Option<PathBuf>),
-    /// The picked sheet was read off the UI thread, for the sheet `target`.
-    CreateSymbolRead {
-        path: PathBuf,
-        target: PathBuf,
-        sheet: Result<Arc<SchematicSheet>, String>,
-    },
+    /// What placing the picked sheet needs was read off the UI thread.
+    CreateSymbolRead(SymbolSheetReads),
     /// The menu row, palette or a key asked for the sync dialog.
     Requested,
     /// Read `generation` of the closed child sheet finished.
@@ -74,12 +70,8 @@ impl Signex {
         let task = match msg {
             SheetSyncMsg::CreateSymbolRequested => self.create_symbol_dialog(),
             SheetSyncMsg::CreateSymbolPicked(path) => self.read_symbol_sheet(path),
-            SheetSyncMsg::CreateSymbolRead {
-                path,
-                target,
-                sheet,
-            } => {
-                self.symbol_sheet_read(&path, &target, sheet);
+            SheetSyncMsg::CreateSymbolRead(read) => {
+                self.symbol_sheet_read(read);
                 Task::none()
             }
             SheetSyncMsg::Requested => self.open_sheet_sync(),

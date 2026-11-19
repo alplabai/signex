@@ -1,165 +1,124 @@
-//! What a `place_sheet_symbol` file brings into the sheet it is placed on
-//! (#2199): the walk down its subtree (a loop back to the edited sheet, a
-//! sheet that cannot be read, names that reach other sheets), the file being a
-//! page or a placement already, and the names it brings in. Everything is
-//! judged on what the edit read before it ran (`edit_reads`); sheets are
-//! matched by their folded key. Rules: `docs/CLI.md`, "Placing parts and
-//! hierarchy".
+//! What a sheet-symbol file brings into the sheet it is placed on (#2199,
+//! #1276): the facts the rules in `signex_engine::check_sheet_file` judge (the
+//! sheets around the edit as a graph, the sheets above it, a link out of the
+//! project folder) and the names it brings in. Everything is judged on what
+//! the edit read before it ran (`edit_reads`); sheets are matched by their
+//! folded key. The GUI's Create Sheet Symbol From Sheet and the operand forms
+//! share this path. Rules: `docs/CLI.md`, "Placing parts and hierarchy".
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 
-use signex_engine::Command;
-use signex_types::schematic::{LabelType, Point, SchematicSheet};
+use signex_engine::{Command, SheetFilePlacement, SheetGraph, SheetGraphNode, SubtreeFacts};
+use signex_types::schematic::{Point, SchematicSheet};
 
 use crate::app::Signex;
 use crate::app::project_sheets::{project_pages, resolve_child_reference_quiet};
 use crate::app::sheet_hierarchy::{CaseFold, normalised_key};
-
-/// The walk down a file's child references.
-pub(super) struct SubtreeFacts {
-    /// A sheet of the subtree places the edited sheet: a loop.
-    pub(super) reaches: bool,
-    /// `<file> is unreadable (<why>)` for each sheet of it that cannot be read.
-    pub(super) unreadable: Vec<String>,
-    /// A sheet of it carries a name that can reach other sheets: a global
-    /// label or a power port naming a net.
-    pub(super) names: bool,
-}
-
-/// A global label or a power port naming a net: a name other sheets see.
-fn carries_reaching_name(sheet: &SchematicSheet) -> bool {
-    sheet
-        .labels
-        .iter()
-        .any(|l| matches!(l.label_type, LabelType::Global | LabelType::Power))
-        || sheet
-            .symbols
-            .iter()
-            .any(|s| s.is_power && !s.value.is_empty())
-}
 
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
 }
 
-/// Walk down from `file` over `known` (sheets by folded key); `unreadable`
-/// holds why a sheet could not be read, by folded key.
-fn walk(
-    file: &Path,
-    edited: &str,
-    fold: CaseFold,
-    known: &HashMap<String, &SchematicSheet>,
-    unreadable: &HashMap<String, String>,
-) -> SubtreeFacts {
-    let mut facts = SubtreeFacts {
-        reaches: false,
-        unreadable: Vec::new(),
-        names: false,
-    };
-    let mut seen = HashSet::new();
-    let mut queue = vec![file.to_path_buf()];
-    while let Some(path) = queue.pop() {
-        let key = normalised_key(&path, fold);
-        if !seen.insert(key.clone()) {
-            continue;
-        }
-        if let Some(why) = unreadable.get(&key) {
-            facts
-                .unreadable
-                .push(format!("{} is unreadable ({why})", file_name(&path)));
-            continue;
-        }
-        let Some(sheet) = known.get(&key) else {
-            continue;
-        };
-        facts.names |= carries_reaching_name(sheet);
-        let dir = path.parent().unwrap_or_else(|| Path::new(""));
-        for child in &sheet.child_sheets {
-            let Ok(next) = resolve_child_reference_quiet(dir, &child.filename) else {
-                continue;
-            };
-            facts.reaches |= normalised_key(&next, fold) == edited;
-            queue.push(next);
-        }
+/// The graph node of `sheet`, read from `path`.
+fn read_node(path: &Path, sheet: &SchematicSheet, fold: CaseFold, in_project: bool) -> SheetGraphNode {
+    let dir = path.parent().unwrap_or_else(|| Path::new(""));
+    let children = sheet
+        .child_sheets
+        .iter()
+        .filter_map(|child| resolve_child_reference_quiet(dir, &child.filename).ok())
+        .map(|next| normalised_key(&next, fold))
+        .collect();
+    SheetGraphNode::Read {
+        name: file_name(path),
+        children,
+        reaching_names: signex_engine::carries_reaching_name(sheet),
+        in_project,
     }
-    facts
 }
 
 impl Signex {
-    /// The walk down `file`'s subtree from the sheet an edit acts on: over
-    /// the open sheets and the project as read, or for a loose sheet the
-    /// file's subtree as read.
+    /// The sheets around an edit of `sheet`: the project as read (or for a
+    /// loose sheet the subtree as read), then the open sheets in their live
+    /// state. A sheet the read found unreadable counts as such unless open.
+    fn sheet_graph(&self, sheet: &Path, fold: CaseFold) -> Result<SheetGraph, String> {
+        let docs = &self.document_state;
+        let owned = match docs.document_project(sheet) {
+            Some(_) => Some(self.edit_project_set(sheet)?),
+            None => None,
+        };
+        let in_project = owned.is_some();
+        let set = owned.as_ref().or_else(|| self.prefetched_subtree());
+        let mut graph = SheetGraph::default();
+        let mut project_keys = HashSet::new();
+        if let Some(set) = set {
+            for (path, content) in &set.sheets {
+                let key = normalised_key(path, fold);
+                if in_project {
+                    project_keys.insert(key.clone());
+                }
+                graph.insert(key, read_node(path, content, fold, in_project));
+            }
+            for (path, why) in &set.unreadable {
+                let node = SheetGraphNode::Unreadable {
+                    name: file_name(path),
+                    why: why.clone(),
+                };
+                graph.insert(normalised_key(path, fold), node);
+            }
+        }
+        for (path, engine) in &docs.engines {
+            let key = normalised_key(path, fold);
+            let node = read_node(path, engine.document(), fold, project_keys.contains(&key));
+            graph.insert(key, node);
+        }
+        Ok(graph)
+    }
+
+    /// The walk down `file`'s subtree from the sheet an edit acts on.
     pub(super) fn file_subtree(
         &self,
         file: &Path,
         sheet: &Path,
         fold: CaseFold,
     ) -> Result<SubtreeFacts, String> {
-        let docs = &self.document_state;
-        let owned = match docs.document_project(sheet) {
-            Some(_) => Some(self.edit_project_set(sheet)?),
-            None => None,
-        };
-        let set = owned.as_ref().or_else(|| self.prefetched_subtree());
-        let mut known: HashMap<String, &SchematicSheet> = HashMap::new();
-        let mut unreadable: HashMap<String, String> = HashMap::new();
-        if let Some(set) = set {
-            for (path, content) in &set.sheets {
-                known.insert(normalised_key(path, fold), content);
-            }
-            for (path, why) in &set.unreadable {
-                unreadable.insert(normalised_key(path, fold), why.clone());
-            }
-        }
-        for (path, engine) in &docs.engines {
-            let key = normalised_key(path, fold);
-            unreadable.remove(&key);
-            known.insert(key, engine.document());
-        }
-        let edited = normalised_key(sheet, fold);
-        Ok(walk(file, &edited, fold, &known, &unreadable))
+        let graph = self.sheet_graph(sheet, fold)?;
+        let (file, edited) = (normalised_key(file, fold), normalised_key(sheet, fold));
+        Ok(signex_engine::subtree_facts(&graph, &file, &edited))
     }
 
-    /// A `file` that is a page of the project, or that a sheet symbol on
-    /// another sheet of it places already: placing it here too changes its
-    /// nets (its local names become this placement's), so it needs
-    /// `allow_merge=true`. A loose sheet has neither.
-    pub(super) fn refuse_placed_file(&self, path: &Path) -> Result<(), String> {
+    /// The file rules of a sheet symbol placing `path` on the sheet an edit
+    /// acts on (`signex_engine::check_sheet_file`): the project folder, the
+    /// sheet itself, one above it, a loop at any depth and, unless
+    /// `allow_merge`, an unreadable subtree and a file placed already.
+    pub(super) fn check_sheet_symbol_file(&self, path: &Path, allow_merge: bool) -> Result<(), String> {
+        let escapes_project = self.prefetched_escape(path)?;
         let docs = &self.document_state;
         let sheet = docs.edit_path().ok_or("no schematic is open")?;
-        let Some(project) = docs.document_project(sheet) else {
-            return Ok(());
+        let project = docs.document_project(sheet);
+        let fold = crate::app::state::project_case::fold_of(project);
+        let (file, edited) = (normalised_key(path, fold), normalised_key(sheet, fold));
+        let above = self.sheets_above_edited(sheet, fold)?;
+        let graph = self.sheet_graph(sheet, fold)?;
+        let pages: Option<HashSet<String>> = project.map(|project| {
+            project_pages(Some(project))
+                .iter()
+                .map(|page| normalised_key(page, fold))
+                .collect()
+        });
+        let placement = SheetFilePlacement {
+            edited: &edited,
+            file: &file,
+            escapes_project,
+            above: &above,
+            graph: &graph,
+            project_pages: pages.as_ref(),
+            allow_merge,
         };
-        let fold = crate::app::state::project_case::fold_of(Some(project));
-        let key = normalised_key(path, fold);
-        let tail = "placing it again changes its nets; pass allow_merge=true to place it anyway";
-        if project_pages(Some(project))
-            .iter()
-            .any(|page| normalised_key(page, fold) == key)
-        {
-            return Err(format!("`file` is a page of the project; {tail}"));
-        }
-        let edited = normalised_key(sheet, fold);
-        let set = self.edit_project_set(sheet)?;
-        for (parent, content) in &set.sheets {
-            if normalised_key(parent, fold) == edited {
-                continue;
-            }
-            let dir = parent.parent().unwrap_or_else(|| Path::new(""));
-            let places = content.child_sheets.iter().any(|c| {
-                resolve_child_reference_quiet(dir, &c.filename)
-                    .is_ok_and(|p| normalised_key(&p, fold) == key)
-            });
-            if places {
-                return Err(format!(
-                    "`file` is already placed on {}; {tail}",
-                    file_name(parent)
-                ));
-            }
-        }
-        Ok(())
+        signex_engine::check_sheet_file(&placement)
+            .map(|_| ())
+            .map_err(|refusal| refusal.to_string())
     }
 
     /// The name rule (#2199 comment 6761836527) for the nets a sheet symbol's

@@ -361,3 +361,53 @@ fn a_grandparent_sheet_is_refused_as_a_loop() {
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
 }
+
+/// A sheet symbol on `parent` placing `file`.
+fn placing(file: &str) -> ChildSheet {
+    ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: file.trim_end_matches(".snxsch").to_string(),
+        filename: file.to_string(),
+        ..sheet_symbol(Vec::new())
+    }
+}
+
+/// parent (A, in view) is open; b places c and c places parent, both closed
+/// and in no hierarchy a window holds. A symbol for b on parent would close
+/// A→B→C→A: the dialog refuses it as the operand form does
+/// (`sheet_sync_operand_tests::a_loop_two_levels_down_is_refused`).
+#[test]
+fn a_loop_through_two_closed_sheets_is_refused() {
+    let mut rig = rig(Vec::new(), Vec::new());
+    let dir = rig.child.parent().expect("dir").to_path_buf();
+    let b = dir.join("b.snxsch");
+    write_sheet(
+        &b,
+        SchematicSheet {
+            child_sheets: vec![placing("c.snxsch")],
+            labels: vec![hierarchical("VIN", "input", 10.0)],
+            ..SchematicSheet::default()
+        },
+    );
+    write_sheet(
+        &dir.join("c.snxsch"),
+        SchematicSheet {
+            child_sheets: vec![placing("parent.snxsch")],
+            ..SchematicSheet::default()
+        },
+    );
+    let mark = crate::diagnostics::newest_entry_id();
+    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(b)));
+    let engine = rig.app.document_state.active_engine().expect("parent");
+    assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
+    let said: Vec<String> = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|e| e.message)
+        .filter(|m| {
+            m.starts_with("Create Sheet Symbol From Sheet:")
+                && m.contains("places this sheet below it")
+        })
+        .collect();
+    assert!(!said.is_empty(), "refused as a loop, not for another reason");
+}
