@@ -64,8 +64,7 @@ fn sent(messages: &[Message], wanted: impl Fn(&PrintPreviewMsg) -> bool) -> bool
 fn centre_of(app: &Signex, preview: &PreviewState, label: &str) -> Point {
     lay_out_texts(app.view_pdf_settings_column(preview), COLUMN)
         .into_iter()
-        .filter(|t| t.text == label)
-        .last()
+        .rfind(|t| t.text == label)
         .unwrap_or_else(|| panic!("no {label:?} in the settings column"))
         .bounds
         .center()
