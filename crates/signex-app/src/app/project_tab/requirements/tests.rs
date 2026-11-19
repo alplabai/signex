@@ -7,7 +7,7 @@
 use serde_json::{Value, json};
 use signex_types::project::{RequirementField, RequirementProblem, parse_project, write_project};
 
-use super::RequirementsMsg;
+use super::{EntryKey, RequirementsMsg};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -140,14 +140,17 @@ fn a_field_commits_on_enter_and_a_refused_value_stays_with_its_reason() {
     assert_eq!(
         state
             .drafts
-            .get(&("board_size".to_string(), RequirementField::MaxWidthMm))
+            .get(&(EntryKey::first("board_size"), RequirementField::MaxWidthMm))
             .map(String::as_str),
         Some("-2"),
         "the typed text stays in its box"
     );
     assert_eq!(
         state.problem,
-        Some((Some(0), RequirementProblem::NotPositive("-2".into())))
+        Some((
+            Some(EntryKey::first("board_size")),
+            RequirementProblem::NotPositive("-2".into())
+        ))
     );
 
     // Undo steps the committed value back and shows the stored values again.
@@ -464,7 +467,7 @@ fn a_catalog_remove_keeps_other_drafts_and_none_lands_on_the_wrong_entry() {
 
     answer(&mut app, "project_remove_requirement", &["requirement=a"]);
     assert_eq!(
-        tab(&app, id).drafts.get(&("b".to_string(), field)),
+        tab(&app, id).drafts.get(&(EntryKey::first("b"), field)),
         Some(&"55".to_string()),
         "b keeps its draft through the remove of a",
     );
@@ -481,4 +484,81 @@ fn a_catalog_remove_keeps_other_drafts_and_none_lands_on_the_wrong_entry() {
     for entry in &entries {
         assert_eq!(entry["max_width_mm"], json!(100), "{entry}");
     }
+}
+
+fn edit_field(app: &mut Signex, id: ProjectId, index: usize, field: RequirementField, text: &str) {
+    let edited = RequirementsMsg::FieldEdited {
+        index,
+        field,
+        text: text.into(),
+    };
+    let _ = send(app, id, edited);
+}
+
+fn submit(app: &mut Signex, id: ProjectId, index: usize, field: RequirementField) {
+    let _ = send(app, id, RequirementsMsg::FieldSubmitted { index, field });
+}
+
+/// #2547 review: the loader keeps two entries with one id (a hand edit, a
+/// merge). A draft typed on the first is the first's alone: Enter on the
+/// second commits nothing.
+#[test]
+fn entries_sharing_an_id_keep_a_draft_each() {
+    let (mut app, id, _dir) = app();
+    let twin = || {
+        serde_json::from_value(json!({"id": "x", "kind": "board_size",
+            "max_width_mm": 100, "max_height_mm": 100}))
+        .expect("an entry")
+    };
+    app.document_state.projects[0].data.requirements = vec![twin(), twin()];
+    let field = RequirementField::MaxWidthMm;
+    edit_field(&mut app, id, 0, field, "55");
+    submit(&mut app, id, 1, field);
+    let widths: Vec<Value> = stored(&app)
+        .iter()
+        .map(|entry| entry["max_width_mm"].clone())
+        .collect();
+    assert_eq!(widths, [json!(100), json!(100)]);
+    assert_eq!(drafted(&app, id), ["55"], "the first's draft stays");
+}
+
+/// #2547 review: a committed id moves the entry's other drafts to the new id.
+#[test]
+fn a_committed_id_takes_the_entrys_other_drafts_along() {
+    let (mut app, id, _dir) = app();
+    for name in ["a", "b"] {
+        add_by_catalog(&mut app, name);
+    }
+    let width = RequirementField::MaxWidthMm;
+    edit_field(&mut app, id, 1, width, "55");
+    edit_field(&mut app, id, 1, RequirementField::Id, "b2");
+    submit(&mut app, id, 1, RequirementField::Id);
+    assert_eq!(stored(&app)[1]["id"], "b2");
+    assert_eq!(drafted(&app, id), ["55"], "the width draft followed");
+    submit(&mut app, id, 1, width);
+    assert_eq!(stored(&app)[1]["max_width_mm"], json!(55));
+    assert_eq!(stored(&app)[0]["max_width_mm"], json!(100));
+}
+
+/// #2547 review: a refusal stays with its entry when an agent removes an
+/// earlier one, and goes when its own entry is removed.
+#[test]
+fn a_refusal_stays_with_its_entry_through_a_remove_of_another() {
+    let (mut app, id, _dir) = app();
+    for name in ["a", "b", "c"] {
+        add_by_catalog(&mut app, name);
+    }
+    let width = RequirementField::MaxWidthMm;
+    edit_field(&mut app, id, 1, width, "-2");
+    submit(&mut app, id, 1, width);
+    let shown_at = |app: &Signex| {
+        tab(app, id).problem_shown_at(&app.document_state.projects[0].data.requirements)
+    };
+    assert_eq!(shown_at(&app), Some(1), "refused on b");
+
+    answer(&mut app, "project_remove_requirement", &["requirement=a"]);
+    assert_eq!(shown_at(&app), Some(index_of(&app, "b")), "still on b");
+
+    answer(&mut app, "project_remove_requirement", &["requirement=b"]);
+    assert_eq!(shown_at(&app), None, "gone with b");
 }
