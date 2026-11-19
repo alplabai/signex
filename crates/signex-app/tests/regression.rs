@@ -608,6 +608,9 @@ mod click_click_move;
 mod rubber_band_move;
 #[path = "regression/symbol_drag_entry_points.rs"]
 mod symbol_drag_entry_points;
+// #122, #123 - the Pins tab of the symbol editor's Properties panel.
+#[path = "regression/symbol_properties_pins_tab.rs"]
+mod symbol_properties_pins_tab;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]

@@ -1,198 +1,309 @@
-//! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
+//! Nothing selected: the symbol's header, the Symbol / Pins tabs and the
+//! Symbol tab (illustration, General, Parts, Graphical, Fields).
 
-use iced::widget::{Column, Widget, container, row};
-use iced::{Color, Element, Length};
-use signex_widgets::{raw, text};
+use iced::widget::row;
+use iced::{Alignment, Color, Element, Widget as _};
+use signex_i18n::{ids, t};
+use signex_types::schematic::BodyStyle;
 
-use super::super::form_look;
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
-use crate::styles::{Spacing, TypeScale};
-use signex_types::theme::ThemeTokens;
+use super::illustration::{self, field};
+use super::rows::{Form, SP, props};
+use super::{part_name, pins_tab};
+use crate::library::editor::symbol::{PartStep, SymbolPropsMsg, SymbolPropsTab};
+use crate::styles::PillTone;
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
+/// Section keys (`PanelMsg::ToggleSection`).
+const GENERAL: &str = "symprops.general";
+const PARTS: &str = "symprops.parts";
+const GRAPHICAL: &str = "symprops.graphical";
+const FIELDS: &str = "symprops.fields";
 
-/// Render one Local Colors row (Fills / Lines / Pins) via the shared
-/// [`color_field`] widget. `picker` carries the transient open-state;
-/// the inline palette / HSV overlay only expands when it targets this
-/// slot. `None` = inherit from the sheet palette.
+pub(super) fn view<'a>(
+    sym: &'a SymbolEditorPanelContext,
+    form: &Form<'_>,
+    border_c: Color,
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let file = sym
+        .path
+        .file_name()
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut col = vec![
+        form.header(
+            t!(i18n, ids::EDITORS_SYMPROPS_TITLE).into(),
+            Some((part_name(sym.active_part, i18n).into(), PillTone::Neutral)),
+            Some((
+                t!(
+                    i18n,
+                    ids::EDITORS_SYMPROPS_FILE_SYMBOL,
+                    "file" => file,
+                    "symbol" => sym.symbol_name.as_str()
+                )
+                .into(),
+                true,
+            )),
+        ),
+        tabs(sym, form),
+    ];
+    match sym.props.tab {
+        SymbolPropsTab::Pins => col.extend(pins_tab::view(sym, form)),
+        SymbolPropsTab::Symbol => col.extend(symbol_tab(sym, form, border_c)),
+    }
+    col
+}
+
+fn tabs<'a>(sym: &SymbolEditorPanelContext, form: &Form<'_>) -> Element<'a, PanelMsg> {
+    let i18n = form.i18n;
+    let tab = sym.props.tab;
+    form.tabs(vec![
+        (
+            t!(i18n, ids::EDITORS_SYMPROPS_TAB_SYMBOL),
+            None,
+            tab == SymbolPropsTab::Symbol,
+            props(SymbolPropsMsg::TabPicked(SymbolPropsTab::Symbol)),
+        ),
+        (
+            t!(i18n, ids::EDITORS_SYMPROPS_TAB_PINS),
+            Some(sym.pins.len()),
+            tab == SymbolPropsTab::Pins,
+            props(SymbolPropsMsg::TabPicked(SymbolPropsTab::Pins)),
+        ),
+    ])
+}
+
+fn symbol_tab<'a>(
+    sym: &'a SymbolEditorPanelContext,
+    form: &Form<'_>,
+    border_c: Color,
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let mut col = Vec::new();
+    if let Some(ill) = illustration::symbol(sym) {
+        col.push(illustration::view(ill, form));
+    }
+    col.push(form.section(
+        GENERAL,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_GENERAL),
+        true,
+        None,
+        || {
+            vec![
+                form.field(
+                    t!(i18n, ids::EDITORS_SYMPROPS_SYMBOL_NAME),
+                    form.input(
+                        t!(i18n, ids::EDITORS_SYMPROPS_SYMBOL_NAME),
+                        sym.symbol_name.clone(),
+                        true,
+                        PanelMsg::SymEditorSetSymbolName,
+                    ),
+                    None,
+                ),
+                form.field(
+                    t!(i18n, ids::EDITORS_SYMPROPS_UUID),
+                    form.read_only(
+                        signex_i18n::UserText::new(sym.symbol_uuid.to_string()).into(),
+                        true,
+                    ),
+                    None,
+                ),
+                // Not in the mockup; kept so the count stays visible.
+                form.field(
+                    t!(i18n, ids::EDITORS_SYMPROPS_GRAPHICS),
+                    form.read_only(
+                        signex_i18n::UserText::new(i18n.count(sym.graphics.len() as i64)).into(),
+                        true,
+                    ),
+                    None,
+                ),
+            ]
+        },
+    ));
+    col.push(form.section(
+        PARTS,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_PARTS),
+        true,
+        None,
+        || parts_rows(sym, form),
+    ));
+    col.push(form.section(
+        GRAPHICAL,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_GRAPHICAL),
+        true,
+        None,
+        || graphical_rows(sym, form, border_c),
+    ));
+    col.push(form.section(
+        FIELDS,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_FIELDS),
+        false,
+        Some(2),
+        || {
+            vec![
+                form.field(
+                    t!(i18n, ids::EDITORS_SYMPROPS_REFERENCE),
+                    form.input(
+                        t!(i18n, ids::EDITORS_SYMPROPS_REFERENCE),
+                        sym.symbol_designator.clone(),
+                        true,
+                        PanelMsg::SymEditorSetSymbolDesignator,
+                    ),
+                    None,
+                ),
+                form.field(
+                    t!(i18n, ids::EDITORS_SYMPROPS_VALUE),
+                    form.note(t!(i18n, ids::EDITORS_SYMPROPS_VALUE_BOUND)),
+                    None,
+                ),
+            ]
+        },
+    ));
+    col.push(form.caption(t!(i18n, ids::EDITORS_SYMPROPS_SELECT_HINT)));
+    col
+}
+
+/// The Part stepper (‹ part › + −) and the Body choice. The stepper runs
+/// the toolbar's part messages, so the arrows stop where the toolbar's do.
+fn parts_rows<'a>(sym: &SymbolEditorPanelContext, form: &Form<'_>) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let step = |s: PartStep| Some(props(SymbolPropsMsg::PartStepPressed(s)));
+    let part = sym.active_part;
+    let max = sym.active_max_part;
+    let stepper = row![
+        form.ghost(
+            t!(i18n, ids::EDITORS_SYMPROPS_PREVIOUS_PART),
+            if part > 1 {
+                step(PartStep::Previous)
+            } else {
+                None
+            },
+            Some(t!(i18n, ids::EDITORS_SYMPROPS_PREVIOUS_PART_TIP)),
+        ),
+        iced::widget::container(form.read_only(part_name(part, i18n).into(), false))
+            .width(iced::Length::Fill),
+        form.ghost(
+            t!(i18n, ids::EDITORS_SYMPROPS_NEXT_PART),
+            if part < max {
+                step(PartStep::Next)
+            } else {
+                None
+            },
+            Some(t!(i18n, ids::EDITORS_SYMPROPS_NEXT_PART_TIP)),
+        ),
+        form.ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_ADD_PART),
+            step(PartStep::Added),
+            Some(t!(i18n, ids::EDITORS_SYMPROPS_ADD_PART_TIP)),
+        ),
+        form.ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_REMOVE_PART),
+            if max > 1 && part > 1 {
+                step(PartStep::Removed)
+            } else {
+                None
+            },
+            Some(t!(i18n, ids::EDITORS_SYMPROPS_REMOVE_PART_TIP)),
+        ),
+    ]
+    .spacing(SP.xs)
+    .align_y(Alignment::Center);
+    let body = |b: BodyStyle, id: signex_i18n::MessageId| {
+        (
+            t!(i18n, id),
+            sym.active_body == b,
+            props(SymbolPropsMsg::BodyPicked(b)),
+        )
+    };
+    vec![
+        form.field(
+            t!(i18n, ids::EDITORS_SYMPROPS_PART),
+            stepper.boxed(),
+            Some(field::SYM_PART),
+        ),
+        form.field(
+            t!(i18n, ids::EDITORS_SYMBOL_BODY),
+            form.segmented(vec![
+                body(BodyStyle::Normal, ids::EDITORS_SYMBOL_BODY_NORMAL),
+                body(BodyStyle::Alternate, ids::EDITORS_SYMBOL_BODY_ALTERNATE),
+            ]),
+            None,
+        ),
+    ]
+}
+
+fn graphical_rows<'a>(
+    sym: &SymbolEditorPanelContext,
+    form: &Form<'_>,
+    border_c: Color,
+) -> Vec<Element<'a, PanelMsg>> {
+    use crate::app::LocalColorSlot as Slot;
+    let i18n = form.i18n;
+    let colour = |label: signex_i18n::MessageId, slot: Slot, current: Option<[u8; 4]>| {
+        local_color_field(form, label, slot, current, sym, border_c)
+    };
+    vec![
+        form.field(
+            t!(i18n, ids::EDITORS_SYMPROPS_MIRRORED),
+            signex_widgets::checkbox(sym.symbol_mirrored)
+                .size(super::rows::TS.heading)
+                .style(super::super::form_look::checkbox_style)
+                .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored)
+                .boxed(),
+            Some(field::SYM_MIRROR),
+        ),
+        form.mini_heading(t!(i18n, ids::EDITORS_SYMPROPS_LOCAL_COLORS)),
+        colour(
+            ids::EDITORS_SYMPROPS_FILLS,
+            Slot::Fill,
+            sym.symbol_local_fill_color,
+        ),
+        colour(
+            ids::EDITORS_SYMPROPS_LINES,
+            Slot::Line,
+            sym.symbol_local_line_color,
+        ),
+        colour(
+            ids::EDITORS_SYMPROPS_PINS,
+            Slot::Pin,
+            sym.symbol_local_pin_color,
+        ),
+    ]
+}
+
+/// One Local Colors row (Fills / Lines / Pins) on the shared colour field:
+/// a swatch, or "Inherit" while the slot is unset. The palette opens below
+/// the row while the editor's picker targets this slot.
 fn local_color_field<'a>(
-    label: &'a str,
+    form: &Form<'_>,
+    label: signex_i18n::MessageId,
     slot: crate::app::LocalColorSlot,
     current: Option<[u8; 4]>,
-    muted: Color,
+    sym: &SymbolEditorPanelContext,
     border_c: Color,
-    picker: Option<crate::app::LocalColorPicker>,
-    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use std::rc::Rc;
-
-    let this = picker.filter(|p| p.slot == slot);
-    let show_palette = this.is_some();
-    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
-
+    let i18n = form.i18n;
+    let this = sym.local_color_picker.filter(|p| p.slot == slot);
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
         Rc::new(move |rgba| PanelMsg::SymEditorSetLocalColor { slot, color: rgba });
-    let on_clear = current
-        .is_some()
-        .then_some(PanelMsg::SymEditorClearLocalColor(slot));
-
     color_field(
         ColorFieldProps {
-            // raw: symbol-editor labels move with #2060.
-            label: raw(label),
+            label: t!(i18n, label).into(),
             current,
-            // raw: symbol-editor labels move with #2060.
-            none_label: raw("Inherit"),
-            show_palette,
-            show_advanced,
-            muted,
+            none_label: t!(i18n, ids::EDITORS_SYMPROPS_INHERIT).into(),
+            show_palette: this.is_some(),
+            show_advanced: this.is_some_and(|p| p.advanced),
+            muted: form.look.ink3,
             border_c,
             on_toggle: PanelMsg::SymEditorToggleLocalColorPicker(slot),
             on_advanced: PanelMsg::SymEditorOpenLocalColorAdvanced(slot),
             on_cancel: PanelMsg::SymEditorCancelLocalColorPicker,
             on_pick,
-            on_clear,
+            on_clear: current
+                .is_some()
+                .then_some(PanelMsg::SymEditorClearLocalColor(slot)),
         },
         i18n,
     )
-}
-
-/// Symbol-level default Properties (nothing selected): identity,
-/// graphical toggles, and local-colour overrides.
-pub(super) fn view_symbol_selection<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
-    sym: &'a SymbolEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    tokens: &ThemeTokens,
-    i18n: &signex_i18n::I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    // The .snxsym editor is a SYMBOL editor — symbol-level
-    // visual / geometric properties only. Component metadata
-    // (Designator / Comment / Description / Type / Parameters)
-    // lives on the host ComponentRow in the component library
-    // and is edited from the Library Browser / Component
-    // Editor, not here.
-
-    // Helper — labelled text_input row.
-    let text_field = |label: &'a str,
-                      value: &'a str,
-                      placeholder: &'a str,
-                      on_input: fn(String) -> PanelMsg|
-     -> Element<'a, PanelMsg> {
-        container(
-            row![
-                text(raw(label))
-                    .size(TS.body)
-                    .color(muted)
-                    .width(Length::FillPortion(2)),
-                signex_widgets::text_input(signex_widgets::raw(placeholder), value)
-                    .padding([SP.xs, SP.s])
-                    .size(TS.body)
-                    .on_input(on_input)
-                    .style(form_look::text_input_style)
-                    .width(Length::FillPortion(3)),
-            ]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([3.0, SP.m])
-        .width(Length::Fill)
-        .boxed()
-    };
-
-    // ── ▾ Symbol ──
-    col = col.push(super::section_title("Symbol", tokens, i18n));
-    col = col.push(text_field(
-        "Design Item ID",
-        sym.symbol_name.as_str(),
-        "Symbol name",
-        PanelMsg::SymEditorSetSymbolName,
-    ));
-    col = col.push(super::prop_row_mono(
-        "UUID",
-        sym.symbol_uuid.to_string(),
-        muted,
-        primary,
-    ));
-    col = col.push(super::prop_row_static(
-        "Pins",
-        i18n.count(sym.pins.len() as i64),
-        muted,
-        primary,
-    ));
-    col = col.push(super::prop_row_static(
-        "Graphics",
-        i18n.count(sym.graphics.len() as i64),
-        muted,
-        primary,
-    ));
-
-    // Part of Parts (Altium "Part B / of Parts: 2") — surfaces
-    // the multi-part picker the user already drives via the
-    // toolbar arrows or the SCH Library tree-expander.
-    let part_label = if sym.active_max_part > 1 {
-        format!(
-            "Part {} / of Parts {}",
-            sym.active_part, sym.active_max_part
-        )
-    } else {
-        "Single-part".to_string()
-    };
-    col = col.push(super::prop_row_static("Part", part_label, muted, primary));
-
-    // ── ▾ Graphical ──
-    col = col.push(super::section_title("Graphical", tokens, i18n));
-    let mirrored_row: Element<'a, PanelMsg> = container(
-        row![
-            text(raw("Mirrored"))
-                .size(TS.body)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            signex_widgets::checkbox(sym.symbol_mirrored)
-                .size(TS.heading)
-                .style(form_look::checkbox_style)
-                .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([3.0, SP.m])
-    .width(Length::Fill)
-    .boxed();
-    col = col.push(mirrored_row);
-
-    // ── Local Colors (Fills / Lines / Pins) ──
-    col = col.push(super::section_title("Local Colors", tokens, i18n));
-    col = col.push(local_color_field(
-        "Fills",
-        crate::app::LocalColorSlot::Fill,
-        sym.symbol_local_fill_color,
-        muted,
-        border_c,
-        sym.local_color_picker,
-        i18n,
-    ));
-    col = col.push(local_color_field(
-        "Lines",
-        crate::app::LocalColorSlot::Line,
-        sym.symbol_local_line_color,
-        muted,
-        border_c,
-        sym.local_color_picker,
-        i18n,
-    ));
-    col = col.push(local_color_field(
-        "Pins",
-        crate::app::LocalColorSlot::Pin,
-        sym.symbol_local_pin_color,
-        muted,
-        border_c,
-        sym.local_color_picker,
-        i18n,
-    ));
-    col
 }

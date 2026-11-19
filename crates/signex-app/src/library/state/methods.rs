@@ -118,6 +118,7 @@ impl Default for LibraryState {
             stock_copy: None,
             stock_copy_target: None,
             stock_copies_in_flight: Default::default(),
+            symbol_props: HashMap::new(),
         }
     }
 }

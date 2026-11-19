@@ -280,6 +280,20 @@ pins it to the body shown. Updating a library symbol from its library never
 silently drops a placed symbol's Alternate choice: the update is refused when
 it would disturb a wired pin, and otherwise the choice is kept.
 
+With nothing selected, the symbol editor's **Properties** panel has two tabs.
+**Symbol** shows a drawing of the current part and the symbol's name, UUID,
+parts (the part stepper and the **Body** choice), Mirrored, the local colours
+and the Reference field. **Pins** lists every pin with its number, name, type
+and part: type in the filter to find a pin by number or name, pick a part
+chip to list one part, and **+ Pin** arms the Add Pin tool. A row whose number
+is empty or used twice shows the number in red; a pin with no name reads
+*no name*. Click a row to select that pin: Properties shows its fields, under
+a drawing of the pin whose labels light up as you point at the fields.
+**‹ Pins** clears the selection and goes back to the list. Pin names and the
+Hidden flag are edited in the pin's fields. A selected rectangle has a
+**Width / Height** pair next to its Start and End corners; changing it moves
+the End corner.
+
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
 application note. Each document is a URL or a pinned PDF, with an optional
