@@ -205,12 +205,6 @@ pub fn board_3d_highlight() -> [f32; 4] {
     [r, g, b, BOARD_3D_HIGHLIGHT_ALPHA]
 }
 
-/// The board 3D view's background: the board canvas's.
-pub fn board_3d_background() -> Color {
-    let c = crate::styles::board_canvas_colors().background;
-    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

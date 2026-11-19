@@ -119,6 +119,11 @@ mod pcb_view_rotation;
 #[path = "regression/pcb_board_3d.rs"]
 mod pcb_board_3d;
 
+// Mockup m175 - the board 3D view's toolbar: Side and Shift, Reset, Flip, Explode,
+// lighting, screenshots, the unread toast; no undo step from any of them.
+#[path = "regression/pcb_board_3d_toolbar.rs"]
+mod pcb_board_3d_toolbar;
+
 // #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
 #[path = "regression/pcb_board_menu_view.rs"]
 mod pcb_board_menu_view;

@@ -4,9 +4,11 @@
 //! drag slides, the wheel zooms, a left click picks).
 //!
 //! The program holds what one frame needs: the scene, its generation (the
-//! pipeline uploads only a new one), the camera and the parts to wash in
-//! the selection colour. The camera lives in the app's `Board3dSession`;
-//! gestures go back as messages, never mutate it here.
+//! pipeline uploads only a new one), the camera, the lighting preset and
+//! the parts to wash in the selection colour. The camera lives in the app's
+//! `Board3dSession`; gestures go back as messages, never mutate it here. A
+//! redraw reports the view's size and its place in the window (where a
+//! screenshot is cropped) when the app holds others.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
@@ -17,7 +19,7 @@ use std::sync::Arc;
 
 use iced::widget::shader::{self, Viewport};
 use iced::{Event, Point, Rectangle, keyboard, mouse, window};
-use signex_gfx::camera3d::OrbitCamera;
+use signex_gfx::camera3d::{LightingPreset, OrbitCamera};
 use signex_gfx::pipeline::mesh::{MeshPipeline, PixelRect};
 use signex_renderer::board3d::BoardScene3d;
 
@@ -43,6 +45,11 @@ pub struct Board3dProgram {
     /// The view's size as the app last heard it; a redraw that finds
     /// another reports it.
     pub viewport: [f32; 2],
+    /// The view's top-left corner in the window as the app last heard it;
+    /// a redraw that finds another reports it.
+    pub origin: [f32; 2],
+    /// The lighting preset the scene is lit by.
+    pub lighting: LightingPreset,
 }
 
 /// How far, in logical pixels, the view's size may differ from the size
@@ -59,13 +66,19 @@ struct Drag {
 }
 
 /// The pointer state of the view's widget: the press in progress, whether
-/// Shift is held (mouse events carry no modifiers) and the size last
-/// reported, so a size the app ignores is not reported on every redraw.
+/// Shift is held (mouse events carry no modifiers) and the size and place
+/// last reported, so one the app ignores is not reported on every redraw.
 #[derive(Debug, Default)]
 pub struct Board3dPointer {
     drag: Option<Drag>,
     shift: bool,
     reported: Option<[f32; 2]>,
+    placed: Option<[f32; 2]>,
+}
+
+/// Whether `a` and `b` differ by more than [`RESIZE_SLOP_PX`] on an axis.
+fn apart(a: [f32; 2], b: [f32; 2]) -> bool {
+    (a[0] - b[0]).abs() > RESIZE_SLOP_PX || (a[1] - b[1]).abs() > RESIZE_SLOP_PX
 }
 
 impl Board3dProgram {
@@ -88,15 +101,29 @@ impl Board3dProgram {
         if size[0] <= 0.0 || size[1] <= 0.0 {
             return None;
         }
-        let apart = |a: [f32; 2]| {
-            (a[0] - size[0]).abs() > RESIZE_SLOP_PX || (a[1] - size[1]).abs() > RESIZE_SLOP_PX
-        };
-        if !apart(self.viewport) || state.reported.is_some_and(|r| !apart(r)) {
+        if !apart(self.viewport, size) || state.reported.is_some_and(|r| !apart(r, size)) {
             return None;
         }
         state.reported = Some(size);
         Some(shader::Action::publish(Message::Pcb(PcbMsg::Board3d(
             Board3dMsg::ViewportSized(size),
+        ))))
+    }
+
+    /// On a redraw, the view's place in the window when the app holds
+    /// another and it was not reported already. Not captured either.
+    fn report_origin(
+        &self,
+        state: &mut Board3dPointer,
+        bounds: Rectangle,
+    ) -> Option<shader::Action<Message>> {
+        let origin = [bounds.x, bounds.y];
+        if !apart(self.origin, origin) || state.placed.is_some_and(|p| !apart(p, origin)) {
+            return None;
+        }
+        state.placed = Some(origin);
+        Some(shader::Action::publish(Message::Pcb(PcbMsg::Board3d(
+            Board3dMsg::ViewportPlaced(origin),
         ))))
     }
 }
@@ -113,7 +140,10 @@ impl shader::Program<Message> for Board3dProgram {
         cursor: mouse::Cursor,
     ) -> Option<shader::Action<Message>> {
         match event {
-            Event::Window(window::Event::RedrawRequested(_)) => self.report_size(state, bounds),
+            // One report per redraw: the size first, then the place.
+            Event::Window(window::Event::RedrawRequested(_)) => self
+                .report_size(state, bounds)
+                .or_else(|| self.report_origin(state, bounds)),
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
                 state.shift = modifiers.shift();
                 None
@@ -182,6 +212,7 @@ impl shader::Program<Message> for Board3dProgram {
             camera: self.camera,
             highlights: self.highlights.clone(),
             highlight: self.highlight,
+            lighting: self.lighting,
         }
     }
 
@@ -207,6 +238,7 @@ pub struct Board3dPrimitive {
     camera: OrbitCamera,
     highlights: Vec<Range<u32>>,
     highlight: [f32; 4],
+    lighting: LightingPreset,
 }
 
 /// The mesh pipeline and where this frame's view sits on the target.
@@ -252,9 +284,12 @@ impl shader::Primitive for Board3dPrimitive {
         pipeline
             .mesh
             .upload(device, queue, &self.scene.scene, self.generation);
-        let uniform = self
-            .camera
-            .uniform(bounds.width, bounds.height.max(1.0), self.highlight);
+        let uniform = self.camera.uniform_lit(
+            bounds.width,
+            bounds.height.max(1.0),
+            self.highlight,
+            self.lighting,
+        );
         pipeline.mesh.set_uniform(queue, &uniform);
         let size = viewport.physical_size();
         pipeline
