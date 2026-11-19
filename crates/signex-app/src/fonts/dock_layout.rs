@@ -23,29 +23,127 @@ impl PrefsDockLayoutStore {
 
 impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
     fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
-        fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
-            let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
-            let mut json = serde_json::json!({
-                "panels": kinds,
-                "collapsed": region.collapsed,
-            });
-            if let Some(width) = region.width {
-                json["width"] = serde_json::json!(width);
-            }
-            json
-        }
-
-        try_update_prefs_json(&self.path, "dock", |prefs| {
-            prefs.insert(
-                "dock".to_string(),
-                serde_json::json!({
-                    "left":   region_to_json(&layout.left),
-                    "right":  region_to_json(&layout.right),
-                    "bottom": region_to_json(&layout.bottom),
-                }),
-            );
-        })
+        write_prefs_key(&self.path, "dock", snapshot_to_json(layout))
     }
+}
+
+/// Replace the top-level `key` of the `prefs.json` at `path` with `value`,
+/// keeping every other setting; refused (and nothing written) when the file
+/// cannot be read as preferences. Blocking: call it off the UI thread.
+pub(crate) fn write_prefs_key(
+    path: &std::path::Path,
+    key: &str,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    try_update_prefs_json(path, key, |prefs| {
+        prefs.insert(key.to_string(), value);
+    })
+}
+
+// The dock codec: the `dock` key of `prefs.json` and the workspace layouts
+// (#166) read and write regions through these, so the two forms cannot drift.
+
+/// One dock region as `prefs.json` stores it.
+pub(crate) fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
+    let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
+    let mut json = serde_json::json!({
+        "panels": kinds,
+        "collapsed": region.collapsed,
+    });
+    if let Some(width) = region.width {
+        json["width"] = serde_json::json!(width);
+    }
+    json
+}
+
+/// A stored region. An unknown panel key drops that panel only; a missing
+/// or malformed field reads as its fresh-layout value (no panels, open, the
+/// default width). A width is kept only when it is a positive number, in
+/// whole px (Signex writes whole px).
+pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::RegionLayout {
+    let panels = region
+        .get("panels")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|val| val.as_str().and_then(parse_panel_kind))
+                .collect()
+        })
+        .unwrap_or_default();
+    // A layout saved before #2395 has no width; the dock keeps the
+    // fresh-layout width.
+    let width = region
+        .get("width")
+        .and_then(|v| v.as_f64())
+        .filter(|w| w.is_finite() && *w > 0.0)
+        .map(|w| w.round() as u32);
+    crate::dock::RegionLayout {
+        panels,
+        collapsed: region
+            .get("collapsed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        width,
+    }
+}
+
+/// The three regions as `{"left", "right", "bottom"}`.
+pub(crate) fn snapshot_to_json(layout: &crate::dock::DockLayoutSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "left":   region_to_json(&layout.left),
+        "right":  region_to_json(&layout.right),
+        "bottom": region_to_json(&layout.bottom),
+    })
+}
+
+/// The three regions of a stored dock; `None` when `json` is not an object.
+/// A missing region is empty.
+pub(crate) fn snapshot_from_json(
+    json: &serde_json::Value,
+) -> Option<crate::dock::DockLayoutSnapshot> {
+    let dock_v = json.as_object()?;
+    let region = |key: &str| {
+        dock_v.get(key).map_or_else(
+            || crate::dock::RegionLayout {
+                panels: Vec::new(),
+                collapsed: false,
+                width: None,
+            },
+            region_from_json,
+        )
+    };
+    Some(crate::dock::DockLayoutSnapshot {
+        left: region("left"),
+        right: region("right"),
+        bottom: region("bottom"),
+    })
+}
+
+/// Build a dock from a snapshot through the dock's own API (`add_panel`,
+/// the collapse toggle, the width setter): the one path a saved layout and
+/// an applied workspace layout both take.
+pub(crate) fn dock_from_snapshot(
+    layout: &crate::dock::DockLayoutSnapshot,
+) -> crate::dock::DockArea {
+    let mut dock = crate::dock::DockArea::new();
+    for (region, pos) in [
+        (&layout.left, crate::dock::PanelPosition::Left),
+        (&layout.right, crate::dock::PanelPosition::Right),
+        (&layout.bottom, crate::dock::PanelPosition::Bottom),
+    ] {
+        for kind in &region.panels {
+            dock.add_panel(pos, *kind);
+        }
+        // Collapsed flag: run ToggleRegion once via the dock API so
+        // the mutation path stays authoritative.
+        if region.collapsed {
+            dock.update(crate::dock::DockMessage::ToggleCollapse(pos));
+        }
+        if let Some(width) = region.width {
+            dock.set_preferred_width(pos, width as f32);
+        }
+    }
+    dock
 }
 
 /// Rebuild a DockArea from persisted JSON. Returns None when no saved
@@ -55,43 +153,11 @@ pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
 }
 
 pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::dock::DockArea> {
-    let json = json?;
-    let dock_v = json.get("dock")?.as_object()?;
-    let mut dock = crate::dock::DockArea::new();
-    for (region_key, pos) in [
-        ("left", crate::dock::PanelPosition::Left),
-        ("right", crate::dock::PanelPosition::Right),
-        ("bottom", crate::dock::PanelPosition::Bottom),
-    ] {
-        let Some(region) = dock_v.get(region_key) else {
-            continue;
-        };
-        if let Some(arr) = region.get("panels").and_then(|v| v.as_array()) {
-            for val in arr {
-                if let Some(s) = val.as_str()
-                    && let Some(kind) = parse_panel_kind(s)
-                {
-                    dock.add_panel(pos, kind);
-                }
-            }
-        }
-        // Collapsed flag: run ToggleRegion once via the dock API so
-        // the mutation path stays authoritative.
-        if let Some(c) = region.get("collapsed").and_then(|v| v.as_bool())
-            && c
-        {
-            dock.update(crate::dock::DockMessage::ToggleCollapse(pos));
-        }
-        // A layout saved before #2395 has no width; the dock keeps the
-        // fresh-layout width.
-        if let Some(width) = region.get("width").and_then(|v| v.as_f64()) {
-            dock.set_preferred_width(pos, width as f32);
-        }
-    }
-    Some(dock)
+    let snapshot = snapshot_from_json(json?.get("dock")?)?;
+    Some(dock_from_snapshot(&snapshot))
 }
 
-fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
+pub(crate) fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
     use crate::panels::PanelKind::*;
     match k {
         Projects => "projects",
@@ -124,7 +190,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
     }
 }
 
-fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
+pub(crate) fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
     use crate::panels::PanelKind::*;
     Some(match s {
         "projects" => Projects,
