@@ -970,6 +970,7 @@ fn the_library_updates_modal_follows_the_rename() {
         vec![LibraryUpdateEntry {
             symbol_uuid: uuid::Uuid::now_v7(),
             ref_des: "R1".into(),
+            internal_pn: String::new(),
             lib_id: "L:S".into(),
             library_id: uuid::Uuid::now_v7(),
             library_name: "alpha".into(),

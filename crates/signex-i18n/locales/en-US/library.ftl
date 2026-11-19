@@ -530,3 +530,49 @@ library-create-options-lfs-help = Tracks *.step, *.stp, *.wrl, *.iges via Git LF
 library-create-options-relocate = Choose another location…
 # Tooltip of the disabled Create Library button while a refusal shows.
 library-create-options-refused-tip = Choose another location, or turn off version control.
+
+## Library Updates (#135)
+# Message over the drift table. $count is how many placed components differ
+# from their library rows (a whole number).
+library-updates-summary =
+    { $count ->
+        [one] { $count } placed component drifted from the library since this schematic was last saved.
+       *[other] { $count } placed components drifted from the library since this schematic was last saved.
+    }
+# Summary pill: $count components (a whole number) have a major version change.
+library-updates-count-major = { $count } major
+# Summary pill: $count components (a whole number) have a minor version change.
+library-updates-count-minor = { $count } minor
+# Summary pill: $count components (a whole number) have a patch version change.
+library-updates-count-patch = { $count } patch
+# Column heading of the drift table: the placed part (designator and Internal PN).
+library-updates-column-part = Part
+# Column heading: the library the part comes from.
+library-updates-column-library = Library
+# Column heading: the part's version and its library row's version now.
+library-updates-column-version = Version
+# Column heading: how large the version change is.
+library-updates-column-change = Change
+# Change pill: a major version change, which may break the placed part.
+library-updates-change-major = ⚠ Major
+# Change pill: a minor version change.
+library-updates-change-minor = Minor
+# Change pill: a patch version change.
+library-updates-change-patch = Patch
+# Version cell: $current is the placed part's version, $latest its library
+# row's version now.
+library-updates-version = { $current } → { $latest }
+# Conflict line: caption before the value the placed part holds.
+library-updates-conflict-yours = yours
+# Conflict line: caption before the value the library row holds now.
+library-updates-conflict-library-now = library now
+# Conflict answer: keep the placed part's own value.
+library-updates-keep-mine = Keep mine
+# Conflict answer: take the library row's value.
+library-updates-use-library = Use library value
+# Conflict line: the field that differs, the part's footprint.
+library-updates-field-footprint = Footprint
+# Conflict line: the field that differs, the part's manufacturer.
+library-updates-field-manufacturer = Manufacturer
+# Conflict line: the field that differs, the manufacturer part number.
+library-updates-field-mpn = MPN

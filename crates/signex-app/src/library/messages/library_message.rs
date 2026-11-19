@@ -541,6 +541,9 @@ pub enum LibraryMessage {
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
     LibraryUpdatesCancel,
+    /// The table's header checkbox was clicked: every row is cleared when
+    /// all are ticked, else every row is ticked.
+    LibraryUpdatesSelectAllToggled,
 
     // ── Components Panel (Stage 9 of v0.9-snxlib-as-file) ───────────
     /// Expand or collapse the library mounted at this root in the list.

@@ -180,4 +180,24 @@ define_ids! {
     LIBRARY_CREATE_OPTIONS_LFS_HELP = "library-create-options-lfs-help";
     LIBRARY_CREATE_OPTIONS_RELOCATE = "library-create-options-relocate";
     LIBRARY_CREATE_OPTIONS_REFUSED_TIP = "library-create-options-refused-tip";
+    // Library Updates (#135)
+    LIBRARY_UPDATES_SUMMARY = "library-updates-summary";
+    LIBRARY_UPDATES_COUNT_MAJOR = "library-updates-count-major";
+    LIBRARY_UPDATES_COUNT_MINOR = "library-updates-count-minor";
+    LIBRARY_UPDATES_COUNT_PATCH = "library-updates-count-patch";
+    LIBRARY_UPDATES_COLUMN_PART = "library-updates-column-part";
+    LIBRARY_UPDATES_COLUMN_LIBRARY = "library-updates-column-library";
+    LIBRARY_UPDATES_COLUMN_VERSION = "library-updates-column-version";
+    LIBRARY_UPDATES_COLUMN_CHANGE = "library-updates-column-change";
+    LIBRARY_UPDATES_CHANGE_MAJOR = "library-updates-change-major";
+    LIBRARY_UPDATES_CHANGE_MINOR = "library-updates-change-minor";
+    LIBRARY_UPDATES_CHANGE_PATCH = "library-updates-change-patch";
+    LIBRARY_UPDATES_VERSION = "library-updates-version";
+    LIBRARY_UPDATES_CONFLICT_YOURS = "library-updates-conflict-yours";
+    LIBRARY_UPDATES_CONFLICT_LIBRARY_NOW = "library-updates-conflict-library-now";
+    LIBRARY_UPDATES_KEEP_MINE = "library-updates-keep-mine";
+    LIBRARY_UPDATES_USE_LIBRARY = "library-updates-use-library";
+    LIBRARY_UPDATES_FIELD_FOOTPRINT = "library-updates-field-footprint";
+    LIBRARY_UPDATES_FIELD_MANUFACTURER = "library-updates-field-manufacturer";
+    LIBRARY_UPDATES_FIELD_MPN = "library-updates-field-mpn";
 }
