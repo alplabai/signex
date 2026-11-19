@@ -1,8 +1,5 @@
-//! Pad-stack table cells + the per-pad copper row.
-//!
-//! These helpers render the pad-properties table chrome (header, body
-//! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
-//! to compose the COPPER / HOLE / PASTE / SOLDER rows.
+//! The per-layer copper table of a through-hole pad stack in the
+//! Top-Middle-Bottom and Full Stack modes: header, rows and data cells.
 
 use iced::widget::{Widget, container, pick_list};
 use iced::{Color, Length, Theme};
@@ -10,11 +7,11 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{PanelMsg, PanelPalette};
+use super::choices::PadShapeChoice;
 use super::form::{
     PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
     pad_thermal_relief_msg,
 };
-use super::stack_preview::PadShapeChoice;
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -24,13 +21,10 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Width share of a table's row-label column.
 const LABEL_PORTION: u16 = 3;
 
-/// Width shares of each table's value cells, after the label column. The
-/// header and every row of a table share one array so the columns line up;
-/// number fields get the widest share, the checkbox column the narrowest.
+/// Width shares of the copper table's value cells, after the label column.
+/// The header and every row share the array so the columns line up; number
+/// fields get the widest share, the checkbox column the narrowest.
 pub(super) const COPPER_CELLS: [u16; 4] = [3, 3, 3, 2];
-pub(super) const HOLE_CELLS: [u16; 4] = [3, 3, 3, 2];
-pub(super) const PASTE_CELLS: [u16; 4] = [3, 2, 3, 2];
-pub(super) const SOLDER_CELLS: [u16; 3] = [3, 3, 2];
 
 /// Gap between table cells: the dock is narrow, so cells sit close.
 const CELL_GAP: f32 = SP.xs;
@@ -95,11 +89,11 @@ pub(super) fn pad_table_header<'a>(
         .boxed()
 }
 
-/// v0.20 — Altium-style table data row. First cell is the row label
-/// (e.g. "All Layers", "Pad Hole", "Top Paste"); remaining cells are
-/// caller-provided Elements. Width portions match the header row.
+/// A table data row. The first cell is the row label (a layer name);
+/// the other cells are caller-provided Elements. Width portions match the
+/// header row.
 pub(super) fn pad_table_row<'a>(
-    label: &'a str,
+    label: String,
     cells: Vec<iced::Element<'a, PanelMsg>>,
     portions: &[u16],
     primary: Color,
@@ -211,7 +205,7 @@ pub(super) fn pad_table_static_cell<'a>(
 /// data cells (X-Size, Y-Size, Shape, Relief) reference different
 /// fields on PadFormValues + different message constructors.
 pub(super) fn pad_copper_row<'a>(
-    label: &'a str,
+    label: String,
     values: &PadFormValues,
     current_shape: PadShapeChoice,
     target: PadEditTarget,
@@ -266,9 +260,10 @@ mod tests {
     /// value like "1.550" is not cut while a tick box has room to spare.
     #[test]
     fn number_cells_are_never_narrower_than_the_checkbox_column() {
-        for cells in [&COPPER_CELLS[..], &HOLE_CELLS, &PASTE_CELLS, &SOLDER_CELLS] {
-            let (numbers, check) = cells.split_at(cells.len() - 1);
-            assert!(numbers.iter().all(|share| *share >= check[0]), "{cells:?}");
-        }
+        let (numbers, check) = COPPER_CELLS.split_at(COPPER_CELLS.len() - 1);
+        assert!(
+            numbers.iter().all(|share| *share >= check[0]),
+            "{COPPER_CELLS:?}"
+        );
     }
 }
