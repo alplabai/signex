@@ -7,8 +7,14 @@ use signex_output::{BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, 
 
 use super::super::super::super::*;
 
+#[path = "bom_rows.rs"]
+mod rows;
+#[cfg(test)]
+#[path = "bom_tests.rs"]
+mod tests;
+
 impl Signex {
-    /// Open the BOM preview modal — Altium parity with Print Preview.
+    /// Open the BOM preview modal, the export dialog of #112.
     /// Builds the rolled-up table from the active project's
     /// schematic snapshot and seeds the modal with the default
     /// options. The user adjusts grouping / include flags / format
@@ -48,18 +54,15 @@ impl Signex {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
-        // Default sort: ascending by the Designator column when it
-        // exists in the column set. Matches Altium's "rows are
-        // ordered by reference designator on open" convention.
+        // Default sort: ascending by the Designator column when it exists
+        // in the column set, so lines open in designator order.
         let default_sort = opts
             .columns
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
-        let row_order =
-            crate::app::view::dialogs::sorted_row_order(&table.rows, &opts.columns, default_sort);
-        self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
-            row_order,
+        let mut preview = crate::app::state::BomPreviewState {
+            row_order: Vec::new(),
             source,
             options: opts,
             table,
@@ -72,7 +75,15 @@ impl Signex {
             column_widths: std::collections::HashMap::new(),
             column_resize: None,
             sidebar_tab: crate::app::state::BomSidebarTab::General,
-        });
+            filter: String::new(),
+            visible_lines: Vec::new(),
+            row_flags: Vec::new(),
+            issue_lines: Vec::new(),
+            selected_row: None,
+            scroll_x: 0.0,
+        };
+        preview.refresh_rows();
+        self.document_state.bom_preview = Some(preview);
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
 
@@ -89,18 +100,63 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_bom_preview_set_include_dnp(&mut self, include: bool) {
+    /// "Include not-fitted parts (DNP) for this variant": one option over the
+    /// two domain flags, which it always sets together (decisions F25).
+    pub(crate) fn handle_bom_preview_include_not_fitted(&mut self, include: bool) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.options.include_dnp = include;
+            preview.options.include_not_fitted = include;
         }
         self.rerollup_bom_preview();
     }
 
-    pub(crate) fn handle_bom_preview_set_include_not_fitted(&mut self, include: bool) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
-            preview.options.include_not_fitted = include;
+    /// Select the line an issue points at and scroll it into view. A filter
+    /// that hides the line is cleared, so the selection is never off screen.
+    pub(crate) fn handle_bom_preview_issue_selected(&mut self, issue: usize) -> Task<Message> {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return Task::none();
+        };
+        let Some(Some(at)) = preview.issue_lines.get(issue).copied() else {
+            return Task::none();
+        };
+        preview.selected_row = Some(at.row);
+        let line = at.line.saturating_sub(1);
+        if !preview.visible_lines.contains(&line) {
+            preview.filter.clear();
+            preview.refresh_rows();
         }
-        self.rerollup_bom_preview();
+        let Some(position) = preview.visible_lines.iter().position(|&l| l == line) else {
+            return Task::none();
+        };
+        let y = position as f32 * crate::styles::ChromeMetrics::DEFAULT.field;
+        iced::widget::operation::scrollable::scroll_to(
+            crate::app::state::BomPreviewState::BODY_SCROLL,
+            iced::widget::scrollable::AbsoluteOffset {
+                x: None,
+                y: Some(y),
+            },
+            iced::widget::operation::Animation::Instant,
+        )
+    }
+
+    /// The table body scrolled: move the sticky header to the same
+    /// horizontal offset.
+    pub(crate) fn handle_bom_preview_body_scrolled(&mut self, x: f32) -> Task<Message> {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return Task::none();
+        };
+        if preview.scroll_x == x {
+            return Task::none();
+        }
+        preview.scroll_x = x;
+        iced::widget::operation::scrollable::scroll_to(
+            crate::app::state::BomPreviewState::HEADER_SCROLL,
+            iced::widget::scrollable::AbsoluteOffset {
+                x: Some(x),
+                y: None,
+            },
+            iced::widget::operation::Animation::Instant,
+        )
     }
 
     /// Turn one validation rule on or off and re-validate. Rule flags do not
@@ -319,6 +375,8 @@ impl Signex {
         {
             preview.table = table;
             preview.validation_report = report;
+            // Row indexes name lines of the old table.
+            preview.selected_row = None;
         }
     }
 

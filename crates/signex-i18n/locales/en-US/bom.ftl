@@ -1,4 +1,4 @@
-# Bill of Materials preview (#2058).
+# Bill of Materials export dialog (#2058, #1988).
 
 bom-properties = Properties
 bom-tab-general = General
@@ -6,27 +6,44 @@ bom-tab-columns = Columns
 bom-tab-rules = Rules
 bom-section-items = BOM Items
 bom-section-export = Export Options
-bom-section-columns = Columns
 bom-section-rules = Validation Rules
 bom-section-issues = Issues
-bom-grouping = Grouping:
 bom-grouping-grouped = Grouped
 bom-grouping-ungrouped = Ungrouped
 bom-grouping-flat = Flat
-bom-format = Format:
+bom-format = Format
 # File format names.
 bom-format-csv = CSV
 bom-format-xlsx = XLSX
 bom-format-html = HTML
-bom-include-dnp = Include DNP
-bom-include-not-fitted = Include Not Fitted
-bom-variant = Variant:
+# One option for parts the active variant does not fit (DNP): both the DNP
+# parts and the explicitly not-fitted ones are listed when it is ticked.
+bom-include-not-fitted = Include not-fitted parts (DNP) for this variant
+# Caption before the variant picker in the toolbar.
+bom-variant = Variant
 # The view with no variant applied.
 bom-variant-base = Base
-# $variant is the variant's name, or the word for the base view.
-bom-variant-is = Variant: { $variant }
-# $variant is the variant's name, or the word for the base view.
-bom-current-variant = Current variant: { $variant }
+# Placeholder of the toolbar filter; filtering only hides lines on screen.
+bom-filter-placeholder = Filter lines
+# Toolbar chip that opens the Rules tab; $count is a whole number, at least 1.
+bom-chip-warnings = { $count ->
+    [one] { $count } warning
+   *[other] { $count } warnings
+}
+# Toolbar chip that opens the Rules tab; $count is a whole number, at least 1.
+bom-chip-errors = { $count ->
+    [one] { $count } error
+   *[other] { $count } errors
+}
+bom-columns-hint = Ticked columns are exported. Drag to reorder.
+bom-issues-hint = Click an issue to select its line.
+# Where an issue sits: $line is the line number in the table, $part the
+# line's value (or name).
+bom-issue-line = Line { $line } · { $part }
+# Export button, named by the chosen format.
+bom-export-csv = Export CSV…
+bom-export-xlsx = Export XLSX…
+bom-export-html = Export HTML…
 # Column picker names.
 bom-column-name = Name
 bom-column-description = Description
@@ -42,7 +59,6 @@ bom-column-currency = Currency
 bom-column-stock = Stock
 bom-column-distributor = Distributor
 bom-column-price-age = Price Age
-bom-no-issues = No BOM issues
 bom-no-issues-found = No issues found.
 # Issue list heading; $count is how many errors (a whole number).
 bom-issues-errors = Errors ({ $count })
@@ -50,12 +66,19 @@ bom-issues-errors = Errors ({ $count })
 bom-issues-warnings = Warnings ({ $count })
 # Issue list heading; $count is how many notes (a whole number).
 bom-issues-notes = Notes ({ $count })
-# Footer: $visible and $total are line counts (whole numbers). The English
-# says "lines" for every count.
-bom-status-visible = { $visible } of { $total } lines visible
+# Footer: $visible lines of $total are shown (whole numbers; the English says
+# "lines" for every count); $parts is how many parts the BOM lists (the sum
+# of the Qty column).
+bom-status-visible = { $visible } of { $total } lines · { $parts ->
+    [one] { $parts } part
+   *[other] { $parts } parts
+}
 # As above, followed by the price note $prices (one of the bom-price-*
 # messages below).
-bom-status-visible-prices = { $visible } of { $total } lines visible · { $prices }
+bom-status-visible-prices = { $visible } of { $total } lines · { $parts ->
+    [one] { $parts } part
+   *[other] { $parts } parts
+} · { $prices }
 # Price note when no line has a cached price.
 bom-price-none = no cached prices
 # Price note: $sums is the total per currency, such as "2.00 EUR + 1.50 USD".

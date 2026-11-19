@@ -189,7 +189,7 @@ panels-kind-favorites = Favorites
 panels-kind-snippets = Snippets
 panels-kind-todo = To-Do
 panels-kind-wiki = Wiki
-panels-kind-output-jobs = Output Jobs
+panels-kind-output-jobs = Export Jobs
 panels-kind-library = Library
 # Schematic symbol library.
 panels-kind-sch-library = SCH Library

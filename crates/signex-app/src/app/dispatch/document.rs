@@ -318,8 +318,9 @@ impl Signex {
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
-        // Pure pointer/UI-state messages cannot change the row order; every
-        // other message (and any future one) re-sorts after it ran.
+        // Pure pointer/UI-state messages cannot change the rows on screen;
+        // every other message (and any future one) re-sorts, re-filters and
+        // re-flags after it ran.
         let reorders = !matches!(
             msg,
             BomPreviewMsg::ColumnHoverEnter(_)
@@ -328,14 +329,12 @@ impl Signex {
                 | BomPreviewMsg::ColumnResizeStart(_)
                 | BomPreviewMsg::ColumnResizeEnd
                 | BomPreviewMsg::SetSidebarTab(_)
+                | BomPreviewMsg::RowSelected(_)
+                | BomPreviewMsg::BodyScrolled(_)
         );
         let task = self.dispatch_bom_preview_message_inner(msg);
         if reorders && let Some(p) = self.document_state.bom_preview.as_mut() {
-            p.row_order = crate::app::view::dialogs::sorted_row_order(
-                &p.table.rows,
-                &p.options.columns,
-                p.sort,
-            );
+            p.refresh_rows();
         }
         task
     }
@@ -350,13 +349,29 @@ impl Signex {
                 self.handle_bom_preview_set_format(f);
                 self.finish_update()
             }
-            BomPreviewMsg::SetIncludeDnp(b) => {
-                self.handle_bom_preview_set_include_dnp(b);
+            BomPreviewMsg::NotFittedIncludedToggled(include) => {
+                self.handle_bom_preview_include_not_fitted(include);
                 self.finish_update()
             }
-            BomPreviewMsg::SetIncludeNotFitted(b) => {
-                self.handle_bom_preview_set_include_not_fitted(b);
+            BomPreviewMsg::FilterChanged(text) => {
+                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                    p.filter = text;
+                }
                 self.finish_update()
+            }
+            BomPreviewMsg::RowSelected(row) => {
+                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                    p.selected_row = Some(row);
+                }
+                self.finish_update()
+            }
+            BomPreviewMsg::IssueSelected(issue) => {
+                let task = self.handle_bom_preview_issue_selected(issue);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            BomPreviewMsg::BodyScrolled(x) => {
+                let task = self.handle_bom_preview_body_scrolled(x);
+                iced::Task::batch([task, self.finish_update()])
             }
             BomPreviewMsg::SetRule(rule, enabled) => {
                 self.handle_bom_preview_set_rule(rule, enabled);

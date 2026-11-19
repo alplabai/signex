@@ -11,6 +11,7 @@ mod board_3d;
 mod board_net_classes;
 mod board_project;
 mod board_sketch;
+mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
 pub(crate) mod check_runs;
@@ -68,6 +69,7 @@ pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
+pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
@@ -709,80 +711,6 @@ pub struct CommitBytes {
     /// The write's position in its document-save ledger; `0` is exempt from
     /// ordering (a restore).
     pub sequence: u64,
-}
-
-/// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns / Rules split.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BomSidebarTab {
-    General,
-    Columns,
-    Rules,
-}
-
-/// Live BOM preview state — the rolled-up table for the active project
-/// plus the user-editable options that drive the next rollup. Re-rolled
-/// whenever an option toggle fires.
-pub struct BomPreviewState {
-    /// The document the preview was built for; Export writes this one even if
-    /// the user has switched tabs since (#852).
-    pub source: PathBuf,
-    pub options: signex_output::BomOptions,
-    pub table: signex_output::BomTable,
-    /// Live validation of `table` under `options.rule_options`. Refreshed on
-    /// every rollup and every rule toggle so it never goes stale against the
-    /// displayed table. Advisory only — it never blocks export.
-    pub validation_report: signex_output::BomValidationReport,
-    /// Available variants for the active project. Reserved for the
-    /// variant picker dropdown — empty when no variants are defined.
-    /// Currently only seeded; the picker UI lands with the Advanced Schematic /
-    /// Enhanced Output plans.
-    pub variants: Vec<String>,
-    /// Active sort spec — `(column index in options.columns, ascending)`.
-    /// `None` = render rollup order (the default emit order from
-    /// `bom::rollup`). Click a header cell to set; click the same one
-    /// again to flip direction.
-    pub sort: Option<(usize, bool)>,
-    /// Row indexes into `table.rows` in display order under `sort`. Recomputed
-    /// in `update` whenever the rows, columns or sort change, so `view` only
-    /// reads it.
-    pub row_order: Vec<usize>,
-    /// In-flight column drag — `Some(from_idx)` while the user is
-    /// holding the mouse down on a header cell. The header only
-    /// renders the drag highlight once the cursor has moved past
-    /// `column_drag_press_x` by at least the threshold (see
-    /// `view`); a quick press-and-release counts as a click and
-    /// the cell never lights up.
-    pub column_drag: Option<usize>,
-    /// Cursor x at the moment the column drag was armed. Compared
-    /// against `last_mouse_pos.0` in the view to decide whether
-    /// the press has graduated into an actual drag.
-    pub column_drag_press_x: Option<f32>,
-    /// Index of the column header currently under the cursor.
-    /// Tracked via on_enter/on_exit on each header cell so the
-    /// release handler (which fires on the press-source widget,
-    /// not the cursor target) can resolve where the drop landed.
-    pub column_hover: Option<usize>,
-    /// Per-column width overrides keyed by index in
-    /// `options.columns`. Populated as the user drags a header
-    /// resize handle; consulted by the width helper before falling
-    /// back to the per-`BomColumn` default. Cleared on close.
-    pub column_widths: std::collections::HashMap<usize, f32>,
-    /// In-flight column-resize state — `Some` while the user is
-    /// dragging a header's right-edge handle. `start_x` is the
-    /// global cursor x at press; `start_width` is the column's
-    /// width at press. Width updates each mouse-move tick are
-    /// computed against these baselines.
-    pub column_resize: Option<ColumnResizeState>,
-    /// Currently-shown tab inside the Properties sidebar.
-    pub sidebar_tab: BomSidebarTab,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ColumnResizeState {
-    pub idx: usize,
-    pub start_x: f32,
-    pub start_width: f32,
 }
 
 /// Output PDF resolution preset. Drives the Quality dropdown in the
