@@ -470,21 +470,24 @@ fn preview_row<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         Some(preview) => preview_caption(i18n, &preview),
         None => t!(i18n, ids::RULES_MATRIX_PREVIEW_NONE),
     };
-    let head = Row::new()
-        .spacing(SP.m)
-        .align_y(Alignment::Center)
-        .push(
+    let drawn = super::grid_preview::drawn(frame);
+    // The drawing brings its own heading; show the row's only without it.
+    let mut head: Row<Element<'a, Message>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
+    if drawn.is_none() {
+        head = head.push(
             text(t!(i18n, ids::RULES_MATRIX_PREVIEW))
                 .size(TS.section)
                 .style(crate::styles::section_label(tokens))
                 .boxed(),
-        )
+        );
+    }
+    let head = head
         .push(Space::new().width(Length::Fill).boxed())
         .push(text(caption).size(TS.caption).color(faint).boxed());
     let mut left = Column::new()
         .spacing(SP.s)
         .push(head.width(Length::Fill).boxed());
-    if let Some(drawn) = super::grid_preview::drawn(frame) {
+    if let Some(drawn) = drawn {
         left = left.push(drawn);
     }
     Row::new()
