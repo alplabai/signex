@@ -164,7 +164,8 @@ fn drawing_box<'a>(
 ) -> Element<'a, PanelMsg> {
     let canvas =
         property_illustration(drawing, &IllustrationHover::default(), &ctx.tokens, TS.body)
-            .map(|_| PanelMsg::Noop);
+            .map(|_| PanelMsg::Noop)
+            .boxed();
     let mut body: Column<Element<'a, PanelMsg>> = Column::new().push(canvas);
     if is_wire {
         body = body.push(

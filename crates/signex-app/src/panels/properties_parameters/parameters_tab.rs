@@ -111,8 +111,8 @@ impl ParameterListing {
         variables: impl IntoIterator<Item = &'s String>,
         builtins: impl IntoIterator<Item = BuiltinParameter>,
     ) -> Self {
-        let query = query.trim().to_lowercase();
-        let matches = |name: &str| query.is_empty() || name.to_lowercase().contains(&query);
+        let query = i18n.fold_for_search(query.trim());
+        let matches = |name: &str| query.is_empty() || i18n.fold_for_search(name).contains(&query);
         let named = |id: MessageId| i18n.message_plain(id, &[]);
         Self {
             title_block: TitleBlockField::ALL

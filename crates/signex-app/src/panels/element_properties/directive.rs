@@ -122,7 +122,7 @@ fn rules_body<'a>(
         )
         .push(thin_sep(st.border_c));
     let mut shown = 0;
-    for (rule_id, name) in builtin_rules().filter(|(_, name)| rule_matches(name, &query)) {
+    for (rule_id, name) in builtin_rules().filter(|(_, name)| rule_matches(i18n, name, &query)) {
         let on = ticked(&rule_id);
         shown += 1;
         rules = rules.push(form_check_row(

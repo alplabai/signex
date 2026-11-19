@@ -229,7 +229,8 @@ fn wire_width_refuses_negative_and_zero_is_the_default() {
 
 #[test]
 fn the_rule_filter_ignores_case_and_blanks() {
-    assert!(rule_matches("Unused pin", ""));
-    assert!(rule_matches("Unused pin", " PIN "));
-    assert!(!rule_matches("Unused pin", "wire"));
+    let i18n = I18n::en_us();
+    assert!(rule_matches(&i18n, "Unused pin", ""));
+    assert!(rule_matches(&i18n, "Unused pin", " PIN "));
+    assert!(!rule_matches(&i18n, "Unused pin", "wire"));
 }

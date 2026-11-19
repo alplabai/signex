@@ -45,6 +45,8 @@ pub(in crate::panels) enum EntryDirection {
 }
 
 pub(in crate::panels) fn entry_direction(word: &str) -> EntryDirection {
+    // Parses the stored file word, never shown: ASCII fold in every language.
+    // ast-grep-ignore: no-case-in-view
     match word.trim().to_ascii_lowercase().as_str() {
         "input" | "in" => EntryDirection::Input,
         "output" | "out" => EntryDirection::Output,

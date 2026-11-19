@@ -124,7 +124,8 @@ fn thumbnail<'a>(
             Some(drawing) => signex_widgets::property_illustration::property_illustration(
                 drawing, hover, tokens, TS.caption,
             )
-            .map(|m| PanelMsg::Part(super::part_panel::PartPanelMsg::IllustrationHovered(m))),
+            .map(|m| PanelMsg::Part(super::part_panel::PartPanelMsg::IllustrationHovered(m)))
+            .boxed(),
             None => Space::new().boxed(),
         },
         FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new().boxed(),

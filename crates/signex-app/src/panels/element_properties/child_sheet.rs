@@ -76,6 +76,8 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
 /// The basename of a file reference, folded for comparison.
 fn file_key(reference: &str) -> String {
+    // A file-name match key, never shown: it must not follow the UI language.
+    // ast-grep-ignore: no-case-in-view
     reference
         .rsplit(['/', '\\'])
         .next()

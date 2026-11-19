@@ -153,9 +153,12 @@ impl SelectionForm {
     }
 }
 
-/// Whether a rule named `name` passes the filter `query` (case-insensitive,
-/// surrounding blanks ignored).
-pub fn rule_matches(name: &str, query: &str) -> bool {
+/// Whether a rule named `name` passes the filter `query` (case folded by the
+/// UI language, surrounding blanks ignored).
+pub fn rule_matches(i18n: &signex_i18n::I18n, name: &str, query: &str) -> bool {
     let query = query.trim();
-    query.is_empty() || name.to_lowercase().contains(&query.to_lowercase())
+    query.is_empty()
+        || i18n
+            .fold_for_search(name)
+            .contains(&i18n.fold_for_search(query))
 }

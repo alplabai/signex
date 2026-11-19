@@ -240,7 +240,7 @@ fn push_net_flags<'a>(
     let veil = signex_widgets::enable_section::dependents_veil(st.palette.panel_bg, open);
     let gated = |content: Element<'a, PanelMsg>| match veil {
         Some(veil) => signex_widgets::tooltip(
-            signex_widgets::inert::Inert::new(content, veil),
+            signex_widgets::inert::Inert::new(content, veil).boxed(),
             container(text(t!(i18n, ids::PROPERTIES_POWER_NET_EXCLUDES)).size(TS.body))
                 .padding([SP.xs, SP.s]),
             iced::widget::tooltip::Position::Bottom,
@@ -267,7 +267,7 @@ fn push_net_flags<'a>(
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
-        .padding([SP.s, PROPERTY_ROW_PAD_X])
+        .padding([SP.s, f32::from(PROPERTY_ROW_PAD_X)])
         .width(Length::Fill)
         .boxed(),
     )
@@ -294,7 +294,8 @@ fn style_grid<'a>(
             &ctx.tokens,
             TS.caption,
         )
-        .map(|_| PanelMsg::Noop);
+        .map(|_| PanelMsg::Noop)
+        .boxed();
         let face = iced::widget::Column::new()
             .push(glyph)
             .push(

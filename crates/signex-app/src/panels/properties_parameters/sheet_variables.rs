@@ -61,7 +61,10 @@ fn icon_button<'a>(
     let glyph = svg(handle)
         .width(TS.body)
         .height(TS.body)
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        });
     signex_widgets::button(glyph)
         .padding(SP.xs)
         .style(crate::panels::form_look::ghost_button)
@@ -178,7 +181,10 @@ pub(super) fn add_sheet_variable_row<'a>(ctx: &'a PanelContext) -> Element<'a, P
     let glyph = svg(crate::icons::icon_plus(ctx.theme_id))
         .width(TS.body)
         .height(TS.body)
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        });
     let add = signex_widgets::button(
         row![
             glyph,

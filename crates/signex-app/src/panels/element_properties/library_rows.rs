@@ -395,7 +395,7 @@ fn banner_actions<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    let button = |label, tip, msg: PanelMsg, quiet: bool| -> Element<'a, PanelMsg> {
+    let action = |label, tip, msg: PanelMsg, quiet: bool| -> Element<'a, PanelMsg> {
         let pressable =
             signex_widgets::button(signex_widgets::text(t!(i18n, label)).size(TS.caption))
                 .padding([SP.xs, SP.m])
@@ -413,14 +413,14 @@ fn banner_actions<'a>(
         .style(crate::styles::context_menu(tokens))
         .boxed()
     };
-    let mut actions = iced::widget::Row::<Element<'a, PanelMsg>>::new().push(button(
+    let mut actions = iced::widget::Row::<Element<'a, PanelMsg>>::new().push(action(
         ids::PROPERTIES_LIBRARY_UPDATE,
         ids::PROPERTIES_LIBRARY_UPDATE_TIP,
         PanelMsg::UpdateSymbolFromLibrary(id),
         false,
     ));
     if !this_one_current {
-        actions = actions.push(button(
+        actions = actions.push(action(
             ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE,
             ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP,
             PanelMsg::UpdateSymbolFromLibraryOnly(id),

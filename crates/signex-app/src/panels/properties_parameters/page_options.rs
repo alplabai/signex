@@ -142,7 +142,7 @@ fn zones_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 /// A check row with its box first: Show Title Block.
 fn check_row<'a>(content: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
     container(content)
-        .padding([SP.xs, PROPERTY_ROW_PAD_X])
+        .padding([SP.xs, f32::from(PROPERTY_ROW_PAD_X)])
         .width(Length::Fill)
         .boxed()
 }
