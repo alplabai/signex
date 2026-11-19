@@ -63,17 +63,18 @@ fn root(parent: &[usize], mut at: usize) -> usize {
 /// else where the plain move put it; a warned pin, or one on no net before,
 /// stays where the plain move put it; a kept carried point joins the net at
 /// its old place to the net its wire landed on, unless either holds a warned
-/// pin or both carry different names (decisions 2026-11-19). Power ports name
-/// nets across the sheet, which this check does not restate: it passes them.
+/// pin, named as the netlist names the join (decisions 2026-11-19). Power
+/// ports name nets across the sheet, which this check does not restate: it
+/// passes a move of one, returning `false` (counted by the property run).
 pub(crate) fn check_allowed(
     before: &SchematicSheet,
     plain: &SchematicSheet,
     after: &SchematicSheet,
     tips: &[PinTip],
     record: &Record,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     if tips.iter().any(PinTip::is_power) {
-        return Ok(());
+        return Ok(false);
     }
     // A pin riding on a carried wire is no contact of its own: it is where
     // the plain move put it, like any member of the plain nets.
@@ -207,7 +208,7 @@ pub(crate) fn check_allowed(
     let want: BTreeSet<NetSignature> = bags.iter().filter_map(&project).collect();
     let got: BTreeSet<NetSignature> = net_signatures(after).iter().filter_map(&project).collect();
     if want == got {
-        return Ok(());
+        return Ok(true);
     }
     let missing: Vec<_> = want.difference(&got).collect();
     let extra: Vec<_> = got.difference(&want).collect();
@@ -318,4 +319,35 @@ fn netlist_name(sheet: &SchematicSheet, net: &NetSignature) -> Option<String> {
         .collect();
     let named = labels.iter().map(|l| (l.label_type, l.text.as_str()));
     signex_net::best_net_name_of(named, &values).map(|(_, name)| name)
+}
+
+/// A wire the pass lays over a pin end must not leave it touching bare (no
+/// dot, so no connection, #107) where the plain move leaves it free: the
+/// round that would is taken down the ladder. A probe of the rule the
+/// property run holds on every case.
+#[test]
+fn a_dragged_segment_never_leaves_a_bare_touch_on_a_pin_end() {
+    use crate::rubber_band_tests::{add_wire, lib_pin, lib_symbol, place};
+    use signex_types::schematic::Point;
+    let mut sheet = crate::test_support::test_sheet();
+    sheet
+        .lib_symbols
+        .insert("TP".to_string(), lib_symbol("TP", vec![lib_pin("1", 0.0)]));
+    // A free pin end just below the joint the stretched neighbour passes.
+    place(&mut sheet, "TP1", "TP", Point::new(40.0, 45.0));
+    let segment = add_wire(&mut sheet, (40.0, 40.0), (60.0, 40.0));
+    add_wire(&mut sheet, (40.0, 40.0), (40.0, 20.0));
+    let run = |keep_wires: bool| {
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        let item = SelectedItem::new(segment, SelectedKind::Wire);
+        let command = Command::MoveEach {
+            moves: vec![(item, 0.0, 10.0)],
+            keep_wires,
+        };
+        engine.execute(command).expect("move");
+        engine
+    };
+    let plain = crate::transform::bare_tap_keys(run(false).document());
+    let kept = crate::transform::bare_tap_keys(run(true).document());
+    assert!(kept.is_subset(&plain), "new bare touches: {kept:?} over {plain:?}");
 }

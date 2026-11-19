@@ -1442,6 +1442,9 @@ pub(crate) struct RunCounts {
     /// Per kind of case, the cases whose only notice was a held pin kept off
     /// the wire it landed in (spec gap (a)): a notice, not a fallback.
     unjoined_only: std::collections::BTreeMap<&'static str, usize>,
+    /// Cases the differential check passed without checking (a moved power
+    /// port, whose name-merges it does not restate).
+    allowed_skipped: usize,
 }
 
 impl RunCounts {
@@ -1456,6 +1459,7 @@ impl RunCounts {
         self.rerouted += other.rerouted;
         self.pin_joined += other.pin_joined;
         self.strict_pins += other.strict_pins;
+        self.allowed_skipped += other.allowed_skipped;
         for (key, n) in &other.fallbacks {
             *self.fallbacks.entry(*key).or_default() += n;
         }
@@ -1483,7 +1487,7 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     assert!(exercised > 4000, "only {exercised} cases");
     // The strict net check leaves out a moved pin the plain move joined to a
     // wire through a new pin dot; a bound keeps those few from growing into
-    // a blind spot.
+    // a blind spot. Measured 1232 of 11465 (10.7 %, 2026-11-19).
     eprintln!(
         "pin-dot pins left out of the strict check: {} of {} moved pins",
         total.pin_joined, total.strict_pins
@@ -1503,6 +1507,10 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     for ((kind, why), n) in &total.fallbacks {
         eprintln!("fallback {kind}: {n} cases: {why}");
     }
+    eprintln!(
+        "differential check passed without checking: {} cases (a moved power port)",
+        total.allowed_skipped
+    );
     for (kind, n) in &total.unjoined_only {
         eprintln!("notice only {kind}: {n} cases: a held pin kept off its landing wire");
     }
@@ -1515,7 +1523,8 @@ fn random_rubber_band_moves_never_change_the_netlist() {
             share.warned, share.cases
         );
     }
-    // Symbol-only measured at 22.6 % (#1177), 17.8 % with the guarded pass.
+    // Symbol-only measured at 22.6 % (#1177), 17.8 % with the guarded pass
+    // (957 of 5366, 2026-11-19), the cap about two points above.
     // Co-selected measured at 32.2 % with the guarded pass (2026-11-19), the
     // cap about two points above. Its causes: moved pins that cannot be kept
     // (the pin pass, as for symbol-only), a dragged wire that cannot be
@@ -1523,13 +1532,27 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     // touching their landing wire (provisional decision (a)).
     // TODO: lower the fallback rate, #2521.
     for (kind, share, cap) in [
-        ("symbol-only", total.symbols_only, 25),
+        ("symbol-only", total.symbols_only, 20),
         ("co-selected", total.co_selected, 34),
     ] {
         assert!(
             share.warned * 100 < share.cases * cap,
             "{} of {} {kind} cases fell back to a plain move",
             share.warned,
+            share.cases
+        );
+    }
+    // A held pin kept off the wire it landed in (provisional decision (a)) is
+    // told but kept; those notices are bounded apart. Provisional cap of 5 %
+    // per kind of case until measured (the run prints the counts above).
+    for (kind, share) in [
+        ("symbol-only", total.symbols_only),
+        ("co-selected", total.co_selected),
+    ] {
+        let only = total.unjoined_only.get(kind).copied().unwrap_or_default();
+        assert!(
+            only * 100 < share.cases * 5,
+            "{only} of {} {kind} cases gave only the held-pin notice",
             share.cases
         );
     }
@@ -1713,18 +1736,39 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
         "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
         describe(after)
     );
+    // No new bare touch of a pin end (a wire over it with no dot): only the
+    // plain move's own, or one at a pin dot it made (a held pin, spec gap (a)).
+    let plain_taps = crate::transform::bare_tap_keys(plain.document());
+    let plain_dots: std::collections::HashSet<_> =
+        (crate::transform::new_pin_dots(&sheet, plain.document()).iter())
+            .map(signex_net::pt_key)
+            .collect();
+    let new_taps: Vec<_> = (crate::transform::bare_tap_keys(after).into_iter())
+        .filter(|k| !plain_taps.contains(k) && !plain_dots.contains(k))
+        .collect();
+    assert!(
+        new_taps.is_empty(),
+        "seed {seed:#x} case {index}: new bare pin touches {new_taps:?}\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
     // A pin end the plain move put inside a wire joins it through a new pin
     // dot (2026-11-18): the user's placement, which may join two nets. The
     // closure oracle reads the plain nets, so it still holds such a pin; the
     // strict net equality below leaves out just that pin (counted, bounded).
     let (dot_terminals, dot_pins, dot_spots) = plain_pin_dot_pins(&sheet, plain.document(), &items);
+    // A wire that could not be carried whole moved plainly: it carries
+    // nothing, so it bridges nothing.
+    let mut carried = selected_wire_ids(&items);
+    if let Some(record) = &record {
+        carried.retain(|id| !record.bailed_wires.contains(id));
+    }
     let oracle = check_closure_oracle(
         &sheet,
         plain.document(),
         after,
         &warned_items(&sheet, &unkept),
         &moved_pin_items(&tips),
-        &selected_wire_ids(&items),
+        &carried,
     );
     if let Err(why) = oracle {
         panic!(
@@ -1734,14 +1778,16 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     }
     // The written rule worked out apart from the guard (a differential
     // check): the plain nets with every kept contact restored.
-    if let Some(record) = &record
-        && let Err(why) =
-            crate::carry_guard_tests::check_allowed(&sheet, plain.document(), after, &tips, record)
-    {
-        panic!(
-            "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
-            describe(after)
-        );
+    if let Some(record) = &record {
+        let allowed =
+            crate::carry_guard_tests::check_allowed(&sheet, plain.document(), after, &tips, record);
+        match allowed {
+            Ok(checked) => counts.allowed_skipped += usize::from(!checked),
+            Err(why) => panic!(
+                "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+                describe(after)
+            ),
+        }
     }
     let moves_power = sheet
         .symbols

@@ -639,3 +639,30 @@ fn diagnose_corpus_folds() {
         }
     }
 }
+
+/// Timing: microseconds per keep-wires preview frame on each corpus sheet
+/// with wires, over random moves of its wires and parts. Run in release with
+/// `--ignored --nocapture`.
+#[test]
+#[ignore = "timing: prints microseconds per keep-wires preview frame on the corpus"]
+fn time_keep_wires_preview_frames() {
+    const FRAMES: u32 = 40;
+    for path in &corpus_sheets() {
+        let Ok(engine) = Engine::open(path) else {
+            continue;
+        };
+        let sheet = engine.document().clone();
+        if sheet.wires.is_empty() {
+            continue;
+        }
+        let preview = MovePreview::new(&sheet);
+        let mut rng = Lcg(sheet.wires.len() as u64 + 7);
+        let moves: Vec<Moves> = (0..FRAMES).map(|_| random_moves(&mut rng, &sheet)).collect();
+        let started = std::time::Instant::now();
+        for frame in &moves {
+            let _ = preview.moved_with(frame, true);
+        }
+        let per_frame = started.elapsed().as_micros() / u128::from(FRAMES);
+        eprintln!("{}: {per_frame} us per frame", path.display());
+    }
+}
