@@ -337,9 +337,11 @@ impl Engine {
                         | DocumentPatch::WIRES
                         | DocumentPatch::JUNCTIONS;
                 }
-                // A drag preview's notices are never shown.
-                if self.preset_sheet.is_none() {
-                    self.warn_plain_pins(&guard, &contacts.tips, &policy);
+                // A drag preview's notices are never shown, so it lists the pins
+                // it left plain (cheap) and skips the rest, which reads nets.
+                let preview = self.preset_sheet.is_some();
+                self.warn_plain_pins(&guard, &contacts.tips, &policy, !preview);
+                if !preview {
                     self.warn_plain_wire_points(before, contacts, &policy, items);
                     self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
                 }

@@ -1543,15 +1543,16 @@ fn random_rubber_band_moves_never_change_the_netlist() {
         );
     }
     // A held pin kept off the wire it landed in (provisional decision (a)) is
-    // told but kept; those notices are bounded apart. Provisional cap of 5 %
-    // per kind of case until measured (the run prints the counts above).
+    // told but kept; those notices are bounded apart. Measured 7 of 5366
+    // symbol-only and 2 of 2548 co-selected cases (2026-11-19); the cap is 1 %
+    // per kind of case.
     for (kind, share) in [
         ("symbol-only", total.symbols_only),
         ("co-selected", total.co_selected),
     ] {
         let only = total.unjoined_only.get(kind).copied().unwrap_or_default();
         assert!(
-            only * 100 < share.cases * 5,
+            only * 100 < share.cases,
             "{only} of {} {kind} cases gave only the held-pin notice",
             share.cases
         );

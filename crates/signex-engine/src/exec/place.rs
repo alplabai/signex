@@ -141,12 +141,14 @@ impl Engine {
     }
 
     /// One notice for the connected pins the guard had to leave as a plain
-    /// move: a count and the first few, not a line per pin.
+    /// move: a count and the first few, not a line per pin. Without `notice`
+    /// (a drag preview) the pins are listed and no notice is written.
     pub(super) fn warn_plain_pins(
         &mut self,
         guard: &crate::Guard,
         tips: &[crate::PinTip],
         policy: &crate::Policy,
+        notice: bool,
     ) {
         const NAMED: usize = 3;
         let pins: Vec<String> = tips
@@ -155,6 +157,10 @@ impl Engine {
             .map(|tip| tip.label().to_string())
             .collect();
         if pins.is_empty() {
+            return;
+        }
+        if !notice {
+            self.unkept_pins.extend(pins);
             return;
         }
         let shown = pins
