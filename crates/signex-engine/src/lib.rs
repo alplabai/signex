@@ -168,8 +168,7 @@ pub use transform::rubber_band::{
     follow_moved_pins, follow_wire_grip, moved_pin_tips, moved_wire_contacts, wire_contact_points,
 };
 pub(crate) use transform::rubber_band::{
-    WirePoint, bailing_wires, carried_points, carry_points, held_at,
-    pin_dots_to_keep,
+    WirePoint, bailing_wires, carried_points, carry_points, held_at, pin_dots_to_keep,
 };
 
 pub(crate) use transform::{PreWires, TouchingPairs};
