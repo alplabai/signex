@@ -13,6 +13,7 @@ mod locale;
 mod modal_card;
 mod project_tree;
 mod section;
+mod stat_tiles;
 mod tabs;
 mod theme;
 mod theme_picker;
