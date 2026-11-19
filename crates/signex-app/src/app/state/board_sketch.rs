@@ -1,18 +1,19 @@
 //! Board sketch mode (#2234): the working copy of one board's sketch while
-//! the user edits it. Nothing here touches the board or the disk; leaving
-//! the mode or Apply bakes the copy and commits it as one board command.
-//! See `docs/PCB_SKETCH.md`, "Sketch mode".
+//! the user edits it. Nothing here touches the board or the disk; Bake
+//! bakes the copy and commits it as one board command, Discard changes
+//! drops it (#2518). See `docs/PCB_SKETCH.md`, "Sketch mode".
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{NetDef, PcbBoard};
+use signex_types::sketch::SketchHost;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-use crate::library::editor::footprint::sketch_mode::SketchEdit;
+use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchEdit};
 use crate::library::editor::footprint::{BoardBackdrop, EditorMode};
 
 /// One board in sketch mode. The sketch is edited by the footprint
@@ -27,6 +28,8 @@ pub struct BoardSketchSession {
     /// Why the last commit was refused, shown in the mode's bar until the
     /// next commit; rendered in the language of the moment it is shown.
     pub refusal: Option<signex_i18n::Translatable>,
+    /// What a bake of the copy writes, while the bake preview is open.
+    pub preview: Option<BakePreview>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
 }
@@ -52,6 +55,7 @@ impl BoardSketchSession {
         );
         editor.state.mode = EditorMode::Sketch;
         editor.state.board_backdrop = Some(Arc::new(BoardBackdrop::from_board(board)));
+        debug_assert_eq!(editor.state.sketch_host(), SketchHost::Board);
         editor.with_parts(|state, primitive| {
             apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
         });
@@ -62,6 +66,7 @@ impl BoardSketchSession {
             board_path: board_path.to_path_buf(),
             editor: Box::new(editor),
             refusal: None,
+            preview: None,
             start,
         }
     }
@@ -77,6 +82,17 @@ impl BoardSketchSession {
         self.editor.primitive().sketch.as_ref() != Some(&self.start)
     }
 
+    /// Bake the copy for the preview against the board's `nets`, when the
+    /// preview is open; close it otherwise. Pure: the board is not touched.
+    pub fn refresh_preview(&mut self, nets: &[NetDef]) {
+        self.preview = self
+            .editor
+            .state
+            .sketch_exit
+            .preview
+            .then(|| board_preview(&self.working_sketch(), nets));
+    }
+
     /// The board took the copy and stored it as `stored`, which also records
     /// what the bake owns (`baked_kinds`): it is the new starting point.
     /// `board` is the board after the commit: the backdrop and the outline
@@ -88,5 +104,22 @@ impl BoardSketchSession {
         self.editor.canvas_cache.clear();
         self.start = stored;
         self.refusal = None;
+    }
+}
+
+/// What a board bake of `sketch` writes: a count per board target, or why
+/// the bake refuses.
+fn board_preview(sketch: &SketchData, nets: &[NetDef]) -> BakePreview {
+    match signex_bake::bake_board(sketch, nets) {
+        Ok(baked) => BakePreview::Counts(
+            SketchHost::Board
+                .bake_targets()
+                .iter()
+                .filter_map(|&kind| {
+                    signex_bake::board::baked_count(&baked, kind).map(|n| (kind, n))
+                })
+                .collect(),
+        ),
+        Err(error) => BakePreview::Refused(error.to_string()),
     }
 }

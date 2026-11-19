@@ -57,9 +57,7 @@ mod area_ids;
 define_ids! {
     BOARD_SKETCH_TITLE = "board-sketch-title";
     BOARD_SKETCH_TOOLTIP = "board-sketch-tooltip";
-    BOARD_SKETCH_APPLY = "board-sketch-apply";
-    BOARD_SKETCH_LEAVE = "board-sketch-leave";
-    BOARD_SKETCH_DISCARD = "board-sketch-discard";
+    BOARD_SKETCH_BAKE_TOOLTIP = "board-sketch-bake-tooltip";
     BOARD_SKETCH_ENTERED = "board-sketch-entered";
     BOARD_SKETCH_REFUSED = "board-sketch-refused";
     BOARD_SKETCH_DROPPED = "board-sketch-dropped";

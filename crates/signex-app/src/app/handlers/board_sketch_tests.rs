@@ -238,3 +238,47 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
         "the card still shows, in en-XA ({card:?}): {xa:#?}"
     );
 }
+
+/// #2518: the board's mode bar is the shared exit set, Bake preview ·
+/// Discard changes · Bake; Leave and Apply are gone. With edits, Discard
+/// changes turns the bar into its question.
+#[test]
+fn the_mode_bar_is_the_shared_exit_set() {
+    let (mut app, _tmp) = sketching();
+    let texts = main_window_texts(&mut app);
+    for label in ["Board Sketch", "Bake preview", "Discard changes", "Bake"] {
+        assert!(texts.iter().any(|t| t == label), "{label:?} in {texts:#?}");
+    }
+    // The bar's old Apply / Leave / Discard buttons.
+    for gone in ["Leave", "Discard"] {
+        assert!(!texts.iter().any(|t| t == gone), "{gone:?} in {texts:#?}");
+    }
+
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    session.editor.state.sketch_exit.confirming_discard = true;
+    let texts = main_window_texts(&mut app);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Discard the changes made in this sketch?"),
+        "{texts:#?}"
+    );
+    assert!(texts.iter().any(|t| t == "Keep editing"), "{texts:#?}");
+}
+
+/// #2518: Esc never applies the sketch. Without edits it leaves; it never
+/// commits a board command.
+#[test]
+fn esc_without_edits_leaves_and_writes_nothing() {
+    let (mut app, _tmp) = sketching();
+    let message = app.board_sketch_escape().expect("the mode is in view");
+    assert!(
+        matches!(
+            message,
+            Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::DiscardRequested))
+        ),
+        "{message:?}"
+    );
+    send(&mut app, message);
+    assert!(app.interaction_state.board_sketch.is_none());
+}

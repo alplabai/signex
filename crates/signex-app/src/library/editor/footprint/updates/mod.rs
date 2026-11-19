@@ -418,10 +418,20 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         FootprintEditorMsg::SketchSelectMany(..)
         | FootprintEditorMsg::SketchSelect { .. }
         | FootprintEditorMsg::SketchSetTool(..)
-        | FootprintEditorMsg::SketchToggleConstruction
-        | FootprintEditorMsg::SketchToggleCenterline
+        | FootprintEditorMsg::SketchLinetypePicked(..)
         | FootprintEditorMsg::SketchToolEscape
         | FootprintEditorMsg::SketchDimensionInput(..) => sketch::ui::apply(editor, msg),
+        FootprintEditorMsg::SketchBakePreviewToggled
+        | FootprintEditorMsg::SketchBakeRequested
+        | FootprintEditorMsg::SketchDiscardRequested
+        | FootprintEditorMsg::SketchDiscardConfirmed
+        | FootprintEditorMsg::SketchDiscardCancelled => {
+            use crate::library::editor::footprint::sketch_mode::{ExitOutcome, exit};
+            use crate::library::editor::footprint::state::EditorMode;
+            if exit::apply(editor, &msg) == ExitOutcome::Leave {
+                view::apply(editor, FootprintEditorMsg::SetMode(EditorMode::Normal));
+            }
+        }
         FootprintEditorMsg::SketchPlacementInputChar(..)
         | FootprintEditorMsg::SketchPlacementInputBackspace
         | FootprintEditorMsg::SketchPlacementInputEnter
@@ -566,8 +576,13 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarSetSketchTool(_)
         | SetMode(_)
         | SketchSetTool(_)
-        | SketchToggleConstruction
-        | SketchToggleCenterline
+        | SketchLinetypePicked(_)
+        // The exit set's UI state; Bake leaves like SetMode. The
+        // confirmed discard is an edit (one undo step brings it back).
+        | SketchBakePreviewToggled
+        | SketchBakeRequested
+        | SketchDiscardRequested
+        | SketchDiscardCancelled
         | TogglePlacementPause
         | SketchToolEscape
         // v0.24 Track D — placement-input keypress messages mutate

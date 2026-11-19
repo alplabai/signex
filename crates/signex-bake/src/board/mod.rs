@@ -52,6 +52,25 @@ pub fn bake_board(sketch: &SketchData, nets: &[NetDef]) -> Result<BakedBoard, Bo
     })
 }
 
+/// How many items of `kind` a board bake produced, for the bake preview
+/// (#2518). The outline counts one when the sketch draws it. `None`: a
+/// board bake never writes `kind`; the targets it writes are
+/// `SketchHost::Board.bake_targets()`.
+pub fn baked_count(baked: &BakedBoard, kind: BakedKind) -> Option<usize> {
+    Some(match kind {
+        BakedKind::BoardOutline => baked
+            .outline
+            .as_ref()
+            .is_some_and(|outline| !outline.is_empty())
+            .into(),
+        BakedKind::Keepouts => baked.keepouts.len(),
+        BakedKind::Cutouts => baked.cutouts.len(),
+        BakedKind::MountingHoles => baked.holes.len(),
+        BakedKind::VScores => baked.v_scores.len(),
+        _ => return None,
+    })
+}
+
 /// What every bake stage reads.
 pub(crate) struct Context<'a> {
     pub(crate) sketch: &'a SketchData,
