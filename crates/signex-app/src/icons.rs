@@ -205,6 +205,7 @@ bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 
 // ─── Chrome (window controls, search) ──────────────────────────────
 
+canonical_icon!(icon_chrome_more, "chrome/more.svg");
 canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");

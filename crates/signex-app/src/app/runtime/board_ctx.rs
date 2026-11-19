@@ -17,7 +17,14 @@ impl Signex {
             .active_tab_path()
             .map(|path| self.pcb_layer_view(&path))
             .unwrap_or_default();
+        // The more menu's Layer Stack... row runs the catalog command, live
+        // exactly when the command is (#103).
+        let layer_stack_live = crate::keymap::AppCommandId::new(
+            crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND,
+        )
+        .is_ok_and(|id| crate::app::command::is_enabled(&id, &self.command_context(None)));
         crate::panels::PcbLayersPanel {
+            layer_stack_live,
             saved_sets: self
                 .ui_state
                 .layer_strip
