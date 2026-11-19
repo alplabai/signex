@@ -227,3 +227,97 @@ pcb-prim-offset = Offset
 pcb-prim-precision = Precision
 pcb-prim-value = Value
 pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6
+
+## Via (#96): the via type a via picks, Override, protection after IPC-4761.
+## The types are derived from the board's vias until the Layer Stack
+## Manager stores them.
+pcb-prim-via-type = Via Type
+pcb-prim-via-type-tip = The board's via types, read from its vias until the Layer Stack stores them. Picking one sets the span, sizes and tenting in one step.
+# A Via Type entry: its name ("Thru 1:4") and its spec.
+pcb-prim-via-type-entry = { $name } · { $spec }
+# "Through 1:4 · 0.6/0.3 · Type I-b"; $class is "Type I-b", "open" or "Custom".
+pcb-prim-via-type-spec = { $kind } { $from }:{ $to } · { $diameter }/{ $drill } · { $class }
+pcb-prim-via-kind-through = Through
+pcb-prim-via-kind-blind = Blind
+pcb-prim-via-kind-micro = Micro
+# A drill pair over the copper layers, counted from the top: "Through 1–4".
+pcb-prim-via-drill-pair = { $kind } { $from }–{ $to }
+pcb-prim-edit-in-layer-stack = Edit in Layer Stack…
+pcb-prim-define-via-types = Define blind/buried via types in Layer Stack…
+pcb-prim-layer-stack-later = Via types will be edited in the Layer Stack Manager, which is not available yet.
+# A small tag after a value that comes from somewhere else.
+pcb-prim-from-type = from type
+pcb-prim-from-drill = from drill
+pcb-prim-span = Span
+# The layers a via joins: "Top Layer → Bottom Layer".
+pcb-prim-span-ends = { $from } → { $to }
+pcb-prim-drill-pair = Drill Pair
+pcb-prim-position = Position
+pcb-prim-via-locked = This via is locked. Click the lock to edit it.
+pcb-prim-unlock-via = Unlock
+pcb-prim-stack-from-type-tip = Set by the via type: Simple is one size on every layer; Top-Middle-Bottom and Full Stack size each copper layer. Turn on Override to change it for this via.
+pcb-prim-override = Override
+pcb-prim-override-caption = for this via
+pcb-prim-override-tip = Let this via use its own Diameter and Drill. Span and drill pair stay with the type.
+pcb-prim-override-note = Span and drill pair stay with the type; only Diameter and Drill change for this via.
+pcb-prim-drill = Drill
+pcb-prim-reset-to-type = Reset to the via type's value
+pcb-prim-finished-hole = Finished Hole
+pcb-prim-finished-hole-tip = The drill less twice the hole plating.
+pcb-prim-min-drill-warn = Drill { $drill } is below the board's minimum via drill { $min }.
+pcb-prim-protection = Protection
+pcb-prim-protection-type = Type
+pcb-prim-protection-type-tip = Picks a via protection type and sets Fill, Cap and Tented in one step. Set by the via type here.
+# An IPC-4761 type in a via type's spec: $code is "I-b", "VII".
+pcb-prim-ipc-code = Type { $code }
+pcb-prim-ipc-short-open = open
+pcb-prim-ipc-open = None · open
+pcb-prim-ipc-ia = Type I-a · tented one side
+pcb-prim-ipc-ib = Type I-b · tented both sides
+pcb-prim-ipc-ii = Type II · tented & covered (second coat not stored)
+pcb-prim-ipc-iiia = Type III-a · plugged one side
+pcb-prim-ipc-iiib = Type III-b · plugged both sides
+pcb-prim-ipc-iva = Type IV-a · plugged & covered one side
+pcb-prim-ipc-ivb = Type IV-b · plugged & covered both sides
+pcb-prim-ipc-v = Type V · filled
+pcb-prim-ipc-via = Type VI-a · filled & covered one side
+pcb-prim-ipc-vib = Type VI-b · filled & covered both sides
+pcb-prim-ipc-vii = Type VII · filled & capped
+pcb-prim-ipc-custom = Custom
+pcb-prim-fill = Fill
+pcb-prim-fill-plug = Plug
+pcb-prim-fill-resin = Resin
+pcb-prim-fill-conductive = Cond.
+pcb-prim-fill-cap-unstored = The board does not store a via's fill or cap yet.
+pcb-prim-plug-from = Plug From
+pcb-prim-both = Both
+pcb-prim-cap = Cap
+pcb-prim-capped = Capped
+pcb-prim-no-mask-top = Top: this via does not reach Top Layer, so the side has no mask.
+pcb-prim-no-mask-bottom = Bottom: this via does not reach Bottom Layer, so the side has no mask.
+pcb-prim-protection-from-type = Protection comes from the via type.
+pcb-prim-edit-via-types = Edit it in Layer Stack ▸ Via Types.
+pcb-prim-testpoint-summary = Fabrication · Assembly
+
+## Mask rows of tracks and vias (#95, #96).
+pcb-prim-source = Source
+pcb-prim-tenting-moved = Tented Top/Bottom moved to Protection above; a tented side has no opening.
+pcb-prim-track-tent-unstored = Tracks do not store tenting yet.
+
+## Via and pad illustrations (#96, #97).
+pcb-prim-top-view = Top view
+pcb-prim-side-view = Side view
+# A copper layer counted from the top: L1 is Top, the last is Bottom.
+pcb-prim-layer-position = L{ $n }
+# The cross-section's header: the drill pair and the protection type.
+pcb-prim-via-section-header = { $pair } · { $class }
+pcb-prim-fill-summary = Fill: { $fill }
+pcb-prim-fill-capped-summary = Fill: { $fill } · capped
+
+## Pad (#97): the copper table, the hole and the mask switches.
+pcb-prim-all-layers = All layers
+pcb-prim-shape-all-layers-tip = The board stores one shape per pad: a shape picked in any row sets every layer.
+pcb-prim-hole = Hole
+pcb-prim-plated = Plated
+pcb-prim-plated-tip = A plated hole connects the copper on every layer. Plating follows the pad type, which the footprint sets.
+pcb-prim-solder-tented = Solder mask: Tented

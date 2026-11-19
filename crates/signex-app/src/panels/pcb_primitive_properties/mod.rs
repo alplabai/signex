@@ -38,12 +38,14 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_widgets::{text, text_input};
 
+pub use facts::ViaTypeChoice;
 pub use facts::{
     ArcFacts, AreaLayerChoice, DimensionFacts, Editability, GraphicFacts, LayerChoice,
     LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
     PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts, TrackFacts, ViaFacts,
     ZoneFacts, ZoneKind, shared,
 };
+pub use via::ViaMsg;
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
@@ -149,6 +151,8 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         mode: StackMode,
     },
+    /// The Via panel's via type, Override and layer chips (#96).
+    Via(ViaMsg),
 }
 
 /// The panel for `facts`: header, then the kind's sections.
