@@ -642,9 +642,10 @@ mod scale_tests {
     /// The bar badge's count is 8.5 px at the default base and follows it.
     #[test]
     fn the_badge_step_is_8_5_px_at_the_default_base() {
-        assert!(close(TypeScale::DEFAULT.badge, 8.5));
+        let ts = TypeScale::DEFAULT;
+        assert!(close(ts.badge, 8.5));
         assert!(close(TypeScale::from_base(24.0).badge, 17.0));
-        assert!(TypeScale::DEFAULT.badge < TypeScale::DEFAULT.caption);
+        assert!(ts.badge < ts.caption, "{} !< {}", ts.badge, ts.caption);
     }
 
     /// Accent-soft colours: the theme's tokens when set, else the accent at
