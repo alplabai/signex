@@ -18,12 +18,39 @@ fn opening_the_sheet_clears_the_filter_and_takes_the_active_editors_scope() {
         filter: "left over".into(),
         scope: ShortcutScope::All,
     };
+    // A schematic in front opens on Schematic; no editor at all on All.
+    let expected = if app.has_active_schematic() {
+        ShortcutScope::Schematic
+    } else {
+        ShortcutScope::All
+    };
     let _ = app.update(Message::Menu(MenuMessage::OpenKeyboardShortcuts));
     assert!(app.ui_state.keyboard_shortcuts_open);
-    assert_eq!(
-        app.ui_state.shortcut_sheet,
-        ShortcutSheet::opened(ShortcutScope::Schematic)
-    );
+    assert_eq!(app.ui_state.shortcut_sheet, ShortcutSheet::opened(expected));
+}
+
+/// A footprint editor in front: neither Schematic nor PCB lists its rows,
+/// so the sheet opens on All and the footprint shortcuts are there.
+#[test]
+fn a_footprint_editor_in_front_opens_the_sheet_on_all() {
+    use crate::app::{FootprintDocument, TabInfo, TabKind};
+    let mut app = app();
+    let path = std::path::PathBuf::from("/w/part.snxfpt");
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+    app.document_state.tabs.push(TabInfo {
+        title: "part".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    let _ = app.update(Message::Menu(MenuMessage::OpenKeyboardShortcuts));
+    assert_eq!(app.ui_state.shortcut_sheet.scope, ShortcutScope::All);
 }
 
 #[test]

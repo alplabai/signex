@@ -11,7 +11,7 @@ use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, text};
 
-use crate::about_modal::{GLYPH_THEME, glyph, help_footer, px};
+use crate::about_modal::{GLYPH_THEME, px};
 use crate::app::{Message, OverlayMsg};
 use crate::canvas::WheelMode;
 use crate::icons;
@@ -163,7 +163,7 @@ fn tour_row<'a>(
 ) -> Element<'a, Message> {
     let r = styles::tokens::resolve(tokens);
     let (sunken, line) = (r.sunken, r.line_soft);
-    let tile = container(glyph(icon, px(14.0), r.ink4))
+    let tile = container(styles::tinted_glyph(icon, px(14.0), r.ink4))
         .width(TILE)
         .height(TILE)
         .center_x(TILE)
@@ -211,7 +211,7 @@ fn footer<'a>(i18n: &I18n, tokens: &ThemeTokens, mode: WheelMode) -> Element<'a,
     ]
     .spacing(px(4.0))
     .align_y(Alignment::Center);
-    help_footer(
+    styles::dialog_footer_band(
         vec![note.boxed()],
         vec![styles::dialog_button(
             t!(i18n, ids::DIALOG_TOUR_GOT_IT),

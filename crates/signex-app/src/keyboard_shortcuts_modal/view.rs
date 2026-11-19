@@ -16,7 +16,7 @@ use super::filter::{
     Listing, ShownSection, cap_matches, column_split, label_runs, listing, trigger_caps,
 };
 use super::{ShortcutScope, ShortcutSection, ShortcutSheet};
-use crate::about_modal::{GLYPH_THEME, glyph, help_footer, px};
+use crate::about_modal::{GLYPH_THEME, px};
 use crate::app::{Message, OverlayMsg};
 use crate::keymap::{CompiledKeymap, KeymapEditorRow, ShortcutProfileSet, category_title};
 use crate::styles::{self, ChromeMetrics, DialogButtonKind, TypeScale, ti};
@@ -82,7 +82,21 @@ fn build<'a>(
     let body = body(i18n, tokens, sheet, &shown);
     let footer = footer(i18n, tokens, facts);
     if windowed {
-        return container(column![toolbar, body, footer])
+        // The OS title bar names the sheet only; the subtitle line keeps
+        // the profile it lists in view.
+        let caption = container(
+            text(subtitle(i18n, facts, sheet.scope))
+                .size(TS.caption)
+                .color(styles::tokens::resolve(tokens).ink4),
+        )
+        .padding(Padding {
+            top: px(8.0),
+            right: px(16.0),
+            bottom: 0.0,
+            left: px(16.0),
+        })
+        .width(Length::Fill);
+        return container(column![caption, toolbar, body, footer])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(styles::modal_card(tokens))
@@ -90,7 +104,7 @@ fn build<'a>(
     }
     let header = crate::app::view::dialogs::graphite_header(
         crate::keymap::command_menu_text(i18n, "show_current_command_hotkeys"),
-        Some(subtitle(i18n, facts, sheet.scope)),
+        Some(subtitle(i18n, facts, sheet.scope).into_string()),
         None,
         Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
         crate::app::view::dialogs::DIALOG_HEADER_H,
@@ -118,15 +132,15 @@ fn scope_label(i18n: &I18n, scope: ShortcutScope) -> Localized {
     }
 }
 
-/// "Classic profile · Schematic": the header subtitle.
-fn subtitle(i18n: &I18n, facts: &SheetFacts, scope: ShortcutScope) -> String {
+/// "Classic profile · Schematic": the header subtitle, and the caption
+/// line of the sheet in its own window.
+fn subtitle(i18n: &I18n, facts: &SheetFacts, scope: ShortcutScope) -> Localized {
     t!(
         i18n,
         ids::DIALOG_SHORTCUTS_SUBTITLE,
         "profile" => facts.profile_name.as_str(),
         "scope" => scope_label(i18n, scope).into_string()
     )
-    .into_string()
 }
 
 fn mono() -> Font {
@@ -207,7 +221,7 @@ fn toolbar<'a>(
     let mut field_line: Row<Element<'a, Message>> = Row::new()
         .spacing(px(6.0))
         .align_y(Alignment::Center)
-        .push(glyph(
+        .push(styles::tinted_glyph(
             crate::icons::icon_chrome_search(GLYPH_THEME),
             px(14.0),
             ink4,
@@ -215,11 +229,15 @@ fn toolbar<'a>(
         .push(input.boxed());
     if !sheet.filter.is_empty() {
         field_line = field_line.push(
-            button(glyph(crate::icons::icon_close(GLYPH_THEME), px(12.0), ink4))
-                .padding(px(3.0))
-                .on_press(Message::Overlay(OverlayMsg::ShortcutsFilterCleared))
-                .style(styles::ghost_button(tokens))
-                .boxed(),
+            button(styles::tinted_glyph(
+                crate::icons::icon_close(GLYPH_THEME),
+                px(12.0),
+                ink4,
+            ))
+            .padding(px(3.0))
+            .on_press(Message::Overlay(OverlayMsg::ShortcutsFilterCleared))
+            .style(styles::ghost_button(tokens))
+            .boxed(),
         );
     }
     let field_h = ChromeMetrics::DEFAULT.field;
@@ -436,7 +454,7 @@ fn footer<'a>(i18n: &I18n, tokens: &ThemeTokens, facts: &SheetFacts) -> Element<
     let hint = text(t!(i18n, ids::DIALOG_SHORTCUTS_KEY_HINT, "key" => facts.sheet_key.as_str()))
         .size(TS.caption)
         .color(styles::tokens::resolve(tokens).ink4);
-    help_footer(
+    styles::dialog_footer_band(
         vec![hint.boxed()],
         vec![
             styles::dialog_button(
@@ -500,11 +518,11 @@ mod tests {
         let i18n = I18n::en_us_ref();
         let facts = facts();
         assert_eq!(
-            plain(&subtitle(i18n, &facts, ShortcutScope::Schematic)),
+            plain(&subtitle(i18n, &facts, ShortcutScope::Schematic).into_string()),
             "Classic profile · Schematic"
         );
         assert_eq!(
-            plain(&subtitle(i18n, &facts, ShortcutScope::Pcb)),
+            plain(&subtitle(i18n, &facts, ShortcutScope::Pcb).into_string()),
             "Classic profile · PCB"
         );
         let tokens = theme_tokens(ThemeId::GraphiteLight);
@@ -643,6 +661,10 @@ mod tests {
         let open = sheet("", ShortcutScope::Schematic);
         let shown = texts(window_view(i18n, &tokens, &sections, &open, &facts()));
         assert!(!shown.iter().any(|t| t == "Keyboard Shortcuts"));
+        assert!(
+            shown.iter().any(|t| t == "Classic profile · Schematic"),
+            "the window names the profile it lists: {shown:?}"
+        );
         assert!(shown.iter().any(|t| t == "PCB"));
         assert!(shown.iter().any(|t| t == "Edit in Preferences…"));
     }

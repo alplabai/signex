@@ -4,7 +4,7 @@
 
 use super::symbol_hover::{
     HOVER_CARD_MAX_W, HOVER_CARD_MIN_W, HOVER_CARD_PAD_H, HOVER_CARD_PAD_W, HOVER_GLYPH,
-    HOVER_TITLE_GAP, HOVER_TITLE_H, hover_card, hover_card_title, hover_glyph,
+    HOVER_TITLE_GAP, HOVER_TITLE_H, hover_card, hover_card_title,
 };
 use super::*;
 use crate::app::state::net_nav::HoverCard;
@@ -47,8 +47,9 @@ impl Signex {
         .boxed();
         let wire = crate::styles::ti(self.document_state.panel_ctx.canvas_colors.wire);
         let title = hover_card_title(
-            hover_glyph(
+            crate::styles::tinted_glyph(
                 crate::icons::icon_wire(self.ui_state.effective_theme_id()),
+                HOVER_GLYPH,
                 wire,
             ),
             signex_i18n::UserText::new(card.name.clone()),

@@ -229,6 +229,18 @@ fn save_as_is_offered_for_a_changed_sheet_and_not_for_a_board() {
     assert!(!ErrorNotice::disk_changed(sheet.clone(), DiskDrift::Missing).offers_save_as());
     assert!(!ErrorNotice::disk_changed(sheet, DiskDrift::FolderMissing).offers_save_as());
     assert!(!ErrorNotice::save(verbatim("x")).offers_save_as());
+    for has in ["/w/lib/R.snxsym", "/w/lib/R0603.SNXFPT"] {
+        assert!(
+            ErrorNotice::disk_changed(PathBuf::from(has), DiskDrift::Changed).offers_save_as(),
+            "{has}"
+        );
+    }
+    for none in ["/w/proj/top.snxprj", "/w/lib/parts.snxlib", "/w/notes.txt"] {
+        assert!(
+            !ErrorNotice::disk_changed(PathBuf::from(none), DiskDrift::Changed).offers_save_as(),
+            "{none}: a kind without Save As offers none"
+        );
+    }
 }
 
 fn conflict_fixture(dir: &std::path::Path) -> (Signex, PathBuf, PathBuf) {
@@ -305,4 +317,20 @@ fn save_as_keeps_the_card_when_it_cannot_run() {
         assert_eq!(app.document_state.error_notice.as_ref(), Some(&card));
         assert_eq!(active_path(&app), other, "no tab was switched");
     }
+}
+
+/// Copy on the card hands the clipboard write back as a Task and leaves the
+/// card up; with no card there is nothing to copy and no work.
+#[test]
+fn copy_on_the_card_writes_the_clipboard_through_a_task() {
+    let (mut app, _boot) = Signex::new();
+    let card = ErrorNotice::create(verbatim("it failed"));
+    app.document_state.error_notice = Some(card.clone());
+    let task = app.update(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed));
+    assert!(task.units() > 0, "the clipboard write is a Task");
+    assert_eq!(app.document_state.error_notice.as_ref(), Some(&card));
+
+    app.document_state.error_notice = None;
+    let task = app.update(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed));
+    assert_eq!(task.units(), 0, "no card, no work");
 }

@@ -1,22 +1,22 @@
 //! Help ▸ About Signex: the mark and the name, the version block (version,
 //! licence, OS), links to the documentation and the issue tracker, and the
-//! "Copy version info" action. Also the footer band, glyph and icon-button
-//! helpers the other Help cards (Keyboard Shortcuts, the first-run card)
-//! share. Styled from `ThemeTokens` only.
+//! "Copy version info" action. Also the scale and glyph theme the other
+//! Help cards (Keyboard Shortcuts, the first-run card) share. Styled from
+//! `ThemeTokens` only.
 
 use std::sync::LazyLock;
 
 use iced::font::Weight;
 use iced::widget::{Space, column, container, row, svg};
-use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
-use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use iced::{Alignment, Background, Border, Element, Font, Length, Padding, Theme, Widget};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, raw, text};
 
 use crate::about::{ExternalLink, LICENSE_NAME, VERSION, os_text};
 use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
-use crate::styles::{self, ChromeMetrics, DialogButtonKind, Radii, TypeScale, chrome_px, ti};
+use crate::styles::{self, DialogButtonKind, Radii, TypeScale, chrome_px, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -86,11 +86,12 @@ fn build<'a>(i18n: &I18n, tokens: &'a ThemeTokens, windowed: bool) -> Element<'a
     })
     .width(Length::Fill);
 
-    let footer = help_footer(
-        vec![icon_dialog_button(
+    let footer = styles::dialog_footer_band(
+        vec![styles::dialog_icon_button(
             crate::icons::icon_chrome_copy(GLYPH_THEME),
             t!(i18n, ids::DIALOG_ABOUT_COPY_VERSION),
-            Message::Overlay(OverlayMsg::CopyAboutInfo),
+            DialogButtonKind::Secondary,
+            Some(Message::Overlay(OverlayMsg::CopyAboutInfo)),
             tokens,
         )],
         vec![styles::dialog_button(
@@ -210,7 +211,7 @@ fn external_link<'a>(
     button(
         row![
             text(t!(i18n, label)).size(TS.body).color(accent),
-            glyph(
+            styles::tinted_glyph(
                 crate::icons::icon_chrome_external_link(GLYPH_THEME),
                 LINK_GLYPH,
                 accent
@@ -223,100 +224,6 @@ fn external_link<'a>(
     .on_press(Message::Overlay(OverlayMsg::OpenLink(link)))
     .style(styles::ghost_button(tokens))
     .boxed()
-}
-
-/// A monochrome chrome glyph `side` px square, tinted `ink`.
-pub(crate) fn glyph<'a, M: 'a>(handle: svg::Handle, side: f32, ink: Color) -> Element<'a, M> {
-    svg(handle)
-        .width(side)
-        .height(side)
-        .style(move |_: &Theme, _| svg::Style {
-            color: Some(ink),
-            ..Default::default()
-        })
-        .boxed()
-}
-
-/// The footer band of the Help cards: the chrome fill under a hairline,
-/// `left` at the start, `right` at the end. In the main window its lower
-/// corners follow the card's; in a dialog window it is flat.
-pub(crate) fn help_footer<'a, M: 'a>(
-    left: Vec<Element<'a, M>>,
-    right: Vec<Element<'a, M>>,
-    padding: Padding,
-    tokens: &ThemeTokens,
-) -> Element<'a, M> {
-    let gap = px(8.0);
-    let line = row![
-        iced::widget::row(left)
-            .spacing(gap)
-            .align_y(Alignment::Center),
-        Space::new().width(Length::Fill),
-        iced::widget::row(right)
-            .spacing(gap)
-            .align_y(Alignment::Center),
-    ]
-    .align_y(Alignment::Center);
-    let (fill, rule, corner) = (
-        ti(tokens.toolbar_bg),
-        styles::tokens::resolve(tokens).line_soft,
-        Radii::GRAPHITE.dialog,
-    );
-    container(line)
-        .padding(padding)
-        .width(Length::Fill)
-        .style(move |theme: &Theme| {
-            let mut border = Border {
-                color: rule,
-                radius: if styles::is_dialog_window(theme) {
-                    iced::border::Radius::default()
-                } else {
-                    iced::border::Radius::default()
-                        .bottom_left(corner)
-                        .bottom_right(corner)
-                },
-                ..Border::default()
-            };
-            border.top = iced::border::Side::default().width(1.0);
-            container::Style {
-                background: Some(Background::Color(fill)),
-                border,
-                ..container::Style::default()
-            }
-        })
-        .boxed()
-}
-
-/// A Secondary dialog button with a leading glyph: the dialog buttons'
-/// height, padding and radius over the outline look (`dialog_button`
-/// takes no glyph).
-pub(crate) fn icon_dialog_button<'a, M: Clone + 'a>(
-    icon: svg::Handle,
-    label: Localized,
-    on_press: M,
-    tokens: &ThemeTokens,
-) -> Element<'a, M> {
-    let ink = ti(tokens.text);
-    let face = row![
-        glyph(icon, px(14.0), ink),
-        text(label)
-            .size(TS.label)
-            .color(ink)
-            .wrapping(iced::widget::text::Wrapping::None),
-    ]
-    .spacing(px(5.0))
-    .align_y(Alignment::Center);
-    let outline = styles::outline_button(tokens);
-    button(container(face).center_y(Length::Fill))
-        .padding([0.0, chrome_px(14.0)])
-        .height(ChromeMetrics::DEFAULT.button)
-        .on_press(on_press)
-        .style(move |theme: &Theme, status| {
-            let mut style = outline(theme, status);
-            style.border.radius = Radii::GRAPHITE.button.into();
-            style
-        })
-        .boxed()
 }
 
 #[cfg(test)]

@@ -131,7 +131,13 @@ pub fn dialog_glyph<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let (_, ink) = pill_colors(tokens, icon.tone());
-    svg(GLYPHS[icon.index()].clone())
+    tinted_glyph(GLYPHS[icon.index()].clone(), side, ink)
+}
+
+/// A monochrome SVG glyph, `side` px square, drawn in `ink`. The one way
+/// the dialogs, Help cards and hover cards draw a glyph.
+pub fn tinted_glyph<'a, M: 'a>(handle: svg::Handle, side: f32, ink: iced::Color) -> Element<'a, M> {
+    svg(handle)
         .width(Length::Fixed(side))
         .height(Length::Fixed(side))
         .style(move |_: &Theme, _| svg::Style {

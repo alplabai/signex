@@ -95,6 +95,16 @@ fn a_wall_clock_formats_in_the_locale() {
 }
 
 #[test]
+fn a_time_of_day_formats_in_the_locale() {
+    let at = wall(2025, 1, 15, 16, 9, 35);
+    let en = i18n("en-US").show_time(at);
+    assert!(en.starts_with("4:09"), "{en}");
+    assert!(en.contains("PM"), "{en}");
+    assert_eq!(i18n("tr-TR").show_time(at), "16:09");
+    assert_eq!(i18n("de").show_time(at), "16:09");
+}
+
+#[test]
 fn a_fixed_offset_moves_the_wall_clock_across_midnight() {
     let at = utc(2025, 1, 15, 23, 30, 0);
     let tr = i18n("tr-TR");

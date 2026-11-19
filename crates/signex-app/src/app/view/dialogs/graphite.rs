@@ -1,7 +1,7 @@
 //! Graphite parts shared by the dialog bodies: the subtitled header, the
 //! severity chips, the changed-row tint and the callout.
 
-use iced::widget::{Row, container, svg};
+use iced::widget::{Row, container};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, raw, text};
@@ -148,16 +148,7 @@ pub(super) fn callout<'a, M: 'a>(
     // One body line tall, so the glyph sits on the first line.
     let glyph = TS.body * styles::LINE_HEIGHT;
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Start);
-    line = line.push(
-        svg(icon.glyph_handle())
-            .width(Length::Fixed(glyph))
-            .height(Length::Fixed(glyph))
-            .style(move |_: &Theme, _| svg::Style {
-                color: Some(ink),
-                ..Default::default()
-            })
-            .boxed(),
-    );
+    line = line.push(styles::tinted_glyph(icon.glyph_handle(), glyph, ink));
     line = line.push(
         text(message)
             .size(TS.body)

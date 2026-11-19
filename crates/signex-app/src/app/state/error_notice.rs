@@ -136,15 +136,19 @@ impl ErrorNotice {
     }
 
     /// Whether the card offers Save As…: a File Changed on Disk card of a
-    /// document that has a Save As (a sheet, symbol or footprint; not a
-    /// board).
+    /// document that has a Save As (a sheet, symbol or footprint). Named
+    /// kinds only: a board, or any kind added later, offers none until its
+    /// Save As exists.
     pub fn offers_save_as(&self) -> bool {
+        use crate::app::file_extension::has_extension;
         matches!(
             &self.action,
             Some(NoticeAction::DiskChanged {
                 path,
                 drift: crate::persist::DiskDrift::Changed,
-            }) if !crate::app::is_pcb_path(path)
+            }) if ["snxsch", "snxsym", "snxfpt"]
+                .iter()
+                .any(|ext| has_extension(path, ext))
         )
     }
 

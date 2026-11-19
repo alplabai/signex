@@ -162,47 +162,65 @@ impl Signex {
         let roots = self.draft_library_roots();
         let drafts: std::collections::HashSet<PathBuf> =
             self.document_state.unsaved_drafts().into_iter().collect();
-        let projects = &self.document_state.projects;
         let files = paths.iter().map(|path| {
-            let kind = kind_code(path);
             if drafts.contains(path) {
-                let fold = self.draft_fold(path);
-                let library = crate::app::state::scope::owning_libraries(path, &roots, fold)
-                    .first()
-                    .map(|lib| (*lib).clone());
-                let dir = library.as_deref().and_then(Path::parent);
-                return QuitEntry {
-                    group: QuitGroupKey::Libraries,
-                    kind,
-                    name: crate::library::close_prompt::dirty_path_label(path, dir),
-                    meta: library
-                        .as_deref()
-                        .map_or_else(|| folder_of(path), |lib| self.library.library_label(lib)),
-                    library: library.or_else(|| path.parent().map(Path::to_path_buf)),
-                };
-            }
-            let owner = self
-                .document_state
-                .document_project(path)
-                .map(|project| project.id)
-                .or_else(|| {
-                    projects
-                        .iter()
-                        .find(|project| project.path == *path)
-                        .map(|project| project.id)
-                });
-            let group = owner
-                .and_then(|id| projects.iter().position(|project| project.id == id))
-                .map_or(QuitGroupKey::Other, QuitGroupKey::Project);
-            QuitEntry {
-                group,
-                kind,
-                name: file_name_of(path),
-                meta: folder_of(path),
-                library: None,
+                self.quit_draft_entry(path, &roots)
+            } else {
+                self.quit_file_entry(path)
             }
         });
-        let rows = rows.iter().map(|address| QuitEntry {
+        let rows = rows.iter().map(|address| self.quit_row_entry(address));
+        files.chain(rows).collect()
+    }
+
+    /// A symbol or footprint draft: listed under the libraries, by its path
+    /// in the library that owns it.
+    fn quit_draft_entry(&self, path: &Path, roots: &[PathBuf]) -> QuitEntry {
+        let fold = self.draft_fold(path);
+        let library = crate::app::state::scope::owning_libraries(path, roots, fold)
+            .first()
+            .map(|lib| (*lib).clone());
+        let dir = library.as_deref().and_then(Path::parent);
+        QuitEntry {
+            group: QuitGroupKey::Libraries,
+            kind: kind_code(path),
+            name: crate::library::close_prompt::dirty_path_label(path, dir),
+            meta: library
+                .as_deref()
+                .map_or_else(|| folder_of(path), |lib| self.library.library_label(lib)),
+            library: library.or_else(|| path.parent().map(Path::to_path_buf)),
+        }
+    }
+
+    /// A file: under the open project that owns it (its sheets, its board,
+    /// the project file itself), else under Other.
+    fn quit_file_entry(&self, path: &Path) -> QuitEntry {
+        let projects = &self.document_state.projects;
+        let owner = self
+            .document_state
+            .document_project(path)
+            .map(|project| project.id)
+            .or_else(|| {
+                projects
+                    .iter()
+                    .find(|project| project.path == *path)
+                    .map(|project| project.id)
+            });
+        let group = owner
+            .and_then(|id| projects.iter().position(|project| project.id == id))
+            .map_or(QuitGroupKey::Other, QuitGroupKey::Project);
+        QuitEntry {
+            group,
+            kind: kind_code(path),
+            name: file_name_of(path),
+            meta: folder_of(path),
+            library: None,
+        }
+    }
+
+    /// A Component Preview row: under the libraries, by its part number.
+    fn quit_row_entry(&self, address: &EditorAddress) -> QuitEntry {
+        QuitEntry {
             group: QuitGroupKey::Libraries,
             kind: Some(ids::PANELS_TAB_KIND_COMPONENT),
             name: self.library.editors.get(address).map_or_else(
@@ -211,8 +229,7 @@ impl Signex {
             ),
             meta: self.library.library_label(&address.library_path),
             library: Some(address.library_path.clone()),
-        });
-        files.chain(rows).collect()
+        }
     }
 
     /// `(group headings, rows)` of the quit confirm's list, for its window

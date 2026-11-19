@@ -86,7 +86,8 @@ binding in the active shortcut profile, grouped by category in two columns.
 Type in the filter field to find a shortcut by its action or its key; the
 match is highlighted and the count under the list says how many match. The
 **Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
-starts on the editor you are in. **Edit in Preferences…** closes the sheet
+starts on the editor you are in (on **All** in a footprint or library
+editor, or with no editor open). **Edit in Preferences…** closes the sheet
 and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
 `Esc` closes it.
 

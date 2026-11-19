@@ -40,36 +40,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let detached = self.modal_detached(crate::app::state::ModalId::ErrorNotice);
-        let dismiss = || Some(Message::Overlay(OverlayMsg::DismissErrorNotice));
-
         let choices = notice_choice_buttons(i18n, notice, tokens);
         let is_choice = !choices.is_empty();
-        let footer = if is_choice {
-            dialog_footer_split(
-                vec![dialog_button(
-                    t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                    DialogButtonKind::Cancel,
-                    dismiss(),
-                    tokens,
-                )],
-                choices,
-            )
-        } else {
-            let copy = crate::styles::dialog_icon_button(
-                crate::icons::icon_dd_copy(self.ui_state.effective_theme_id()),
-                t!(i18n, ids::DIALOG_BUTTON_COPY),
-                DialogButtonKind::Secondary,
-                Some(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed)),
-                tokens,
-            );
-            let ok = dialog_button(
-                t!(i18n, ids::DIALOG_BUTTON_OK),
-                DialogButtonKind::Primary,
-                dismiss(),
-                tokens,
-            );
-            dialog_footer_split(vec![copy], vec![ok])
-        };
+        let footer = self.error_notice_footer(choices);
 
         let ink = crate::styles::ti(tokens.text);
         let sentence = signex_widgets::text(notice.detail.localized(i18n))
@@ -111,6 +84,37 @@ impl Signex {
             .width(Length::Fit.max(width))
             .style(crate::styles::modal_card(tokens));
         Some(card.boxed())
+    }
+
+    /// The error card's footer: Cancel, then `choices` on a choice card;
+    /// Copy and OK on a plain one.
+    fn error_notice_footer<'a>(&self, choices: Vec<Element<'a, Message>>) -> Element<'a, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
+        let dismiss = || Some(Message::Overlay(OverlayMsg::DismissErrorNotice));
+        if !choices.is_empty() {
+            let cancel = dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                dismiss(),
+                tokens,
+            );
+            return dialog_footer_split(vec![cancel], choices);
+        }
+        let copy = crate::styles::dialog_icon_button(
+            crate::icons::icon_chrome_copy(self.ui_state.effective_theme_id()),
+            t!(i18n, ids::DIALOG_BUTTON_COPY),
+            DialogButtonKind::Secondary,
+            Some(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed)),
+            tokens,
+        );
+        let ok = dialog_button(
+            t!(i18n, ids::DIALOG_BUTTON_OK),
+            DialogButtonKind::Primary,
+            dismiss(),
+            tokens,
+        );
+        dialog_footer_split(vec![copy], vec![ok])
     }
 
     /// `card` centred in a dialog's own OS window, on the panel surface.
@@ -356,9 +360,8 @@ fn notice_header<'a>(
 ) -> Element<'a, Message> {
     use crate::app::state::NoticeSeverity;
     use crate::styles::DialogIcon;
-    use iced::widget::{Space, container, row, svg};
+    use iced::widget::{Space, row};
     use signex_i18n::RenderTranslatable as _;
-    use signex_widgets::button;
     let icon = match notice.severity() {
         NoticeSeverity::Error => DialogIcon::Error,
         NoticeSeverity::Warn => DialogIcon::Warn,
@@ -379,27 +382,43 @@ fn notice_header<'a>(
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
     if let Some(close) = close {
-        let muted = crate::styles::tokens::muted_text(tokens);
-        let glyph = svg(crate::icons::icon_close(theme))
-            .width(Length::Fixed(NOTICE_GLYPH * 0.75))
-            .height(Length::Fixed(NOTICE_GLYPH * 0.75))
-            .style(move |_: &iced::Theme, _| svg::Style {
-                color: Some(muted),
-                ..Default::default()
-            });
-        line = line.push_boxed(
-            button(
-                container(glyph)
-                    .center_x(Length::Fill)
-                    .center_y(Length::Fill),
-            )
-            .padding(0)
-            .width(Length::Fixed(NOTICE_CLOSE))
-            .height(Length::Fixed(NOTICE_CLOSE))
-            .on_press(close)
-            .style(crate::styles::ghost_button(tokens)),
-        );
+        line = line.push(notice_close_button(close, theme, tokens));
     }
+    notice_header_band(line.boxed(), tokens)
+}
+
+/// The header's close x: a muted glyph on a ghost button.
+fn notice_close_button<'a>(
+    close: Message,
+    theme: signex_types::theme::ThemeId,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    use iced::widget::container;
+    let glyph = crate::styles::tinted_glyph(
+        crate::icons::icon_close(theme),
+        NOTICE_GLYPH * 0.75,
+        crate::styles::tokens::muted_text(tokens),
+    );
+    signex_widgets::button(
+        container(glyph)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+    )
+    .padding(0)
+    .width(Length::Fixed(NOTICE_CLOSE))
+    .height(Length::Fixed(NOTICE_CLOSE))
+    .on_press(close)
+    .style(crate::styles::ghost_button(tokens))
+    .boxed()
+}
+
+/// The header band under `line`: the paper fill over a hairline, its upper
+/// corners following the card's in the main window, flat in its own one.
+fn notice_header_band<'a>(
+    line: Element<'a, Message>,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    use iced::widget::container;
     let (paper, rule) = (
         crate::styles::ti(tokens.paper),
         crate::styles::tokens::resolve(tokens).line_soft,

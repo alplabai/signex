@@ -63,9 +63,11 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let ink = crate::styles::ti(tokens.text);
         let label_ink = crate::styles::tokens::resolve(tokens).ink4;
-        // The values are data read off the canvas, in the chrome mono face
-        // (m10; an open maintainer decision against the canvas font).
-        let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+        // The values are data read off the canvas, so they keep the canvas
+        // font. m10 draws the chrome mono instead; that is an open
+        // maintainer decision.
+        let canvas_font_name = self.document_state.panel_ctx.canvas_font_name.as_str();
+        let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
         let ui_font_name = self.panel_ctx_for(window_id).ui_font_name.as_str();
 
         let i18n = &self.ui_state.i18n;
@@ -89,7 +91,7 @@ impl Signex {
             ));
         }
         let designator = self.shown_designator(symbol).to_owned();
-        let card_w = symbol_card_width(&designator, &fields, ui_font_name);
+        let card_w = symbol_card_width(&designator, &fields, ui_font_name, canvas_font_name);
 
         let rows_len = fields.len();
         let rows: Vec<Element<'_, Message>> = fields
@@ -102,10 +104,10 @@ impl Signex {
                         .width(Length::Fixed(LABEL_W)),
                     // The symbol's own field value (design data).
                     text(signex_i18n::UserText::new(value))
-                        .font(mono)
+                        .font(canvas_font)
                         .size(TS.body)
                         .color(ink)
-                        .wrapping(iced::widget::text::Wrapping::Glyph)
+                        .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
                         .width(Length::Fill),
                 ]
                 .spacing(COLUMN_GAP)
@@ -116,7 +118,7 @@ impl Signex {
 
         let chip = crate::icons::icon_component(self.ui_state.effective_theme_id());
         let title = hover_card_title(
-            hover_glyph(chip, ink),
+            crate::styles::tinted_glyph(chip, HOVER_GLYPH, ink),
             signex_i18n::UserText::new(designator),
             None,
             ui_font_name,
@@ -171,21 +173,6 @@ pub(super) fn hover_card<'a>(
         .boxed()
 }
 
-/// The monochrome SVG `glyph` at the title glyph size, drawn in `color`.
-pub(super) fn hover_glyph<'a>(
-    glyph: iced::widget::svg::Handle,
-    color: iced::Color,
-) -> Element<'a, Message> {
-    iced::widget::svg(glyph)
-        .width(Length::Fixed(HOVER_GLYPH))
-        .height(Length::Fixed(HOVER_GLYPH))
-        .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
-            color: Some(color),
-            ..Default::default()
-        })
-        .boxed()
-}
-
 /// A hover card's title row: `glyph`, `title` in the semibold UI face, and
 /// `trailing` (a pill) at the right end.
 pub(super) fn hover_card_title<'a>(
@@ -224,15 +211,16 @@ fn symbol_card_width(
     title: &str,
     fields: &[(signex_i18n::Localized, String)],
     ui_family: &str,
+    value_family: &str,
 ) -> f32 {
     let ui = signex_types::font::nonblank_family(ui_family);
-    let mono = Some(crate::fonts::CHROME_MONO_FONT);
+    let values = signex_types::font::nonblank_family(value_family);
     let title_w = HOVER_GLYPH
         + HOVER_TITLE_GAP
         + signex_types::font::estimate_text_width_px(title, TS.body, ui);
     let value_w = fields
         .iter()
-        .map(|(_, value)| signex_types::font::estimate_text_width_px(value, TS.body, mono))
+        .map(|(_, value)| signex_types::font::estimate_text_width_px(value, TS.body, values))
         .fold(0.0, f32::max);
     (title_w.max(LABEL_W + COLUMN_GAP + value_w) + HOVER_CARD_PAD_W)
         .ceil()
@@ -291,7 +279,7 @@ mod tests {
     /// The card is never narrower than the m10 minimum nor wider than the cap.
     #[test]
     fn the_symbol_card_width_stays_between_the_minimum_and_the_cap() {
-        let short = super::symbol_card_width("R1", &[], "");
+        let short = super::symbol_card_width("R1", &[], "", "");
         assert_eq!(short, super::HOVER_CARD_MIN_W);
         let long_value = "X".repeat(200);
         let fields = [(
@@ -302,7 +290,7 @@ mod tests {
             long_value,
         )];
         assert_eq!(
-            super::symbol_card_width("R1", &fields, ""),
+            super::symbol_card_width("R1", &fields, "", ""),
             super::HOVER_CARD_MAX_W
         );
     }

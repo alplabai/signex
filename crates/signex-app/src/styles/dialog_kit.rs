@@ -168,13 +168,7 @@ pub fn dialog_icon_button<'a, M: Clone + 'a>(
     let color = label_color(kind, disabled, tokens);
     let label: Label<'a> = label.into();
     let (height, size, width) = button_metrics(label.as_str());
-    let icon = iced::widget::svg(glyph)
-        .width(Length::Fixed(BUTTON_GLYPH))
-        .height(Length::Fixed(BUTTON_GLYPH))
-        .style(move |_: &Theme, _| iced::widget::svg::Style {
-            color: Some(color),
-            ..Default::default()
-        });
+    let icon = super::tinted_glyph(glyph, BUTTON_GLYPH, color);
     let face = container(
         row![
             icon,
@@ -257,11 +251,62 @@ pub fn dialog_footer_split<'a, M: 'a>(
     extras: Vec<Element<'a, M>>,
     buttons: Vec<Element<'a, M>>,
 ) -> Element<'a, M> {
-    let extras = row(extras).spacing(SP.s).align_y(Alignment::Center);
-    let buttons = row(buttons).spacing(SP.s).align_y(Alignment::Center);
-    container(row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center))
+    container(footer_line(extras, buttons, SP.s))
         .padding(SP.l)
         .width(Length::Fill)
+        .boxed()
+}
+
+/// Gap between the items of a [`dialog_footer_band`] (8 px at the default
+/// base).
+const BAND_GAP: f32 = chrome_px(8.0 * 11.0 / 12.0);
+
+/// `extras` at the left end, `buttons` at the right, `gap` between items.
+fn footer_line<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    gap: f32,
+) -> iced::widget::Row<'a, M> {
+    let extras = row(extras).spacing(gap).align_y(Alignment::Center);
+    let buttons = row(buttons).spacing(gap).align_y(Alignment::Center);
+    row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center)
+}
+
+/// [`dialog_footer_split`] on a band: the chrome fill under a hairline,
+/// padded by `padding` (the Help cards). In the main window its lower
+/// corners follow the card's; in a dialog window it is flat.
+pub fn dialog_footer_band<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    padding: iced::Padding,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let fill = ti(theme_tokens.toolbar_bg);
+    let rule = tokens::resolve(theme_tokens).line_soft;
+    let corner = super::Radii::GRAPHITE.dialog;
+    container(footer_line(extras, buttons, BAND_GAP))
+        .padding(padding)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| {
+            let radius = if super::is_dialog_window(theme) {
+                iced::border::Radius::default()
+            } else {
+                iced::border::Radius::default()
+                    .bottom_left(corner)
+                    .bottom_right(corner)
+            };
+            let mut border = Border {
+                color: rule,
+                radius,
+                ..Border::default()
+            };
+            border.top = iced::border::Side::default().width(1.0);
+            container::Style {
+                background: Some(iced::Background::Color(fill)),
+                border,
+                ..container::Style::default()
+            }
+        })
         .boxed()
 }
 

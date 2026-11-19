@@ -250,12 +250,18 @@ impl Signex {
             ));
             return Task::none();
         }
+        // The card closes only once Save As has really started; a kind
+        // without one leaves it up, so the choice is never silently lost.
+        let task = self.save_as_dialog_for_active_tab();
+        if task.units() == 0 {
+            return task;
+        }
         self.document_state.error_notice = None;
         crate::diagnostics::log_info(format!(
             "[save] Saving {} under a new name as the user chose; the changed file is kept",
             file_label(&path)
         ));
-        self.save_as_dialog_for_active_tab()
+        task
     }
 
     /// The user chose Overwrite (or Re-create): save again without comparing.

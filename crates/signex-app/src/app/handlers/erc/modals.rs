@@ -492,8 +492,9 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::CreateChildSheet => iced::Size::new(560.0, 206.0),
         ModalId::ErrorNotice => iced::Size::new(480.0, 260.0),
         ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
-        // The two version rows, the note and its caption (#2262).
-        ModalId::AutosaveRecovery => iced::Size::new(540.0, 320.0),
+        // The two version rows and the notes; tall enough for the
+        // saved-file-newer case, which adds the Restore caption (#2262).
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 360.0),
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
         ModalId::AppQuitConfirm => iced::Size::new(500.0, 310.0),
         ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),

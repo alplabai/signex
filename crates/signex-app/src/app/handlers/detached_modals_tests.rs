@@ -954,3 +954,35 @@ fn recovery_dialog_text_has_no_indentation_gaps() {
         assert!(!t.text.contains("  "), "gap in dialog text: {:?}", t.text);
     }
 }
+
+/// The saved-file-newer case carries one note more than the case the fit
+/// sweep opens (the warning and the Restore explanation): its window still
+/// shows the whole footer.
+#[test]
+fn the_recovery_window_fits_the_saved_file_newer_case() {
+    let (mut app, _main) = test_app();
+    app.document_state
+        .autosave
+        .offer(crate::autosave::RecoveryOffer {
+            path: "p.snxsch".into(),
+            age_secs: 2 * 86_400,
+            older_than_file: true,
+            saved_age_secs: Some(30),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
+        });
+    open(&mut app, ModalId::AutosaveRecovery);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::AutosaveRecovery).expect("window");
+    let size = app.modal_window_size(ModalId::AutosaveRecovery);
+    let texts = lay_out_texts(app.view(id), size);
+    let bottom = texts
+        .iter()
+        .map(|t| t.bounds.y + t.bounds.height)
+        .fold(0.0_f32, f32::max);
+    assert!(
+        bottom <= size.height,
+        "content ends at {bottom}, window is {}",
+        size.height
+    );
+    assert!(texts.iter().any(|t| t.text == "Decide later"), "{texts:#?}");
+}

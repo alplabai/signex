@@ -46,11 +46,12 @@ is therefore not drift, whatever order the jobs run in.
 On `DiskChanged` the sheet stays modified, the failure goes to Messages and into
 the save ledger (Save All lists it), and the notice card offers:
 
-- **Save As…** (Changed only, the default; not on a board, which has no Save
-  As): the conflicted document is made the active tab and the regular Save As
-  runs for it, so the changed file is left as it is. The document stays
-  modified until that Save As lands; when the document is not a tab of the
-  main window the card stays and Messages says why.
+- **Save As…** (Changed only, the default; only for a sheet, symbol or
+  footprint, the kinds with a Save As, so not on a board): the conflicted
+  document is made the active tab and the regular Save As runs for it, so the
+  changed file is left as it is. The document stays modified until that Save
+  As lands; when the document is not a tab of the main window the card stays
+  and Messages says why, and the card also stays when Save As does not start.
 - **Overwrite** (Missing: Re-create): one save that is not compared; a failed
   write leaves the baseline, so the next save asks again.
 - **Reload from disk**: read and parse the file on a worker, then replace the

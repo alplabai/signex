@@ -24,13 +24,16 @@ impl ShortcutScope {
     /// The scopes in the order the segmented switch shows them.
     pub const ALL: [Self; 3] = [Self::Schematic, Self::Pcb, Self::All];
 
-    /// The scope the sheet opens on: PCB while a board tab is active, else
-    /// Schematic.
-    pub fn for_active_editor(pcb_active: bool) -> Self {
-        if pcb_active {
-            Self::Pcb
-        } else {
-            Self::Schematic
+    /// The scope the sheet opens on, from the context of the editor in
+    /// front: Schematic or PCB for those editors. Every other editor (the
+    /// footprint and library editors, which neither scope lists) and no
+    /// editor at all open on All, so the sheet never opens without the
+    /// active editor's own shortcuts.
+    pub fn for_active_editor(editor: Option<ShortcutContext>) -> Self {
+        match editor {
+            Some(ShortcutContext::Schematic) => Self::Schematic,
+            Some(ShortcutContext::Pcb) => Self::Pcb,
+            _ => Self::All,
         }
     }
 
@@ -317,11 +320,25 @@ mod tests {
 
     #[test]
     fn the_sheet_opens_on_the_active_editors_scope_with_no_filter() {
-        assert_eq!(ShortcutScope::for_active_editor(true), ShortcutScope::Pcb);
         assert_eq!(
-            ShortcutScope::for_active_editor(false),
+            ShortcutScope::for_active_editor(Some(ShortcutContext::Pcb)),
+            ShortcutScope::Pcb
+        );
+        assert_eq!(
+            ShortcutScope::for_active_editor(Some(ShortcutContext::Schematic)),
             ShortcutScope::Schematic
         );
+        for other in [
+            Some(ShortcutContext::Footprint),
+            Some(ShortcutContext::Library),
+            None,
+        ] {
+            assert_eq!(
+                ShortcutScope::for_active_editor(other),
+                ShortcutScope::All,
+                "{other:?}"
+            );
+        }
         let opened = ShortcutSheet::opened(ShortcutScope::Pcb);
         assert!(opened.filter.is_empty());
         assert_eq!(opened.scope, ShortcutScope::Pcb);

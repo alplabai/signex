@@ -2,11 +2,12 @@
 
 use std::time::{Duration, SystemTime};
 
-use super::{clock_time, restore_kind};
+use signex_i18n::{DateLength, I18n, LanguagePref};
+
+use super::{clock_time, instant_before};
 use crate::app::Signex;
 use crate::autosave::RecoveryOffer;
 use crate::layout_probe::{LaidOutText, find, lay_out_texts};
-use crate::styles::DialogButtonKind;
 
 /// 2023-11-14 22:13:20 UTC.
 fn checked_at() -> SystemTime {
@@ -35,25 +36,32 @@ fn laid_out(offer: &RecoveryOffer) -> Vec<LaidOutText> {
     )
 }
 
-/// The time of each version is local wall-clock time: the time of day
-/// within a day of the check, the date and time beyond it.
+/// The time of each version goes through the locale formatter: the time of
+/// day within a day of the check, the date and time beyond it. Never a
+/// fixed English pattern.
 #[test]
 fn version_times_are_the_time_of_day_or_the_date_beyond_a_day() {
-    let zone = chrono::FixedOffset::east_opt(3600).expect("offset");
-    assert_eq!(clock_time(checked_at(), 0, &zone), "23:13");
-    assert_eq!(clock_time(checked_at(), 360, &zone), "23:07");
-    assert_eq!(clock_time(checked_at(), 86_399, &zone), "23:13");
-    assert_eq!(clock_time(checked_at(), 2 * 86_400, &zone), "Nov 12 23:13");
-    let utc = chrono::Utc;
-    assert_eq!(clock_time(checked_at(), 3 * 86_400, &utc), "Nov 11 22:13");
-}
-
-/// Restore is the primary action only while the copy is the newer version;
-/// when the saved file is newer the footer has no primary button.
-#[test]
-fn restore_is_primary_only_when_the_copy_is_newer() {
-    assert_eq!(restore_kind(&offer(false)), DialogButtonKind::Primary);
-    assert_eq!(restore_kind(&offer(true)), DialogButtonKind::Secondary);
+    for tag in ["en-US", "de", "tr-TR"] {
+        let i18n = I18n::new(&LanguagePref::Locale(tag.to_owned()));
+        for age in [0, 360, 86_399] {
+            assert_eq!(
+                clock_time(&i18n, checked_at(), age),
+                i18n.time(instant_before(checked_at(), age)),
+                "{tag} {age}"
+            );
+        }
+        for age in [86_400, 2 * 86_400] {
+            assert_eq!(
+                clock_time(&i18n, checked_at(), age),
+                i18n.date_time(instant_before(checked_at(), age), DateLength::Medium),
+                "{tag} {age}"
+            );
+        }
+    }
+    assert_eq!(
+        instant_before(checked_at(), 360).timestamp(),
+        1_700_000_000 - 360
+    );
 }
 
 /// The "newer" pill sits on the row of the newer version: the copy's row
@@ -77,8 +85,8 @@ fn the_newer_pill_marks_the_newer_version() {
 
 /// Copy newer: the Restore explanation (old hint, first part) in the info
 /// callout, then the Discard / Decide later caption. Saved file newer: the
-/// warning instead of the explanation, the caption kept. Both rows give
-/// their time.
+/// warning, then the same Restore explanation (its "cannot be undone"
+/// sentence matters most here) and the caption. Both rows give their time.
 #[test]
 fn the_notes_follow_which_version_is_newer() {
     let restore = "Restore loads the copy as unsaved edits;";
@@ -104,21 +112,26 @@ fn the_notes_follow_which_version_is_newer() {
 
     let newer_file = shown(true);
     assert!(has(&newer_file, warning), "{newer_file:#?}");
-    assert!(!has(&newer_file, restore));
+    assert!(has(&newer_file, restore), "the undo warning is kept");
+    assert!(has(&newer_file, "cannot be undone with"));
     assert!(has(&newer_file, later), "the Decide later caption is kept");
     assert!(has(&newer_file, "autosaved 2 days ago · "));
 }
 
-/// Discard sits alone at the left; Decide later, then Restore, at the right.
+/// The footer order is unchanged by the redraw: Restore, then Discard, at
+/// the left; Decide later alone at the right. The m15 split is an open
+/// maintainer question.
 #[test]
-fn discard_leads_and_restore_ends_the_footer() {
-    let texts = laid_out(&offer(false));
-    let discard = find(&texts, "Discard").bounds;
-    let later = find(&texts, "Decide later").bounds;
-    let restore = find(&texts, "Restore").bounds;
-    assert!(discard.x < later.x && later.x < restore.x);
-    assert!(
-        later.x - (discard.x + discard.width) > 100.0,
-        "Discard stands apart"
-    );
+fn restore_and_discard_lead_and_decide_later_ends_the_footer() {
+    for older in [false, true] {
+        let texts = laid_out(&offer(older));
+        let restore = find(&texts, "Restore").bounds;
+        let discard = find(&texts, "Discard").bounds;
+        let later = find(&texts, "Decide later").bounds;
+        assert!(restore.x < discard.x && discard.x < later.x, "{texts:#?}");
+        assert!(
+            later.x - (discard.x + discard.width) > 100.0,
+            "Decide later stands apart"
+        );
+    }
 }

@@ -6,10 +6,12 @@
 
 use std::time::{Duration, SystemTime};
 
+use chrono::{DateTime, Utc};
+
 use super::*;
 use iced::widget::{Column, column, container};
 use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_i18n::{DateLength, I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, text};
 
@@ -28,39 +30,28 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Ages under a day show the time of day only.
 const DAY_SECS: u64 = 86_400;
 
-/// The local wall-clock time `age_secs` before `checked_at` in `zone`:
-/// "14:26" within a day of the check, else "Nov 16 17:40".
-pub(super) fn clock_time<Tz>(checked_at: SystemTime, age_secs: u64, zone: &Tz) -> String
-where
-    Tz: chrono::TimeZone,
-    Tz::Offset: std::fmt::Display,
-{
+/// The instant `age_secs` before `checked_at`.
+pub(super) fn instant_before(checked_at: SystemTime, age_secs: u64) -> DateTime<Utc> {
     let at = checked_at
         .checked_sub(Duration::from_secs(age_secs))
         .unwrap_or(checked_at);
-    let local = chrono::DateTime::<chrono::Utc>::from(at).with_timezone(zone);
-    let pattern = if age_secs < DAY_SECS {
-        "%H:%M"
-    } else {
-        "%b %-d %H:%M"
-    };
-    local.format(pattern).to_string()
+    DateTime::<Utc>::from(at)
 }
 
-/// The recovery copy is the newer version: it gets the "newer" pill, and
-/// Restore is the primary action.
+/// The local time `age_secs` before `checked_at`, in the UI locale: the time
+/// of day within a day of the check, else the date and time.
+pub(super) fn clock_time(i18n: &I18n, checked_at: SystemTime, age_secs: u64) -> String {
+    let at = instant_before(checked_at, age_secs);
+    if age_secs < DAY_SECS {
+        i18n.time(at)
+    } else {
+        i18n.date_time(at, DateLength::Medium)
+    }
+}
+
+/// The recovery copy is the newer version: it gets the "newer" pill.
 fn copy_is_newer(offer: &RecoveryOffer) -> bool {
     !offer.older_than_file
-}
-
-/// The role of Restore: primary only while the copy is the newer version;
-/// with newer saved work the footer has no primary action.
-pub(super) fn restore_kind(offer: &RecoveryOffer) -> DialogButtonKind {
-    if copy_is_newer(offer) {
-        DialogButtonKind::Primary
-    } else {
-        DialogButtonKind::Secondary
-    }
 }
 
 /// The medium-weight UI face of a version's name and of the lead line.
@@ -182,13 +173,12 @@ impl Signex {
             kind_code(&offer.path)
         };
         let tile = || code.map(|code| kind_tile(i18n, code, tokens));
-        let zone = chrono::Local;
         let copy_caption = caption(
             t!(
                 i18n,
                 ids::DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE,
                 "age" => describe_age(offer.age_secs),
-                "time" => clock_time(offer.checked_at, offer.age_secs, &zone)
+                "time" => clock_time(i18n, offer.checked_at, offer.age_secs)
             ),
             false,
             tokens,
@@ -200,7 +190,7 @@ impl Signex {
                     i18n,
                     ids::DIALOG_RECOVERY_SAVED_TIME,
                     "path" => offer.path.display().to_string(),
-                    "time" => clock_time(offer.checked_at, age, &zone)
+                    "time" => clock_time(i18n, offer.checked_at, age)
                 ),
                 true,
                 tokens,
@@ -235,23 +225,9 @@ impl Signex {
         )
     }
 
-    fn autosave_recovery_card(
-        &self,
-        offer: &RecoveryOffer,
-        windowed: bool,
-    ) -> Element<'_, Message> {
-        let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
-
-        let header: Element<'_, Message> = if windowed {
-            super::widgets::os_title_bar_slot()
-        } else {
-            self.autosave_recovery_header(later.clone())
-        };
-
-        // A Component Preview row has no file: the prompt names the part
-        // and its library.
+    /// The name the prompt shows and, for a Component Preview row (which has
+    /// no file), the label of its library.
+    fn recovery_subject(&self, offer: &RecoveryOffer) -> (String, Option<String>) {
         let (row_name, library) = self
             .library
             .editors
@@ -271,67 +247,100 @@ impl Signex {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| offer.path.display().to_string())
         });
+        (name, library)
+    }
 
+    /// The notes under the versions. The copy is newer: what Restore does,
+    /// in the info callout. The saved file is newer: the warning that
+    /// Restore replaces that newer work, then what Restore does. Both end
+    /// with the Discard / Decide later caption, the one place Decide later
+    /// (and so Esc) is explained.
+    fn recovery_notes(&self, offer: &RecoveryOffer, name: &str) -> Element<'_, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let ink4 = crate::styles::tokens::resolve(tokens).ink4;
+        let hint = |label: Localized| {
+            text(label)
+                .size(TS.caption)
+                .color(ink4)
+                .width(Length::Fill)
+                .boxed()
+        };
+        let restore = t!(
+            i18n,
+            ids::DIALOG_RECOVERY_RESTORE_HINT,
+            "undo" => crate::keymap::shown_in("Mod+Z", i18n)
+        );
+        let mut notes: Vec<Element<'_, Message>> = Vec::with_capacity(3);
+        if copy_is_newer(offer) {
+            notes.push(super::graphite::callout(DialogIcon::Info, restore, tokens));
+        } else {
+            notes.push(super::graphite::callout(
+                DialogIcon::Warn,
+                t!(i18n, ids::DIALOG_RECOVERY_OLDER, "name" => name),
+                tokens,
+            ));
+            notes.push(hint(restore));
+        }
+        notes.push(hint(t!(i18n, ids::DIALOG_RECOVERY_LATER_HINT)));
+        Column::with_children(notes).spacing(SP.m).boxed()
+    }
+
+    /// Restore and Discard at the left, a quiet Decide later at the right;
+    /// Esc keeps meaning Decide later.
+    fn recovery_footer(&self) -> Element<'_, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let choose = |choice| Some(Message::Autosave(AutosaveMsg::Recovery(choice)));
+        dialog_footer_split(
+            vec![
+                dialog_button(
+                    t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE),
+                    DialogButtonKind::Primary,
+                    choose(RecoveryChoice::Restore),
+                    tokens,
+                ),
+                dialog_button(
+                    t!(i18n, ids::DIALOG_BUTTON_DISCARD),
+                    DialogButtonKind::Danger,
+                    choose(RecoveryChoice::Discard),
+                    tokens,
+                ),
+            ],
+            vec![dialog_button(
+                t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_LATER),
+                DialogButtonKind::Ghost,
+                choose(RecoveryChoice::Later),
+                tokens,
+            )],
+        )
+    }
+
+    fn autosave_recovery_card(
+        &self,
+        offer: &RecoveryOffer,
+        windowed: bool,
+    ) -> Element<'_, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let header: Element<'_, Message> = if windowed {
+            super::widgets::os_title_bar_slot()
+        } else {
+            self.autosave_recovery_header(Message::Autosave(AutosaveMsg::Recovery(
+                RecoveryChoice::Later,
+            )))
+        };
+        let (name, library) = self.recovery_subject(offer);
         let lead = text(t!(i18n, ids::DIALOG_RECOVERY_FOUND, "name" => name.as_str()))
             .size(TS.label)
             .font(medium())
             .color(crate::styles::ti(tokens.text));
-        // The copy is newer: what Restore does. The saved file is newer: the
-        // warning that Restore replaces that newer work.
-        let note = if copy_is_newer(offer) {
-            super::graphite::callout(
-                DialogIcon::Info,
-                t!(
-                    i18n,
-                    ids::DIALOG_RECOVERY_RESTORE_HINT,
-                    "undo" => crate::keymap::shown_in("Mod+Z", i18n)
-                ),
-                tokens,
-            )
-        } else {
-            super::graphite::callout(
-                DialogIcon::Warn,
-                t!(i18n, ids::DIALOG_RECOVERY_OLDER, "name" => name.as_str()),
-                tokens,
-            )
-        };
-        // Shown in both cases: the one place Decide later (and so Esc) is
-        // explained.
-        let later_hint = text(t!(i18n, ids::DIALOG_RECOVERY_LATER_HINT))
-            .size(TS.caption)
-            .color(crate::styles::tokens::resolve(tokens).ink4)
-            .width(Length::Fill);
         let body: Column<Element<'_, Message>> = column![
             column![lead.boxed(), self.recovery_versions(offer, library)].spacing(SP.m),
-            column![note, later_hint.boxed()].spacing(SP.m),
+            self.recovery_notes(offer, &name),
         ]
         .spacing(SP.l);
-
-        let choose = |choice| Some(Message::Autosave(AutosaveMsg::Recovery(choice)));
-        // Discard deletes the copy: alone at the left. Decide later, then
-        // Restore, at the right.
-        let footer = dialog_footer_split(
-            vec![dialog_button(
-                t!(i18n, ids::DIALOG_BUTTON_DISCARD),
-                DialogButtonKind::Danger,
-                choose(RecoveryChoice::Discard),
-                tokens,
-            )],
-            vec![
-                dialog_button(
-                    t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_LATER),
-                    DialogButtonKind::Cancel,
-                    Some(later),
-                    tokens,
-                ),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE),
-                    restore_kind(offer),
-                    choose(RecoveryChoice::Restore),
-                    tokens,
-                ),
-            ],
-        );
+        let footer = self.recovery_footer();
         let dialog = container(
             column![header, dialog_body(body), footer].width(if windowed {
                 Length::Fill
