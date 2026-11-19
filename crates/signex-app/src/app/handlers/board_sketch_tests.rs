@@ -306,6 +306,7 @@ fn the_toggle_answers_an_open_discard_question_with_keep_editing() {
 /// point) leaves the role as it was and Messages says why.
 #[test]
 fn a_role_on_the_wrong_shape_is_refused_with_a_message() {
+    crate::diagnostics::init_logging().ignore("the logger may already be installed");
     use crate::library::editor::footprint::apply_footprint_primitive_edit;
     use crate::library::messages::{FootprintEditorMsg, RoleTag};
     let (mut app, _tmp) = sketching();
