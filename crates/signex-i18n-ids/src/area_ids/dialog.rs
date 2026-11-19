@@ -35,7 +35,13 @@ define_ids! {
     DIALOG_PRINT_PREVIEW_NO_FILES = "dialog-print-preview-no-files";
     DIALOG_PRINT_PREVIEW_PAGE_COUNT = "dialog-print-preview-page-count";
     DIALOG_NETLIST_INCOMPLETE_TITLE = "dialog-netlist-incomplete-title";
-    DIALOG_NETLIST_INCOMPLETE_BODY = "dialog-netlist-incomplete-body";
+    DIALOG_NETLIST_INCOMPLETE_COUNT = "dialog-netlist-incomplete-count";
+    DIALOG_NETLIST_INCOMPLETE_DETAIL = "dialog-netlist-incomplete-detail";
+    DIALOG_NETLIST_INCOMPLETE_ANYWAY_NOTE = "dialog-netlist-incomplete-anyway-note";
+    DIALOG_NETLIST_OMITTED_PAGE = "dialog-netlist-omitted-page";
+    DIALOG_NETLIST_OMITTED_WHY = "dialog-netlist-omitted-why";
+    DIALOG_NETLIST_OMITTED_FILE_MISSING = "dialog-netlist-omitted-file-missing";
+    DIALOG_NETLIST_OMITTED_PLACED_BY = "dialog-netlist-omitted-placed-by";
     DIALOG_BUTTON_CANCEL = "dialog-button-cancel";
     DIALOG_BUTTON_OK = "dialog-button-ok";
     DIALOG_BUTTON_APPLY = "dialog-button-apply";
@@ -59,6 +65,11 @@ define_ids! {
     DIALOG_CREATE_CHILD_SHEET_FILE_PLACED = "dialog-create-child-sheet-file-placed";
     DIALOG_CREATE_CHILD_SHEET_FILE_EXISTS = "dialog-create-child-sheet-file-exists";
     DIALOG_CREATE_CHILD_SHEET_SYMBOL_GONE = "dialog-create-child-sheet-symbol-gone";
+    DIALOG_CREATE_CHILD_SHEET_FILE_LABEL = "dialog-create-child-sheet-file-label";
+    DIALOG_CREATE_CHILD_SHEET_FILE_NOTE = "dialog-create-child-sheet-file-note";
+    DIALOG_CREATE_CHILD_SHEET_LATER_HINT = "dialog-create-child-sheet-later-hint";
+    DIALOG_CREATE_CHILD_SHEET_REUSE_PAGE = "dialog-create-child-sheet-reuse-page";
+    DIALOG_CREATE_CHILD_SHEET_REUSE = "dialog-create-child-sheet-reuse";
     DIALOG_CREATE_CHILD_SHEET_NOT_FOCUSED = "dialog-create-child-sheet-not-focused";
     DIALOG_TITLE_ANNOTATE = "dialog-title-annotate";
     DIALOG_TITLE_ERC = "dialog-title-erc";

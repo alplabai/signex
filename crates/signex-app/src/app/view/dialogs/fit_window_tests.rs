@@ -227,6 +227,7 @@ fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
             path_text: "power.snxsch".to_string(),
             error: None,
             exists: false,
+            reuse_warning: None,
         });
     assert_card_inside(
         &mut app,

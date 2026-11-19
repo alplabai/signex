@@ -188,11 +188,16 @@ fn an_existing_file_is_never_overwritten_and_can_be_opened_instead() {
         "nothing to write"
     );
     let c = confirm(&app);
-    assert!(c.exists && c.error.is_some(), "offers Open it");
+    assert!(c.exists && c.error.is_some(), "offers Use existing file");
+    assert!(
+        c.reuse_warning.is_none(),
+        "neither a project page nor placed elsewhere: no copy warning"
+    );
     let err = add_io::write_new_schematic(&child, SchematicSheet::default()).unwrap_err();
     assert_eq!(err, add_io::ChildSheetWriteError::AlreadyExists);
     assert_eq!(std::fs::read_to_string(&child).expect("read"), "mine");
-    // Open it: the dialog closes, the file is untouched, the symbol links to it.
+    // Use existing file: the dialog closes, the file is untouched, the symbol
+    // links to it.
     let _ = app.handle_create_child_sheet_open_existing();
     assert!(app.ui_state.create_child_sheet_confirm.is_none());
     assert_eq!(std::fs::read_to_string(&child).expect("read"), "mine");
@@ -456,7 +461,11 @@ fn a_file_another_symbol_uses_is_not_offered_to_open_and_says_who_has_it() {
     dialog_with(&mut app, id, "taken.snxsch");
     assert!(app.plan_child_sheet_from_dialog().is_none());
     let offered = confirm(&app);
-    assert!(!offered.exists, "no Open it for a file already placed");
+    assert!(
+        !offered.exists,
+        "no Use existing file for a file already placed"
+    );
+    assert!(offered.reuse_warning.is_none(), "{offered:?}");
     assert!(
         offered
             .error
@@ -1023,5 +1032,236 @@ fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
     assert!(
         app.document_state.error_notice.is_some(),
         "the refusal shows"
+    );
+}
+
+// ---- Mockup row #27 (F10): the "File exists" state and the copy warning.
+
+/// `text` without the isolation marks the catalog puts around its values.
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
+fn reuse_warning(app: &Signex) -> Option<String> {
+    confirm(app)
+        .reuse_warning
+        .as_ref()
+        .map(|w| plain(&w.render_en_us()))
+}
+
+#[test]
+fn a_file_that_is_already_a_page_of_the_project_warns_that_using_it_makes_a_copy() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    assert!(
+        super::super::dock::project_navigation::register_sheet_entry(
+            &mut app.document_state.projects[0],
+            "mcu.snxsch",
+        )
+    );
+    std::fs::write(dir.path().join("mcu.snxsch"), "mcu").expect("existing page");
+    dialog_with(&mut app, id, "mcu.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    assert!(confirm(&app).exists, "Use existing file is still offered");
+    assert_eq!(
+        reuse_warning(&app).as_deref(),
+        Some("mcu.snxsch is already sheet 2; using it makes sheet1 a copy of it.")
+    );
+    // Another name clears it with the error.
+    let _ = app.handle_create_child_sheet_path_changed("power.snxsch".to_owned());
+    let c = confirm(&app);
+    assert!(c.reuse_warning.is_none() && c.error.is_none() && !c.exists);
+}
+
+#[test]
+fn a_file_another_open_sheet_places_warns_without_a_page_number() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    let mut placing = signex_engine::child_sheet_from_corners(
+        Point::new(100.0, 50.0),
+        Point::new(130.0, 80.0),
+        "io",
+        &mut signex_types::object_id::UuidV7Ids,
+    )
+    .expect("big enough");
+    placing.filename = "io.snxsch".into();
+    let other = dir.path().join("other.snxsch");
+    let sheet = SchematicSheet {
+        child_sheets: vec![placing],
+        ..SchematicSheet::default()
+    };
+    let engine = signex_engine::Engine::new_with_path(sheet, Some(other.clone())).expect("engine");
+    app.document_state.engines.insert(other, engine);
+    std::fs::write(dir.path().join("io.snxsch"), "io").expect("existing file");
+    dialog_with(&mut app, id, "io.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    assert!(confirm(&app).exists);
+    assert_eq!(
+        reuse_warning(&app).as_deref(),
+        Some("io.snxsch is already a sheet of this project; using it makes sheet1 a copy of it.")
+    );
+}
+
+#[test]
+fn use_existing_file_still_links_a_file_that_is_already_a_page() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, id) = parent_with_symbol(dir.path());
+    assert!(
+        super::super::dock::project_navigation::register_sheet_entry(
+            &mut app.document_state.projects[0],
+            "mcu.snxsch",
+        )
+    );
+    std::fs::write(dir.path().join("mcu.snxsch"), "mcu").expect("existing page");
+    dialog_with(&mut app, id, "mcu.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    assert!(reuse_warning(&app).is_some());
+    // The warning informs; the choice is the user's.
+    let _ = app.handle_create_child_sheet_open_existing();
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert_eq!(file_field(&app, &top), "mcu.snxsch");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("mcu.snxsch")).expect("read"),
+        "mcu",
+        "nothing is written"
+    );
+}
+
+/// The Create Sheet dialog in its own window: the window and its size.
+fn dialog_window(app: &mut Signex) -> (iced::window::Id, iced::Size) {
+    app.ui_state.main_window_opened = true;
+    app.ui_state.first_run_tour_open = false;
+    let _ = app.sync_detached_modals();
+    let modal = crate::app::state::ModalId::CreateChildSheet;
+    let window = app
+        .detached_window_of(modal)
+        .expect("the dialog has its window");
+    (window, app.modal_window_size(modal))
+}
+
+fn is_create(message: &crate::app::Message) -> bool {
+    matches!(
+        message,
+        crate::app::Message::Project(crate::app::ProjectMsg::CreateChildSheetAnswered {
+            create: true
+        })
+    )
+}
+
+fn enter_key() -> iced::Event {
+    use iced::keyboard;
+    let key = keyboard::Key::Named(keyboard::key::Named::Enter);
+    iced::Event::Keyboard(keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::default(),
+        text: None,
+        repeat: false,
+    })
+}
+
+/// What a click into the path field (just under its "File" label) and then
+/// Enter publish.
+fn enter_in_the_field(
+    app: &Signex,
+    window: iced::window::Id,
+    size: iced::Size,
+) -> Vec<crate::app::Message> {
+    use iced::mouse;
+    let texts = crate::layout_probe::lay_out_texts(app.view(window), size);
+    let label = crate::layout_probe::find(&texts, "File").bounds;
+    let at = iced::Point::new(label.x + 40.0, label.y + label.height + 14.0);
+    crate::layout_probe::messages_for_events(
+        app.view(window),
+        size,
+        at,
+        &[
+            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            enter_key(),
+        ],
+    )
+}
+
+#[test]
+fn the_new_file_state_shows_the_note_and_enter_creates() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    app.open_create_child_sheet_dialog(id, false);
+    let (window, size) = dialog_window(&mut app);
+    let texts = crate::layout_probe::lay_out_texts(app.view(window), size);
+    for label in [
+        "File",
+        "Relative to the project folder",
+        "The sheet symbol's File field is set to this path when the file is created.",
+        "Later keeps the symbol without a file",
+        "Later",
+        "Create",
+    ] {
+        assert!(
+            texts.iter().any(|t| t.text == label),
+            "{label:?}: {texts:#?}"
+        );
+    }
+    assert!(!texts.iter().any(|t| t.text == "Use existing file"));
+    assert!(
+        enter_in_the_field(&app, window, size).iter().any(is_create),
+        "Enter in the field is Create while the name is new"
+    );
+    assert!(
+        crate::layout_probe::messages_on_click(app.view(window), size, "Create")
+            .iter()
+            .any(is_create)
+    );
+}
+
+#[test]
+fn the_exists_state_offers_use_existing_file_disables_create_and_ignores_enter() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _top, id) = parent_with_symbol(dir.path());
+    std::fs::write(dir.path().join("sheet1.snxsch"), "mine").expect("existing");
+    dialog_with(&mut app, id, "sheet1.snxsch");
+    assert!(app.plan_child_sheet_from_dialog().is_none());
+    let (window, size) = dialog_window(&mut app);
+    let texts = crate::layout_probe::lay_out_texts(app.view(window), size);
+    for label in [
+        "A file with that name already exists. Use it, or pick another name.",
+        "Use existing file",
+        "Create",
+        "Later",
+    ] {
+        assert!(
+            texts.iter().any(|t| t.text == label),
+            "{label:?}: {texts:#?}"
+        );
+    }
+    assert!(
+        !texts
+            .iter()
+            .any(|t| t.text.starts_with("The sheet symbol's File field")),
+        "the note belongs to the new-file state"
+    );
+    assert!(
+        !crate::layout_probe::messages_on_click(app.view(window), size, "Create")
+            .iter()
+            .any(is_create),
+        "Create is disabled while the typed name exists"
+    );
+    assert!(
+        !enter_in_the_field(&app, window, size).iter().any(is_create),
+        "Enter does not pick the existing file or create"
+    );
+    assert!(
+        crate::layout_probe::messages_on_click(app.view(window), size, "Use existing file")
+            .iter()
+            .any(|m| matches!(
+                m,
+                crate::app::Message::Project(crate::app::ProjectMsg::CreateChildSheetOpenExisting)
+            )),
+        "Use existing file still sends the open-existing answer"
     );
 }

@@ -63,6 +63,7 @@ impl Signex {
             path_text: filename,
             error: None,
             exists: false,
+            reuse_warning: None,
         });
     }
 
@@ -102,6 +103,7 @@ impl Signex {
             confirm.path_text = text;
             confirm.error = None;
             confirm.exists = false;
+            confirm.reuse_warning = None;
         }
         Task::none()
     }
@@ -161,6 +163,7 @@ impl Signex {
         };
         confirm.error = None;
         confirm.exists = false;
+        confirm.reuse_warning = None;
         Task::none()
     }
 
@@ -200,8 +203,8 @@ impl Signex {
         )
     }
 
-    /// "Open it": the typed path already exists; link the symbol to it and
-    /// open it, writing nothing. If the symbol cannot be linked (another
+    /// "Use existing file": the typed path already exists; link the symbol to
+    /// it and open it, writing nothing. If the symbol cannot be linked (another
     /// symbol already uses that file) the dialog stays open with the reason.
     pub(crate) fn handle_create_child_sheet_open_existing(&mut self) -> Task<Message> {
         let Some(confirm) = self.ui_state.create_child_sheet_confirm.clone() else {
@@ -261,7 +264,13 @@ impl Signex {
         };
         if path.exists() {
             let (why, offer_open) = self.existing_file_reply(&confirm, &path);
+            let warning = offer_open
+                .then(|| self.reuse_warning(&confirm, &path))
+                .flatten();
             self.set_dialog_error(why, offer_open);
+            if let Some(confirm) = self.ui_state.create_child_sheet_confirm.as_mut() {
+                confirm.reuse_warning = warning;
+            }
             return None;
         }
         if let Err(why) = self.refuse_while_project_moves(&path, "create") {
@@ -307,7 +316,7 @@ impl Signex {
     }
 
     /// What the dialog says about a typed path that already holds a file, and
-    /// whether "Open it" is offered. It is not when another sheet symbol of
+    /// whether "Use existing file" is offered. It is not when another sheet symbol of
     /// the parent already points at the file: one file is placed once, and
     /// linking this symbol too would be refused (#1835).
     fn existing_file_reply(
@@ -340,10 +349,55 @@ impl Signex {
         }
     }
 
+    /// What using the existing file at `path` would make of the symbol (F10):
+    /// a copy of a sheet the project already has. Read from the Model only:
+    /// the project's sheet list (`page` is the file's position in it, from 1)
+    /// and the sheet symbols of the other open sheets. `None` when neither
+    /// shows the file.
+    fn reuse_warning(
+        &self,
+        confirm: &CreateChildSheetConfirmState,
+        path: &std::path::Path,
+    ) -> Option<Translatable> {
+        use crate::app::state::scope::path_key_with;
+        let project = self.document_state.document_project(&confirm.parent);
+        let fold = crate::app::state::project_case::fold_of(project);
+        let key = path_key_with(path, fold);
+        let file = path.file_name()?.to_string_lossy().into_owned();
+        let page = project.and_then(|p| {
+            p.data
+                .sheets
+                .iter()
+                .position(|entry| path_key_with(&p.dir().join(&entry.filename), fold) == key)
+        });
+        let placed_elsewhere = || {
+            self.document_state.engines.iter().any(|(sheet, engine)| {
+                let Some(dir) = sheet.parent().filter(|_| *sheet != confirm.parent) else {
+                    return false;
+                };
+                engine.document().child_sheets.iter().any(|symbol| {
+                    crate::app::project_sheets::resolve_child_reference_quiet(dir, &symbol.filename)
+                        .is_ok_and(|child| path_key_with(&child, fold) == key)
+                })
+            })
+        };
+        let warning = match page {
+            Some(index) => {
+                Translatable::new(ids::DIALOG_CREATE_CHILD_SHEET_REUSE_PAGE).arg("page", index + 1)
+            }
+            None if placed_elsewhere() => Translatable::new(ids::DIALOG_CREATE_CHILD_SHEET_REUSE),
+            None => return None,
+        };
+        Some(warning.arg("file", file).arg("name", confirm.name.clone()))
+    }
+
     fn set_dialog_error(&mut self, why: Translatable, exists: bool) {
         if let Some(confirm) = self.ui_state.create_child_sheet_confirm.as_mut() {
             confirm.error = Some(why);
             confirm.exists = exists;
+            if !exists {
+                confirm.reuse_warning = None;
+            }
         }
     }
 

@@ -13,6 +13,7 @@ mod class_styles;
 mod current_page_tests;
 mod erc_report;
 mod loose_bom;
+mod omitted;
 mod page_setup;
 mod pdf_netlist;
 pub(crate) mod placements;

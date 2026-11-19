@@ -23,6 +23,7 @@ mod fab_outputs;
 mod graphite;
 mod graphite_annotate;
 mod header;
+mod netlist_incomplete;
 pub(crate) mod new_project;
 mod project;
 mod rule_editor;

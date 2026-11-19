@@ -27,6 +27,19 @@ const MESSAGE_MAX: f32 = 200.0;
 /// padding, the two-line intro, the one-line hint and the footer, with no list
 /// area (13 + 33 + 9 + 17 + 13 + 53 px on the legacy layout).
 const STOCK_COPY_EMPTY: f32 = 140.0;
+/// The most the rows of the netlist-incomplete prompt's omitted-page list
+/// grow to before they scroll (the heading row stays above them).
+pub(crate) const OMITTED_LIST_MAX: f32 = 140.0;
+/// Window height of the netlist-incomplete prompt without its list: the
+/// intro, the anyway note, the footer and the dialog padding.
+const NETLIST_PROMPT_BASE: f32 = 236.0;
+/// The omitted-page list's heading row, its rule and the list border.
+const OMITTED_LIST_CHROME: f32 = 29.0;
+/// One omitted-page row and the rule under it.
+const OMITTED_ROW: f32 = 31.0;
+/// One callout under the Create Sheet field (an error or the copy warning):
+/// a padded line and the gap above it.
+const CALLOUT_HEIGHT: f32 = 40.0;
 
 /// Height a Graphite theme adds to `modal`'s window over the legacy layout
 /// the sizes here were measured on: what the shell's intro adds over the
@@ -152,9 +165,25 @@ impl Signex {
                 .netlist_incomplete_prompt
                 .as_ref()
                 .map(|p| {
-                    let lines = wrapped_lines(&p.messages.join("\n"), 70) as f32;
-                    236.0 + (lines * 14.0).min(120.0)
+                    let rows = p.omitted.len() as f32 * OMITTED_ROW;
+                    NETLIST_PROMPT_BASE + OMITTED_LIST_CHROME + rows.min(OMITTED_LIST_MAX)
                 }),
+            // The note under the field in the new-file state, else one
+            // callout per error or warning, each grown by its wrapped lines.
+            ModalId::CreateChildSheet => ui.create_child_sheet_confirm.as_ref().map(|c| {
+                let pad = crate::styles::Spacing::DEFAULT.l;
+                let callouts: Vec<String> = [c.error.as_ref(), c.reuse_warning.as_ref()]
+                    .into_iter()
+                    .flatten()
+                    .map(|t| t.render(&*self.ui_state.i18n))
+                    .collect();
+                if callouts.is_empty() {
+                    return fixed.height + NOTE_HEIGHT;
+                }
+                callouts.iter().fold(fixed.height, |height, text| {
+                    height + CALLOUT_HEIGHT + note_growth(fixed.width - 2.0 * pad, pad, text)
+                })
+            }),
             ModalId::LibraryStockCopy => self.library.stock_copy.as_ref().and_then(|c| {
                 if !self.library.writable_libraries().is_empty() {
                     return None;

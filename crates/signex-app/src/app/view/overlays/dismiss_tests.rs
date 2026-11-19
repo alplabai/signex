@@ -80,6 +80,10 @@ fn prompt_app() -> Signex {
             current_sheet: None,
             netlist_placements: Vec::new(),
         },
+        omitted: vec![crate::app::state::OmittedPage {
+            file: "two.snxsch".to_owned(),
+            reason: crate::app::state::OmittedReason::FileMissing { placed_by: None },
+        }],
     });
     app
 }
