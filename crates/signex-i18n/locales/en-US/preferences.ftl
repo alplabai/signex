@@ -325,3 +325,107 @@ preferences-annotation-section-related = RELATED
 preferences-annotation-paste-help = Lives on Editing, because it applies to paste, not annotate.
 # Link to the Editing page.
 preferences-annotation-open-editing = Open Editing ›
+
+## Appearance page and Editing page (#144, #147)
+
+# Shared by both pages. The link after a shortened help text that shows the
+# whole text; the leading space separates it from that text.
+preferences-pages-more = { " " }More…
+# The link after a whole help text that shortens it again.
+preferences-pages-less = { " " }Less
+# Tooltip of the button that grows a preview to fill the page.
+preferences-pages-expand-preview = Expand preview
+# Tooltip of the same button while the preview fills the page.
+preferences-pages-close-preview = Close the expanded preview (Esc)
+# A length in millimetres. $value is the number.
+preferences-pages-millimetres = { $value } mm
+# Pill beside a setting that applies at the next start.
+preferences-pill-restart = Restart
+# Pill beside a setting that is still being tried out.
+preferences-pill-experimental = Experimental
+
+# Appearance page.
+preferences-appearance-heading = Appearance
+# Section labels of the page, shown in capitals.
+preferences-appearance-section-look = LOOK
+preferences-appearance-section-canvas = CANVAS
+preferences-appearance-section-navigation = NAVIGATION
+preferences-appearance-section-window = WINDOW
+preferences-appearance-ui-font-short-help = Applies to all panels and menus.
+# Readout beside the Interface scale slider. $percent is a whole number.
+preferences-appearance-ui-scale-value = { $percent }%
+preferences-appearance-grid-style-label = Grid style
+preferences-appearance-grid-style-help = Appearance of snap points, per editor.
+# Captions of the two grid style pickers: the editor each one is for.
+preferences-appearance-grid-style-schematic = Schematic
+preferences-appearance-grid-style-symbol = Symbol
+# The grid styles.
+preferences-grid-style-dots = Dots
+preferences-grid-style-lines = Lines
+preferences-grid-style-small-crosses = Small crosses
+# Label over the grid preview, shown in capitals.
+preferences-appearance-grid-preview = GRID PREVIEW
+# Caption beside that label. $schematic and $symbol are grid styles, $grid a length.
+preferences-appearance-grid-preview-caption = Schematic: { $schematic } · Symbol: { $symbol }, { $grid }
+# Captions drawn on the two halves of the preview. $style is a grid style, $grid a length.
+preferences-appearance-grid-preview-schematic = Schematic · { $style } · { $grid }
+preferences-appearance-grid-preview-symbol = Symbol · { $style } · { $grid }
+preferences-appearance-symbol-grid-label = Symbol editor default grid
+preferences-appearance-symbol-grid-help = Applied when a symbol library is first opened. Can be changed per library from the canvas status bar.
+preferences-appearance-pin-selection-label = Pin selection
+preferences-appearance-pin-selection-short-help = How a click selects a pin on the symbol editor canvas: the pin body only, or its name and number labels too.
+# The two pin selection choices.
+preferences-pin-selection-pin-only = Pin only
+preferences-pin-selection-text-and-pin = Text and pin
+# The GPU render setting; the Experimental pill stands beside it.
+preferences-appearance-gpu-render-label = GPU Render
+preferences-appearance-antialiasing-short-help = Smooth the edges of canvas shapes.
+# The two Mouse wheel choices.
+preferences-wheel-mode-zoom = Zoom
+preferences-wheel-mode-scroll = Scroll
+preferences-wheel-mode-short-help = Zoom: the wheel zooms the canvas. Scroll: the wheel and two-finger scroll pan, Shift + wheel pans sideways, Ctrl/Cmd + wheel or a pinch zooms.
+preferences-appearance-trackpad-pan-short-help = A two-finger trackpad scroll pans instead of zooming. Pinch and Ctrl/Cmd + scroll still zoom. Only used when Mouse wheel is Zoom.
+preferences-appearance-remember-geometry-short-help = Reopen the main window at the size and position it had when you last closed it.
+
+# Editing page.
+preferences-editing-heading = Editing
+preferences-editing-intro = How moving, selecting, pasting and snapping behave on the schematic canvas.
+# Section labels of the page, shown in capitals.
+preferences-editing-section-move = MOVE AND SELECT
+preferences-editing-section-grid = GRID
+preferences-editing-section-text = TEXT AND PASTE
+preferences-editing-section-files = FILES AND AGENTS
+# Shortened help texts; More… shows the whole text.
+preferences-move-keeps-wires-help-summary = Moving, rotating or mirroring symbols, child sheets or sheet pins drags the wires on their pins along, adding a bend where needed. Hold Alt through one drag to do the opposite.
+preferences-drag-direction-help-summary = Left to right selects only what the box fully contains; right to left selects everything the box touches. When off, the Inside / Touching mode (Shift+S) decides.
+preferences-paste-designators-help-summary = What pasted parts are called. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-autosave-help-summary = Keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute, in the { -brand-name } config folder. Your own file is never touched. Off by default.
+preferences-agent-connections-help-summary = { -brand-name } listens for agents running as you on this computer, through a socket only you can open. Every request is listed in Messages. Off by default.
+preferences-editing-fast-grid-1-help = Snap grid set by the Fast grid 1 command. Cycle fast grid steps between the two fast grids. Default 1.27 mm (50 mil).
+preferences-editing-fast-grid-2-help = Snap grid set by the Fast grid 2 command. Default 2.54 mm (100 mil).
+# Readout beside a fast grid field: the grid in mil. $value is the number.
+preferences-editing-fast-grid-mil = { $value } mil
+# The same readout while the field holds no valid grid.
+preferences-editing-fast-grid-mil-invalid = —
+# Error under a fast grid field. $reason says why the text would be refused.
+preferences-editing-fast-grid-problem = { $reason }
+# Label over the snap preview, shown in capitals.
+preferences-editing-snap-preview = SNAP PREVIEW
+# Caption beside that label. $first and $second are a length or the text below.
+preferences-editing-snap-caption = Fast grid 1 { $first } (dots) · Fast grid 2 { $second } (rings)
+# Stands for a fast grid the field would refuse.
+preferences-editing-snap-not-valid = not valid
+# Label on the drawing. $number is 1 or 2, $pitch a length.
+preferences-editing-snap-label = Fast grid { $number } · { $pitch }
+# The same label while its field holds no valid grid.
+preferences-editing-snap-label-invalid = Fast grid { $number } · invalid
+# Note when a fine grid is drawn with only some of its points. $count is a whole number.
+preferences-editing-snap-every = 1 point in { $count } drawn
+# Note at the point the pointer snaps to.
+preferences-editing-snap-here = snaps here
+# Note while Fast grid 2 is not valid.
+preferences-editing-snap-no-rings = no rings until it is fixed
+preferences-editing-snap-help = Click a pitch on the drawing to type it; Enter commits, Tab moves to the other pitch, Esc cancels. Drag a ● handle to change a pitch. The fields above follow, and the other way round.
+# Tooltips of the Increment step buttons.
+preferences-editing-increment-down = Step down
+preferences-editing-increment-up = Step up

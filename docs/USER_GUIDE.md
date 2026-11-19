@@ -168,6 +168,23 @@ schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
+**Fast grids.** The Fast grid 1 and Fast grid 2 commands snap to two grids
+you choose in **Tools ▸ Preferences… ▸ Editing ▸ Grid** (1.27 mm and 2.54 mm
+out of the box). Each field shows the grid in mil as you type, and a value
+that cannot be a grid (not a number above zero, or finer than 1 nm) is marked
+on its row with the reason; Save refuses it until you fix it. The snap preview
+under the fields draws Fast grid 1 as dots and Fast grid 2 as rings. Click a
+pitch on the drawing to type it (Enter commits, Tab moves to the other pitch,
+Esc cancels), or drag its handle; the field follows, and the other way round.
+
+**How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
+theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
+the grid style of the schematic and of the symbol editor (dots, lines or
+small crosses, shown side by side in the grid preview), the symbol editor's
+default grid, pin selection, the GPU render and anti-aliasing, the mouse
+wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting
+marked **Restart** applies the next time Signex starts.
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
@@ -332,7 +349,7 @@ or sheet entry and run **Go to net partner on another sheet** from the command
 palette; run it again to cycle through the other ends. The highlight commands
 keep a net bright on every sheet while the rest fades, and step through its pins
 and labels. Resting the pointer on a wire, pin or label shows its net, class and
-pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+pins (Preferences ▸ Editing ▸ Show net info on hover turns it off). See
 [NET_NAVIGATION.md](NET_NAVIGATION.md).
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
