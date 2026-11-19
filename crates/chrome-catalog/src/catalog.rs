@@ -95,6 +95,11 @@ impl Catalog {
             ),
             section::view("Flow progress", tokens, crate::flow_progress::view(tokens)),
             section::view(
+                "Stat tiles (summary, filter, clean run)",
+                tokens,
+                crate::stat_tiles::view(tokens)
+            ),
+            section::view(
                 "Board palette and line-art inks",
                 tokens,
                 crate::board_palette::view(tokens)
