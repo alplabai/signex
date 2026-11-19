@@ -100,7 +100,10 @@ struct GridCells<'a> {
 
 /// One row of the Object Visibility grid, `height` tall, inside the
 /// panel's side padding.
-fn grid_row<'a>(cells: GridCells<'a>, height: f32) -> container::Container<'a, PanelMsg> {
+fn grid_row<'a>(
+    cells: GridCells<'a>,
+    height: f32,
+) -> container::Container<'a, Row<Element<'a, PanelMsg>>> {
     let GridCells {
         eye,
         name,
