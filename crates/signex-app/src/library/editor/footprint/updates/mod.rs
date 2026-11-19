@@ -376,6 +376,14 @@ pub(crate) fn apply_footprint_primitive_edit(
 /// Route one footprint-editor message to the slice that owns it.
 fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
+        // Esc answers an open "Discard changes?" with Keep editing, as on a
+        // board (`board_sketch_escape`, #2518).
+        FootprintEditorMsg::ToolEscape | FootprintEditorMsg::SketchToolEscape
+            if editor.state.sketch_exit.confirming_discard =>
+        {
+            use crate::library::editor::footprint::sketch_mode::exit;
+            exit::apply(editor, &FootprintEditorMsg::SketchDiscardCancelled);
+        }
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
         | FootprintEditorMsg::SelectSilkF(..)

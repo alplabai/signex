@@ -24,6 +24,15 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 impl Signex {
     pub(crate) fn handle_board_sketch(&mut self, event: BoardSketchMsg) -> Task<Message> {
         match event {
+            // The toggle while "Discard changes?" is open answers Keep
+            // editing, as Esc does; it never applies the sketch.
+            BoardSketchMsg::ModeToggled
+                if self
+                    .board_sketch_in_view()
+                    .is_some_and(|s| s.editor.state.sketch_exit.confirming_discard) =>
+            {
+                return self.handle_board_sketch(BoardSketchMsg::DiscardCancelled);
+            }
             BoardSketchMsg::ModeToggled if self.board_sketch_in_view().is_some() => {
                 self.leave_board_sketch();
             }

@@ -282,3 +282,22 @@ fn esc_without_edits_leaves_and_writes_nothing() {
     send(&mut app, message);
     assert!(app.interaction_state.board_sketch.is_none());
 }
+
+/// #2518: the mode toggle while "Discard changes?" is open answers Keep
+/// editing, as Esc does: the mode stays on and nothing is applied.
+#[test]
+fn the_toggle_answers_an_open_discard_question_with_keep_editing() {
+    let (mut app, _tmp) = sketching();
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    session.editor.state.sketch_exit.confirming_discard = true;
+    send(
+        &mut app,
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::ModeToggled)),
+    );
+    let session = app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .expect("the mode stays on");
+    assert!(!session.editor.state.sketch_exit.confirming_discard);
+}

@@ -118,3 +118,20 @@ fn the_footprint_preview_counts_every_footprint_target() {
         );
     }
 }
+
+/// #2518: Esc answers an open "Discard changes?" with Keep editing, as on a
+/// board: the edits and sketch mode stay, and the question closes.
+#[test]
+fn esc_answers_the_discard_question_with_keep_editing() {
+    for esc in [M::ToolEscape, M::SketchToolEscape] {
+        let mut editor = editor_in_sketch();
+        draw_a_point(&mut editor);
+        let drawn = entity_count(&editor);
+        apply_footprint_primitive_edit(&mut editor, M::SketchDiscardRequested);
+        assert!(editor.state.sketch_exit.confirming_discard);
+        apply_footprint_primitive_edit(&mut editor, esc.clone());
+        assert!(!editor.state.sketch_exit.confirming_discard, "{esc:?}");
+        assert_eq!(editor.state.mode, EditorMode::Sketch, "{esc:?}");
+        assert_eq!(entity_count(&editor), drawn, "{esc:?}: the edits stay");
+    }
+}
