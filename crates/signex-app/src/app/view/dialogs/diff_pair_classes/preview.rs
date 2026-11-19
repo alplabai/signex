@@ -139,13 +139,11 @@ mod tests {
     fn the_preview_draws_both_traces_and_names_the_values() {
         let i18n = I18n::en_us();
         let class = DiffPairClass {
-            name: "USB".to_string(),
             width_mm: Some(0.2),
             gap_mm: Some(0.15),
             impedance_ohm: Some(90.0),
             impedance_tolerance_pct: Some(10.0),
-            pair_by_suffix: true,
-            ..DiffPairClass::default()
+            ..DiffPairClass::named("USB")
         };
         let ill = illustration(&class, &i18n);
         assert_eq!(ill.visible_parts().count(), 7);

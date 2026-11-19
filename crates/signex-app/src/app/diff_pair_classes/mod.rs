@@ -93,11 +93,7 @@ pub enum PairClassProblem {
 
 /// A fresh class: pairs by suffix, nothing else set.
 pub fn new_class(name: String) -> DiffPairClass {
-    DiffPairClass {
-        name,
-        pair_by_suffix: true,
-        ..DiffPairClass::default()
-    }
+    DiffPairClass::named(name)
 }
 
 /// The first free name `base`, `base_2`, `base_3`, … among `classes`.

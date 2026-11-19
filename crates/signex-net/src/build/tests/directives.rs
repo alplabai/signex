@@ -324,9 +324,8 @@ fn a_pair_carries_its_class_and_the_class_decides_the_suffix_styles() {
     let netlist = build_netlist(&sheet);
     let by_suffix = |pair_by_suffix: bool| {
         [DiffPairClass {
-            name: "USB".to_string(),
             pair_by_suffix,
-            ..DiffPairClass::default()
+            ..DiffPairClass::named("USB")
         }]
     };
     let pairs = crate::diff_pairs_with_classes(&sheet, &netlist, &by_suffix(true));
