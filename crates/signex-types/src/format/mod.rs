@@ -44,6 +44,7 @@ mod pad_shape_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
+mod pcb_rooms;
 mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_uuid_repair;
@@ -99,6 +100,8 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_rooms_tests;
 #[cfg(test)]
 mod pcb_route_attrs_tests;
 #[cfg(test)]
@@ -885,6 +888,7 @@ impl SnxPcb {
         board_sketch::write(&mut out, &self.board)?;
         board_options::write(&mut out, &self.board)?;
         board_free::write(&mut out, &self.board)?;
+        pcb_rooms::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -1009,6 +1013,7 @@ impl SnxPcb {
             free: board_free::read(raw.free)?,
             sketch,
             stackup: stack,
+            rooms: pcb_rooms::read(raw.rooms)?,
             options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
@@ -1079,6 +1084,9 @@ struct PcbRaw {
     board_options: Option<board_options::BoardOptionsRaw>,
     #[serde(default)]
     free: Option<board_free::FreeRaw>,
+    /// Rooms (#2457), `format::pcb_rooms`.
+    #[serde(default)]
+    rooms: Option<Vec<pcb_rooms::RoomRaw>>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

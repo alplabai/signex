@@ -96,6 +96,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -311,6 +312,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),

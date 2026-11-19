@@ -153,6 +153,7 @@ fn board(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 0,

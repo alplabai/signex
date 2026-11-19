@@ -125,6 +125,7 @@ fn board() -> PcbBoard {
         free: Default::default(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
     }

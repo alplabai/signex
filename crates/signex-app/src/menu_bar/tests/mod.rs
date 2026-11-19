@@ -498,6 +498,7 @@ pub(super) fn loaded_board_app() -> Signex {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),

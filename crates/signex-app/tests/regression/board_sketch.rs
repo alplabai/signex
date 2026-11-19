@@ -38,6 +38,7 @@ pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::from_u128(0xB0A2D),
         version: 1,

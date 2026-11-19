@@ -16,6 +16,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),
