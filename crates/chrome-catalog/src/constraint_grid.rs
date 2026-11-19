@@ -6,14 +6,20 @@ use std::sync::LazyLock;
 use iced::widget::{column, container};
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::Label;
 use signex_widgets::constraint_grid::{
     CellRef, CellValue, ClassMatrix, ClassPair, ColumnGroup, ColumnId, ColumnKind, ConstraintGrid,
     GridColumn, GridMessage, GridRow, GridStyle, GridText, GroupId, I18n, MatrixClass,
     MatrixMessage, MatrixText, RowId, RowKind, matrix_view, view,
 };
-use signex_widgets::{Label, raw};
 
 use crate::catalog::Message;
+use signex_i18n::UserText;
+
+/// Sample text for this page: fixture content, not UI copy.
+fn sample_text(text: impl Into<String>) -> Label<'static> {
+    UserText::new(text).into()
+}
 
 /// UI text size of the samples.
 const TEXT_SIZE: f32 = 12.0;
@@ -21,7 +27,7 @@ const TEXT_SIZE: f32 = 12.0;
 const GRID_ROWS: f32 = 13.0;
 
 fn label(text: &'static str) -> Label<'static> {
-    raw(text)
+    sample_text(text)
 }
 
 fn length(id: u32, title: &'static str, mm: f64) -> GridColumn {

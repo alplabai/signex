@@ -9,10 +9,16 @@ use signex_widgets::chips::{
     ChipMetrics, ChipStyle, ChipTone, FilterSet, TabChip, TabChipStyle, choice_chips, filter_chips,
     kind_chip, tab_chips,
 };
-use signex_widgets::{SegmentedStyle, raw, segmented};
+use signex_widgets::{Label, SegmentedStyle, segmented};
 
 use crate::catalog::Message;
 use crate::theme;
+use signex_i18n::UserText;
+
+/// Sample text for this page: fixture content, not UI copy.
+fn sample_text(text: impl Into<String>) -> Label<'static> {
+    UserText::new(text).into()
+}
 
 /// Body size of the Graphite type scale.
 const BODY: f32 = 12.0;
@@ -65,9 +71,9 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let variants = choice_chips(
         [
-            (Sample::A, raw("Project open")),
-            (Sample::B, raw("Filter matches nothing")),
-            (Sample::C, raw("No project open")),
+            (Sample::A, sample_text("Project open")),
+            (Sample::B, sample_text("Filter matches nothing")),
+            (Sample::C, sample_text("No project open")),
         ],
         Sample::A,
         chip_style(tokens),
@@ -76,10 +82,10 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     );
     let filters = filter_chips(
         [
-            (Sample::A, raw("Errors"), Some(3)),
-            (Sample::B, raw("Warnings"), Some(12)),
-            (Sample::C, raw("Notes"), Some(0)),
-            (Sample::D, raw("Used On"), None),
+            (Sample::A, sample_text("Errors"), Some(3)),
+            (Sample::B, sample_text("Warnings"), Some(12)),
+            (Sample::C, sample_text("Notes"), Some(0)),
+            (Sample::D, sample_text("Used On"), None),
         ],
         &FilterSet::new([Sample::A, Sample::D]),
         chip_style(tokens),
@@ -96,15 +102,15 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     };
     let kinds: Row<Element<'a, Message>> = Row::new()
         .spacing(m.row_gap)
-        .push(kind_chip(raw("panel"), info, m))
-        .push(kind_chip(raw("global"), neutral, m));
+        .push(kind_chip(sample_text("panel"), info, m))
+        .push(kind_chip(sample_text("global"), neutral, m));
     let domains = tab_chips(
         [
-            TabChip::new(Sample::A, raw("Clearance")).count(4),
-            TabChip::new(Sample::B, raw("Physical")).count(1200),
-            TabChip::new(Sample::C, raw("Mask")).count(0),
-            TabChip::new(Sample::D, raw("Placement")),
-            TabChip::new(Sample::E, raw("Signal integrity")).dimmed(true),
+            TabChip::new(Sample::A, sample_text("Clearance")).count(4),
+            TabChip::new(Sample::B, sample_text("Physical")).count(1200),
+            TabChip::new(Sample::C, sample_text("Mask")).count(0),
+            TabChip::new(Sample::D, sample_text("Placement")),
+            TabChip::new(Sample::E, sample_text("Signal integrity")).dimmed(true),
         ],
         Sample::B,
         tab_style(tokens),
@@ -121,18 +127,21 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     );
     let modes = segmented(
         [
-            (Sample::A, raw("Nets")),
-            (Sample::B, raw("Net Classes")),
-            (Sample::C, raw("Differential Pairs")),
-            (Sample::D, raw("xSignals")),
-            (Sample::E, raw("Polygons")),
+            (Sample::A, sample_text("Nets")),
+            (Sample::B, sample_text("Net Classes")),
+            (Sample::C, sample_text("Differential Pairs")),
+            (Sample::D, sample_text("xSignals")),
+            (Sample::E, sample_text("Polygons")),
         ],
         Sample::B,
         seg_style.fill_width(true),
         ignore,
     );
     let pages = segmented(
-        [(Sample::A, raw("General")), (Sample::B, raw("Parameters"))],
+        [
+            (Sample::A, sample_text("General")),
+            (Sample::B, sample_text("Parameters")),
+        ],
         Sample::B,
         seg_style,
         ignore,

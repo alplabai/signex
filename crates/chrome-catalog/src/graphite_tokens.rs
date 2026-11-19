@@ -9,9 +9,15 @@ use signex_types::theme::{Color as SxColor, ThemeId, ThemeTokens, canvas_colors,
 use signex_widgets::theme_ext::{
     self, ChromeMetrics, HAIRLINE, Radii, Spacing, TypeScale, to_color,
 };
-use signex_widgets::{button, raw, text};
+use signex_widgets::{Label, button, text};
 
 use crate::catalog::Message;
+use signex_i18n::UserText;
+
+/// Sample text for this page: fixture content, not UI copy.
+fn sample_text(text: impl Into<String>) -> Label<'static> {
+    UserText::new(text).into()
+}
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -126,7 +132,7 @@ fn swatch(ink: Color, name: &'static str, fill: Color) -> Element<'static, Messa
             ..container::Style::default()
         },
     );
-    column![chip, text(raw(name)).size(TS.caption).color(ink)]
+    column![chip, text(sample_text(name)).size(TS.caption).color(ink)]
         .spacing(SP.xs)
         .boxed()
 }
@@ -146,9 +152,13 @@ fn scroll_sample(t: &ThemeTokens) -> Element<'static, Message> {
     let mut list = column![];
     for i in 1..=SAMPLE_ROWS {
         list = list.push(
-            container(text(raw(format!("Row {i}"))).size(TS.body).color(ink))
-                .height(METRICS.row)
-                .padding([0.0, SP.m]),
+            container(
+                text(sample_text(format!("Row {i}")))
+                    .size(TS.body)
+                    .color(ink),
+            )
+            .height(METRICS.row)
+            .padding([0.0, SP.m]),
         );
     }
     scrollable(list)
@@ -187,29 +197,35 @@ fn states_sample(t: &ThemeTokens) -> Element<'static, Message> {
         } else {
             theme_ext::dimmed_button(base)
         };
-        button(text(raw(label)).size(TS.body))
+        button(text(sample_text(label)).size(TS.body))
             .height(METRICS.button)
             .padding([SP.s, SP.l])
             .style(move |_: &Theme, _: button::Status| style)
             .boxed()
     };
-    let read_only = container(text(raw("Read-only 10 mm")).size(TS.body).color(ink3))
-        .height(METRICS.field)
-        .padding([SP.s, SP.m])
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(sunken)),
-            border: Border {
-                width: HAIRLINE,
-                color: line,
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
+    let read_only = container(
+        text(sample_text("Read-only 10 mm"))
+            .size(TS.body)
+            .color(ink3),
+    )
+    .height(METRICS.field)
+    .padding([SP.s, SP.m])
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(sunken)),
+        border: Border {
+            width: HAIRLINE,
+            color: line,
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
     column![
         row![sample("Enabled", true), sample("Disabled", false)].spacing(SP.m),
         read_only,
-        text(raw("Disabled hint text")).size(TS.caption).color(ink4),
+        text(sample_text("Disabled hint text"))
+            .size(TS.caption)
+            .color(ink4),
     ]
     .spacing(SP.m)
     .boxed()

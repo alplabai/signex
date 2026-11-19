@@ -188,7 +188,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::raw;
+
+    /// Fixture text for the tests.
+    fn sample(text: &str) -> Label<'static> {
+        signex_i18n::UserText::new(text).into()
+    }
+    use crate::Label;
 
     #[test]
     fn metrics_at_the_12_px_body_match_the_mockup() {
@@ -234,9 +239,9 @@ mod tests {
         for sel in [Mode::Nets, Mode::NetClasses, Mode::Polygons] {
             let _: Element<'_, Mode> = segmented(
                 [
-                    (Mode::Nets, raw("Nets")),
-                    (Mode::NetClasses, raw("Net Classes")),
-                    (Mode::Polygons, raw("Polygons")),
+                    (Mode::Nets, sample("Nets")),
+                    (Mode::NetClasses, sample("Net Classes")),
+                    (Mode::Polygons, sample("Polygons")),
                 ],
                 sel,
                 style,

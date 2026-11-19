@@ -13,7 +13,7 @@ use iced::font::Weight;
 use iced::widget::{Row, container};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
 
-use crate::{Label, button, raw, text};
+use crate::{Label, button, text};
 
 // Graphite chip sizes at a 12 px body, kept as ratios of the body size.
 const CHIP_HEIGHT_EM: f32 = 22.0 / 12.0;
@@ -242,7 +242,7 @@ fn label_text<'a, M: 'a>(label: Label<'a>, size: f32, ink: Color, is_on: bool) -
 }
 
 fn mono_text<'a, M: 'a>(value: String, size: f32, ink: Color) -> Element<'a, M> {
-    text(raw(value))
+    text(Label::from(signex_i18n::UserText::new(value)))
         .size(size)
         .font(Font::MONOSPACE)
         .color(ink)
@@ -524,6 +524,11 @@ where
 mod tests {
     use super::*;
 
+    /// Fixture text for the tests.
+    fn sample(text: &str) -> Label<'static> {
+        signex_i18n::UserText::new(text).into()
+    }
+
     #[test]
     fn metrics_at_the_12_px_body_match_the_mockup() {
         let m = ChipMetrics::from_text_size(12.0);
@@ -621,7 +626,10 @@ mod tests {
         let m = ChipMetrics::from_text_size(12.0);
         let set = FilterSet::new([Kind::Errors]);
         let _: Element<'_, Kind> = choice_chips(
-            [(Kind::Errors, raw("Errors")), (Kind::Notes, raw("Notes"))],
+            [
+                (Kind::Errors, sample("Errors")),
+                (Kind::Notes, sample("Notes")),
+            ],
             Kind::Notes,
             style(),
             m,
@@ -629,8 +637,8 @@ mod tests {
         );
         let _: Element<'_, Kind> = filter_chips(
             [
-                (Kind::Errors, raw("Errors"), Some(3)),
-                (Kind::Warnings, raw("Warnings"), None),
+                (Kind::Errors, sample("Errors"), Some(3)),
+                (Kind::Warnings, sample("Warnings"), None),
             ],
             &set,
             style(),
@@ -641,13 +649,13 @@ mod tests {
             fill: Color::WHITE,
             ink: Color::BLACK,
         };
-        let _: Element<'_, Kind> = kind_chip(raw("panel"), tone, m);
-        let _: Element<'_, Kind> = chip(raw("Off"), Some(2), false, style(), m, None);
+        let _: Element<'_, Kind> = kind_chip(sample("panel"), tone, m);
+        let _: Element<'_, Kind> = chip(sample("Off"), Some(2), false, style(), m, None);
         let _: Element<'_, Kind> = tab_chips(
             [
-                TabChip::new(Kind::Errors, raw("Clearance")).count(4),
-                TabChip::new(Kind::Warnings, raw("Physical")).count(0),
-                TabChip::new(Kind::Notes, raw("Signal integrity")).dimmed(true),
+                TabChip::new(Kind::Errors, sample("Clearance")).count(4),
+                TabChip::new(Kind::Warnings, sample("Physical")).count(0),
+                TabChip::new(Kind::Notes, sample("Signal integrity")).dimmed(true),
             ],
             Kind::Errors,
             tab_style(),

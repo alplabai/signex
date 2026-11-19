@@ -9,10 +9,16 @@
 use iced::widget::{Space, column, container, row, stack};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{CheckboxLabel, Label, checkbox, raw, text};
+use signex_widgets::{CheckboxLabel, Label, checkbox, text};
 
 use crate::catalog::Message;
 use crate::theme;
+use signex_i18n::UserText;
+
+/// Sample text for this page: fixture content, not UI copy.
+fn sample_text(text: impl Into<String>) -> Label<'static> {
+    UserText::new(text).into()
+}
 
 /// The catalog's body text size; every other size derives from it.
 const BASE: f32 = 11.0;
@@ -22,7 +28,7 @@ const VEIL_ALPHA: f32 = 0.58;
 
 /// Sample text: the catalog has no message catalog to draw from.
 fn label(s: &'static str) -> Label<'static> {
-    raw(s)
+    sample_text(s)
 }
 
 /// An on and an off subsection side by side.

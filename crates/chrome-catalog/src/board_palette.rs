@@ -6,10 +6,16 @@ use iced::Widget;
 use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens, canvas_colors, theme_tokens};
-use signex_widgets::{raw, text};
+use signex_widgets::{Label, text};
 
 use crate::catalog::Message;
 use crate::theme;
+use signex_i18n::UserText;
+
+/// Sample text for this page: fixture content, not UI copy.
+fn sample_text(text: impl Into<String>) -> Label<'static> {
+    UserText::new(text).into()
+}
 
 /// The body text size the catalog samples are sized from.
 const BODY: f32 = 12.0;
@@ -50,7 +56,7 @@ fn board_legend<'a>() -> Element<'a, Message> {
         if let Some(bottom) = bottom {
             pair = pair.push(chip(theme::color(bottom)));
         }
-        column![pair, text(raw(name)).size(BODY).color(label)]
+        column![pair, text(sample_text(name)).size(BODY).color(label)]
             .spacing(GAP / 2.0)
             .boxed()
     });
@@ -79,7 +85,7 @@ fn line_art<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let chips = inks.into_iter().map(|(name, ink)| {
         row![
             stroke(theme::color(ink)),
-            text(raw(name)).size(BODY).color(label)
+            text(sample_text(name)).size(BODY).color(label)
         ]
         .spacing(GAP / 2.0)
         .boxed()

@@ -811,6 +811,7 @@ name = "chrome-catalog"
 version = "26.11.0"
 dependencies = [
  "iced",
+ "signex-i18n",
  "signex-types",
  "signex-widgets",
 ]
