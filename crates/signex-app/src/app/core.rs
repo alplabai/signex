@@ -11,3 +11,4 @@ pub(crate) mod origin;
 pub(crate) mod pin_selection_mode;
 pub(crate) mod project_id;
 pub(crate) mod resolved_placement;
+pub(crate) mod rule_list_filter;

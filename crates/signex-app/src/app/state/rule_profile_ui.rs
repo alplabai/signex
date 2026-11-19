@@ -39,14 +39,7 @@ impl SaveProfileDialog {
     }
 }
 
-/// What the rule editor's list shows (#1289): every rule, or only the rules
-/// that differ from the shipped profile, narrowed by a name filter. Each
-/// caller of the editor holds its own.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RuleListFilter {
-    pub changed_only: bool,
-    pub query: String,
-}
+pub use crate::app::core::rule_list_filter::RuleListFilter;
 
 /// Preferences ▸ Rule Profiles. Edits apply at once, like the ERC dialog's:
 /// each one is written to the profile's file, not held as a draft.
