@@ -104,13 +104,13 @@ impl Signex {
             ]
             .spacing(SP.m + SP.xs);
             if open {
-                block = block.push(choices.map(edit));
+                block = block.push(choices.map(edit).boxed());
             }
             col = col.push(block.boxed());
         } else {
-            col = col.push(choices.map(edit));
+            col = col.push(choices.map(edit).boxed());
         }
-        col = col.push(fields.map(edit));
+        col = col.push(fields.map(edit).boxed());
         let left =
             scrollable(container(col).padding([SP.xl + SP.s, SP.xl + SP.m])).width(Length::Fill);
         let body: Element<'a, Message> = match state.kind {
