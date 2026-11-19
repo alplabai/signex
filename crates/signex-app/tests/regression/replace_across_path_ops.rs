@@ -159,6 +159,8 @@ fn start_rename(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         buffer: "moved.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     app.update(Message::Rename(RenameMsg::Submit))
 }

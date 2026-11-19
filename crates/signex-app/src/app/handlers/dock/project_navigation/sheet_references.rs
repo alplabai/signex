@@ -601,6 +601,8 @@ mod tests {
             buffer: "renamed.snxsch".to_string(),
             error: None,
             is_project_rename: false,
+            placing_symbols: Vec::new(),
+            name_clash: None,
         });
         let _task = app.update(Message::Rename(RenameMsg::Submit));
 

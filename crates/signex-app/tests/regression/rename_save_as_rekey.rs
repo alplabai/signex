@@ -112,6 +112,8 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
         buffer: "PSU.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
@@ -197,6 +199,8 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         buffer: "R0402.snxfpt".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 

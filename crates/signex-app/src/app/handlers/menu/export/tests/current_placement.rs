@@ -338,6 +338,8 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
 
     crate::app::path_ops::settle(&mut app, Message::Rename(RenameMsg::Submit));

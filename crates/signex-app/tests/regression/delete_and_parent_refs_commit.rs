@@ -150,6 +150,8 @@ fn rename(f: &mut Fixture, name: &str, buffer: &str) {
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
 }
@@ -465,6 +467,8 @@ fn a_project_closed_during_the_rename_leaves_open_parents_matching_disk() {
         buffer: "Kid.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let task = f.app.update(Message::Rename(RenameMsg::Submit));
     f.app.document_state.projects.clear();

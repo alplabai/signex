@@ -123,6 +123,8 @@ fn rename(app: &mut Signex, target: &Path, buffer: &str) {
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let task = app.update(Message::Rename(RenameMsg::Submit));
     complete(app, task);
@@ -340,6 +342,8 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
         buffer: "Third.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let task = f.app.update(Message::Rename(RenameMsg::Submit));
     let mut messages = run(task);

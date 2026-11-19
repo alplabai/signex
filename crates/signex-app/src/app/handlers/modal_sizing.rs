@@ -10,6 +10,9 @@ use super::intro_wrap::{Wrapped, intro_growth, note_growth};
 
 /// The most a list area grows to before it scrolls, in logical pixels.
 pub(crate) const LIST_MAX_HEIGHT: f32 = 160.0;
+/// The most the Enable Version Control file list grows to before it
+/// scrolls, so the dialog fits a 768 px screen with its commit message field.
+pub(crate) const TRACK_LIST_MAX_HEIGHT: f32 = 180.0;
 /// Padding and border of the bordered list box around the rows
 /// (`dialog_list`: 2 x `Spacing::s` + 2 x 1 px).
 pub(crate) const LIST_BOX_CHROME: f32 = 10.0;
@@ -69,6 +72,68 @@ fn graphite_extra(modal: ModalId) -> f32 {
 
 fn list_height(rows: usize) -> f32 {
     (rows as f32 * ROW_HEIGHT).min(LIST_MAX_HEIGHT)
+}
+
+/// One line of body text and of caption text.
+fn body_line() -> f32 {
+    crate::styles::TypeScale::DEFAULT.body * crate::styles::LINE_HEIGHT
+}
+fn caption_line() -> f32 {
+    crate::styles::TypeScale::DEFAULT.caption * crate::styles::LINE_HEIGHT
+}
+/// A note under a dialog's field (callout or inline error) of `lines` body
+/// lines, with the gap above it; a callout adds its padding.
+fn note_block(lines: usize, padded: bool) -> f32 {
+    let pad = if padded { 2.0 * 7.0 } else { 0.0 };
+    crate::styles::Spacing::DEFAULT.l + pad + lines as f32 * body_line()
+}
+
+/// What the Rename dialog adds over the layout its base height was measured
+/// on (#23): the path under the title, the "New name" label, the wider gap
+/// above the field, then the placing-symbol note, the name clash and the
+/// handler's error when they show.
+fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
+    let sp = crate::styles::Spacing::DEFAULT;
+    let mut grow = caption_line() + sp.xs + 1.0 + body_line() + 4.0 + (sp.l - sp.m);
+    if !d.placing_symbols.is_empty() {
+        grow += note_block(2, true);
+    }
+    if d.name_clash.is_some() {
+        grow += note_block(1, false);
+    }
+    if let Some(error) = &d.error {
+        grow += note_block(wrapped_lines(error, 60), false);
+    }
+    grow
+}
+
+/// Window height of Enable Version Control (#26): the body padding, a
+/// three-line intro, the commit message field, the LFS option, Commit every
+/// save (project scope) and the legacy footer the Graphite extra replaces,
+/// then the file list (capped at [`TRACK_LIST_MAX_HEIGHT`]) or the scanning
+/// line, and the error.
+fn version_control_height(s: &crate::app::EnableVersionControlState) -> f32 {
+    let sp = crate::styles::Spacing::DEFAULT;
+    let title_line = crate::styles::TypeScale::DEFAULT.title * crate::styles::LINE_HEIGHT;
+    let intro = title_line + sp.xs + 1.0 + 3.0 * body_line();
+    let field = body_line() + 4.0 + crate::styles::ChromeMetrics::DEFAULT.field;
+    let option = body_line() + sp.xs + caption_line();
+    let mut height = sp.l + intro + sp.l + field + sp.l + option;
+    if s.scope == crate::app::VersionControlScope::Project {
+        // Its help runs to two caption lines.
+        height += sp.l + option + caption_line();
+    }
+    if s.scanning {
+        height += sp.l + caption_line();
+    } else if !s.items.is_empty() {
+        let rows = s.items.len() as f32;
+        let list = (rows * 30.0 + (rows - 1.0)).min(TRACK_LIST_MAX_HEIGHT) + 2.0;
+        height += sp.l + caption_line() + sp.s + 2.0 + list;
+    }
+    if let Some(error) = &s.error {
+        height += note_block(wrapped_lines(error, 80), false);
+    }
+    height + crate::styles::dialog_footer_height()
 }
 
 /// Rough wrapped line count of `text` at about `chars` characters per line.
@@ -210,6 +275,14 @@ impl Signex {
                             ((&title, &text), (&ref_title, &ref_text)),
                         )
                 }),
+            ModalId::RenameDialog => ui
+                .rename_dialog
+                .as_ref()
+                .map(|d| fixed.height + rename_growth(d)),
+            ModalId::EnableVersionControl => ui
+                .enable_version_control
+                .as_ref()
+                .map(version_control_height),
             _ => None,
         };
         let logical = height.map_or(fixed, |h| Size::new(fixed.width, h));

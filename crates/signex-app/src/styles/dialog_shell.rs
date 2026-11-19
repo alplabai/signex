@@ -30,16 +30,39 @@ pub enum DialogIcon {
     File,
     /// Options or preferences.
     Settings,
+    /// A Git repository (version control).
+    Git,
+    /// Something is deleted.
+    Trash,
+    /// An existing schematic sheet.
+    Sheet,
+    /// A schematic sheet about to be made.
+    NewSheet,
 }
 
 impl DialogIcon {
+    /// Every kind, in [`Self::index`] order.
+    pub const ALL: [Self; 10] = [
+        Self::Info,
+        Self::Warn,
+        Self::Error,
+        Self::Library,
+        Self::File,
+        Self::Settings,
+        Self::Git,
+        Self::Trash,
+        Self::Sheet,
+        Self::NewSheet,
+    ];
+
     /// Tone of the tile: its soft fill and its ink.
     pub fn tone(self) -> PillTone {
         match self {
             Self::Info | Self::File => PillTone::Info,
-            Self::Warn => PillTone::Warn,
+            Self::Warn | Self::Trash => PillTone::Warn,
             Self::Error => PillTone::Err,
-            Self::Library | Self::Settings => PillTone::Accent,
+            Self::Library | Self::Settings | Self::Git | Self::NewSheet => PillTone::Accent,
+            Self::Sheet => PillTone::Neutral,
         }
     }
 
@@ -52,6 +75,10 @@ impl DialogIcon {
             Self::Library => 3,
             Self::File => 4,
             Self::Settings => 5,
+            Self::Git => 6,
+            Self::Trash => 7,
+            Self::Sheet => 8,
+            Self::NewSheet => 9,
         }
     }
 
@@ -63,6 +90,10 @@ impl DialogIcon {
             Self::Library => GLYPH_LIBRARY,
             Self::File => GLYPH_FILE,
             Self::Settings => GLYPH_SETTINGS,
+            Self::Git => GLYPH_GIT,
+            Self::Trash => GLYPH_TRASH,
+            Self::Sheet => GLYPH_SHEET,
+            Self::NewSheet => GLYPH_NEW_SHEET,
         }
     }
 }
@@ -74,18 +105,14 @@ const GLYPH_LIBRARY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 const GLYPH_FILE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>"##;
 const GLYPH_SETTINGS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>"##;
 
-/// The six glyphs parsed once, in [`DialogIcon::index`] order.
-static GLYPHS: LazyLock<[svg::Handle; 6]> = LazyLock::new(|| {
-    [
-        DialogIcon::Info,
-        DialogIcon::Warn,
-        DialogIcon::Error,
-        DialogIcon::Library,
-        DialogIcon::File,
-        DialogIcon::Settings,
-    ]
-    .map(|icon| svg::Handle::from_memory(icon.glyph()))
-});
+const GLYPH_GIT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M18 9c0 5-12 3-12 8"/></svg>"##;
+const GLYPH_TRASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>"##;
+const GLYPH_SHEET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18H5z"/><path d="M8 8h3v3H8zM11 9.5h5M8 15h8"/></svg>"##;
+const GLYPH_NEW_SHEET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 21H5V3h14v9"/><path d="M8 8h3v3H8zM11 9.5h5M18 15v6M15 18h6"/></svg>"##;
+
+/// The glyphs parsed once, in [`DialogIcon::index`] order.
+static GLYPHS: LazyLock<[svg::Handle; 10]> =
+    LazyLock::new(|| DialogIcon::ALL.map(|icon| svg::Handle::from_memory(icon.glyph())));
 
 /// Side of the icon tile (28 px at the 11 px base).
 pub const DIALOG_ICON_TILE: f32 = chrome_px(28.0 * 11.0 / 12.0);
@@ -141,9 +168,22 @@ pub fn dialog_intro<'a, M: 'a>(
     secondary: Option<String>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
+    let ink3 = tokens::resolve(tokens).ink3;
+    let secondary = secondary
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| text(raw(s)).size(TS.body).color(ink3).boxed());
+    dialog_intro_with(icon, title, secondary, tokens)
+}
+
+/// [`dialog_intro`] with any element as the secondary line (a mono path, a
+/// line with a link). `None` leaves no gap under the title.
+pub fn dialog_intro_with<'a, M: 'a>(
+    icon: DialogIcon,
+    title: impl Into<String>,
+    secondary: Option<Element<'a, M>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
     let title = title.into();
-    let secondary = secondary.filter(|s| !s.trim().is_empty());
-    let r = tokens::resolve(tokens);
     let mut lines = column![
         text(raw(title))
             .size(TS.title)
@@ -153,7 +193,7 @@ pub fn dialog_intro<'a, M: 'a>(
     ]
     .spacing(TITLE_GAP);
     if let Some(s) = secondary {
-        lines = lines.push(text(raw(s)).size(TS.body).color(r.ink3).boxed());
+        lines = lines.push(s);
     }
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m + 2.0).align_y(Alignment::Start);
     line = line.push(dialog_icon_tile(icon, tokens));
@@ -166,14 +206,64 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const ALL: [DialogIcon; 6] = [
+    const ALL: [DialogIcon; 10] = [
         DialogIcon::Info,
         DialogIcon::Warn,
         DialogIcon::Error,
         DialogIcon::Library,
         DialogIcon::File,
         DialogIcon::Settings,
+        DialogIcon::Git,
+        DialogIcon::Trash,
+        DialogIcon::Sheet,
+        DialogIcon::NewSheet,
     ];
+
+    /// The parsed-glyph table is indexed by `index`: every kind sits at its
+    /// own slot, so no tile paints another kind's glyph.
+    #[test]
+    fn every_kind_sits_at_its_index_in_the_glyph_table() {
+        for (slot, icon) in DialogIcon::ALL.iter().enumerate() {
+            assert_eq!(icon.index(), slot, "{icon:?}");
+        }
+        for icon in ALL {
+            assert!(DialogIcon::ALL.contains(&icon), "{icon:?}");
+        }
+    }
+
+    /// Git and New Sheet are accent tiles, Trash a warn tile and Sheet the
+    /// neutral sunken tile with the secondary ink.
+    #[test]
+    fn the_project_dialog_kinds_take_their_tones() {
+        assert_eq!(DialogIcon::Git.tone(), PillTone::Accent);
+        assert_eq!(DialogIcon::NewSheet.tone(), PillTone::Accent);
+        assert_eq!(DialogIcon::Trash.tone(), PillTone::Warn);
+        assert_eq!(DialogIcon::Sheet.tone(), PillTone::Neutral);
+        for id in ThemeId::BUILTINS {
+            let t = signex_types::theme::theme_tokens(*id);
+            let r = tokens::resolve(&t);
+            assert_eq!(
+                pill_colors(&t, DialogIcon::Sheet.tone()),
+                (r.sunken, r.ink3)
+            );
+        }
+    }
+
+    #[test]
+    fn the_intro_takes_any_element_as_its_secondary_line() {
+        for id in ThemeId::BUILTINS {
+            let t = signex_types::theme::theme_tokens(*id);
+            for icon in ALL {
+                let path = text(signex_i18n::UserText::new(
+                    "D:/work/power.snxsch".to_string(),
+                ))
+                .size(TS.caption)
+                .boxed();
+                let _: Element<'_, ()> = dialog_intro_with(icon, "Title", Some(path), &t);
+                let _: Element<'_, ()> = dialog_intro_with(icon, "Title", None, &t);
+            }
+        }
+    }
 
     /// Every kind draws its own glyph on the soft fill of its tone, and the
     /// three status kinds use the three status tones.

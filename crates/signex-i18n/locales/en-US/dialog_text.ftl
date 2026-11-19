@@ -142,10 +142,47 @@ dialog-rename-file-title = Rename File
 dialog-rename-project-prompt = Rename project "{ $name }"
 # $name is the file's current name.
 dialog-rename-file-prompt = Rename "{ $name }"
+dialog-rename-new-name = New name
+# $name is the new file name another file in the folder already has.
+dialog-rename-name-taken = A file named { $name } already exists.
+# The sheet symbols that place the file being renamed; the rename re-points
+# them. $count is how many there are; $symbol and $sheet name the first symbol
+# and the sheet it sits on; $symbols lists every symbol as "name (sheet)".
+dialog-rename-placed-by =
+    { $count ->
+        [one] Sheet symbol { $symbol } on { $sheet } points at this file and is updated too.
+       *[other] Sheet symbols { $symbols } point at this file and are updated too.
+    }
 # $name is the project's name.
 dialog-version-control-project = Project: { $name }
 # $name is the library's name.
 dialog-version-control-library = Library: { $name }
+# $path is the folder that gets the repository. $every is "on" while Commit
+# every save is on.
+dialog-version-control-intro-project =
+    { $every ->
+        [on] Creates a Git repository in { $path } and commits the ticked files as the first version. Every save after that is committed, including library edits inside the project's .snxlib folders.
+       *[off] Creates a Git repository in { $path } and commits the ticked files as the first version. Saves are not committed while Commit every save is off.
+    }
+# $path is the library folder that gets the repository.
+dialog-version-control-intro-library = Creates a Git repository in { $path } and commits the ticked files as the first version. Later edits to the library are committed too.
+# $ticked rows of $total are ticked; the second form leads into "Select all".
+dialog-version-control-ticked = { $ticked } of { $total } ticked
+dialog-version-control-ticked-more = { $ticked } of { $total } ticked ·
+dialog-version-control-select-all = Select all
+dialog-version-control-commit-message = First commit message
+# $name is the project's or library's name.
+dialog-version-control-commit-message-default = Initial version of { $name }
+dialog-version-control-commit-every-save = Commit every save
+dialog-version-control-commit-every-save-help = Each save of a project file is committed. Turned off, saves are not committed; the repository and its history stay as they are.
+# What a row of the file list is.
+dialog-version-control-kind-project = Project
+dialog-version-control-kind-schematic = Schematic
+dialog-version-control-kind-pcb = PCB
+dialog-version-control-kind-library = Library
+dialog-version-control-kind-config = Config
+dialog-version-control-kind-components = Components
+dialog-version-control-kind-folder = Folder
 dialog-grid-title = Cartesian Grid Editor [mm]
 dialog-grid-intro = Grid step and display
 dialog-selection-filter-title = Selection Filter — Customize

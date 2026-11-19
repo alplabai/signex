@@ -10,6 +10,8 @@ use crate::app::state::scope::CaseFold;
 use signex_i18n::RenderTranslatable;
 
 impl Signex {
+    /// Open the rename modal for a tree row. Its name field is focused once
+    /// the dialog's window opens ([`Self::focus_rename_field_once_open`]).
     pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         if self.refuse_on_missing_child(&tree_path, "Rename", false) {
             return;
@@ -26,6 +28,7 @@ impl Signex {
             .unwrap_or("")
             .to_string();
         let project_id = self.project_id_at_tree_path(&tree_path);
+        let placing_symbols = self.own_project_placing_symbols(&target_path, project_id);
         self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
             target_path,
             tree_path,
@@ -33,7 +36,118 @@ impl Signex {
             buffer: filename,
             error: None,
             is_project_rename: false,
+            placing_symbols,
+            name_clash: None,
         });
+    }
+
+    /// The Rename field has focus and its text selected once the dialog's
+    /// own window exists; a focus asked for at open time has no window yet.
+    pub(crate) fn focus_rename_field_once_open(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> iced::Task<Message> {
+        if modal != crate::app::state::ModalId::RenameDialog
+            || self.ui_state.rename_dialog.is_none()
+        {
+            return iced::Task::none();
+        }
+        use iced::widget::operation;
+        let id = &crate::app::contracts::RENAME_INPUT_ID;
+        iced::Task::batch([
+            operation::focus(id.clone()),
+            operation::text_input::select_all(id.clone()),
+        ])
+    }
+
+    /// The sheet symbols of `owner`'s own project that place `target`: the
+    /// ones a file rename re-points (`sheet_references`). Read from the Model
+    /// (the walked hierarchies and the open sheets), no disk. Only a
+    /// schematic sheet can be placed.
+    pub(crate) fn own_project_placing_symbols(
+        &self,
+        target: &std::path::Path,
+        owner: Option<crate::app::state::ProjectId>,
+    ) -> Vec<crate::app::path_ops::PlacingSymbol> {
+        let Some(owner) = owner else {
+            return Vec::new();
+        };
+        if !crate::app::file_extension::has_extension(target, "snxsch") {
+            return Vec::new();
+        }
+        let elsewhere = self.sheet_users(target, Some(owner)).symbols;
+        self.sheet_users(target, None)
+            .symbols
+            .into_iter()
+            .filter(|s| !elsewhere.contains(s))
+            .collect()
+    }
+
+    /// The Rename field changed: keep the text, clear the last refusal and
+    /// check the new name against the files the Model knows.
+    pub(crate) fn handle_rename_buffer_changed(&mut self, buffer: String) {
+        let Some(dialog) = self.ui_state.rename_dialog.as_mut() else {
+            return;
+        };
+        dialog.buffer = buffer;
+        dialog.error = None;
+        let clash = self
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .and_then(|d| self.rename_name_clash(d));
+        if let Some(dialog) = self.ui_state.rename_dialog.as_mut() {
+            dialog.name_clash = clash;
+        }
+    }
+
+    /// The new name of a file rename, when another file the Model knows sits
+    /// in the same folder under it: a project's file, sheet, board or
+    /// library, or an open tab. Compared under the project's case rules; the
+    /// file itself (a case-only rename) is no clash. A file only on disk is
+    /// left to the worker, which refuses to overwrite it.
+    pub(crate) fn rename_name_clash(
+        &self,
+        dialog: &crate::app::RenameDialogState,
+    ) -> Option<String> {
+        use crate::app::project_sheets::lexically_normalize;
+        use crate::app::state::scope::path_key_with;
+        if dialog.is_project_rename {
+            return None;
+        }
+        let name = dialog.buffer.trim();
+        if name.is_empty() || name.contains(['/', '\\']) {
+            return None;
+        }
+        let candidate = dialog.target_path.parent()?.join(name);
+        let ds = &self.document_state;
+        let owner = dialog
+            .project_id
+            .and_then(|id| ds.project_by_id(id))
+            .or_else(|| ds.projects.get(*dialog.tree_path.first()?));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        let key = |p: &std::path::Path| path_key_with(&lexically_normalize(p), fold);
+        let wanted = key(&candidate);
+        if wanted == key(&dialog.target_path) {
+            return None;
+        }
+        let mut known: Vec<std::path::PathBuf> = Vec::new();
+        for project in &ds.projects {
+            let dir = project.dir();
+            known.push(project.path.clone());
+            known.extend(project.data.sheets.iter().map(|s| dir.join(&s.filename)));
+            known.extend(project.data.pcb_file.iter().map(|pcb| dir.join(pcb)));
+            for entry in &project.data.libraries {
+                let library = project.data.resolve_library_path(entry);
+                known.extend(library.parent().map(std::path::Path::to_path_buf));
+                known.push(library);
+            }
+        }
+        known.extend(ds.tabs.iter().map(|tab| tab.path.clone()));
+        known
+            .iter()
+            .any(|p| key(p) == wanted)
+            .then(|| name.to_string())
     }
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
@@ -59,6 +173,8 @@ impl Signex {
             buffer: stem,
             error: None,
             is_project_rename: true,
+            placing_symbols: Vec::new(),
+            name_clash: None,
         });
     }
 
@@ -66,6 +182,11 @@ impl Signex {
         let Some(mut state) = self.ui_state.rename_dialog.clone() else {
             return iced::Task::none();
         };
+        // The name is taken by a file the Model knows: the dialog already says
+        // so and withholds Rename; Enter in the field is refused the same way.
+        if state.name_clash.is_some() {
+            return iced::Task::none();
+        }
         if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} cancelled: its project was closed while the dialog was open.",
@@ -395,3 +516,7 @@ impl Signex {
         crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
 }
+
+#[cfg(test)]
+#[path = "rename_dialog_tests.rs"]
+mod rename_dialog_tests;

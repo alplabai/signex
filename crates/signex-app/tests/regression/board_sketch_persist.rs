@@ -349,6 +349,8 @@ fn a_renamed_board_keeps_its_sketch() {
         buffer: "renamed.snxpcb".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
     assert!(renamed.exists(), "the file moved");

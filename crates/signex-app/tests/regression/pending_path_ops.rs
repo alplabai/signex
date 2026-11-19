@@ -139,6 +139,8 @@ fn open_rename_dialog(app: &mut Signex, target: &Path, buffer: &str) {
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
 }
 

@@ -682,24 +682,12 @@ impl Signex {
         msg: EnableVersionControlMsg,
     ) -> Task<Message> {
         match msg {
-            // A run in flight has already read the choices; edits are ignored.
-            EnableVersionControlMsg::ToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                {
-                    s.use_lfs = !s.use_lfs;
-                }
-                Task::none()
-            }
-            EnableVersionControlMsg::ToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                    && let Some(item) = s.items.get_mut(idx)
-                {
-                    item.tracked = !item.tracked;
-                }
+            edit @ (EnableVersionControlMsg::ToggleLfs
+            | EnableVersionControlMsg::ToggleItem(_)
+            | EnableVersionControlMsg::AllTicked
+            | EnableVersionControlMsg::CommitMessageChanged(_)
+            | EnableVersionControlMsg::CommitEverySaveToggled) => {
+                self.edit_enable_version_control(edit);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
@@ -729,10 +717,7 @@ impl Signex {
     pub(crate) fn dispatch_rename_message(&mut self, msg: RenameMsg) -> Task<Message> {
         match msg {
             RenameMsg::BufferChanged(s) => {
-                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
-                    d.buffer = s;
-                    d.error = None;
-                }
+                self.handle_rename_buffer_changed(s);
                 Task::none()
             }
             RenameMsg::Submit => self.handle_rename_submit(),

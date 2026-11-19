@@ -433,6 +433,7 @@ impl Signex {
                 // foreground grab from a background process).
                 Task::batch([
                     self.focus_new_project_name_once_open(modal),
+                    self.focus_rename_field_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),

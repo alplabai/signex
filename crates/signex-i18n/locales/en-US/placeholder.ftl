@@ -30,8 +30,6 @@ placeholder-color-channel = 0
 placeholder-pdf-page = 1
 # Rename: an example project name, written without spaces.
 placeholder-rename-project = new-project-name
-# Rename: an example sheet file name.
-placeholder-rename-file = new-name.snxsch
 # Grid Properties: the grid step in millimetres.
 placeholder-grid-step = 0.127
 # New child sheet: an example file name.

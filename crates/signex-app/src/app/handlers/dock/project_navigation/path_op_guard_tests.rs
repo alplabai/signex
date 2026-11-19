@@ -44,6 +44,8 @@ fn file_rename_dialog_for(fx: &Fixture, new_name: &str) -> RenameDialogState {
         buffer: new_name.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     }
 }
 

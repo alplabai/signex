@@ -133,6 +133,8 @@ fn reopen_dialog_for_another_file(fx: &mut Fixture, other: &Path) {
         buffer: "half_typed".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
 }
 

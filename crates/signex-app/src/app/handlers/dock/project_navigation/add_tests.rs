@@ -388,6 +388,8 @@ fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
         buffer: "Renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let _rename = fx.app.update(Message::Rename(RenameMsg::Submit));
     assert!(rename_error(&fx).contains("updates the project's files"));

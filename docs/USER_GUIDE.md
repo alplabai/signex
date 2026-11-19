@@ -137,6 +137,20 @@ that cannot be fully read is refused too. Such a repository would commit
 every file in the folder. Move the project into its own folder first. A
 project that already lives in a shared folder still opens normally.
 
+The dialog lists the project's files and library folders, all ticked; untick
+one to keep it out of the repository (it goes into `.gitignore`), or click
+**Select all** to tick every row again. **First commit message** is the
+subject of the repository's first commit, "Initial version of" and the
+project's name until you change it; **Enable** waits while it is blank.
+**Commit every save** (on by default) commits each later save of a project
+file. Turn it off to create the repository without that: saves are then not
+committed until you turn it on in the Project tab's Version control section.
+
+**Rename** shows the file's name without its extension, which stays as it is.
+Renaming a sheet that sheet symbols of the same project place says so, and
+those symbols are pointed at the new name. A name another file of the folder
+already has is shown at once, and **Rename** waits for a different one.
+
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 > **Sample project.** **Help ▸ Open Sample Project** (or the button on the
