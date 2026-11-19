@@ -4,8 +4,8 @@
 use super::is_planned;
 
 /// Whether `action` needs at least one selected item to make sense.
-/// Transform / align / distribute family — Altium greys these out when
-/// the selection is empty. Net-colour picks are excluded because the
+/// Transform / align / distribute family — greyed while the selection is
+/// empty. Net-colour picks are excluded because the
 /// NetColor flow is "arm-then-apply", not "act on selection".
 pub fn requires_selection(action: &ActiveBarAction) -> bool {
     use ActiveBarAction::*;
