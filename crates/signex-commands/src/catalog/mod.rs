@@ -213,8 +213,9 @@ pub enum KeyRepeat {
     /// Every repeat runs it again: a nudge, an arrow, a zoom step, undo.
     #[default]
     Runs,
-    /// A held key runs it once: a cycle or toggle would otherwise spin
-    /// through its states while the key is down (Hakan, 2026-11-19).
+    /// A held key runs it once: a cycle, toggle or flip would otherwise spin
+    /// through its states while the key is down. See `docs/DECISIONS.md`,
+    /// "Held keys".
     Ignored,
 }
 

@@ -96,11 +96,11 @@ rotate_selection	modify	Rotate selection counter-clockwise	Rotate Selection Coun
 rotate_selection_cw	modify	Rotate selection clockwise	Rotate Selection Clockwise	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_clockwise	modify	Rotate clockwise by 90 degrees	Rotate Clockwise	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
-flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
-flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
+flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schematic	-	-	RequiresSelection	mutates_doc,undoable,no_key_repeat	-
+flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable,no_key_repeat	-
 mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutates_doc,undoable	-
 mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutates_doc,undoable	-
-flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable,no_key_repeat	-
 set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,at:point/mm,document:document?
 set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,document:document?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?

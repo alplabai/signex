@@ -1,6 +1,8 @@
 //! Transform commands: drag, move, rotate, flip and mirror the selection.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, KeyRepeat, operands,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const TRANSFORM: &[CommandMetadata] = &[
@@ -112,6 +114,7 @@ pub(super) const TRANSFORM: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -122,6 +125,7 @@ pub(super) const TRANSFORM: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -154,6 +158,7 @@ pub(super) const TRANSFORM: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2418: the Properties rows of a placed object. Each runs from its
