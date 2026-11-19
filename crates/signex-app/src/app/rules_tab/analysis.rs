@@ -108,6 +108,7 @@ impl Signex {
             analysis.shown_key = Some(shown_key);
         }
         self.rules_tab_mut(id).analysis = Some(analysis);
+        self.sync_rules_matrix(id);
     }
 
     fn rules_analysis_key(&self, id: ProjectId) -> Option<AnalysisKey> {

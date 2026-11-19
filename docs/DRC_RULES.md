@@ -284,11 +284,14 @@ same undo step.
   and how each rule of that limit fared (applies, a more specific rule
   applies, an equally specific stricter rule applies, other nets, layers or
   objects).
-- **Text view.** The same rules as text, with what the compiler says about the
-  text as typed; Apply stores it as one undo step, Discard drops what was
-  typed. While typed text is not applied, Undo, Redo and the switch back to
-  the table wait and the tab says so; a text view nobody typed in follows the
-  stored rules.
+- **Text view.** The same rules as text in a code field with line numbers and
+  keyword colours. A line the compiler rejects is washed red with the bad span
+  in the error ink, and each problem is a banner under the field ("Line 9,
+  column 32: ..."); clean text shows "No problems in the text." in green.
+  Apply stores the text as one undo step and is off while the text has an
+  error; Discard drops what was typed. While typed text is not applied, Undo,
+  Redo and the switch back to the table wait and the tab says so; a text view
+  nobody typed in follows the stored rules.
 - **Search and filter.** By name, scope, layer or message; All, With
   violations, Flagged, Off.
 
@@ -332,11 +335,19 @@ else the setup and class clearances), or with no board open the larger of
 the two class clearances, or "board setup". A cell below what a class asks
 is applied and flagged as lowering that class, as any rule is.
 
-Clicking a cell types in it (Enter stores it; an empty value removes the
-rule, so the cell falls back) and opens its object sub-grid: the whole cell,
-then one cell per object pair (track-track, track-pad, track-via, pad-pad,
-pad-via, via-via), each the same rule narrowed with `between`, each with
-Clear. Every cell edit is one undo step.
+Only the lower triangle is live; the mirror half is inert, and a pair named
+in either order is the same cell. Clicking a cell types in it (Enter stores
+it; a bare number is in mm; an empty value removes the rule, so the cell
+falls back), keeps the accent ring and opens its object pairs in a card
+beside the matrix: All objects (the whole cell), then one row per object
+pair (track-track, track-pad, track-via, pad-pad, pad-via, via-via), each
+the same rule narrowed with `between`. An empty object-pair row shows the
+All objects value it falls back to; ↺ on a written row clears it. Every
+cell edit is one undo step.
+
+The preview row under them follows the hovered cell or object pair, else
+the clicked one (the pin). A value typed on the preview drawing writes the
+pinned cell or object-pair row, as one undo step.
 
 Differential-pair classes are not in the matrix yet: there is no
 differential-pair class to name.
@@ -371,9 +382,12 @@ tier merges seven board-wide rules, `fab_clearance`, `fab_track`, `fab_via`,
 `fab_hole`, `fab_edge`, `fab_mask` and `fab_silk`, into the text by name: a
 rule of that name is replaced, the rest stay. A profile replaces the
 project's DRC rules (text, severity entries and rule sets) as "Update from
-profile" does. Picking one lists the rules it adds, changes and removes
-(spacing alone is not a change) and the other lines; Apply stores it as one
-undo step, and is refused when the rules changed since the list was made.
+profile" does. Each tier is a card with its clearance, width, drill and
+annular minimums, read from the tier table (`FabTemplate::capabilities`).
+Picking one gives it the accent and lists the rules it adds, changes and
+removes (spacing alone is not a change), each with its limits old → new,
+and the other lines; Apply in that card stores it as one undo step, and is
+refused when the rules changed since the list was made.
 
 ## Fab profiles
 
