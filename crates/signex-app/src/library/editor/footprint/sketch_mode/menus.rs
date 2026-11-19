@@ -23,8 +23,11 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     }
 }
 
-/// The Create rows, in menu order: label, tool, icon.
-const CREATE_ROWS: [(MessageId, SketchTool, fn(ThemeId) -> Handle); 8] = [
+/// One Create row: label, tool, icon.
+type CreateRow = (MessageId, SketchTool, fn(ThemeId) -> Handle);
+
+/// The Create rows, in menu order.
+const CREATE_ROWS: [CreateRow; 8] = [
     (
         ids::EDITORS_SKETCH_TOOL_LINE,
         SketchTool::Line,

@@ -9,7 +9,7 @@ use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES, S
 use signex_types::schematic::{SheetOrientation, SheetSize};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::{PickListPlaceholder as _, button, text, text_input};
 
 use super::{SP, TS, labelled_row};
 use crate::app::new_project::{NewProjectMsg, NewProjectState, RULE_FIELDS};
@@ -254,7 +254,7 @@ fn fab_tier<'a>(
     let current = options.iter().find(|o| Some(o.value) == shown).cloned();
     let picker = pick_list(current, options, |o: &Opt<FabTemplate>| o.label.clone())
         .graphite()
-        .placeholder(t!(i18n, ids::DIALOG_NEW_PROJECT_PROFILE_CUSTOM_NAME).into_string())
+        .placeholder_label(t!(i18n, ids::DIALOG_NEW_PROJECT_PROFILE_CUSTOM_NAME))
         .on_select(|o: Opt<FabTemplate>| NewProjectMsg::FabPicked(o.value))
         .on_open(NewProjectMsg::DropdownToggled(true))
         .on_close(NewProjectMsg::DropdownToggled(false))
