@@ -58,11 +58,12 @@ pub const MAX_EXPR_DEPTH: usize = 64;
 pub const MAX_EXPR_CHAIN: usize = 256;
 
 /// Deepest tree the evaluator walks in one evaluation, counted across every
-/// reference it follows. One parsed tree is at most `MAX_EXPR_CHAIN +
-/// MAX_EXPR_DEPTH` levels deep, so an expression at the caps that names a
-/// body at the caps still evaluates; a longer chain of such bodies runs out
-/// of budget with [`ExprError::TooDeep`] instead of overflowing the stack.
-pub const MAX_EVAL_DEPTH: usize = 2 * (MAX_EXPR_CHAIN + MAX_EXPR_DEPTH);
+/// reference it follows. An expression at the chain cap that names a body at
+/// the chain cap still evaluates; a longer chain of such bodies runs out of
+/// budget with [`ExprError::TooDeep`] instead of overflowing the stack. The
+/// budget is sized to fit a 1 MiB thread stack in a debug build (the Windows
+/// main thread); twice the full tree depth did not.
+pub const MAX_EVAL_DEPTH: usize = 2 * MAX_EXPR_CHAIN + MAX_EXPR_DEPTH / 2;
 
 /// Longest expression source, in bytes, the parser accepts.
 pub const MAX_EXPR_LEN: usize = 4096;
