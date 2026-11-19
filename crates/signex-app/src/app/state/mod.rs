@@ -41,6 +41,7 @@ pub(crate) mod pcb_edit;
 pub(crate) mod pcb_query;
 mod pcb_ratsnest;
 mod pcb_revision;
+mod pdf_dialog;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 mod placement;
@@ -73,6 +74,7 @@ pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
+pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -783,17 +785,8 @@ pub struct ColumnResizeState {
     pub start_width: f32,
 }
 
-/// Tabs inside the unified Export PDF modal — Preview is the
-/// rasterised page view, Settings is the multi-section configuration
-/// panel (file picker, additional settings, structure settings).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PdfPreviewTab {
-    Preview,
-    Settings,
-}
-
-/// Output PDF resolution preset — Altium parity. Drives the Quality
-/// dropdown in the Settings tab. The export pipeline is vector-only
+/// Output PDF resolution preset. Drives the Quality dropdown in the
+/// Export PDF dialog's Output section. The export pipeline is vector-only
 /// today, so DPI only affects the *preview* rasterisation: a higher
 /// preset gives a sharper preview when you zoom in. The mapped DPI
 /// for the export-side `PdfOptions.dpi` is the picker label (72/300/
@@ -848,8 +841,9 @@ impl PdfQuality {
 /// `signex_output::PdfOptions` lives ONLY on `pdf_options`; the
 /// dispatcher mutates that struct directly so the rasterizer and
 /// exporter see one consistent view. Fields on this struct itself are
-/// the leftovers — UI presentation (active tab, quality enum), the
-/// rasterised pages, and pan/zoom interaction state.
+/// the leftovers — UI presentation (folded sections, quality enum, the
+/// Watermark and PDF Layers switches), the rasterised pages, and pan/zoom
+/// interaction state.
 pub struct PreviewState {
     /// The document the preview was built for; Export writes this one even if
     /// the user has switched tabs since (#852).
@@ -872,8 +866,8 @@ pub struct PreviewState {
     /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
     /// wheel bursts can't blow the image up to gigabytes.
     pub zoom: f32,
-    /// Currently-shown tab inside the Export PDF modal.
-    pub active_tab: PdfPreviewTab,
+    /// Folded settings sections and the Watermark / PDF Layers switches.
+    pub dialog: PdfDialogState,
     /// Pan offset in logical pixels — added to the image origin so the
     /// user can drag a zoomed-in page around the viewport. Reset to
     /// (0, 0) when zoom ≤ 1 (no pan needed) and on page change.

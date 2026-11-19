@@ -538,8 +538,29 @@ impl Signex {
                 let task = self.handle_print_preview_close();
                 iced::Task::batch([task, self.finish_update()])
             }
-            PrintPreviewMsg::SetTab(tab) => {
-                self.handle_print_preview_set_tab(tab);
+            PrintPreviewMsg::SectionToggled(section) => {
+                self.handle_print_preview_section_toggled(section);
+                self.finish_update()
+            }
+            PrintPreviewMsg::ZoomFitPressed => {
+                self.handle_print_preview_zoom_fit();
+                self.finish_update()
+            }
+            // Watermark, PDF Layers and Bookmarks (#1298): no re-render, the
+            // preview draws the watermark over the page.
+            msg @ (PrintPreviewMsg::WatermarkToggled(..)
+            | PrintPreviewMsg::WatermarkPresetPicked(..)
+            | PrintPreviewMsg::WatermarkTextChanged(..)
+            | PrintPreviewMsg::WatermarkOpacityChanged(..)
+            | PrintPreviewMsg::WatermarkAngleChanged(..)
+            | PrintPreviewMsg::WatermarkPagesPicked(..)
+            | PrintPreviewMsg::WatermarkRevisionToggled(..)
+            | PrintPreviewMsg::PdfLayersToggled(..)
+            | PrintPreviewMsg::PdfLayerVisibilityToggled(..)
+            | PrintPreviewMsg::BookmarkSheetsToggled(..)
+            | PrintPreviewMsg::BookmarkPartsToggled(..)
+            | PrintPreviewMsg::PartBookmarkOrderPicked(..)) => {
+                self.handle_print_preview_pdf_option(msg);
                 self.finish_update()
             }
             PrintPreviewMsg::PanStart => {
