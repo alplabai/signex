@@ -84,7 +84,8 @@ pub(super) fn numeric_field<'a>(
         text(t!(i18n, unit_words(field)))
             .size(TS.label)
             .font(mono_font())
-            .color(r.ink4),
+            .color(r.ink4)
+            .boxed(),
     );
     let field_box = container(inside)
         .padding([SP.s, SP.m])
