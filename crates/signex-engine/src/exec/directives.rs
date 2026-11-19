@@ -11,15 +11,30 @@ use signex_types::schematic::SchDirective;
 /// field run.
 const DIRECTIVE_RUN_KEY: &str = "directive";
 
-/// Whether `directive` has finite points and, for a region, two corners
-/// that span an area.
+/// Whether `directive` has finite points and values and, for a region, two
+/// corners that span an area.
 fn is_valid(directive: &SchDirective) -> bool {
     let finite = |p: &signex_types::schematic::Point| p.x.is_finite() && p.y.is_finite();
     match directive {
-        SchDirective::Blanket { start, end, .. } | SchDirective::CompileMask { start, end, .. } => {
+        SchDirective::Blanket {
+            start,
+            end,
+            track_width,
+            ..
+        } => {
+            finite(start)
+                && finite(end)
+                && start.x != end.x
+                && start.y != end.y
+                && track_width.is_none_or(f64::is_finite)
+        }
+        SchDirective::CompileMask { start, end, .. } => {
             finite(start) && finite(end) && start.x != end.x && start.y != end.y
         }
         SchDirective::DiffPair { position, .. } => finite(position),
+        SchDirective::NetParameters {
+            position, rules, ..
+        } => finite(position) && rules.is_finite(),
     }
 }
 
@@ -114,6 +129,7 @@ impl Engine {
         let at = |p: &signex_types::schematic::Point| {
             format!("{:.2}, {:.2}", p.x, self.document.page_y(p.y))
         };
+        let mm = |v: &Option<f64>| v.map(|v| format!("{v:.2}")).unwrap_or_default();
         let mut info = Vec::new();
         match directive {
             SchDirective::Blanket {
@@ -121,6 +137,9 @@ impl Engine {
                 end,
                 net_class,
                 erc_exclusions,
+                track_width,
+                pour,
+                include_edge_nets,
                 ..
             } => {
                 info.push(("Type".into(), "Blanket".into()));
@@ -128,15 +147,55 @@ impl Engine {
                 info.push(("End".into(), at(end)));
                 info.push(("Net Class".into(), net_class.clone().unwrap_or_default()));
                 info.push(("ERC Exclusions".into(), erc_exclusions.join(", ")));
+                info.push(("Track Width".into(), mm(track_width)));
+                let pour = if pour.is_normal() {
+                    "Normal"
+                } else {
+                    "Keep Short"
+                };
+                info.push(("Pour".into(), pour.into()));
+                info.push(("Include Edge Nets".into(), include_edge_nets.to_string()));
             }
             SchDirective::CompileMask { start, end, .. } => {
                 info.push(("Type".into(), "Compile Mask".into()));
                 info.push(("Start".into(), at(start)));
                 info.push(("End".into(), at(end)));
             }
-            SchDirective::DiffPair { position, .. } => {
+            SchDirective::DiffPair {
+                position, class, ..
+            } => {
                 info.push(("Type".into(), "Differential Pair".into()));
                 info.push(("Position".into(), at(position)));
+                info.push(("Class".into(), class.clone().unwrap_or_default()));
+            }
+            SchDirective::NetParameters {
+                position,
+                net_class,
+                diff_pair_class,
+                rules,
+                show_on_flag,
+                ..
+            } => {
+                info.push(("Type".into(), "Net Parameters".into()));
+                info.push(("Position".into(), at(position)));
+                let netlist = signex_net::build_netlist(&self.document);
+                let net = signex_net::net_parameters(&self.document, &netlist)
+                    .into_iter()
+                    .find(|on| on.directive == id)
+                    .map(|on| on.net_name)
+                    .unwrap_or_default();
+                info.push(("Net".into(), net));
+                info.push(("Net Class".into(), net_class.clone().unwrap_or_default()));
+                info.push((
+                    "Diff Pair Class".into(),
+                    diff_pair_class.clone().unwrap_or_default(),
+                ));
+                info.push(("Width".into(), mm(&rules.width_mm)));
+                info.push(("Clearance".into(), mm(&rules.clearance_mm)));
+                info.push(("Via Diameter".into(), mm(&rules.via_diameter_mm)));
+                info.push(("Via Hole".into(), mm(&rules.via_hole_mm)));
+                info.push(("Current".into(), mm(&rules.current_a)));
+                info.push(("Show On Flag".into(), show_on_flag.to_string()));
             }
         }
         Some(info)

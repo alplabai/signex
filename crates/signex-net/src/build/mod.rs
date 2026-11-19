@@ -771,7 +771,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     dedup_net_names(&mut nets);
 
     let mut netlist = Netlist { nets };
-    crate::directives::apply_blanket_classes(sheet, &mut netlist);
+    crate::directives::apply_directive_classes(sheet, &mut netlist);
     netlist
 }
 

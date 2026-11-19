@@ -534,6 +534,7 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
             }),
     );
 
+    crate::directives::apply_project_classes(graph.sheets, &mut nets);
     let reports = names::collect_reports(multi, pinless, &nets);
     Stitched {
         netlist: ProjectNetlist {

@@ -6,20 +6,11 @@ use super::*;
 use signex_types::schematic::SchDirective;
 
 fn blanket() -> SchDirective {
-    SchDirective::Blanket {
-        uuid: uuid::Uuid::from_u128(1),
-        start: Point::new(10.0, 10.0),
-        end: Point::new(50.0, 40.0),
-        net_class: None,
-        erc_exclusions: Vec::new(),
-    }
+    SchDirective::Blanket { uuid: uuid::Uuid::from_u128(1), start: Point::new(10.0, 10.0), end: Point::new(50.0, 40.0), net_class: None, erc_exclusions: Vec::new(), track_width: None, pour: signex_types::schematic::BlanketPour::Normal, include_edge_nets: false }
 }
 
 fn diff_pair() -> SchDirective {
-    SchDirective::DiffPair {
-        uuid: uuid::Uuid::from_u128(2),
-        position: Point::new(70.0, 70.0),
-    }
+    SchDirective::DiffPair { uuid: uuid::Uuid::from_u128(2), position: Point::new(70.0, 70.0), class: None }
 }
 
 fn sheet() -> SchematicRenderSnapshot {

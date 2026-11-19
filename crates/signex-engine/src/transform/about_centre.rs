@@ -128,6 +128,7 @@ fn directive_points(d: &signex_types::schematic::SchDirective) -> Vec<Point> {
             vec![*start, *end]
         }
         SchDirective::DiffPair { position, .. } => vec![*position],
+        SchDirective::NetParameters { position, .. } => vec![*position],
     }
 }
 
