@@ -8,6 +8,7 @@
 
 mod analysis;
 mod commands;
+mod drawing;
 mod json;
 mod matrix;
 mod open;
