@@ -148,8 +148,19 @@ dialog-version-control-project = Project: { $name }
 dialog-version-control-library = Library: { $name }
 dialog-grid-title = Cartesian Grid Editor [mm]
 dialog-grid-intro = Grid step and display
-dialog-selection-filter-title = Selection Filter — Customize
+dialog-selection-filter-title = Selection Filter
 dialog-selection-filter-intro = Selectable kinds
+# Subtitle beside the title of the Custom Selection Filter dialog.
+dialog-selection-filter-subtitle = Customize
+# Buttons that turn every kind on or off.
+dialog-selection-filter-all = All
+dialog-selection-filter-none = None
+# Pill on a kind the canvas does not filter by yet.
+dialog-selection-filter-not-wired = not wired
+# Name the filter is saved under as a preset.
+dialog-selection-filter-preset-name = Preset name
+# Footer count. $count and $total are whole numbers.
+dialog-selection-filter-selectable = { $count } of { $total } selectable
 
 ## Move Selection
 # $count is how many objects are selected, a whole number. The English keeps

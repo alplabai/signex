@@ -445,6 +445,10 @@ pub enum SelectionFilterMsg {
     /// Writes the draft into the active footprint editor's
     /// `state.selection_filter` then closes.
     ApplyCustom,
+    /// All (`true`) or None (`false`) was pressed: every shown kind follows.
+    CustomKindsAllSet(bool),
+    /// The Preset name field was edited.
+    CustomPresetNameEdited(String),
 }
 
 /// File / save message family (ADR-0001 D3). Namespaced under

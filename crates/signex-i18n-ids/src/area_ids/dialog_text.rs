@@ -66,6 +66,12 @@ define_ids! {
     DIALOG_GRID_INTRO = "dialog-grid-intro";
     DIALOG_SELECTION_FILTER_TITLE = "dialog-selection-filter-title";
     DIALOG_SELECTION_FILTER_INTRO = "dialog-selection-filter-intro";
+    DIALOG_SELECTION_FILTER_SUBTITLE = "dialog-selection-filter-subtitle";
+    DIALOG_SELECTION_FILTER_ALL = "dialog-selection-filter-all";
+    DIALOG_SELECTION_FILTER_NONE = "dialog-selection-filter-none";
+    DIALOG_SELECTION_FILTER_NOT_WIRED = "dialog-selection-filter-not-wired";
+    DIALOG_SELECTION_FILTER_PRESET_NAME = "dialog-selection-filter-preset-name";
+    DIALOG_SELECTION_FILTER_SELECTABLE = "dialog-selection-filter-selectable";
     DIALOG_MOVE_SELECTION_COUNT = "dialog-move-selection-count";
     DIALOG_MOVE_SELECTION_DX = "dialog-move-selection-dx";
     DIALOG_MOVE_SELECTION_DY = "dialog-move-selection-dy";
