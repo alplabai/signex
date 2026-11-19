@@ -704,3 +704,8 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #145 / #2509 — Preferences ▸ Keyboard shortcuts page: context chips, the
+// conflict banner's Show, Delete on a built-in profile.
+#[path = "regression/preferences_keymap_page.rs"]
+mod preferences_keymap_page;
