@@ -37,7 +37,9 @@ history, which the ERC dialog and the Rules tab share.
 - **Version control** — whether the project folder has a Git repository
   (from the last probe), Enable Version Control… (the project tree's dialog)
   when it has none, and "Commit every save" (`enable_git`). Turning it on
-  needs a repository; turning it off keeps the repository.
+  needs a repository; turning it off keeps the repository. The dialog's own
+  "Commit every save" switch (on by default) decides whether a successful
+  Enable turns `enable_git` on, as the same General step.
 
 ## Requirements (#2339)
 
