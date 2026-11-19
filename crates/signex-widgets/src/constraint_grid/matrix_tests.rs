@@ -31,13 +31,21 @@ impl Clearances {
     }
 }
 
+/// The caller's rule: an empty cell falls back to the larger of the two
+/// classes' own clearances.
 impl PairValues for Clearances {
-    fn written(&self, pair: ClassPair) -> Option<f64> {
-        self.cells.get(&pair).copied()
+    fn resolve(&self, pair: ClassPair) -> Option<PairClearance> {
+        let fallback = self.fallback(pair)?;
+        Some(match self.cells.get(&pair) {
+            Some(mm) => PairClearance::Written(*mm),
+            None => PairClearance::Fallback(fallback),
+        })
     }
 
-    fn class_clearance(&self, class: usize) -> Option<f64> {
-        self.classes.get(class).copied()
+    fn fallback(&self, pair: ClassPair) -> Option<f64> {
+        let a = self.classes.get(pair.row)?;
+        let b = self.classes.get(pair.col)?;
+        Some(f64::max(*a, *b))
     }
 }
 
@@ -207,4 +215,28 @@ fn the_matrix_view_builds_with_an_open_editor() {
         mm(),
     );
     let _ = matrix_view(&matrix, &values, mm(), &words, style);
+}
+
+/// The editor opens with a rounded value (0.1016 mm opens as 0.102, 0.1 mm
+/// in mil as 3.94); submitting it untouched must not write that back.
+#[test]
+fn an_untouched_editor_reports_no_change() {
+    let (mut matrix, mut values) = sample();
+    let pair = ClassPair::new(1, 0);
+    values.cells.insert(pair, 0.1016);
+    matrix.update(MatrixMessage::CellPressed(pair), &values, mm());
+    assert_eq!(matrix.edit().map(|e| e.text.as_str()), Some("0.102"));
+    assert_eq!(
+        matrix.update(MatrixMessage::EditSubmitted, &values, mm()),
+        None
+    );
+    assert!(matrix.edit().is_none());
+
+    values.cells.insert(pair, 0.1);
+    let mil = LengthFormat::new(I18n::en_us_ref(), Unit::Mil);
+    matrix.update(MatrixMessage::CellPressed(pair), &values, mil);
+    assert_eq!(
+        matrix.update(MatrixMessage::EditSubmitted, &values, mil),
+        None
+    );
 }

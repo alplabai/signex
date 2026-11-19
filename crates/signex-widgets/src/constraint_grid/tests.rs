@@ -481,3 +481,21 @@ fn the_view_builds_for_every_cell_state() {
     grid.update(GridMessage::GroupToggled(PAIRS), &rules, mm());
     let _ = view(&grid, &rules, mm(), &words, style);
 }
+
+/// The editor opens with a rounded value (0.1016 mm opens as 0.102, 0.1 mm
+/// in mil as 3.94); submitting it untouched must not write that back.
+#[test]
+fn an_untouched_editor_reports_no_change() {
+    let (mut grid, mut rules) = sample();
+    let cell = CellRef::new(PWR, WIDTH);
+    rules.set(cell, CellValue::Length(0.1016));
+    grid.update(GridMessage::CellPressed(cell), &rules, mm());
+    assert_eq!(grid.edit().map(|e| e.text.as_str()), Some("0.102"));
+    assert_eq!(grid.update(GridMessage::EditSubmitted, &rules, mm()), None);
+    assert!(grid.edit().is_none());
+
+    rules.set(cell, CellValue::Length(0.1));
+    let mil = LengthFormat::new(I18n::en_us_ref(), Unit::Mil);
+    grid.update(GridMessage::CellPressed(cell), &rules, mil);
+    assert_eq!(grid.update(GridMessage::EditSubmitted, &rules, mil), None);
+}

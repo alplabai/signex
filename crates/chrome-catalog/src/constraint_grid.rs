@@ -8,14 +8,13 @@ use std::sync::LazyLock;
 
 use iced::widget::{column, container};
 use iced::{Element, Widget};
-use signex_i18n::I18n;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::constraint_grid::{
     CellRef, CellValue, CellValues, ClassMatrix, ClassPair, ColumnGroup, ColumnId, ColumnKind,
     ConstraintGrid, GridColumn, GridMessage, GridRow, GridStyle, GridText, GroupId, MatrixClass,
-    MatrixMessage, MatrixText, PairValues, Resolved, RowId, RowKind, ValueSource, matrix_view,
-    view,
+    MatrixMessage, MatrixText, PairClearance, PairValues, Resolved, RowId, RowKind, ValueSource,
+    matrix_view, view,
 };
 use signex_widgets::theme_ext::TypeScale;
 use signex_widgets::{Label, LengthFormat, raw};
@@ -195,7 +194,7 @@ static RULES: LazyLock<SampleRules> = LazyLock::new(|| {
 
 /// The samples show millimetres in the en-US locale.
 fn format() -> LengthFormat<'static> {
-    LengthFormat::new(I18n::en_us_ref(), Unit::Mm)
+    LengthFormat::new(crate::locale::en_us(), Unit::Mm)
 }
 
 static GRID: LazyLock<ConstraintGrid> = LazyLock::new(|| {
@@ -224,13 +223,21 @@ struct SampleClearances {
     cells: BTreeMap<ClassPair, f64>,
 }
 
+/// The sample rule: an empty cell falls back to the larger of the two
+/// classes' own clearances.
 impl PairValues for SampleClearances {
-    fn written(&self, pair: ClassPair) -> Option<f64> {
-        self.cells.get(&pair).copied()
+    fn resolve(&self, pair: ClassPair) -> Option<PairClearance> {
+        let fallback = self.fallback(pair)?;
+        Some(match self.cells.get(&pair) {
+            Some(mm) => PairClearance::Written(*mm),
+            None => PairClearance::Fallback(fallback),
+        })
     }
 
-    fn class_clearance(&self, class: usize) -> Option<f64> {
-        self.classes.get(class).copied()
+    fn fallback(&self, pair: ClassPair) -> Option<f64> {
+        let a = self.classes.get(pair.row)?;
+        let b = self.classes.get(pair.col)?;
+        Some(f64::max(*a, *b))
     }
 }
 

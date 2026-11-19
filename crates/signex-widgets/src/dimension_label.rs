@@ -271,6 +271,9 @@ pub enum DimensionLabelMessage {
 struct Editing {
     index: usize,
     draft: String,
+    /// The text the field opened with. It is rounded to the field's
+    /// decimals, so committing it unchanged would round the value.
+    opened: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -386,9 +389,11 @@ impl DimensionLabels {
             return DimensionLabelOutcome::default();
         };
         self.drag = None;
+        let opened = label.format.field_text(label.value);
         self.editing = Some(Editing {
             index,
-            draft: label.format.field_text(label.value),
+            draft: opened.clone(),
+            opened,
         });
         DimensionLabelOutcome {
             committed: None,
@@ -397,9 +402,14 @@ impl DimensionLabels {
     }
 
     /// Close the open field and read its text in its label's unit. Text
-    /// that is not a finite number commits nothing.
+    /// that is not a finite number, or the text the field opened with,
+    /// commits nothing: the opening text is rounded, and writing it back
+    /// would change a value the user never touched.
     fn take_draft(&mut self, labels: &[DimensionLabel<'_>]) -> Option<DimensionCommitted> {
         let editing = self.editing.take()?;
+        if editing.draft.trim() == editing.opened.trim() {
+            return None;
+        }
         let label = labels.get(editing.index)?;
         label
             .format
@@ -811,9 +821,33 @@ mod tests {
         assert_eq!(out.committed, committed(2, 2.0));
         assert!(out.focus_input);
         assert_eq!(s.editing_index(), Some(0));
+        s.update(DimensionLabelMessage::DraftEdited("0.3".into()), &items);
         let out = s.update(DimensionLabelMessage::TabPressed { backward: true }, &items);
-        assert_eq!(out.committed, committed(0, 0.15));
+        assert_eq!(out.committed, committed(0, 0.3));
         assert_eq!(s.editing_index(), Some(2));
+    }
+
+    /// The field opens with a rounded value (0.1016 mm opens as 0.102);
+    /// leaving it untouched must not write that rounding back.
+    #[test]
+    fn an_untouched_field_commits_nothing_on_tab_or_enter() {
+        let at = Point::new(0.0, 0.0);
+        let items = vec![
+            DimensionLabel::new(0.1016, mm(), at),
+            DimensionLabel::new(0.1, mil(), at),
+        ];
+        let mut s = DimensionLabels::default();
+        s.update(DimensionLabelMessage::LabelPressed(0), &items);
+        assert_eq!(s.draft(), Some("0.102"));
+        let out = s.update(
+            DimensionLabelMessage::TabPressed { backward: false },
+            &items,
+        );
+        assert_eq!(out.committed, None);
+        assert_eq!(s.editing_index(), Some(1));
+        let out = s.update(DimensionLabelMessage::DraftSubmitted, &items);
+        assert_eq!(out.committed, None);
+        assert_eq!(s.editing_index(), None);
     }
 
     #[test]

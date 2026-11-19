@@ -112,18 +112,23 @@ impl ConstraintGrid {
         self.edit = match column.kind {
             // A length cell opens a text editor holding its own value; an
             // empty editor shows the inherited value as its placeholder.
-            ColumnKind::Length => Some(CellEdit {
-                cell,
-                text: match values.own_value(cell) {
+            ColumnKind::Length => {
+                let opened = match values.own_value(cell) {
                     Some(CellValue::Length(mm)) => format.field_text(mm),
                     _ => String::new(),
-                },
-                is_invalid: false,
-            }),
+                };
+                Some(CellEdit {
+                    cell,
+                    text: opened.clone(),
+                    opened,
+                    is_invalid: false,
+                })
+            }
             // A choice cell opens its options; the view reads `selected`.
             ColumnKind::Choice(_) => Some(CellEdit {
                 cell,
                 text: String::new(),
+                opened: String::new(),
                 is_invalid: false,
             }),
             ColumnKind::Flag => None,
@@ -138,6 +143,12 @@ impl ConstraintGrid {
         let edit = self.edit.as_ref()?;
         let cell = edit.cell;
         let text = edit.text.trim();
+        // The opening text is rounded to the field's decimals; submitting
+        // it untouched must not write that rounding back.
+        if text == edit.opened.trim() {
+            self.edit = None;
+            return None;
+        }
         // An empty editor means "inherit": drop the row's own value.
         if text.is_empty() {
             self.edit = None;

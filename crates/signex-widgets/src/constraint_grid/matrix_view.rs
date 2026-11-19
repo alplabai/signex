@@ -86,7 +86,7 @@ fn live_cell<'a>(
     let is_written = matches!(clearance, PairClearance::Written(_));
 
     let content: Element<'a, MatrixMessage> = if let Some(edit) = edit {
-        let placeholder: Label<'a> = matrix.fallback(values, pair).map_or_else(
+        let placeholder: Label<'a> = values.fallback(pair).map_or_else(
             || UserText::new(String::new()).into(),
             |mm| format.label(mm),
         );

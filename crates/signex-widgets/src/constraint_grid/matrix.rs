@@ -1,8 +1,8 @@
 //! The class-to-class matrix: one clearance per pair of classes. The pair
 //! is symmetric, so only the lower triangle (column <= row) is live; the
-//! mirror half is inert. An empty cell falls back to the larger of the two
-//! classes' own clearances. The clearances are the caller's: the matrix
-//! reads them through [`PairValues`] and holds only the view state.
+//! mirror half is inert. The clearances, and what an empty cell falls back
+//! to, are the caller's rules: the matrix reads them through
+//! [`PairValues`] and holds only the view state.
 
 use crate::LengthFormat;
 
@@ -35,14 +35,25 @@ pub struct MatrixClass {
     pub name: String,
 }
 
-/// The caller's read-only view of the clearances, in mm.
+/// The caller's read-only view of the clearances, in mm. The caller's rules
+/// decide what an empty cell falls back to (such as the larger of the two
+/// classes' own clearances).
 pub trait PairValues {
-    /// The clearance written in the pair's cell, if any.
-    fn written(&self, pair: ClassPair) -> Option<f64>;
+    /// The pair's clearance: written in its cell, or the fallback of an
+    /// empty cell; `None` for a pair the caller does not know.
+    fn resolve(&self, pair: ClassPair) -> Option<PairClearance>;
 
-    /// A class's own clearance, by index; `None` for a class the caller
-    /// does not know.
-    fn class_clearance(&self, class: usize) -> Option<f64>;
+    /// What the pair would hold with its cell empty: the editor
+    /// placeholder.
+    fn fallback(&self, pair: ClassPair) -> Option<f64>;
+
+    /// The clearance written in the pair's cell, if any.
+    fn written(&self, pair: ClassPair) -> Option<f64> {
+        match self.resolve(pair) {
+            Some(PairClearance::Written(mm)) => Some(mm),
+            _ => None,
+        }
+    }
 }
 
 /// The value a pair resolves to.
@@ -50,7 +61,7 @@ pub trait PairValues {
 pub enum PairClearance {
     /// Written in the pair's cell.
     Written(f64),
-    /// No cell: the larger of the two classes' own clearances.
+    /// No cell: the caller's fallback.
     Fallback(f64),
 }
 
@@ -66,6 +77,9 @@ impl PairClearance {
 pub struct MatrixEdit {
     pub pair: ClassPair,
     pub text: String,
+    /// The text the editor opened with. It is rounded to the field's
+    /// decimals, so a submit of this text unchanged writes nothing.
+    pub opened: String,
     pub is_invalid: bool,
 }
 
@@ -121,26 +135,13 @@ impl ClassMatrix {
         pair.row < self.classes.len()
     }
 
-    /// The larger of the pair's two class clearances: what an empty cell
-    /// shows.
-    pub fn fallback(&self, values: &impl PairValues, pair: ClassPair) -> Option<f64> {
-        if !self.has(pair) {
-            return None;
-        }
-        let a = values.class_clearance(pair.row)?;
-        let b = values.class_clearance(pair.col)?;
-        Some(a.max(b))
-    }
-
-    /// The pair's clearance: its written value, else the fallback.
+    /// The pair's clearance as the caller resolves it; `None` for a pair
+    /// outside this matrix's classes.
     pub fn clearance(&self, values: &impl PairValues, pair: ClassPair) -> Option<PairClearance> {
         if !self.has(pair) {
             return None;
         }
-        match values.written(pair) {
-            Some(mm) => Some(PairClearance::Written(mm)),
-            None => self.fallback(values, pair).map(PairClearance::Fallback),
-        }
+        values.resolve(pair)
     }
 
     /// Apply `message` to the view state. `values` is the caller's view of
@@ -158,12 +159,14 @@ impl ClassMatrix {
                     return None;
                 }
                 self.pinned = Some(pair);
+                let opened = values
+                    .written(pair)
+                    .map(|mm| format.field_text(mm))
+                    .unwrap_or_default();
                 self.edit = Some(MatrixEdit {
                     pair,
-                    text: values
-                        .written(pair)
-                        .map(|mm| format.field_text(mm))
-                        .unwrap_or_default(),
+                    text: opened.clone(),
+                    opened,
                     is_invalid: false,
                 });
                 None
@@ -197,6 +200,12 @@ impl ClassMatrix {
         let edit = self.edit.as_ref()?;
         let pair = edit.pair;
         let text = edit.text.trim();
+        // The opening text is rounded to the field's decimals; submitting
+        // it untouched must not write that rounding back.
+        if text == edit.opened.trim() {
+            self.edit = None;
+            return None;
+        }
         if text.is_empty() {
             self.edit = None;
             return cleared(pair, values);

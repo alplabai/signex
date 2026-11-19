@@ -163,6 +163,9 @@ pub enum GridError {
 pub struct CellEdit {
     pub cell: CellRef,
     pub text: String,
+    /// The text the editor opened with. It is rounded to the field's
+    /// decimals, so a submit of this text unchanged writes nothing.
+    pub opened: String,
     /// The last submit did not parse as a valid length.
     pub is_invalid: bool,
 }
