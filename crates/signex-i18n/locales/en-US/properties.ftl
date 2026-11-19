@@ -276,3 +276,49 @@ properties-title-block-today = { $field } (today)
 properties-value-shows = Shows { $value }
 # Why a part value's `=` expression does not evaluate. $error is the reason.
 properties-value-error = Error: { $error }
+
+## Placed part, Graphite layout (#42)
+
+# The free-text footprint field under the footprint pick list.
+properties-override = Override
+# Note under the Override field.
+properties-override-note = A name typed here wins over the pick
+# Between the library name and the library id on the Library row.
+properties-library-separator = ·
+# The header button that opens the placed part's action menu.
+properties-part-more = ⋯
+properties-part-more-tip = More actions
+# Menu entry: put the part's library id on the clipboard.
+properties-action-copy-library-id = Copy Library ID
+# Callout of the part illustration. $x and $y are the position as the
+# Location fields show it.
+properties-part-illustration-position = Position { $x }, { $y }
+# Corner note of the part illustration when the part is mirrored both ways.
+properties-part-illustration-mirror-xy = Mirror X · Mirror Y
+
+## Pin of a placed part (#50)
+
+# Caption under the pin illustration.
+properties-pin-read-only-note = Read-only on a placed part · Edit in Symbol Editor changes it
+properties-pin-edit-in-symbol-editor = Edit in Symbol Editor
+# Opens the Net Inspector on the pin's net.
+properties-pin-show-net = Show net
+properties-pin-type = Type
+properties-pin-length = Length
+# $length is the pin length in mm.
+properties-pin-length-value = { $length } mm
+properties-pin-orientation = Orientation
+properties-pin-orientation-right = Right
+properties-pin-orientation-up = Up
+properties-pin-orientation-left = Left
+properties-pin-orientation-down = Down
+# Leader of the pin illustration. $type is the pin's electrical type.
+properties-pin-illustration-type = Type · { $type }
+# Callout of the pin illustration. $length is the pin length in mm.
+properties-pin-illustration-length = Length { $length } mm
+# Tooltip of a Pins table row whose pin is hidden on the sheet.
+properties-pin-hidden-tip = Hidden on the sheet
+# The count pill of the Pins section header. $count is the number of pins.
+properties-pins-count = { $count }
+# Title of the Pins section; its count shows in a pill beside it.
+properties-section-pins = Pins
