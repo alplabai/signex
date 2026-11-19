@@ -322,17 +322,46 @@ of different nets, the higher priority keeps the overlap.
 Copper of the pour's own net is filled over: a pad joins the pour solidly, with
 no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
 are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared.
+graphics are not cleared, hatched fill, and rounded or chamfered corners.
+
+A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
+but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
+other pour, and the canvas, the fabrication and PDF outputs, the ratsnest
+and via stitching read no copper for it, since each takes a pour's copper
+from the fills. The design rule check reads no pour copper either way. The
+canvas draws a shelved pour's outline dashed. The flag is the zone key
+`shelved = true`, written only when on, so a board with no shelved pour
+saves as before, and a build that does not know the key keeps it on
+re-save. Fabrication Outputs does not count a shelved pour as a zone left
+unfilled.
 
 ### Picking and editing a pour
 
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
-Polygons chip of the selection filter) and opens the area panel: net, layer,
-clearance, minimum width, Priority (a whole number from 0), Remove Islands
-Below (mm²), Remove Dead Copper, and the copper its fill holds (area and
-pieces), read from the fills the app holds. Each edit is one undo step.
-`min_island_area` and `remove_dead_islands` are written to the file only when
-set.
+Polygons chip of the selection filter) and opens the area panel (#2523): its
+illustration, Net Information, then Net, Layer and the Pour section: Fill
+Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
+Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
+greyed, since the fill draws no spokes), Corners and Corner Size (Sharp;
+greyed, not stored yet), Priority (a whole number from 0), Remove Islands
+(below an area in mm²), Remove Dead Copper, and the Copper card. Each edit
+is one undo step. `min_island_area` and `remove_dead_islands` are written to
+the file only when set. Fill Mode has no None: the outline-only state is
+Shelve.
+
+The Copper card shows the copper the fill holds (area and pieces, read from
+the fills the app holds), or "shelved · no copper". Its buttons:
+
+- **Repour** fills the board again and reports the selected pours, as
+  Repour Selected does; greyed while the pour is shelved.
+- **Shelve** / **Unshelve** sets `shelved` on the selected pours, one undo
+  step (`ZoneEdit::Shelved`). The fields stay editable while shelved.
+- **⋯** opens Repour all, Shelve all and Unshelve all, which act on every
+  pour of the board in view; Shelve all and Unshelve all are one undo step
+  each (`pour_edit::shelve_all_pours`). A pick closes the menu.
+
+A fill, region or keepout has no Copper card. The area lock is not a row:
+the panel header shows it greyed, with the reason as its tooltip.
 
 ### Pour Cutout and Slice Pour
 
@@ -359,7 +388,9 @@ Repour Selected reports the selected pours. Fills depend on each other, so
 the whole board is filled either way. Nothing in the document changes, so
 there is no undo step. `repour_all document=<board>` answers an agent or the
 CLI with each pour's `zone`, `net`, `net_name`, `layer`, `priority`,
-`filled`, `pieces`, `area_mm2` and `islands_removed`.
+`shelved`, `filled`, `pieces`, `area_mm2` and `islands_removed`; a shelved
+pour is not filled. The area panel's Copper card has the same Repour, and
+Repour all in its ⋯ menu.
 
 A round part of a grown obstacle is cut as a polygon whose chords lie on or
 outside the true arc, so the fill never comes closer than the clearance. The
@@ -387,6 +418,13 @@ click places nothing and the Messages panel names the layers that do.
 Copper text would be copper that the copper list, the design rule check and
 the ratsnest never read. The canvas draws it (#2387); a click or box picks
 it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
+
+The String panel (#2523) shows the illustration (the text box with its
+Text Height and its Position X/Y origin; the rotation is not drawn), then
+the text across the full width, Layer, Position (X and Y on one row), Text
+Height, Rotation, and the quick rotation steps 0°, 90°, 180° and 270°. A
+step is on while the rotation equals it; a pick sets the rotation as one
+undo step, like a typed one.
 
 ## Arc
 
@@ -431,9 +469,13 @@ arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
 of its value. Two equal points add nothing and say so.
 
-The Dimension panel shows Start, End, Offset, Line Width, Text Height,
-Precision, the value and Layer (layers that take text); each edit is one
-undo step. Angular, radial, diameter, leader, baseline and centre-mark
+The Dimension panel (#2523) shows the illustration (the two points, the
+extension lines, the Offset and the value), the measured Value on a card
+under it, then Start and End (X and Y on one row each), Offset, and under
+Style: Line Width, Text Height, Precision and Layer (layers that take text).
+Precision is a 0 to 6 segmented control, so a precision outside that range
+cannot be entered from the panel. Each edit is one undo step. There is no
+Type row: angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
 
 ## Graphics {#graphics}
