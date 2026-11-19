@@ -249,12 +249,13 @@ drop commits what the ghost shows. The mode holds for later moves, and the
 status bar names it while it is not Auto. Move By, align and distribute,
 position edits, rotate and mirror always use Auto (#1669).
 
-A held key runs a cycle, toggle or flip command once: `cycle_wiring_mode`, the
-corner mode and posture keys, the grid, unit and selection-mode cycles, every
-show/hide toggle and the selection flips step one state per press, however long
-the key is down. Other commands, such as zoom, undo, rotate, mirror and nudges,
-repeat while the key is held. The catalog marks which is which (`KeyRepeat` in
-`docs/DECISIONS.md`, 2026-11-19).
+A held key runs some commands once, however long the key is down:
+`cycle_wiring_mode`, the corner mode and posture keys, the grid, unit and
+selection-mode cycles, every show/hide toggle, flip and mirror (`X`, `Y`, `L`),
+and `Insert` (one vertex per press mid wire). `Space` and `Shift+Space` bend an
+open wire, bus or track run once per press, but turn a selection on every
+repeat. Other commands, such as zoom, undo, nudges and layer stepping, repeat
+while the key is held (`docs/DECISIONS.md`, "Held keys", 2026-11-19).
 
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
