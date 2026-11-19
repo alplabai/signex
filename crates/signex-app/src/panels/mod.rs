@@ -101,7 +101,7 @@ pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_choice_row, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
     form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
-    justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
+    justification_grid, label_anchor, net_params_add_bar, net_params_tabs,
     preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
@@ -149,7 +149,9 @@ pub use pcb_component::{
 pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
-pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+pub use placed_edit::{
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};

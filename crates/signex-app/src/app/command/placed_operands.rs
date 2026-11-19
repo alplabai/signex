@@ -9,7 +9,7 @@
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::schematic::{Point, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -193,6 +193,91 @@ impl Signex {
             .and_then(|e| signex_engine::move_to_command(e.document(), &item, at, keep_wires))
             .ok_or_else(|| PlacedRefusal::new("this object has no position to set"))?;
         self.apply_placed_edit(command)?;
+        self.placed_answer(item)
+    }
+
+    /// The end of the wire or bus `item` on `sheet` (stored mm); `None` for
+    /// any other kind. Its start is the `placed_geometry` position.
+    pub(crate) fn run_end(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Point> {
+        match item.kind {
+            SelectedKind::Wire => (sheet.wires.iter())
+                .find(|w| w.uuid == item.uuid)
+                .map(|w| w.end),
+            SelectedKind::Bus => (sheet.buses.iter())
+                .find(|b| b.uuid == item.uuid)
+                .map(|b| b.end),
+            _ => None,
+        }
+    }
+
+    /// Put the end of the wire or bus `item` at `end` (stored mm), its start
+    /// kept: one engine edit, one undo step. Refused while a lock holds the
+    /// run, and when the end would land on the start.
+    pub(crate) fn set_run_end(&mut self, item: SelectedItem, end: Point) -> Placed {
+        let engine = self
+            .document_state
+            .edit_engine()
+            .ok_or_else(|| PlacedRefusal::new("no schematic is open"))?;
+        let sheet = engine.document();
+        let start = signex_engine::placed_geometry(sheet, &item)
+            .map(|g| g.position)
+            .ok_or_else(|| PlacedRefusal::new("the object is no longer on this sheet"))?;
+        // The lock that refuses a move of the run holds its end as well.
+        if let Some(reason) = signex_engine::move_to_command(sheet, &item, start, false)
+            .and_then(|command| engine.lock_refusal(&command))
+        {
+            return Err(PlacedRefusal::new(reason));
+        }
+        if signex_net::pt_key(&end) == signex_net::pt_key(&start) {
+            return Err(PlacedRefusal::new("the end would sit on the start"));
+        }
+        let mut document = sheet.clone();
+        let slot = match item.kind {
+            SelectedKind::Wire => (document.wires.iter_mut())
+                .find(|w| w.uuid == item.uuid)
+                .map(|w| &mut w.end),
+            SelectedKind::Bus => (document.buses.iter_mut())
+                .find(|b| b.uuid == item.uuid)
+                .map(|b| &mut b.end),
+            _ => None,
+        };
+        let slot =
+            slot.ok_or_else(|| PlacedRefusal::new("only a wire or a bus has an end to set"))?;
+        *slot = end;
+        self.apply_placed_edit(signex_engine::Command::ReplaceDocument { document })?;
+        self.placed_answer(item)
+    }
+
+    /// Change the text note `item` with `edit` (its justification, turn or
+    /// text size): one engine edit, one undo step, none when nothing
+    /// changed. Refused while a lock holds the note.
+    pub(crate) fn edit_text_note(
+        &mut self,
+        item: SelectedItem,
+        edit: impl FnOnce(&mut signex_types::schematic::TextNote),
+    ) -> Placed {
+        let engine = self
+            .document_state
+            .edit_engine()
+            .ok_or_else(|| PlacedRefusal::new("no schematic is open"))?;
+        let sheet = engine.document();
+        let at = signex_engine::placed_geometry(sheet, &item)
+            .map(|g| g.position)
+            .ok_or_else(|| PlacedRefusal::new("the object is no longer on this sheet"))?;
+        if let Some(reason) = signex_engine::move_to_command(sheet, &item, at, false)
+            .and_then(|command| engine.lock_refusal(&command))
+        {
+            return Err(PlacedRefusal::new(reason));
+        }
+        let mut document = sheet.clone();
+        let note = (document.text_notes.iter_mut())
+            .find(|n| item.kind == SelectedKind::TextNote && n.uuid == item.uuid)
+            .ok_or_else(|| PlacedRefusal::new("only a text note has this row"))?;
+        let before = note.clone();
+        edit(note);
+        if *note != before {
+            self.apply_placed_edit(signex_engine::Command::ReplaceDocument { document })?;
+        }
         self.placed_answer(item)
     }
 
