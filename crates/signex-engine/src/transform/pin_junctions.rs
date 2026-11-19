@@ -410,10 +410,19 @@ pub(crate) fn crossed_taps_notice(
     (!pins.is_empty()).then_some(crate::EngineNotice::PinDotRefused { pins })
 }
 
-/// "R1 pin 2" for every pin end of `sheet` at `k`.
+/// "R1 pin 2" for every pin end of `sheet` at `k` that a refused dot left
+/// unjoined. A power port's pin there is the other net, not a pin the edit
+/// placed, so it is named only when no other part's pin is at `k` (a power
+/// port moved onto the point itself).
 fn pin_labels_at(sheet: &SchematicSheet, k: Key) -> Vec<String> {
-    let mut out = Vec::new();
+    let mut parts = Vec::new();
+    let mut ports = Vec::new();
     for symbol in &sheet.symbols {
+        let out = if symbol.is_power {
+            &mut ports
+        } else {
+            &mut parts
+        };
         let Some(lib) = sheet.resolve_lib_symbol(symbol) else {
             continue;
         };
@@ -430,7 +439,7 @@ fn pin_labels_at(sheet: &SchematicSheet, k: Key) -> Vec<String> {
             out.push(format!("{} pin {pin}", symbol.reference));
         }
     }
-    out
+    if parts.is_empty() { ports } else { parts }
 }
 
 /// Where a wire end lies strictly inside another wire of `sheet` with no dot:
