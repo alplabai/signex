@@ -207,8 +207,8 @@ pub(super) fn change(i18n: &I18n, change: &EcoChange) -> Localized {
     }
 }
 
-/// Why a row cannot be ticked.
-pub(super) fn blocked(i18n: &I18n, why: &EcoBlock) -> Localized {
+/// Why a row cannot be ticked. Compare Board with Schematic says it too.
+pub(in crate::app::view::dialogs) fn blocked(i18n: &I18n, why: &EcoBlock) -> Localized {
     match why {
         EcoBlock::MissingFootprint(error) => t!(
             i18n,
@@ -239,8 +239,8 @@ pub(super) fn needs_annotate(why: &EcoBlock) -> bool {
     )
 }
 
-/// One note under the rows.
-pub(super) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
+/// One note under the rows. Compare Board with Schematic shows it too.
+pub(in crate::app::view::dialogs) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
     match note {
         EcoNote::UnreadableSheet(_) => t!(i18n, ids::UPDATE_PCB_NOTE_UNREADABLE_SHEET),
         EcoNote::PadLosesLock {

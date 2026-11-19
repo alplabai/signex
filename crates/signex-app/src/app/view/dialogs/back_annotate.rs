@@ -321,7 +321,8 @@ fn change_text(i18n: &I18n, change: &BackChange) -> Localized {
     }
 }
 
-fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
+/// Why a row cannot be ticked. Compare Board with Schematic says it too.
+pub(super) fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
     match why {
         BackBlock::NeedsAnnotation => t!(i18n, ids::BACK_ANNOTATE_BLOCK_NEEDS_ANNOTATION),
         BackBlock::DuplicateDesignator(designator) => t!(
@@ -335,7 +336,8 @@ fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
     }
 }
 
-fn note_text(i18n: &I18n, note: &BackNote) -> Localized {
+/// One note under the rows. Compare Board with Schematic shows it too.
+pub(super) fn note_text(i18n: &I18n, note: &BackNote) -> Localized {
     match note {
         BackNote::UnreadableSheet(_) => t!(i18n, ids::BACK_ANNOTATE_NOTE_UNREADABLE),
         BackNote::Unlinked { reference } => t!(

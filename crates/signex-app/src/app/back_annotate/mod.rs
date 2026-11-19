@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use signex_engine::pcb::eco::{BackChangeList, BackGroup, BackKey};
 
+pub(crate) use apply::FileEdits;
 pub use read::BackRead;
 
 use crate::app::state::ProjectId;

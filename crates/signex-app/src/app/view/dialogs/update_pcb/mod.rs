@@ -23,7 +23,7 @@ mod summary;
 mod table;
 #[cfg(test)]
 mod tests;
-mod texts;
+pub(super) mod texts;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
