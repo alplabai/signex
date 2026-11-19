@@ -7,7 +7,7 @@
 use uuid::Uuid;
 
 use super::{
-    Aabb, HarnessConnector, HarnessDefinition, HarnessEntry, HarnessWire, Point,
+    Aabb, HARNESS_TIP_MM, HarnessConnector, HarnessDefinition, HarnessEntry, HarnessWire, Point,
     SCHEMATIC_RENDER_BUS_STROKE_MM, SheetHarness,
 };
 
@@ -97,6 +97,15 @@ impl SheetHarness {
         }
     }
 
+    /// The box around every connector and harness wire; `None` without any.
+    pub fn extent(&self) -> Option<Aabb> {
+        self.connectors
+            .iter()
+            .map(HarnessConnector::bounds)
+            .chain(self.wires.iter().map(HarnessWire::bounds))
+            .reduce(|a, b| a.union(&b))
+    }
+
     /// Every uuid the harness objects carry, entries included.
     pub fn ids(&self) -> Vec<Uuid> {
         let mut ids = Vec::new();
@@ -138,26 +147,25 @@ impl HarnessConnector {
         axis_of(t.x - c.x, t.y - c.y)
     }
 
-    /// The body outline as a closed polygon (first point not repeated): the
-    /// flat side and the two chamfers that meet at the tip side, as drawn.
+    /// The outline as a closed polygon (first point not repeated): the body
+    /// from the flat side, then the two edges that meet at the tip point.
     pub fn outline(&self) -> Vec<Point> {
         let b = self.bounds();
         let (ux, uy) = self.tip_direction();
-        // Length along the tip direction and across it.
+        // Length along the tip direction (body and tip) and across it.
         let (along, across) = if ux != 0.0 {
             (b.width(), b.height())
         } else {
             (b.height(), b.width())
         };
-        let chamfer = (across / 3.0).min(along / 2.0).min(2.54).max(0.0);
-        // Corners in the local frame (flat side at s = 0, tip side at
-        // s = along), mapped back onto the bounds.
+        let body = (along - HARNESS_TIP_MM).max(0.0);
+        // Corners in the local frame (flat side at s = 0, tip at s = along),
+        // mapped back onto the bounds.
         let local = [
             (0.0, 0.0),
-            (along - chamfer, 0.0),
-            (along, chamfer),
-            (along, across - chamfer),
-            (along - chamfer, across),
+            (body, 0.0),
+            (along, across / 2.0),
+            (body, across),
             (0.0, across),
         ];
         local

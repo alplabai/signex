@@ -63,13 +63,14 @@ fn an_entry_is_found_by_its_own_id() {
 }
 
 #[test]
-fn the_outline_has_six_corners_inside_the_bounds() {
+fn the_outline_is_a_body_with_a_pointed_tip_inside_the_bounds() {
     for rotation in [0.0, 90.0, 180.0, 270.0] {
         let c = connector(rotation, &["A", "B", "C"]);
         let b = c.bounds().expand(1e-6);
         let outline = c.outline();
-        assert_eq!(outline.len(), 6, "{rotation}");
+        assert_eq!(outline.len(), 5, "{rotation}");
         assert!(outline.iter().all(|p| b.contains(p.x, p.y)), "{rotation}");
+        assert!(near(outline[2], c.tip_point()), "{rotation}: {outline:?}");
     }
 }
 

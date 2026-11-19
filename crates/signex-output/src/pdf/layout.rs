@@ -79,6 +79,11 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
         extend(cs.position.x, cs.position.y);
         extend(cs.position.x + cs.size.0, cs.position.y + cs.size.1);
     }
+    // Signal harness connectors and wires (#1280).
+    if let Some(b) = sch.harness.extent() {
+        extend(b.min_x, b.min_y);
+        extend(b.max_x, b.max_y);
+    }
 
     for drawing in &sch.drawings {
         match drawing {
