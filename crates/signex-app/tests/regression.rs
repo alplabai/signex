@@ -529,6 +529,8 @@ mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.
 #[path = "regression/multi_selection_edit.rs"]
 mod multi_selection_edit;
+#[path = "regression/selection_forms.rs"]
+mod selection_forms;
 // #1255, #1670 — in-place editing of a part's designator, value and footprint.
 #[path = "regression/inplace_field_edit.rs"]
 mod inplace_field_edit;
