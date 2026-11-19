@@ -417,9 +417,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_preset_diff` | Show what a rules preset would change | validation | — | — |
 | `rules_remove` | Remove a design rule | design | — | — |
 | `rules_set` | Change a field of a design rule | design | — | — |
-| `rules_set_apply` | Apply a named rule set to a class or net | design | — | — |
-| `rules_set_create` | Create a named rule set | design | — | — |
-| `rules_set_edit` | Change the limits of a named rule set | design | — | — |
+| `rules_set_apply` | Apply a constraint set to a class or net | design | — | — |
+| `rules_set_create` | Create a constraint set | design | — | — |
+| `rules_set_edit` | Change the limits of a constraint set | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
 | `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
