@@ -146,8 +146,6 @@ dialog-rename-file-prompt = Rename "{ $name }"
 dialog-version-control-project = Project: { $name }
 # $name is the library's name.
 dialog-version-control-library = Library: { $name }
-dialog-grid-title = Cartesian Grid Editor [mm]
-dialog-grid-intro = Grid step and display
 dialog-selection-filter-title = Selection Filter — Customize
 dialog-selection-filter-intro = Selectable kinds
 

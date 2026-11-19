@@ -56,3 +56,53 @@ fn an_invalid_step_keeps_the_old_value_and_the_dialog_open() {
     assert_eq!(step_mm(&mut app), before);
     assert!(app.ui_state.grid_properties.is_some());
 }
+
+fn label(app: &mut Signex, m: signex_widgets::dimension_label::DimensionLabelMessage) {
+    send(app, GridPropertiesMsg::PreviewLabelEdited(m));
+}
+
+/// A step typed on the preview's label is the step OK writes.
+#[test]
+fn a_step_set_on_the_preview_is_what_ok_writes() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("2.5".into()));
+    label(&mut app, M::DraftSubmitted);
+    send(&mut app, GridPropertiesMsg::Apply);
+    assert_eq!(step_mm(&mut app), 2.5);
+}
+
+/// Esc with a preview label open closes the label; the next Esc closes
+/// the dialog.
+#[test]
+fn escape_closes_an_open_preview_label_before_the_dialog() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    send(&mut app, GridPropertiesMsg::Close);
+    let state = app.ui_state.grid_properties.as_ref().expect("still open");
+    assert!(state.preview_labels.editing_index().is_none());
+    send(&mut app, GridPropertiesMsg::Close);
+    assert!(app.ui_state.grid_properties.is_none());
+}
+
+/// The expand button toggles a taller preview.
+#[test]
+fn the_expand_button_toggles_a_taller_preview() {
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    let expanded = |app: &Signex| {
+        app.ui_state
+            .grid_properties
+            .as_ref()
+            .is_some_and(|s| s.preview_expanded)
+    };
+    assert!(!expanded(&app));
+    send(&mut app, GridPropertiesMsg::PreviewExpandToggled);
+    assert!(expanded(&app));
+    send(&mut app, GridPropertiesMsg::PreviewExpandToggled);
+    assert!(!expanded(&app));
+}

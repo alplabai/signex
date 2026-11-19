@@ -212,3 +212,23 @@ ctx-fp-silk-header = { $kind } (silk)
 ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
+# Footprint editor menu on a pad: rows acting on the selection.
+ctx-fp-move-by = Move Selection By…
+ctx-fp-rotate-selection = Rotate Selection
+ctx-fp-flip-selection = Flip Selection
+ctx-fp-rect-pattern = Rectangular Pattern…
+ctx-fp-edit-sketch = Edit Sketch
+# Rows of the Align submenu on a pad. The first opens the Align Selection dialog.
+ctx-fp-align-dialog = Align…
+ctx-fp-align-left = Align Left
+ctx-fp-align-right = Align Right
+ctx-fp-align-hcenter = Align Horizontal Centers
+ctx-fp-distribute-h = Distribute Horizontally
+ctx-fp-align-top = Align Top
+ctx-fp-align-bottom = Align Bottom
+ctx-fp-align-vcenter = Align Vertical Centers
+ctx-fp-distribute-v = Distribute Vertically
+ctx-fp-align-to-grid = Align To Grid
+# Symbol editor menu: rows acting on the selection.
+ctx-symbol-rotate-selection = Rotate Selection
+ctx-symbol-align-to-grid = Align To Grid

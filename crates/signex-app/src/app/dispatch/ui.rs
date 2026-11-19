@@ -361,6 +361,7 @@ impl Signex {
                         fine_display: opts.fine_grid_display,
                         coarse_display: opts.coarse_grid_display,
                         multiplier: opts.coarse_multiplier,
+                        ..crate::app::GridPropertiesState::default()
                     });
                 }
                 self.finish_update()
@@ -384,8 +385,35 @@ impl Signex {
                 self.finish_update()
             }
             GridPropertiesMsg::Close => {
+                // Esc with a preview label open closes the label only.
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    let _ = state.preview_labels.update(
+                        signex_widgets::dimension_label::DimensionLabelMessage::EscapePressed,
+                        &[],
+                    );
+                    return self.finish_update();
+                }
                 self.ui_state.grid_properties = None;
                 self.finish_update()
+            }
+            GridPropertiesMsg::PreviewExpandToggled => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.preview_expanded = !state.preview_expanded;
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::PreviewLabelEdited(event) => {
+                use crate::app::view::dialogs::grid_properties::preview;
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                let focus = match self.ui_state.grid_properties.as_mut() {
+                    Some(state) if preview::label_edited(state, event, &i18n) => {
+                        state.preview_labels.focus_input()
+                    }
+                    _ => Task::none(),
+                };
+                Task::batch([focus, self.finish_update()])
             }
             GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {

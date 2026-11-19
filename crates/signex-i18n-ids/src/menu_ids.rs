@@ -151,5 +151,22 @@ define_ids! {
         CTX_FP_SILK_UNKNOWN = "ctx-fp-silk-unknown";
         CTX_FP_SILK_STRING = "ctx-fp-silk-string";
         CTX_FP_SILK_REGION = "ctx-fp-silk-region";
+        CTX_FP_MOVE_BY = "ctx-fp-move-by";
+        CTX_FP_ROTATE_SELECTION = "ctx-fp-rotate-selection";
+        CTX_FP_FLIP_SELECTION = "ctx-fp-flip-selection";
+        CTX_FP_RECT_PATTERN = "ctx-fp-rect-pattern";
+        CTX_FP_EDIT_SKETCH = "ctx-fp-edit-sketch";
+        CTX_FP_ALIGN_DIALOG = "ctx-fp-align-dialog";
+        CTX_FP_ALIGN_LEFT = "ctx-fp-align-left";
+        CTX_FP_ALIGN_RIGHT = "ctx-fp-align-right";
+        CTX_FP_ALIGN_HCENTER = "ctx-fp-align-hcenter";
+        CTX_FP_DISTRIBUTE_H = "ctx-fp-distribute-h";
+        CTX_FP_ALIGN_TOP = "ctx-fp-align-top";
+        CTX_FP_ALIGN_BOTTOM = "ctx-fp-align-bottom";
+        CTX_FP_ALIGN_VCENTER = "ctx-fp-align-vcenter";
+        CTX_FP_DISTRIBUTE_V = "ctx-fp-distribute-v";
+        CTX_FP_ALIGN_TO_GRID = "ctx-fp-align-to-grid";
+        CTX_SYMBOL_ROTATE_SELECTION = "ctx-symbol-rotate-selection";
+        CTX_SYMBOL_ALIGN_TO_GRID = "ctx-symbol-align-to-grid";
     }
 }
