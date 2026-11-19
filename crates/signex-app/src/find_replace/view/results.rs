@@ -226,7 +226,7 @@ fn result_row<'a>(
         r.ink4
     };
 
-    let mut line: Row<'a, FindReplaceMsg> = row![].align_y(Alignment::Center);
+    let mut line: Row<Element<'a, FindReplaceMsg>> = row![].align_y(Alignment::Center);
     let ranges = query.map(|q| q.ranges(&row_data.text)).unwrap_or_default();
     for (segment, hit) in segments(&row_data.text, &ranges) {
         let piece = text(UserText::new(segment.to_string()))
@@ -279,7 +279,8 @@ fn result_row<'a>(
         );
     }
 
-    let mut cells: Row<'a, FindReplaceMsg> = row![].spacing(SP.m).align_y(Alignment::Center);
+    let mut cells: Row<Element<'a, FindReplaceMsg>> =
+        row![].spacing(SP.m).align_y(Alignment::Center);
     if boxes {
         cells = cells.push(
             checkbox(included)

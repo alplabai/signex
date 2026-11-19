@@ -40,12 +40,12 @@ pub(super) fn footer<'a>(
     i18n: &I18n,
 ) -> Element<'a, FindReplaceMsg> {
     let muted = tokens::muted_text(theme_tokens);
-    let mut info: iced::widget::Column<'a, FindReplaceMsg> = column![].spacing(SP.xs);
+    let mut info: iced::widget::Column<Element<'a, FindReplaceMsg>> = column![].spacing(SP.xs);
     if let Some(line) = position_line(state, i18n) {
-        info = info.push(text(line).size(TS.caption).color(muted));
+        info = info.push_boxed(text(line).size(TS.caption).color(muted));
     }
     if state.replace_mode {
-        info = info.push(
+        info = info.push_boxed(
             text(t!(i18n, ids::FIND_ONE_UNDO_STEP))
                 .size(TS.caption)
                 .color(muted),

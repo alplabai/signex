@@ -10,7 +10,7 @@
 mod table;
 
 use super::*;
-use iced::widget::{Space, svg};
+use iced::widget::{Space, column, svg};
 use iced::{Alignment, Padding};
 use signex_i18n::{Arg, I18n, ids, t};
 use signex_types::schematic::{SchematicSheet, Symbol};
@@ -324,7 +324,7 @@ impl Signex {
 
 /// An empty-state card centred in the table area at a readable width.
 fn empty_area(content: Element<'_, Message>) -> Element<'_, Message> {
-    container(container(content).max_width(TS.body * 37.0))
+    container(container(content).width(Length::Fit.max(TS.body * 37.0)))
         .padding(SP.xl)
         .width(Length::Fill)
         .height(Length::Fill)

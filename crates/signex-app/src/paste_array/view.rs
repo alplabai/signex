@@ -106,11 +106,12 @@ fn field<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, PasteArrayMsg> {
     let r = tokens::resolve(tokens);
-    let mut line: Row<'a, PasteArrayMsg> = Row::new().spacing(SP.s).align_y(Alignment::Center);
+    let mut line: Row<Element<'a, PasteArrayMsg>> =
+        Row::new().spacing(SP.s).align_y(Alignment::Center);
     if let Some(prefix) = prefix {
-        line = line.push(text(prefix).size(TS.body).color(r.ink3));
+        line = line.push_boxed(text(prefix).size(TS.body).color(r.ink3));
     }
-    line = line.push(
+    line = line.push_boxed(
         text_input(UserText::new(String::new()), value)
             .on_input(on_input)
             .on_submit_maybe(submit)
@@ -120,7 +121,7 @@ fn field<'a>(
             .style(bare_input(tokens)),
     );
     if let Some(unit) = suffix {
-        line = line.push(text(UserText::new(unit)).size(TS.body).color(r.ink3));
+        line = line.push_boxed(text(UserText::new(unit)).size(TS.body).color(r.ink3));
     }
     let edge = if is_invalid {
         tokens::danger(tokens)
@@ -236,7 +237,7 @@ fn layout_group<'a>(
     state: &'a PasteArrayState,
     tokens: &ThemeTokens,
     i18n: &I18n,
-) -> Column<'a, PasteArrayMsg> {
+) -> Column<Element<'a, PasteArrayMsg>> {
     let submit = state.input().is_ok().then_some(PasteArrayMsg::ApplyPressed);
     let bad = state.invalid_field();
     let unit = || Some(state.unit.to_string());
@@ -300,7 +301,7 @@ fn numbering_group<'a>(
     state: &'a PasteArrayState,
     tokens: &ThemeTokens,
     i18n: &I18n,
-) -> Column<'a, PasteArrayMsg> {
+) -> Column<Element<'a, PasteArrayMsg>> {
     let submit = state.input().is_ok().then_some(PasteArrayMsg::ApplyPressed);
     let step = container(field(
         None,
@@ -322,7 +323,7 @@ fn numbering_group<'a>(
         .on_toggle(PasteArrayMsg::CountUpToggled)
         .view(
             crate::panels::enable_section::enable_section_style(tokens),
-            step_rows,
+            step_rows.boxed(),
         );
 
     let modes = Choice::named(PasteDesignators::ALL, PasteDesignators::label, i18n);

@@ -127,7 +127,7 @@ fn find_field<'a>(
         .padding([0.0, SP.s])
         .size(TS.body)
         .width(Length::Fill);
-    let mut line: Row<'a, FindReplaceMsg> = row![glyph, input]
+    let mut line: Row<Element<'a, FindReplaceMsg>> = row![glyph, input]
         .spacing(SP.xs)
         .align_y(Alignment::Center)
         .padding([0.0, SP.m]);

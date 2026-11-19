@@ -176,7 +176,7 @@ fn table<'a>(
     ]
     .spacing(SP.m)
     .padding([0.0, SP.m]);
-    let mut rows: Column<'a, FindSimilarMsg> = column![heading].spacing(SP.xs);
+    let mut rows: Column<Element<'a, FindSimilarMsg>> = column![heading].spacing(SP.xs);
     for v in &state.values {
         rows = rows.push(property_row(
             v,
@@ -238,7 +238,7 @@ fn counts<'a>(
     } else {
         ids::FIND_SIMILAR_COUNT_SHEET
     };
-    let mut line: Row<'a, FindSimilarMsg> = row![pill(
+    let mut line: Row<Element<'a, FindSimilarMsg>> = row![pill(
         t!(i18n, here, "count" => state.sheet_matches),
         PillTone::Ok,
         tokens
@@ -280,14 +280,15 @@ pub fn view<'a>(
         tokens,
     );
 
-    let mut body: Column<'a, FindSimilarMsg> = column![table(state, tokens, i18n)].spacing(SP.m);
+    let mut body: Column<Element<'a, FindSimilarMsg>> =
+        column![table(state, tokens, i18n)].spacing(SP.m);
     // A board search reaches its own board only (#2403): no scope to pick.
     if !state.board {
         body = body.push(scope_row(state, tokens, i18n));
     }
     body = body.push(counts(state, tokens, i18n));
     if !state.board {
-        body = body.push(
+        body = body.push_boxed(
             text(t!(i18n, ids::FIND_SIMILAR_FOOTER))
                 .size(TS.caption)
                 .color(tokens::resolve(tokens).ink3),
