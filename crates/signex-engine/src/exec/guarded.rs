@@ -68,9 +68,6 @@ pub(crate) struct Record {
     pub(crate) wires: Vec<(Point, Point)>,
     /// The moved pins the pin pass kept (not those riding on a carried wire).
     pub(crate) tips: Vec<crate::PinIdent>,
-    /// New tips of the pins held on their old net whose plain pin dot the
-    /// round left out (spec gap (a)).
-    pub(crate) unjoined: Vec<Point>,
 }
 
 /// Turns [`ALL_PLAIN`] on for this thread until dropped.
@@ -232,7 +229,7 @@ impl Engine {
             let Some(blamed) = guard.check(&self.document, &contacts.tips, &policy, &edited) else {
                 self.warn_plain_pins(&guard, &contacts.tips, &policy);
                 self.warn_plain_wire_points(before, contacts, &policy, items);
-                let unjoined = self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
+                self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
                 #[cfg(test)]
                 LAST.with(|last| {
                     let plain: HashSet<_> = (policy.plain.iter().copied())
@@ -246,11 +243,8 @@ impl Engine {
                         plain,
                         wires,
                         tips,
-                        unjoined,
                     });
                 });
-                #[cfg(not(test))]
-                let _ = unjoined;
                 return patch;
             };
             // Every blamed contact is still live, so each round takes at least
@@ -300,7 +294,7 @@ impl Engine {
 
     /// One notice for the pins held on their old net whose new tip lies
     /// inside a wire the plain move would have joined them to (spec gap (a),
-    /// `transform::rubber_band::intent`); returns those tips.
+    /// `transform::rubber_band::intent`).
     fn warn_unjoined_pins(
         &mut self,
         contacts: &Contacts,
@@ -308,14 +302,14 @@ impl Engine {
         held: &[Point],
         kept: &[Point],
         tips_now: &[Option<Point>],
-    ) -> Vec<Point> {
+    ) {
         let key = signex_net::pt_key;
         let left_out = |p: &Point| {
             at.plain_dots.iter().any(|d| key(d) == key(p)) && !kept.iter().any(|d| key(d) == key(p))
         };
         let unjoined: Vec<Point> = held.iter().copied().filter(left_out).collect();
         if unjoined.is_empty() {
-            return unjoined;
+            return;
         }
         let names: Vec<String> = (contacts.tips.iter().zip(tips_now))
             .filter(|(_, now)| now.is_some_and(|p| unjoined.iter().any(|u| key(u) == key(&p))))
@@ -326,6 +320,5 @@ impl Engine {
             |name| format!("{name} kept its net and was not joined to the wire it now ends on"),
             |n| format!("{n} pins kept their nets and were not joined to the wires they end on"),
         ));
-        unjoined
     }
 }
