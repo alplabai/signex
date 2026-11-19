@@ -76,4 +76,15 @@ define_ids! {
     DIALOG_NET_COLOR_CHANNEL_G = "dialog-net-color-channel-g";
     DIALOG_NET_COLOR_CHANNEL_B = "dialog-net-color-channel-b";
     DIALOG_NET_COLOR_QUICK_PICK = "dialog-net-color-quick-pick";
+    DIALOG_PARAMETER_MANAGER_SUBTITLE = "dialog-parameter-manager-subtitle";
+    DIALOG_PARAMETER_MANAGER_FILTER_HINT = "dialog-parameter-manager-filter-hint";
+    DIALOG_PARAMETER_MANAGER_NOT_SET = "dialog-parameter-manager-not-set";
+    DIALOG_PARAMETER_MANAGER_REMOVE_COLUMN = "dialog-parameter-manager-remove-column";
+    DIALOG_PARAMETER_MANAGER_NO_MATCH_TITLE = "dialog-parameter-manager-no-match-title";
+    DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY = "dialog-parameter-manager-no-match-body";
+    DIALOG_PARAMETER_MANAGER_NO_SCHEMATIC_TITLE = "dialog-parameter-manager-no-schematic-title";
+    DIALOG_PARAMETER_MANAGER_NO_SCHEMATIC_BODY = "dialog-parameter-manager-no-schematic-body";
+    DIALOG_PARAMETER_MANAGER_FOOTER_HINT = "dialog-parameter-manager-footer-hint";
+    DIALOG_PARAMETER_MANAGER_CHANGED = "dialog-parameter-manager-changed";
+    DIALOG_PARAMETER_MANAGER_REVERT_TIP = "dialog-parameter-manager-revert-tip";
 }

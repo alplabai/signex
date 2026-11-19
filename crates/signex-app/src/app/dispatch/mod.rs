@@ -666,43 +666,6 @@ impl Signex {
             }
         }
     }
-
-    /// Parameter Manager dialog handler (namespaced family, ADR-0001 D3).
-    pub(crate) fn dispatch_parameter_manager_message(
-        &mut self,
-        msg: ParameterManagerMsg,
-    ) -> Task<Message> {
-        match msg {
-            ParameterManagerMsg::Open => {
-                // Already open: keep the filter and the half-typed column name.
-                if !self.ui_state.parameter_manager_open {
-                    self.ui_state.parameter_table = Default::default();
-                }
-                self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::state::ModalId::ParameterManager)
-            }
-            ParameterManagerMsg::Close => self.close_parameter_manager(),
-            ParameterManagerMsg::Edit {
-                symbol_uuid,
-                key,
-                value,
-            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
-            ParameterManagerMsg::CellSubmitted => {
-                self.end_parameter_edit_runs();
-                Task::none()
-            }
-            ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),
-            ParameterManagerMsg::NewKeyChanged(key) => {
-                self.ui_state.parameter_table.new_key = key;
-                Task::none()
-            }
-            ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
-            ParameterManagerMsg::FilterChanged(filter) => {
-                self.ui_state.parameter_table.filter = filter;
-                Task::none()
-            }
-        }
-    }
 }
 
 /// Ask winit for a window's OS scale; the answer lands as

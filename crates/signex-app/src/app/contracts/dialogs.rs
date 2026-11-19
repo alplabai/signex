@@ -54,6 +54,33 @@ pub enum ParameterManagerMsg {
     ColumnAdded,
     /// The row filter changed.
     FilterChanged(String),
+    /// Clear filter on the no-match card: every row shows again.
+    FilterCleared,
+    /// Revert changes: every cell edited since the dialog opened goes back
+    /// to its value from before, as one undo step.
+    SessionReverted,
+    /// The pointer entered (`is_hovered`) or left the header of parameter
+    /// column `key`. A leave names its column, so it never clears the
+    /// hover of the header just entered.
+    ColumnHeaderHovered { key: String, is_hovered: bool },
+    /// One pane of the table scrolled to `x`, `y`; the others follow, so the
+    /// header row and the Reference column stay in view.
+    TableScrolled {
+        pane: ParameterTablePane,
+        x: f32,
+        y: f32,
+    },
+}
+
+/// The scrolling panes of the Parameter Manager table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParameterTablePane {
+    /// The header row right of Reference: scrolls sideways with the body.
+    Header,
+    /// The Reference column: scrolls up and down with the body.
+    References,
+    /// The parameter cells: scroll both ways.
+    Body,
 }
 
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under
