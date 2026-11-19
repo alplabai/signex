@@ -19,7 +19,18 @@ fn send_opening(app: &mut Signex, msg: FindReplaceMsg) {
     crate::app::handlers::canvas::sheet_open_tests::finish_read(app, task);
 }
 
+/// Match as Find did before #2525, a substring in any case: these tests
+/// pin the scan and replace mechanics (`net` in `TOP_NET`), not the options.
+fn substring_search(app: &mut Signex) {
+    app.ui_state.find_replace.options = signex_engine::MatchOptions::SUBSTRING;
+}
+
+fn substring(needle: &str) -> signex_engine::FindQuery {
+    signex_engine::FindQuery::new(needle, signex_engine::MatchOptions::SUBSTRING).unwrap()
+}
+
 fn project_search(app: &mut Signex, query: &str) {
+    substring_search(app);
     send(app, FindReplaceMsg::ScopeChanged(FindScope::Project));
     send(app, FindReplaceMsg::QueryChanged(query.into()));
     app.run_project_scan_blocking();
@@ -218,7 +229,7 @@ fn project_replace_never_shadows_an_open_tab_under_another_spelling() {
     let label = app.document_state.engines[&child].document().labels[0].uuid;
     let hit = signex_engine::scan_sheet(
         app.document_state.engines[&child].document(),
-        "child_net",
+        &substring("child_net"),
         &signex_engine::DesignatorScope::default(),
     )
     .remove(0);
@@ -647,6 +658,7 @@ fn a_singly_placed_sheet_designator_replace_writes_reference_and_drops_the_entry
 fn sheet_scope_replace_only_touches_the_active_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, top, child) = placed_twice_on_disk(&dir);
+    substring_search(&mut app);
     send(&mut app, FindReplaceMsg::QueryChanged("net".into()));
     send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
     assert_eq!(
@@ -1242,4 +1254,220 @@ fn undoing_a_replace_on_a_cached_sheet_makes_it_clean_again() {
         !app.document_state.is_document_dirty(&child),
         "back at the save point"
     );
+}
+
+// ---- #2525: match options and the include boxes ----
+
+/// `placed_twice_on_disk` with net labels `texts` added to the open top
+/// sheet; returns their ids in order.
+fn top_with_labels(texts: &[&str]) -> (Signex, tempfile::TempDir, PathBuf, Vec<uuid::Uuid>) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    let engine = app.document_state.engines.get_mut(&top).unwrap();
+    let mut sheet = engine.document().clone();
+    let mut ids = Vec::new();
+    for (n, text) in texts.iter().enumerate() {
+        let label = signex_types::schematic::Label::new(
+            *text,
+            signex_types::schematic::Point::new(10.0 * (n as f64 + 1.0), 40.0),
+            signex_types::schematic::LabelType::Net,
+        );
+        ids.push(label.uuid);
+        sheet.labels.push(label);
+    }
+    engine.set_document(sheet);
+    (app, dir, top, ids)
+}
+
+fn label_text(app: &Signex, path: &Path, id: uuid::Uuid) -> String {
+    app.document_state.engines[path]
+        .document()
+        .labels
+        .iter()
+        .find(|l| l.uuid == id)
+        .map(|l| l.text.clone())
+        .unwrap()
+}
+
+/// The index of the result on label `id`.
+fn result_of(app: &Signex, id: uuid::Uuid) -> usize {
+    app.ui_state
+        .find_replace
+        .matches
+        .iter()
+        .position(|m| m.hit.item.uuid == id)
+        .expect("the label is a result")
+}
+
+#[test]
+fn whole_word_is_on_when_the_dialog_opens() {
+    let (mut app, _dir, _top, ids) = top_with_labels(&["VOUT", "VOUT_3V3", "VOUT_SENSE"]);
+    assert!(app.ui_state.find_replace.options.whole_word);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    let found: Vec<_> = app
+        .ui_state
+        .find_replace
+        .matches
+        .iter()
+        .map(|m| m.hit.item.uuid)
+        .collect();
+    assert_eq!(found, [ids[0]]);
+
+    send(&mut app, FindReplaceMsg::WholeWordToggled);
+    assert_eq!(app.ui_state.find_replace.matches.len(), 3);
+    send(&mut app, FindReplaceMsg::MatchCaseToggled);
+    send(&mut app, FindReplaceMsg::QueryChanged("vout".into()));
+    assert!(app.ui_state.find_replace.matches.is_empty(), "case matters");
+}
+
+#[test]
+fn an_invalid_regex_lists_nothing_and_replaces_nothing() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT"]);
+    send(&mut app, FindReplaceMsg::RegexToggled);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT(".into()));
+    assert!(app.ui_state.find_replace.find_query().is_err());
+    assert!(app.ui_state.find_replace.matches.is_empty());
+    send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+    assert_eq!(label_text(&app, &top, ids[0]), "VOUT");
+}
+
+#[test]
+fn an_excluded_row_survives_replace_all() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT_3V3"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    assert_eq!(app.ui_state.find_replace.matches.len(), 2);
+    let kept = result_of(&app, ids[1]);
+    send(&mut app, FindReplaceMsg::ResultIncludeToggled(kept));
+    assert!(!app.ui_state.find_replace.is_included(kept));
+    assert_eq!(app.ui_state.find_replace.included_count(), 1);
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    assert_eq!(label_text(&app, &top, ids[0]), "VOUT_A");
+    assert_eq!(label_text(&app, &top, ids[1]), "VOUT", "the excluded row");
+    assert_eq!(
+        label_text(&app, &top, ids[2]),
+        "VOUT_3V3",
+        "not a whole word"
+    );
+    // The refreshed list still holds the excluded row, still cleared.
+    let kept = result_of(&app, ids[1]);
+    assert!(!app.ui_state.find_replace.is_included(kept));
+}
+
+#[test]
+fn replace_all_with_exclusions_is_one_undo_step() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT", "VOUT_3V3"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    let kept = result_of(&app, ids[1]);
+    send(&mut app, FindReplaceMsg::ResultIncludeToggled(kept));
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+    let texts =
+        |app: &Signex| -> Vec<String> { ids.iter().map(|id| label_text(app, &top, *id)).collect() };
+    assert_eq!(texts(&app), ["VOUT_A", "VOUT", "VOUT_A", "VOUT_3V3"]);
+
+    undo(&mut app);
+
+    assert_eq!(
+        texts(&app),
+        ["VOUT", "VOUT", "VOUT", "VOUT_3V3"],
+        "one undo puts back every replaced row"
+    );
+}
+
+#[test]
+fn the_include_set_resets_when_the_query_options_or_scope_change() {
+    let (mut app, _dir, _top, ids) = top_with_labels(&["VOUT", "VOUT"]);
+    let clear_first = |app: &mut Signex| {
+        send(app, FindReplaceMsg::QueryChanged("VOUT".into()));
+        let index = result_of(app, ids[0]);
+        send(app, FindReplaceMsg::ResultIncludeToggled(index));
+        assert_eq!(app.ui_state.find_replace.included_count(), 1);
+    };
+
+    clear_first(&mut app);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT ".into()));
+    assert!(app.ui_state.find_replace.excluded.is_empty(), "query");
+    assert_eq!(app.ui_state.find_replace.included_count(), 2);
+
+    for change in [
+        FindReplaceMsg::MatchCaseToggled,
+        FindReplaceMsg::WholeWordToggled,
+        FindReplaceMsg::RegexToggled,
+    ] {
+        clear_first(&mut app);
+        send(&mut app, change.clone());
+        assert!(app.ui_state.find_replace.excluded.is_empty(), "{change:?}");
+        send(&mut app, change);
+    }
+
+    clear_first(&mut app);
+    send(&mut app, FindReplaceMsg::ScopeChanged(FindScope::Project));
+    assert!(app.ui_state.find_replace.excluded.is_empty(), "scope");
+
+    // A second click on the box puts the row back.
+    send(&mut app, FindReplaceMsg::ScopeChanged(FindScope::Sheet));
+    clear_first(&mut app);
+    let index = result_of(&app, ids[0]);
+    send(&mut app, FindReplaceMsg::ResultIncludeToggled(index));
+    assert_eq!(app.ui_state.find_replace.included_count(), 2);
+}
+
+#[test]
+fn a_project_replace_job_holds_only_the_included_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    project_search(&mut app, "net");
+    send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
+    let on_child = app
+        .ui_state
+        .find_replace
+        .matches
+        .iter()
+        .position(|m| m.sheet.as_deref() == Some(child.as_path()))
+        .expect("a child result");
+    send(&mut app, FindReplaceMsg::ResultIncludeToggled(on_child));
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    let job = app
+        .ui_state
+        .find_replace
+        .replace_job
+        .clone()
+        .expect("the replace waits on the disk");
+    assert!(
+        job.matches
+            .iter()
+            .all(|m| m.sheet.as_deref() != Some(child.as_path())),
+        "the excluded child row is not in the job"
+    );
+    let included = app.ui_state.find_replace.included_matches();
+    app.ui_state.find_replace.replace_job = None;
+    app.run_project_replace_blocking(included);
+    assert_eq!(first_label(&app, &top), "TOP_X");
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "the excluded closed sheet is not touched"
+    );
+}
+
+#[test]
+fn the_mode_switch_changes_the_mode_in_place() {
+    let (mut app, _dir, _top, _ids) = top_with_labels(&["VOUT"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(&mut app, FindReplaceMsg::ModeChanged(true));
+    assert!(app.ui_state.find_replace.replace_mode);
+    assert_eq!(app.ui_state.find_replace.matches.len(), 1, "results kept");
+    send(&mut app, FindReplaceMsg::ModeChanged(false));
+    assert!(!app.ui_state.find_replace.replace_mode);
 }
