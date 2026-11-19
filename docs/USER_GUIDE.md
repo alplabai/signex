@@ -1150,3 +1150,50 @@ label. The complete lists are in the
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+<!-- Preferences: Distributor APIs and Component Classes pages -->
+## Preferences: Distributor APIs
+
+**Preferences ▸ Library ▸ Distributor APIs** holds the accounts Signex uses to
+fetch prices, stock and part data. Keys and tokens are kept in the OS keyring,
+never in a project file. Each distributor has a card with its state:
+
+- **DigiKey** shows *Connected as …* once connected. **Connect via OAuth**
+  opens your browser to sign in and stores the refresh token in the keyring;
+  **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
+  stored token and forgets the account; if the keyring refuses, the card says
+  why and the message is also in the Messages panel. When Signex was started
+  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
+  Connect stays off until Signex is started with that variable (and
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+- **Mouser** takes an API key. **Test** checks it with one lookup and, if it
+  works, saves it in the keyring; the card then shows *Key verified*. Editing
+  the key makes it *Not tested* again.
+- **LCSC, JLCPCB** need no key.
+
+**Order of Preference**, beside the cards, decides which distributor's adapter
+is tried first when you paste a distributor URL into the Supply tab. Drag a
+row by its handle to move it; the order is saved at once to the
+`distributors.toml` file named under the list.
+
+## Preferences: Component Classes
+
+**Preferences ▸ Library ▸ Component Classes** lists the classes a new library
+starts with. They appear in the class picker of New Component and Edit
+Component; a library's own list is edited in that library.
+
+- The **Key** is what a part stores; the **Label** is what pickers show. Click
+  a cell to edit it.
+- **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
+  to type.
+- Drag a row by its handle to change the order the picker shows. The filter
+  field only hides rows; it does not change the order.
+- Point at a row and press **×** to remove it.
+- A key that is empty or used by another row is marked in red with the
+  reason. Save keeps one class per key: when two rows share a key, the lower
+  row's label is kept.
+- **Reset to Defaults…** asks before it replaces the list with the default
+  classes.
+
+Nothing on this page is kept until you save Preferences; discarding drops the
+changes.
