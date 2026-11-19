@@ -1,5 +1,7 @@
-//! `Inert` — wraps editing controls of a Component Preview tab that is
-//! open on a read-only library (the stock library, issue #329).
+//! `Inert` — wraps controls that show but take no input: the editing
+//! controls of a Component Preview tab open on a read-only library (the
+//! stock library, issue #329) and the fields of a switched-off
+//! [`EnableSection`](crate::enable_section::EnableSection).
 //!
 //! The child renders exactly as it would normally, dimmed, but takes no
 //! input: no clicks, no typing, no hover state, no focus. Only wheel
@@ -162,12 +164,12 @@ where
 #[cfg(all(test, debug_assertions))]
 mod tests {
     use super::*;
+    use crate::button;
     use iced::Widget as _;
     use iced::advanced::shell::{Bus, Waker};
     use iced::widget::Space;
     use iced::window::Headless;
     use iced::{Point, Theme};
-    use signex_widgets::button;
 
     /// Click the middle of a button built by `wrap` and return the
     /// messages it produced. `()` is iced's headless renderer.

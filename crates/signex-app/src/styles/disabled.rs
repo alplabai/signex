@@ -14,7 +14,10 @@ use super::radii::Radii;
 use super::ti;
 use super::tokens::resolve;
 
-/// Alpha of the sunken fill behind a read-only property row.
+/// Alpha of the sunken fill behind a read-only property row. A wash, not a
+/// disabled fade, so not [`DISABLED_OPACITY`]: the Graphite panels mockup
+/// mixes the row as `color-mix(in srgb, var(--sunken) 55%, transparent)`
+/// (`.prm.ro`, panels.html).
 const READ_ONLY_ROW_ALPHA: f32 = 0.55;
 
 /// Read-only field frame: sunken fill, `ink3` text, the field's hairline
