@@ -603,11 +603,13 @@ pub const DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// Waive a finding of the named board's last run; `text` is the note.
+/// Waive a finding of the named board's last run; `text` is the note and
+/// `author` who accepted it (AV-13).
 pub const WAIVE_DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
     optional("text", OperandKind::Text),
+    optional("author", OperandKind::Text),
 ];
 /// What the DRC results show: one rule id, one copper layer token, one
 /// severity (`error`, `warning`, `info`), and whether waived findings show.

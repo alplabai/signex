@@ -108,6 +108,10 @@ each as one `SetBoardOptions` undo step. `fingerprint` (#2307, 32 hex digits,
 was waived; when they change the waiver lapses. A waiver saved before #2307
 (26.11.0) has no `fingerprint` key and loads with an empty one; it lapses
 once and is waived again. A board whose waivers all lack it is re-saved byte-identical.
+`author` (AV-13) names who accepted the finding; the DRC panel's waiver
+form asks for it (it starts as the user identity) and `waive_drc_violation`
+takes it as `author=`. A waiver with no author writes no `author` key, so a
+board saved before it re-saves byte-identical.
 See `docs/architecture/pcb-drc.md`, "Waivers".
 
 The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).

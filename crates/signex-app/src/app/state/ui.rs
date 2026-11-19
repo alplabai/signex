@@ -535,6 +535,9 @@ pub struct UiState {
     pub erc_page_frames: crate::app::handlers::erc::PageFrames,
     /// The waiver being written in the ERC panel, if any (#1285).
     pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
+    /// What the ERC and Messages panels show, the cached user identity and
+    /// what the newest ERC run checked (#85, #86, AV-13).
+    pub validation_panels: crate::panels::ValidationPanels,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,

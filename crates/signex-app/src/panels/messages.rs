@@ -654,6 +654,13 @@ pub enum PanelMsg {
     },
     /// Per-finding waivers with a reason (#1285).
     ErcWaiver(super::ErcWaiverMsg),
+    /// The ERC panel's tiles, rule groups and row hover (#85).
+    ErcView(super::ErcPanelMsg),
+    /// The Messages panel's chips, filters, Copy and Clear (#86).
+    MessagesView(super::MessagesPanelMsg),
+    /// The user identity a waiver's Author starts as was read (AV-13);
+    /// `None` when neither git nor the login names anyone.
+    WaiverIdentityResolved(Option<String>),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),

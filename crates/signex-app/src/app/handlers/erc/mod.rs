@@ -62,3 +62,4 @@ mod rules_edit;
 mod rules_edit_tests;
 #[cfg(test)]
 mod rules_undo_routing_tests;
+mod validation_panels;
