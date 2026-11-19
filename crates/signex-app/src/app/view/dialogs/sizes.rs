@@ -2,7 +2,7 @@
 //! centres on it and the card takes its width from it, so the two cannot
 //! disagree about how big the dialog is.
 
-pub(super) const ANNOTATE_RESET_CONFIRM: (f32, f32) = (420.0, 180.0);
+pub(super) const ANNOTATE_RESET_CONFIRM: (f32, f32) = (420.0, 250.0);
 pub(super) const REPREFIX_CONFIRM: (f32, f32) = (560.0, 520.0);
 pub(super) const AUTOSAVE_RECOVERY: (f32, f32) = (520.0, 250.0);
 pub(super) const REMOVE: (f32, f32) = (560.0, 260.0);

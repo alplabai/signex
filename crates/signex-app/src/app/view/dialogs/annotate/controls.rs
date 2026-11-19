@@ -1,11 +1,12 @@
 //! Small form controls used by the Annotate modal: the inline checkbox pip,
-//! the uppercase section label, the order-of-processing dropdown, the Lock
-//! column header checkbox (lock or unlock every row) and the shared
-//! bordered-container style. Graphite looks come from `graphite_annotate`.
+//! the uppercase section label, the order-of-processing dropdown and its
+//! description, the Lock column header checkbox (lock or unlock every row),
+//! pills, banners, Accept with its count and the shared bordered-container
+//! style. Graphite looks come from `graphite_annotate`.
 
 use super::super::*;
-use iced::widget::{container, pick_list, scrollable};
-use iced::{Background, Border, Element, Theme};
+use iced::widget::{container, pick_list, row, scrollable};
+use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -16,6 +17,7 @@ use crate::app::state::AnnotateOrder;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Scroll-rail style of the modal's lists: a quiet pill thumb (the
 /// form-look rail).
@@ -170,6 +172,93 @@ pub(super) fn reprefix_note(
             "standard" => standard.to_string()
         ),
     }
+}
+
+/// The one-line description under the order dropdown.
+pub(super) fn order_help(order: AnnotateOrder) -> MessageId {
+    match order {
+        AnnotateOrder::UpThenAcross => ids::DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS_HELP,
+        AnnotateOrder::AcrossThenDown => ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN_HELP,
+        AnnotateOrder::DownThenAcross => ids::DIALOG_ANNOTATE_ORDER_DOWN_THEN_ACROSS_HELP,
+        AnnotateOrder::AcrossThenUp => ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_UP_HELP,
+    }
+}
+
+/// A rounded status pill: caption text on the tone's soft fill.
+pub(super) fn pill<'a>(
+    label: impl Into<signex_widgets::Label<'a>>,
+    tone: crate::styles::PillTone,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let (_, ink) = crate::styles::pill_colors(theme_tokens, tone);
+    container(
+        text(label)
+            .size(TS.caption)
+            .color(ink)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .padding([SP.xs, SP.m - SP.xs])
+    .style(crate::styles::pill(theme_tokens, tone))
+    .boxed()
+}
+
+/// A banner box: the tone's soft fill with a hairline of the tone.
+pub(super) fn banner_style(
+    theme_tokens: &ThemeTokens,
+    tone: crate::styles::PillTone,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let (fill, ink) = crate::styles::pill_colors(theme_tokens, tone);
+    let edge = Color { a: 0.35, ..ink };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            width: 1.0,
+            color: edge,
+            radius: crate::styles::Radii::GRAPHITE.button.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Accept Changes with its count: the primary button, the count in a
+/// lighter weight after the label.
+pub(super) fn accept_button<'a>(
+    i18n: &I18n,
+    changes: usize,
+    on_press: Option<Message>,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = crate::styles::tokens::resolve(theme_tokens);
+    let ink = if on_press.is_some() {
+        r.primary_ink
+    } else {
+        Color {
+            a: 0.7,
+            ..r.primary_ink
+        }
+    };
+    let count = Color { a: 0.8, ..ink };
+    button(
+        row![
+            text(t!(i18n, ids::DIALOG_ANNOTATE_ACCEPT))
+                .size(TS.label)
+                .color(ink)
+                .wrapping(iced::widget::text::Wrapping::None),
+            text(signex_i18n::UserText::new(i18n.count(changes as i64)))
+                .size(TS.caption)
+                .color(count)
+                .font(ga::mono())
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([0.0, SP.l])
+    .height(Length::Fixed(crate::styles::ChromeMetrics::DEFAULT.button))
+    .on_press_maybe(on_press)
+    .style(crate::styles::primary_button(theme_tokens))
+    .boxed()
 }
 
 #[cfg(test)]

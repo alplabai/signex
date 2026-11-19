@@ -55,10 +55,9 @@ dialog-assign-footprints-cancel = Cancel
 dialog-assign-footprints-apply = Apply
 
 dialog-annotate-matching-unavailable = Parameter matching is not available yet.
-dialog-annotate-sheet-options-unavailable = Start and Add Suffix cannot be changed yet.
+dialog-annotate-sheet-options-unavailable = Start cannot be changed yet. Add Suffix is hidden until suffixes work.
 
 ## Graphite views (#2225)
-dialog-annotate-current-sheet = Current Sheet
 dialog-annotate-order-heading = Order of Processing
 dialog-annotate-order-up-then-across = Up Then Across
 dialog-annotate-order-across-then-down = Across Then Down
@@ -68,7 +67,6 @@ dialog-annotate-process-location = Process Location of
 dialog-annotate-process-location-designator = Designator
 dialog-annotate-replace-sub-parts = Replace Sub-Parts
 dialog-annotate-replace-sub-parts-off = Off
-dialog-annotate-no-custom-parameters = No custom parameters on any symbol yet.
 dialog-annotate-matching-heading = Matching Options
 dialog-annotate-complete-packages = Complete Existing Packages
 dialog-annotate-complete-packages-none = None
@@ -76,7 +74,6 @@ dialog-annotate-sheets-heading = Schematic Sheets To Annotate
 dialog-annotate-sheets-empty = No schematic tab open.
 dialog-annotate-sheets-col-sheet = Schematic Sheet
 dialog-annotate-sheets-col-start = Start
-dialog-annotate-sheets-col-suffix = Add Suffix
 dialog-annotate-changes-heading = Proposed Change List
 dialog-annotate-col-lock = Lock
 dialog-annotate-col-current = Current
@@ -85,13 +82,12 @@ dialog-annotate-col-location = Location
 dialog-annotate-loading = Loading project sheets…
 dialog-annotate-load-failed = Could not load the project's sheets - see the Messages panel.
 dialog-annotate-nothing-to-number = No symbols need annotation — every reference has a number.
-dialog-annotate-summary-nothing = Annotation has nothing to do — all { $total } symbols on '{ $sheet }' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch.
-dialog-annotate-summary-changes = Annotation will assign new designators to { $changes } of { $total } symbols on '{ $sheet }'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.
-dialog-annotate-summary-heading = Annotation Summary
-# Count on the Proposed Change List heading. Both are whole numbers.
+# Banner when no designator changes. $total is a whole number.
+dialog-annotate-summary-nothing = Nothing to number: all { $total } designators are set. Reset All or Reset & Renumber renumbers from scratch.
+# Bold lead of the change-list banner. Both are whole numbers.
 dialog-annotate-change-count = { $changes } of { $total } designators will change
 dialog-annotate-reprefix-unavailable = Re-prefix to standard is unavailable: this project follows no designator standard. Pick one in Project Options.
-dialog-annotate-reprefix-note = Re-prefix to standard re-issues the prefix of every placed part under { $standard } and renumbers them, across the whole project, as one undo step, after you confirm a list of the changes. Sheets that are not open are loaded unsaved; nothing is written until you save. Locked parts, hand-edited prefixes and parts without a library link are left alone and listed in Messages. PCB references are not updated.
+dialog-annotate-reprefix-note = Re-prefix to standard uses { $standard } (Project Options) and works on the whole project after a confirm list. Locked parts, hand-edited prefixes and parts without a library link are left alone.
 dialog-annotate-running = Running…
 dialog-version-control-track-heading = Track in repository
 dialog-version-control-lfs = Track binary 3D models via Git LFS
@@ -138,12 +134,11 @@ dialog-annotate-reprefix = Re-prefix to standard
 dialog-annotate-reset-all = Reset All
 dialog-annotate-reset-renumber = Reset & Renumber
 dialog-annotate-accept = Accept Changes
-# Re-prefix confirm button. $count is how many parts change (a whole number);
-# the English keeps "part(s)" for every count.
+# Re-prefix confirm button. $count is how many parts change (a whole number).
 dialog-annotate-reprefix-parts =
     { $count ->
-        [one] Re-prefix { $count } part(s)
-       *[other] Re-prefix { $count } part(s)
+        [one] Re-prefix { $count } part
+       *[other] Re-prefix { $count } parts
     }
 # Autosave recovery: load the recovered copy as unsaved edits.
 dialog-autosave-recovery-restore = Restore

@@ -487,7 +487,6 @@ define_ids! {
     EDITORS_COMPONENT_READ_ONLY_FOOTER = "editors-component-read-only-footer";
     EDITORS_COMPONENT_UNSAVED_MARKER = "editors-component-unsaved-marker";
     EDITORS_COMPONENT_RELOAD_CONFIRM = "editors-component-reload-confirm";
-    DIALOG_ANNOTATE_CURRENT_SHEET = "dialog-annotate-current-sheet";
     DIALOG_ANNOTATE_ORDER_HEADING = "dialog-annotate-order-heading";
     DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS = "dialog-annotate-order-up-then-across";
     DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN = "dialog-annotate-order-across-then-down";
@@ -497,7 +496,6 @@ define_ids! {
     DIALOG_ANNOTATE_PROCESS_LOCATION_DESIGNATOR = "dialog-annotate-process-location-designator";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS = "dialog-annotate-replace-sub-parts";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS_OFF = "dialog-annotate-replace-sub-parts-off";
-    DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS = "dialog-annotate-no-custom-parameters";
     DIALOG_ANNOTATE_MATCHING_HEADING = "dialog-annotate-matching-heading";
     DIALOG_ANNOTATE_COMPLETE_PACKAGES = "dialog-annotate-complete-packages";
     DIALOG_ANNOTATE_COMPLETE_PACKAGES_NONE = "dialog-annotate-complete-packages-none";
@@ -505,7 +503,6 @@ define_ids! {
     DIALOG_ANNOTATE_SHEETS_EMPTY = "dialog-annotate-sheets-empty";
     DIALOG_ANNOTATE_SHEETS_COL_SHEET = "dialog-annotate-sheets-col-sheet";
     DIALOG_ANNOTATE_SHEETS_COL_START = "dialog-annotate-sheets-col-start";
-    DIALOG_ANNOTATE_SHEETS_COL_SUFFIX = "dialog-annotate-sheets-col-suffix";
     DIALOG_ANNOTATE_CHANGES_HEADING = "dialog-annotate-changes-heading";
     DIALOG_ANNOTATE_COL_LOCK = "dialog-annotate-col-lock";
     DIALOG_ANNOTATE_COL_CURRENT = "dialog-annotate-col-current";
@@ -515,9 +512,7 @@ define_ids! {
     DIALOG_ANNOTATE_LOAD_FAILED = "dialog-annotate-load-failed";
     DIALOG_ANNOTATE_NOTHING_TO_NUMBER = "dialog-annotate-nothing-to-number";
     DIALOG_ANNOTATE_SUMMARY_NOTHING = "dialog-annotate-summary-nothing";
-    DIALOG_ANNOTATE_SUMMARY_CHANGES = "dialog-annotate-summary-changes";
     DIALOG_ANNOTATE_CHANGE_COUNT = "dialog-annotate-change-count";
-    DIALOG_ANNOTATE_SUMMARY_HEADING = "dialog-annotate-summary-heading";
     DIALOG_ANNOTATE_REPREFIX_UNAVAILABLE = "dialog-annotate-reprefix-unavailable";
     DIALOG_ANNOTATE_REPREFIX_NOTE = "dialog-annotate-reprefix-note";
     DIALOG_ANNOTATE_RUNNING = "dialog-annotate-running";

@@ -30,9 +30,13 @@ mod stale_findings;
 mod stale_findings_tests;
 
 pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
-#[cfg(test)]
-pub(crate) use annotate_preview::AnnotatePreviewEntry;
-pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
+pub(crate) use annotate_preview::rows::{
+    AnnotateListView, AnnotateSession, PlacementLabel, SheetTickRow, TickState, change_count,
+    changing_sheets, is_changing, listed_rows, tick_state,
+};
+pub(crate) use annotate_preview::{
+    AnnotatePreviewCache, AnnotatePreviewEntry, AnnotatePreviewLoad,
+};
 pub(crate) use erc_check::ERC_CHECK;
 pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
