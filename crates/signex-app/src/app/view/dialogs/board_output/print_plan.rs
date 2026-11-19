@@ -1,4 +1,4 @@
-//! Board Print / PDF's page plan (#116): one schematic card per page of
+//! Board Print / PDF's page plan (m116): one schematic card per page of
 //! `BoardPrintOptions::page_plan`, live with the options, naming the page's
 //! sets and the layers it holds (`BoardPrintOptions::page_layers`), tagged
 //! "mirrored" on a mirrored bottom page. With no set ticked it shows its

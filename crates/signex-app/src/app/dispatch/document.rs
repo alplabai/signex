@@ -563,18 +563,7 @@ impl Signex {
             }
             // Watermark, PDF Layers and Bookmarks (#1298): no re-render, the
             // preview draws the watermark over the page.
-            msg @ (PrintPreviewMsg::WatermarkToggled(..)
-            | PrintPreviewMsg::WatermarkPresetPicked(..)
-            | PrintPreviewMsg::WatermarkTextChanged(..)
-            | PrintPreviewMsg::WatermarkOpacityChanged(..)
-            | PrintPreviewMsg::WatermarkAngleChanged(..)
-            | PrintPreviewMsg::WatermarkPagesPicked(..)
-            | PrintPreviewMsg::WatermarkRevisionToggled(..)
-            | PrintPreviewMsg::PdfLayersToggled(..)
-            | PrintPreviewMsg::PdfLayerVisibilityToggled(..)
-            | PrintPreviewMsg::BookmarkSheetsToggled(..)
-            | PrintPreviewMsg::BookmarkPartsToggled(..)
-            | PrintPreviewMsg::PartBookmarkOrderPicked(..)) => {
+            PrintPreviewMsg::PdfOption(msg) => {
                 self.handle_print_preview_pdf_option(msg);
                 self.finish_update()
             }
@@ -728,12 +717,6 @@ impl Signex {
             PrintPreviewMsg::SetBookmarkPorts(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.bookmark_ports = v;
-                }
-                self.finish_update()
-            }
-            PrintPreviewMsg::SetIncludeComponentParameters(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
-                    p.pdf_options.include_component_parameters = v;
                 }
                 self.finish_update()
             }

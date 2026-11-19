@@ -217,7 +217,7 @@ fn issue_chips<'a>(
 mod tests {
     use super::*;
 
-    /// #112: the variant is picked in one place, the toolbar: Base first,
+    /// m112: the variant is picked in one place, the toolbar: Base first,
     /// then the project's variants, a variant named Base folded into it.
     #[test]
     fn the_variant_picker_lists_base_then_the_project_variants() {

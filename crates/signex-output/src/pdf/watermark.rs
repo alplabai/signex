@@ -97,6 +97,20 @@ const PREFERRED_ALIAS: &str = "F2";
 const FALLBACK_CAP_RATIO: f64 = 0.7;
 
 impl Watermark {
+    /// The line printed under the text: "Rev B · 2026-11-19", the date alone
+    /// without a revision, `None` with neither. Fixed English whatever the
+    /// UI language: PDF text is locale-invariant (docs/DECISIONS.md,
+    /// 2026-11-07).
+    pub fn revision_line_for(revision: &str, date: &str) -> Option<String> {
+        let (revision, date) = (revision.trim(), date.trim());
+        match (revision.is_empty(), date.is_empty()) {
+            (true, true) => None,
+            (true, false) => Some(date.to_owned()),
+            (false, true) => Some(format!("Rev {revision}")),
+            (false, false) => Some(format!("Rev {revision} · {date}")),
+        }
+    }
+
     /// Whether the page at `page_index` (0-based, among the exported pages)
     /// carries the watermark.
     pub fn applies_to_page(&self, page_index: usize) -> bool {

@@ -14,7 +14,7 @@ use super::rail::rail_entries;
 use super::sheets::sheets_summary;
 use super::viewer::paper_caption;
 use crate::app::state::{PdfSection, PreviewState};
-use crate::app::{Message, PrintPreviewMsg, Signex, UiMsg};
+use crate::app::{Message, PdfOptionMsg, PrintPreviewMsg, Signex, UiMsg};
 use crate::layout_probe::{lay_out_texts, messages_on_click_at};
 
 /// The settings column laid out with room for every section.
@@ -140,8 +140,10 @@ fn folded_sections_show_their_summaries() {
     options.include_probes = false;
     options.include_blankets = false;
     options.include_collapsed_notes = true;
-    // Bookmarks and Nets: Pins, Net Labels and Component Parameters.
-    options.bookmark_ports = false;
+    // Bookmarks and Nets: Pins, Net Labels and Ports. Component parameters
+    // (on by default) has no box, so it does not count.
+    options.bookmark_ports = true;
+    options.include_component_parameters = true;
     options.global_bookmarks = false;
     options.use_physical_structure = false;
 
@@ -152,6 +154,27 @@ fn folded_sections_show_their_summaries() {
     // Folded: their boxes are not drawn.
     assert!(!texts.iter().any(|t| t == "Probes"), "{texts:#?}");
     assert_eq!(sheets_summary(&preview), (3, 4));
+}
+
+/// Bookmarks and Nets has no "Include Component Parameters" box: the
+/// exporter writes no parameter rows, and part bookmarks follow "One
+/// bookmark per part" in Bookmarks.
+#[test]
+fn bookmarks_and_nets_has_no_component_parameters_box() {
+    let (app, _task) = Signex::new();
+    let mut preview = four_sheets();
+    preview.dialog.sections.toggle(PdfSection::BookmarksAndNets);
+    let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Global Bookmarks for Components and Nets"),
+        "the section is open: {texts:#?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.contains("Component Parameters")),
+        "{texts:#?}"
+    );
 }
 
 /// Clear and Select All re-render the preview: the "N of M" count, the
@@ -238,7 +261,12 @@ fn watermark_fields_are_disabled_while_the_watermark_is_off() {
     let off = four_sheets();
     assert!(!off.dialog.watermark.is_on, "off by default");
     let (live, veiled) = click_on_and_off(&app, &on, &off, "CONFIDENTIAL");
-    let preset = |m: &PrintPreviewMsg| matches!(m, PrintPreviewMsg::WatermarkPresetPicked(_));
+    let preset = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::WatermarkPresetPicked(_))
+        )
+    };
     assert!(sent(&live, preset), "{live:?}");
     assert!(!sent(&veiled, preset), "{veiled:?}");
 }
@@ -248,15 +276,18 @@ fn watermark_fields_are_disabled_while_the_watermark_is_off() {
 #[test]
 fn layer_rows_are_disabled_while_pdf_layers_are_off() {
     let (app, _task) = Signex::new();
-    let on = four_sheets();
-    assert!(on.dialog.layers.is_on, "on by default");
-    let mut off = four_sheets();
-    off.dialog.layers.is_on = false;
+    let mut on = four_sheets();
+    on.dialog.layers.is_on = true;
+    let off = four_sheets();
+    assert!(!off.dialog.layers.is_on, "off by default");
     let (live, veiled) = click_on_and_off(&app, &on, &off, "Parts");
     let parts = |m: &PrintPreviewMsg| {
         matches!(
             m,
-            PrintPreviewMsg::PdfLayerVisibilityToggled(PdfLayer::Parts, false)
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::Parts,
+                false
+            ))
         )
     };
     assert!(sent(&live, parts), "{live:?}");
@@ -276,7 +307,9 @@ fn the_watermark_layer_row_is_disabled_while_the_watermark_is_off() {
     let (app, _task) = Signex::new();
     let mut on = four_sheets();
     on.dialog.watermark.is_on = true;
-    let off = four_sheets();
+    on.dialog.layers.is_on = true;
+    let mut off = four_sheets();
+    off.dialog.layers.is_on = true;
     let texts = texts_of(app.view_pdf_settings_column(&on), COLUMN);
     assert!(
         texts.iter().any(|t| t == "locked on in print"),
@@ -286,7 +319,10 @@ fn the_watermark_layer_row_is_disabled_while_the_watermark_is_off() {
     let row = |m: &PrintPreviewMsg| {
         matches!(
             m,
-            PrintPreviewMsg::PdfLayerVisibilityToggled(PdfLayer::Watermark, _)
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::Watermark,
+                _
+            ))
         )
     };
     assert!(sent(&live, row), "{live:?}");
@@ -303,7 +339,12 @@ fn part_bookmark_grouping_is_disabled_until_part_bookmarks() {
     let mut off = four_sheets();
     off.pdf_options.bookmark_parts = false;
     let (live, veiled) = click_on_and_off(&app, &on, &off, "A\u{2013}Z");
-    let order = |m: &PrintPreviewMsg| matches!(m, PrintPreviewMsg::PartBookmarkOrderPicked(_));
+    let order = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PartBookmarkOrderPicked(_))
+        )
+    };
     assert!(sent(&live, order), "{live:?}");
     assert!(!sent(&veiled, order), "{veiled:?}");
 }

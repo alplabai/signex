@@ -125,6 +125,7 @@ impl Signex {
             self.ui_state.board_output.dialog.as_deref_mut()
         {
             change(state);
+            state.refresh_shown();
         }
     }
 
@@ -149,6 +150,7 @@ impl Signex {
                 state.sort = ReportSort::opening(kind);
             }
             state.report = report;
+            state.refresh_shown();
         }
     }
 

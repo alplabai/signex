@@ -7,7 +7,7 @@ fab-outputs-subtitle = { $board }
 # Tooltip of the PCB Active Bar button.
 fab-outputs-tooltip = Fabrication Outputs: Gerber, drill, pick and place, test netlist, IPC-2581, ODB++, assembly drawings and STEP
 fab-outputs-intro = Writes the files a board house and an assembler need. Nothing is written until you press Generate.
-# The four groups of kinds (#115), each with how many of its kinds are ticked.
+# The four groups of kinds (mockup m115), each with how many of its kinds are ticked.
 fab-outputs-group-fabrication = Fabrication
 fab-outputs-group-single-file = Single-file job
 fab-outputs-group-assembly = Assembly

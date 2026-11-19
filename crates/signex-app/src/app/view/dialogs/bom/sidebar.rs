@@ -14,19 +14,19 @@ use signex_widgets::{Label, SegmentedStyle, button, raw, segmented, text};
 use super::super::graphite_annotate::checkbox_pip;
 use crate::app::state::{BomPreviewState, BomSidebarTab};
 use crate::styles::tokens::resolve;
-use crate::styles::{HAIRLINE, Radii, Spacing, TypeScale, ti};
+use crate::styles::{ChromeMetrics, HAIRLINE, Radii, Spacing, TypeScale, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Height of a checkbox row, as drawn.
-const CHECK_ROW_H: f32 = 24.0;
+/// Height of a checkbox row: a list row.
+const CHECK_ROW_H: f32 = ChromeMetrics::DEFAULT.row;
 /// Height of a Columns-tab row, as drawn.
 const COLUMN_ROW_H: f32 = 28.0;
 /// Width of the key column of the Export Options form, as drawn.
 const FORM_KEY_W: f32 = 56.0;
 /// Gap above a section heading, as drawn (the first one sits closer).
-const SECTION_GAP: f32 = 20.0;
+const SECTION_GAP: f32 = SP.xl + SP.s;
 
 /// The standard columns the Columns tab offers, in its order.
 static COLUMN_OPTIONS: [(BomColumn, MessageId); 14] = [

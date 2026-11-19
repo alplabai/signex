@@ -1,4 +1,4 @@
-//! #116 / #117 through `Signex::update`: Mirror the Bottom Side waits for a
+//! m116 / m117 through `Signex::update`: Mirror the Bottom Side waits for a
 //! bottom set; Board Reports' filter and sort are view only (Export CSV
 //! writes the same bytes), Net Lengths opens longest first, a heading click
 //! turns the order, and another kind opens unfiltered.

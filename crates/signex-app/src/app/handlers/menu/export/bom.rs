@@ -14,7 +14,7 @@ mod rows;
 mod tests;
 
 impl Signex {
-    /// Open the BOM preview modal, the export dialog of #112.
+    /// Open the BOM preview modal, the export dialog of m112.
     /// Builds the rolled-up table from the active project's
     /// schematic snapshot and seeds the modal with the default
     /// options. The user adjusts grouping / include flags / format

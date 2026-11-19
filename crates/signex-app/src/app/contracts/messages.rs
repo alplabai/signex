@@ -612,38 +612,14 @@ pub enum PrintPreviewMsg {
     SetBookmarkPins(bool),
     SetBookmarkNetLabels(bool),
     SetBookmarkPorts(bool),
-    SetIncludeComponentParameters(bool),
     SetGlobalBookmarks(bool),
     SetPcbColourMode(signex_output::ColourMode),
     /// A settings section header was clicked: fold or unfold it.
     SectionToggled(crate::app::state::PdfSection),
     /// The page toolbar's Fit button was pressed.
     ZoomFitPressed,
-    /// "Print a watermark" was ticked or cleared.
-    WatermarkToggled(bool),
-    /// A watermark preset (DRAFT, CONFIDENTIAL, Custom) was picked.
-    WatermarkPresetPicked(crate::app::state::WatermarkPreset),
-    /// The watermark Text field was edited.
-    WatermarkTextChanged(String),
-    /// The watermark opacity field or slider changed (percent, as text).
-    WatermarkOpacityChanged(String),
-    /// The watermark angle field or the 0 / 45 / 90 switch changed
-    /// (degrees, as text).
-    WatermarkAngleChanged(String),
-    /// All pages or the first only was picked for the watermark.
-    WatermarkPagesPicked(signex_output::WatermarkPages),
-    /// "Add date and revision under the text" was ticked or cleared.
-    WatermarkRevisionToggled(bool),
-    /// "Write PDF layers" was ticked or cleared.
-    PdfLayersToggled(bool),
-    /// A PDF layer's "visible when the PDF opens" box was ticked or cleared.
-    PdfLayerVisibilityToggled(signex_output::PdfLayer, bool),
-    /// "One bookmark per sheet" was ticked or cleared.
-    BookmarkSheetsToggled(bool),
-    /// "One bookmark per part" was ticked or cleared.
-    BookmarkPartsToggled(bool),
-    /// The part bookmarks' grouping (by sheet, A–Z) was picked.
-    PartBookmarkOrderPicked(signex_output::PartBookmarkOrder),
+    /// A Watermark, PDF Layers or Bookmarks control changed (#1298).
+    PdfOption(PdfOptionMsg),
 }
 
 impl PrintPreviewMsg {
@@ -701,21 +677,9 @@ impl PrintPreviewMsg {
             | Self::SetBookmarkPins(..)
             | Self::SetBookmarkNetLabels(..)
             | Self::SetBookmarkPorts(..)
-            | Self::SetIncludeComponentParameters(..)
             | Self::SetGlobalBookmarks(..)
             | Self::SetPcbColourMode(..)
-            | Self::WatermarkToggled(..)
-            | Self::WatermarkPresetPicked(..)
-            | Self::WatermarkTextChanged(..)
-            | Self::WatermarkOpacityChanged(..)
-            | Self::WatermarkAngleChanged(..)
-            | Self::WatermarkPagesPicked(..)
-            | Self::WatermarkRevisionToggled(..)
-            | Self::PdfLayersToggled(..)
-            | Self::PdfLayerVisibilityToggled(..)
-            | Self::BookmarkSheetsToggled(..)
-            | Self::BookmarkPartsToggled(..)
-            | Self::PartBookmarkOrderPicked(..) => false,
+            | Self::PdfOption(..) => false,
         }
     }
 }

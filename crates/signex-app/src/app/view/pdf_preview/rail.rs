@@ -17,7 +17,7 @@ pub(super) const RAIL_W: f32 = 152.0;
 const THUMB_W: f32 = 128.0;
 const THUMB_H: f32 = 91.0;
 /// Padding of the list and the gap between its thumbnails.
-const RAIL_PAD: f32 = 10.0;
+const RAIL_PAD: f32 = SP.m + SP.xs;
 
 /// What a thumbnail stands for.
 #[derive(Debug, Clone, PartialEq)]

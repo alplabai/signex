@@ -1,4 +1,4 @@
-//! The Fabrication Outputs dialog (#2388; laid out as #115): the kinds of
+//! The Fabrication Outputs dialog (#2388; laid out as m115): the kinds of
 //! file in four groups over two columns, the destination, Generate, and the
 //! outcome with its notes. State and rules: `app/fab_outputs/`.
 

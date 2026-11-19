@@ -1,4 +1,4 @@
-//! #116 on screen: the page plan's cards follow `page_plan`, an empty plan
+//! m116 on screen: the page plan's cards follow `page_plan`, an empty plan
 //! disables Export PDF, and Mirror the Bottom Side takes clicks only while
 //! a bottom set is ticked.
 

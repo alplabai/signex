@@ -1,4 +1,4 @@
-//! Board Reports' table (#117): a header that stays put over the scrolling
+//! Board Reports' table (m117): a header that stays put over the scrolling
 //! rows, click-to-sort headings, 26 px rows, numbers right-aligned in the
 //! mono face, long cells on one line ending in an ellipsis with the full
 //! text on hover, and a centred empty state.

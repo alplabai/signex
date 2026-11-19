@@ -33,7 +33,6 @@ define_ids! {
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
     DIALOG_PRINT_PREVIEW_EXPORT_PDF = "dialog-print-preview-export-pdf";
     DIALOG_PRINT_PREVIEW_NO_FILES = "dialog-print-preview-no-files";
-    DIALOG_PRINT_PREVIEW_PAGE_COUNT = "dialog-print-preview-page-count";
     DIALOG_NETLIST_INCOMPLETE_TITLE = "dialog-netlist-incomplete-title";
     DIALOG_NETLIST_INCOMPLETE_BODY = "dialog-netlist-incomplete-body";
     DIALOG_BUTTON_CANCEL = "dialog-button-cancel";

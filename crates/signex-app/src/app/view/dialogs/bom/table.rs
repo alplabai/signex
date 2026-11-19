@@ -20,13 +20,13 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Height of the header and of every line (rule included), as drawn: a
 /// field tall.
 const ROW_H: f32 = ChromeMetrics::DEFAULT.field;
-/// Width of the row-number gutter, as drawn.
+/// Width of the row-number gutter, a column width fixed by the m112 mockup.
 const GUTTER_W: f32 = 34.0;
 /// Width of the flag edge at the left of a flagged line's gutter.
-const FLAG_EDGE: f32 = 2.0;
+const FLAG_EDGE: f32 = SP.xs;
 /// Width of the resize handle between two column heads; lines leave the
 /// same gap so cells stay under their heads.
-const HANDLE_W: f32 = 5.0;
+const HANDLE_W: f32 = SP.s + SP.xs / 2.0;
 /// A header press becomes a drag once the cursor has moved this far, the
 /// same threshold the tab drag ghost uses; a press-and-release without
 /// motion is a click (sort).

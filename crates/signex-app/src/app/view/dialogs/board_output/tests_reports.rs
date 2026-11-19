@@ -1,4 +1,4 @@
-//! #117 on screen: the catalog names, cells in the user's unit, numbers
+//! m117 on screen: the catalog names, cells in the user's unit, numbers
 //! right-aligned in their own columns, one growing column a report, the
 //! rows in the shown order, and the count and caption.
 
@@ -132,6 +132,7 @@ fn the_rows_show_in_the_sorted_order_with_the_count_and_the_unit() {
     assert!(texts.contains(&caption), "{texts:?}");
 
     state.filter = "v".into();
+    state.refresh_shown();
     let texts = shown_texts(&state, &i18n);
     assert!(!texts.iter().any(|t| t == "FB"), "filtered out: {texts:?}");
     let some = t!(
@@ -144,6 +145,7 @@ fn the_rows_show_in_the_sorted_order_with_the_count_and_the_unit() {
     assert!(texts.contains(&some), "{texts:?}");
 
     state.filter = "nothing".into();
+    state.refresh_shown();
     let texts = shown_texts(&state, &i18n);
     let none = t!(i18n, ids::BOARD_REPORTS_NO_MATCH).into_string();
     assert!(texts.contains(&none), "{texts:?}");

@@ -37,7 +37,7 @@ tables and has Export CSV (`export_board_report`: the table in view, the
 BOM when the dialog is closed). A table is made from the board when its
 kind is picked; Export CSV makes it again from the board as it is then.
 
-The dialog (900 x 620, #117): a toolbar with the four kinds as a segmented
+The dialog (900 x 620, mockup m117): a toolbar with the four kinds as a segmented
 switch, a filter field and the row count ("18 rows", or "3 of 18 rows"
 while the filter hides some); the table, whose header stays put while the
 rows scroll; and a footer caption that says what the rows are and the unit
@@ -107,7 +107,7 @@ bottom mirrored, fitted, colour, outline, drill holes and title block on, A4
 landscape. The dialog keeps its options for the next opening in the session.
 Export PDF asks for the file and writes it off the UI thread, crash-safe.
 
-The dialog (780 x 600, #116) puts the options on the left: Layer Sets with
+The dialog (780 x 600, mockup m116) puts the options on the left: Layer Sets with
 how many of the six are ticked, a Layout group with Pages, Scale and Ink as
 segmented controls on aligned labels, and Show. Mirror the Bottom Side is
 greyed and deaf, with a hover note, while no bottom set (Bottom Side,

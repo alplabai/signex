@@ -56,7 +56,7 @@ impl Signex {
                 container(check(
                     t!(i18n, layer_label(layer)),
                     layers.is_visible(layer),
-                    move |visible| PrintPreviewMsg::PdfLayerVisibilityToggled(layer, visible),
+                    move |visible| PdfOptionMsg::PdfLayerVisibilityToggled(layer, visible).into(),
                 ))
                 .width(Length::Fill)
             ]
@@ -70,7 +70,7 @@ impl Signex {
 
         let mut body: iced::widget::Column<Element<'a, Message>> = column![
             EnableSection::new(t!(i18n, ids::PDF_LAYERS_SWITCH), layers.is_on)
-                .on_toggle(|on| Message::PrintPreview(PrintPreviewMsg::PdfLayersToggled(on)))
+                .on_toggle(|on| Message::from(PdfOptionMsg::PdfLayersToggled(on)))
                 .view(
                     crate::panels::enable_section::enable_section_style(tokens),
                     rows.boxed(),

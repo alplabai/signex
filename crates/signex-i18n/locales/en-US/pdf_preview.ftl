@@ -132,9 +132,6 @@ pdf-watermark-pages-all = All
 pdf-watermark-pages-first = First only
 pdf-watermark-revision = Add date and revision under the text
 pdf-watermark-revision-help = e.g. "Rev B · 2026-11-18"
-# The line printed under the watermark: the project's $revision and the
-# export $date (YYYY-MM-DD).
-pdf-watermark-stamp = Rev { $revision } · { $date }
 
 ## PDF Layers
 pdf-layers-switch = Write PDF layers
@@ -167,7 +164,6 @@ pdf-net-bookmarks-help = The following bookmarks can be created in the PDF for n
 pdf-bookmark-pins = Pins
 pdf-bookmark-net-labels = Net Labels
 pdf-bookmark-ports = Ports
-pdf-include-component-parameters = Include Component Parameters
 pdf-global-bookmarks = Global Bookmarks for Components and Nets
 
 ## Schematics include

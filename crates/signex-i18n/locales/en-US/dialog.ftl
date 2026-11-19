@@ -178,9 +178,6 @@ dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
 # Footer of Print Preview when no file is ticked for export.
 dialog-print-preview-no-files = No files selected for export
-# Footer of Print Preview: $count is how many pages, a whole number. The
-# English keeps "page(s)" for every count.
-dialog-print-preview-page-count = { $count } page(s)
 dialog-netlist-incomplete-title = Netlist is incomplete
 dialog-netlist-incomplete-body = The project netlist does not cover the whole project. Exporting it would produce a file missing components and carrying the wrong net names wherever nets merge through a page that is not in it — and a PCB import cannot tell. You can export it anyway: the file stays a valid netlist, and the omitted pages are reported in the Messages panel.
 

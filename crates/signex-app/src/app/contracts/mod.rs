@@ -178,6 +178,7 @@ mod layer_strip;
 mod messages;
 mod net_nav;
 mod pcb;
+mod pdf_option;
 mod placement_extras;
 mod state;
 
@@ -194,6 +195,7 @@ pub use pcb::{
     DrcRunResult, DxfImportMsg, FootprintSwapMsg, PartSwapMsg, PcbBarMenu, PcbBarMsg, PcbMsg,
     PcbViewMsg, TuneMsg, ViewAngleEntry, ViewRotationMsg,
 };
+pub use pdf_option::PdfOptionMsg;
 pub use placement_extras::PlacementExtrasMsg;
 pub use state::*;
 

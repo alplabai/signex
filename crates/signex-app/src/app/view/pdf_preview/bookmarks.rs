@@ -36,19 +36,19 @@ impl Signex {
             .map(|(order, label)| (order, Label::from(t!(i18n, label)))),
             options.part_bookmark_order,
             look.segmented(),
-            |order| Message::PrintPreview(PrintPreviewMsg::PartBookmarkOrderPicked(order)),
+            |order| Message::from(PdfOptionMsg::PartBookmarkOrderPicked(order)),
         );
         column![
             check(
                 t!(i18n, ids::PDF_BOOKMARK_SHEETS),
                 options.bookmark_sheets,
-                PrintPreviewMsg::BookmarkSheetsToggled,
+                |on| PdfOptionMsg::BookmarkSheetsToggled(on).into(),
             ),
             check_with_help(
                 t!(i18n, ids::PDF_BOOKMARK_PARTS),
                 t!(i18n, ids::PDF_BOOKMARK_PARTS_HELP),
                 options.bookmark_parts,
-                PrintPreviewMsg::BookmarkPartsToggled,
+                |on| PdfOptionMsg::BookmarkPartsToggled(on).into(),
                 &look,
             ),
             gated(

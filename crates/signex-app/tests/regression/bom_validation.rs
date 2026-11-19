@@ -102,7 +102,7 @@ fn a_rollup_change_refreshes_the_report() {
     assert_eq!(issue_rules(&app).len(), 2);
 }
 
-/// #112, decisions F25: the one not-fitted option of the BOM dialog sets
+/// m112, decisions F25: the one not-fitted option of the BOM dialog sets
 /// both domain flags, and the export it starts carries them.
 #[test]
 fn the_not_fitted_option_reaches_the_export_with_both_flags() {
@@ -121,7 +121,7 @@ fn the_not_fitted_option_reaches_the_export_with_both_flags() {
     assert!(options.include_not_fitted, "not-fitted parts are included");
 }
 
-/// #112: the toolbar filter hides lines, never parts of the file: the
+/// m112: the toolbar filter hides lines, never parts of the file: the
 /// export written while a filter hides every line still lists every part.
 #[test]
 fn a_filter_hiding_every_line_still_exports_every_part() {

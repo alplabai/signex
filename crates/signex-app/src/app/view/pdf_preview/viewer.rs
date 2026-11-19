@@ -22,7 +22,7 @@ const TOOLBAR_H: f32 = 36.0;
 const STEP_BUTTON: f32 = 24.0;
 const STEP_ICON: f32 = 14.0;
 /// Space around the page.
-const PAGE_MARGIN: f32 = 20.0;
+const PAGE_MARGIN: f32 = SP.xl + SP.s;
 
 /// The paper's name and orientation, as "ISO A4 landscape".
 pub(super) fn paper_name(options: &PdfOptions, i18n: &I18n) -> String {
@@ -324,7 +324,7 @@ impl Signex {
         let options = &preview.pdf_options;
         Some(WatermarkOverlay {
             watermark: draft.settings.clone(),
-            stamp: draft.stamp(&self.ui_state.i18n),
+            stamp: draft.stamp(),
             page_mm: options.page_size.dimensions_mm(options.orientation),
         })
     }

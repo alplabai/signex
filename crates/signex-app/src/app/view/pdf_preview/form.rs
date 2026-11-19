@@ -21,10 +21,11 @@ pub(super) const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Width of a settings row's label column.
 pub(super) const KEY_W: f32 = 76.0;
 /// Gap between a row's label and its control.
-pub(super) const KEY_GAP: f32 = 10.0;
+pub(super) const KEY_GAP: f32 = SP.m + SP.xs;
 /// Indent of a dependent under its checkbox: the box plus its gap.
-pub(super) const SUB_INDENT: f32 = 22.0;
-/// Width of a numeric field (opacity, angle, scale percent).
+pub(super) const SUB_INDENT: f32 = SP.xl + SP.s + SP.xs;
+/// Width of a numeric field (opacity, angle, scale percent), fixed by the
+/// m111 / m168 mockups.
 pub(super) const NUM_W: f32 = 56.0;
 /// Height of a section header.
 const SECTION_H: f32 = 26.0;
@@ -274,8 +275,10 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
 }
 
 /// Bookmarks and Nets: what a net bookmark lists (indented under the help
-/// line), then the component parameters and the global bookmarks.
-pub(super) fn net_bookmarks() -> [Toggle; 5] {
+/// line), then the global bookmarks. No component-parameters box: the
+/// exporter writes no parameter rows yet (docs/PDF_EXPORT.md), so it would
+/// change nothing.
+pub(super) fn net_bookmarks() -> [Toggle; 4] {
     use signex_i18n::ids;
     [
         toggle(
@@ -295,12 +298,6 @@ pub(super) fn net_bookmarks() -> [Toggle; 5] {
             |o| o.bookmark_ports,
             PrintPreviewMsg::SetBookmarkPorts,
             true,
-        ),
-        toggle(
-            ids::PDF_INCLUDE_COMPONENT_PARAMETERS,
-            |o| o.include_component_parameters,
-            PrintPreviewMsg::SetIncludeComponentParameters,
-            false,
         ),
         toggle(
             ids::PDF_GLOBAL_BOOKMARKS,

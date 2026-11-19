@@ -172,6 +172,10 @@ pub struct BoardReportsState {
     /// The column the rows are shown sorted by; `None` keeps the report's
     /// own order.
     pub sort: Option<ReportSort>,
+    /// The rows the table shows, as indices into `report.rows`: `shown_rows`
+    /// of the three fields above, worked out in update so the view only
+    /// reads it. Call [`Self::refresh_shown`] after changing them.
+    pub shown: Vec<usize>,
 }
 
 impl BoardReportsState {
@@ -179,13 +183,21 @@ impl BoardReportsState {
     /// with.
     pub fn new(board: PathBuf, board_name: String, report: BoardReport) -> Self {
         let sort = ReportSort::opening(report.kind);
-        Self {
+        let mut state = Self {
             board,
             board_name,
             report,
             filter: String::new(),
             sort,
-        }
+            shown: Vec::new(),
+        };
+        state.refresh_shown();
+        state
+    }
+
+    /// Work `shown` out again from the report, the filter and the sort.
+    pub fn refresh_shown(&mut self) {
+        self.shown = shown_rows(&self.report, &self.filter, self.sort);
     }
 }
 

@@ -89,7 +89,6 @@ define_ids! {
     PDF_WATERMARK_PAGES_FIRST = "pdf-watermark-pages-first";
     PDF_WATERMARK_REVISION = "pdf-watermark-revision";
     PDF_WATERMARK_REVISION_HELP = "pdf-watermark-revision-help";
-    PDF_WATERMARK_STAMP = "pdf-watermark-stamp";
     PDF_LAYERS_SWITCH = "pdf-layers-switch";
     PDF_LAYERS_HELP = "pdf-layers-help";
     PDF_LAYERS_OFF = "pdf-layers-off";
@@ -115,7 +114,6 @@ define_ids! {
     PDF_BOOKMARK_PINS = "pdf-bookmark-pins";
     PDF_BOOKMARK_NET_LABELS = "pdf-bookmark-net-labels";
     PDF_BOOKMARK_PORTS = "pdf-bookmark-ports";
-    PDF_INCLUDE_COMPONENT_PARAMETERS = "pdf-include-component-parameters";
     PDF_GLOBAL_BOOKMARKS = "pdf-global-bookmarks";
     PDF_NO_ERC_MARKERS = "pdf-no-erc-markers";
     PDF_NO_CONNECT_MARKERS = "pdf-no-connect-markers";

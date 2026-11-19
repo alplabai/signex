@@ -362,16 +362,20 @@ and Export PDF… asks where to save.
 
 Watermark, PDF Layers and Bookmarks (#1298): "Print a watermark" is off by
 default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
-opacity, angle (0, 45, 90 or typed) and colour, on every page or the first
-only, optionally with a "Rev · date" line (the revision from the title block,
-the date of the export). The page preview draws it where the PDF prints it;
-switched off, its settings are kept for when it is on again. "Write PDF
-layers" is on by default: each group (wires and buses, parts, net labels and
-ports, power ports, title block and border, watermark) is a layer a PDF reader
-can switch, its box says whether it is visible when the PDF opens; the
-watermark row is greyed while no watermark prints. Bookmarks: one per sheet,
-one per part (grouped by sheet or A–Z) and one per net (the nets information
-the PDF has always carried; it is no longer also under Bookmarks and Nets).
+opacity and angle (0, 45, 90 or typed), in a fixed red (#C0392B, shown as a
+swatch; the dialog has no colour picker), on every page or the first only,
+optionally with a "Rev · date" line in English (the revision from the title
+block, the date of the export). The page preview draws it where the PDF
+prints it; switched off, its settings are kept for when it is on again.
+"Write PDF layers" is off by default, so the PDF stays flat as before; on,
+each group (wires and buses, parts, net labels and ports, power ports, title
+block and border, watermark) is a layer a PDF reader can switch, its box says
+whether it is visible when the PDF opens; the watermark row is greyed while no
+watermark prints. Bookmarks: one per sheet, one per part (grouped by sheet or
+A–Z) and one per net (the nets information the PDF has always carried; it is
+no longer also under Bookmarks and Nets). Part bookmarks follow "One bookmark
+per part" only; Bookmarks and Nets has no Include Component Parameters box
+any more, because the exporter writes no parameter rows yet.
 
 On a board (#2402) both rows are live and open Board Print / PDF instead: the
 layer sets, one page per set or one composite page, the bottom side mirrored,

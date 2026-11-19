@@ -5,7 +5,6 @@
 
 use std::collections::BTreeSet;
 
-use signex_i18n::{I18n, ids};
 use signex_output::{PdfLayer, PdfLayerVisibility, PdfOptions, Watermark, WatermarkText};
 
 use super::PreviewState;
@@ -186,25 +185,18 @@ impl WatermarkDraft {
 
     /// The line printed under the text, such as "Rev B · 2026-11-19"; `None`
     /// while the box is clear or there is neither a revision nor a date.
-    pub fn stamp(&self, i18n: &I18n) -> Option<String> {
+    /// Fixed English, never the UI language: it is PDF text.
+    pub fn stamp(&self) -> Option<String> {
         if !self.with_revision {
             return None;
         }
-        let (revision, date) = (self.revision.trim(), self.date.trim());
-        match (revision.is_empty(), date.is_empty()) {
-            (true, true) => None,
-            (true, false) => Some(date.to_owned()),
-            _ => Some(i18n.message_plain(
-                ids::PDF_WATERMARK_STAMP,
-                &[("revision", revision.into()), ("date", date.into())],
-            )),
-        }
+        Watermark::revision_line_for(&self.revision, &self.date)
     }
 
     /// The watermark the PDF prints: `None` while the switch is off.
-    pub fn output(&self, i18n: &I18n) -> Option<Watermark> {
+    pub fn output(&self) -> Option<Watermark> {
         self.is_on.then(|| Watermark {
-            revision_line: self.stamp(i18n),
+            revision_line: self.stamp(),
             ..self.settings.clone()
         })
     }
@@ -238,8 +230,10 @@ pub fn angle_text(angle_deg: f64) -> String {
     }
 }
 
-/// The PDF Layers section. On by default in the dialog (the drawn option of
-/// the #168 design); every group visible when the PDF opens.
+/// The PDF Layers section. Off by default, so an export stays a flat PDF as
+/// before #1298 until the user ticks it (the m168 design draws it on; that
+/// default waits for the maintainer's OK). Every group visible when the PDF
+/// opens.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PdfLayersDraft {
     pub is_on: bool,
@@ -249,7 +243,7 @@ pub struct PdfLayersDraft {
 impl Default for PdfLayersDraft {
     fn default() -> Self {
         Self {
-            is_on: true,
+            is_on: false,
             visibility: PdfLayerVisibility {
                 hidden_on_open: BTreeSet::new(),
             },
@@ -289,9 +283,9 @@ impl PreviewState {
     /// and the layers, each only while its switch is on. The preview
     /// rasterises `pdf_options` as is and draws the watermark over the page
     /// itself, so `pdf_options.watermark` and `.layers` stay `None`.
-    pub fn output_options(&self, i18n: &I18n) -> PdfOptions {
+    pub fn output_options(&self) -> PdfOptions {
         PdfOptions {
-            watermark: self.dialog.watermark.output(i18n),
+            watermark: self.dialog.watermark.output(),
             layers: self.dialog.layers.output(),
             ..self.pdf_options.clone()
         }
@@ -353,20 +347,19 @@ mod tests {
 
     #[test]
     fn the_watermark_is_off_by_default_and_keeps_its_settings_while_off() {
-        let i18n = I18n::en_us();
         let mut draft = WatermarkDraft::default();
         assert!(!draft.is_on);
-        assert_eq!(draft.output(&i18n), None);
+        assert_eq!(draft.output(), None);
         draft.pick_preset(WatermarkPreset::Confidential);
         draft.set_opacity("40".into());
         draft.is_on = true;
-        let printed = draft.output(&i18n).expect("on");
+        let printed = draft.output().expect("on");
         assert_eq!(printed.text, WatermarkText::Confidential);
         assert_eq!(printed.opacity_percent, 40);
         draft.is_on = false;
-        assert_eq!(draft.output(&i18n), None);
+        assert_eq!(draft.output(), None);
         draft.is_on = true;
-        assert_eq!(draft.output(&i18n), Some(printed), "restored as it was");
+        assert_eq!(draft.output(), Some(printed), "restored as it was");
     }
 
     #[test]
@@ -422,25 +415,26 @@ mod tests {
 
     #[test]
     fn the_stamp_reads_rev_and_date_only_when_ticked() {
-        let i18n = I18n::en_us();
         let mut draft = WatermarkDraft {
             revision: "B".into(),
             date: "2026-11-19".into(),
             ..WatermarkDraft::default()
         };
-        assert_eq!(draft.stamp(&i18n), None);
+        assert_eq!(draft.stamp(), None);
         draft.with_revision = true;
-        assert_eq!(draft.stamp(&i18n).as_deref(), Some("Rev B · 2026-11-19"));
+        assert_eq!(draft.stamp().as_deref(), Some("Rev B · 2026-11-19"));
         draft.revision.clear();
-        assert_eq!(draft.stamp(&i18n).as_deref(), Some("2026-11-19"));
+        assert_eq!(draft.stamp().as_deref(), Some("2026-11-19"));
         draft.date.clear();
-        assert_eq!(draft.stamp(&i18n), None);
+        assert_eq!(draft.stamp(), None);
     }
 
     #[test]
-    fn layers_are_written_by_default_and_flat_when_switched_off() {
+    fn layers_are_flat_by_default_and_written_when_switched_on() {
         let mut layers = PdfLayersDraft::default();
-        assert!(layers.is_on);
+        assert!(!layers.is_on);
+        assert_eq!(layers.output(), None, "a flat PDF, as before #1298");
+        layers.is_on = true;
         layers.set_visible(PdfLayer::Parts, false);
         let written = layers.output().expect("on");
         assert!(written.hidden_on_open.contains(&PdfLayer::Parts));
@@ -452,17 +446,18 @@ mod tests {
 
     #[test]
     fn the_exporter_gets_watermark_and_layers_only_while_switched_on() {
-        let i18n = I18n::en_us();
         let mut preview = PreviewState::blank_for_tests();
-        let options = preview.output_options(&i18n);
+        let options = preview.output_options();
         assert_eq!(options.watermark, None, "watermark off by default");
-        assert!(options.layers.is_some(), "layers on by default");
+        assert_eq!(options.layers, None, "layers off by default");
 
         preview.dialog.watermark.is_on = true;
-        preview.dialog.layers.is_on = false;
-        let options = preview.output_options(&i18n);
+        preview.dialog.layers.is_on = true;
+        let options = preview.output_options();
         assert!(options.watermark.is_some());
-        assert_eq!(options.layers, None);
+        assert!(options.layers.is_some());
+        preview.dialog.layers.is_on = false;
+        assert_eq!(preview.output_options().layers, None);
         assert_eq!(
             preview.pdf_options.watermark, None,
             "the preview's own options never carry the watermark"

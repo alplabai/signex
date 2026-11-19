@@ -20,7 +20,7 @@ drawing as a PDF, the assembly drawings as SVG, and the board's STEP model.
 By default every kind is ticked but the SVG drawings and the STEP model,
 and ODB++ is the archive.
 
-The dialog (720 x 640, #115) lists the kinds in four groups over two
+The dialog (720 x 640, mockup m115) lists the kinds in four groups over two
 columns: Fabrication (Gerber RS-274X, Excellon drill, IPC-D-356 test
 netlist) and Single-file job (IPC-2581 revision C, ODB++ job) on the left,
 Assembly (pick and place, the assembly drawing PDF, the assembly drawing

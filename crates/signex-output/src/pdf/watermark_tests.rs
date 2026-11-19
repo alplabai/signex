@@ -117,6 +117,23 @@ fn mono_and_greyscale_convert_the_colour_like_the_page() {
 }
 
 #[test]
+fn the_revision_line_is_fixed_english() {
+    assert_eq!(
+        Watermark::revision_line_for(" B ", "2026-11-19").as_deref(),
+        Some("Rev B · 2026-11-19")
+    );
+    assert_eq!(
+        Watermark::revision_line_for("", "2026-11-19").as_deref(),
+        Some("2026-11-19")
+    );
+    assert_eq!(
+        Watermark::revision_line_for("C", " ").as_deref(),
+        Some("Rev C")
+    );
+    assert_eq!(Watermark::revision_line_for(" ", ""), None);
+}
+
+#[test]
 fn the_revision_line_is_drawn_only_when_set() {
     let ctx = sample_ctx(1);
     let shows = |ops: &str| ops.matches(" Tj\n").count();

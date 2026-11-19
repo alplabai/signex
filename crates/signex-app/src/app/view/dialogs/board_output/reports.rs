@@ -1,4 +1,4 @@
-//! The Board Reports dialog (#117): the kind switch, the filter field and
+//! The Board Reports dialog (m117): the kind switch, the filter field and
 //! the row count over the table (`reports_table.rs`), then the unit caption
 //! with Cancel and Export CSV…. The filter and the sort are view only;
 //! Export CSV writes the report as the board makes it.
@@ -13,7 +13,6 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, segmented, text, text_input};
 
 use super::{SP, TS, kit, out};
-use crate::app::board_output::shown_rows;
 use crate::app::{BoardOutputMsg, BoardReportsState, Message};
 use crate::styles::{DialogButtonKind, chrome_px, dialog_button, dialog_footer_split, tokens};
 
@@ -101,11 +100,11 @@ pub(super) fn parts<'a>(
         super::super::header::DIALOG_HEADER_H,
         tokens,
     );
-    let shown = shown_rows(&state.report, &state.filter, state.sort);
+    let shown = &state.shown;
     let body = column![
         toolbar(state, shown.len(), i18n, tokens),
         kit::rule(tokens::resolve(tokens).line_soft),
-        super::reports_table::table(state, &shown, unit, i18n, tokens),
+        super::reports_table::table(state, shown, unit, i18n, tokens),
     ]
     .height(Length::Fill)
     .boxed();

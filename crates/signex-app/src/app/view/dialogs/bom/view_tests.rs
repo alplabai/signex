@@ -1,4 +1,4 @@
-//! #112: the laid-out BOM dialog reads as drawn: one variant control, the
+//! m112: the laid-out BOM dialog reads as drawn: one variant control, the
 //! one not-fitted option, an issue chip, a footer without the variant, and
 //! Cancel beside the format-named Export.
 

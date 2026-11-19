@@ -24,6 +24,16 @@ pub(super) fn colour_hex([r, g, b]: [u8; 3]) -> String {
     format!("#{r:02X}{g:02X}{b:02X}")
 }
 
+/// The Opacity field was typed in.
+fn opacity_typed(text: String) -> PrintPreviewMsg {
+    PdfOptionMsg::WatermarkOpacityChanged(text).into()
+}
+
+/// The Angle field was typed in.
+fn angle_typed(text: String) -> PrintPreviewMsg {
+    PdfOptionMsg::WatermarkAngleChanged(text).into()
+}
+
 impl Signex {
     /// The Watermark section body.
     pub(super) fn view_pdf_watermark<'a>(
@@ -48,7 +58,7 @@ impl Signex {
             .map(|(preset, label)| (preset, Label::from(t!(i18n, label)))),
             draft.preset(),
             look.segmented(),
-            |preset| Message::PrintPreview(PrintPreviewMsg::WatermarkPresetPicked(preset)),
+            |preset| Message::from(PdfOptionMsg::WatermarkPresetPicked(preset)),
         );
 
         // The preset's printed text shows read-only; Custom text is typed.
@@ -61,7 +71,7 @@ impl Signex {
         .width(Length::Fill)
         .style(crate::panels::form_look::text_input_style);
         let text_field = if draft.preset() == WatermarkPreset::Custom {
-            text_field.on_input(|v| Message::PrintPreview(PrintPreviewMsg::WatermarkTextChanged(v)))
+            text_field.on_input(|v| Message::from(PdfOptionMsg::WatermarkTextChanged(v)))
         } else {
             text_field
         };
@@ -71,9 +81,7 @@ impl Signex {
                 0.0..=100.0,
                 f32::from(settings.opacity_percent),
                 |v: f32| {
-                    Message::PrintPreview(PrintPreviewMsg::WatermarkOpacityChanged(format!(
-                        "{v:.0}"
-                    )))
+                    Message::from(PdfOptionMsg::WatermarkOpacityChanged(format!("{v:.0}")))
                 }
             )
             .step(1.0)
@@ -81,7 +89,7 @@ impl Signex {
             num_field(
                 &draft.opacity_input,
                 Length::Fixed(NUM_W),
-                Some(PrintPreviewMsg::WatermarkOpacityChanged)
+                Some(opacity_typed)
             ),
             unit(t!(i18n, ids::PDF_UNIT_PERCENT), &look),
         ]
@@ -97,18 +105,14 @@ impl Signex {
             draft.angle_preset(),
             look.segmented(),
             |angle: Option<i32>| {
-                Message::PrintPreview(PrintPreviewMsg::WatermarkAngleChanged(
+                Message::from(PdfOptionMsg::WatermarkAngleChanged(
                     angle.unwrap_or_default().to_string(),
                 ))
             },
         );
         let angle = row![
             container(angle_switch).width(Length::Fill),
-            num_field(
-                &draft.angle_input,
-                Length::Fixed(NUM_W),
-                Some(PrintPreviewMsg::WatermarkAngleChanged)
-            ),
+            num_field(&draft.angle_input, Length::Fixed(NUM_W), Some(angle_typed)),
             unit(t!(i18n, ids::PDF_UNIT_DEGREE), &look),
         ]
         .spacing(SP.s)
@@ -149,7 +153,7 @@ impl Signex {
             .map(|(pages, label)| (pages, Label::from(t!(i18n, label)))),
             settings.pages,
             look.segmented(),
-            |pages| Message::PrintPreview(PrintPreviewMsg::WatermarkPagesPicked(pages)),
+            |pages| Message::from(PdfOptionMsg::WatermarkPagesPicked(pages)),
         );
 
         let fields = column![
@@ -163,7 +167,7 @@ impl Signex {
                 t!(i18n, ids::PDF_WATERMARK_REVISION),
                 t!(i18n, ids::PDF_WATERMARK_REVISION_HELP),
                 draft.with_revision,
-                PrintPreviewMsg::WatermarkRevisionToggled,
+                |on| PdfOptionMsg::WatermarkRevisionToggled(on).into(),
                 &look,
             ),
         ]
@@ -171,7 +175,7 @@ impl Signex {
         .width(Length::Fill);
 
         EnableSection::new(t!(i18n, ids::PDF_WATERMARK_SWITCH), draft.is_on)
-            .on_toggle(|on| Message::PrintPreview(PrintPreviewMsg::WatermarkToggled(on)))
+            .on_toggle(|on| Message::from(PdfOptionMsg::WatermarkToggled(on)))
             .view(
                 crate::panels::enable_section::enable_section_style(tokens),
                 fields.boxed(),

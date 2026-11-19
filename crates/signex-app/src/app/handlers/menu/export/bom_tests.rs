@@ -1,4 +1,4 @@
-//! #112: the BOM dialog's table state (filter, flags, issue lines) and the
+//! m112: the BOM dialog's table state (filter, flags, issue lines) and the
 //! one not-fitted option.
 
 use std::path::PathBuf;

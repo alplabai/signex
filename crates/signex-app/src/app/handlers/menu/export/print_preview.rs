@@ -249,7 +249,7 @@ impl Signex {
         let (source, pdf_options, files) = match self.document_state.preview.as_ref() {
             Some(preview) => {
                 // The watermark and the PDF layers only while switched on.
-                let mut options = preview.output_options(&self.ui_state.i18n);
+                let mut options = preview.output_options();
                 if matches!(options.page_range, PageRange::Specific(_)) {
                     let parsed = preview.specific_page_input.trim().parse::<usize>().ok();
                     let page = match parsed {
@@ -533,29 +533,28 @@ impl Signex {
 
     /// The Watermark, PDF Layers and Bookmarks controls (#1298). None of them
     /// changes the rasterised page: the preview draws the watermark over it.
-    /// The dispatcher routes only the variants matched here.
-    pub(crate) fn handle_print_preview_pdf_option(&mut self, msg: PrintPreviewMsg) {
+    /// The dispatcher routes every `PrintPreviewMsg::PdfOption` here.
+    pub(crate) fn handle_print_preview_pdf_option(&mut self, msg: PdfOptionMsg) {
         let Some(preview) = self.document_state.preview.as_mut() else {
             return;
         };
         let dialog = &mut preview.dialog;
         let options = &mut preview.pdf_options;
         match msg {
-            PrintPreviewMsg::WatermarkToggled(on) => dialog.watermark.is_on = on,
-            PrintPreviewMsg::WatermarkPresetPicked(preset) => dialog.watermark.pick_preset(preset),
-            PrintPreviewMsg::WatermarkTextChanged(text) => dialog.watermark.set_text(text),
-            PrintPreviewMsg::WatermarkOpacityChanged(text) => dialog.watermark.set_opacity(text),
-            PrintPreviewMsg::WatermarkAngleChanged(text) => dialog.watermark.set_angle(text),
-            PrintPreviewMsg::WatermarkPagesPicked(pages) => dialog.watermark.settings.pages = pages,
-            PrintPreviewMsg::WatermarkRevisionToggled(on) => dialog.watermark.with_revision = on,
-            PrintPreviewMsg::PdfLayersToggled(on) => dialog.layers.is_on = on,
-            PrintPreviewMsg::PdfLayerVisibilityToggled(layer, visible) => {
+            PdfOptionMsg::WatermarkToggled(on) => dialog.watermark.is_on = on,
+            PdfOptionMsg::WatermarkPresetPicked(preset) => dialog.watermark.pick_preset(preset),
+            PdfOptionMsg::WatermarkTextChanged(text) => dialog.watermark.set_text(text),
+            PdfOptionMsg::WatermarkOpacityChanged(text) => dialog.watermark.set_opacity(text),
+            PdfOptionMsg::WatermarkAngleChanged(text) => dialog.watermark.set_angle(text),
+            PdfOptionMsg::WatermarkPagesPicked(pages) => dialog.watermark.settings.pages = pages,
+            PdfOptionMsg::WatermarkRevisionToggled(on) => dialog.watermark.with_revision = on,
+            PdfOptionMsg::PdfLayersToggled(on) => dialog.layers.is_on = on,
+            PdfOptionMsg::PdfLayerVisibilityToggled(layer, visible) => {
                 dialog.layers.set_visible(layer, visible);
             }
-            PrintPreviewMsg::BookmarkSheetsToggled(on) => options.bookmark_sheets = on,
-            PrintPreviewMsg::BookmarkPartsToggled(on) => options.bookmark_parts = on,
-            PrintPreviewMsg::PartBookmarkOrderPicked(order) => options.part_bookmark_order = order,
-            _ => {}
+            PdfOptionMsg::BookmarkSheetsToggled(on) => options.bookmark_sheets = on,
+            PdfOptionMsg::BookmarkPartsToggled(on) => options.bookmark_parts = on,
+            PdfOptionMsg::PartBookmarkOrderPicked(order) => options.part_bookmark_order = order,
         }
     }
 

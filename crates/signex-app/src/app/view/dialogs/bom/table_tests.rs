@@ -111,7 +111,7 @@ fn value_column_sorts_by_quantity() {
     assert_eq!(desc, vec![2, 4, 5, 0, 3, 1]);
 }
 
-/// #112: the numbers (Qty, prices, Stock, Buy Qty) are right-aligned in the
+/// m112: the numbers (Qty, prices, Stock, Buy Qty) are right-aligned in the
 /// mono face; the footprint is mono too; text columns are neither.
 #[test]
 fn numeric_columns_are_right_aligned_and_mono() {
@@ -135,7 +135,7 @@ fn numeric_columns_are_right_aligned_and_mono() {
     }
 }
 
-/// #112 and decisions F25, on both Graphite themes: a flagged line takes the
+/// m112 and decisions F25, on both Graphite themes: a flagged line takes the
 /// soft warning (or error) tint and its gutter the flag colour; a selected
 /// line takes the neutral selection fill, never the warning amber; a clean
 /// line has no fill at rest and notes flag nothing.

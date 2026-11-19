@@ -23,8 +23,9 @@ whatever the UI language.
 | `include_component_parameters` | `true` | Reserved for parameter rows under each part; see below. |
 | `global_bookmarks` | `false` | The Components and Nets groups sit under each sheet. |
 
-The domain defaults keep the watermark and the layers off. The dialog may
-open with other values; that is the dialog's choice, not the exporter's.
+The domain defaults keep the watermark and the layers off, and so does the
+Export PDF dialog. The dialog has no box for `include_component_parameters`
+while it has no effect.
 
 ## Watermark
 
@@ -47,8 +48,10 @@ angle, the colour, the pages and an optional revision line. The default is
   most of it. Its glyphs are added to the font subset.
 - **Order.** The watermark is drawn last on the page, over the drawing,
   inside its own `q ... Q`.
-- **Revision line.** The caller builds it (for example "Rev B · 2026-11-18");
-  the exporter reads no clock. It is drawn only when set.
+- **Revision line.** The caller builds it with
+  `Watermark::revision_line_for(revision, date)`, which gives fixed English
+  ("Rev B · 2026-11-18", the date alone without a revision); the exporter
+  reads no clock. It is drawn only when set.
 
 ### Placement rule
 
