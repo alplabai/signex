@@ -216,8 +216,8 @@ pub fn follow_wire_grip(
         // back where it was and follows the end like any attached wire, so its
         // own joins are never parted.
         for w in &mut document.wires {
-            if let Some((_, start, end)) = (originals.iter())
-                .find(|(id, _, _)| *id == w.uuid && carried.bailed.contains(id))
+            if let Some((_, start, end)) =
+                (originals.iter()).find(|(id, _, _)| *id == w.uuid && carried.bailed.contains(id))
             {
                 w.start = *start;
                 w.end = *end;

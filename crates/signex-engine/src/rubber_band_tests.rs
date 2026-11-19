@@ -1539,11 +1539,7 @@ thread_local! {
 
 /// Whether the plain move minted a pin dot: a new dot at a moved pin end's
 /// new tip (decision 2026-11-18), not a T where wires meet.
-fn plain_pin_dots(
-    before: &SchematicSheet,
-    plain: &SchematicSheet,
-    items: &[SelectedItem],
-) -> bool {
+fn plain_pin_dots(before: &SchematicSheet, plain: &SchematicSheet, items: &[SelectedItem]) -> bool {
     let tips: std::collections::HashSet<_> = (crate::moved_pin_tips(plain, items).iter())
         .map(crate::PinTip::old_key)
         .collect();

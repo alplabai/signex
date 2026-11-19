@@ -726,9 +726,10 @@ impl Engine {
         // The bare pin contacts the sheet holds now: an edit that can make a
         // pin end touch a wire dots only the contacts it makes.
         self.taps_before = if makes_pin_contacts(&cmd) {
-            let taps = self.preset_taps.clone().unwrap_or_else(|| {
-                std::sync::Arc::new(transform::bare_tap_keys(&self.document))
-            });
+            let taps = self
+                .preset_taps
+                .clone()
+                .unwrap_or_else(|| std::sync::Arc::new(transform::bare_tap_keys(&self.document)));
             Some(taps)
         } else {
             None

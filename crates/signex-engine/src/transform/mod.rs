@@ -251,7 +251,10 @@ impl Engine {
             let k = signex_net::pt_key(at);
             let through = (index.segment_candidates(*at).into_iter()).any(|i| {
                 let wire = index.wire(i);
-                let (a, b) = (signex_net::pt_key(&wire.start), signex_net::pt_key(&wire.end));
+                let (a, b) = (
+                    signex_net::pt_key(&wire.start),
+                    signex_net::pt_key(&wire.end),
+                );
                 k != a && k != b && signex_net::point_on_segment(k, a, b)
             });
             if !through {
