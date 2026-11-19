@@ -133,6 +133,9 @@ pub enum WindowMsg {
     /// A press on an unfocused tile pane, carrying the index of the tab it
     /// shows: that document becomes the active one (#2249).
     TilePanePressed(usize),
+    /// Dock back was pressed in the title strip of the detached panel
+    /// window: the window closes, which re-docks the panel (m8).
+    DetachedPanelDockBackPressed(iced::window::Id),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under

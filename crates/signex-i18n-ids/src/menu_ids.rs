@@ -66,11 +66,17 @@ define_ids! {
         CTX_TAB_CLOSE = "ctx-tab-close";
         CTX_TAB_CLOSE_OTHERS = "ctx-tab-close-others";
         CTX_TAB_OPEN_IN_NEW_WINDOW = "ctx-tab-open-in-new-window";
+        CTX_TAB_CLOSE_RIGHT = "ctx-tab-close-right";
+        CTX_TAB_COPY_PATH = "ctx-tab-copy-path";
+        CTX_TAB_REVEAL_IN_PROJECTS = "ctx-tab-reveal-in-projects";
+        CTX_TAB_OVERFLOW_BUTTON = "ctx-tab-overflow-button";
+        CTX_TAB_OVERFLOW_CAPTION = "ctx-tab-overflow-caption";
         CTX_DOCK_CLOSE = "ctx-dock-close";
         CTX_DOCK_FLOAT = "ctx-dock-float";
         CTX_DOCK_LEFT = "ctx-dock-left";
         CTX_DOCK_RIGHT = "ctx-dock-right";
         CTX_DOCK_BOTTOM = "ctx-dock-bottom";
+        CTX_DOCK_BACK = "ctx-dock-back";
         CTX_COMPONENTS_ROW_PLACE = "ctx-components-row-place";
         CTX_COMPONENTS_ROW_EDIT = "ctx-components-row-edit";
         CTX_GRID_1_MIL = "ctx-grid-1-mil";

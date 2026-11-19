@@ -24,6 +24,7 @@ const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 mod bars;
 #[cfg(test)]
 mod dismiss_tests;
+mod dock_zones;
 mod modals;
 mod net_hover;
 mod palette;
@@ -492,6 +493,12 @@ impl Signex {
     ) -> Vec<Element<'_, Message>> {
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
+            // The tab strip's "+N" menu shares this slot; the menus are
+            // exclusive (`close_all_context_menus`).
+            let overflow = self.tab_overflow_menu_overlay(window_id);
+            if !overflow.is_empty() {
+                return overflow;
+            }
             return self.dock_tab_context_menu_overlay();
         };
         // Only the main window's tab strip opens this menu, so only the main
@@ -559,48 +566,9 @@ impl Signex {
         )
     }
 
-    /// Dock drop preview — paints the region the dragged floating panel
-    /// docks into if released now (`DockArea::drop_preview`).
-    pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
-        use iced::widget::{column, container, row};
-
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        let position = document.dock.drop_preview?;
-        let geometry = document.dock.drop_geometry(
-            ui.window_size,
-            (ui.left_width, ui.right_width, ui.bottom_height),
-        );
-        let depth = geometry.preview_depth(position);
-        let zone_style = crate::styles::dock_zone_highlight(&document.panel_ctx.tokens);
-        let zone = |width: Length, height: Length| {
-            container(iced::widget::Space::new())
-                .width(width)
-                .height(height)
-                .style(zone_style)
-        };
-        Some(match position {
-            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).boxed(),
-            crate::dock::PanelPosition::Right => row![
-                iced::widget::Space::new().width(Length::Fill),
-                zone(depth.into(), Length::Fill),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-            crate::dock::PanelPosition::Bottom => column![
-                iced::widget::Space::new().height(Length::Fill),
-                zone(Length::Fill, depth.into()),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-        })
-    }
-
     /// Floating panels — one `Translate`-positioned widget per floating
-    /// panel. No clamp: panels follow Altium behaviour and may be
-    /// dragged anywhere, even past the window edge (the OS clips).
+    /// panel. No clamp: a panel may be dragged anywhere, even past the
+    /// window edge (the OS clips).
     pub(super) fn floating_panels_overlay(
         &self,
         window_id: iced::window::Id,

@@ -690,6 +690,9 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
+    /// the main window's strip has no room for.
+    pub tab_overflow_menu_open: bool,
 }
 
 impl UiState {

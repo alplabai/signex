@@ -7,7 +7,7 @@
 mod first_run;
 mod graphite;
 mod layout_sync;
-mod measure;
+pub(crate) mod measure;
 mod placement;
 mod side_width;
 mod state;

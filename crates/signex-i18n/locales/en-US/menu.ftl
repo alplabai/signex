@@ -116,12 +116,22 @@ ctx-assign-net-class-elsewhere = Pick the class in the Net Class row of the Prop
 ctx-tab-close = Close { $title }
 ctx-tab-close-others = Close All Other Documents
 ctx-tab-open-in-new-window = Open In New Window
+ctx-tab-close-right = Close Tabs to the Right
+ctx-tab-copy-path = Copy Path
+ctx-tab-reveal-in-projects = Reveal in Projects
+# Tab strip overflow: the button at the strip's end ({ $count } is how many tabs
+# do not fit) and the caption of the menu that lists them.
+ctx-tab-overflow-button = +{ $count }
+ctx-tab-overflow-caption = Hidden tabs
 # Panel-tab menu: where the panel goes.
 ctx-dock-close = Close
 ctx-dock-float = Undock / Float
 ctx-dock-left = Dock Left
 ctx-dock-right = Dock Right
 ctx-dock-bottom = Dock Bottom
+# Button and tooltip in the title strip of a panel's own window: the panel goes
+# back into the dock.
+ctx-dock-back = Dock back
 # Menu of a component row of the Components panel (the verb "place").
 ctx-components-row-place = Place
 ctx-components-row-edit = Edit Component

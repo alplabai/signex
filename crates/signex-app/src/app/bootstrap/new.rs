@@ -520,6 +520,7 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                tab_overflow_menu_open: false,
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
