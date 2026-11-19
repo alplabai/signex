@@ -207,6 +207,8 @@ cycle_unit	headless_refusal	headless_refusal	core	none	routing
 cycle_wire_bus_graphic_mode	bridge	Tool(CycleDrawMode)	gui	tool state	handler
 cycle_wire_bus_graphic_mode	in_window_rewrite	document_window	gui	window	routing
 cycle_wire_bus_graphic_mode	headless_refusal	headless_refusal	core	none	routing
+cycle_wiring_mode	bridge	Tool(DragWiringCycleRequested)	gui	tool state	handler
+cycle_wiring_mode	in_window_rewrite	document_window	gui	window	routing
 cycle_wiring_mode	headless_refusal	headless_refusal	core	none	routing
 delete_layer_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,settings	handler
 delete_layer_set	refusal_needs	Pcb	core	active document	routing

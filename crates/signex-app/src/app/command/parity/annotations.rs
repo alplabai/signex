@@ -613,6 +613,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "cycle_unit",
             "cycle_selection_mode",
             "cycle_wire_bus_graphic_mode",
+            "cycle_wiring_mode",
             "placement_properties",
         ],
         Bridge,
