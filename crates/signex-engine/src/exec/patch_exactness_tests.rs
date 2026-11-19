@@ -555,6 +555,7 @@ fn samples() -> Vec<(String, Command)> {
                 dx: 2.54,
                 dy: 2.54,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -564,6 +565,7 @@ fn samples() -> Vec<(String, Command)> {
                 dx: 2.54,
                 dy: 2.54,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -571,6 +573,7 @@ fn samples() -> Vec<(String, Command)> {
             Command::MoveEach {
                 moves: vec![(item, 2.54, -2.54)],
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -653,6 +656,7 @@ fn samples() -> Vec<(String, Command)> {
             dx: 2.54,
             dy: 2.54,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
     );
     add(
@@ -671,6 +675,7 @@ fn samples() -> Vec<(String, Command)> {
                 ),
             ],
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
     );
 
@@ -1233,6 +1238,7 @@ fn keep_wires_edits_wires_for_the_kinds_that_carry_pins() {
                     dx: 2.54,
                     dy: 2.54,
                     keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 })
                 .expect("move");
             format!("{:?}", engine.document().wires)
@@ -1254,6 +1260,7 @@ fn the_fallback_sample_really_falls_back_with_a_notice() {
             dx: 2.54,
             dy: 2.54,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     let notices = engine.take_warnings();

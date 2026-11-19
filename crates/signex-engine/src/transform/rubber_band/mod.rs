@@ -53,6 +53,15 @@
 //! or another wire's end on its interior is never shortened or translated;
 //! that makes the tip anchored instead.
 //!
+//! # Drag wiring mode
+//!
+//! `Policy::wiring` (the move command's `wiring` operand, #1669) overrides
+//! the corner choice above. `Auto` is the rule as described. `HorizontalFirst`
+//! and `VerticalFirst` skip the slide and leave the fixed end (free tip) or
+//! the old tip (anchored) in that direction first, the other L as fallback.
+//! `Straight` inserts no corner: one leg at any slope. Collisions and the
+//! guard apply as above. Rationale: `docs/DECISIONS.md`, 2026-11-18.
+//!
 //! Which items drag wires: pins of moved symbols (power ports included,
 //! unit-filtered), pins of moved child sheets and individually moved sheet
 //! pins. Labels, junctions, no-connects and text never drag wires on their

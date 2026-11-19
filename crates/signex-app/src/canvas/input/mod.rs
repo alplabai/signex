@@ -28,6 +28,18 @@ impl SchematicCanvas<'_> {
 
         let action = self.route_event(state, event, bounds, cursor);
         self.publish_move_behaviour(state);
+        // `cycle_wiring_mode` changed the mode mid-drag: redo the ghost at the
+        // next event (the redraw after the key) instead of the next move.
+        if self.is_moving(state)
+            && self.keeps_wires(state)
+            && !state.ghost.is_built_for(self.prefs.drag_wiring)
+        {
+            self.refresh_drag_ghost(state);
+            // Only a rebuilt ghost redraws, so a plain-shift drag cannot loop.
+            if state.ghost.is_built_for(self.prefs.drag_wiring) {
+                return action.or_else(|| Some(canvas::Action::request_redraw()));
+            }
+        }
         action
     }
 

@@ -4,6 +4,8 @@
 use super::super::super::*;
 use crate::canvas::FLIP_WIRES_MODIFIER;
 use crate::status_bar::Activity;
+use signex_i18n::ids;
+use signex_types::corner::DragWiringMode;
 
 impl Signex {
     /// How the drag in flight in `window` treats wires, `None` outside a drag.
@@ -13,10 +15,17 @@ impl Signex {
             .canvas_for_window(window_id)
             .move_behaviour
             .get()?;
-        let id = if keeps {
-            signex_i18n::ids::PANELS_STATUS_BAR_DRAG_WITH_WIRES
-        } else {
-            signex_i18n::ids::PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES
+        // The drag wiring mode is named once it is not Auto (#1669).
+        let id = match (keeps, self.interaction_state.drag_wiring) {
+            (false, _) => ids::PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES,
+            (true, DragWiringMode::Auto) => ids::PANELS_STATUS_BAR_DRAG_WITH_WIRES,
+            (true, DragWiringMode::HorizontalFirst) => {
+                ids::PANELS_STATUS_BAR_DRAG_WIRES_HORIZONTAL_FIRST
+            }
+            (true, DragWiringMode::VerticalFirst) => {
+                ids::PANELS_STATUS_BAR_DRAG_WIRES_VERTICAL_FIRST
+            }
+            (true, DragWiringMode::Straight) => ids::PANELS_STATUS_BAR_DRAG_WIRES_STRAIGHT,
         };
         Some(
             self.ui_state

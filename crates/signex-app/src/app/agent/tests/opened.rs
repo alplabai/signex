@@ -224,6 +224,7 @@ fn assigning_a_net_class_changes_it_and_the_persons_undo_is_in_order() {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,

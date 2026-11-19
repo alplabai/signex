@@ -105,6 +105,9 @@ pub struct InteractionState {
     /// How a wire or bus run bends at its corner. Kept across segments and
     /// tools until the user flips it or changes the mode (#2372).
     pub corner_rule: signex_types::corner::CornerRule,
+    /// How the wires that follow a dragged pin bend (`cycle_wiring_mode`,
+    /// #1669). Kept across drags; a move commit carries it as an operand.
+    pub drag_wiring: signex_types::corner::DragWiringMode,
     /// How Interactive Routing treats other nets in its way (#2389): walk
     /// around them or push their tracks aside. Kept across routes.
     pub route_mode: signex_engine::pcb::route::RouteMode,

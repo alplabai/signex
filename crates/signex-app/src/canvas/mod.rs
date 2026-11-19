@@ -609,6 +609,8 @@ pub struct CanvasViewPrefs<'a> {
     pub move_keeps_wires: bool,
     /// How the rubber-band preview of a wire or bus bends.
     pub corner_rule: signex_types::corner::CornerRule,
+    /// How the drag ghost's rubber-banded wires bend (#1669).
+    pub drag_wiring: signex_types::corner::DragWiringMode,
     /// Active tool; decides whether the Active Bar shows the draw-mode pill,
     /// which widens the bar the right-click hit-test must centre.
     pub current_tool: crate::app::Tool,
@@ -788,9 +790,13 @@ impl<'a> SchematicCanvas<'a> {
                 return;
             }
             let (gx, gy) = self.ghost_delta(dx, dy);
-            state
-                .ghost
-                .refresh_with(snap, cache.revision(), &self.selected, gx, gy);
+            state.ghost.refresh_wired(
+                snap,
+                cache.revision(),
+                &self.selected,
+                (gx, gy),
+                self.prefs.drag_wiring,
+            );
             if let Some(held) = state.ghost.take_unreported_held() {
                 crate::diagnostics::log_locked_holds(&held);
             }
@@ -1045,6 +1051,7 @@ mod tests {
             wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
             corner_rule: Default::default(),
+            drag_wiring: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
             wire_color_overrides: overrides,

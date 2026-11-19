@@ -1,6 +1,7 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 /// Whether `item` is the designator or value field of a symbol `symbols`
@@ -149,7 +150,12 @@ impl Engine {
         tips: &[crate::PinTip],
         items: &[SelectedItem],
         followed: &[SelectedItem],
+        wiring: DragWiringMode,
     ) -> DocumentPatch {
+        let policy = crate::Policy {
+            wiring,
+            ..Default::default()
+        };
         let plain_items = [items, followed].concat();
         #[cfg(test)]
         if self.full_scan_moves {
@@ -158,7 +164,8 @@ impl Engine {
             let base = self.document.clone();
             self.reconciled_patch(&plain_items);
             let plain = std::mem::replace(&mut self.document, base.clone());
-            return self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
+            let guard = self.move_guard(before, &plain, tips);
+            return self.guarded_rounds(guard, tips, items, followed, policy, |engine| {
                 engine.document = base.clone();
             });
         }
@@ -169,27 +176,21 @@ impl Engine {
         let junctions = self.document.junctions.clone();
         self.reconciled_patch(&plain_items);
         let plain = std::mem::take(&mut self.document);
-        self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
+        let guard = self.move_guard(before, &plain, tips);
+        self.guarded_rounds(guard, tips, items, followed, policy, |engine| {
             engine.document = plain.clone();
             engine.document.junctions.clone_from(&junctions);
         })
     }
 
-    /// The escalation rounds of [`Self::rubber_band_guarded`]; `fresh` sets
-    /// `self.document` to the plain-moved sheet, junctions not yet reconciled,
-    /// that every round starts from.
-    fn guarded_rounds(
-        &mut self,
-        before: &SchematicSheet,
+    /// The net guard of a move: the nets `before` it, against what the plain
+    /// move (`plain_reference`) leaves.
+    fn move_guard<'a>(
+        &self,
+        before: &'a SchematicSheet,
+        plain_reference: &'a SchematicSheet,
         tips: &[crate::PinTip],
-        items: &[SelectedItem],
-        followed: &[SelectedItem],
-        plain_reference: &SchematicSheet,
-        fresh: impl Fn(&mut Self),
-    ) -> DocumentPatch {
-        const MAX_ROUNDS: usize = 6;
-        #[cfg(test)]
-        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
+    ) -> crate::Guard<'a> {
         let guard = crate::Guard::with_base(
             before,
             plain_reference,
@@ -198,12 +199,28 @@ impl Engine {
             self.preset_base.clone(),
         );
         #[cfg(test)]
-        let guard = if self.full_scan_guard {
-            guard.without_local()
-        } else {
-            guard
-        };
-        let mut policy = crate::Policy::default();
+        if self.full_scan_guard {
+            return guard.without_local();
+        }
+        guard
+    }
+
+    /// The escalation rounds of [`Self::rubber_band_guarded`] under `guard`,
+    /// starting from `policy`; `fresh` sets `self.document` to the
+    /// plain-moved sheet, junctions not yet reconciled, that every round
+    /// starts from.
+    fn guarded_rounds(
+        &mut self,
+        guard: crate::Guard<'_>,
+        tips: &[crate::PinTip],
+        items: &[SelectedItem],
+        followed: &[SelectedItem],
+        mut policy: crate::Policy,
+        fresh: impl Fn(&mut Self),
+    ) -> DocumentPatch {
+        const MAX_ROUNDS: usize = 6;
+        #[cfg(test)]
+        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
         for round in 0.. {
             fresh(self);
             let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
@@ -273,6 +290,7 @@ impl Engine {
         before: SchematicSheet,
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
+        wiring: DragWiringMode,
     ) -> Result<CommandResult, EngineError> {
         let mut moves = fold_port_text_moves(&self.document, moves);
         drop_fields_of_moved_symbols(&mut moves);
@@ -305,7 +323,7 @@ impl Engine {
         let preview_sheet = self.preset_sheet.clone();
         let pre_move = preview_sheet.as_deref().unwrap_or(&before);
         let mut patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(pre_move, &tips, &items, &followed),
+            Some(tips) => self.rubber_band_guarded(pre_move, &tips, &items, &followed, wiring),
             None => self.reconciled_patch(&[items, followed].concat()),
         };
         #[cfg(test)]
@@ -351,7 +369,9 @@ impl Engine {
             return Ok(CommandResult::unchanged());
         }
         let mut patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(&before, &tips, items, &[]),
+            Some(tips) => {
+                self.rubber_band_guarded(&before, &tips, items, &[], DragWiringMode::Auto)
+            }
             None => self.reconciled_patch(items),
         };
         patch |= self.merge_after_edit(adjacent);
@@ -423,11 +443,16 @@ impl Engine {
                 dx,
                 dy,
                 keep_wires,
+                wiring,
             } => {
                 let moves = items.into_iter().map(|item| (item, dx, dy)).collect();
-                self.exec_moves(before, moves, keep_wires)
+                self.exec_moves(before, moves, keep_wires, wiring)
             }
-            Command::MoveEach { moves, keep_wires } => self.exec_moves(before, moves, keep_wires),
+            Command::MoveEach {
+                moves,
+                keep_wires,
+                wiring,
+            } => self.exec_moves(before, moves, keep_wires, wiring),
             Command::RotateSelection {
                 items,
                 angle_degrees,

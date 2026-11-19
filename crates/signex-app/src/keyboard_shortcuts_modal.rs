@@ -271,22 +271,28 @@ mod tests {
     /// dispatch arm, and still lists the ones that work.
     #[test]
     fn the_sheet_lists_only_shortcuts_that_dispatch() {
-        let rows = KeymapEditorModel::built_ins()
-            .expect("built-in profiles load")
-            .rows();
-        let with_trigger = |row: &&KeymapEditorRow| !row.trigger.trim().is_empty();
+        /// The rows with a trigger, split into listed and hidden.
+        fn split(rows: &[KeymapEditorRow]) -> (Vec<&KeymapEditorRow>, Vec<&KeymapEditorRow>) {
+            rows.iter()
+                .filter(|row| !row.trigger.trim().is_empty())
+                .partition(|r| is_listed(r))
+        }
+        let mut model = KeymapEditorModel::built_ins().expect("built-in profiles load");
+        let is_bound_to = |rows: &[&KeymapEditorRow], id: &str| {
+            rows.iter()
+                .any(|r| r.command.as_ref().is_some_and(|c| c.as_str() == id))
+        };
+        let all_dispatch = |listed: &[&KeymapEditorRow]| {
+            listed.iter().all(|r| {
+                r.command
+                    .as_ref()
+                    .is_none_or(crate::app::command::bridge::is_dispatchable)
+            })
+        };
 
-        let listed: Vec<_> = rows
-            .iter()
-            .filter(with_trigger)
-            .filter(|r| is_listed(r))
-            .collect();
-        let hidden: Vec<_> = rows
-            .iter()
-            .filter(with_trigger)
-            .filter(|r| !is_listed(r))
-            .collect();
-
+        // The default profile.
+        let rows = model.rows();
+        let (listed, _) = split(&rows);
         assert!(
             listed
                 .iter()
@@ -294,16 +300,19 @@ mod tests {
             "a working shortcut must stay listed"
         );
         assert!(
-            hidden.iter().any(|r| r
-                .command
-                .as_ref()
-                .is_some_and(|c| c.as_str() == "cycle_wiring_mode")),
+            is_bound_to(&listed, "cycle_wiring_mode"),
+            "cycle_wiring_mode dispatches (#1669), so its binding is listed"
+        );
+        assert!(all_dispatch(&listed));
+
+        // Classic binds the still unmapped `reset_local_coordinates`.
+        model.set_active_profile("classic").expect("classic loads");
+        let rows = model.rows();
+        let (listed, hidden) = split(&rows);
+        assert!(
+            is_bound_to(&hidden, "reset_local_coordinates"),
             "an unimplemented command's binding must be hidden"
         );
-        assert!(listed.iter().all(|r| {
-            r.command
-                .as_ref()
-                .is_none_or(crate::app::command::bridge::is_dispatchable)
-        }));
+        assert!(all_dispatch(&listed));
     }
 }

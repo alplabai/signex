@@ -16,6 +16,9 @@ pub enum ToolMessage {
     /// The wire/bus corner was asked to flip: horizontal-first becomes
     /// vertical-first and back (#2372).
     CornerFlipRequested,
+    /// `cycle_wiring_mode`: step how wires that follow a dragged pin bend:
+    /// auto, horizontal first, vertical first, straight (#1669).
+    DragWiringCycleRequested,
     /// Cancel an in-progress wire/bus draw and reset to the select tool.
     CancelDrawing,
     /// Backspace/Delete: drop the pending wire vertex while drawing,

@@ -368,7 +368,11 @@ impl Signex {
         // wire between two symbols that move alike translates whole.
         if !moves.is_empty() {
             self.apply_engine_commands(
-                vec![signex_engine::Command::MoveEach { moves, keep_wires }],
+                vec![signex_engine::Command::MoveEach {
+                    moves,
+                    keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
+                }],
                 true,
                 false,
             );

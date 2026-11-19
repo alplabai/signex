@@ -202,6 +202,7 @@ impl Signex {
                             dx,
                             dy,
                             keep_wires: connections.keeps_wires(self.ui_state.move_keeps_wires),
+                            wiring: self.interaction_state.drag_wiring,
                         },
                         true,
                         true,
