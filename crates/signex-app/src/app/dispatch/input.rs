@@ -298,18 +298,20 @@ impl Signex {
         self.route_key(window, event)
     }
 
-    /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
-    /// or `None` when it was swallowed or nobody wanted it.
-    ///
-    /// `&self` on purpose: this is the testable heart. Build a `Signex`,
-    /// set state, feed an event, assert the message — none of which was
-    /// possible while these branches lived in a subscription closure.
+    /// The message [`Self::route_key_by`] returns, for the tests.
+    #[cfg(test)]
     fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
         self.route_key_by(window, event).0
     }
 
-    /// [`Self::route_key`], with the consumer that swallowed the event when
-    /// one did (`None` for a claimed, locked-out or unwanted event).
+    /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
+    /// or `None` when it was swallowed or nobody wanted it, with the
+    /// consumer that swallowed it when one did (`None` for a claimed,
+    /// locked-out or unwanted event).
+    ///
+    /// `&self` on purpose: this is the testable heart. Build a `Signex`,
+    /// set state, feed an event, assert the message — none of which was
+    /// possible while these branches lived in a subscription closure.
     fn route_key_by(
         &self,
         window: iced::window::Id,
