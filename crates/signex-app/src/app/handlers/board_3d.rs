@@ -160,9 +160,11 @@ impl Signex {
             return Task::none();
         };
         let generation = session.cycle_lighting();
-        Task::perform(tokio::time::sleep(LIGHTING_TOAST), move |()| {
-            board_3d_message(Board3dMsg::LightingToastExpired(generation))
-        })
+        // Built inside the future: `sleep` needs the runtime the task runs on.
+        Task::perform(
+            async { tokio::time::sleep(LIGHTING_TOAST).await },
+            move |()| board_3d_message(Board3dMsg::LightingToastExpired(generation)),
+        )
     }
 
     /// A frame was drawn: the flip moves on, and a screenshot waiting for a
