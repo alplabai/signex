@@ -345,10 +345,16 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// `create_sheet_symbol_from_sheet` (#1276) goes there too: its GUI form only
 /// opens a file picker, which a headless run refuses, so the handler refuses
 /// it for the missing `path` rather than the picker's refusal reading as run.
+/// `repair_pin_junctions` goes there too, so a headless run on the sheet in
+/// view answers how many dots it added (0 when nothing needed one) instead of
+/// a bare `Ran`.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
-        "new_pcb_document" | "new_schematic_sheet" | "create_sheet_symbol_from_sheet"
+        "new_pcb_document"
+            | "new_schematic_sheet"
+            | "create_sheet_symbol_from_sheet"
+            | "repair_pin_junctions"
     )
 }
 

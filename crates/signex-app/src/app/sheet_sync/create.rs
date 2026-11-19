@@ -20,6 +20,42 @@ use crate::app::{Message, Signex};
 
 const LABEL: &str = "Create Sheet Symbol From Sheet";
 
+/// A refusal of the shared checks as the dialog's user reads it. The checks
+/// word their refusals for the operand form (`file` is the operand, and the
+/// way past is `allow_merge=true`, which the dialog does not offer); the
+/// dialog names the file and says what to do in the editor instead.
+fn gui_wording(why: &str) -> String {
+    const CLI_TO_GUI: [(&str, &str); 6] = [
+        (" (see docs/CLI.md, \"Why allow_merge\")", ""),
+        (
+            "fix the project, or pass allow_merge=true to place it anyway",
+            "fix the project first",
+        ),
+        (
+            "pass allow_merge=true to merge on purpose",
+            "rename the entries first",
+        ),
+        (
+            "pass allow_merge=true if that is intended",
+            "rename the entries first",
+        ),
+        (
+            "pass allow_merge=true to place it anyway",
+            "it was not placed",
+        ),
+        ("`file`", "the file"),
+    ];
+    let mut text = why.to_string();
+    for (cli, gui) in CLI_TO_GUI {
+        text = text.replace(cli, gui);
+    }
+    // A refusal that began with the operand name begins a sentence.
+    match text.strip_prefix("the file") {
+        Some(rest) => format!("The file{rest}"),
+        None => text,
+    }
+}
+
 /// The reads Create Sheet Symbol From Sheet waited for, for the sheet
 /// `target`, and the revisions they depend on.
 #[derive(Debug, Clone)]
@@ -114,7 +150,7 @@ impl Signex {
                     if entries == 1 { "y" } else { "ies" }
                 ));
             }
-            Err(why) => crate::diagnostics::log_warning(format!("{LABEL}: {why}")),
+            Err(why) => crate::diagnostics::log_warning(format!("{LABEL}: {}", gui_wording(&why))),
         }
     }
 
@@ -127,5 +163,34 @@ impl Signex {
         }
         let (x, y) = self.snap_to_grid(ui.cursor_x, ui.cursor_y);
         Some(Point::new(x, y))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gui_wording;
+
+    /// The dialog never tells its user to pass an operand: the operand form's
+    /// way past (`allow_merge=true`) becomes what to do in the editor.
+    #[test]
+    fn a_refusal_in_the_dialog_has_no_cli_wording() {
+        let merge = "a sheet symbol at 10,20 would give a net of the project the names {A, B}, \
+                     some of which reach it from other sheets; pass allow_merge=true to merge on \
+                     purpose (see docs/CLI.md, \"Why allow_merge\")";
+        assert_eq!(
+            gui_wording(merge),
+            "a sheet symbol at 10,20 would give a net of the project the names {A, B}, \
+             some of which reach it from other sheets; rename the entries first"
+        );
+        let placed = "`file` is already placed on top.snxsch; placing it again changes its nets; \
+             pass allow_merge=true to place it anyway";
+        assert_eq!(
+            gui_wording(placed),
+            "The file is already placed on top.snxsch; placing it again changes its nets; \
+             it was not placed"
+        );
+        for refusal in [merge, placed] {
+            assert!(!gui_wording(refusal).contains("allow_merge"), "{refusal}");
+        }
     }
 }

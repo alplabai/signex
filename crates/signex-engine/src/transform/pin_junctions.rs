@@ -303,6 +303,10 @@ pub(crate) fn pin_dots_for(
     }
     let lines = WireLines::of(&sheet.wires);
     let mut candidates = safe_taps(sheet, &lines, |symbol| symbols.contains(&symbol.uuid));
+    // A moved part's pin end is a contact the edit made, even where another
+    // part's pin already touched bare (`before` keys points, not pins): its
+    // refused dot is told. Only a wire edit's refusals go through `before`.
+    let moved_crossed = std::mem::take(&mut candidates.crossed);
     if !wires.is_empty() {
         let touched: Vec<&Wire> = (sheet.wires.iter())
             .filter(|wire| wires.contains(&wire.uuid))
@@ -330,6 +334,7 @@ pub(crate) fn pin_dots_for(
     let mut seen: HashSet<Key> = HashSet::new();
     let crossed = (candidates.crossed.into_iter())
         .filter(made_here)
+        .chain(moved_crossed)
         .filter(|tip| !taken.contains(&pt_key(tip)) && seen.insert(pt_key(tip)))
         .collect();
     PinDots { dots, crossed }
