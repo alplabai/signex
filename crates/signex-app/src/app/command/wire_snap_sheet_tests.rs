@@ -50,13 +50,25 @@ fn app() -> Signex {
     app
 }
 
+/// `id` from `start` to `end` on the named sheet `b`.
 fn run(app: &mut Signex, id: &str, start: (f64, f64), end: (f64, f64)) -> CommandOutcome {
+    run_on(app, id, start, end, Some("b.snxsch"))
+}
+
+/// `id` from `start` to `end`, naming `document` or, with none, on the active sheet.
+fn run_on(
+    app: &mut Signex,
+    id: &str,
+    start: (f64, f64),
+    end: (f64, f64),
+    document: Option<&str>,
+) -> CommandOutcome {
     let command = AppCommandId::new(id).expect("a valid id");
-    let operands = [
+    let mut operands = vec![
         format!("start={},{}", start.0, start.1),
         format!("end={},{}", end.0, end.1),
-        format!("document={}", path("b.snxsch").display()),
     ];
+    operands.extend(document.map(|file| format!("document={}", path(file).display())));
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&command, &refs).expect("operands parse");
     app.run_operands_settled(&command, &args).0
@@ -120,5 +132,54 @@ fn a_wire_into_a_named_sheet_snaps_to_that_sheets_hotspots_not_the_active_tabs()
             wires(&app, "b.snxsch")
         );
         assert_eq!(wires(&app, "a.snxsch"), a_before, "{id}");
+    }
+}
+
+/// With no `document`, the snap reads the active sheet's engine, not its
+/// render snapshot: geometry only the snapshot holds (as a drag preview would
+/// draw it) is no hotspot, and the committed end is one.
+#[test]
+fn a_wire_on_the_active_sheet_snaps_to_its_committed_ends_not_the_drawn_copy() {
+    /// Where the snapshot alone draws `a`'s off-grid wire, 5 mm to the right.
+    const DRAWN_END: (f64, f64) = (A_END.0 + 5.0, A_END.1);
+    const NEAR_DRAWN: (f64, f64) = (PROBE.0 + 5.0, PROBE.1);
+    for id in ["place_wire", "draw_wire"] {
+        let mut app = app();
+        let mut drawn = app.document_state.engines[&path("a.snxsch")]
+            .document()
+            .clone();
+        let moved = drawn
+            .wires
+            .iter_mut()
+            .find(|w| (w.start.x, w.start.y) == A_END)
+            .expect("a's off-grid wire");
+        moved.start.x += 5.0;
+        moved.end.x += 5.0;
+        app.interaction_state
+            .active_canvas_mut()
+            .set_render_cache(Some(
+                crate::schematic_runtime::SchematicRenderCache::from_sheet(&drawn),
+            ));
+        let before = wires(&app, "a.snxsch");
+
+        // Near the drawn-only end: not a hotspot, so not pulled onto it.
+        let reason = refusal(run_on(&mut app, id, NEAR_DRAWN, B_OTHER_END, None));
+        assert!(
+            !reason.contains(&format!("lands on {},{}", DRAWN_END.0, DRAWN_END.1)),
+            "{id}: {reason}"
+        );
+        let reason = refusal(run_on(&mut app, id, DRAWN_END, B_OTHER_END, None));
+        assert!(
+            reason.contains("`start` is not where a click lands"),
+            "{id}: {reason}"
+        );
+
+        // Near the committed end: pulled onto it.
+        let reason = refusal(run_on(&mut app, id, PROBE, B_OTHER_END, None));
+        assert!(
+            reason.contains(&format!("lands on {},{}", A_END.0, A_END.1)),
+            "{id}: {reason}"
+        );
+        assert_eq!(wires(&app, "a.snxsch"), before, "{id}");
     }
 }
