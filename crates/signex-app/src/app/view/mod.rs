@@ -16,6 +16,7 @@ mod chrome;
 mod context_menu;
 mod library_tab;
 mod modals;
+mod net_color;
 mod overlays;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;

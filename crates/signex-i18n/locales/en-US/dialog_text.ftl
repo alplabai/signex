@@ -152,15 +152,16 @@ dialog-selection-filter-title = Selection Filter — Customize
 dialog-selection-filter-intro = Selectable kinds
 
 ## Move Selection
-# $count is how many objects are selected, a whole number. The English keeps
-# "item(s)" for every count.
-dialog-move-selection-count = { $count } item(s) selected
-# The offset along X and Y, in millimetres.
-dialog-move-selection-dx = ΔX (mm)
-dialog-move-selection-dy = ΔY (mm)
+# Header subtitle. $count is how many objects are selected, a whole number.
+dialog-move-selection-count = { $count ->
+    [one] { $count } item selected
+   *[other] { $count } items selected
+}
+# The offset along X and Y; the field shows the unit as a suffix.
+dialog-move-selection-dx = ΔX
+dialog-move-selection-dy = ΔY
 
 ## Net colours
-dialog-net-color-pick-title = Pick Net Color
 dialog-net-color-no-nets = No net labels on the active sheet.
 dialog-net-color-custom-rgb = Custom RGB
 # One letter per colour channel: red, green, blue.
@@ -199,3 +200,32 @@ dialog-parameter-manager-revert-tip = { $count ->
     [one] Undo the cell edit as one step
    *[other] Undo all { $count } cell edits as one step
 }
+
+## Move Selection (#66)
+# The primary button: moves the selection by the offsets.
+dialog-move-selection-move = Move
+# Under the preview. $grid is the grid step and $unit its unit; $x and $y
+# are how many whole grid steps the offsets span. Stored Y counts down.
+dialog-move-selection-help = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: { $x } × { $y } steps.
+# The same line when an offset is not a whole number of grid steps.
+dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: off grid.
+
+## Net colour palette (#2528)
+# Header subtitle. $count is how many nets the active sheet labels.
+dialog-net-color-count = { $count ->
+    [one] { $count } net on this sheet
+   *[other] { $count } nets on this sheet
+}
+dialog-net-color-filter = Filter nets
+# Footer link: removes every net colour of the active sheet in one undo step.
+dialog-net-color-clear-all = Clear all colours
+dialog-net-color-row-hint = Click a row to choose
+# Row chooser: opens the custom colour picker for the row's net.
+dialog-net-color-custom = Custom…
+# Row chooser: removes the row's net colour.
+dialog-net-color-clear = Clear
+# Custom picker: the hex code field.
+dialog-net-color-hex = Hex
+# Custom picker preview: the net's colour now, and the pick.
+dialog-net-color-old = Old
+dialog-net-color-new = New

@@ -69,7 +69,6 @@ define_ids! {
     DIALOG_MOVE_SELECTION_COUNT = "dialog-move-selection-count";
     DIALOG_MOVE_SELECTION_DX = "dialog-move-selection-dx";
     DIALOG_MOVE_SELECTION_DY = "dialog-move-selection-dy";
-    DIALOG_NET_COLOR_PICK_TITLE = "dialog-net-color-pick-title";
     DIALOG_NET_COLOR_NO_NETS = "dialog-net-color-no-nets";
     DIALOG_NET_COLOR_CUSTOM_RGB = "dialog-net-color-custom-rgb";
     DIALOG_NET_COLOR_CHANNEL_R = "dialog-net-color-channel-r";
@@ -87,4 +86,16 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_FOOTER_HINT = "dialog-parameter-manager-footer-hint";
     DIALOG_PARAMETER_MANAGER_CHANGED = "dialog-parameter-manager-changed";
     DIALOG_PARAMETER_MANAGER_REVERT_TIP = "dialog-parameter-manager-revert-tip";
+    DIALOG_MOVE_SELECTION_MOVE = "dialog-move-selection-move";
+    DIALOG_MOVE_SELECTION_HELP = "dialog-move-selection-help";
+    DIALOG_MOVE_SELECTION_HELP_OFF_GRID = "dialog-move-selection-help-off-grid";
+    DIALOG_NET_COLOR_COUNT = "dialog-net-color-count";
+    DIALOG_NET_COLOR_FILTER = "dialog-net-color-filter";
+    DIALOG_NET_COLOR_CLEAR_ALL = "dialog-net-color-clear-all";
+    DIALOG_NET_COLOR_ROW_HINT = "dialog-net-color-row-hint";
+    DIALOG_NET_COLOR_CUSTOM = "dialog-net-color-custom";
+    DIALOG_NET_COLOR_CLEAR = "dialog-net-color-clear";
+    DIALOG_NET_COLOR_HEX = "dialog-net-color-hex";
+    DIALOG_NET_COLOR_OLD = "dialog-net-color-old";
+    DIALOG_NET_COLOR_NEW = "dialog-net-color-new";
 }

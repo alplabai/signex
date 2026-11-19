@@ -418,6 +418,9 @@ impl Signex {
         let (Some(dx), Some(dy)) = (dx, dy) else {
             return Task::none();
         };
+        // The fields are typed in the display unit (their suffix).
+        let per = signex_types::measure::mm_per(self.ui_state.unit);
+        let (dx, dy) = (dx * per, dy * per);
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -471,8 +474,15 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
         ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 191.0),
         ModalId::ReprefixConfirm => iced::Size::new(560.0, 500.0),
-        ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
-        ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+        // Content-fit (#66, #71): heights from the type scale.
+        ModalId::MoveSelection => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::move_selection_dialog::window_height(),
+        ),
+        ModalId::NetColorPalette => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::net_color_palette::palette_window_height(0),
+        ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
         ModalId::NewProject => iced::Size::new(860.0, 700.0),
@@ -504,8 +514,9 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
-        // Height follows the type scale (authored at the 11 px base).
-        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(390.0)),
+        // Height follows the type scale (authored at the 11 px base). The
+        // 8 x 6 quick pick (#72) leaves the right column the tallest.
+        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(300.0)),
     }
 }
 

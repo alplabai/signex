@@ -704,6 +704,10 @@ mod navigator_async;
 
 #[path = "regression/paste_array_count_up.rs"]
 mod paste_array_count_up;
+
+#[path = "regression/net_color_palette_clear_all.rs"]
+mod net_color_palette_clear_all;
+
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]

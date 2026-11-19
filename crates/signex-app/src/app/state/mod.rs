@@ -140,11 +140,18 @@ pub enum ReorderPicker {
     Below,
 }
 
-/// Custom net-colour picker state (Active Bar → Net Color → Custom).
+/// Custom net-colour picker state (Active Bar → Net Color → Custom, or a
+/// palette row's Custom…).
 #[derive(Debug, Clone)]
 pub struct NetColorCustomState {
     pub show: bool,
     pub draft: iced::Color,
+    /// The net the picker colours when it was opened from a palette row;
+    /// `None` arms the net-colour pen, as the Active Bar entry does.
+    pub net: Option<String>,
+    /// The Hex field while the user types in it; `None` shows the draft.
+    /// Text that does not parse stays here and the field shows an error.
+    pub hex: Option<String>,
 }
 
 impl Default for NetColorCustomState {
@@ -152,11 +159,22 @@ impl Default for NetColorCustomState {
         Self {
             show: false,
             draft: iced::Color::from_rgb(0.40, 0.40, 0.93),
+            net: None,
+            hex: None,
         }
     }
 }
 
-/// Transient state for the Altium-style Move Selection dialog.
+/// F5 net colour palette state (#2528): the filter text and the row whose
+/// chooser is open.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NetColorPaletteState {
+    pub filter: String,
+    /// The net label text whose chooser is open beside its row.
+    pub chooser: Option<String>,
+}
+
+/// Transient state for the Move Selection dialog.
 /// Deltas are stored as strings so mid-edit partial values (`-`, `2.`)
 /// don't panic through number parsing; the Apply handler parses them.
 #[derive(Debug, Clone, Default)]

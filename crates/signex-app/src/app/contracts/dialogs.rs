@@ -20,11 +20,25 @@ pub enum NetColorMsg {
     CustomShow(bool),
     /// Live-update the draft colour as the user drags the picker.
     CustomDraft(iced::Color),
-    /// Commit the draft colour and arm net-colour flood mode.
+    /// Commit the draft colour: colour the picker's net when it was opened
+    /// from a palette row, else arm net-colour flood mode.
     CustomSubmit(iced::Color),
     /// Edit one R/G/B channel of the custom-picker draft via text
     /// input. Parsed as 0-255; invalid values ignored.
     CustomChannel(Channel, String),
+    /// The palette's filter text changed.
+    FilterChanged(String),
+    /// A palette row was clicked: its chooser opens, or closes when it was
+    /// the open one.
+    RowOpened(String),
+    /// The chooser's Custom… was pressed: the custom picker opens for that
+    /// net.
+    CustomOpenedFor(String),
+    /// The custom picker's Hex field changed; applied when it parses.
+    CustomHexChanged(String),
+    /// The palette footer's "Clear all colours" was pressed: the active
+    /// sheet's net colours go in one undo step.
+    ClearedAll,
 }
 
 /// Parameter Manager dialog message family (ADR-0001 D3). Namespaced
