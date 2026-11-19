@@ -474,7 +474,7 @@ fn the_focused_pin_rows_pair_labels_with_their_values() {
     assert!(shown.iter().any(|t| t.text == "PIN 1"), "{shown:#?}");
     assert_eq!(beside(&shown, "Designator"), "1");
     assert_eq!(beside(&shown, "Name"), "ANODE");
-    assert_eq!(beside(&shown, "Electrical Type"), "Passive");
+    assert_eq!(beside(&shown, "Type"), "Passive");
     assert_eq!(beside(&shown, "Hidden"), "Yes");
 }
 
