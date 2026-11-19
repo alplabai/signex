@@ -207,6 +207,19 @@ impl Signex {
             .unwrap_or(Point::new(0.0, 0.0))
     }
 
+    /// A tool with a form was armed: Properties comes to the front on what
+    /// the next click places, as on a sheet. The canvas keeps the keyboard,
+    /// so a Properties window of its own is left where it is.
+    pub(crate) fn raise_board_tool_form(&mut self) -> Task<Message> {
+        let armed = self.own_board_tool().is_some_and(|s| has_form(s.tool));
+        let kind = crate::panels::PanelKind::Properties;
+        let docked = self.document_state.dock.locate(kind).is_some();
+        if !armed || (!docked && self.is_panel_open(kind)) {
+            return Task::none();
+        }
+        self.show_panel(kind)
+    }
+
     /// Tab while a tool is armed on the board in view: pause it for its
     /// values to be edited, or go on placing when paused. `None` when no
     /// tool with a form is armed there.

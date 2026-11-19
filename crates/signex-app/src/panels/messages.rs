@@ -12,6 +12,9 @@ pub enum PanelMsg {
     Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
+    /// A Messages row's command link was pressed: the catalog id it runs
+    /// (`messages_row::row_action`).
+    MessageLinkPressed(&'static str),
     /// v0.14.2 — Properties panel toggle for the active footprint
     /// editor's Auto-fit Courtyard setting. Routes through
     /// `handle_dock_sch_library_message` (same dispatcher every other
@@ -751,6 +754,8 @@ pub enum PanelMsg {
     EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// Edit the rules a No-ERC directive silences (#1699).
+    EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of the selected text item.
     EditTextFontFamily(signex_engine::TextTarget, Option<String>),
@@ -1087,6 +1092,8 @@ pub enum PanelMsg {
     TitleBlockTyping(super::TitleBlockField, String),
     /// Title Block: Enter in a field writes its draft to the sheet.
     CommitTitleBlockField(super::TitleBlockField),
+    /// Sheet Variables: an edit of the active sheet's variables (#1987).
+    SheetVariables(super::SheetVariableMsg),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
     /// The multi-selection form of the Properties panel (#1258).

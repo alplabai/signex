@@ -499,6 +499,14 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     merged_connectivity(sheet).parent
 }
 
+/// The logical connectivity of `sheet`: wires and junctions plus the
+/// same-name label and power-port merges, the nets [`build_netlist`] reports.
+/// Two points share a net iff their [`SheetConnectivity::root_of`] agree.
+#[must_use]
+pub fn logical_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
+    merged_connectivity(sheet)
+}
+
 /// The whole per-sheet topology a consumer must read to agree with
 /// [`build_netlist`]: the physical [`SheetConnectivity`] core (wire endpoints +
 /// junction T-merges) **plus** the logical same-name label merge on top. Every

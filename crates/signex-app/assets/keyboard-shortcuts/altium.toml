@@ -207,6 +207,7 @@ context = "schematic"
 # leaves the board sketch, `L` flips the selection or the part on the cursor
 # to the other side, `N` shows or hides the ratsnest, `F` changes the
 # footprint, `P K` draws a keepout and `T D` runs the design rule check.
+# `E O S` sets the board origin (Edit ▸ Origin ▸ Set, 2026-11-18).
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -218,6 +219,7 @@ context = "pcb"
 "-" = "prev_layer"
 "1" = "board_sketch"
 "3" = "view_board_3d"
+"E O S" = "set_board_origin"
 "F" = "change_footprint"
 "L" = "flip_selection"
 "N" = "toggle_ratsnest"

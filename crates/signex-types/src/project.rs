@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
+use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
 
 mod annotate_undo;
 mod annotation;
@@ -81,9 +82,17 @@ where
         .and_then(|text| text.parse().ok()))
 }
 
-/// Format token written into every saved `.snxprj` (`"format"` key). Files
-/// without it predate the token and are read as version 1.
+/// Format token written into every saved `.snxprj` (`"format"` key).
 pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
+
+/// `.snxprj` version policy. A file without the token predates it and is
+/// read as version 1; a newer token is refused on load.
+pub const SNXPRJ_VERSION: FormatVersion = FormatVersion {
+    current: SNXPRJ_FORMAT_V1,
+    readable: &[SNXPRJ_FORMAT_V1],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::ReadAs(SNXPRJ_FORMAT_V1),
+};
 
 const FORMAT_KEY: &str = "format";
 
@@ -618,31 +627,31 @@ pub enum ProjectError {
     )]
     Corrupt { path: String, reason: String },
     #[error(
-        "project file {path} uses format \"{found}\", which this Signex ({supported}) cannot read; \
-         it was not opened so a save cannot drop data written by another version. \
-         Update Signex to open it"
+        "project file {path}: {source}; it was not opened so a save cannot drop data \
+         written by another version"
     )]
     UnsupportedFormat {
         path: String,
-        found: String,
-        supported: &'static str,
+        #[source]
+        source: FormatVersionError,
     },
 }
 
-/// Accept a missing token (pre-#788 file) or [`SNXPRJ_FORMAT_V1`]; refuse
-/// anything else, newer versions and garbage alike.
+/// Check the token through [`SNXPRJ_VERSION`]; a token that is not a string
+/// is refused as garbled.
 fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectError> {
-    let unsupported = |found: String| ProjectError::UnsupportedFormat {
-        path: path.display().to_string(),
-        found,
-        supported: SNXPRJ_FORMAT_V1,
+    let found = match token {
+        None => None,
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(other) => Some(other.to_string()),
     };
-    match token {
-        None => Ok(()),
-        Some(Value::String(s)) if s == SNXPRJ_FORMAT_V1 => Ok(()),
-        Some(Value::String(s)) => Err(unsupported(s.clone())),
-        Some(other) => Err(unsupported(other.to_string())),
-    }
+    SNXPRJ_VERSION
+        .read(found.as_deref())
+        .map(drop)
+        .map_err(|source| ProjectError::UnsupportedFormat {
+            path: path.display().to_string(),
+            source,
+        })
 }
 
 /// Parse a `.snxprj` project file. Two paths:

@@ -3,7 +3,7 @@
 //! it was logged.
 
 use chrono::{DateTime, TimeZone, Utc};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::{MessageId, command_ids, ids};
 
 /// The short Source name of a Messages row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,6 +94,21 @@ impl MessageSource {
     }
 }
 
+/// The log target of the line that reports bare pin touches on open; its rows
+/// link to Repair Pin Junctions ([`row_action`]).
+pub(crate) const PIN_JUNCTIONS_TARGET: &str = "signex::pin_junctions";
+
+/// The command a Messages row offers as a link, with its catalog label: a row
+/// logged under a target that names one, by its diagnostic code.
+pub(crate) fn row_action(code: &str) -> Option<(&'static str, MessageId)> {
+    // `diagnostic_code_from_target(PIN_JUNCTIONS_TARGET)`, pinned by a test.
+    const PIN_JUNCTIONS_CODE: &str = "SIGNEX-PIN_JUNCTIONS";
+    (code == PIN_JUNCTIONS_CODE).then_some((
+        "repair_pin_junctions",
+        command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS,
+    ))
+}
+
 /// `at` on the operating system's local clock as `HH:MM:SS`. Display only.
 pub(crate) fn clock_time(at: DateTime<Utc>) -> String {
     clock_time_in(at, &chrono::Local)
@@ -148,6 +163,19 @@ mod tests {
         assert_eq!(source("iced_wgpu::window"), MessageSource::Graphics);
         assert_eq!(source("reqwest::connect"), MessageSource::System);
         assert_eq!(MessageSource::of_code("APP-EVENT"), MessageSource::App);
+    }
+
+    /// The bare-touch report links to Repair Pin Junctions (2026-11-19); a
+    /// row from any other target has no link.
+    #[test]
+    fn the_bare_touch_line_links_to_the_repair() {
+        let code = diagnostic_code_from_target(PIN_JUNCTIONS_TARGET);
+        let (command, label) = row_action(&code).expect("a link");
+        assert_eq!(command, "repair_pin_junctions");
+        assert_eq!(label, command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS);
+        let id = crate::keymap::AppCommandId::new(command).expect("a catalog id");
+        assert!(crate::app::command::bridge::is_dispatchable(&id));
+        assert!(row_action(&diagnostic_code_from_target("signex::project")).is_none());
     }
 
     #[test]

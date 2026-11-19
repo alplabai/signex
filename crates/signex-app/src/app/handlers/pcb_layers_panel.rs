@@ -4,11 +4,23 @@
 
 use iced::Task;
 use signex_renderer::pcb::LayerSetId;
+use signex_types::pcb_layer::PcbLayer;
 
 use crate::app::{Board3dMsg, LayerSetMsg, Message, PcbMsg, Signex};
-use crate::panels::LayersPanelMsg;
+use crate::panels::{LayersPanelMsg, LayersTab, PanelKind};
 
 impl Signex {
+    /// Layer colour... (a layer tab's menu, `edit_layer_color`): the Layers
+    /// panel opens on Layers & Colors, unfiltered, with the colours of
+    /// `layer` open under its row: the board's one colour picker (#2363).
+    pub(crate) fn open_layer_colour(&mut self, layer: PcbLayer) -> Task<Message> {
+        let ui = &mut self.document_state.panel_ctx.pcb_layers_ui;
+        ui.tab = LayersTab::LayersAndColors;
+        ui.search.clear();
+        ui.picker = Some((layer, false));
+        self.show_panel(PanelKind::Layers)
+    }
+
     pub(crate) fn handle_layers_panel(&mut self, msg: &LayersPanelMsg) -> Task<Message> {
         let ui = &mut self.document_state.panel_ctx.pcb_layers_ui;
         if ui.apply(msg) {

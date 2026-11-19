@@ -468,12 +468,17 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub drawings: Vec<SchDrawing>,
     #[serde(default)]
-    pub no_erc_directives: Vec<NoConnect>,
+    pub no_erc_directives: Vec<NoErcDirective>,
     /// Blankets, Compile Masks and Differential Pair directives (#2420).
     #[serde(default)]
     pub directives: Vec<super::SchDirective>,
     #[serde(default)]
     pub title_block: HashMap<String, String>,
+    /// Sheet variables (#1987): name to source text, shadowing the project
+    /// variables of the same name (`crate::variables`). Saved in
+    /// `[extras.sheet.variables]` only when not empty.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub variables: BTreeMap<String, String>,
     #[serde(default)]
     pub lib_symbols: LibSymbolTable,
     /// Measured text widths for hit boxes; derived data, not saved.
@@ -544,6 +549,7 @@ impl Default for SchematicSheet {
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
             title_block: HashMap::new(),
+            variables: BTreeMap::new(),
             lib_symbols: LibSymbolTable::default(),
             text_widths: super::TextWidths::default(),
             text_extents: super::TextExtents::default(),
