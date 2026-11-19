@@ -100,6 +100,7 @@ View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net
 View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
+Project/Add Table of Contents Sheet	item	Add Table of Contents Sheet	-	-	AddTableOfContents	01001000	cmd:add_table_of_contents
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-
@@ -150,7 +151,11 @@ Place/Graphics/Line	item	Line	-	-	DrawLine	01-00000	cmd:draw_line
 Place/Graphics/Rectangle	item	Rectangle	-	-	DrawRectangle	01-00000	cmd:draw_rectangle
 Place/Graphics/Round Rectangle	stub	Round Rectangle	-	-	-	00-00000	never
 Place/Graphics/Polygon	item	Polygon	-	-	DrawPolygon	01-00000	cmd:draw_polygon
-Place/Graphics/Bezier	stub	Bezier	-	-	-	00-00000	never
+Place/Graphics/Bezier	item	Bezier	-	-	DrawBezier	01-00000	cmd:draw_bezier
+Place/Graphics/Table	item	Table	-	-	PlaceTable	01-00000	cmd:place_table
+Place/Graphics/Dimension	submenu	Dimension	-	-	-	-	-
+Place/Graphics/Dimension/Linear	item	Linear	-	-	PlaceLinearDimension	01-00000	cmd:place_linear_dimension
+Place/Graphics/Dimension/Aligned	item	Aligned	-	-	PlaceAlignedDimension	01-00000	cmd:place_aligned_dimension
 Place/Graphics/---	separator	-	-	-	-	-	-
 Place/Graphics/Graphic...	stub	Graphic...	-	-	-	00-00000	never
 Design	menu	Design	-	-	-	-	-

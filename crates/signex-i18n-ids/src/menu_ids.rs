@@ -152,5 +152,6 @@ define_ids! {
         CTX_FP_SILK_UNKNOWN = "ctx-fp-silk-unknown";
         CTX_FP_SILK_STRING = "ctx-fp-silk-string";
         CTX_FP_SILK_REGION = "ctx-fp-silk-region";
+        MENU_PLACE_DIMENSION = "menu-place-dimension";
     }
 }

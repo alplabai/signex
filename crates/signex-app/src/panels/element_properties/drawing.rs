@@ -392,6 +392,9 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             | signex_types::schematic::SchDrawing::Circle { stroke_color, .. }
             | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
             | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+            signex_types::schematic::SchDrawing::Bezier(b) => b.stroke_color,
+            signex_types::schematic::SchDrawing::Dimension(d) => d.stroke_color,
+            signex_types::schematic::SchDrawing::Table(_) => None,
         });
         col = col.push(drawing_stroke_color_row(current_color, muted, &ctx.i18n));
         col = col.push(drawing_placement_row(

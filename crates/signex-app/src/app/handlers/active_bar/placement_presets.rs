@@ -128,6 +128,23 @@ impl Signex {
             ActiveBarAction::DrawPolygon => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
             }
+            // #1267, #1300: their own tools.
+            ActiveBarAction::DrawBezier => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bezier)));
+            }
+            ActiveBarAction::DrawTable => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Table)));
+            }
+            ActiveBarAction::PlaceLinearDimension => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::LinearDimension,
+                )));
+            }
+            ActiveBarAction::PlaceAlignedDimension => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::AlignedDimension,
+                )));
+            }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
             // selected colour. Colours stay in app state only; nothing

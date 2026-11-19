@@ -3,6 +3,7 @@
 # scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
 add_board_graphic
 add_net_class
+add_table_of_contents
 add_teardrops
 align_bottom
 align_horizontal_centers
@@ -183,6 +184,7 @@ panelize_board
 paste
 paste_array
 paste_special
+place_aligned_dimension
 place_blanket
 place_board_arc
 place_board_circle
@@ -219,6 +221,7 @@ place_harness_connector
 place_harness_entry
 place_hierarchical_label
 place_junction
+place_linear_dimension
 place_local_net_label
 place_net_label
 place_no_connect
@@ -233,6 +236,7 @@ place_sheet_entry
 place_sheet_symbol
 place_signal_harness
 place_symbol
+place_table
 place_text
 place_text_frame
 place_text_string

@@ -562,6 +562,29 @@ impl Engine {
                         info.push(("Border".into(), format!("{width:.3}")));
                         info.push(("Fill".into(), fill_type_label(*fill).into()));
                     }
+                    SchDrawing::Bezier(b) => {
+                        info.push(("Type".into(), "Bezier".into()));
+                        info.push((
+                            "Start".into(),
+                            format!("{:.2}, {:.2}", b.start.x, self.document.page_y(b.start.y)),
+                        ));
+                        info.push((
+                            "End".into(),
+                            format!("{:.2}, {:.2}", b.end.x, self.document.page_y(b.end.y)),
+                        ));
+                        info.push(("Width".into(), format!("{:.3}", b.width)));
+                    }
+                    SchDrawing::Dimension(dim) => {
+                        info.push(("Type".into(), "Dimension".into()));
+                        info.push(("Length".into(), format!("{:.3}", dim.measured_mm())));
+                        info.push((info_keys::TEXT.into(), dim.label()));
+                    }
+                    SchDrawing::Table(t) => {
+                        let (rows, columns) = t.size();
+                        info.push(("Type".into(), "Table".into()));
+                        info.push(("Rows".into(), rows.to_string()));
+                        info.push(("Columns".into(), columns.to_string()));
+                    }
                 }
             }
             SelectedKind::SymbolRefField => {

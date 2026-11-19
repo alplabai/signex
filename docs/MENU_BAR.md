@@ -57,6 +57,10 @@ enablement; no command left the app.
 **Project** (project-wide actions):
 
 - Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Add Table of Contents Sheet (`add_table_of_contents`, #1300): writes
+  `contents.snxsch` next to the root sheet (refused, and said so, when that
+  file is there) and adds it to the project; gated like Electrical Rules
+  Check. See `SCHEMATIC_TABLES.md`.
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -426,7 +430,10 @@ buttons (`menu_bar/model/sheet_place.rs`):
 - **Directives**: Parameter Set, Generic No ERC, Differential Pair, Blanket,
   Compile Mask.
 - **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
-  Round Rectangle, Polygon, Bezier; Graphic.
+  Round Rectangle, Polygon, Bezier, Table, then the **Dimension** submenu
+  (Linear, Aligned); Graphic. Bezier (`draw_bezier`) went live and Table
+  (`place_table`), Linear (`place_linear_dimension`) and Aligned
+  (`place_aligned_dimension`) were added with #1267 / #1300.
 
 A live row runs its catalog command, the one the Active Bar's row names, and
 is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
@@ -718,7 +725,8 @@ will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has eleven planned commands (#2415), greyed with the planned
+Place on a sheet has ten planned commands (#2415; Bezier left the list with
+#1267), greyed with the planned
 tooltip in every state until their tools are built
 (`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
 
@@ -733,7 +741,6 @@ tooltip in every state until their tools are built
 | Graphics | Elliptical Arc | `draw_elliptical_arc` |
 | Graphics | Ellipse | `draw_ellipse` |
 | Graphics | Round Rectangle | `draw_round_rectangle` |
-| Graphics | Bezier | `draw_bezier` |
 | Graphics | Graphic... | `place_graphic` |
 
 Each one is the row of a planned Active Bar tool. It is not a

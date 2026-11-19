@@ -951,6 +951,8 @@ pub enum EditMsg {
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
+    /// Schematic tables (#1300): contents sheet, CSV, cell edits.
+    Tables(crate::app::TablesMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

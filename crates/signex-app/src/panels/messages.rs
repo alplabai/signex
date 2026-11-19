@@ -1000,6 +1000,8 @@ pub enum PanelMsg {
     /// best-effort and fires UpdateDrawingEdit when the value is a
     /// valid f64.
     DrawingFieldTyping(DrawingFieldId, String),
+    /// The Properties of a Bezier, dimension or table (#1267, #1300).
+    Annotation(super::AnnotationPanelMsg),
     /// Open / close the border-colour picker overlay for a child sheet.
     ToggleChildSheetBorderPicker(uuid::Uuid),
     /// Open / close the fill-colour picker overlay for a child sheet.

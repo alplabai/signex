@@ -186,4 +186,15 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         operands: operands::SHEET_SYMBOL_SIZE,
         ..CommandMetadata::DEFAULT
     },
+    // #1300: writes contents.snxsch and adds it to the project.
+    CommandMetadata {
+        id: "add_table_of_contents",
+        category: "design",
+        label: command_ids::CMD_ADD_TABLE_OF_CONTENTS,
+        menu_label: Some(command_ids::CMD_MENU_ADD_TABLE_OF_CONTENTS),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

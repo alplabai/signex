@@ -10,6 +10,11 @@
     "category": "design"
   },
   {
+    "id": "add_table_of_contents",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "add_teardrops",
     "group": "Pcb",
     "category": "pcb"
@@ -910,6 +915,11 @@
     "category": "edit"
   },
   {
+    "id": "place_aligned_dimension",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_blanket",
     "group": "Schematic",
     "category": "place"
@@ -1090,6 +1100,11 @@
     "category": "place"
   },
   {
+    "id": "place_linear_dimension",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_local_net_label",
     "group": "Schematic",
     "category": "place"
@@ -1156,6 +1171,11 @@
   },
   {
     "id": "place_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_table",
     "group": "Schematic",
     "category": "place"
   },

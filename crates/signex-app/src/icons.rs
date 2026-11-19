@@ -222,6 +222,7 @@ canonical_icon!(icon_dd_align_menu, "dropdown/align_menu.svg");
 canonical_icon!(icon_dd_align_vcenter, "dropdown/align_vcenter.svg");
 canonical_icon!(icon_dd_arc, "dropdown/arc.svg");
 canonical_icon!(icon_dd_bezier, "dropdown/bezier.svg");
+canonical_icon!(icon_dd_table, "dropdown/table.svg");
 canonical_icon!(icon_dd_blanket, "dropdown/blanket.svg");
 canonical_icon!(icon_dd_bring_front, "dropdown/bring_front.svg");
 canonical_icon!(icon_dd_bring_front_of, "dropdown/bring_front_of.svg");

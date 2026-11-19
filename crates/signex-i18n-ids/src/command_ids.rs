@@ -650,5 +650,13 @@ define_ids! {
         CMD_CATEGORY_PCB = "cmd-category-pcb";
         CMD_CATEGORY_UNCATEGORIZED = "cmd-category-uncategorized";
         CMD_UNNAMED = "cmd-unnamed";
+        CMD_PLACE_TABLE = "cmd-place-table";
+        CMD_MENU_PLACE_TABLE = "cmd-menu-place-table";
+        CMD_PLACE_LINEAR_DIMENSION = "cmd-place-linear-dimension";
+        CMD_MENU_PLACE_LINEAR_DIMENSION = "cmd-menu-place-linear-dimension";
+        CMD_PLACE_ALIGNED_DIMENSION = "cmd-place-aligned-dimension";
+        CMD_MENU_PLACE_ALIGNED_DIMENSION = "cmd-menu-place-aligned-dimension";
+        CMD_ADD_TABLE_OF_CONTENTS = "cmd-add-table-of-contents";
+        CMD_MENU_ADD_TABLE_OF_CONTENTS = "cmd-menu-add-table-of-contents";
     }
 }

@@ -901,6 +901,24 @@ pub use harness::{
 };
 mod union;
 pub use union::SchUnion;
+mod drawing_bezier;
+mod drawing_dimension;
+mod sch_table;
+pub use drawing_bezier::{
+    BEZIER_FLATTEN_SEGMENTS, LINE_END_ARROW_HALF_WIDTH_MM, LINE_END_ARROW_LENGTH_MM, LineEnds,
+    SchBezier,
+};
+pub use drawing_dimension::{
+    DIMENSION_MAX_PRECISION, DIMENSION_TEXT_MM, DimensionArrows, DimensionDirection,
+    DimensionGeometry, DimensionUnits, SchDimension,
+};
+pub use sch_table::{
+    PinSort, SchTable, TABLE_ADVANCE_EM, TABLE_HEADER_TINT_SHARE, TABLE_TITLE_GAP_EM, TableBorders,
+    TableCell, TableColumn, TableLayout, TableRefresh, TableSource, TableStyle, pin_columns,
+    power_net_names, sheet_columns, table_header_fill,
+};
+#[cfg(test)]
+mod drawing_kinds_tests;
 
 #[cfg(test)]
 mod default_tests;

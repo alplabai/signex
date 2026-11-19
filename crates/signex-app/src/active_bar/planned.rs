@@ -25,7 +25,6 @@ pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
     // #1248: a rule directive must never enter the netlist, and no
     // non-electrical directive object exists yet.
     (ActiveBarAction::PlaceParameterSet, "Parameter Set"),
-    (ActiveBarAction::DrawBezier, "Bezier"),
     (ActiveBarAction::DrawEllipse, "Ellipse"),
     (ActiveBarAction::DrawEllipticalArc, "Elliptical Arc"),
     (ActiveBarAction::PlaceSignalHarness, "Signal Harness"),
@@ -67,7 +66,6 @@ mod tests {
         "Round Rectangle",
         "Graphic",
         "Parameter Set",
-        "Bezier",
         "Ellipse",
         "Elliptical Arc",
         "Signal Harness",

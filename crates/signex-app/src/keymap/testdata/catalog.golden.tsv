@@ -164,6 +164,9 @@ draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Sch
 draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_table	place	Place table	Table	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_linear_dimension	place	Place linear dimension	Linear	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_aligned_dimension	place	Place aligned dimension	Aligned	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
 edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
@@ -206,6 +209,7 @@ previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schema
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_sheet_symbol_size	edit	Set the size of a sheet symbol	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,size:point/mm,document:document?
+add_table_of_contents	design	Add table of contents sheet	Add Table of Contents Sheet	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-

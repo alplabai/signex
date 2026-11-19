@@ -53,6 +53,7 @@ use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
+pub(crate) use draw::{AnnotationDraft, AnnotationDraftKind, HintInk};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use fitted_view::{FittedView, ResizeFollow, resize_follow};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
@@ -275,6 +276,8 @@ pub struct CanvasSlot {
     /// In-flight polyline vertices while Tool::Polyline is active.
     /// Mirrors `interaction_state.polyline_points`.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// The Bezier or dimension being placed (#1267), for the preview draw.
+    pub annotation_draft: Option<draw::AnnotationDraft>,
     /// When the BringToFrontOf / SendToBackOf picker is armed, show
     /// the gray-X placement cursor so the user knows the next click
     /// is a reference pick, not a selection. Synced from
@@ -373,6 +376,7 @@ impl CanvasSlot {
             lasso_polygon: None,
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
+            annotation_draft: None,
             reorder_picker_armed: false,
             move_pick: None,
             move_epoch: 0,

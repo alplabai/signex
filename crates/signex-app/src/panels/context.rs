@@ -158,6 +158,8 @@ pub struct PanelContext {
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
     /// Where that drawing sits against the circuit (#1583).
     pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
+    /// The Properties state of a selected Bezier, dimension or table.
+    pub annotation: super::AnnotationPanelState,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.

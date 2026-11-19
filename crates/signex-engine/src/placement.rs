@@ -377,10 +377,21 @@ pub(crate) fn drawing_points(d: &SchDrawing) -> Vec<Point> {
             start, mid, end, ..
         } => vec![*start, *mid, *end],
         SchDrawing::Polyline { points, .. } => points.clone(),
+        SchDrawing::Bezier(b) => b.points().to_vec(),
+        SchDrawing::Dimension(d) => {
+            let line = d.line();
+            vec![d.from, d.to, line[0], line[1]]
+        }
+        SchDrawing::Table(t) => {
+            let (lo, hi) = t.bounds();
+            vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+        }
     }
 }
 
-/// [`drawing_points`], to move them.
+/// The points that move drawing `d`: [`drawing_points`] for the classic
+/// shapes; a dimension's two measured points (its offset is relative) and a
+/// table's corner.
 fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
     match d {
         SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
@@ -391,6 +402,9 @@ fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
             start, mid, end, ..
         } => vec![start, mid, end],
         SchDrawing::Polyline { points, .. } => points.iter_mut().collect(),
+        SchDrawing::Bezier(b) => b.points_mut().into_iter().collect(),
+        SchDrawing::Dimension(d) => vec![&mut d.from, &mut d.to],
+        SchDrawing::Table(t) => vec![&mut t.position],
     }
 }
 

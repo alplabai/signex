@@ -359,6 +359,12 @@ pub enum ActiveBarAction {
     DrawPolygon,
     DrawBezier,
     PlaceGraphic,
+    /// A table on the sheet (#1300).
+    DrawTable,
+    /// A horizontal or vertical dimension (#1267).
+    PlaceLinearDimension,
+    /// A dimension along its two points (#1267).
+    PlaceAlignedDimension,
     // Net Color
     NetColorBlue,
     NetColorLightGreen,
@@ -589,7 +595,13 @@ fn bar_items(
         ic::icon_shapes(tid),
         matches!(
             current_tool,
-            crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle
+            crate::app::Tool::Line
+                | crate::app::Tool::Rectangle
+                | crate::app::Tool::Circle
+                | crate::app::Tool::Bezier
+                | crate::app::Tool::Table
+                | crate::app::Tool::LinearDimension
+                | crate::app::Tool::AlignedDimension
         ),
         last("shapes", ActiveBarAction::DrawLine),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)),

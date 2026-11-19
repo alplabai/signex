@@ -557,6 +557,11 @@ impl Engine {
                 .iter_mut()
                 .find(|d| d.uuid() == item.uuid)
                 .map(|d| {
+                    if d.map_annotation_points(|p| {
+                        signex_types::schematic::Point::new(p.x + dx, p.y + dy)
+                    }) {
+                        return true;
+                    }
                     match d {
                         SchDrawing::Line { start, end, .. } => {
                             start.x += dx;
@@ -589,6 +594,9 @@ impl Engine {
                                 p.x += dx;
                                 p.y += dy;
                             }
+                        }
+                        // Moved by `map_annotation_points` above.
+                        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
                         }
                     }
                     true

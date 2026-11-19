@@ -102,6 +102,9 @@ fn drawing_name(drawing: &signex_types::schematic::SchDrawing) -> String {
             Some(first) => ("polyline", first),
             None => return "polyline".to_string(),
         },
+        SchDrawing::Bezier(b) => ("bezier", &b.start),
+        SchDrawing::Dimension(d) => ("dimension", &d.from),
+        SchDrawing::Table(t) => ("table", &t.position),
     };
     format!("{shape} ({:.2}, {:.2})", p.x, p.y)
 }
