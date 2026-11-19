@@ -408,6 +408,14 @@ pub struct ZoneFacts {
     /// The copper the selected pours' fills hold: area in mm² and pieces;
     /// `None` while the fills of the board are not computed.
     pub copper: Option<(f64, usize)>,
+    /// Whether the selected pours are shelved (#2523); `None` when they
+    /// differ or an area is not a pour.
+    pub shelved: Option<bool>,
+    /// The thermal relief the pours store: on, spoke width and air gap in
+    /// mm; `None` when they differ. The fill does not draw spokes yet.
+    pub thermal: Option<(bool, f64, f64)>,
+    /// The Copper card's menu of board-wide pour commands is open.
+    pub menu_open: bool,
 }
 
 /// Free arcs (#2373). Positions and angles are read from the board origin

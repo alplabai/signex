@@ -8,6 +8,7 @@
 //! then board order), and each clears the fills of other nets' pours filled
 //! before it. Islands below the pour's minimum area, and with
 //! `remove_dead_islands` those touching no copper of its net, are dropped.
+//! A shelved pour (`Zone::is_shelved_pour`) has no fill and clears nothing.
 //! Rules and what is not modelled: `docs/PCB_TOOLS.md`, "Polygon Pour".
 
 mod islands;
@@ -71,15 +72,16 @@ impl ZoneFills {
     }
 }
 
-/// The fill of every pour of `board`. A pour on no copper layer, or with
-/// an outline or clearance the geometry cannot hold, has no fill.
+/// The fill of every pour of `board`. A shelved pour, a pour on no copper
+/// layer, or one with an outline or clearance the geometry cannot hold, has
+/// no fill.
 pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let inside = board_area(board);
     let mut order: Vec<(usize, &Zone)> = board
         .zones
         .iter()
         .enumerate()
-        .filter(|(_, zone)| zone.is_pour())
+        .filter(|(_, zone)| zone.is_pour() && !zone.is_shelved_pour())
         .collect();
     order.sort_by_key(|(index, zone)| (Reverse(zone.priority), *index));
     let mut fills: Vec<ZoneFill> = Vec::with_capacity(order.len());

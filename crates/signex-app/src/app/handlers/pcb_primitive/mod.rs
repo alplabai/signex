@@ -64,6 +64,8 @@ pub struct PcbPrimitivePanel {
     pub via_override: Option<PrimitiveTarget>,
     /// The copper layer the via illustration's top view shows.
     pub via_view_layer: Option<CopperLayer>,
+    /// The pour Copper card's menu of board-wide commands is open (#2523).
+    pub pour_menu_open: bool,
 }
 
 impl PcbPrimitivePanel {
@@ -250,6 +252,7 @@ impl Signex {
             }
             M::ArcModePicked(mode) => self.pick_arc_mode(*mode),
             M::Via(m) => self.handle_via_msg(m),
+            M::Pour(m) => self.handle_pour_msg(m),
         }
         self.sync_pcb_board_summary();
     }

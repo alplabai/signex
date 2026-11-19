@@ -407,21 +407,6 @@ pub(super) fn with_tip<'a>(
     .boxed()
 }
 
-/// A disabled checkbox with its label and `tip`.
-pub(super) fn fixed_checkbox<'a>(
-    look: Look<'a>,
-    label: MessageId,
-    checked: bool,
-    tip: MessageId,
-) -> Element<'a, PanelMsg> {
-    let check = checkbox::<PanelMsg, Theme, iced::Renderer>(checked)
-        .labelled(look.t(label))
-        .size(TS.body)
-        .text_size(TS.body)
-        .style(form_look::checkbox_style);
-    with_tip(look, check.boxed(), tip)
-}
-
 /// A checkbox with its label, ticked when `checked` is `Some(true)`; it
 /// sends `on_toggle` when the selection can be edited.
 pub(super) fn live_checkbox<'a>(
@@ -468,11 +453,6 @@ pub(super) fn fixed_value<'a>(
             }
         });
     with_tip(look, boxed.boxed(), tip)
-}
-
-/// The lock toggle beside a location, disabled with `tip`.
-pub(super) fn lock<'a>(look: Look<'a>, locked: bool, tip: MessageId) -> Element<'a, PanelMsg> {
-    fixed_checkbox(look, signex_i18n::ids::PCB_PRIM_LOCK, locked, tip)
 }
 
 /// The Net row: its dropdown and pick button.
@@ -559,14 +539,4 @@ pub(super) fn any_layer_value<'a>(
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .boxed()
-}
-
-/// A text field: the draft while one is typed, else `value`.
-pub(super) fn text_field<'a>(
-    common: &PrimitiveCommon,
-    id: PrimitiveField,
-    value: Option<&str>,
-    look: Look<'a>,
-) -> Element<'a, PanelMsg> {
-    field(common, id, value.map(str::to_string), None, look)
 }

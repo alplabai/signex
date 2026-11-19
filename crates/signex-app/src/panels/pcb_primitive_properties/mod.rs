@@ -56,6 +56,7 @@ pub use facts::{
 };
 pub use linked::{EndChoice, end_choices, ends_tip};
 pub use via::ViaMsg;
+pub use zone::PourMsg;
 
 use super::{PanelContext, PanelMsg, form_look};
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, tokens::resolve};
@@ -177,6 +178,8 @@ pub enum PcbPrimitiveMsg {
     ArcModePicked(ArcMode),
     /// The Via panel's via type, Override and layer chips (#96).
     Via(ViaMsg),
+    /// A pour's Copper card: Repour, Shelve and the board-wide menu (#2523).
+    Pour(PourMsg),
 }
 
 /// The panel for `facts`: header, then the kind's sections.

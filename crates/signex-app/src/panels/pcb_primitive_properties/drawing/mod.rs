@@ -7,10 +7,13 @@
 //! geometry.
 
 pub(super) mod arc;
+pub(super) mod dimension;
 pub(super) mod graphic;
 pub(super) mod pad;
+pub(super) mod text;
 pub(super) mod track;
 pub(super) mod via;
+pub(super) mod zone;
 
 use iced::Point;
 use signex_i18n::{I18n, UserText, ids, t};
