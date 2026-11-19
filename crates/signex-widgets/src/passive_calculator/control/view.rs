@@ -64,7 +64,8 @@ impl CalculatorControl {
                         enable_section,
                     },
                 )
-                .map(CalculatorMessage::RkmEncoder),
+                .map(CalculatorMessage::RkmEncoder)
+                .boxed(),
             CalculatorTab::Passive(_) => {
                 let page_look = PageLook { palette, mono };
                 responsive(move |size| self.network_page(i18n, tokens, page_look, size.width))
