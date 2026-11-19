@@ -171,6 +171,7 @@ fn room_row<'a>(row_: &RoomRow, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a
                 color: colour,
                 width: 1.5,
                 radius: (TS.body / 4.0).into(),
+                ..Border::default()
             },
             ..Default::default()
         });
@@ -293,6 +294,7 @@ fn left_column<'a>(
             color: r.line_strong,
             width: 1.0,
             radius: Radii::GRAPHITE.button.into(),
+            ..Border::default()
         },
         ..Default::default()
     });
@@ -387,6 +389,7 @@ fn right_column<'a>(
                 color: r.line_strong,
                 width: 1.0,
                 radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             ..Default::default()
         });

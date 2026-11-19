@@ -462,10 +462,11 @@ fn in_sync_card<'a>(
     let card = container(
         column![title, body]
             .spacing(SP.xs)
+            .width(Length::Fill)
             .align_x(Alignment::Center),
     )
     .padding(SP.l + SP.xs)
-    .max_width(TS.body * 420.0 / 12.0)
+    .width(Length::Fixed(TS.body * 420.0 / 12.0))
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(fill)),
         border: Border {

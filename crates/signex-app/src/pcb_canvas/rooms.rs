@@ -90,7 +90,7 @@ pub(super) fn draw_rooms(
         .chain(overlay.drawing.iter().map(|r| r.uuid))
         .collect();
     let rooms = rooms.iter().chain(overlay.drawing.iter());
-    let bottom_view = camera.view_flipped();
+    let bottom_view = camera.rotation().is_mirrored();
     let selection = crate::render_config::to_iced(&colors.selection);
     let screen = |p: [f32; 2]| camera.world_to_screen(Point::new(p[0], p[1]));
     let font = iced::Font {

@@ -160,6 +160,7 @@ fn header<'a>(facts: &'a RoomFacts, i18n: &I18n, tokens: &ThemeTokens) -> Elemen
                 color: colour,
                 width: 1.5,
                 radius: (TS.body / 4.0).into(),
+                ..Border::default()
             },
             ..Default::default()
         });
@@ -562,6 +563,7 @@ fn banner<'a>(
                 color: warn,
                 width: 1.0,
                 radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             ..Default::default()
         })
