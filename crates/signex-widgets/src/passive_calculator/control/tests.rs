@@ -136,7 +136,7 @@ mod m17 {
                 disabled_ink: c,
                 panel: c,
                 font: Font::DEFAULT,
-                checkbox: Box::new(|_: &Theme, _| checkbox::Style {
+                checkbox: Box::new(move |_: &Theme, _| checkbox::Style {
                     background: iced::Background::Color(c),
                     icon_color: c,
                     border: iced::Border::default(),
