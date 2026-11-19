@@ -213,10 +213,21 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
-            UiMsg::StatusBar(StatusBarRequest::ActiveLayerStepRequested) => self
-                .dispatch_pcb_message(PcbMsg::View(PcbViewMsg::ActiveLayerStepped {
-                    forward: true,
-                })),
+            // The board counters and their popovers (#2460); a bare click is
+            // the main window's.
+            UiMsg::StatusBar(StatusBarRequest::BoardCounterClicked { window, counter }) => {
+                match window.or(self.ui_state.main_window_id) {
+                    Some(window) => self.board_counter_clicked(window, counter),
+                    None => Task::none(),
+                }
+            }
+            UiMsg::StatusBar(StatusBarRequest::BoardPopover(event)) => {
+                self.board_popover_event(event)
+            }
+            UiMsg::StatusBar(StatusBarRequest::BoardClockTicked) => {
+                self.ui_state.board_status.now = Some(std::time::SystemTime::now());
+                Task::none()
+            }
             // `status_bar_message` routes these to the window's board; a bare
             // one acts on the main window's.
             UiMsg::StatusBar(StatusBarRequest::ViewAngleClicked) => {
@@ -485,8 +496,9 @@ impl Signex {
         })
     }
 
-    /// A click on the status bar of `window`. The layer pill steps the
-    /// board that window shows, the one it names (#2272). On a symbol tab
+    /// A click on the status bar of `window`. A board counter (the layer
+    /// pill among them) opens its popover over that window (#2272, #2460).
+    /// On a symbol tab
     /// (`symbol`, from [`Self::status_symbol_path`]) the Grid and unit
     /// buttons toggle that symbol's library settings, the ones the bar shows.
     pub fn status_bar_message(
@@ -505,10 +517,12 @@ impl Signex {
         let view_angle =
             |window, event| Message::Pcb(PcbMsg::ViewRotationInWindow { window, event });
         match (request, symbol) {
-            (StatusBarRequest::ActiveLayerStepRequested, _) => Message::Pcb(PcbMsg::ViewInWindow {
-                window,
-                event: PcbViewMsg::ActiveLayerStepped { forward: true },
-            }),
+            (StatusBarRequest::BoardCounterClicked { counter, .. }, _) => {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardCounterClicked {
+                    window: Some(window),
+                    counter,
+                }))
+            }
             (StatusBarRequest::ViewAngleClicked, _) => {
                 view_angle(window, ViewRotationMsg::AngleEntryToggled)
             }

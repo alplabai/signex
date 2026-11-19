@@ -251,13 +251,13 @@ pub enum PcbViewMsg {
     /// The user asked to show or hide the board origin marker (#2351).
     OriginMarkerVisibilityToggled,
     /// The user stepped the active layer to the next or previous one of the
-    /// board's layers (`+`, `-`, the status bar pill).
+    /// board's layers (`+`, `-`, View ▸ Next / Previous Layer).
     ActiveLayerStepped { forward: bool },
     /// The user stepped the active layer to the next or previous signal
     /// layer (`*`).
     SignalLayerStepped { forward: bool },
-    /// The user made one layer the active one (a tab under the canvas or a
-    /// Layers panel row).
+    /// The user made one layer the active one (a tab under the canvas, a
+    /// Layers panel row or a row of the status bar's Active layer popover).
     ActiveLayerPicked(PcbLayer),
     /// The user turned single-layer mode on or off (Shift+S, the View
     /// Options switch).

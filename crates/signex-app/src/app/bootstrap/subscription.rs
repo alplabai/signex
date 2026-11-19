@@ -109,6 +109,8 @@ struct OpenOverlays {
     grid_picker_open: bool,
     /// The status bar's Grid & Snap popover: Esc closes it, not the tool.
     grid_snap_popover_open: bool,
+    /// A board counter's popover (#2460): Esc closes it, not the tool.
+    board_status_popover_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -259,6 +261,11 @@ impl OpenOverlays {
             OverlayId::GridSnapPopover => self
                 .grid_snap_popover_open
                 .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
+            OverlayId::BoardStatusPopover => self.board_status_popover_open.then(|| {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                    crate::status_bar::BoardPopoverEvent::Dismissed,
+                )))
+            }),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -769,6 +776,14 @@ impl Signex {
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
             grid_snap_popover_open: self.ui_state.grid_snap_popover.is_some(),
+            // Painted only while its window shows a board: no rung for a
+            // popover left behind by a tab switch.
+            board_status_popover_open: self
+                .ui_state
+                .board_status
+                .popover
+                .as_ref()
+                .is_some_and(|p| self.status_board_target(p.window).is_some()),
         }
     }
 
@@ -1021,6 +1036,9 @@ impl Signex {
             chord_timeout,
             // The Start screen's minute clock; none while it is off screen.
             crate::start_screen::clock_subscription(self.start_screen_shown()),
+            // The board DRC counter's age (#2460); none unless a board with a
+            // finished run is shown.
+            self.board_clock_subscription(),
             kbd,
             mouse_sub,
             window_close,
@@ -1834,6 +1852,7 @@ mod tests {
             project_tree_context_menu_open,
             grid_picker_open,
             grid_snap_popover_open,
+            board_status_popover_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1948,6 +1967,9 @@ mod tests {
             ("grid_picker_open", |o| o.grid_picker_open = true),
             ("grid_snap_popover_open", |o| {
                 o.grid_snap_popover_open = true
+            }),
+            ("board_status_popover_open", |o| {
+                o.board_status_popover_open = true
             }),
         ];
 

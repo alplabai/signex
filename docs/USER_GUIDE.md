@@ -178,7 +178,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
   (**Snap off**). Click the grid value to show or hide the grid, and click the
   Snap pill to switch snapping. **View ▸ Toggle Grid** does the same as the
-  grid click. Placed objects snap to the grid while snapping is on.
+  grid click. Placed objects snap to the grid while snapping is on. On a
+  board the grid value opens the **Grid** popover instead; see the board
+  counters below.
   Right-click the grid value on a schematic to open **Grid & Snap**: Visible
   Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
   the two grids. These are the settings of **Properties ▸ Document Options ▸
@@ -192,6 +194,33 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   PCB; an open panel has a check and says where it is (left, right, bottom,
   floating or window). Click a panel to open it, or to bring an open one
   forward.
+- **Board counters:** on a board the status bar also shows how far the
+  board is: **Routed** (routed connections of all, with a bar and the
+  percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
+  how long ago it ran, or *not run yet*) and **Selected**, which takes the
+  place of the selection summary. A count of zero shows as a grey 0. Each of
+  them, the active layer pill and the grid value is a button that opens a
+  popover above it; Esc or a click elsewhere closes it:
+  - **Active layer:** the board's shown layers; click one to make it the
+    active layer. **Layers panel** opens the panel. The `+` and `-` keys
+    (**View ▸ Next Layer** and **Previous Layer**) still step the layer.
+  - **Grid:** pick 0.100, 0.250, 0.500 or 1.270 mm, or type any pitch in mm
+    into **Custom…** and press Enter (a pitch of 0 or less is refused and
+    shows red). **Snap to grid** switches snapping; **Grids…** opens the
+    board's grid settings in Properties.
+  - **Unrouted connections:** each net with what it still has to join, for
+    example `C1-1 → U1-2`, and *pour will connect* when a pour of that net is
+    on the board (those connections count as unrouted until the pour reaches
+    the pads). **Zoom** shows the net's connections; **Route next** zooms to
+    the first one and starts Interactive Routing.
+  - **DRC:** when the last check ran and how many edits the board has had
+    since, its violations with a **Zoom** each, **Run DRC** and **Open
+    Messages**.
+  - **Selection:** the selected objects with a **Zoom** each, then
+    **Properties**, **Select in schematic** (for a board in a project) and
+    **Clear**.
+
+  In a board's own window the counters and popovers are that board's.
 
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps

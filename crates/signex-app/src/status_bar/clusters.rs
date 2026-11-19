@@ -1,7 +1,7 @@
 //! The status bar as clusters: cursor · grid and snap · tool and hint at the
-//! left, separated by faint rules; the selection, the board angle, the zoom
-//! and the Panels button at the right. [`segments`] says what the bar holds
-//! in which order; [`view`] draws it.
+//! left, separated by faint rules; the selection (on a board, the board
+//! counters), the board angle, the zoom and the Panels button at the right.
+//! [`segments`] says what the bar holds in which order; [`view`] draws it.
 
 use iced::widget::{Row, Widget, container, mouse_area, row, space, svg};
 use iced::{Element, Length, Theme};
@@ -12,8 +12,8 @@ use signex_widgets::{button, text};
 use super::Readout;
 use super::graphite::{
     BAR_GAP, BAR_PADDING, CLUSTER_GAP, PANELS_ICON, SP, TS, UNIT_COLUMN, X_COLUMN, Y_COLUMN,
-    cursor_texts, grid_text, layer_dot, layer_pill, mono_button, mono_message, mono_text,
-    panels_button, rule, selection_pill, snap_label, snap_pill, view_angle, zoom_text,
+    cursor_texts, grid_text, layer_pill, mono_button, mono_message, mono_text, panels_button, rule,
+    selection_pill, snap_label, snap_pill, view_angle, zoom_text,
 };
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
@@ -46,6 +46,9 @@ pub(super) enum Segment {
     Spacer,
     /// The selection summary, a click opens Properties.
     Selection,
+    /// A board's Routed, Unrouted, DRC and Selected counters (#2460); on a
+    /// board they stand in for the selection summary.
+    BoardCounters,
     /// The board view's angle.
     ViewAngle,
     Zoom,
@@ -70,7 +73,9 @@ pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
         out.push(S::Spacer);
     }
     let before_zoom = out.len();
-    if r.selection.is_some() {
+    if r.surface.board.is_some() {
+        out.push(S::BoardCounters);
+    } else if r.selection.is_some() {
         out.push(S::Selection);
     }
     if r.surface.view_angle.is_some() {
@@ -139,6 +144,9 @@ fn segment_view<'a>(
             .style(selection_pill(tokens))
             .on_press(StatusBarRequest::OpenPropertiesForSelection)
             .boxed(),
+        Segment::BoardCounters => {
+            super::board::board_counters(r.surface.board.as_ref()?, tokens, i18n)
+        }
         Segment::ViewAngle => view_angle(r.surface.view_angle.clone()?, tokens),
         Segment::Zoom => mono_message(zoom_text(i18n, r.zoom), muted).boxed(),
         Segment::Panels => panels(tokens, i18n),
@@ -173,7 +181,8 @@ fn cursor_cluster<'a>(
 }
 
 /// The Grid read-out (a click shows or hides the grid; on a sheet a
-/// right-click opens the Grid & Snap popover) and the Snap pill.
+/// right-click opens the Grid & Snap popover; on a board a click opens the
+/// Grid popover, #2460) and the Snap pill.
 fn grid_snap_cluster<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
@@ -187,7 +196,11 @@ fn grid_snap_cluster<'a>(
         ),
         StatusBarRequest::ToggleGrid,
     );
-    let grid: Element<'a, StatusBarRequest> = if r.surface.opens_grid_popover {
+    let grid: Element<'a, StatusBarRequest> = if let Some(board) = &r.surface.board {
+        let value = super::board::board_grid_value(i18n, r.grid_visible, r.grid_size_mm, r.unit);
+        let open = board.open == Some(super::BoardPopoverKind::Grid);
+        super::board::board_grid_readout(value, open, tokens, i18n)
+    } else if r.surface.opens_grid_popover {
         mouse_area(grid)
             .on_right_press(StatusBarRequest::GridReadoutRightClicked)
             .boxed()
@@ -211,8 +224,9 @@ fn grid_snap_cluster<'a>(
         .boxed()
 }
 
-/// The active copper layer of an open board: its colour dot, the caption
-/// and the name; a click steps to the next layer.
+/// The active copper layer of an open board: its swatch, the caption, the
+/// name and the chevron; a click opens the Active layer popover (#2460).
+/// Stepping the layer is View ▸ Next / Previous Layer and their keys.
 fn layer_pill_view<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
@@ -221,18 +235,22 @@ fn layer_pill_view<'a>(
     let r_tokens = resolve(tokens);
     let pill = button(
         row![
-            layer_dot(layer.colour),
+            super::board::layer_swatch(layer.colour, tokens),
             text(layer.caption).size(TS.body).color(r_tokens.ink3),
             text(layer.name)
                 .size(TS.body)
                 .color(r_tokens.accent_soft_ink),
+            super::board::layer_chevron(tokens),
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
     .padding([1.5, 6.0])
     .style(layer_pill(tokens))
-    .on_press(StatusBarRequest::ActiveLayerStepRequested);
+    .on_press(StatusBarRequest::BoardCounterClicked {
+        window: None,
+        counter: super::BoardCounter::Layer,
+    });
     Some(pill.boxed())
 }
 
@@ -294,7 +312,7 @@ fn panels<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, StatusBarRequest
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Activity, LayerReadout, SurfaceReadout, ViewAngleReadout};
+    use super::super::{Activity, BoardReadout, LayerReadout, SurfaceReadout, ViewAngleReadout};
     use super::Segment as S;
     use super::*;
     use signex_types::coord::Unit;
@@ -347,12 +365,9 @@ mod tests {
         );
     }
 
-    /// The mock's board bar: the layer pill before the tool, the git save
-    /// after it, the angle before the rule at the right.
-    #[test]
-    fn a_board_bar_shows_the_layer_pill_save_and_angle() {
-        let i18n = I18n::en_us();
-        let surface = SurfaceReadout {
+    /// A board's surface: the layer pill, the angle and the counters.
+    fn board_surface(i18n: &I18n) -> SurfaceReadout {
+        SurfaceReadout {
             active_layer: Some(LayerReadout {
                 caption: t!(i18n, ids::PCB_STATUS_LAYER),
                 name: t!(i18n, ids::PCB_STATUS_LAYER),
@@ -366,8 +381,17 @@ mod tests {
                 entry: None,
             }),
             opens_grid_popover: false,
-        };
-        let mut r = readout(None, surface);
+            board: Some(BoardReadout::default()),
+        }
+    }
+
+    /// The mock's board bar: the layer pill before the tool, the git save
+    /// after it; at the right the board counters (#2460), then the angle
+    /// before the rule.
+    #[test]
+    fn a_board_bar_shows_the_layer_pill_save_and_angle() {
+        let i18n = I18n::en_us();
+        let mut r = readout(None, board_surface(&i18n));
         r.pending_git_commits = 2;
         assert_eq!(
             segments(&r),
@@ -380,12 +404,50 @@ mod tests {
                 S::Tool,
                 S::Saving,
                 S::Spacer,
+                S::BoardCounters,
                 S::ViewAngle,
                 S::Rule,
                 S::Zoom,
                 S::Panels,
             ]
         );
+    }
+
+    /// m164: on a board the Selected counter stands in for the selection
+    /// summary; the counters come before the angle and the zoom.
+    #[test]
+    fn on_a_board_the_counters_replace_the_selection_summary() {
+        let i18n = I18n::en_us();
+        let mut r = readout(None, board_surface(&i18n));
+        r.selection = Some(t!(
+            i18n,
+            ids::PANELS_STATUS_BAR_SELECTION_KINDS,
+            "count" => 2,
+            "kinds" => "2 components"
+        ));
+        let shown = segments(&r);
+        assert!(shown.contains(&S::BoardCounters));
+        assert!(!shown.contains(&S::Selection));
+        let at = |s| shown.iter().position(|x| *x == s).expect("shown");
+        assert!(at(S::BoardCounters) < at(S::ViewAngle));
+        assert!(at(S::ViewAngle) < at(S::Zoom));
+    }
+
+    /// A sheet keeps its bar: no counters, the selection summary as before.
+    #[test]
+    fn a_sheet_bar_has_no_board_counters() {
+        let i18n = I18n::en_us();
+        let mut r = readout(None, SurfaceReadout::default());
+        r.selection = Some(t!(
+            i18n,
+            ids::PANELS_STATUS_BAR_SELECTION_KINDS,
+            "count" => 1,
+            "kinds" => "1 wire"
+        ));
+        let shown = segments(&r);
+        assert!(shown.contains(&S::Selection));
+        assert!(!shown.contains(&S::BoardCounters));
+        assert!(!shown.contains(&S::LayerPill));
     }
 
     /// With nothing at the right but the zoom, no rule stands before it;

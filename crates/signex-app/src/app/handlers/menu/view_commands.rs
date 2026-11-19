@@ -49,8 +49,8 @@ impl Signex {
     }
 
     /// Set the snap grid; the visible grid follows unless the user set the
-    /// two apart.
-    fn set_snap_grid(&mut self, next: f32) -> Task<Message> {
+    /// two apart. The board's Grid popover picks through it too (#2460).
+    pub(crate) fn set_snap_grid(&mut self, next: f32) -> Task<Message> {
         let current = self.ui_state.grid_size_mm;
         let linked = (self.ui_state.visible_grid_mm - current).abs() < f32::EPSILON;
         let mut tasks =

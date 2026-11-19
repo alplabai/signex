@@ -48,6 +48,7 @@ impl Signex {
                 active_layer: self.status_layer(window_id),
                 view_angle: self.status_view_angle(window_id),
                 opens_grid_popover: self.status_sheet_tab(window_id).is_some(),
+                board: self.status_board(window_id),
             },
             &self.ui_state.i18n,
         );

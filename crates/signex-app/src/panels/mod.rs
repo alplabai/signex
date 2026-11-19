@@ -42,6 +42,8 @@ pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+// The DRC popover of the status bar words its rows as the panel does (#2460).
+pub(crate) use drc::row_text as drc_row_text;
 pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
 pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;

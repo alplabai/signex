@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+mod board_status;
 pub(crate) mod chord;
 mod command_palette;
 mod document;

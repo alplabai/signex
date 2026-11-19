@@ -76,6 +76,8 @@ pub(crate) enum OverlayId {
     PanelList,
     /// The status bar's Grid & Snap popover (m6).
     GridSnapPopover,
+    /// The popover a board counter of the status bar opened (#2460).
+    BoardStatusPopover,
     ComponentsRowDragLabel,
 
     // Dialogs.
@@ -157,7 +159,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 73] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -187,6 +189,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 73] = [
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::GridSnapPopover,
+    OverlayId::BoardStatusPopover,
     OverlayId::ComponentsRowDragLabel,
     OverlayId::Preferences,
     OverlayId::FindReplace,
@@ -319,6 +322,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::GridPicker
         | OverlayId::PanelList
         | OverlayId::GridSnapPopover
+        | OverlayId::BoardStatusPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -540,6 +544,14 @@ impl Signex {
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
+            OverlayId::BoardStatusPopover => {
+                if let Some(card) = self.board_popover_card(window_id) {
+                    let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                        crate::status_bar::BoardPopoverEvent::Dismissed,
+                    )));
+                    layers.extend(Self::dismiss_over(dismissed, card));
+                }
+            }
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
@@ -638,6 +650,7 @@ mod tests {
             OverlayId::GridPicker,
             OverlayId::PanelList,
             OverlayId::GridSnapPopover,
+            OverlayId::BoardStatusPopover,
         ] {
             assert!(
                 slot(menu) > panels,

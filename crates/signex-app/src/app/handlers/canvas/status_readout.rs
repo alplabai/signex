@@ -1,6 +1,6 @@
 //! The status bar's cursor X/Y and zoom readouts: each window asks the
 //! canvas it is showing, never a stored copy that another canvas wrote
-//! (#1789).
+//! (#1789). The board counters' readout lives in `board_status` (#2460).
 
 use std::path::{Path, PathBuf};
 
@@ -8,6 +8,8 @@ use signex_types::coord::Unit;
 
 use super::super::super::*;
 use crate::library::state::LibraryDisplaySettings;
+
+mod board_status;
 
 /// The grid and unit a window's status bar shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
