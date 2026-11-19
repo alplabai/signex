@@ -93,6 +93,7 @@ impl Catalog {
                 tokens,
                 bom_modal::view(tokens),
             ),
+            section::view("Flow progress", tokens, crate::flow_progress::view(tokens)),
             section::view(
                 "Board palette and line-art inks",
                 tokens,

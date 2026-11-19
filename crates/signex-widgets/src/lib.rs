@@ -8,6 +8,7 @@ pub mod chevron;
 pub mod chips;
 pub mod dimension_label;
 pub mod dropdown_style;
+pub mod flow_progress;
 pub mod history_pane;
 mod house;
 mod house_extra;
