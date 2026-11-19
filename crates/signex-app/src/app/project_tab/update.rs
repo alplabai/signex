@@ -343,6 +343,7 @@ impl Signex {
         let defaults_before = project.data.schematic_defaults.clone();
         let pages_before = project.data.sheet_order();
         let rules_before = project.data.rules.clone();
+        let requirements_before = project.data.requirements.clone();
         let moved = if undo {
             tab.general_history.undo(&mut project.data)
         } else {
@@ -359,7 +360,9 @@ impl Signex {
         tab.journal_lines_draft = None;
         tab.variant_rename = None;
         tab.variant_problem = None;
-        tab.requirements.clear_drafts();
+        // Requirement drafts are by id: only a stepped entry's go (#2547).
+        tab.requirements
+            .follow_step(&requirements_before, &project.data.requirements);
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);
