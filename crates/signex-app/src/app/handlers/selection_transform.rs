@@ -13,11 +13,15 @@ use signex_types::schematic::BusEntry;
 use crate::app::{Signex, Tool};
 
 impl Signex {
-    /// Whether a board track run or a wire or bus run is open: the two cases
-    /// in which [`Self::handle_selection_rotate_requested`] bends the run
-    /// instead of turning anything.
-    pub(crate) fn has_open_run(&self) -> bool {
-        self.is_routing_board_track() || self.is_drawing_wire_run()
+    /// Whether a rotate key from `window` (`None`: the main window) bends a
+    /// run instead of turning anything: a track run on the board that window
+    /// shows, or a wire or bus run. These are the two checks
+    /// [`Self::handle_selection_rotate_requested`] makes once that window's
+    /// board is swapped in (`bend_board_route`, `is_drawing_wire_run`); the
+    /// board one resolves the window itself, as a key is judged before the
+    /// swap.
+    pub(crate) fn has_open_run_in(&self, window: Option<iced::window::Id>) -> bool {
+        self.is_routing_board_track_in(window) || self.is_drawing_wire_run()
     }
 
     /// Rotate the selection 90 degrees on screen. The engine's

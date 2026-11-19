@@ -735,8 +735,11 @@ impl Signex {
                     .command
             }
         };
+        // The run the command would bend is the one in the key's window: an
+        // undocked tab acts in its own window, every other window in the main.
+        let acting = (target == InputTarget::UndockedTab).then_some(window);
         let ctx = HeldKeyContext {
-            run_open: self.has_open_run(),
+            run_open: self.has_open_run_in(acting),
         };
         command.is_some_and(|command| !runs_on_key_repeat(&command, ctx))
     }

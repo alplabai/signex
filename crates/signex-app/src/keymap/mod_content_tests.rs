@@ -203,7 +203,8 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
 
 /// A Mac keyboard has no Insert key: on macOS the Altium profile also binds
 /// ⌥I to add vertex, after Insert, so the menu hint there is ⌥I. Windows and
-/// Linux keep Insert alone (`docs/DECISIONS.md`, "Held keys").
+/// Linux keep Insert alone (`docs/DECISIONS.md`, the 2026-11-19 row on the
+/// Altium profile's macOS bindings).
 #[test]
 fn altium_on_macos_adds_a_vertex_on_option_i() {
     let option_i = [KeyStroke::from_str("Alt+I").unwrap()];
@@ -230,7 +231,8 @@ fn altium_on_macos_adds_a_vertex_on_option_i() {
 /// macOS takes ⌃Space for the input source once two exist, so on macOS the
 /// Altium profile also cycles the drag wiring mode on ⇧Tab, after ⌃Space, so
 /// the menu hint there is ⇧Tab. Windows and Linux keep Ctrl+Space alone
-/// (`docs/DECISIONS.md`, "Held keys").
+/// (`docs/DECISIONS.md`, the 2026-11-19 row on the Altium profile's macOS
+/// bindings).
 #[test]
 fn altium_on_macos_cycles_the_wiring_mode_on_shift_tab() {
     let shift_tab = [KeyStroke::from_str("Shift+TAB").unwrap()];

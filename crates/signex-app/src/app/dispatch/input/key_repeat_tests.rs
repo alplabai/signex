@@ -339,7 +339,7 @@ fn a_held_shift_space_mid_wire_steps_the_corner_mode_once() {
     let mut app = app_with_tool(Tool::Wire);
     let start = grid(0.0, 0.0);
     click(&mut app, (start.x, start.y));
-    assert!(app.has_open_run(), "the run is open");
+    assert!(app.has_open_run_in(None), "the run is open");
     let before = app.interaction_state.corner_rule;
     send(&mut app, shift_space(false));
     let stepped = app.interaction_state.corner_rule;
@@ -355,7 +355,7 @@ fn a_held_shift_space_mid_wire_steps_the_corner_mode_once() {
 #[test]
 fn a_held_shift_space_on_a_selection_rotates_on_every_repeat() {
     let mut app = showing_selected_symbol();
-    assert!(!app.has_open_run());
+    assert!(!app.has_open_run_in(None));
     let mut rotation = symbol(&app).rotation;
     for repeat in std::iter::once(false).chain([true; REPEATS]) {
         send(&mut app, shift_space(repeat));
