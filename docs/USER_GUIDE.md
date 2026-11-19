@@ -204,6 +204,13 @@ fixed by the part's template or picked from a list. You do not type the unit,
 and `4k7` or `4.7uF` in the number field is refused with a message. The
 Library Browser opens the **Edit Component Details** modal for a measurement
 cell, and the component editor's **Parameters** tab edits the same way. In the
+modal the number and its prefix list form one field; a unit this version does
+not know is shown as written and kept. Parameters that come from the class
+template are marked **template** and cannot be removed there; your own
+parameters keep their **✕**. If the **Internal PN** you type is already used by
+another component in the library, the field turns red, says which table has
+it, and the footer counts the problem; **Save** waits until the PN is unique.
+A save the library refuses shows its reason in the same footer spot. In the
 Library Browser and in the **Place Component** picker, **Add range filter…**
 filters a measurement column with an operator (`≥`, `≤`, `=` or `between`), a
 number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows

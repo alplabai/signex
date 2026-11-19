@@ -38,6 +38,7 @@ pub mod editor;
 pub mod external_poll;
 pub mod held_back;
 pub mod loose_symbols;
+pub(crate) mod measurement_slot;
 pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;

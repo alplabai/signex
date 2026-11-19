@@ -315,3 +315,100 @@ library-recovery-binding-intro-text = A row in '{ $table }' references a { $kind
        *[other] Primitive
     } that no longer exists on disk.
 library-recovery-binding-caption = Skip for now keeps the row as it is until it is re-bound.
+
+## Edit Component (#130)
+# Dialog title.
+library-edit-row-title = Edit Component
+# Header note: $pn is the row's part number, $library the library, $table the table.
+library-edit-row-note = { $pn } · { $library } / { $table }
+# Section heading, written in capitals.
+library-edit-row-identity = IDENTITY
+# Section heading, written in capitals.
+library-edit-row-bindings = BINDINGS
+# Section heading, written in capitals.
+library-edit-row-parameters = PARAMETERS
+# Field label, also the field's placeholder.
+library-edit-row-internal-pn = Internal PN
+# Field label: the component class.
+library-edit-row-class = Class
+# Placeholder of the Class dropdown.
+library-edit-row-class-placeholder = Select class…
+# Field label: the lifecycle state.
+library-edit-row-state = State
+# Placeholder of the State dropdown.
+library-edit-row-state-placeholder = Select lifecycle…
+# Field label, also the field's placeholder.
+library-edit-row-manufacturer = Manufacturer
+# Field label: manufacturer part number; also the field's placeholder.
+library-edit-row-mpn = MPN
+# Field label.
+library-edit-row-description = Description
+# Placeholder of the Description field: a sample description.
+library-edit-row-description-placeholder = e.g. 100 nF 50 V X7R 0603
+# Field label.
+library-edit-row-datasheet = Datasheet
+# Placeholder of the Datasheet field: a sample address.
+library-edit-row-datasheet-placeholder = https://example.com/datasheet.pdf
+# A datasheet stored in the library, shown read-only; $file is its file name.
+library-edit-row-datasheet-pinned = Pinned PDF: { $file }
+# Field label.
+library-edit-row-tags = Tags (comma-separated)
+# Placeholder of the Tags field: sample tags.
+library-edit-row-tags-placeholder = e.g. low-noise, RoHS, qualified
+# Error under the Internal PN field; $pn is the typed part number, $table the table of the row that has it.
+library-edit-row-pn-conflict = Internal PN “{ $pn }” is already used in { $table }.
+# Footer summary of what holds Save; $count is a whole number, $fields the field names.
+library-edit-row-problems = { $count ->
+        [one] { $count } problem
+       *[other] { $count } problems
+    }: { $fields }
+# Binding card title.
+library-edit-row-symbol-ref = Symbol ref
+# Binding card title.
+library-edit-row-footprint-ref = Footprint ref
+# Binding card text when the row binds no symbol.
+library-edit-row-symbol-unbound = Unbound — pick a symbol
+# Binding card text when the row binds no footprint.
+library-edit-row-footprint-unbound = Unbound (optional)
+# What a binding resolves to: $file is the file, $name the symbol or footprint.
+library-edit-row-binding = { $file } · { $name }
+# A binding no open library lists; $id is the short id it names.
+library-edit-row-binding-missing = Not in the open libraries ({ $id })
+# Inline confirm before the draft is discarded.
+library-edit-row-reload-confirm = Discard your edits and reload?
+# Button that adds an empty parameter row.
+library-edit-row-add-parameter = + Add Parameter
+# Parameters table column heading.
+library-edit-row-key = Key
+# Parameters table column heading.
+library-edit-row-value = Value
+# Parameters table column heading.
+library-edit-row-unit = Unit
+# Placeholder of a parameter's number field.
+library-edit-row-value-placeholder = value
+# The parameters table when it is empty.
+library-edit-row-no-parameters = No parameters yet.
+# Pill after a parameter that comes from the class template.
+library-edit-row-template-pill = template
+# Caption under the parameters table; $class is the class name.
+library-edit-row-template-caption = Template parameters come from the { $class } class and cannot be removed.
+# Heading over the template parameters the row has no value for yet.
+library-edit-row-template-offer = Template parameters
+# Button that adds a template parameter; $name is the parameter.
+library-edit-row-add-slot = + { $name }
+# Button that adds a template parameter; $name is the parameter, $unit its unit symbol.
+library-edit-row-add-slot-unit = + { $name } ({ $unit })
+# Why a stored value breaks its template rule; $reason is the rule, in English.
+library-edit-row-slot-problem = ✗ { $reason }
+# Tooltip of a unit this version does not know, which is kept unchanged.
+library-edit-row-unit-kept = Kept as written
+
+## Delete Component (#137)
+# Dialog title.
+library-delete-row-title = Delete Component?
+# Intro title; $pn is the row's part number.
+library-delete-row-intro-title = Delete { $pn }?
+# Intro text; $pn is the row's part number, $table its table.
+library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
+# Caption under the intro text.
+library-delete-row-caption = Placed parts keep their embedded copy.
