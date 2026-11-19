@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2525 — Find and Replace: Whole word renames only the exact net.
+#[path = "regression/find_replace_whole_word.rs"]
+mod find_replace_whole_word;
