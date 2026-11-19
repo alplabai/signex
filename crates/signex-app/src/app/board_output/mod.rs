@@ -18,11 +18,12 @@ use std::sync::Arc;
 
 use signex_output::{
     BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale, BoardReport,
-    BoardReportKind,
+    BoardReportKind, ReportColumn,
 };
 use signex_types::pcb_layer::BoardSide;
 
 pub(crate) use print::{print_text, set_label};
+pub use reports::{ReportSort, shown_rows};
 pub use step::BoardStepBuilt;
 pub(crate) use step::{StepContext, make_step_of};
 
@@ -45,8 +46,14 @@ pub enum BoardOutputMsg {
     /// A report command ran: Board Reports opens on `kind` for the board
     /// in view.
     ReportRequested(BoardReportKind),
-    /// A tab of Board Reports was picked.
+    /// A report kind of Board Reports' switch was picked.
     ReportPicked(BoardReportKind),
+    /// The filter field of Board Reports was edited. View only: the export
+    /// writes every row.
+    ReportFilterEdited(String),
+    /// A column heading of Board Reports was clicked: sort by that column,
+    /// or turn the order round when it is the sorted one. View only.
+    ReportSortPicked(ReportColumn),
     /// `export_board_report` or the dialog's Export CSV: the save dialog for
     /// the report in view.
     CsvExportRequested,
@@ -152,13 +159,34 @@ pub enum BoardOutputDialog {
     Print(BoardPrintState),
 }
 
-/// Board Reports: the board, and the table in view made from it when its
-/// tab was picked.
+/// Board Reports: the board, the table in view made from it when its kind
+/// was picked, and how the table is filtered and sorted on screen (never in
+/// the export).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardReportsState {
     pub board: PathBuf,
     pub board_name: String,
     pub report: BoardReport,
+    /// The filter field as typed; a row shows when a cell holds it.
+    pub filter: String,
+    /// The column the rows are shown sorted by; `None` keeps the report's
+    /// own order.
+    pub sort: Option<ReportSort>,
+}
+
+impl BoardReportsState {
+    /// Report `report` of `board`, unfiltered, in the order its kind opens
+    /// with.
+    pub fn new(board: PathBuf, board_name: String, report: BoardReport) -> Self {
+        let sort = ReportSort::opening(report.kind);
+        Self {
+            board,
+            board_name,
+            report,
+            filter: String::new(),
+            sort,
+        }
+    }
 }
 
 /// Board Print / PDF: the board and the options being set.
@@ -186,6 +214,10 @@ impl crate::app::Signex {
         match msg {
             M::ReportRequested(kind) => self.open_board_report(kind),
             M::ReportPicked(kind) => self.pick_board_report(kind),
+            M::ReportFilterEdited(filter) => self.edit_board_report(|s| s.filter = filter),
+            M::ReportSortPicked(column) => {
+                self.edit_board_report(|s| s.sort = Some(ReportSort::picked(s.sort, column)));
+            }
             M::CsvExportRequested => return self.request_board_report_csv(),
             M::CsvPathChosen { board, kind, path } => {
                 return self.write_board_report_csv(&board, kind, path);
@@ -202,6 +234,13 @@ impl crate::app::Signex {
             M::PrintPagesPicked(pages) => self.edit_board_print(|o| o.pages = pages),
             M::PrintScalePicked(scale) => self.edit_board_print(|o| o.scale = scale),
             M::PrintMonochromePicked(on) => self.edit_board_print(|o| o.monochrome = on),
+            // Mirror is greyed and deaf while no bottom set is ticked; this
+            // guard is the backstop.
+            M::PrintFlagToggled(BoardPrintFlag::MirrorBottom) => self.edit_board_print(|o| {
+                if o.has_bottom_set() {
+                    BoardPrintFlag::MirrorBottom.toggle(o);
+                }
+            }),
             M::PrintFlagToggled(flag) => self.edit_board_print(|o| flag.toggle(o)),
             M::PdfExportRequested => return self.request_board_pdf(),
             M::PdfPathChosen {
@@ -263,6 +302,8 @@ fn file_title(path: &std::path::Path) -> String {
 mod tests;
 #[cfg(test)]
 mod tests_assembly;
+#[cfg(test)]
+mod tests_dialogs;
 #[cfg(test)]
 mod tests_print;
 #[cfg(test)]

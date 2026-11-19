@@ -1,18 +1,23 @@
-//! Board Reports (#2404) and Board Print / PDF (#2402). State and rules:
-//! `app/board_output/`.
+//! Board Reports (#2404; laid out as #117) and Board Print / PDF (#2402;
+//! laid out as #116). State and rules: `app/board_output/`.
 
+pub(super) mod kit;
 mod print;
+mod print_plan;
 mod reports;
+mod reports_table;
 
-use iced::widget::{Row, Space, column, container};
+#[cfg(test)]
+mod tests_print;
+#[cfg(test)]
+mod tests_reports;
+
+use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::Localized;
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
 
 use super::sizes;
 use crate::app::{BoardOutputDialog, BoardOutputMsg, Message, Signex};
-use crate::styles::{Spacing, TypeScale, tokens};
+use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -38,7 +43,10 @@ impl Signex {
                 let unit = crate::panels::pcb_board_properties::shown_unit(self.ui_state.unit);
                 reports::parts(state, unit, i18n, tokens)
             }
-            Some(BoardOutputDialog::Print(state)) => print::parts(state, i18n, tokens),
+            Some(BoardOutputDialog::Print(state)) => {
+                let board = self.document_state.pcb_board(&state.board);
+                print::parts(state, board, i18n, tokens)
+            }
             None => return container(Space::new()).boxed(),
         };
         container(column![header, body, footer].width(Length::Fixed(
@@ -49,37 +57,4 @@ impl Signex {
         .clip(true)
         .boxed()
     }
-}
-
-/// A row of toggle pills, the one for the current choice on.
-fn pills<'a>(
-    options: Vec<(Localized, bool, BoardOutputMsg)>,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let mut row: Row<Element<'a, Message>> = Row::new().spacing(SP.s);
-    for (label, on, msg) in options {
-        row = row.push(
-            button(container(text(label).size(TS.body)).padding([SP.s, 10.0]))
-                .on_press(out(msg))
-                .style(super::graphite_annotate::toggle_style(tokens, on))
-                .boxed(),
-        );
-    }
-    row.wrap().boxed()
-}
-
-/// A muted caption over a control.
-fn captioned<'a>(
-    caption: Localized,
-    control: Element<'a, Message>,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    column![
-        text(caption)
-            .size(TS.label)
-            .color(tokens::muted_text(tokens)),
-        control,
-    ]
-    .spacing(SP.s)
-    .boxed()
 }
