@@ -120,3 +120,104 @@ fn the_open_launcher_top_counts_the_rows_and_separators_above_it() {
         Some(2.0 * m.panel_pad + 2.0 * m.item_height(false) + m.separator_height())
     );
 }
+
+/// A row built without the new builders is an ordinary row: not current,
+/// no leading check, no hint; its fill is the hover wash or the open
+/// submenu highlight, as before.
+#[test]
+fn a_default_row_has_no_current_look_lead_check_or_hint() {
+    let item = DropdownItem::new("Place", ());
+    assert!(!item.current && item.lead_check.is_none() && item.hint.is_none());
+    let look = Look::of(&theme_tokens(ThemeId::GraphiteDark));
+    assert_eq!(
+        row_fill(button::Status::Active, look, false, false, false),
+        None
+    );
+    assert_eq!(
+        row_fill(button::Status::Hovered, look, false, false, false),
+        Some(look.hover)
+    );
+    assert_eq!(
+        row_fill(button::Status::Active, look, false, true, false),
+        Some(look.active)
+    );
+    assert!(!metrics::has_icons(&labelled("Place")));
+}
+
+/// The current row has the accent-soft fill and ink in both Graphite
+/// themes, and a hover still washes over it.
+#[test]
+fn the_current_row_is_accent_soft_and_still_hovers() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let look = Look::of(&tokens);
+        assert_eq!(look.current_fill, theme_ext::accent_soft(&tokens));
+        assert_eq!(look.current_ink, theme_ext::accent_soft_ink(&tokens));
+        let rest = row_fill(button::Status::Active, look, false, false, true);
+        assert_eq!(rest, Some(look.current_fill), "{id:?}");
+        let hovered = row_fill(button::Status::Hovered, look, false, false, true);
+        assert!(hovered.is_some() && hovered != rest && hovered != Some(look.hover));
+    }
+    let item = DropdownItem::new("Polygon Pour", ()).current(true);
+    assert!(item.current);
+}
+
+/// A leading check reserves the icon column (on or off) and replaces the
+/// trailing check, so it does not widen the card.
+#[test]
+fn a_lead_check_row_takes_the_icon_column_not_the_trailing_check() {
+    let m = MenuMetrics::GRAPHITE;
+    let off = vec![DropdownEntry::Item(
+        DropdownItem::new("Signal Layers", ()).lead_check(false),
+    )];
+    assert!(
+        metrics::has_icons(&off),
+        "an empty column is still a column"
+    );
+    let on = DropdownItem::new("Signal Layers", ()).lead_check(true);
+    assert_eq!(on.lead_check, Some(true));
+    let plain = m.fitted_width(&[DropdownEntry::Item(on)], f32::MAX, "");
+    let checked = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new("Signal Layers", ())
+                .lead_check(true)
+                .checked(true),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert_eq!(plain, checked, "no trailing check beside a leading one");
+    let iconless = m.fitted_width(&labelled("Signal Layers"), f32::MAX, "");
+    assert!(plain > iconless, "{plain} {iconless}");
+}
+
+/// A hint is part of the fitted width, measured at the caption size.
+#[test]
+fn a_hint_widens_the_fitted_card() {
+    let m = MenuMetrics::GRAPHITE;
+    assert_eq!(m.hint_size, theme_ext::TypeScale::DEFAULT.caption);
+    let label = "Find Similar Objects";
+    let plain = m.fitted_width(&labelled(label), f32::MAX, "");
+    let hinted = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new(label, ()).hint("not available on boards yet"),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert!(hinted > plain, "{hinted} {plain}");
+}
+
+/// Compositing a translucent wash over a fill keeps the fill visible.
+#[test]
+fn a_wash_over_a_fill_blends_the_two() {
+    let base = Color::from_rgb(1.0, 0.0, 0.0);
+    let wash = Color::from_rgba(0.0, 0.0, 1.0, 0.5);
+    let mixed = over(wash, base);
+    assert_eq!(mixed.a, 1.0);
+    assert!((mixed.r - 0.5).abs() < 1e-6 && (mixed.b - 0.5).abs() < 1e-6);
+    assert_eq!(
+        over(Color::TRANSPARENT, Color::TRANSPARENT),
+        Color::TRANSPARENT
+    );
+}

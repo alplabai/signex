@@ -183,12 +183,6 @@ bar_icon!(
     "active_bar/graphite/fab_outputs.svg",
     "active_bar/graphite/fab_outputs.svg"
 );
-// The board view's quarter turn (#2316); Graphite has the only glyph.
-bar_icon!(
-    icon_view_rotate,
-    "active_bar/graphite/view_rotate.svg",
-    "active_bar/graphite/view_rotate.svg"
-);
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");
 canonical_icon!(icon_shape_line, "shape_line.svg");

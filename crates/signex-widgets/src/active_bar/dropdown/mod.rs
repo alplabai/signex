@@ -127,6 +127,16 @@ where
     /// The row's submenu is open: it keeps a highlight, and the flyout
     /// lines up with it ([`MenuMetrics::active_submenu_top`]).
     pub active: bool,
+    /// The row is the current one (a group's last-used tool): an
+    /// accent-soft fill, its label and icon in the accent-soft ink.
+    pub current: bool,
+    /// `Some` draws an accent check in the icon column (`Some(true)`) or
+    /// leaves the column empty (`Some(false)`), in place of the icon and
+    /// the trailing check; `None` is an ordinary row.
+    pub lead_check: Option<bool>,
+    /// Muted caption-size text at the right, in the label face (a reason or
+    /// a value, where the shortcut column holds a key in the mono face).
+    pub hint: Option<String>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -149,6 +159,9 @@ impl<M: 'static + Clone> DropdownItem<M> {
             submenu: false,
             on_hover: None,
             active: false,
+            current: false,
+            lead_check: None,
+            hint: None,
         }
     }
 
@@ -214,6 +227,26 @@ impl<M: 'static + Clone> DropdownItem<M> {
         self.active = on;
         self
     }
+
+    /// Builder: the row is the current one (accent-soft fill and ink).
+    pub fn current(mut self, on: bool) -> Self {
+        self.current = on;
+        self
+    }
+
+    /// Builder: an accent check in the icon column when `on`, an empty
+    /// column when not. The row reserves the column like an icon row and
+    /// draws neither its icon nor the trailing check.
+    pub fn lead_check(mut self, on: bool) -> Self {
+        self.lead_check = Some(on);
+        self
+    }
+
+    /// Builder: a muted caption-size hint at the right, in the label face.
+    pub fn hint(mut self, text: impl Into<String>) -> Self {
+        self.hint = Some(text.into());
+        self
+    }
 }
 
 /// Chrome of the small hover hint shown on a planned row, shared by the
@@ -254,6 +287,10 @@ struct Look {
     icon_ink: Color,
     panel_bg: Color,
     border: Color,
+    /// Fill of the current row.
+    current_fill: Color,
+    /// Label and icon colour on the current row.
+    current_ink: Color,
 }
 
 impl Look {
@@ -268,7 +305,45 @@ impl Look {
             icon_ink: skin.icon_ink,
             panel_bg: theme_ext::to_color(&tokens.panel_bg),
             border: theme_ext::border_color(tokens),
+            current_fill: theme_ext::accent_soft(tokens),
+            current_ink: theme_ext::accent_soft_ink(tokens),
         }
+    }
+}
+
+/// `top` composited over `base` (source-over), so a hover wash still shows
+/// on a row that already has a fill.
+fn over(top: Color, base: Color) -> Color {
+    let a = top.a + base.a * (1.0 - top.a);
+    if a <= 0.0 {
+        return Color::TRANSPARENT;
+    }
+    let mix = |t: f32, b: f32| (t * top.a + b * base.a * (1.0 - top.a)) / a;
+    Color {
+        r: mix(top.r, base.r),
+        g: mix(top.g, base.g),
+        b: mix(top.b, base.b),
+        a,
+    }
+}
+
+/// Fill of an item row for its pointer `status`: the hover wash (over the
+/// current fill on the current row), else the open-submenu highlight, else
+/// the current fill.
+fn row_fill(
+    status: button::Status,
+    look: Look,
+    disabled: bool,
+    active: bool,
+    current: bool,
+) -> Option<Color> {
+    let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed) && !disabled;
+    match (hovered, current) {
+        (true, true) => Some(over(look.hover, look.current_fill)),
+        (true, false) => Some(look.hover),
+        _ if active => Some(look.active),
+        (false, true) => Some(look.current_fill),
+        (false, false) => None,
     }
 }
 
@@ -392,23 +467,49 @@ where
         submenu,
         on_hover,
         active,
+        current,
+        lead_check,
+        hint,
     } = item;
-    let text_c = if disabled { look.muted } else { look.primary };
+    let text_c = if disabled {
+        look.muted
+    } else if current {
+        look.current_ink
+    } else {
+        look.primary
+    };
     let mut cells: Row<Element<'a, M>> = Row::new()
         .spacing(m.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
-    if let Some(handle) = icon {
-        let (muted, ink) = (look.muted, look.icon_ink);
-        cells = cells.push(
-            svg(handle)
-                .width(m.icon_size)
-                .height(m.icon_size)
-                .style(move |_: &Theme, _| icon_style(disabled, muted, ink))
-                .boxed(),
-        );
-    } else if shape.has_icons {
-        cells = cells.push(Space::new().width(Length::Fixed(m.icon_size)).boxed());
+    match (lead_check, icon) {
+        (Some(true), _) => {
+            cells = cells.push(
+                container(check_mark(m, look.accent))
+                    .width(Length::Fixed(m.icon_size))
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .boxed(),
+            )
+        }
+        (None, Some(handle)) => {
+            let muted = look.muted;
+            let ink = if current {
+                look.current_ink
+            } else {
+                look.icon_ink
+            };
+            cells = cells.push(
+                svg(handle)
+                    .width(m.icon_size)
+                    .height(m.icon_size)
+                    .style(move |_: &Theme, _| icon_style(disabled, muted, ink))
+                    .boxed(),
+            );
+        }
+        _ if shape.has_icons => {
+            cells = cells.push(Space::new().width(Length::Fixed(m.icon_size)).boxed());
+        }
+        _ => {}
     }
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
@@ -427,25 +528,17 @@ where
         Length::Fixed(m.cluster_gap)
     };
     cells = cells.push(Space::new().width(gap).boxed());
-    if let Some(s) = shortcut {
-        let mut hint = text(raw(s))
-            .size(m.shortcut_size)
-            .color(look.muted)
-            .wrapping(text::Wrapping::None);
-        if m.mono_shortcut {
-            hint = hint.font(iced::Font::with_family(iced::font::Family::name(
-                MONO_FAMILY,
-            )));
-        }
-        cells = cells.push(hint.boxed());
+    if let Some(h) = hint {
+        cells = cells.push(side_text(h, m.hint_size, look.muted, None));
     }
-    if checked {
-        cells = cells.push(
-            text(raw("\u{2713}"))
-                .size(m.check_size)
-                .color(look.accent)
-                .boxed(),
-        );
+    if let Some(s) = shortcut {
+        let mono = m
+            .mono_shortcut
+            .then(|| iced::Font::with_family(iced::font::Family::name(MONO_FAMILY)));
+        cells = cells.push(side_text(s, m.shortcut_size, look.muted, mono));
+    }
+    if checked && lead_check.is_none() {
+        cells = cells.push(check_mark(m, look.accent));
     }
     if shape.has_chevrons {
         cells = cells.push(
@@ -458,7 +551,7 @@ where
         );
     }
 
-    let (hover, active_c, radius) = (look.hover, look.active, m.row_radius);
+    let radius = m.row_radius;
     let mut btn = button(
         container(cells)
             .padding([0.0, m.row_pad_x])
@@ -469,11 +562,7 @@ where
     .padding(0)
     .width(Length::Fill)
     .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed if !disabled => Some(hover),
-            _ if active => Some(active_c),
-            _ => None,
-        };
+        let bg = row_fill(status, look, disabled, active, current);
         button::Style {
             background: bg.map(Background::Color),
             border: Border {
@@ -503,6 +592,32 @@ where
         Some((enter, leave)) => mouse_area(row).on_enter(enter).on_exit(leave).boxed(),
         None => row,
     }
+}
+
+/// The accent check of a checked row, trailing or in the icon column.
+fn check_mark<'a, M: 'a>(m: &MenuMetrics, color: Color) -> Element<'a, M> {
+    text(raw("\u{2713}"))
+        .size(m.check_size)
+        .color(color)
+        .boxed()
+}
+
+/// A muted cell right of the label: a hint in the label face (`font` None)
+/// or a shortcut in its own face. It never wraps.
+fn side_text<'a, M: 'a>(
+    s: String,
+    size: f32,
+    color: Color,
+    font: Option<iced::Font>,
+) -> Element<'a, M> {
+    let mut cell = text(raw(s))
+        .size(size)
+        .color(color)
+        .wrapping(text::Wrapping::None);
+    if let Some(font) = font {
+        cell = cell.font(font);
+    }
+    cell.boxed()
 }
 
 /// Altium-style toggle chip — used inside `DropdownEntry::Custom`

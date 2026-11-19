@@ -1,6 +1,6 @@
 //! The PCB Active Bar's tool groups (#2392), driven through `Signex::update`.
 
-use super::tests::{bar_of, board_app, button_for, buttons, rows, runs};
+use super::tests::{bar_of, board_app, button_for, buttons, entries, rows, runs};
 use super::*;
 use crate::app::pcb_bar_groups::PcbBarRow;
 
@@ -286,4 +286,103 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         "place_board_pour_cutout",
     );
     assert_eq!(armed(&app), Some(BoardPlaceTool::PourCutout));
+}
+
+/// The shape of a dropdown entry: `H` heading, `-` separator, `*` the
+/// current row, `.` another row.
+fn shape(entries: &[DropdownEntry<Message>]) -> String {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            DropdownEntry::Header(_) => 'H',
+            DropdownEntry::Separator => '-',
+            DropdownEntry::Item(item) if item.current => '*',
+            DropdownEntry::Item(_) => '.',
+            DropdownEntry::Custom(_) => '?',
+        })
+        .collect()
+}
+
+/// #108: a group's dropdown opens with its name as a heading, in capitals,
+/// then its rows; every group with a dropdown has one.
+#[test]
+fn a_group_dropdown_is_headed_by_the_group_name() {
+    let app = board_app();
+    let cases = [
+        (PcbBarGroup::Components, "COMPONENTS"),
+        (PcbBarGroup::Route, "ROUTE"),
+        (PcbBarGroup::Tune, "TUNE"),
+        (PcbBarGroup::ViaPad, "VIA / PAD"),
+        (PcbBarGroup::CopperAreas, "COPPER AREAS"),
+        (PcbBarGroup::CopperDrawing, "COPPER DRAWING"),
+        (PcbBarGroup::Graphics, "GRAPHICS"),
+    ];
+    for (group, heading) in cases {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        let Some(DropdownEntry::Header(text)) = menu.first() else {
+            panic!("{group:?} opens with a heading");
+        };
+        assert_eq!(text.replace(['\u{2068}', '\u{2069}'], ""), heading);
+        let headers = menu
+            .iter()
+            .filter(|entry| matches!(entry, DropdownEntry::Header(_)))
+            .count();
+        assert_eq!(headers, 1, "{group:?}");
+    }
+}
+
+/// #108: the commands of a group (Repour, Change Footprint) sit below a
+/// separator after its tools; a group of tools only, or of commands only,
+/// has none.
+#[test]
+fn a_group_dropdown_puts_its_commands_below_a_separator() {
+    let app = board_app();
+    let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
+    assert_eq!(shape(&areas), "H*.....-..", "Polygon Pour is current");
+    let DropdownEntry::Item(first_command) = &areas[8] else {
+        panic!("a row after the separator");
+    };
+    assert_eq!(first_command.command_id, Some("repour_selected"));
+    let parts = entries(&app, PcbBarMenu::Group(PcbBarGroup::Components));
+    assert_eq!(
+        shape(&parts),
+        "H.-*",
+        "Change Footprint is what the button shows while Component cannot run"
+    );
+    for group in [PcbBarGroup::Route, PcbBarGroup::Tune, PcbBarGroup::Graphics] {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        assert!(!shape(&menu).contains('-'), "{group:?}: {}", shape(&menu));
+    }
+}
+
+/// #108: the row the group's button shows is drawn current in its dropdown,
+/// and follows the last tool used.
+#[test]
+fn the_last_used_row_is_current_in_its_dropdown() {
+    let mut app = board_app();
+    let current = |app: &Signex, group: PcbBarGroup| -> Vec<Option<&'static str>> {
+        rows(app, PcbBarMenu::Group(group))
+            .into_iter()
+            .filter(|row| row.current)
+            .map(|row| row.command_id)
+            .collect()
+    };
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperDrawing),
+        [Some("place_board_track")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperDrawing, "place_board_arc");
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperDrawing),
+        [Some("place_board_arc")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, "place_board_keepout");
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperAreas),
+        [Some("place_board_keepout")]
+    );
+    assert!(runs(
+        &group_button_of(&app, PcbBarGroup::CopperAreas),
+        "place_board_keepout"
+    ));
 }
