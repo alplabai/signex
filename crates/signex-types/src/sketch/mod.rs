@@ -12,6 +12,7 @@ pub mod baked_kinds;
 pub mod constraint;
 pub mod data;
 pub mod entity;
+pub mod host;
 pub mod id;
 pub(crate) mod layer_serde;
 pub mod parameter;
@@ -19,6 +20,7 @@ pub mod plane;
 
 pub use attr::LinkedRadius;
 pub use data::SketchData;
+pub use host::{SketchAction, SketchHost, SketchRole};
 
 #[cfg(test)]
 mod board_tests;
