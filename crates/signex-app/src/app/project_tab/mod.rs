@@ -17,6 +17,7 @@ mod commands;
 mod erc_annotation;
 mod general;
 mod libraries;
+mod look;
 mod open;
 mod parameters;
 mod requirements;
@@ -247,6 +248,11 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         filename: String,
         step: signex_types::project::ListMove,
+    },
+    /// Add New ▸ Schematic in an empty Sheets section (#31): the project
+    /// tree's New Schematic flow for the project.
+    AddSchematicRequested {
+        project_id: ProjectId,
     },
     /// The new variant name as typed (#1690).
     NewVariantNameEdited {

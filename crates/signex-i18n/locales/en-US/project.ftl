@@ -26,7 +26,7 @@ project-move-up = Move up
 project-move-down = Move down
 
 # Sheets section (#1689).
-project-sheets-help = The project lists its sheets in this order: the Sheet N of M a sheet shows in its title block and the order of the project tree follow it. PDF export numbers its pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
+project-sheets-help = The project lists its sheets in this order. The Sheet N of M in a title block and the order of the project tree follow it. PDF export numbers pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
 project-sheets-col-number = Page
 project-sheets-page = { $page }
 project-sheets-col-name = Name
@@ -98,3 +98,14 @@ project-vcs-auto-commit = Commit every save
 project-vcs-auto-commit-help = Each save of a project file is committed to the project's repository. Turned off, saves are not committed and the repository stays.
 project-vcs-auto-commit-needs-repo = Enable version control first: the project folder has no Git repository.
 project-vcs-pending = Commits in progress: { $count }
+
+# Graphite look (#31, #33).
+project-sheets-root = root
+project-sheets-missing = missing
+project-sheets-add-schematic = Add New ▸ Schematic
+project-sheets-preview = Preview
+# $size is the sheet size name, such as A4 or ANSI B.
+project-sheets-preview-landscape = { $size } landscape
+project-sheets-preview-portrait = { $size } portrait
+project-sheets-preview-mm = { $width } × { $height } mm
+project-libraries-where = Add, remove and rename libraries in the project tree: right-click the project, then Add New to Project ▸ Component Library.
