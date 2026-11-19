@@ -274,6 +274,8 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The field / callout hover of the Properties illustration (#2523).
+    pub illustration_hover: super::PanelIllustrationHover,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

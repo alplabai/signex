@@ -15,6 +15,7 @@ mod font_row;
 mod footprint_card;
 mod footprint_section;
 mod header;
+mod illustrations;
 mod label;
 mod library_rows;
 mod no_erc;

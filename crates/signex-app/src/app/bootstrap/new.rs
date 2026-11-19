@@ -693,6 +693,7 @@ impl Signex {
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
+                    illustration_hover: Default::default(),
                     document_font_family: None,
                 },
                 history: crate::panels::history::HistoryPanelState::default(),

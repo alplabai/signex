@@ -46,6 +46,7 @@ mod erc_waivers;
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
+pub(crate) mod illustration;
 mod library;
 mod messages;
 pub(crate) mod messages_row;
@@ -122,6 +123,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{

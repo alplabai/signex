@@ -1101,6 +1101,7 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    Illustration(signex_widgets::property_illustration::IllustrationMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

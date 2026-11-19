@@ -439,6 +439,11 @@ impl Signex {
                 self.document_state.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Advanced;
             }
+            crate::panels::PanelMsg::Illustration(msg) => {
+                let subject = crate::panels::HoverSubject::of(&self.document_state.panel_ctx);
+                let hover = &mut self.document_state.panel_ctx.illustration_hover;
+                hover.update(subject, msg.clone());
+            }
             crate::panels::PanelMsg::CancelWireColorPicker => {
                 self.document_state.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
