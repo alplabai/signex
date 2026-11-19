@@ -41,10 +41,15 @@ impl ExternalLink {
 /// the clipboard — what a bug report needs first.
 pub fn version_info_text() -> String {
     format!(
-        "Signex {VERSION}\nLicense: {LICENSE_NAME}\nOS: {} ({})",
-        std::env::consts::OS,
-        std::env::consts::ARCH,
+        "Signex {VERSION}\nLicense: {LICENSE_NAME}\nOS: {}",
+        os_text()
     )
+}
+
+/// The operating system and architecture, as the About dialog and the
+/// version block show them: `windows (x86_64)`.
+pub fn os_text() -> String {
+    format!("{} ({})", std::env::consts::OS, std::env::consts::ARCH)
 }
 
 /// Open `link` in the default browser without blocking `update`. A launch
@@ -106,6 +111,9 @@ mod tests {
         assert!(text.contains(VERSION));
         assert!(text.contains(LICENSE_NAME));
         assert!(text.contains(std::env::consts::OS));
+        // The dialog's OS row and the copied block say the same.
+        assert!(text.ends_with(&format!("OS: {}", os_text())), "{text}");
+        assert!(os_text().contains(std::env::consts::ARCH));
     }
 
     #[test]

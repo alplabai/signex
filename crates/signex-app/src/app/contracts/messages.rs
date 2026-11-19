@@ -278,6 +278,18 @@ pub enum OverlayMsg {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// Help cards (#2262). The Keyboard Shortcuts filter text changed.
+    ShortcutsFilterChanged(String),
+    /// The filter's clear button was pressed.
+    ShortcutsFilterCleared,
+    /// A scope was picked on the switch, or All from the no-match note.
+    ShortcutsScopePicked(crate::keyboard_shortcuts_modal::ShortcutScope),
+    /// "Edit in Preferences…" was pressed: the sheet closes and Preferences
+    /// opens on its Keyboard Shortcuts page.
+    ShortcutsPreferencesPressed,
+    /// The first-run card's "change" link was pressed: Preferences opens on
+    /// Appearance (the Mouse wheel setting); the card stays open.
+    FirstRunTourWheelChangePressed,
 }
 
 /// What a finished `Mod` move of a custom shortcut profile hands back.

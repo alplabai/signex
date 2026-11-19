@@ -1,35 +1,18 @@
-//! Help ▸ Keyboard Shortcuts modal — single-page reference grouped by
-//! category. Reachable from the Help menu and from F1 (which also closes
-//! the modal when it's already open).
-//!
-//! Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.2 ("Hotkey discoverability").
+//! The sheet's rows: the active profile's working shortcuts grouped by
+//! category, built once per keymap change and cached in `UiState`.
 
-use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, shortcut_ids};
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_i18n::I18n;
 
-use crate::app::view::dialogs::modal_title_header;
-use crate::app::{Message, OverlayMsg};
-use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet, category_title};
-use crate::styles;
+use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-const MODAL_W: f32 = 520.0;
-const MODAL_H: f32 = 600.0;
-const KEY_COL_W: f32 = 140.0;
-const SECTION_HEADER_GAP_TOP: f32 = 14.0;
-
-/// One category of the reference sheet: the category id and the
-/// `(label, trigger)` rows listed under it, in profile order.
+/// One category of the reference sheet: the category id and the rows
+/// listed under it, in profile order. A row is the keymap editor's row, so
+/// the sheet's filter matches exactly what the Preferences keymap search
+/// matches (label, key, command id) and its scope reads the row's context.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShortcutSection {
     pub category: String,
-    pub rows: Vec<(String, String)>,
+    pub rows: Vec<KeymapEditorRow>,
 }
 
 /// Group the active profile's listed shortcuts by category, categories in
@@ -49,154 +32,11 @@ pub fn build_sections(i18n: &I18n, profiles: &ShortcutProfileSet) -> Vec<Shortcu
             sections.len() - 1
         });
         if !row.trigger.trim().is_empty() && is_listed(&row) {
-            sections[slot].rows.push((row.label, row.trigger));
+            sections[slot].rows.push(row);
         }
     }
     sections.retain(|section| !section.rows.is_empty());
     sections
-}
-
-/// The sheet painted as a card in the main window.
-pub fn view<'a>(
-    i18n: &I18n,
-    tokens: &'a ThemeTokens,
-    sections: &[ShortcutSection],
-) -> Element<'a, Message> {
-    build(i18n, tokens, sections, false)
-}
-
-/// The sheet as the content of its own OS window: no header, filling it.
-pub fn window_view<'a>(
-    i18n: &I18n,
-    tokens: &'a ThemeTokens,
-    sections: &[ShortcutSection],
-) -> Element<'a, Message> {
-    build(i18n, tokens, sections, true)
-}
-
-fn build<'a>(
-    i18n: &I18n,
-    tokens: &'a ThemeTokens,
-    sections: &[ShortcutSection],
-    windowed: bool,
-) -> Element<'a, Message> {
-    let text_primary = styles::ti(tokens.text);
-    let text_secondary = styles::ti(tokens.text_secondary);
-    let border = styles::ti(tokens.border);
-    // Row dividers should be barely visible — half the alpha of the
-    // border colour. Subtle horizontal rhythm without noise.
-    let row_divider_color = iced::Color {
-        a: border.a * 0.35,
-        ..border
-    };
-    let section_divider_color = iced::Color {
-        a: border.a * 0.7,
-        ..border
-    };
-
-    // ── Header — canonical modal chrome ─────────────────────────
-    let header = modal_title_header(
-        crate::keymap::command_menu_text(i18n, "show_current_command_hotkeys"),
-        Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
-        tokens,
-    );
-
-    // ── Body — sections per category ────────────────────────────
-    // Column header (Action | Shortcut). Action goes on the LEFT
-    // because it's what users scan for; Shortcut on the right.
-    let column_header = container(
-        row![
-            text(i18n.message(shortcut_ids::KEYMAP_COL_ACTION, &[]))
-                .size(TS.caption)
-                .color(text_secondary),
-            Space::new().width(Length::Fill),
-            text(i18n.message(shortcut_ids::KEYMAP_COL_SHORTCUT, &[]))
-                .size(TS.caption)
-                .color(text_secondary)
-                .width(Length::Fixed(KEY_COL_W)),
-        ]
-        .padding([0, 0]),
-    )
-    .padding([6, 0]);
-
-    let mut body: Column<Element<'a, Message>> =
-        Column::new().spacing(0).push(column_header.boxed());
-    body = body.push(crate::panels::thin_sep(border));
-
-    let mut first_section = true;
-    for section in sections {
-        let category = &section.category;
-        let section_shortcuts = &section.rows;
-
-        // Subtle section divider above every section after the first.
-        if !first_section {
-            body = body.push(crate::panels::thin_sep(section_divider_color));
-        }
-        first_section = false;
-
-        body = body.push(
-            container(
-                text(raw(i18n.upper_for_display(&category_title(i18n, category))))
-                    .size(TS.caption)
-                    .color(text_secondary),
-            )
-            .padding(iced::Padding {
-                top: SECTION_HEADER_GAP_TOP,
-                right: 0.0,
-                bottom: 4.0,
-                left: 0.0,
-            })
-            .boxed(),
-        );
-
-        let last_idx = section_shortcuts.len().saturating_sub(1);
-        let mut section_col: Column<Element<'a, Message>> = Column::new().spacing(0);
-        for (idx, (label, trigger)) in section_shortcuts.iter().enumerate() {
-            let row_el: Element<'a, Message> = row![
-                text(raw(label.clone())).size(TS.body).color(text_primary),
-                Space::new().width(Length::Fill),
-                text(raw(trigger.clone()))
-                    .size(TS.body)
-                    .color(text_primary)
-                    .width(Length::Fixed(KEY_COL_W)),
-            ]
-            .padding([3, 0])
-            .boxed();
-            section_col = section_col.push(row_el);
-            // Subtle row divider between rows (not after the last row
-            // in a section — section divider handles that gap).
-            if idx < last_idx {
-                section_col = section_col.push(crate::panels::thin_sep(row_divider_color));
-            }
-        }
-        body = body.push(section_col.boxed());
-    }
-
-    let body_container = container(scrollable(body).height(Length::Fill))
-        .padding([10.0, SP.xl])
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    // ── Card ────────────────────────────────────────────────────
-    if windowed {
-        return container(body_container)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(styles::modal_card(tokens))
-            .boxed();
-    }
-    let card = container(column![header, body_container].spacing(0))
-        .width(Length::Fixed(MODAL_W))
-        .height(Length::Fixed(MODAL_H))
-        .clip(true)
-        .style(styles::modal_card(tokens));
-
-    container(card)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .boxed()
 }
 
 /// Whether the reference sheet may list `row` as a working shortcut.
@@ -215,7 +55,7 @@ fn is_listed(row: &KeymapEditorRow) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keymap::KeymapEditorModel;
+    use crate::keymap::category_title;
 
     #[test]
     fn category_titles_capitalise_by_the_message_language() {
@@ -260,7 +100,14 @@ mod tests {
             set.set_active_profile(id).unwrap();
             let built: Vec<_> = build_sections(I18n::en_us_ref(), &set)
                 .into_iter()
-                .map(|s| (s.category, s.rows))
+                .map(|s| {
+                    let rows = s
+                        .rows
+                        .into_iter()
+                        .map(|row| (row.label, row.trigger))
+                        .collect::<Vec<_>>();
+                    (s.category, rows)
+                })
                 .collect();
             assert_eq!(built, legacy_sections(&set));
             assert!(!built.is_empty());
