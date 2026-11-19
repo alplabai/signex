@@ -95,4 +95,33 @@ define_ids! {
     PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
     PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
     PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
+    // c13 multi-channel-compiled
+    PANELS_KIND_COMPILED_DESIGN = "panels-kind-compiled-design";
+    PANELS_COMPILED_DESIGN_RECOMPILE = "panels-compiled-design-recompile";
+    PANELS_COMPILED_DESIGN_MODE_SHEETS = "panels-compiled-design-mode-sheets";
+    PANELS_COMPILED_DESIGN_MODE_NETS = "panels-compiled-design-mode-nets";
+    PANELS_COMPILED_DESIGN_FIND = "panels-compiled-design-find";
+    PANELS_COMPILED_DESIGN_COLUMN_SHEET = "panels-compiled-design-column-sheet";
+    PANELS_COMPILED_DESIGN_COLUMN_PARTS = "panels-compiled-design-column-parts";
+    PANELS_COMPILED_DESIGN_COLUMN_NETS = "panels-compiled-design-column-nets";
+    PANELS_COMPILED_DESIGN_COLUMN_NET = "panels-compiled-design-column-net";
+    PANELS_COMPILED_DESIGN_COLUMN_SHEETS = "panels-compiled-design-column-sheets";
+    PANELS_COMPILED_DESIGN_STALE = "panels-compiled-design-stale";
+    PANELS_COMPILED_DESIGN_STALE_ROW = "panels-compiled-design-stale-row";
+    PANELS_COMPILED_DESIGN_EMPTY_TITLE = "panels-compiled-design-empty-title";
+    PANELS_COMPILED_DESIGN_EMPTY_BODY = "panels-compiled-design-empty-body";
+    PANELS_COMPILED_DESIGN_COMPILE = "panels-compiled-design-compile";
+    PANELS_COMPILED_DESIGN_EMPTY_NOTE = "panels-compiled-design-empty-note";
+    PANELS_COMPILED_DESIGN_COMPILING = "panels-compiled-design-compiling";
+    PANELS_COMPILED_DESIGN_NO_PROJECT = "panels-compiled-design-no-project";
+    PANELS_COMPILED_DESIGN_NO_MATCH = "panels-compiled-design-no-match";
+    PANELS_COMPILED_DESIGN_FOOTER = "panels-compiled-design-footer";
+    PANELS_COMPILED_DESIGN_FOOTER_NONE = "panels-compiled-design-footer-none";
+    PANELS_CHANNEL_STRIP_EDITOR = "panels-channel-strip-editor";
+    PANELS_CHANNEL_STRIP_PARTS = "panels-channel-strip-parts";
+    PANELS_CHANNEL_STRIP_COUNT = "panels-channel-strip-count";
+    PANELS_CHANNEL_CARD_CAPTION = "panels-channel-card-caption";
+    PANELS_CHANNEL_VIEW_NOT_COMPILED = "panels-channel-view-not-compiled";
+    PANELS_CHANNEL_READ_ONLY = "panels-channel-read-only";
+    PANELS_COMPILED_DESIGN_FAILED = "panels-compiled-design-failed";
 }

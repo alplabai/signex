@@ -50,6 +50,7 @@ clear_net_highlighting
 close_active_document
 close_all_documents
 color_net
+compile_project
 copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol
@@ -162,6 +163,7 @@ next_signal_layer
 number_schematic_sheets
 open_child_sheet
 open_command_palette
+open_compiled_design
 open_components_panel
 open_datasheet
 open_document

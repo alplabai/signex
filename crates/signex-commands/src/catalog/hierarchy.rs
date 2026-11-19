@@ -105,6 +105,18 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Compile the project for the Compiled Design panel and the channel
+    // tabs of repeated sheets (#1279, #1308); gated like the sheet numbers.
+    CommandMetadata {
+        id: "compile_project",
+        category: "design",
+        label: command_ids::CMD_COMPILE_PROJECT,
+        menu_label: Some(command_ids::CMD_MENU_COMPILE_PROJECT),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "open_child_sheet",
         category: "navigation",

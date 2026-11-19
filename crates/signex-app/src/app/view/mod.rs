@@ -532,7 +532,8 @@ impl Signex {
             } else {
                 iced::widget::Space::new().boxed()
             };
-            stack![base, badge].boxed()
+            // A repeated sheet gets its channel tabs under the canvas (#1279).
+            self.with_channel_strip(is_main, stack![base, badge].boxed())
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch

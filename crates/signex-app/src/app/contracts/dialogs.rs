@@ -633,6 +633,9 @@ pub enum ProjectMsg {
     /// The Tools ▸ Assign Footprints dialog (#2248); routed to
     /// `dispatch_assign_footprints_message`.
     AssignFootprints(crate::app::AssignFootprintsMsg),
+    /// Multi-channel sheets and the Compiled Design panel (#1279, #1308);
+    /// routed to `dispatch_compiled_design_message`.
+    CompiledDesign(crate::app::CompiledDesignMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that

@@ -519,6 +519,8 @@ pub struct UiState {
     pub assign_footprints_reads: u64,
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
+    /// The Compiled Design panel, channel tabs and Repeat rows (#1279, #1308).
+    pub compiled_design: crate::app::compiled_design::CompiledDesignUi,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers

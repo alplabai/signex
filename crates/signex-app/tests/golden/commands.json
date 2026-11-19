@@ -245,6 +245,11 @@
     "category": "view"
   },
   {
+    "id": "compile_project",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "copy",
     "group": "General",
     "category": "edit"
@@ -803,6 +808,11 @@
     "id": "open_command_palette",
     "group": "General",
     "category": "commands"
+  },
+  {
+    "id": "open_compiled_design",
+    "group": "General",
+    "category": "panels"
   },
   {
     "id": "open_components_panel",

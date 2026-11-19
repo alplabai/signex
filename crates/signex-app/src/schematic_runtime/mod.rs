@@ -35,6 +35,7 @@ pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
 pub mod overlay;
+mod repeat_stack;
 mod scene_cache;
 pub mod selection;
 mod snapshot;

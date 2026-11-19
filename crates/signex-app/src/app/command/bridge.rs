@@ -297,6 +297,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::NetInspector,
         )),
+        // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
+        "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::CompiledDesign,
+        )),
         // #2416: View ▸ Selection Filter opens the Active Bar's filter.
         "open_selection_filter" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::ToggleMenu(
             crate::active_bar::ActiveBarMenu::Filter,

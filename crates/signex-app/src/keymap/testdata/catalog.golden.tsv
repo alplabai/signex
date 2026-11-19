@@ -201,6 +201,7 @@ sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child shee
 create_sheet_symbol_from_sheet	design	Create a sheet symbol from a sheet file, with an entry for every port	Create Sheet Symbol From Sheet...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm?,allow_merge:bool?,document:document?
 sync_sheet_entries	design	Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview	Synchronize Sheet Entries and Ports...	Schematic	-	-	RequiresSelection	mutates_doc,undoable	symbol:text,direction:text,document:document?
 number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
+compile_project	design	Compile the project	Compile Project	Schematic	-	-	Always	gui_only	-
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 navigate_up_hierarchy	navigation	Navigate up hierarchy	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -305,6 +306,7 @@ clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocum
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_net_inspector	panels	Open Net Inspector panel	Net Inspector	General	-	-	Always	gui_only	-
+open_compiled_design	panels	Open Compiled Design panel	Compiled Design	General	-	-	Always	gui_only	-
 assign_net_class	design	Assign net to class	Assign Net Class...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 open_net_classes	design	Open the project's Net Classes panel	Net Classes	General	-	-	Always	gui_only	-
 open_net_classes_panel	design	Open the Net Classes panel of the project	Net Classes	General	-	-	Always	gui_only	-

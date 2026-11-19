@@ -288,6 +288,13 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
             c.labels.push(label("N", pt(0.0, 0.0), LabelType::Net));
         }
+        RuleKind::RepeatEntryNeedsBus => c.child_sheets.push(ErcChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Repeat(CH, 1, 4)".into(),
+            filename: "channel.snxsch".into(),
+            position: pt(0.0, 0.0),
+            pins: vec![sheet_pin("Repeat(VOUT)")],
+        }),
     }
     c
 }

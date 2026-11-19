@@ -289,6 +289,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2416: the Net Inspector panel (docs/MENU_BAR.md#view-net-inspector),
         // and the Active Bar's selection filter of the sheet in view.
         cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        // The Compiled Design panel (#1308, docs/MENU_BAR.md#view-compiled-design).
+        cmd_item_gated(ctx, cmd("open_compiled_design", "")),
         cmd_item_gated(ctx, cmd("open_selection_filter", "")),
     ]
 }

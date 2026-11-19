@@ -658,5 +658,10 @@ define_ids! {
         CMD_MENU_PLACE_ALIGNED_DIMENSION = "cmd-menu-place-aligned-dimension";
         CMD_ADD_TABLE_OF_CONTENTS = "cmd-add-table-of-contents";
         CMD_MENU_ADD_TABLE_OF_CONTENTS = "cmd-menu-add-table-of-contents";
+        // c13 multi-channel-compiled
+        CMD_COMPILE_PROJECT = "cmd-compile-project";
+        CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
+        CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
+        CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
     }
 }

@@ -919,6 +919,13 @@ pub use sch_table::{
 };
 #[cfg(test)]
 mod drawing_kinds_tests;
+mod repeat;
+#[cfg(test)]
+mod repeat_tests;
+pub use repeat::{
+    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
+    channel_alpha, check_format, repeated_entry_name,
+};
 
 #[cfg(test)]
 mod default_tests;

@@ -57,6 +57,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::off_grid(ctx, &mut out);
     rules::sheet_pin_unconnected(ctx, &mut out);
     rules::sheet_pin_direction_conflict(ctx, &mut out);
+    rules::repeat_entry_needs_bus(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

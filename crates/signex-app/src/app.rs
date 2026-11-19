@@ -20,8 +20,10 @@ pub(crate) mod board_reannotate;
 pub(crate) mod board_reuse;
 pub(crate) mod board_tools;
 mod bootstrap;
+pub(crate) mod channel_view;
 pub(crate) mod command;
 pub mod command_palette;
+pub(crate) mod compiled_design;
 pub mod contracts;
 pub(crate) mod core;
 mod dir_listing;
@@ -102,6 +104,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use compiled_design::CompiledDesignMsg;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,

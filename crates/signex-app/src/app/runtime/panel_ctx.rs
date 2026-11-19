@@ -706,6 +706,7 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            compiled_design: self.compiled_design_view(),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,

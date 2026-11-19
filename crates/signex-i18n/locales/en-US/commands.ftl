@@ -683,3 +683,9 @@ cmd-place-aligned-dimension = Place aligned dimension
 cmd-menu-place-aligned-dimension = Aligned
 cmd-add-table-of-contents = Add table of contents sheet
 cmd-menu-add-table-of-contents = Add Table of Contents Sheet
+## c13 multi-channel-compiled
+
+cmd-compile-project = Compile the project
+cmd-menu-compile-project = Compile Project
+cmd-open-compiled-design = Open Compiled Design panel
+cmd-menu-open-compiled-design = Compiled Design

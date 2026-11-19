@@ -712,3 +712,5 @@ mod wire_tab_options;
 mod drawing_tools;
 #[path = "regression/schematic_tables.rs"]
 mod schematic_tables;
+#[path = "regression/multi_channel.rs"]
+mod multi_channel;

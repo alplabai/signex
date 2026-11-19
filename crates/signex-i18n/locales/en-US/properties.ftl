@@ -394,3 +394,55 @@ properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs
 properties-table-toc-written = Contents sheet written: { $file }
 properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
 properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
+## c13 multi-channel-compiled
+
+# The sheet symbol's designator row (it was "Name").
+properties-sheet-symbol-designator = Designator
+properties-sheet-symbol-title = Sheet Symbol
+# Caption under the title: the sheet file, then whether it is repeated.
+properties-sheet-symbol-repeated = { $file } · repeated ×{ $count }
+properties-sheet-symbol-one-sheet = { $file } · one sheet
+properties-sheet-symbol-section = Sheet
+properties-sheet-symbol-width = Width
+properties-sheet-symbol-height = Height
+# The section whose header is the Repeat switch.
+properties-sheet-symbol-repeat = Repeat
+properties-sheet-symbol-repeat-tip = Repeat this sheet
+properties-sheet-symbol-channel-name = Channel name
+properties-sheet-symbol-from-to = From / To
+# The channels a repeat compiles to. $names lists them (CH1, CH2, CH3, CH4).
+properties-sheet-symbol-channels =
+    { $count ->
+        [one] 1 channel: { $names }
+       *[other] { $count } channels: { $names }
+    }
+properties-sheet-symbol-channel-naming = Channel naming
+properties-sheet-symbol-designators = Designators
+properties-sheet-symbol-local-nets = Local nets
+# The live preview of the naming formats: R5 → CH1_R5 · VOUT_3V3 → VOUT_3V3_CH1.
+properties-sheet-symbol-naming-preview = { $designator } → { $channel-designator } · { $net } → { $channel-net }
+properties-sheet-symbol-entries = Entries
+properties-sheet-symbol-entry = Entry
+properties-sheet-symbol-per-channel = Per channel
+# A plain entry: every channel shares its net.
+properties-sheet-symbol-shared = shared
+# The pill of a Repeat(…) entry: one net per channel.
+properties-sheet-symbol-repeat-pill = Repeat
+# The naming format menus.
+properties-channel-naming-designator-format = Designator format
+properties-channel-naming-net-format = Local net format
+properties-channel-naming-custom = Custom format…
+# The token help line; each variable is a token as typed.
+properties-channel-naming-tokens = Tokens: { $channel } (CH1), { $index } (1), { $alpha } (A), { $base } ({ $example }).
+properties-channel-naming-error-empty = Type a format.
+properties-channel-naming-error-whitespace = A format cannot contain spaces.
+properties-channel-naming-error-unclosed = A token is not closed with a brace.
+properties-channel-naming-error-unknown = Unknown token { $token }.
+properties-channel-naming-error-no-channel = Add a channel token, or every channel gets the same name.
+properties-channel-naming-error-no-base = Add the designator or net token.
+# The Properties header of a channel tab. $channel is CH1.
+properties-channel-title = Channel { $channel }
+# $index is the channel's position, $count the number of channels.
+properties-channel-caption = { $file } · { $index } of { $count } · read-only view
+properties-channel-designator-map = Designator map
+properties-channel-logical = Logical
