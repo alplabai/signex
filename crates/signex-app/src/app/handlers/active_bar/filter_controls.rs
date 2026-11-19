@@ -55,9 +55,9 @@ impl Signex {
             SchFilterMsg::AllPicked => self.set_all_selection_filters(true),
             SchFilterMsg::NonePicked => self.set_all_selection_filters(false),
             SchFilterMsg::PresetApplied(idx) => {
-                let task = self.handle_apply_custom_filter_preset(idx);
-                let _ = self.handle_select_custom_filter_tab(idx);
-                task
+                let applied = self.handle_apply_custom_filter_preset(idx);
+                let tab = self.handle_select_custom_filter_tab(idx);
+                Task::batch([applied, tab])
             }
             SchFilterMsg::PresetSaved => self.handle_save_current_filter_preset(),
             SchFilterMsg::PresetRenameStarted(idx) => {
