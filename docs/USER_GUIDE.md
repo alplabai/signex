@@ -656,6 +656,10 @@ the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
 The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+When some pages cannot go into the netlist (a missing or unreadable sheet file,
+a sheet cycle), the netlist export stops and lists them with the reason.
+**Cancel**, the default, writes nothing; **Export anyway (incomplete)** writes
+the partial netlist and reports the omitted pages in the Messages panel.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
