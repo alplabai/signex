@@ -78,14 +78,36 @@ impl Nets<'_> {
     }
 
     /// Whether a dot at `at` would merge two nets: a wire through it, or a
-    /// wire end, dot or label anchored there (a bare T), is on another net
-    /// than `wire`, which passes through it.
-    fn merges_at(&mut self, at: &Point, wire: &Wire, through: &[&Wire]) -> bool {
+    /// wire end, dot, label or power-port pin anchored there (a dotless T),
+    /// is on another net than `wire`, which passes through it. `own` is the
+    /// part whose pin end is at `at`: its own pin is not another net.
+    fn merges_at(
+        &mut self,
+        at: &Point,
+        wire: &Wire,
+        through: &[&Wire],
+        own: Option<uuid::Uuid>,
+    ) -> bool {
         if through.iter().any(|other| !self.same_net(wire, other)) {
             return true;
         }
+        let sheet = self.sheet;
+        let k = pt_key(at);
         let (nets, anchors) = self.built();
-        anchors.contains(&pt_key(at)) && nets.root_of(at) != nets.root_of(&wire.start)
+        let root = nets.root_of(&wire.start);
+        if anchors.contains(&k) && nets.root_of(at) != root {
+            return true;
+        }
+        // A power port names its net across the sheet: its pin here joins it.
+        let ports = (sheet.symbols.iter()).filter(|s| s.is_power && Some(s.uuid) != own);
+        for port in ports {
+            for tip in symbol_pin_tips(sheet, port) {
+                if pt_key(&tip) == k && nets.root_of(&tip) != root {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -122,7 +144,7 @@ fn safe_taps(
             let Some(&wire) = through.first() else {
                 continue;
             };
-            if nets.merges_at(tip, wire, &through[1..]) {
+            if nets.merges_at(tip, wire, &through[1..], Some(symbol.uuid)) {
                 out.crossed.push(*tip);
                 continue;
             }
@@ -218,14 +240,20 @@ pub fn bare_pin_taps(sheet: &SchematicSheet) -> Vec<Point> {
 pub fn pin_junction_repairs(sheet: &SchematicSheet, ids: &mut dyn IdSource) -> Vec<Command> {
     (bare_pin_taps(sheet).into_iter())
         .map(|at| Command::PlaceJunction {
-            junction: Junction {
-                uuid: ids.next_id(),
-                position: at,
-                minted: true,
-                ..Junction::default()
-            },
+            junction: pin_dot(at, ids),
         })
         .collect()
+}
+
+/// An automatic pin dot at `position`, its id from the caller's `ids`: the
+/// engine mints none (#2429).
+fn pin_dot(position: Point, ids: &mut dyn IdSource) -> Junction {
+    Junction {
+        uuid: ids.next_id(),
+        position,
+        minted: true,
+        ..Junction::default()
+    }
 }
 
 /// Where a pin end touches a wire strictly inside it with no dot: the bare
@@ -255,11 +283,13 @@ pub(crate) struct PinDots {
 /// wires. Only places with no dot yet; called with the edit applied. A pin end
 /// that touched a wire bare before the edit (`before`, see [`bare_tap_keys`])
 /// stays bare: the edit did not make that contact, and only Repair Pin
-/// Junctions turns an old bare touch into a connection.
+/// Junctions turns an old bare touch into a connection. The dots' ids come
+/// from `ids`.
 pub(crate) fn pin_dots_for(
     sheet: &SchematicSheet,
     items: &[SelectedItem],
     before: Option<&HashSet<Key>>,
+    ids: &mut dyn IdSource,
 ) -> PinDots {
     let kinds = |kind: SelectedKind| -> HashSet<uuid::Uuid> {
         (items.iter())
@@ -295,8 +325,7 @@ pub(crate) fn pin_dots_for(
     let dots = (candidates.safe.into_iter())
         .filter(made_here)
         .filter(|tip| taken.insert(pt_key(tip)))
-        // An automatic dot, made where the T dots of a reconcile are made.
-        .map(super::autoplace::junction_at)
+        .map(|tip| pin_dot(tip, ids))
         .collect();
     let mut seen: HashSet<Key> = HashSet::new();
     let crossed = (candidates.crossed.into_iter())
@@ -306,10 +335,13 @@ pub(crate) fn pin_dots_for(
     PinDots { dots, crossed }
 }
 
-/// The Messages notice for the pin ends of `crossed` that `sheet` still leaves
-/// bare where wires of two nets overlap: each pin named with the two nets, as
-/// the netlist names them. `None` when none is left.
-pub(crate) fn crossed_taps_notice(sheet: &SchematicSheet, crossed: &[Point]) -> Option<String> {
+/// The notice for the pin ends of `crossed` that `sheet` still leaves bare
+/// where a dot would merge two nets: each pin with the two nets, as the
+/// netlist names them. `None` when none is left.
+pub(crate) fn crossed_taps_notice(
+    sheet: &SchematicSheet,
+    crossed: &[Point],
+) -> Option<crate::EngineNotice> {
     if crossed.is_empty() {
         return None;
     }
@@ -329,7 +361,7 @@ pub(crate) fn crossed_taps_notice(sheet: &SchematicSheet, crossed: &[Point]) -> 
         let Some(&first) = through.first() else {
             continue;
         };
-        if !nets.merges_at(tip, first, &through[1..]) {
+        if !nets.merges_at(tip, first, &through[1..], None) {
             continue;
         }
         let crossing = through[1..].iter().find(|w| !nets.same_net(first, w));
@@ -347,37 +379,30 @@ pub(crate) fn crossed_taps_notice(sheet: &SchematicSheet, crossed: &[Point]) -> 
     let net_of = |wire: uuid::Uuid| {
         (netlist.nets.iter())
             .find(|net| net.wires.contains(&wire))
-            .map_or_else(|| "an unnamed net".to_string(), |net| net.name.clone())
+            .map(|net| net.name.clone())
     };
     // A label alone names the other net when no wire of it is there.
     let label_at = |k: Key| {
         (sheet.labels.iter())
             .find(|label| pt_key(&label.position) == k)
-            .map_or_else(|| "another net".to_string(), |label| label.text.clone())
+            .map(|label| label.text.clone())
     };
-    let mut pins: Vec<(String, String, String)> = Vec::new();
+    let mut pins: Vec<crate::RefusedPinDot> = Vec::new();
     for (k, a, b) in &pairs {
-        let a = net_of(*a);
-        let b = b.map_or_else(|| label_at(*k), net_of);
+        let through = net_of(*a);
+        let other = match b {
+            Some(wire) => net_of(*wire),
+            None => label_at(*k),
+        };
         for pin in pin_labels_at(sheet, *k) {
-            pins.push((pin, a.clone(), b.clone()));
+            pins.push(crate::RefusedPinDot {
+                pin,
+                through: through.clone(),
+                other: other.clone(),
+            });
         }
     }
-    if let [(pin, a, b)] = pins.as_slice() {
-        return Some(format!(
-            "could not join {pin} to the wires it ends on: they carry two nets, {a} and {b}"
-        ));
-    }
-    let names: Vec<String> = (pins.iter())
-        .map(|(pin, a, b)| format!("{pin} ({a}, {b})"))
-        .collect();
-    (!names.is_empty()).then(|| {
-        crate::exec::guarded::notice(
-            &names,
-            |name| format!("could not join {name} to the wires it ends on"),
-            |n| format!("could not join {n} pins to wires of two nets they end on"),
-        )
-    })
+    (!pins.is_empty()).then_some(crate::EngineNotice::PinDotRefused { pins })
 }
 
 /// "R1 pin 2" for every pin end of `sheet` at `k`.
@@ -417,8 +442,12 @@ pub(crate) fn bare_t_keys(sheet: &SchematicSheet) -> HashSet<Key> {
 /// The pin dots of [`pin_dots_for`] when they were decided on another sheet:
 /// a dot at each place of `frozen` where a wire still passes strictly through
 /// and no dot stands yet. Geometry only; the no-short verdict is the one the
-/// list was made with.
-pub(crate) fn frozen_pin_dots(sheet: &SchematicSheet, frozen: &[Point]) -> Vec<Junction> {
+/// list was made with. The dots' ids come from `ids`.
+pub(crate) fn frozen_pin_dots(
+    sheet: &SchematicSheet,
+    frozen: &[Point],
+    ids: &mut dyn IdSource,
+) -> Vec<Junction> {
     if frozen.is_empty() {
         return Vec::new();
     }
@@ -427,7 +456,7 @@ pub(crate) fn frozen_pin_dots(sheet: &SchematicSheet, frozen: &[Point]) -> Vec<J
     (frozen.iter())
         .filter(|at| !lines.through(pt_key(at)).is_empty())
         .filter(|at| taken.insert(pt_key(at)))
-        .map(|at| super::autoplace::junction_at(*at))
+        .map(|at| pin_dot(*at, ids))
         .collect()
 }
 
@@ -532,6 +561,10 @@ mod tests {
             SelectedItem::new(wire, SelectedKind::Wire),
             SelectedItem::new(r1, SelectedKind::Symbol),
         ];
-        assert!(pin_dots_for(&sheet, &items, None).dots.is_empty());
+        assert!(
+            pin_dots_for(&sheet, &items, None, &mut SequentialIds::default())
+                .dots
+                .is_empty()
+        );
     }
 }

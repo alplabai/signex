@@ -216,13 +216,15 @@ impl Engine {
         // dot is the connection, as #107 has it (see `pin_junctions`). Found
         // before the index, so the wires near each new dot are in the index
         // that judges it: the local and the full-scan commit then agree. A pin
-        // end where wires of two nets overlap gets no dot; the command names
-        // it in a notice once it is committed (`Engine::execute`).
+        // end where a dot would merge two nets gets none; the command names
+        // it in a notice once it is committed (`Engine::execute`). The dots'
+        // ids come from the host's source (#2429).
         let before = self.taps_before.as_deref();
+        let ids = self.derived_ids.source();
         let mut pin_dots = match frozen {
-            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen.pin_dots),
+            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen.pin_dots, ids),
             None => {
-                let decided = pin_junctions::pin_dots_for(&self.document, items, before);
+                let decided = pin_junctions::pin_dots_for(&self.document, items, before, ids);
                 self.crossed_taps.extend(decided.crossed);
                 decided.dots
             }

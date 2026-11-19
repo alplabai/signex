@@ -51,9 +51,10 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 /// 1 µm integer bucket — the union-find key space and the single definition of
 /// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
 /// can compare positions with the exact same metric instead of hand-rolling a
-/// second float-epsilon `same()` (issue #388).
+/// second float-epsilon `same()` (issue #388). Defined once, on
+/// [`Point::um_key`], so the types crate's own readers share it.
 pub fn pt_key(p: &Point) -> Key {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
+    p.um_key()
 }
 
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer

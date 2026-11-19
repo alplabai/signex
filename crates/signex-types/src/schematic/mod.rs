@@ -82,6 +82,16 @@ impl Point {
     pub const fn new(x: f64, y: f64) -> Self {
         Point { x, y }
     }
+
+    /// The point in the netlist's 1 µm integer key space: the one definition
+    /// of "the same point" (`signex_net::pt_key` reads it; #388).
+    #[must_use]
+    pub fn um_key(&self) -> (i64, i64) {
+        (
+            (self.x * 1000.0).round() as i64,
+            (self.y * 1000.0).round() as i64,
+        )
+    }
 }
 
 impl Default for Point {

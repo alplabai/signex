@@ -30,6 +30,7 @@ mod document;
 pub mod document_ids;
 pub mod document_read;
 mod documents;
+pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
 pub(crate) mod file_extension;
 mod handlers;

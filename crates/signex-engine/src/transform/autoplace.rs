@@ -364,9 +364,7 @@ fn junction_is_honoured(point: signex_types::schematic::Point, index: &WireIndex
         >= 2
 }
 
-pub(super) fn junction_at(
-    point: signex_types::schematic::Point,
-) -> signex_types::schematic::Junction {
+fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic::Junction {
     signex_types::schematic::Junction {
         unknown: Default::default(),
         unknown_columns: Default::default(),

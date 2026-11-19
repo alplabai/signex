@@ -71,6 +71,7 @@ fn a_dragged_segment_stretches_its_neighbours_and_one_undo_restores_them() {
     assert!(has(&segs, (80.0, 50.0), (80.0, 70.0)), "{segs:?}");
     assert_eq!(net_shape(engine.document()), before, "netlist changed");
     assert!(engine.take_warnings().is_empty());
+    assert!(engine.take_notices().is_empty());
 
     engine.undo().unwrap();
     assert_eq!(wires(engine.document()), before_wires);
@@ -329,5 +330,6 @@ fn a_dragged_wire_bends_its_neighbour_as_the_wiring_mode_says() {
     assert!(has(&segs, (10.0, 50.0), (50.0, 50.0)), "{segs:?}");
     assert!(has(&segs, (40.0, 0.0), (50.0, 50.0)), "{segs:?}");
     assert!(engine.take_warnings().is_empty());
+    assert!(engine.take_notices().is_empty());
     assert_eq!(net_shape(engine.document()), before, "netlist changed");
 }

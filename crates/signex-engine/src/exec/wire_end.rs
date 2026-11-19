@@ -108,10 +108,8 @@ impl Engine {
         }
         self.document = plain;
         if self.preset_sheet.is_none() {
-            self.warnings.push(format!(
-                "could not keep the wires at ({}, {}) on the dragged end",
-                old.x, old.y
-            ));
+            self.notices
+                .push(crate::EngineNotice::GripEndLeft { at: old });
         }
         plain_patch
     }

@@ -85,4 +85,14 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_MESSAGES_DRAGGED_WIRE_LEFT_ONE = "panels-messages-dragged-wire-left-one";
+    PANELS_MESSAGES_DRAGGED_WIRE_LEFT_MANY = "panels-messages-dragged-wire-left-many";
+    PANELS_MESSAGES_GRIP_END_LEFT = "panels-messages-grip-end-left";
+    PANELS_MESSAGES_HELD_PINS_ONE = "panels-messages-held-pins-one";
+    PANELS_MESSAGES_HELD_PINS_MANY = "panels-messages-held-pins-many";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_ONE = "panels-messages-pin-dot-refused-one";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_MANY = "panels-messages-pin-dot-refused-many";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
+    PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
+    PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
 }
