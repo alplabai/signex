@@ -8,8 +8,9 @@ use signex_i18n::{MessageId, ids, t};
 use signex_renderer::pcb::{BoardObject, DIMMED_ALPHA};
 use signex_widgets::{button, text};
 
-use super::super::rows::{eye, icon_size, not_yet};
-use super::super::{PcbLayersPanel, SP, TS, eye_handle, row_button};
+use super::super::metrics::{EYE, ICON};
+use super::super::rows::{eye, not_yet};
+use super::super::{PcbLayersPanel, TS, eye_handle, row_button};
 use super::{
     GridCells, HEAD_H, blank, fade_cell, greyed_checkbox, grid_row, live_slider, percent,
     static_slider,
@@ -123,16 +124,16 @@ fn mixed_eye<'a>(
         a: MIXED_EYE_ALPHA,
         ..ti(ctx.tokens.text)
     };
-    let size = icon_size();
+    // Drawn as `rows::eye` is: an ICON glyph centred in an EYE square.
     let icon = svg(eye_handle(false))
-        .width(size)
-        .height(size)
+        .width(ICON)
+        .height(ICON)
         .style(move |_: &Theme, _| svg::Style {
             color: Some(ink),
             ..Default::default()
         });
-    let eye = button(icon)
-        .padding([SP.xs, SP.s])
+    let eye = button(container(icon).center_x(EYE).center_y(EYE))
+        .padding(0)
         .style(row_button(&ctx.tokens))
         .on_press(on_press)
         .boxed();

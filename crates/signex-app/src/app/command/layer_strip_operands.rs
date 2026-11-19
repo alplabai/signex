@@ -175,8 +175,8 @@ pub(super) fn delete_layer_set(app: &mut Signex, args: &CommandArgs) -> Ran {
     ran(task)
 }
 
-/// `set_layer_tab_names style=..`: the tab menu's Short, Medium and Long
-/// tab names rows.
+/// `set_layer_tab_names style=..`: the Short, Medium and Long cells of the
+/// tab menu's Tab names switch.
 pub(super) fn set_layer_tab_names(app: &mut Signex, args: &CommandArgs) -> Ran {
     let token = text_operand(args, "style");
     match LayerNameStyle::from_token(token) {

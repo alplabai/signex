@@ -241,9 +241,11 @@ mod tests {
         entries
             .iter()
             .filter_map(|e| match e {
-                DropdownEntry::Item(item) => {
-                    Some((item.label.clone(), item.lead_check, item.on_press.is_some()))
-                }
+                DropdownEntry::Item(item) => Some((
+                    item.label.clone(),
+                    item.lead_check == Some(true),
+                    item.on_press.is_some(),
+                )),
                 _ => None,
             })
             .collect()
