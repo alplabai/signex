@@ -53,16 +53,25 @@ history, which the ERC dialog and the Rules tab share.
   Move up / Move down are icon buttons on row hover, as in Sheets. Adding,
   removing and renaming stay in the project tree; a line under the table
   says where.
-- **ERC and annotation** — where the ERC rules come from (stored in the
-  project, this machine's Preferences, or an unreadable set from a newer
-  Signex), how many rules run at each severity, and "Store ERC rules in this
-  project". Severities are edited in the ERC dialog. The Annotate undo
-  choice is stored in the project (`annotation.annotate_undo`) or follows
-  Preferences.
-- **Version control** — whether the project folder has a Git repository
-  (from the last probe), Enable Version Control… (the project tree's dialog)
-  when it has none, and "Commit every save" (`enable_git`). Turning it on
-  needs a repository; turning it off keeps the repository.
+- **ERC and annotation** — two cards. The ERC rules card names where the
+  rules come from in a header pill (User Default for this machine's
+  Preferences, Stored in project, or Newer version for an unreadable set
+  from a newer Signex). With machine rules, "Store ERC rules in this
+  project" sits on the same line as the message. For a readable rule set,
+  four tiles count how many rules are set to Error, Warning, Info and off
+  (how the rules are set, not ERC results), and "Open Electrical Rules
+  Check…" opens the ERC dialog for this project, where severities are
+  edited. The Annotation card holds the Annotate undo choice, stored in the
+  project (`annotation.annotate_undo`) or following Preferences.
+- **Version control** — the Repository card shows the last probe of the
+  project folder as a pill (Present, None, Checking…). With a repository it
+  gives the status and "Open History panel"; without one, Enable Version
+  Control… (the project tree's dialog) is the primary button. Below it,
+  "Commit every save" (`enable_git`) is a switch with its help under the
+  label: turning it on needs a repository, turning it off keeps the
+  repository, and a note says so when it cannot be turned on. "Commits in
+  progress" shows only while commits run. The branch, the last commit, the
+  commit author and remotes are not shown yet.
 
 Each section shows its title and help line over its content in a column
 that scrolls inside the tab.
