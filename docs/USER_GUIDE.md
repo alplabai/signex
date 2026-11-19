@@ -871,8 +871,8 @@ stack...** row opens the Layer Stack panel. The button at the left end of
 the tabs picks a layer set.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
-has an eye per layer to show or hide it, and an eye per section for all its
-layers. Click a layer's colour dot to pick a colour from the board palette
+has an eye per layer to show or hide it, and an eye per section for all the
+layers it lists (a search or Used On leaves the others alone). Click a layer's colour dot to pick a colour from the board palette
 or type a hex value such as `#C8A02C`. **Used On**, beside the search field,
 lists only the layers the board uses. The **Active** row shows the active
 layer, and its **Set** dropdown switches between sets of layers. The **⋯**

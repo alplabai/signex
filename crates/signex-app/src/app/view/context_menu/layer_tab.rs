@@ -1,5 +1,5 @@
 //! Right-click menu of a layer tab under the board canvas (#2379, #2394,
-//! #104): hide or highlight the layer, show it alone or every layer, hide or
+//! m104): hide or highlight the layer, show it alone or every layer, hide or
 //! show every layer of a kind, the board editors, the tab names and the flip
 //! of the board view. Every row has the 16 px icon column, so the labels
 //! line up whether or not a row has an icon.
@@ -78,13 +78,13 @@ fn unavailable(
 }
 
 /// A flyout launcher: a click or the pointer opens `submenu`; while it is
-/// open the row keeps the current-row look.
+/// open the row keeps the current-row look (accent-soft fill and ink), not
+/// the active highlight, which would win over it.
 fn launcher(label: String, submenu: LayerTabSubmenu, open: bool) -> DropdownEntry<Message> {
     let opens = menu_msg(LayerTabMenuMsg::SubmenuOpened(submenu));
     let item = DropdownItem::new(label, opens.clone())
         .submenu()
         .hover(opens, Message::noop())
-        .active(open)
         .current(open);
     DropdownEntry::Item(item)
 }
@@ -422,7 +422,7 @@ mod tests {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let i18n = I18n::en_us();
         let entries = layer_tab_menu_entries(&i18n, &state(layer, &view, &prefs, &tokens));
-        // #104: Tab names is a header over one switch, Show layer numbers a
+        // m104: Tab names is a header over one switch, Show layer numbers a
         // checkbox row, and Flip follows it with no separator.
         assert_eq!(shape(&entries), "IIIISIISIIISHCCI");
         assert!(
@@ -519,8 +519,9 @@ mod tests {
         assert_eq!(on, [LayerNameStyle::Short]);
     }
 
-    /// The open flyout's launcher keeps the current-row look; the other
-    /// launcher does not.
+    /// The open flyout's launcher keeps the current-row look and not the
+    /// active highlight (which `row_fill` would draw over it); the other
+    /// launcher has neither.
     #[test]
     fn the_open_launcher_is_the_current_row() {
         let view = PcbLayerView::default();
@@ -541,7 +542,7 @@ mod tests {
             looks,
             [
                 ("Hide layers".to_owned(), false, false),
-                ("Show layers".to_owned(), true, true),
+                ("Show layers".to_owned(), false, true),
             ]
         );
     }
@@ -564,7 +565,7 @@ mod tests {
     fn the_flyouts_hide_or_show_every_kind() {
         let i18n = I18n::en_us();
         let entries = layer_kind_entries(&i18n, LayerTabSubmenu::Hide);
-        // #104: a header, All layers first, a separator, then the kinds.
+        // m104: a header, All layers first, a separator, then the kinds.
         assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "HIDE"));
         assert!(matches!(entries[2], DropdownEntry::Separator));
         let rows = rows(entries);

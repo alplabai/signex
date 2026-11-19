@@ -1,5 +1,5 @@
 //! Menu of the layer set button at the left end of the layer strip (#2394,
-//! #104): the built-in sets, the user's saved sets, Save current as set... (a
+//! m104): the built-in sets, the user's saved sets, Save current as set... (a
 //! name field in the same card) and Manage sets... (the saved sets with
 //! Delete).
 
@@ -25,7 +25,7 @@ fn set_msg(event: LayerSetMenuMsg) -> Message {
     Message::Pcb(PcbMsg::LayerSetMenu(event))
 }
 
-/// The rows to pick a set from (#104): a LAYER SETS header, the built-in
+/// The rows to pick a set from (m104): a LAYER SETS header, the built-in
 /// sets, the saved ones with a "saved" hint, then Save current as set...
 /// and Manage sets.... The shown set has its check in the icon column.
 /// `shown` is the set the board view shows (`None`: every layer, the All
@@ -256,7 +256,7 @@ mod tests {
         let i18n = I18n::en_us();
         let mut prefs = LayerStripPrefs::default();
         let entries = layer_set_entries(&i18n, &prefs, None, THEME);
-        // #104: a LAYER SETS header first; the check sits in the icon
+        // m104: a LAYER SETS header first; the check sits in the icon
         // column, never at the right.
         assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "LAYER SETS"));
         assert!(entries.iter().all(|e| match e {

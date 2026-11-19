@@ -303,7 +303,7 @@ fn shape(entries: &[DropdownEntry<Message>]) -> String {
         .collect()
 }
 
-/// #108: a group's dropdown opens with its name as a heading, in capitals,
+/// m108: a group's dropdown opens with its name as a heading, in capitals,
 /// then its rows; every group with a dropdown has one.
 #[test]
 fn a_group_dropdown_is_headed_by_the_group_name() {
@@ -331,7 +331,7 @@ fn a_group_dropdown_is_headed_by_the_group_name() {
     }
 }
 
-/// #108: the commands of a group (Repour, Change Footprint) sit below a
+/// m108: the commands of a group (Repour, Change Footprint) sit below a
 /// separator after its tools; a group of tools only, or of commands only,
 /// has none.
 #[test]
@@ -355,7 +355,7 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     }
 }
 
-/// #108: the row the group's button shows is drawn current in its dropdown,
+/// m108: the row the group's button shows is drawn current in its dropdown,
 /// and follows the last tool used.
 #[test]
 fn the_last_used_row_is_current_in_its_dropdown() {

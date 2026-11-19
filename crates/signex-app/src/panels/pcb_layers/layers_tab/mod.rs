@@ -1,10 +1,12 @@
-//! The Layers & Colors tab (#2363, #103), top to bottom: the search row
+//! The Layers & Colors tab (#2363, m103), top to bottom: the search row
 //! (with Used On and the more button), the name row while a new layer set
 //! is named, the Active | Set row, All Layers, then the layers by section.
 
 pub(in crate::panels::pcb_layers) mod active_row;
 mod pairs;
 mod sections;
+
+pub(super) use sections::section_layers;
 
 use iced::widget::tooltip::Position;
 use iced::widget::{Column, Space, container, row, svg};

@@ -70,7 +70,7 @@ fn angle(app: &Signex) -> f32 {
 }
 
 /// #2234 and #2316: the PCB Active Bar's buttons run `board_sketch` and
-/// `view_rotate`; #108: View is drawn with the clockwise arrow it turns by.
+/// `view_rotate`; m108: View is drawn with the clockwise arrow it turns by.
 #[test]
 fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
     let tid = ThemeId::GraphiteDark;
@@ -86,7 +86,7 @@ fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
     assert_eq!(handle, &ic::icon_dd_rotate_cw(tid));
 }
 
-/// #108: the board tools are drawn with the board tool glyphs (via, pad,
+/// m108: the board tools are drawn with the board tool glyphs (via, pad,
 /// dimension, keepout), as their dropdown rows are; no button on the bar is
 /// a text glyph.
 #[test]
@@ -139,7 +139,7 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352, #2373, #2388, #2389, #2392, #2424, #108: Selection Filter, Move,
+/// #2352, #2373, #2388, #2389, #2392, #2424, m108: Selection Filter, Move,
 /// Align | Components | Route, Tune, Via/Pad, Copper Areas, Copper Drawing |
 /// Dimensions, Text, Graphics | Board Sketch, Fabrication Outputs | View. A
 /// group with a live row runs it; a group with none is greyed with a tooltip
@@ -159,7 +159,7 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
         .count();
-    assert_eq!(separators, 5, "#108: none between Tune and Via/Pad");
+    assert_eq!(separators, 5, "m108: none between Tune and Via/Pad");
     let separator_after = |index: usize| {
         let slot = items
             .iter()
@@ -419,7 +419,7 @@ fn the_view_dropdown_greys_reset_at_zero() {
     assert!(reset.disabled && reset.on_press.is_none());
 }
 
-/// #108: each View row's arrow turns the way the row says; the half turn
+/// m108: each View row's arrow turns the way the row says; the half turn
 /// uses the clockwise arrow and Reset has no icon, so the two no longer
 /// share one.
 #[test]
@@ -536,7 +536,7 @@ fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
     assert_eq!(on, vec![PickKind::Vias]);
 }
 
-/// #108: the Selection Filter button carries a badge with the number of
+/// m108: the Selection Filter button carries a badge with the number of
 /// pickable kinds that are off, at its top-right corner; there is none while
 /// every kind is on, and a kind boards cannot pick yet does not count.
 #[test]

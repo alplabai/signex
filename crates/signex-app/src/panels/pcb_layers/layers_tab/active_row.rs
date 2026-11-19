@@ -1,4 +1,4 @@
-//! The Active | Set row (#103): one field-look card with the active layer,
+//! The Active | Set row (m103): one field-look card with the active layer,
 //! picked from the board's layers as a tab under the canvas picks it, and
 //! the layer set the view shows. The Set dropdown is the one place a set is
 //! picked; the more menu saves and deletes sets.

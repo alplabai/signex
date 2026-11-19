@@ -105,14 +105,14 @@ fn plain(text: &str) -> String {
         .collect()
 }
 
-/// The context with System Colors opened: it starts closed (#103).
+/// The context with System Colors opened: it starts closed (m103).
 fn with_system_colors(mut ctx: PanelContext) -> PanelContext {
     ctx.collapsed_sections
         .insert("pcb_layers_system.open".to_string());
     ctx
 }
 
-/// #103: no title in the body (the dock's title bar names the panel), the
+/// m103: no title in the body (the dock's title bar names the panel), the
 /// search row with Used On, the Active | Set row and the sections. View
 /// From Bottom Side is in the more menu now.
 #[test]
@@ -149,7 +149,7 @@ fn the_tabs_the_search_and_the_sections_are_listed() {
     assert!(!texts(&ctx).iter().any(|t| t.text.starts_with("Mechanical")));
 }
 
-/// #103: System Colors starts closed; its header opens it.
+/// m103: System Colors starts closed; its header opens it.
 #[test]
 fn system_colors_start_closed_and_open_from_the_header() {
     let ctx = context(&PcbLayerView::default());
@@ -165,7 +165,7 @@ fn system_colors_start_closed_and_open_from_the_header() {
     assert!(listed(&with_system_colors(ctx), "Connection Lines"));
 }
 
-/// #103: each section header counts the rows it lists: two copper layers,
+/// m103: each section header counts the rows it lists: two copper layers,
 /// the eleven pairs with layers, six technical layers, Drill Drawing and
 /// Multi-Layer, and the fourteen system colours.
 #[test]
@@ -189,7 +189,7 @@ fn a_section_header_counts_its_rows() {
     }
 }
 
-/// #103: a section's eye hides every layer of the section, or shows them
+/// m103: a section's eye hides every layer of the section, or shows them
 /// all while one is hidden.
 #[test]
 fn a_section_eye_hides_or_shows_the_whole_section() {
@@ -227,28 +227,47 @@ fn a_section_eye_hides_or_shows_the_whole_section() {
 #[test]
 fn a_section_lists_its_layers_and_is_shut_while_all_are_hidden() {
     let ctx = context(&PcbLayerView::default());
-    let panel = &ctx.pcb_layers;
-    assert_eq!(panel.section_layers(LayerSection::Copper), [TOP, BOTTOM]);
-    let pairs = panel.section_layers(LayerSection::Pairs);
+    let (panel, ui) = (&ctx.pcb_layers, &ctx.pcb_layers_ui);
+    assert_eq!(
+        panel.section_layers(LayerSection::Copper, ui),
+        [TOP, BOTTOM]
+    );
+    let pairs = panel.section_layers(LayerSection::Pairs, ui);
     assert_eq!(pairs.len(), 22, "both sides of the eleven pairs");
     assert!(pairs.contains(&OVERLAY_TOP) && pairs.contains(&OVERLAY_BOTTOM));
-    assert_eq!(panel.section_layers(LayerSection::Technical).len(), 6);
-    assert!(!panel.section_hidden(LayerSection::Copper));
+    assert_eq!(panel.section_layers(LayerSection::Technical, ui).len(), 6);
+    assert_eq!(
+        panel.section_layers(LayerSection::Other, ui),
+        [PcbLayer::Technical(TechnicalLayer::DrillDrawing)],
+        "the Multi-Layer row is no layer"
+    );
+    assert!(!panel.section_hidden(LayerSection::Copper, ui));
 
     let mut hidden = PcbLayerView::default();
     hidden.toggle_visibility(TOP);
     hidden.toggle_visibility(BOTTOM);
     let ctx = context(&hidden);
-    assert!(ctx.pcb_layers.section_hidden(LayerSection::Copper));
-    assert!(ctx.pcb_layers.section_any_hidden(LayerSection::Copper));
+    let (panel, ui) = (&ctx.pcb_layers, &ctx.pcb_layers_ui);
+    assert!(panel.section_hidden(LayerSection::Copper, ui));
+    assert!(panel.section_any_hidden(LayerSection::Copper, ui));
+}
+
+/// A section's eye covers only the rows the search lists: Top, left out,
+/// is neither shown, hidden nor read for the eye's state.
+#[test]
+fn a_section_eye_covers_only_the_listed_rows() {
+    let search = LayersPanelUi {
+        search: "Bottom".to_string(),
+        ..LayersPanelUi::default()
+    };
+    let mut bottom_hidden = PcbLayerView::default();
+    bottom_hidden.toggle_visibility(BOTTOM);
+    let ctx = context_with(&bottom_hidden, search);
+    let (panel, ui) = (&ctx.pcb_layers, &ctx.pcb_layers_ui);
+    assert_eq!(panel.section_layers(LayerSection::Copper, ui), [BOTTOM]);
     assert!(
-        ctx.pcb_layers
-            .toggles_multi_layer(LayerSection::Other, false),
-        "hiding Other Layers hides the Multi-Layer row too"
-    );
-    assert!(
-        !ctx.pcb_layers
-            .toggles_multi_layer(LayerSection::Copper, false)
+        panel.section_hidden(LayerSection::Copper, ui),
+        "every listed row is hidden: the eye reads shut"
     );
 }
 
@@ -270,7 +289,7 @@ fn a_name_click_picks_the_layer_and_its_eye_toggles_it() {
     );
 }
 
-/// #2363: a pair row has an eye per side; each hides only its side. #103:
+/// #2363: a pair row has an eye per side; each hides only its side. m103:
 /// the overlay pair reads Silkscreen.
 #[test]
 fn a_pair_row_eye_toggles_only_its_side() {
@@ -290,7 +309,7 @@ fn a_pair_row_eye_toggles_only_its_side() {
     assert_eq!(toggles(&right), [OVERLAY_BOTTOM]);
 }
 
-/// #103: a row Signex has no layer for is not listed (it was a greyed row
+/// m103: a row Signex has no layer for is not listed (it was a greyed row
 /// that sent nothing); it shows once the board has a layer for it.
 #[test]
 fn a_row_without_a_layer_is_not_listed() {
@@ -307,7 +326,7 @@ fn a_row_without_a_layer_is_not_listed() {
 }
 
 /// #2363: an open dot shows the colour card; a set colour is the layer's
-/// colour in this view, and its dot shows it. #103: the card lists the
+/// colour in this view, and its dot shows it. m103: the card lists the
 /// palette and a hex field holding the typed text.
 #[test]
 fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
@@ -373,7 +392,7 @@ fn the_search_keeps_the_rows_whose_name_holds_it() {
     );
 }
 
-/// #103: a search that lists no row says so, and Clear empties it.
+/// m103: a search that lists no row says so, and Clear empties it.
 #[test]
 fn a_search_with_no_row_says_so_and_clears() {
     let ui = LayersPanelUi {
@@ -407,15 +426,22 @@ fn menu_open(view: &PcbLayerView) -> PanelContext {
 #[path = "menu_tests.rs"]
 mod menu;
 
-/// View From Bottom Side, now in the more menu (#103), flips the view.
+/// View From Bottom Side, now in the more menu (mockup m103), flips the
+/// view and closes the menu (`app::handlers::pcb_layers_panel::tests`).
 #[test]
 fn view_from_bottom_side_flips_the_view() {
     let ctx = menu_open(&PcbLayerView::default());
     let sent = messages_on_click(panel(&ctx), WINDOW, "View From Bottom Side");
     assert_eq!(
         shown(&sent),
-        shown(&[PanelMsg::PcbLayers(PcbViewMsg::BoardFlipToggled)])
+        shown(&[PanelMsg::LayersPanel(LayersPanelMsg::BoardFlipPicked)])
     );
+    let mut ui = ctx.pcb_layers_ui.clone();
+    assert!(
+        !ui.apply(&LayersPanelMsg::BoardFlipPicked),
+        "the flip acts on the view"
+    );
+    assert!(!ui.more_menu_open, "the menu closes");
 }
 
 #[test]
@@ -551,6 +577,15 @@ fn the_show_grid_switch_toggles_the_grid() {
     let ctx = context_with(&PcbLayerView::default(), options());
     let label = find(&texts(&ctx), "Show Grid").bounds;
     let sent = messages_along(&ctx, "Show Grid", label.x + label.width, WINDOW.width);
+    assert_eq!(shown(&sent), shown(&[PanelMsg::ToggleGrid]));
+}
+
+/// A click on the Show Grid caption toggles the grid, as a click on the
+/// checkbox's label did before the switch.
+#[test]
+fn a_click_on_the_show_grid_caption_toggles_the_grid() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    let sent = messages_on_click(panel(&ctx), WINDOW, "Show Grid");
     assert_eq!(shown(&sent), shown(&[PanelMsg::ToggleGrid]));
 }
 

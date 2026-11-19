@@ -314,7 +314,7 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
             .len()
     };
     assert_eq!(traces(&app), 1, "the bottom track is no longer drawn");
-    // #104: a hidden layer has no tab.
+    // m104: a hidden layer has no tab.
     assert!(tab_right_click(&app, main, "Bottom Layer").is_none());
 
     right_click_tab(&mut app, main, "Top Silkscreen");
@@ -340,7 +340,35 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
     }
 }
 
-/// #104: hiding a layer from the Layers panel takes its tab out of the
+/// The Tab names switch and the Show layer numbers row of the drawn tab
+/// menu: a click on the Short cell sets the short names and closes the
+/// menu; a click on Show layer numbers flips the numbers and closes it.
+#[test]
+fn the_tab_names_switch_and_the_numbers_row_change_the_strip() {
+    let (mut app, _path, main) = open();
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+    assert_eq!(
+        app.ui_state.layer_strip.name_style,
+        crate::layer_strip_prefs::LayerNameStyle::Long
+    );
+
+    right_click_tab(&mut app, main, "Bottom Layer");
+    pick_row(&mut app, main, "Short");
+    assert_eq!(
+        app.ui_state.layer_strip.name_style,
+        crate::layer_strip_prefs::LayerNameStyle::Short
+    );
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+
+    let numbers = app.ui_state.layer_strip.show_numbers;
+    right_click_tab(&mut app, main, "BL");
+    pick_row(&mut app, main, "Show layer numbers");
+    assert_eq!(app.ui_state.layer_strip.show_numbers, !numbers);
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+}
+
+/// m104: hiding a layer from the Layers panel takes its tab out of the
 /// strip; Show all layers in a tab menu brings it back.
 #[test]
 fn a_hidden_layer_has_no_tab_and_show_all_layers_brings_it_back() {

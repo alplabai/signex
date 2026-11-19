@@ -535,7 +535,7 @@ chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
 as well as footprint pads, and Other dimensions (`PickKind::of`).
 
 While any kind is off, the button carries a small accent badge at its
-top-right corner with the number of kinds that are off (#108); there is no
+top-right corner with the number of kinds that are off (mockup m108); there is no
 badge while every kind is on. Only kinds the board editor can pick count, so
 turning off a greyed kind (Rooms, 3D Bodies) does not change it. The badge is
 a layer over the bar that takes no clicks
@@ -580,7 +580,7 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row opens its
-  rows under a heading with the group's name in capitals (#108). The tools
+  rows under a heading with the group's name in capitals (mockup m108). The tools
   come first; a group's commands (Repour Selected and Repour All, Change
   Footprint) sit below a separator after them. The row the button shows is
   drawn current, with the accent-soft fill. A live row runs its command and
@@ -591,12 +591,13 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 - **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
   Dimension and Keepout use the board tool glyphs of their dropdown rows
   (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
-  rounded SMD pad with its centre (#108). The View button and the View
-  dropdown draw each turn with an arrow that turns the same way; the half
-  turn uses the clockwise arrow and Reset View Rotation has no icon.
+  rounded SMD pad with its centre (mockup m108). The View button and the
+  View dropdown draw each turn with an arrow that turns the same way; the
+  half turn uses the clockwise arrow and Reset View Rotation has no icon.
+  The clockwise arrow's direction comes from the #2503 icon fix.
 - **Separators.** Components stands alone; Route, Tune, Via / Pad, Copper
   Areas and Copper Drawing form one run; Dimensions, Text and Graphics the
-  next (#108).
+  next (mockup m108).
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
@@ -643,7 +644,7 @@ value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394,
-#104). Every row has one 16 px icon column, so the labels line up whether or
+mockup m104). Every row has one 16 px icon column, so the labels line up whether or
 not a row has an icon:
 
 - Hide <layer> (eye crossed out), Highlight <layer> (every other layer is
@@ -688,7 +689,7 @@ The strip under the board is 28 px tall. It lists the board's visible
 layers only: a layer the view hides has no tab until it is shown again. The
 active layer's tab is filled with the soft accent and has the accent bar
 along its top. When the tabs are wider than the window the strip scrolls
-sideways with the thin scrollbar instead of widening the window (#104).
+sideways with the thin scrollbar instead of widening the window (mockup m104).
 
 The button at the left end of the layer tabs names the set the tabs list and
 opens the set menu (#2394); it is drawn pressed while its menu is open. The
@@ -717,7 +718,7 @@ View menu rows. See `docs/COMMANDS.md`.
 
 ## Board view configuration
 
-The Layers panel configures the board view (#2363, #103). The dock's title
+The Layers panel configures the board view (#2363, #2480, mockup m103). The dock's title
 bar names it; its body starts with two tabs.
 
 **Layers & Colors**, top to bottom:
@@ -732,7 +733,8 @@ bar names it; its body starts with two tabs.
   current set... (live while the view shows a saved set). Import... and
   Export... are greyed until a view can be saved to a file. View From
   Bottom Side, ticked while the board is seen from below, is the flip of
-  the layer tab menu. Layer Stack... runs the Layer Stack command and opens
+  the layer tab menu; a click flips the view and closes the menu, as the
+  menu's other live rows do. Layer Stack... runs the Layer Stack command and opens
   the Layer Stack panel; it is greyed when that command cannot run.
 - The Active | Set row: the active layer's dot and name, a dropdown with
   the same choice as the layer tabs; and the set the view shows ("Set:
@@ -741,9 +743,10 @@ bar names it; its body starts with two tabs.
 - All Layers: its eye hides every layer, or shows them all while one is
   hidden.
 - The sections. Each header has a chevron that opens or closes it and a
-  count of the rows it lists. The four layer sections also have an eye: it
-  is shut while every layer of the section is hidden, and a click shows
-  them all while one is hidden, else hides them all.
+  count of the rows it lists. The four layer sections also have an eye
+  over the layers of the rows they list (a row the search or Used On
+  leaves out is left alone): it is shut while every one is hidden, and a
+  click shows them all while one is hidden, else hides them all.
 - Signal and Plane Layers: the copper layers, each with its number in the
   stack and its type. The active layer's row has an accent bar, a soft
   accent fill and an Active pill.
@@ -756,7 +759,8 @@ bar names it; its body starts with two tabs.
   them.
 - Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
   and ECO 2. Other Layers: Drill Drawing and Multi-Layer (vias and
-  through-hole pads); its eye shows and hides the Multi-Layer row too.
+  through-hole pads); the section eye covers Drill Drawing, and the
+  Multi-Layer row keeps its own eye.
   Drill Guide has no layer yet and is not listed.
 - System Colors, closed until opened: the eyes of Connection Lines (the
   ratsnest) and the Origin Marker work; the other rows and the system
@@ -777,7 +781,8 @@ regions keep the palette colour.
 **View Options**: above the sections, Configuration is one labelled field
 reading Default, greyed until presets exist. General Settings holds 3D
 Off/On, Single Layer Off/On (Mono is greyed; the tooltip gives the full
-name, Single Layer Mode) and the Show Grid switch. Object Visibility is a
+name, Single Layer Mode) and the Show Grid switch (a click on its caption
+toggles the grid too). Object Visibility is a
 grid of four columns under a header: eye, Object, Draft and Transparency (a
 slider and its percent). All Objects comes first, in medium weight; while
 the rows differ its eye is faded and Transparency reads Mixed. Then one row

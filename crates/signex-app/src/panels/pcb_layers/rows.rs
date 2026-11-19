@@ -1,4 +1,4 @@
-//! The pieces a Layers panel row is built of (#2363, #103): an eye, a round
+//! The pieces a Layers panel row is built of (#2363, m103): an eye, a round
 //! colour dot, a name, the colour card that opens under a dot, and a
 //! section with its header (count pill, section eye). A control the board
 //! view cannot honour yet is greyed and says so in its tooltip.

@@ -2,8 +2,8 @@
 //! Single Layer and Show Grid.
 
 use iced::widget::tooltip::Position;
-use iced::widget::{Row, container, row};
-use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget};
+use iced::widget::{Row, container, mouse_area, row};
+use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget, mouse};
 use signex_i18n::{Localized, MessageId, ids, t};
 use signex_widgets::chevron::chevron;
 use signex_widgets::{ToggleSwitchStyle, button, text, toggle_switch};
@@ -131,10 +131,15 @@ pub(super) fn rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Elemen
         ),
         Some(PanelMsg::ToggleGrid),
     );
+    // The caption toggles the grid too, as the checkbox label did.
+    let grid_caption = mouse_area(caption(ctx, t!(i18n, ids::PCB_VIEW_SHOW_GRID)))
+        .on_press(PanelMsg::ToggleGrid)
+        .interaction(mouse::Interaction::Pointer)
+        .boxed();
     vec![
         line(caption(ctx, t!(i18n, ids::PCB_VIEW_3D)), three_d),
         line(single_caption, single),
-        line(caption(ctx, t!(i18n, ids::PCB_VIEW_SHOW_GRID)), grid),
+        line(grid_caption, grid),
     ]
 }
 

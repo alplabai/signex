@@ -1,4 +1,4 @@
-//! Component Layer Pairs (#2363, #103): Top | Layer | Bottom, each side
+//! Component Layer Pairs (#2363, m103): Top | Layer | Bottom, each side
 //! with its own eye and dot, the right side mirrored. A pair the board has
 //! no layer for (Coating, Component Center, Tenting, Value) is not listed;
 //! it shows once a layer exists for it.
@@ -39,21 +39,28 @@ fn pair_token(pair: LayerPair) -> &'static str {
     }
 }
 
+/// The pairs the search and Used On list: each row's name and its sides.
+pub(super) fn listed<'p>(
+    panel: &'p PcbLayersPanel,
+    ui: &'p LayersPanelUi,
+) -> impl Iterator<Item = (Localized, (PcbLayer, PcbLayer))> + 'p {
+    let i18n = &panel.i18n;
+    LayerPair::ALL.into_iter().filter_map(move |pair| {
+        let (top, bottom) = pair.layers()?;
+        let name = t!(i18n, ids::PCB_LAYERS_PAIR, "pair" => pair_token(pair));
+        let listed = ui.matches(i18n, &name) && (panel.lists(top) || panel.lists(bottom));
+        listed.then_some((name, (top, bottom)))
+    })
+}
+
 /// The pair rows the search and Used On list, without the table header.
 pub(super) fn rows<'a>(
     panel: &'a PcbLayersPanel,
     ui: &LayersPanelUi,
     ctx: &PanelContext,
 ) -> Vec<Element<'a, PanelMsg>> {
-    let i18n = &panel.i18n;
-    LayerPair::ALL
-        .into_iter()
-        .filter_map(|pair| {
-            let (top, bottom) = pair.layers()?;
-            let name = t!(i18n, ids::PCB_LAYERS_PAIR, "pair" => pair_token(pair));
-            let listed = ui.matches(i18n, &name) && (panel.lists(top) || panel.lists(bottom));
-            listed.then(|| pair_row(panel, ui, name, (top, bottom), ctx))
-        })
+    listed(panel, ui)
+        .map(|(name, sides)| pair_row(panel, ui, name, sides, ctx))
         .collect()
 }
 

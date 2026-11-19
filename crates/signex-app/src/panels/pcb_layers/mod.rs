@@ -1,4 +1,4 @@
-//! The Layers panel of a board (#2223, #2359, #2363, #103): two tabs.
+//! The Layers panel of a board (#2223, #2359, #2363, m103): two tabs.
 //! Layers & Colors has a search row (with Used On and the more menu), the
 //! Active | Set row and the board's layers by section (copper, the component
 //! layer pairs, the other technical layers, the other layers and the system
@@ -23,17 +23,16 @@ use iced::widget::{Column, container, svg};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, ids, t};
 use signex_renderer::pcb::{
-    BoardObject, BoardPaint, LayerPair, LayerSetId, PcbLayerView, SINGLE_TECHNICAL_LAYERS,
-    board_copper_layers, board_layers, plane_layers, used_layers,
+    BoardObject, BoardPaint, LayerSetId, PcbLayerView, board_copper_layers, board_layers,
+    plane_layers, used_layers,
 };
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::Label;
 use signex_widgets::segmented::{SegmentedMetrics, SegmentedStyle, segmented};
 
-use super::form_look::{self, ghost_button};
-use super::graphite::{active_fill, wash_fn};
+use super::graphite::wash_fn;
 use super::{PanelContext, PanelMsg, empty_state_card};
 use crate::pcb_canvas::layer_style;
 use crate::styles::tokens::resolve;
@@ -73,7 +72,7 @@ pub enum LayerSection {
     Copper,
     Pairs,
     Technical,
-    /// Drill Drawing and the Multi-Layer row.
+    /// Drill Drawing (the Multi-Layer row in it keeps its own eye).
     Other,
 }
 
@@ -214,46 +213,24 @@ impl PcbLayersPanel {
         !self.hidden_objects.contains(&kind)
     }
 
-    /// The layers the eye of `section` shows and hides: the board's copper,
-    /// both sides of every pair that has layers, the other technical layers,
-    /// or Drill Drawing (the Multi-Layer row is not a layer; see
-    /// [`Self::toggles_multi_layer`]).
-    pub fn section_layers(&self, section: LayerSection) -> Vec<PcbLayer> {
-        match section {
-            LayerSection::Copper => self.copper.iter().map(|row| row.layer).collect(),
-            LayerSection::Pairs => LayerPair::ALL
-                .into_iter()
-                .filter_map(LayerPair::layers)
-                .flat_map(|(top, bottom)| [top, bottom])
-                .collect(),
-            LayerSection::Technical => SINGLE_TECHNICAL_LAYERS
-                .into_iter()
-                .map(PcbLayer::Technical)
-                .collect(),
-            LayerSection::Other => vec![PcbLayer::Technical(TechnicalLayer::DrillDrawing)],
-        }
+    /// The layers the eye of `section` shows and hides: those of the rows
+    /// the panel lists (the search and Used On leave the others alone). The
+    /// Multi-Layer row is no layer and keeps its own eye.
+    pub fn section_layers(&self, section: LayerSection, ui: &LayersPanelUi) -> Vec<PcbLayer> {
+        layers_tab::section_layers(self, ui, section)
     }
 
-    /// Every row of `section` is hidden: its eye is shut.
-    pub fn section_hidden(&self, section: LayerSection) -> bool {
-        let layers = self.section_layers(section);
-        let all = !layers.is_empty() && layers.iter().all(|layer| self.is_hidden(*layer));
-        all && (section != LayerSection::Other || self.multi_layer_hidden)
+    /// Every listed layer of `section` is hidden: its eye is shut.
+    pub fn section_hidden(&self, section: LayerSection, ui: &LayersPanelUi) -> bool {
+        let layers = self.section_layers(section, ui);
+        !layers.is_empty() && layers.iter().all(|layer| self.is_hidden(*layer))
     }
 
-    /// Some row of `section` is hidden: its eye shows them all.
-    pub fn section_any_hidden(&self, section: LayerSection) -> bool {
-        let any = self
-            .section_layers(section)
+    /// Some listed layer of `section` is hidden: its eye shows them all.
+    pub fn section_any_hidden(&self, section: LayerSection, ui: &LayersPanelUi) -> bool {
+        self.section_layers(section, ui)
             .iter()
-            .any(|layer| self.is_hidden(*layer));
-        any || (section == LayerSection::Other && self.multi_layer_hidden)
-    }
-
-    /// Showing (`visible`) or hiding `section` flips the Multi-Layer row:
-    /// it is in Other Layers and is not in the wanted state yet.
-    pub fn toggles_multi_layer(&self, section: LayerSection, visible: bool) -> bool {
-        section == LayerSection::Other && self.multi_layer_hidden == visible
+            .any(|layer| self.is_hidden(*layer))
     }
 }
 
@@ -265,7 +242,7 @@ pub enum LayersTab {
     ViewOptions,
 }
 
-/// The Layers panel's own state (#2363, #103), kept across rebuilds:
+/// The Layers panel's own state (#2363, m103), kept across rebuilds:
 /// view-only, never part of a board view.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayersPanelUi {
@@ -315,6 +292,9 @@ pub enum LayersPanelMsg {
     },
     /// Layer Stack... in the more menu.
     LayerStackPicked,
+    /// View From Bottom Side in the more menu: the view flips and the menu
+    /// closes, as every other live row of it does.
+    BoardFlipPicked,
     /// The 3D switch of View Options.
     Board3dToggled,
 }
@@ -348,7 +328,9 @@ impl LayersPanelUi {
                 self.hex.clone_from(hex);
                 return false;
             }
-            LayersPanelMsg::SetDeleted(_) | LayersPanelMsg::LayerStackPicked => {
+            LayersPanelMsg::SetDeleted(_)
+            | LayersPanelMsg::LayerStackPicked
+            | LayersPanelMsg::BoardFlipPicked => {
                 self.more_menu_open = false;
                 return false;
             }
@@ -476,24 +458,6 @@ fn row_button(tokens: &ThemeTokens) -> impl Fn(&Theme, Status) -> ButtonStyle + 
             ..Border::default()
         },
         ..ButtonStyle::default()
-    }
-}
-
-/// A two-state button (a View Options switch): the active fill while on.
-fn toggle_button(
-    tokens: &ThemeTokens,
-    on: bool,
-) -> impl Fn(&Theme, Status) -> ButtonStyle + 'static {
-    let on_fill = active_fill(tokens);
-    move |theme: &Theme, status| {
-        let mut style = ghost_button(theme, status);
-        if on {
-            style.background = Some(Background::Color(on_fill));
-        }
-        if matches!(status, Status::Disabled) {
-            style.text_color = form_look::FormLook::of(theme).ink4;
-        }
-        style
     }
 }
 

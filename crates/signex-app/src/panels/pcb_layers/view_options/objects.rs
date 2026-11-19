@@ -18,7 +18,7 @@ use super::{
 use crate::app::PcbViewMsg;
 use crate::panels::graphite::hint_tooltip;
 use crate::panels::{PanelContext, PanelMsg};
-use crate::styles::{ChromeMetrics, ti, tokens::resolve};
+use crate::styles::{ChromeMetrics, HAIRLINE, ti, tokens::resolve};
 
 /// Alpha of the All Objects eye while the kinds differ.
 const MIXED_EYE_ALPHA: f32 = 0.6;
@@ -104,7 +104,7 @@ fn all_objects_row<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Element<'a
     )
     .style(move |_: &Theme| {
         let mut border = iced::Border::default();
-        border.bottom = iced::border::Side::default().width(1.0).color(rule);
+        border.bottom = iced::border::Side::default().width(HAIRLINE).color(rule);
         container::Style {
             border,
             ..container::Style::default()

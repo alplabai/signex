@@ -1,9 +1,9 @@
-//! #103: the more menu, the set name row and the Active | Set row of the
+//! m103: the more menu, the set name row and the Active | Set row of the
 //! Layers & Colors tab.
 
 use super::*;
 
-/// #103: the more button opens the menu; the menu lists the layer set
+/// m103: the more button opens the menu; the menu lists the layer set
 /// rows, Import... and Export..., View From Bottom Side and Layer Stack....
 #[test]
 fn the_more_button_opens_the_menu_in_place() {
@@ -33,7 +33,7 @@ fn the_more_button_opens_the_menu_in_place() {
     );
 }
 
-/// #103: a click outside the menu closes it; a greyed row takes the click
+/// m103: a click outside the menu closes it; a greyed row takes the click
 /// and does nothing.
 #[test]
 fn a_click_outside_the_menu_closes_it_and_greyed_rows_do_nothing() {
@@ -57,7 +57,7 @@ fn a_click_outside_the_menu_closes_it_and_greyed_rows_do_nothing() {
     }
 }
 
-/// #103: Delete current set... deletes the saved set the view shows; Layer
+/// m103: Delete current set... deletes the saved set the view shows; Layer
 /// Stack... runs while the Layer Stack command can.
 #[test]
 fn delete_and_layer_stack_are_live_when_they_can_act() {
@@ -78,7 +78,7 @@ fn delete_and_layer_stack_are_live_when_they_can_act() {
     );
 }
 
-/// #103: the Active | Set row reads the active layer and the set; a pick
+/// m103: the Active | Set row reads the active layer and the set; a pick
 /// in either dropdown sends what the layer tabs and the layer set button
 /// send.
 #[test]
@@ -126,7 +126,7 @@ fn the_active_row_picks_the_active_layer_and_the_set() {
     assert_eq!(set_current(&saved.pcb_layers), "Set: Mine");
 }
 
-/// #103: the more menu opens and closes; Save current as set... closes it
+/// m103: the more menu opens and closes; Save current as set... closes it
 /// and opens the name row, which closes again without a name.
 #[test]
 fn the_panel_state_opens_the_more_menu_and_the_name_row() {
@@ -146,7 +146,7 @@ fn the_panel_state_opens_the_more_menu_and_the_name_row() {
     assert!(!ui.more_menu_open, "a picked row closes the menu");
 }
 
-/// #103: the name row: Save is live once a name is typed, and Enter saves.
+/// m103: the name row: Save is live once a name is typed, and Enter saves.
 #[test]
 fn the_name_row_saves_a_named_set() {
     let ui = LayersPanelUi {

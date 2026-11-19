@@ -1,4 +1,4 @@
-//! Layer tabs under the PCB canvas (#2357, #104): the board's visible layers
+//! Layer tabs under the PCB canvas (#2357, m104): the board's visible layers
 //! as tabs with a colour swatch, in a 28 px strip that scrolls sideways
 //! when the tabs do not fit. A click on a tab makes that layer the active
 //! one, the same message a Layers panel row sends, so the tab, the panel row
@@ -41,7 +41,7 @@ const TAB_GAP: f32 = chrome_px(6.0 * 11.0 / 12.0);
 /// Edge of a tab's colour swatch.
 const SWATCH: f32 = chrome_px(9.0 * 11.0 / 12.0);
 /// Corner radius of a tab's colour swatch.
-const SWATCH_RADIUS: f32 = 2.0;
+const SWATCH_RADIUS: f32 = chrome_px(2.0 * 11.0 / 12.0);
 /// Thickness of the accent bar along the top of the active tab.
 const ACCENT_BAR: f32 = 2.0 * HAIRLINE;
 
@@ -110,7 +110,7 @@ pub(super) struct StripBoard<'b> {
     /// The user's tab names (#2394).
     pub prefs: &'b LayerStripPrefs,
     /// The layer set menu is open for this strip: its button is drawn
-    /// pressed (#104).
+    /// pressed (m104).
     pub set_menu_open: bool,
 }
 
@@ -139,7 +139,7 @@ struct TabMessages {
 }
 
 /// Whether `layer` gets a tab: the set lists it (#2394) and it is not
-/// hidden (#104). Show all layers brings a hidden layer's tab back.
+/// hidden (m104). Show all layers brings a hidden layer's tab back.
 fn has_tab(view: &PcbLayerView, layer: PcbLayer) -> bool {
     view.lists_in_strip(layer) && !view.is_hidden(layer)
 }
@@ -229,7 +229,7 @@ fn set_button_look(tokens: &ThemeTokens, open: bool) -> (Option<Color>, Color) {
     }
 }
 
-/// The layer set button at the left end of the strip (#2394, #104): the
+/// The layer set button at the left end of the strip (#2394, m104): the
 /// set's name and a chevron, a line on its right; a click opens the set
 /// menu.
 fn layer_set_button<'a>(
@@ -446,7 +446,7 @@ mod tests {
             .collect()
     }
 
-    /// #104: more tabs than the window is wide scroll inside the strip; every
+    /// m104: more tabs than the window is wide scroll inside the strip; every
     /// visible layer still has its tab, on one line, and the strip keeps to
     /// the window and its 28 px.
     #[test]
@@ -496,7 +496,7 @@ mod tests {
         assert_eq!(size.height, STRIP_HEIGHT);
     }
 
-    /// #104: a hidden layer has no tab; showing every layer brings it back.
+    /// m104: a hidden layer has no tab; showing every layer brings it back.
     /// A layer token this build does not know keeps its tab.
     #[test]
     fn a_hidden_layer_has_no_tab_until_it_is_shown() {
@@ -514,7 +514,7 @@ mod tests {
         assert!(shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
     }
 
-    /// #104: the layer set button is filled accent-soft while its menu is
+    /// m104: the layer set button is filled accent-soft while its menu is
     /// open, plain with muted ink otherwise, in both Graphite themes.
     #[test]
     fn the_set_button_draws_pressed_while_its_menu_is_open() {

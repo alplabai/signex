@@ -1,4 +1,4 @@
-//! The Selection Filter's badge on the PCB Active Bar (#108): the number of
+//! The Selection Filter's badge on the PCB Active Bar (m108): the number of
 //! object kinds a click or box cannot pick, pinned to the top-right corner
 //! of the filter button. No badge while every kind is on. The badge is a
 //! layer stacked over the bar, so the bar's buttons stay as they are; the
@@ -14,15 +14,15 @@ use signex_widgets::text;
 
 use crate::app::Message;
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, TypeScale};
+use crate::styles::{Radii, TypeScale, chrome_px};
 
-/// Height and smallest width of the badge, in px (bar geometry, like
+/// Height and smallest width of the badge (bar geometry, like
 /// [`Metrics`]).
-const BADGE_SIZE: f32 = 12.0;
+const BADGE_SIZE: f32 = chrome_px(12.0 * 11.0 / 12.0);
 /// Space left and right of a count wider than the round badge.
-const BADGE_PAD_X: f32 = 2.0;
+const BADGE_PAD_X: f32 = chrome_px(2.0 * 11.0 / 12.0);
 /// Gap between the badge and the button's top and right edges.
-const BADGE_INSET: f32 = 1.0;
+const BADGE_INSET: f32 = chrome_px(11.0 / 12.0);
 
 /// How many kinds the filter has off, of those the board editor can pick.
 pub(super) fn off_count(filter: &PickFilter) -> usize {

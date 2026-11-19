@@ -1,4 +1,4 @@
-//! The colour card of a layer (#2363, #103): a click on the layer's dot
+//! The colour card of a layer (#2363, m103): a click on the layer's dot
 //! opens it under the row, indented to the name column. It lists the board
 //! palette, takes a hex colour that recolours the layer as it is typed, and
 //! offers the palette colour again while the layer has its own.

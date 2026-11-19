@@ -1,4 +1,4 @@
-//! The PCB Active Bar (#2352, #108): selection filter, move, align |
+//! The PCB Active Bar (#2352, m108): selection filter, move, align |
 //! components | route, tune, via and pad, copper areas, copper drawing |
 //! dimensions, text, graphics | board sketch, fabrication outputs | view.
 //!
@@ -285,7 +285,7 @@ pub(in crate::app::view) fn pcb_bar_items(
 
 /// The tool groups between the Align button and Board Sketch, a separator
 /// between each run: what goes on the board, the copper (routing, tuning,
-/// vias and pads, areas, drawing), then what annotates it (#108).
+/// vias and pads, areas, drawing), then what annotates it (m108).
 const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
     &[PcbBarGroup::Components],
     &[
@@ -303,7 +303,7 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
 ];
 
 /// The bar icon of `tool`: the footprint editor's where one fits, the board
-/// tool glyphs for pad, via, dimension and keepout (#108).
+/// tool glyphs for pad, via, dimension and keepout (m108).
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
@@ -359,7 +359,7 @@ const ALIGN_ROWS: &[MenuRow] = &[
 ];
 
 /// The View dropdown: the board view turns of the View menu. Each turn's
-/// arrow points the way the row turns (#108); a half turn is drawn
+/// arrow points the way the row turns (m108); a half turn is drawn
 /// clockwise, and Reset has no icon.
 const VIEW_ROWS: &[MenuRow] = &[
     ("view_rotate", Some(ic::icon_dd_rotate_cw)),

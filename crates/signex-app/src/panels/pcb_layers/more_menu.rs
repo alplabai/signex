@@ -1,4 +1,4 @@
-//! The more menu of the Layers panel (#103), opened in place by the more
+//! The more menu of the Layers panel (m103), opened in place by the more
 //! button beside the search field. It saves and deletes layer sets (a set is
 //! picked only in the Set dropdown of the Active row), holds Import... and
 //! Export... (greyed until a view can be saved to a file), View From Bottom
@@ -12,7 +12,6 @@ use signex_widgets::active_bar_dropdown::{self, DropdownEntry, DropdownItem};
 
 use super::metrics::MENU;
 use super::{LayersPanelMsg, PcbLayersPanel, SP, more_menu_top};
-use crate::app::PcbViewMsg;
 use crate::panels::{PanelContext, PanelMsg};
 
 fn panel_msg(msg: LayersPanelMsg) -> PanelMsg {
@@ -42,7 +41,7 @@ pub(super) fn entries(panel: &PcbLayersPanel) -> Vec<DropdownEntry<PanelMsg>> {
     };
     let flip = DropdownItem::new(
         label(ids::PCB_LAYERS_VIEW_FROM_BOTTOM),
-        PanelMsg::PcbLayers(PcbViewMsg::BoardFlipToggled),
+        panel_msg(LayersPanelMsg::BoardFlipPicked),
     )
     .lead_check(panel.flipped);
     vec![

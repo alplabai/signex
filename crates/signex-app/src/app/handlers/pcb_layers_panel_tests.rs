@@ -1,4 +1,4 @@
-//! #103: what the Layers panel's own controls do to the board view: a
+//! m103: what the Layers panel's own controls do to the board view: a
 //! section's eye, a typed hex colour, and the more menu's Layer Stack....
 
 use std::path::PathBuf;
@@ -87,7 +87,7 @@ fn section_eye(app: &Signex, title: &str) -> Vec<PanelMsg> {
     sent
 }
 
-/// #103: the eye of Signal and Plane Layers hides every copper layer, and
+/// m103: the eye of Signal and Plane Layers hides every copper layer, and
 /// a second click shows them again.
 #[test]
 fn a_section_eye_hides_and_shows_its_layers() {
@@ -120,20 +120,42 @@ fn a_section_eye_hides_and_shows_its_layers() {
     assert!(!view.is_hidden(TOP) && !view.is_hidden(BOTTOM));
 }
 
-/// #103: the eye of Other Layers hides Drill Drawing and the Multi-Layer
-/// row (vias and through-hole pads).
+/// The eye of Other Layers hides Drill Drawing; the Multi-Layer row (vias
+/// and through-hole pads) is no layer and keeps its own eye.
 #[test]
-fn the_other_layers_eye_hides_the_multi_layer_row_too() {
+fn the_other_layers_eye_hides_drill_drawing_only() {
     let (mut app, path) = open();
     for msg in section_eye(&app, "OTHER LAYERS") {
         send(&mut app, msg);
     }
     let view = app.pcb_layer_view(&path);
     assert!(view.is_hidden(PcbLayer::Technical(TechnicalLayer::DrillDrawing)));
-    assert!(!view.multi_layer_visible());
+    assert!(view.multi_layer_visible());
 }
 
-/// #103: a dot opens the colour card with the layer's colour in the hex
+/// A section's eye acts on the rows the panel lists: with a search that
+/// leaves only Bottom Layer, it hides Bottom and leaves Top alone.
+#[test]
+fn a_section_eye_leaves_the_rows_the_search_hides_alone() {
+    let (mut app, path) = open();
+    layers(
+        &mut app,
+        LayersPanelMsg::SearchChanged("Bottom".to_string()),
+    );
+    let hide = section_eye(&app, "SIGNAL AND PLANE LAYERS");
+    assert_eq!(hide.len(), 1, "{hide:?}");
+    for msg in hide {
+        send(&mut app, msg);
+    }
+    let view = app.pcb_layer_view(&path);
+    assert!(view.is_hidden(BOTTOM));
+    assert!(
+        !view.is_hidden(TOP),
+        "Top is not listed: its eye stays open"
+    );
+}
+
+/// m103: a dot opens the colour card with the layer's colour in the hex
 /// field; a typed colour recolours the layer at once and the card stays
 /// open; a half-typed one changes nothing.
 #[test]
@@ -169,7 +191,7 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
     assert_eq!(app.document_state.panel_ctx.pcb_layers_ui.picker, None);
 }
 
-/// #103: Layer Stack... in the more menu runs the Layer Stack command,
+/// m103: Layer Stack... in the more menu runs the Layer Stack command,
 /// which is live on a board.
 #[test]
 fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
@@ -179,4 +201,20 @@ fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
     layers(&mut app, LayersPanelMsg::LayerStackPicked);
     assert!(app.is_panel_open(PanelKind::LayerStack));
     assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+}
+
+/// View From Bottom Side in the more menu flips the view and closes the
+/// menu, as the menu's other live rows do.
+#[test]
+fn view_from_bottom_side_flips_the_view_and_closes_the_menu() {
+    let (mut app, path) = open();
+    assert!(!app.pcb_layer_view(&path).flipped());
+    layers(&mut app, LayersPanelMsg::MoreMenuToggled);
+    layers(&mut app, LayersPanelMsg::BoardFlipPicked);
+    assert!(app.pcb_layer_view(&path).flipped());
+    assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+    assert!(
+        app.document_state.panel_ctx.pcb_layers.flipped,
+        "the tick follows"
+    );
 }

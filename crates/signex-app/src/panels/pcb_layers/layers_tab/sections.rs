@@ -1,4 +1,4 @@
-//! The sections of Layers & Colors (#2363, #103): Signal and Plane Layers,
+//! The sections of Layers & Colors (#2363, m103): Signal and Plane Layers,
 //! Component Layer Pairs, Other Technical Layers, Other Layers (each with a
 //! count of the rows it lists and an eye for all of them) and System Colors
 //! (closed until opened).
@@ -45,7 +45,7 @@ pub(super) fn all<'a>(
             panel,
             "pcb_layers_signal_plane",
             ids::PCB_LAYERS_SIGNAL_PLANE,
-            LayerSection::Copper,
+            section_eye(panel, ui, LayerSection::Copper),
             copper_rows(panel, ui, ctx),
         ),
         counted_section(
@@ -53,7 +53,7 @@ pub(super) fn all<'a>(
             panel,
             "pcb_layers_pairs",
             ids::PCB_LAYERS_PAIRS,
-            LayerSection::Pairs,
+            section_eye(panel, ui, LayerSection::Pairs),
             pair_count,
             pair_rows,
         ),
@@ -62,7 +62,7 @@ pub(super) fn all<'a>(
             panel,
             "pcb_layers_technical",
             ids::PCB_LAYERS_TECHNICAL,
-            LayerSection::Technical,
+            section_eye(panel, ui, LayerSection::Technical),
             technical_rows(panel, ui, ctx),
         ),
         layer_section(
@@ -70,7 +70,7 @@ pub(super) fn all<'a>(
             panel,
             "pcb_layers_other",
             ids::PCB_LAYERS_OTHER,
-            LayerSection::Other,
+            section_eye(panel, ui, LayerSection::Other),
             other_rows(panel, ui, ctx),
         ),
         section_with(
@@ -93,40 +93,48 @@ fn count(panel: &PcbLayersPanel, rows: usize) -> Localized {
     t!(panel.i18n, ids::PCB_LAYERS_SECTION_COUNT, "count" => rows)
 }
 
+/// The eye of a section head: whether it is shut and what a click sends.
+type SectionEye = (bool, Option<PanelMsg>);
+
+/// The eye of `section` over its listed layers: shut while every one is
+/// hidden; a click shows them all while any is hidden, else hides them all.
+fn section_eye(panel: &PcbLayersPanel, ui: &LayersPanelUi, section: LayerSection) -> SectionEye {
+    let visible = panel.section_any_hidden(section, ui);
+    (
+        panel.section_hidden(section, ui),
+        Some(PanelMsg::LayersPanel(
+            LayersPanelMsg::SectionVisibilitySet { section, visible },
+        )),
+    )
+}
+
 /// A section of layers, its count the rows it lists.
 fn layer_section<'a>(
     ctx: &'a PanelContext,
     panel: &PcbLayersPanel,
     key: &str,
     title: signex_i18n::MessageId,
-    section: LayerSection,
+    eye: SectionEye,
     rows: Vec<Element<'a, PanelMsg>>,
 ) -> Option<Element<'a, PanelMsg>> {
     let listed = rows.len();
-    counted_section(ctx, panel, key, title, section, listed, rows)
+    counted_section(ctx, panel, key, title, eye, listed, rows)
 }
 
-/// A section of layers with `listed` rows and an eye for all its layers:
-/// shut while every one is hidden; a click shows them all while any is
-/// hidden, else hides them all.
+/// A section of layers with `listed` rows and an eye for all its listed
+/// layers.
 fn counted_section<'a>(
     ctx: &'a PanelContext,
     panel: &PcbLayersPanel,
     key: &str,
     title: signex_i18n::MessageId,
-    section: LayerSection,
+    eye: SectionEye,
     listed: usize,
     rows: Vec<Element<'a, PanelMsg>>,
 ) -> Option<Element<'a, PanelMsg>> {
-    let visible = panel.section_any_hidden(section);
     let head = SectionHead {
         count: Some(count(panel, listed)),
-        eye: Some((
-            panel.section_hidden(section),
-            Some(PanelMsg::LayersPanel(
-                LayersPanelMsg::SectionVisibilitySet { section, visible },
-            )),
-        )),
+        eye: Some(eye),
         closed_by_default: false,
     };
     section_with(ctx, panel, key, title, head, rows)
@@ -136,6 +144,43 @@ fn counted_section<'a>(
 /// and, with Used On, the board uses it.
 fn listed(panel: &PcbLayersPanel, ui: &LayersPanelUi, layer: PcbLayer, label: &Localized) -> bool {
     panel.lists(layer) && ui.matches(&panel.i18n, label)
+}
+
+/// The layers of the rows `section` lists: what its eye shows, hides and
+/// reads. A pair row brings both its sides; the Multi-Layer row is no layer.
+pub(in crate::panels::pcb_layers) fn section_layers(
+    panel: &PcbLayersPanel,
+    ui: &LayersPanelUi,
+    section: LayerSection,
+) -> Vec<PcbLayer> {
+    let row_listed = |layer: &PcbLayer| {
+        listed(
+            panel,
+            ui,
+            *layer,
+            &layer_style::layer_name(&panel.i18n, *layer),
+        )
+    };
+    match section {
+        LayerSection::Copper => panel
+            .copper
+            .iter()
+            .map(|row| row.layer)
+            .filter(row_listed)
+            .collect(),
+        LayerSection::Pairs => pairs::listed(panel, ui)
+            .flat_map(|(_, (top, bottom))| [top, bottom])
+            .collect(),
+        LayerSection::Technical => SINGLE_TECHNICAL_LAYERS
+            .into_iter()
+            .map(PcbLayer::Technical)
+            .filter(row_listed)
+            .collect(),
+        LayerSection::Other => [PcbLayer::Technical(TechnicalLayer::DrillDrawing)]
+            .into_iter()
+            .filter(row_listed)
+            .collect(),
+    }
 }
 
 fn copper_rows<'a>(

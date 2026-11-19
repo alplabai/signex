@@ -1,4 +1,4 @@
-//! The Layers panel's own controls (#2363, #103): its tab, search, open
+//! The Layers panel's own controls (#2363, m103): its tab, search, open
 //! colour card, more menu and set name are panel state; a layer set picked,
 //! saved or deleted, a section's eye, a typed colour, Layer Stack... and the
 //! 3D switch act on the app as the layer set button, the eyes, a colour
@@ -36,9 +36,8 @@ impl Signex {
                 return Task::none();
             }
             LayersPanelMsg::SectionVisibilitySet { section, visible } => {
-                let panel = &self.document_state.panel_ctx.pcb_layers;
-                let layers = panel.section_layers(*section);
-                let flip_multi_layer = panel.toggles_multi_layer(*section, *visible);
+                let ctx = &self.document_state.panel_ctx;
+                let layers = ctx.pcb_layers.section_layers(*section, &ctx.pcb_layers_ui);
                 for layer in layers {
                     let visible = *visible;
                     self.apply_pcb_view_event(
@@ -46,9 +45,10 @@ impl Signex {
                         PcbViewMsg::LayerVisibilitySet { layer, visible },
                     );
                 }
-                if flip_multi_layer {
-                    self.apply_pcb_view_event(None, PcbViewMsg::MultiLayerVisibilityToggled);
-                }
+                return Task::none();
+            }
+            LayersPanelMsg::BoardFlipPicked => {
+                self.apply_pcb_view_event(None, PcbViewMsg::BoardFlipToggled);
                 return Task::none();
             }
             LayersPanelMsg::LayerStackPicked => {
