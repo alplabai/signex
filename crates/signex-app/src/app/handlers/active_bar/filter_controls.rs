@@ -46,15 +46,61 @@ impl Signex {
         Task::none()
     }
 
-    /// A message of the SCH Filter panel (#2417): the Active Bar dropdown's
-    /// handlers, so the panel and the dropdown edit one filter.
+    /// A message of the SCH Filter or Filter panel (#2417, #55, #56): the
+    /// Active Bar dropdown's and Properties' handlers, so the panels, the
+    /// dropdown and Properties edit one filter and one preset list.
     pub(crate) fn handle_sch_filter(&mut self, msg: SchFilterMsg) -> Task<Message> {
         match msg {
             SchFilterMsg::KindToggled(filter) => self.handle_active_bar_filter_toggle(filter),
             SchFilterMsg::AllPicked => self.set_all_selection_filters(true),
             SchFilterMsg::NonePicked => self.set_all_selection_filters(false),
-            SchFilterMsg::PresetApplied(idx) => self.handle_apply_custom_filter_preset(idx),
+            SchFilterMsg::PresetApplied(idx) => {
+                let task = self.handle_apply_custom_filter_preset(idx);
+                let _ = self.handle_select_custom_filter_tab(idx);
+                task
+            }
+            SchFilterMsg::PresetSaved => self.handle_save_current_filter_preset(),
+            SchFilterMsg::PresetRenameStarted(idx) => {
+                let name = self
+                    .interaction_state
+                    .custom_filter_presets
+                    .get(idx)
+                    .map(|preset| preset.name.clone());
+                self.document_state.panel_ctx.selection_filter.rename = name.map(|n| (idx, n));
+                Task::none()
+            }
+            SchFilterMsg::PresetRenameTyped(typed) => {
+                let rename = &mut self.document_state.panel_ctx.selection_filter.rename;
+                if let Some((_, name)) = rename {
+                    *name = typed;
+                }
+                Task::none()
+            }
+            SchFilterMsg::PresetRenamed(idx, name) => {
+                self.document_state.panel_ctx.selection_filter.rename = None;
+                self.handle_rename_custom_filter_preset(idx, name)
+            }
+            SchFilterMsg::PresetDeleted(idx) => {
+                self.document_state.panel_ctx.selection_filter.rename = None;
+                self.handle_remove_custom_filter_preset(idx)
+            }
         }
+    }
+
+    /// SCH Filter's Save current: a new preset holding the kinds that are
+    /// on, made the edited one. Nothing at the preset limit.
+    pub(crate) fn handle_save_current_filter_preset(&mut self) -> Task<Message> {
+        let state = &mut self.interaction_state;
+        let active = &state.selection_filters;
+        let added = presets::add(
+            &mut state.custom_filter_presets,
+            &mut state.active_custom_filter_tab,
+            |f| active.contains(&f),
+        );
+        if !added {
+            return Task::none();
+        }
+        self.sync_and_persist_custom_filter_presets()
     }
 
     /// Apply a saved preset — replaces the active filter set.

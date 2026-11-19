@@ -120,4 +120,20 @@ define_ids! {
     PANELS_COMPONENTS_RECENT_EMPTY = "panels-components-recent-empty";
     PANELS_COMPONENTS_DETAILS_SUBTITLE = "panels-components-details-subtitle";
     PANELS_COMPONENTS_DRAG_RELEASE = "panels-components-drag-release";
+    PANELS_FILTER_ALL = "panels-filter-all";
+    PANELS_FILTER_NONE = "panels-filter-none";
+    PANELS_FILTER_READOUT = "panels-filter-readout";
+    PANELS_FILTER_EDITOR_SCHEMATIC = "panels-filter-editor-schematic";
+    PANELS_FILTER_EDITOR_BOARD = "panels-filter-editor-board";
+    PANELS_FILTER_FOLLOWS = "panels-filter-follows";
+    PANELS_FILTER_COUNTS_SHEET = "panels-filter-counts-sheet";
+    PANELS_FILTER_COUNTS_BOARD = "panels-filter-counts-board";
+    PANELS_FILTER_PRESETS = "panels-filter-presets";
+    PANELS_FILTER_SAVE_CURRENT = "panels-filter-save-current";
+    PANELS_FILTER_SAVE_CURRENT_TIP = "panels-filter-save-current-tip";
+    PANELS_FILTER_PRESET_LIMIT = "panels-filter-preset-limit";
+    PANELS_FILTER_PRESET_NAME_LABEL = "panels-filter-preset-name-label";
+    PANELS_FILTER_NO_PRESETS = "panels-filter-no-presets";
+    PANELS_FILTER_PRESET_KINDS = "panels-filter-preset-kinds";
+    PANELS_FILTER_PRESET_NO_KINDS = "panels-filter-preset-no-kinds";
 }

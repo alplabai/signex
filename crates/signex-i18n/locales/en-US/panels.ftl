@@ -652,8 +652,8 @@ panels-net-classes-width-cell = { $width } mm
 # Width cell of a class with no width: each wire keeps its own.
 panels-net-classes-wire-width = Wire's own
 panels-net-classes-no-members = None
-# SCH Filter panel (#2417), over the chip grid.
-panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.
+# SCH Filter panel (#2417, #56), over the kind toggles.
+panels-sch-filter-hint = What a click, a box and the hover pick can select.
 
 # Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
 panels-placed-location = Location
@@ -768,3 +768,27 @@ panels-components-recent-empty = Parts you place from this panel show here.
 panels-components-details-subtitle = { $description } · { $library }
 # Second line of the drag card while a row is dragged toward the canvas.
 panels-components-drag-release = release to place
+
+# Filter (#55) and SCH Filter (#56) panels: the kind toggles.
+# All / None cells over the kind toggles.
+panels-filter-all = All
+panels-filter-none = None
+# How many kinds are on; $on and $total are counts.
+panels-filter-readout = { $on } of { $total } kinds
+# Filter panel header: the editor it follows, then what it does.
+panels-filter-editor-schematic = Schematic
+panels-filter-editor-board = Board
+panels-filter-follows = follows the active editor
+panels-filter-counts-sheet = Counts are objects on this sheet.
+panels-filter-counts-board = Counts are objects on this board.
+# SCH Filter's Presets section.
+panels-filter-presets = Presets
+panels-filter-save-current = Save current
+panels-filter-save-current-tip = Save the current kinds as a preset
+# Save current at the limit; $limit is the most presets kept.
+panels-filter-preset-limit = At most { $limit } presets: delete one to save another
+panels-filter-preset-name-label = Name
+panels-filter-no-presets = No presets yet. Save current keeps the kinds that are on.
+# A preset and the kinds it turns on; $name is the preset's, $kinds a list of kind names.
+panels-filter-preset-kinds = { $name }: { $kinds }
+panels-filter-preset-no-kinds = { $name }: no kinds
