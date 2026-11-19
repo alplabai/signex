@@ -366,7 +366,11 @@ fn the_graph_and_detail_strip_build_in_both_themes() {
 #[test]
 fn relative_time_uses_the_history_catalog() {
     let i = i18n();
-    let at = |d: Duration| relative_time(i, now() - d, now()).into_string();
+    let at = |d: Duration| {
+        relative_time(i, now() - d, now())
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
     assert_eq!(at(Duration::minutes(12)), "12m ago");
     assert_eq!(at(Duration::hours(1)), "1h ago");
     assert_eq!(at(Duration::days(5)), "5d ago");
