@@ -83,4 +83,19 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_COMPONENTS_NOTHING_MOUNTED_BODY = "panels-components-nothing-mounted-body";
+    PANELS_COMPONENTS_ADD_LIBRARY = "panels-components-add-library";
+    PANELS_COMPONENTS_OPEN_PROJECT = "panels-components-open-project";
+    PANELS_COMPONENTS_LIBRARY_COUNT = "panels-components-library-count";
+    PANELS_COMPONENTS_SHOWN_OF_TOTAL = "panels-components-shown-of-total";
+    PANELS_COMPONENTS_NO_MATCH = "panels-components-no-match";
+    PANELS_COMPONENTS_CLEAR_FILTER = "panels-components-clear-filter";
+    PANELS_COMPONENTS_PLACE = "panels-components-place";
+    PANELS_COMPONENTS_PREVIEWS = "panels-components-previews";
+    PANELS_COMPONENTS_PREVIEWS_TOOLTIP = "panels-components-previews-tooltip";
+    PANELS_COMPONENTS_RECENT_TITLE = "panels-components-recent-title";
+    PANELS_COMPONENTS_RECENT_USES = "panels-components-recent-uses";
+    PANELS_COMPONENTS_RECENT_EMPTY = "panels-components-recent-empty";
+    PANELS_COMPONENTS_DETAILS_SUBTITLE = "panels-components-details-subtitle";
+    PANELS_COMPONENTS_DRAG_RELEASE = "panels-components-drag-release";
 }
