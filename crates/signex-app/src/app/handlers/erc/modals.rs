@@ -495,7 +495,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
         ModalId::AppQuitConfirm => iced::Size::new(540.0, 310.0),
         ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),
-        ModalId::LibraryEditRow => iced::Size::new(640.0, 600.0),
+        ModalId::LibraryEditRow => iced::Size::new(860.0, 640.0),
         ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
         ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
         ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),

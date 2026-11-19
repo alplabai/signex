@@ -197,13 +197,15 @@ impl Signex {
                 .and_then(|path| self.library.library_browsers.get(path))
                 .and_then(|b| b.delete_confirm.as_ref())
                 .map(|d| {
-                    let (title, text) = crate::library::edit_row_modal::delete_intro_texts(
-                        &d.internal_pn,
-                        &d.table,
-                    );
-                    let (ref_title, ref_text) =
-                        crate::library::edit_row_modal::delete_intro_texts("x", "t");
+                    use crate::library::edit_row_modal::{
+                        delete_caption_height, delete_intro_texts,
+                    };
+                    let i18n = &self.ui_state.i18n;
+                    let (title, text) = delete_intro_texts(i18n, &d.internal_pn, &d.table);
+                    let (ref_title, ref_text) = delete_intro_texts(i18n, "x", "t");
+                    // The one-line caption under the intro (#137).
                     fixed.height
+                        + delete_caption_height()
                         + library_intro_growth(
                             modal,
                             fixed.width,

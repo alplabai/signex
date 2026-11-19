@@ -25,7 +25,7 @@ use crate::styles::{
 pub(crate) const CLOSE_PROMPT_W: f32 = 520.0;
 pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
-pub(crate) const EDIT_ROW_W: f32 = 720.0;
+pub(crate) const EDIT_ROW_W: f32 = 860.0;
 pub(crate) const EDIT_ROW_H: f32 = 640.0;
 
 const TS: TypeScale = TypeScale::DEFAULT;
