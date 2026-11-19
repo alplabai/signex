@@ -237,9 +237,10 @@ pub(crate) fn notice_banner<'a>(
         _ => DialogIcon::Info,
     };
     let has_actions = !actions.is_empty();
-    let mut lines: Column<'a, LibraryMessage> = column![container(body).width(Length::Fill)]
-        .spacing(SP.s)
-        .width(Length::Fill);
+    let mut lines: Column<Element<'a, LibraryMessage>> =
+        column![container(body).width(Length::Fill)]
+            .spacing(SP.s)
+            .width(Length::Fill);
     if has_actions {
         lines = lines.push(
             row(actions)
@@ -278,7 +279,7 @@ pub(crate) fn key_value_box<'a>(
 ) -> Element<'a, LibraryMessage> {
     let key_ink = tokens::resolve(tokens).ink4;
     let line = ti(tokens.border);
-    let mut grid: Column<'a, LibraryMessage> =
+    let mut grid: Column<Element<'a, LibraryMessage>> =
         Column::new().spacing(KV_ROW_GAP).width(Length::Fill);
     for (key, value) in rows {
         let key = container(
@@ -309,6 +310,26 @@ pub(crate) fn key_value_box<'a>(
             ..container::Style::default()
         })
         .boxed()
+}
+
+/// A path or an id in the mono face on one line, cut in the middle when it
+/// does not fit; hovering shows it whole.
+pub(crate) fn mono_value<'a>(value: String, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let shown = text(signex_i18n::UserText::new(value.clone()))
+        .size(TS.body)
+        .font(mono)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::Middle)
+        .width(Length::Fill);
+    let whole = container(
+        text(signex_i18n::UserText::new(value))
+            .size(TS.body)
+            .font(mono),
+    )
+    .padding(SP.s)
+    .style(crate::styles::context_menu(tokens));
+    signex_widgets::tooltip(shown, whole, signex_widgets::tooltip::Position::Top).boxed()
 }
 
 #[cfg(test)]
@@ -364,6 +385,7 @@ mod tests {
                 )],
                 &tokens,
             );
+            let _ = mono_value("/libs/a/a.snxlib".to_owned(), &tokens);
             let _ = secondary_btn(
                 t!(i18n, ids::LIBRARY_UPDATES_SKIP_ALL),
                 LibraryMessage::ClosePicker,
