@@ -438,14 +438,7 @@ fn place_menu_greys_only_the_planned_tools() {
     // (#1249), which are greyed with the shared tooltip.
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {
-            let planned = matches!(
-                it.label.as_str(),
-                "Parameter Set"
-                    | "Signal Harness"
-                    | "Harness Connector"
-                    | "Harness Entry"
-                    | "Device Sheet Symbol"
-            );
+            let planned = matches!(it.label.as_str(), "Parameter Set" | "Device Sheet Symbol");
             assert_eq!(it.disabled, planned, "{}", it.label);
             assert_eq!(
                 it.tooltip.as_deref(),

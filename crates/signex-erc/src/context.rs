@@ -10,6 +10,8 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 use signex_types::schematic::{LabelType, PinDirection, Point, no_erc_rules_suppress, pin_tips};
 use uuid::Uuid;
 
+pub use crate::harness_snapshot::ErcHarness;
+
 // ---------------------------------------------------------------------------
 // Paper size
 // ---------------------------------------------------------------------------
@@ -342,6 +344,8 @@ pub struct ErcContext {
     /// Lets cross-sheet rules count a file once however many parents
     /// reference it.
     pub key: Option<signex_net::SheetKey>,
+    /// The sheet's signal harnesses (#1280).
+    pub harness: ErcHarness,
 }
 
 impl ErcContext {
@@ -579,6 +583,7 @@ impl ErcContext {
             nets,
             children,
             key: None,
+            harness: ErcHarness::from_sheet(snapshot),
         }
     }
 }

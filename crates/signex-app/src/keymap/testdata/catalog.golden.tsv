@@ -310,6 +310,7 @@ open_compiled_design	panels	Open Compiled Design panel	Compiled Design	General	-
 assign_net_class	design	Assign net to class	Assign Net Class...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 open_net_classes	design	Open the project's Net Classes panel	Net Classes	General	-	-	Always	gui_only	-
 open_net_classes_panel	design	Open the Net Classes panel of the project	Net Classes	General	-	-	Always	gui_only	-
+open_harness_definitions	design	Open the harness definitions	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text

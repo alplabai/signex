@@ -1106,6 +1106,8 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The harness Properties and the harness definitions view (#1280).
+    Harness(super::HarnessPanelMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

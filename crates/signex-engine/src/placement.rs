@@ -133,6 +133,7 @@ impl PlacementPayload {
                 shift(p);
             }
         }
+        crate::clipboard_harness::shift_harness(&mut f.harness, dx, dy);
         Self::new(f)
     }
 
@@ -215,6 +216,7 @@ impl PlacementPayload {
             _ => None,
         });
         out.extend(radii);
+        out.extend(crate::clipboard_harness::harness_coordinates(&f.harness));
         out
     }
 
@@ -260,6 +262,7 @@ impl PlacementPayload {
                 SelectedKind::Drawing,
                 f.drawings.iter().map(SchDrawing::uuid).collect(),
             ),
+            crate::clipboard_harness::harness_items(&f.harness),
         ]
         .concat()
     }
@@ -361,6 +364,9 @@ impl PlacementPayload {
             drawing.set_uuid(ids.next_id());
             Command::PlaceSchDrawing { drawing }
         }));
+        commands.extend(crate::clipboard_harness::harness_place_commands(
+            &f.harness, ids,
+        ));
         commands
     }
 }
@@ -431,6 +437,9 @@ fn take_locks(sheet: &mut SchematicSheet) -> std::collections::HashSet<Uuid> {
         d.set_locked(false);
         locked.insert(d.uuid());
     }
+    locked.extend(crate::clipboard_harness::take_harness_locks(
+        &mut sheet.harness,
+    ));
     locked
 }
 
@@ -455,6 +464,7 @@ fn restore_locks(sheet: &mut SchematicSheet, locked: &std::collections::HashSet<
     for d in &mut sheet.drawings {
         d.set_locked(locked.contains(&d.uuid()));
     }
+    crate::clipboard_harness::restore_harness_locks(&mut sheet.harness, locked);
 }
 
 #[cfg(test)]

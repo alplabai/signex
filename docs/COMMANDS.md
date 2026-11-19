@@ -134,6 +134,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
+| `open_harness_definitions` | Open the harness definitions | design | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
 | `open_net_classes` | Open the project's Net Classes panel | design | — | — |
 | `open_net_classes_panel` | Open the Net Classes panel of the project | design | — | — |

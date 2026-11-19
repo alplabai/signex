@@ -470,6 +470,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_linear_dimension", "PlaceLinearDimension"),
     ("place_aligned_dimension", "PlaceAlignedDimension"),
     ("add_table_of_contents", "AddTableOfContents"),
+    // #1280: the harness tools, fixture names only.
+    ("place_signal_harness", "PlaceSignalHarness"),
+    ("place_harness_connector", "PlaceHarnessConnector"),
+    ("place_harness_entry", "PlaceHarnessEntry"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

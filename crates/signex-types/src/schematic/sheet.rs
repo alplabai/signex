@@ -670,6 +670,12 @@ pub enum SelectedKind {
     SymbolRefField,
     /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
     SymbolValField,
+    /// A signal harness connector (#1280, `SheetHarness::connectors`).
+    HarnessConnector,
+    /// One entry of a harness connector. UUID = the entry's uuid.
+    HarnessEntry,
+    /// A harness wire segment (`SheetHarness::wires`).
+    HarnessWire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

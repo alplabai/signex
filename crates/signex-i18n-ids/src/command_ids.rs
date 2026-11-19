@@ -663,5 +663,7 @@ define_ids! {
         CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
         CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
+        // c13 sch-harness (#1280)
+        CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
     }
 }

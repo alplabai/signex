@@ -46,7 +46,10 @@ impl SchematicCanvas<'_> {
             | Tool::Bezier
             | Tool::LinearDimension
             | Tool::AlignedDimension
-            | Tool::Table => true,
+            | Tool::Table
+            | Tool::HarnessWire
+            | Tool::HarnessConnector
+            | Tool::HarnessEntry => true,
         }
     }
 

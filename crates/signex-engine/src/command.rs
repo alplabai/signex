@@ -135,6 +135,11 @@ pub enum CommandKind {
     UpdateDirective,
     SetNoErcRules,
     AutoplaceFields,
+    PlaceHarnessConnector,
+    UpdateHarnessConnector,
+    PlaceHarnessEntry,
+    PlaceHarnessWire,
+    SetHarnessEntryType,
 }
 
 #[derive(Debug, Clone)]
@@ -616,6 +621,35 @@ pub enum Command {
     AutoplaceFields {
         symbol_ids: Vec<Uuid>,
     },
+    /// Place a signal harness connector (#1280), with its entries.
+    PlaceHarnessConnector {
+        connector: signex_types::schematic::HarnessConnector,
+    },
+    /// Replace the connector `uuid` by `connector` (type, place, size,
+    /// entries). Refused when no such connector exists; unchanged when equal.
+    /// Consecutive updates of one connector share one undo step, like
+    /// [`Command::UpdateDirective`].
+    UpdateHarnessConnector {
+        uuid: Uuid,
+        connector: signex_types::schematic::HarnessConnector,
+    },
+    /// Insert `entry` into the connector `connector_id` at `index` (clamped
+    /// to its entry count).
+    PlaceHarnessEntry {
+        connector_id: Uuid,
+        entry: signex_types::schematic::HarnessEntry,
+        index: usize,
+    },
+    /// Place one harness wire segment.
+    PlaceHarnessWire {
+        wire: signex_types::schematic::HarnessWire,
+    },
+    /// Make the sheet entry `sheet_pin_id` harness-typed (`Some`) or a plain
+    /// signal entry again (`None`).
+    SetHarnessEntryType {
+        sheet_pin_id: Uuid,
+        harness_type: Option<String>,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -757,6 +791,11 @@ impl Command {
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
             Command::SetNoErcRules { .. } => CommandKind::SetNoErcRules,
             Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
+            Command::PlaceHarnessConnector { .. } => CommandKind::PlaceHarnessConnector,
+            Command::UpdateHarnessConnector { .. } => CommandKind::UpdateHarnessConnector,
+            Command::PlaceHarnessEntry { .. } => CommandKind::PlaceHarnessEntry,
+            Command::PlaceHarnessWire { .. } => CommandKind::PlaceHarnessWire,
+            Command::SetHarnessEntryType { .. } => CommandKind::SetHarnessEntryType,
         }
     }
 }

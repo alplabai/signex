@@ -489,6 +489,7 @@ impl Signex {
             }
         }
         self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        self.document_state.panel_ctx.harness = self.harness_panel_facts();
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by

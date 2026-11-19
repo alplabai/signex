@@ -926,6 +926,8 @@ pub use repeat::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
     channel_alpha, check_format, repeated_entry_name,
 };
+mod harness_ops;
+pub use harness_ops::*;
 
 #[cfg(test)]
 mod default_tests;

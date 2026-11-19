@@ -227,6 +227,9 @@ pub struct InteractionState {
     /// while the Bus Entry tool is armed). The signs are the orientation; see
     /// `signex_types::schematic::BusEntry`.
     pub bus_entry_size: (f64, f64),
+    /// The harness type the last Harness Connector click placed; the next
+    /// connector takes it (#1280).
+    pub last_harness_type: Option<String>,
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).

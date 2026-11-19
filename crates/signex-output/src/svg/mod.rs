@@ -20,6 +20,7 @@ mod family;
 mod geometry;
 #[cfg(test)]
 mod glyph_height_tests;
+mod harness;
 mod labels;
 mod markers;
 mod sch_table;

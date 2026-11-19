@@ -1058,6 +1058,12 @@ pub enum Tool {
     AlignedDimension,
     /// One click places a typed table (#1300).
     Table,
+    /// Click by click draws harness wire segments, like the wire tool (#1280).
+    HarnessWire,
+    /// Two clicks place a harness connector body (#1280).
+    HarnessConnector,
+    /// One click on a connector's flat side adds an entry there (#1280).
+    HarnessEntry,
 }
 
 impl std::fmt::Display for Tool {
@@ -1089,6 +1095,9 @@ impl std::fmt::Display for Tool {
             Tool::LinearDimension => write!(f, "Place Linear Dimension"),
             Tool::AlignedDimension => write!(f, "Place Aligned Dimension"),
             Tool::Table => write!(f, "Place Table"),
+            Tool::HarnessWire => write!(f, "Draw Signal Harness"),
+            Tool::HarnessConnector => write!(f, "Place Harness Connector"),
+            Tool::HarnessEntry => write!(f, "Place Harness Entry"),
         }
     }
 }

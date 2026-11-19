@@ -510,6 +510,10 @@ fn place_rows_arm_the_expected_tools() {
         ("place_compile_mask", Tool::CompileMask),
         ("place_diff_pair", Tool::DiffPair),
         ("place_text_string", Tool::Text),
+        // #1280: the harness rows are live.
+        ("place_signal_harness", Tool::HarnessWire),
+        ("place_harness_connector", Tool::HarnessConnector),
+        ("place_harness_entry", Tool::HarnessEntry),
     ] {
         let mut app = one_symbol();
         open_menu(&mut app);

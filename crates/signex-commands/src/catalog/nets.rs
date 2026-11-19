@@ -166,6 +166,18 @@ pub(super) const NETS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #1280: the project's harness definitions, in Properties. Palette only,
+    // no default key.
+    CommandMetadata {
+        id: "open_harness_definitions",
+        category: "design",
+        label: command_ids::CMD_OPEN_HARNESS_DEFINITIONS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "add_net_class",
         category: "design",

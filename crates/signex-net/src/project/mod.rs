@@ -265,6 +265,8 @@ struct Analysis<'a> {
     /// Bus-typed sheet pins and Ports, with the member nets each carries
     /// (#1049).
     buses: buses::SheetBuses,
+    /// Harness compiled names, typed sheet entries and ports (#1280).
+    harness: crate::harness::SheetHarnessNets,
 }
 
 /// One visited sheet in the hierarchy, as the stitcher walks it: the same file
@@ -464,6 +466,9 @@ fn stitch_named(graph: &ProjectGraph, want: Want, naming: &ChannelNaming) -> Sti
     // Rule 3c (#1279): a `Repeat(<net>)` entry joins channel k to member k of
     // the parent bus it meets.
     channels::join_repeat_entries(&mut l2, &occs, &edges, &analyses);
+    // Rule 3c (#1280): a harness-typed sheet entry joins the child bundle
+    // carrying the same-named harness port, entry by entry by path.
+    crate::harness::join_across_sheets(&mut l2, &edges, |occ| &analyses[occ].harness);
 
     // Seed every net-root node so terminal-only nets (no label/binding) still
     // form their own group.
@@ -667,7 +672,15 @@ fn assemble_net(
             }
         }
     }
-    let name = best.map(|(_, n)| n);
+    // A harness net no label names takes its compiled `<Type>.<Entry>` name
+    // (#1280), the smallest when its occurrences differ.
+    let name = best.map(|(_, n)| n).or_else(|| {
+        members
+            .iter()
+            .filter_map(|&(oid, root)| analyses[oid].harness.names.get(&root))
+            .min()
+            .cloned()
+    });
 
     // Wire / junction membership across every member occurrence.
     let mut wires: Vec<Uuid> = Vec::new();
@@ -770,6 +783,7 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath, want_members: boo
     }
 
     let buses = buses::sheet_buses(sheet, &mut parent);
+    let harness = crate::harness::sample(sheet, &mut parent);
 
     Analysis {
         terminals,
@@ -781,6 +795,7 @@ fn analyze<'a>(sheet: &'a SchematicSheet, path: &InstancePath, want_members: boo
         port_labels,
         membership,
         buses,
+        harness,
     }
 }
 

@@ -40,6 +40,9 @@ const CHILD: u128 = 10;
 const SHEET_PIN: u128 = 11;
 const DRAWING: u128 = 12;
 const DIRECTIVE: u128 = 13;
+const HARNESS_CONNECTOR: u128 = 20;
+const HARNESS_ENTRY: u128 = 21;
+const HARNESS_WIRE: u128 = 22;
 const NEW: u128 = 90;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -190,6 +193,36 @@ fn blanket(n: u128, class: &str) -> SchDirective {
     }
 }
 
+/// Harness connector `n` with entries `uid(HARNESS_ENTRY, n)` and
+/// `uid(HARNESS_ENTRY, n + 10)` (#1280).
+fn harness_connector(n: u128) -> signex_types::schematic::HarnessConnector {
+    signex_types::schematic::HarnessConnector {
+        uuid: uid(HARNESS_CONNECTOR, n),
+        harness_type: "SPI_BUS".into(),
+        position: pt(150.0, 20.0 * n as f64),
+        width: 10.16,
+        entry_pitch: 2.54,
+        rotation: 0.0,
+        entries: [(n, "SCK"), (n + 10, "MOSI")]
+            .into_iter()
+            .map(|(k, name)| signex_types::schematic::HarnessEntry {
+                uuid: uid(HARNESS_ENTRY, k),
+                name: name.into(),
+            })
+            .collect(),
+        locked: false,
+    }
+}
+
+fn harness_wire(n: u128) -> signex_types::schematic::HarnessWire {
+    signex_types::schematic::HarnessWire {
+        uuid: uid(HARNESS_WIRE, n),
+        start: pt(170.0, 20.0 * n as f64),
+        end: pt(180.0, 20.0 * n as f64),
+        locked: false,
+    }
+}
+
 /// World tip of symbol `n`'s only pin.
 fn pin_tip(n: u128) -> Point {
     SymbolTransform::from_symbol(&symbol(n)).apply(pt(-200.0, -200.0))
@@ -269,6 +302,8 @@ fn fixture() -> SchematicSheet {
         s.child_sheets.push(child_sheet(n));
         s.drawings.push(drawing(n, 65.0));
         s.directives.push(blanket(n, "Power"));
+        s.harness.connectors.push(harness_connector(n));
+        s.harness.wires.push(harness_wire(n));
     }
     connected_pins(&mut s);
     s
@@ -313,7 +348,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         drawings,
         no_erc_directives,
         directives,
-        harness: _,
+        harness,
         unions: _,
         title_block,
         variables,
@@ -354,6 +389,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::NO_ERC_DIRECTIVES,
     );
     flag(differ(directives, &b.directives), DocumentPatch::DIRECTIVES);
+    flag(differ(harness, &b.harness), DocumentPatch::HARNESS);
     flag(
         differ(&sorted(lib_symbols), &sorted(&b.lib_symbols)),
         DocumentPatch::LIB_SYMBOLS,
@@ -391,7 +427,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 66] = [
+const ALL_KINDS: [CommandKind; 71] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -458,6 +494,11 @@ const ALL_KINDS: [CommandKind; 66] = [
     CommandKind::SetNoErcRules,
     CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
+    CommandKind::PlaceHarnessConnector,
+    CommandKind::UpdateHarnessConnector,
+    CommandKind::PlaceHarnessEntry,
+    CommandKind::PlaceHarnessWire,
+    CommandKind::SetHarnessEntryType,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -530,12 +571,17 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateDirective
         | CommandKind::SetNoErcRules
         | CommandKind::AutoplaceFields
-        | CommandKind::MoveEach => {}
+        | CommandKind::MoveEach
+        | CommandKind::PlaceHarnessConnector
+        | CommandKind::UpdateHarnessConnector
+        | CommandKind::PlaceHarnessEntry
+        | CommandKind::PlaceHarnessWire
+        | CommandKind::SetHarnessEntryType => {}
     }
 }
 
 /// `(selected kind, id group)` for each selectable thing in the fixture.
-const SELECTABLE: [(SelectedKind, u128); 15] = [
+const SELECTABLE: [(SelectedKind, u128); 18] = [
     (SelectedKind::Symbol, SYMBOL),
     (SelectedKind::SymbolRefField, SYMBOL),
     (SelectedKind::SymbolValField, SYMBOL),
@@ -551,6 +597,9 @@ const SELECTABLE: [(SelectedKind, u128); 15] = [
     (SelectedKind::ChildSheet, CHILD),
     (SelectedKind::Drawing, DRAWING),
     (SelectedKind::Directive, DIRECTIVE),
+    (SelectedKind::HarnessConnector, HARNESS_CONNECTOR),
+    (SelectedKind::HarnessEntry, HARNESS_ENTRY),
+    (SelectedKind::HarnessWire, HARNESS_WIRE),
 ];
 
 fn samples() -> Vec<(String, Command)> {
@@ -1174,6 +1223,50 @@ fn samples() -> Vec<(String, Command)> {
         "AutoplaceFields",
         Command::AutoplaceFields {
             symbol_ids: vec![uid(SYMBOL, 1)],
+        },
+    );
+    add(
+        "PlaceHarnessConnector",
+        Command::PlaceHarnessConnector {
+            connector: signex_types::schematic::HarnessConnector {
+                uuid: uid(HARNESS_CONNECTOR, NEW),
+                entries: Vec::new(),
+                ..harness_connector(3)
+            },
+        },
+    );
+    add(
+        "UpdateHarnessConnector",
+        Command::UpdateHarnessConnector {
+            uuid: uid(HARNESS_CONNECTOR, 1),
+            connector: signex_types::schematic::HarnessConnector {
+                width: 12.7,
+                ..harness_connector(1)
+            },
+        },
+    );
+    add(
+        "PlaceHarnessEntry",
+        Command::PlaceHarnessEntry {
+            connector_id: uid(HARNESS_CONNECTOR, 1),
+            entry: signex_types::schematic::HarnessEntry {
+                uuid: uid(HARNESS_ENTRY, NEW),
+                name: "CS".into(),
+            },
+            index: 1,
+        },
+    );
+    add(
+        "PlaceHarnessWire",
+        Command::PlaceHarnessWire {
+            wire: harness_wire(NEW),
+        },
+    );
+    add(
+        "SetHarnessEntryType",
+        Command::SetHarnessEntryType {
+            sheet_pin_id: uid(SHEET_PIN, 1),
+            harness_type: Some("SPI_BUS".into()),
         },
     );
     add(

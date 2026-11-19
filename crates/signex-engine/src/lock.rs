@@ -86,6 +86,17 @@ impl Engine {
         for d in doc.drawings.iter().filter(|d| d.is_locked()) {
             out.insert(d.uuid(), drawing_name(d));
         }
+        // A locked harness connector freezes its entries with it (#1280).
+        for c in doc.harness.connectors.iter().filter(|c| c.locked) {
+            let name = format!("harness connector {}", c.harness_type);
+            for e in &c.entries {
+                out.insert(e.uuid, name.clone());
+            }
+            out.insert(c.uuid, name);
+        }
+        for w in doc.harness.wires.iter().filter(|w| w.locked) {
+            out.insert(w.uuid, format!("harness wire {}", at(&w.start)));
+        }
         out
     }
 }
@@ -160,6 +171,9 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::SetWireWidth { wire_id, .. } | Command::SetWireColor { wire_id, .. } => {
             (vec![*wire_id], "edited")
         }
+        // A locked harness connector keeps its type, size and entries.
+        Command::UpdateHarnessConnector { uuid, .. } => (vec![*uuid], "edited"),
+        Command::PlaceHarnessEntry { connector_id, .. } => (vec![*connector_id], "edited"),
         // Exempt, by name (see the module docs): the way out of the lock,
         // properties the lock leaves open, and commands that name no
         // existing symbol.
@@ -204,7 +218,10 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::UpdateDirective { .. }
         | Command::SetNoErcRules { .. }
         | Command::SetDocumentFontFamily { .. }
-        | Command::SetNetColors { .. } => return None,
+        | Command::SetNetColors { .. }
+        | Command::PlaceHarnessConnector { .. }
+        | Command::PlaceHarnessWire { .. }
+        | Command::SetHarnessEntryType { .. } => return None,
     };
     Some(target)
 }
@@ -277,6 +294,8 @@ impl Engine {
                 .iter()
                 .find(|d| d.uuid() == item.uuid)
                 .map(|d| d.is_locked()),
+            SelectedKind::HarnessConnector => doc.harness.connector(item.uuid).map(|c| c.locked),
+            SelectedKind::HarnessWire => doc.harness.wire(item.uuid).map(|w| w.locked),
             _ => None,
         }
     }

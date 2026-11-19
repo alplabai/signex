@@ -186,6 +186,7 @@ impl SvgRenderContext {
                 },
             });
         }
+        super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
             wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)

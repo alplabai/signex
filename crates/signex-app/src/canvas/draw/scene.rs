@@ -322,6 +322,18 @@ impl SchematicCanvas<'_> {
                             }
                         }
                     }
+                    SelectedKind::HarnessConnector => {
+                        if let Some(c) = snapshot.harness.connector(item.uuid) {
+                            let b = c.bounds();
+                            push_pt(b.min_x, b.min_y, 1.0);
+                            push_pt(b.max_x, b.max_y, 1.0);
+                        }
+                    }
+                    SelectedKind::HarnessEntry | SelectedKind::HarnessWire => {
+                        if let Some(at) = snapshot.harness.item_anchor(item) {
+                            push_pt(at.x, at.y, 2.0);
+                        }
+                    }
                     _ => {}
                 }
             }

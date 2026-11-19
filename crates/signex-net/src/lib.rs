@@ -70,3 +70,11 @@ mod compiled;
 #[cfg(test)]
 mod compiled_tests;
 pub use compiled::{CompiledDesign, CompiledNet, CompiledSheet, compile_design};
+
+mod harness;
+#[cfg(test)]
+mod harness_fixture;
+pub use harness::{
+    HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    harness_mismatches, harness_segments_touch, on_harness,
+};

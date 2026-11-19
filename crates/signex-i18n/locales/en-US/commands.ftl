@@ -689,3 +689,6 @@ cmd-compile-project = Compile the project
 cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
+## c13 sch-harness
+
+cmd-open-harness-definitions = Open the harness definitions

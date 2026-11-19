@@ -413,6 +413,7 @@ altium	hint	-	V N	open_net_inspector
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	open_net_classes
 altium	hint	-	-	open_net_classes_panel
+altium	hint	-	-	open_harness_definitions
 altium	hint	-	-	add_net_class
 altium	hint	-	-	rename_net_class
 altium	hint	-	-	delete_net_class
@@ -919,6 +920,7 @@ classic	hint	-	Shift+I	open_net_inspector
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	open_net_classes
 classic	hint	-	-	open_net_classes_panel
+classic	hint	-	-	open_harness_definitions
 classic	hint	-	-	add_net_class
 classic	hint	-	-	rename_net_class
 classic	hint	-	-	delete_net_class

@@ -51,6 +51,10 @@ pub enum ProjectSectionCommand {
     /// (#1279).
     SetChannelNaming {
         naming: ChannelNaming,
+    /// Replace the project's signal harness definitions (#1280), as the
+    /// harness definitions view edits them.
+    SetHarnessDefinitions {
+        definitions: Vec<signex_types::schematic::HarnessDefinition>,
     },
 }
 
@@ -77,6 +81,10 @@ impl ProjectSectionCommand {
             Self::SetVersionControl { on } => data.enable_git = *on,
             Self::SetChannelNaming { naming } => {
                 data.schematic_design.channel_naming = naming.clone();
+            Self::SetHarnessDefinitions { definitions } => {
+                data.schematic_design
+                    .harness_definitions
+                    .clone_from(definitions);
             }
         }
         Ok(())
@@ -96,6 +104,8 @@ pub(super) struct SectionsSnapshot {
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
     channel_naming: ChannelNaming,
+    /// The harness definitions (#1280); only the definitions view writes them.
+    harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl SectionsSnapshot {
@@ -108,6 +118,7 @@ impl SectionsSnapshot {
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
             channel_naming: data.schematic_design.channel_naming.clone(),
+            harness_definitions: data.schematic_design.harness_definitions.clone(),
         }
     }
 
@@ -119,5 +130,6 @@ impl SectionsSnapshot {
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
         data.schematic_design.channel_naming = self.channel_naming;
+        data.schematic_design.harness_definitions = self.harness_definitions;
     }
 }

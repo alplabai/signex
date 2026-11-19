@@ -745,18 +745,17 @@ will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has ten planned commands (#2415; Bezier left the list with
+Place on a sheet has seven planned commands (#2415; Bezier left the list with
 #1267), greyed with the planned
 tooltip in every state until their tools are built
-(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
+(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
+harness rows went live with the harness tools (#1280, see
+`docs/SIGNAL_HARNESSES.md`):
 
 | Submenu | Row | Command |
 |---|---|---|
 | Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
 | Ports & Connectors | Reuse Block... | `place_reuse_block` |
-| Ports & Connectors | Signal Harness | `place_signal_harness` |
-| Ports & Connectors | Harness Connector | `place_harness_connector` |
-| Ports & Connectors | Harness Entry | `place_harness_entry` |
 | Directives | Parameter Set | `place_parameter_set` |
 | Graphics | Elliptical Arc | `draw_elliptical_arc` |
 | Graphics | Ellipse | `draw_ellipse` |

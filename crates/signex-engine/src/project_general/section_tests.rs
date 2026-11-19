@@ -240,3 +240,30 @@ fn a_requirement_edit_is_one_undo_step_and_a_refused_one_records_nothing() {
     assert!(history.redo(&mut data));
     assert_eq!(data.requirements, after_set);
 }
+
+/// #1280: a harness definitions edit is one undo step of the project's
+/// history, and the undo puts the old list back.
+#[test]
+fn a_harness_definitions_edit_is_one_undo_step() {
+    use signex_types::schematic::{HarnessDefinition, HarnessDefinitionEntry};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let spi = HarnessDefinition {
+        name: "SPI_BUS".into(),
+        description: "Sensor SPI, mode 0".into(),
+        entries: ["SCK", "MOSI"]
+            .iter()
+            .map(|n| HarnessDefinitionEntry {
+                name: (*n).into(),
+                harness: None,
+            })
+            .collect(),
+    };
+    let set = ProjectSectionCommand::SetHarnessDefinitions {
+        definitions: vec![spi.clone()],
+    };
+    assert_eq!(apply(&mut history, &mut data, set), Ok(true));
+    assert_eq!(data.schematic_design.harness_definitions, [spi]);
+    assert!(history.undo(&mut data));
+    assert!(data.schematic_design.harness_definitions.is_empty());
+}

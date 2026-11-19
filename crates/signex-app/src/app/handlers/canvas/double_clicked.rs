@@ -60,6 +60,14 @@ impl Signex {
             Tool::Sheet => {
                 return self.place_sheet_click(world_x, world_y);
             }
+            // #1280: a double-click stands for the connector's second click.
+            Tool::HarnessConnector => {
+                if self.interaction_state.shape_anchor.is_some() {
+                    let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
+                    self.harness_connector_click(p);
+                }
+                return Task::none();
+            }
             tool @ (Tool::Blanket | Tool::CompileMask) => {
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 self.directive_region_point(tool, p, ClickKind::DoubleClick);

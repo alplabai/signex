@@ -850,6 +850,11 @@
     "category": "view"
   },
   {
+    "id": "open_harness_definitions",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "open_library_browser",
     "group": "General",
     "category": "library"

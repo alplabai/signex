@@ -36,7 +36,10 @@ pub(crate) fn passes_filter(
         SelectedKind::Junction
         | SelectedKind::NoConnect
         | SelectedKind::NoErcDirective
-        | SelectedKind::Directive => SelectionFilter::Other,
+        | SelectedKind::Directive
+        | SelectedKind::HarnessConnector
+        | SelectedKind::HarnessEntry
+        | SelectedKind::HarnessWire => SelectionFilter::Other,
     };
     filters.contains(&required)
 }
@@ -92,6 +95,19 @@ fn all_selectable_items(
     for drawing in &snapshot.drawings {
         let uuid = drawing.uuid();
         items.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+    }
+    // #1280: harness connectors, their entries and harness wires.
+    for connector in &snapshot.harness.connectors {
+        items.push(SelectedItem::new(
+            connector.uuid,
+            SelectedKind::HarnessConnector,
+        ));
+        for entry in &connector.entries {
+            items.push(SelectedItem::new(entry.uuid, SelectedKind::HarnessEntry));
+        }
+    }
+    for wire in &snapshot.harness.wires {
+        items.push(SelectedItem::new(wire.uuid, SelectedKind::HarnessWire));
     }
 
     items

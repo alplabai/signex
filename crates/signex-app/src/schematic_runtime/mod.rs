@@ -27,6 +27,7 @@ mod directives;
 mod drawings;
 pub(crate) use drawings::annotation_aabb;
 mod drawn_value;
+mod harness;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
@@ -226,6 +227,9 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::DIRECTIVES) {
         dst.directives.clone_from(&src.directives);
+    }
+    if invalidation.intersects(R::HARNESS) {
+        dst.harness.clone_from(&src.harness);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(&src.child_sheets);
@@ -807,6 +811,7 @@ fn collect_item_bounds_with(
         });
     }
     directives::push_item_bounds(snapshot, &mut out);
+    harness::push_item_bounds(snapshot, &mut out);
     out
 }
 

@@ -52,3 +52,6 @@ mod sheet_page_tests;
 mod sheet_variable_tests;
 #[cfg(test)]
 mod symbol_body_tests;
+mod harness;
+#[cfg(test)]
+mod harness_tests;

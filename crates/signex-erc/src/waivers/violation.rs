@@ -360,6 +360,21 @@ fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> 
             json!({"text": t.text, "position": to_value(&t.position)?})
         }
         SelectedKind::Drawing | SelectedKind::Directive => return None,
+        // #1280: a harness finding lapses when the connector's type, entries
+        // or place change.
+        SelectedKind::HarnessConnector => harness_connector_view(sheet.harness.connector(id)?)?,
+        SelectedKind::HarnessEntry => {
+            let (c, index) = sheet.harness.entry(id)?;
+            json!({
+                "name": c.entries[index].name,
+                "index": index,
+                "connector": harness_connector_view(c)?,
+            })
+        }
+        SelectedKind::HarnessWire => {
+            let w = sheet.harness.wire(id)?;
+            json!({"start": to_value(&w.start)?, "end": to_value(&w.end)?})
+        }
     };
     let mut out = String::new();
     write_canonical(&value, &mut out)?;
@@ -396,6 +411,23 @@ fn symbol_view(s: &signex_types::schematic::Symbol, scope: Scope) -> Option<serd
 
 fn to_value(object: &impl Serialize) -> Option<serde_json::Value> {
     serde_json::to_value(object).ok()
+}
+
+/// What a harness connector's findings depend on: its type, entry names and
+/// where its tip and entries sit, lengths in stored nanometres.
+fn harness_connector_view(
+    c: &signex_types::schematic::HarnessConnector,
+) -> Option<serde_json::Value> {
+    use signex_types::format::mm_as_stored_nm;
+    let names: Vec<&str> = c.entries.iter().map(|e| e.name.as_str()).collect();
+    Some(serde_json::json!({
+        "type": c.harness_type,
+        "entries": names,
+        "position": to_value(&c.position)?,
+        "width_nm": mm_as_stored_nm(c.width)?,
+        "pitch_nm": mm_as_stored_nm(c.entry_pitch)?,
+        "rotation": c.rotation,
+    }))
 }
 
 fn write_canonical(value: &serde_json::Value, out: &mut String) -> Option<()> {

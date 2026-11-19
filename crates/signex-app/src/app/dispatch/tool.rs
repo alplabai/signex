@@ -393,6 +393,9 @@ impl Signex {
                     Tool::LinearDimension => Some("Linear Dimension".to_string()),
                     Tool::AlignedDimension => Some("Aligned Dimension".to_string()),
                     Tool::Table => Some("Table".to_string()),
+                    Tool::HarnessWire => Some("Signal Harness".to_string()),
+                    Tool::HarnessConnector => Some("Harness Connector".to_string()),
+                    Tool::HarnessEntry => Some("Harness Entry".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
