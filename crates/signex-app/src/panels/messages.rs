@@ -1094,6 +1094,9 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The symbol editor's Properties panel: its tabs, the Pins tab and the
+    /// illustration hover (#122, #123).
+    SymbolProps(crate::library::editor::symbol::SymbolPropsMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

@@ -33,6 +33,7 @@ mod footprint;
 mod numeric_input;
 mod symbol;
 mod symbol_delete;
+mod symbol_props;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
 use numeric_input::{
@@ -730,6 +731,10 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
+            PanelMsg::SymbolProps(msg) => {
+                follow = self.handle_symbol_props(msg);
+                true
+            }
             PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
                 self.sym_editor_set_graphic_field(*idx, *field, *value)
             }
@@ -830,6 +835,7 @@ fn apply_graphic_field(
     field: crate::panels::GraphicFieldId,
     value: f64,
 ) {
+    use crate::library::editor::symbol::rect_end_for_extent;
     use crate::panels::GraphicFieldId;
     use signex_library::SymbolGraphicKind;
     if matches!(field, GraphicFieldId::StrokeWidth) {
@@ -853,6 +859,12 @@ fn apply_graphic_field(
             SymbolGraphicKind::Rectangle { to, .. } | SymbolGraphicKind::Line { to, .. },
             GraphicFieldId::ToY,
         ) => to[1] = value,
+        (SymbolGraphicKind::Rectangle { from, to }, GraphicFieldId::Width) => {
+            to[0] = rect_end_for_extent(from[0], to[0], value)
+        }
+        (SymbolGraphicKind::Rectangle { from, to }, GraphicFieldId::Height) => {
+            to[1] = rect_end_for_extent(from[1], to[1], value)
+        }
         (
             SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
             GraphicFieldId::CenterX,
@@ -935,5 +947,47 @@ mod arc_field_edit_tests {
         // (30, -60) is a 270° CCW arc in-session; it must persist as the same
         // 270° (30, 300), not collapse to the 90° complement (300, 30).
         assert_eq!((start_deg, end_deg), (30.0, 300.0));
+    }
+
+    /// #123: a rectangle's Width and Height are written as its End corner,
+    /// on the side the corner is on, so End X / Y follow.
+    #[test]
+    fn rectangle_width_and_height_move_the_end_corner() {
+        let mut g = SymbolGraphic {
+            body_style: 1,
+            kind: SymbolGraphicKind::Rectangle {
+                from: [2.0, 1.0],
+                to: [-3.0, 4.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        };
+        apply_graphic_field(&mut g, GraphicFieldId::Width, 10.0);
+        apply_graphic_field(&mut g, GraphicFieldId::Height, 6.0);
+        let SymbolGraphicKind::Rectangle { from, to } = g.kind else {
+            panic!("expected Rectangle");
+        };
+        assert_eq!(from, [2.0, 1.0], "the Start corner stays");
+        assert_eq!(to, [-8.0, 7.0]);
+    }
+
+    #[test]
+    fn width_and_height_leave_a_line_alone() {
+        let mut g = SymbolGraphic {
+            body_style: 1,
+            kind: SymbolGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 1.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        };
+        apply_graphic_field(&mut g, GraphicFieldId::Width, 10.0);
+        let SymbolGraphicKind::Line { to, .. } = g.kind else {
+            panic!("expected Line");
+        };
+        assert_eq!(to, [1.0, 1.0]);
     }
 }
