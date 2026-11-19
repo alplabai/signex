@@ -173,7 +173,7 @@ fn the_primary_button_counts_the_included_results() {
         Some("Match 2 of 5")
     );
     state.selected_index = None;
-    assert_eq!(position_line(&state, &en), None);
+    assert!(position_line(&state, &en).is_none());
 }
 
 /// The laid-out dialog in both Graphite themes: the mockup's texts are
