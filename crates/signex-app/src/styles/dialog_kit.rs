@@ -9,7 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, text};
 
 use super::dialog_buttons::{dialog_border, dialog_button_style, dialog_label_color};
-use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, ti, tokens};
+use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, chrome_px, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -139,6 +139,60 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let btn = button(face)
         .padding(0)
         .width(Length::Fixed(width))
+        .height(Length::Fixed(height))
+        .on_press_maybe(on_press);
+    if disabled {
+        btn.style(disabled_button(tokens)).boxed()
+    } else {
+        btn.style(dialog_button_style(kind, tokens)).boxed()
+    }
+}
+
+/// Side of the glyph in front of a [`dialog_icon_button`] label (14 px at
+/// the default base).
+const BUTTON_GLYPH: f32 = chrome_px(14.0 * 11.0 / 12.0);
+/// Gap between that glyph and the label (5 px at the default base).
+const BUTTON_GLYPH_GAP: f32 = chrome_px(5.0 * 11.0 / 12.0);
+
+/// [`dialog_button`] with `glyph` (a monochrome SVG, drawn in the label's
+/// colour) in front of its label, the button widened by the glyph.
+pub fn dialog_icon_button<'a, M: Clone + 'a>(
+    glyph: iced::widget::svg::Handle,
+    label: impl Into<Label<'a>>,
+    kind: DialogButtonKind,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let kind = kind.resolved();
+    let disabled = on_press.is_none();
+    let color = label_color(kind, disabled, tokens);
+    let label: Label<'a> = label.into();
+    let (height, size, width) = button_metrics(label.as_str());
+    let icon = iced::widget::svg(glyph)
+        .width(Length::Fixed(BUTTON_GLYPH))
+        .height(Length::Fixed(BUTTON_GLYPH))
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(color),
+            ..Default::default()
+        });
+    let face = container(
+        row![
+            icon,
+            text(label)
+                .size(size)
+                .color(color)
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(BUTTON_GLYPH_GAP)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(iced::alignment::Horizontal::Center)
+    .align_y(iced::alignment::Vertical::Center);
+    let btn = button(face)
+        .padding(0)
+        .width(Length::Fixed(width + BUTTON_GLYPH + BUTTON_GLYPH_GAP))
         .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     if disabled {

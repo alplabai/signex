@@ -3,7 +3,8 @@
 //! The save job compares the file with what the document was loaded from or
 //! last saved as (`persist::disk_baseline`) and writes nothing when they differ.
 //! This module is what happens next: the failure reaches Messages, the sheet
-//! stays modified, and the notice card asks Overwrite / Reload / Cancel.
+//! stays modified, and the notice card asks Save As / Overwrite / Reload /
+//! Cancel.
 //! See `docs/architecture/external-change.md`.
 
 use std::path::{Path, PathBuf};
@@ -212,13 +213,49 @@ impl Signex {
         }
     }
 
-    fn take_disk_conflict(&mut self) -> Option<PathBuf> {
+    /// The file the open conflict card is about, leaving the card up.
+    fn disk_conflict_path(&self) -> Option<PathBuf> {
         let notice = self.document_state.error_notice.as_ref()?;
-        let Some(NoticeAction::DiskChanged { path, .. }) = notice.action.clone() else {
+        let Some(NoticeAction::DiskChanged { path, .. }) = &notice.action else {
             return None;
         };
+        Some(path.clone())
+    }
+
+    fn take_disk_conflict(&mut self) -> Option<PathBuf> {
+        let path = self.disk_conflict_path()?;
         self.document_state.error_notice = None;
         Some(path)
+    }
+
+    /// The user chose Save As… (GG-08): the document goes to a new file
+    /// through the regular Save As and the changed file is left as it is.
+    /// The document stays modified until that Save As lands; a cancelled
+    /// dialog writes nothing and the next save asks again.
+    pub(crate) fn handle_disk_conflict_save_as(&mut self) -> Task<Message> {
+        let offered = self
+            .document_state
+            .error_notice
+            .as_ref()
+            .is_some_and(ErrorNotice::offers_save_as);
+        let Some(path) = self.disk_conflict_path().filter(|_| offered) else {
+            return Task::none();
+        };
+        // Save As writes the active tab, so the conflicted document must be it.
+        if !self.activate_tab_for_path(&path) {
+            crate::diagnostics::log_warning(format!(
+                "[save] {} is not open as a tab of the main window, so Save As cannot run \
+                 for it; the card stays",
+                file_label(&path)
+            ));
+            return Task::none();
+        }
+        self.document_state.error_notice = None;
+        crate::diagnostics::log_info(format!(
+            "[save] Saving {} under a new name as the user chose; the changed file is kept",
+            file_label(&path)
+        ));
+        self.save_as_dialog_for_active_tab()
     }
 
     /// The user chose Overwrite (or Re-create): save again without comparing.

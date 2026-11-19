@@ -79,6 +79,13 @@ impl Signex {
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
+            OverlayMsg::DiskConflictSaveAsChosen => self.handle_disk_conflict_save_as(),
+            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_state.error_notice {
+                Some(notice) => {
+                    iced::clipboard::write(notice.copy_text(&self.ui_state.i18n)).discard()
+                }
+                None => Task::none(),
+            },
             OverlayMsg::DismissFirstRunTour => self.dismiss_first_run_tour(),
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),

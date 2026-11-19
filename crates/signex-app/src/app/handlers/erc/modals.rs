@@ -489,7 +489,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::PassiveCalculator => iced::Size::new(640.0, 480.0),
         ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
         ModalId::CreateChildSheet => iced::Size::new(560.0, 206.0),
-        ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),
+        ModalId::ErrorNotice => iced::Size::new(480.0, 260.0),
         ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
         ModalId::AutosaveRecovery => iced::Size::new(540.0, 187.0),
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),

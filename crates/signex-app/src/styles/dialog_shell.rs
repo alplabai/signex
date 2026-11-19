@@ -118,6 +118,24 @@ pub fn dialog_icon_tile<'a, M: 'a>(icon: DialogIcon, tokens: &ThemeTokens) -> El
     .boxed()
 }
 
+/// `icon`'s bare glyph, `side` px square, in its tone's ink and with no
+/// tile: the severity mark of a dialog header.
+pub fn dialog_glyph<'a, M: 'a>(
+    icon: DialogIcon,
+    side: f32,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let (_, ink) = pill_colors(tokens, icon.tone());
+    svg(GLYPHS[icon.index()].clone())
+        .width(Length::Fixed(side))
+        .height(Length::Fixed(side))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
+        .boxed()
+}
+
 /// Height the Graphite intro adds over the plain message line it replaces:
 /// the title line and the gap under it (a one-line title).
 pub const DIALOG_INTRO_EXTRA: f32 = TS.title * super::LINE_HEIGHT + TITLE_GAP;

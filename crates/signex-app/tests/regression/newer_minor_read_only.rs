@@ -46,12 +46,18 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
         app.document_state
             .is_document_dirty(&app.document_state.tabs[0].path)
     );
-    // The card carries the full cause; the Messages panel line is trimmed
-    // to 160 bytes, so only its leading context is matched.
+    // The card carries the full cause: the operation as its sentence and
+    // the error chain in its system block (m11). The Messages panel line is
+    // trimmed to 160 bytes, so only its leading context is matched.
     let notice = app.document_state.error_notice.as_ref().expect("card");
+    assert_eq!(
+        notice.detail.render_en_us(),
+        "Failed to save active document"
+    );
+    let system = notice.system.as_ref().map(|s| s.as_str()).unwrap_or("");
     assert!(
-        notice.detail.render_en_us().contains("newer Signex")
-            && notice.detail.render_en_us().contains("snxsch/1.7")
+        system.contains("newer Signex") && system.contains("snxsch/1.7"),
+        "{notice:?}"
     );
     assert!(
         signex_app::diagnostics::recent_entries()
