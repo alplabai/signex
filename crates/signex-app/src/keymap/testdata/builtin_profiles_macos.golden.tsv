@@ -177,6 +177,7 @@ altium	hint	-	-	open_datasheet
 altium	hint	-	-	change_component
 altium	hint	-	-	open_parameter_manager
 altium	hint	-	-	set_symbol_parameter
+altium	hint	-	-	set_sheet_variable
 altium	hint	-	-	lock_board_items
 altium	hint	-	-	unlock_board_items
 altium	hint	-	-	bring_drawings_forward
@@ -684,6 +685,7 @@ classic	hint	-	D	open_datasheet
 classic	hint	-	-	change_component
 classic	hint	-	-	open_parameter_manager
 classic	hint	-	-	set_symbol_parameter
+classic	hint	-	-	set_sheet_variable
 classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
 classic	hint	-	-	bring_drawings_forward

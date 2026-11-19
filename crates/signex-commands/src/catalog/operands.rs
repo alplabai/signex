@@ -261,6 +261,14 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// One sheet variable: its `name` and `value` (left out or empty: the
+/// variable stays, with no value), or `remove=true` to delete it.
+pub const SHEET_VARIABLE: &[Operand] = &[
+    required("name", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
 /// agent has no selection.
 pub const PART_ON_DOCUMENT: &[Operand] = &[

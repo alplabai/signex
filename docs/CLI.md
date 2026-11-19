@@ -585,6 +585,14 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
 
+`set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
+one variable of the sheet (what `${NAME}` and expressions on it resolve), as
+the Sheet Variables rows in Properties do, in one undo step. A left-out or
+empty `value` keeps the variable with no value; `remove=true` deletes it and
+takes no `value`. A name is letters, digits and `_` and does not start with a
+digit. Variables that then do not evaluate (a cycle, an unknown name) are
+reported in Messages. The answer is `{"name", "value", "variables"}`.
+
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
 

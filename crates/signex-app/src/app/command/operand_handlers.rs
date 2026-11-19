@@ -115,6 +115,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
+    ("set_sheet_variable", placed::set_sheet_variable),
     ("view_rotate", view_rotate),
     ("show_layer_set", strip::show_layer_set),
     ("save_layer_set", strip::save_layer_set),
@@ -426,6 +427,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_symbol_parameter" => Some(
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
+        ),
+        "set_sheet_variable" => Some(
+            "`set_sheet_variable` needs the operand `name` — \
+             use the Sheet Variables rows in Properties",
         ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.

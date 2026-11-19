@@ -453,6 +453,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "set_sheet_variable",
         "place_design_block",
         "import_graphics",
     ];

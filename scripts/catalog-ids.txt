@@ -335,6 +335,7 @@ set_object_visible
 set_pad_shape
 set_selection_filters
 set_sheet_symbol_size
+set_sheet_variable
 set_symbol_parameter
 set_via_span
 sheet_navigation_back
