@@ -268,9 +268,6 @@ impl Engine {
             if self.reconcile_wire_junctions_frozen(&touched, Some(dots.as_slice())) {
                 patch |= DocumentPatch::JUNCTIONS;
             }
-            if self.unjoin_held_tips(at, &held, &dots) {
-                patch |= DocumentPatch::JUNCTIONS;
-            }
             patch |= fold(self);
             let mut edited = carried.edited_tips;
             edited.extend(pins.edited_tips);
@@ -309,30 +306,6 @@ impl Engine {
             }
         }
         unreachable!("the escalation loop returns from inside")
-    }
-
-    /// Spec gap (a): a pin held on its old net whose plain move lands it inside
-    /// a wire of another net is not joined to that wire. Its pin dot is not
-    /// minted (`pin_dots_to_keep`); the path that keeps the pin on its net ends
-    /// there too, and the dot the reconcile mints for that end would join the
-    /// two nets all the same, so a dot this round made at such a tip goes.
-    /// Returns whether one went.
-    fn unjoin_held_tips(&mut self, at: &Reference<'_>, held: &[Point], kept: &[Point]) -> bool {
-        let key = signex_net::pt_key;
-        let apart: HashSet<signex_net::uf::Key> = (held.iter())
-            .filter(|p| at.plain_dots.iter().any(|d| key(d) == key(p)))
-            .filter(|p| !kept.iter().any(|d| key(d) == key(p)))
-            .map(key)
-            .collect();
-        if apart.is_empty() {
-            return false;
-        }
-        let had: HashSet<Uuid> = at.moved.junctions.iter().map(|j| j.uuid).collect();
-        let before = self.document.junctions.len();
-        self.document
-            .junctions
-            .retain(|j| !(j.minted && !had.contains(&j.uuid) && apart.contains(&key(&j.position))));
-        self.document.junctions.len() != before
     }
 
     /// One notice for the points of a dragged wire that held something
