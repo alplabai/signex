@@ -10,6 +10,7 @@ mod board_part_rows;
 mod components_row;
 mod dock_tab;
 mod grid_picker;
+mod grid_preview;
 mod items;
 mod layer_set;
 mod layer_tab;
