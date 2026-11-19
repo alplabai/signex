@@ -40,13 +40,15 @@
 //! - `Call` — see [`crate::Func`].
 //! - `Ref` — resolved through the [`Resolver`]. A name met again while
 //!   it is still being evaluated is [`ExprError::Cycle`]; a chain of more
-//!   than [`MAX_EXPR_DEPTH`] references is [`ExprError::TooDeep`].
+//!   than [`MAX_EXPR_DEPTH`] references is [`ExprError::TooDeep`], and so is
+//!   a walk deeper than [`MAX_EVAL_DEPTH`] tree levels summed over every
+//!   body the references lead into.
 
 use crate::ast::{BinOp, ExprNode, UnaryOp};
 use crate::resolver::{Binding, Resolver};
 use crate::source::{FieldText, classify};
 use crate::unit::{Quantity, Unit, UnitFamily, parse_quantity};
-use crate::{ExprError, MAX_EXPR_DEPTH};
+use crate::{ExprError, MAX_EVAL_DEPTH, MAX_EXPR_DEPTH};
 
 /// Tolerance for `Eq`/`Ne` comparisons and `Lookup` key matching, in
 /// canonical units (mm for Length, rad for Angle, raw for Count, base
@@ -61,20 +63,32 @@ pub fn eval(node: &ExprNode, resolver: &dyn Resolver) -> Result<Quantity, ExprEr
     Evaluator {
         resolver,
         active: Vec::new(),
+        depth: 0,
     }
     .eval(node)
 }
 
-/// One evaluation: the resolver plus the names being evaluated right now,
-/// innermost last, for cycle detection.
+/// One evaluation: the resolver, the names being evaluated right now
+/// (innermost last, for cycle detection) and the recursion budget spent.
 struct Evaluator<'r> {
     resolver: &'r dyn Resolver,
     active: Vec<String>,
+    /// Tree levels currently on the stack, across every reference followed.
+    /// The one budget that bounds the evaluator's recursion.
+    depth: usize,
 }
 
 impl Evaluator<'_> {
     fn eval(&mut self, node: &ExprNode) -> Result<Quantity, ExprError> {
-        let q = self.eval_node(node)?;
+        if self.depth >= MAX_EVAL_DEPTH {
+            return Err(ExprError::TooDeep {
+                max: MAX_EVAL_DEPTH,
+            });
+        }
+        self.depth += 1;
+        let result = self.eval_node(node);
+        self.depth -= 1;
+        let q = result?;
         // `powf`, overflowing products and the like can yield NaN / inf with
         // no error of their own; refuse to hand those to the solver or bake.
         if q.value.is_finite() {

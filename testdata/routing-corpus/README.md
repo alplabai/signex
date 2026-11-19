@@ -32,11 +32,18 @@ CC-BY-3.0, CC-BY-4.0, CERN-OHL-P-2.0, CERN-OHL-S-2.0, CERN-OHL-W-2.0 and
 CERN-OHL-1.2. `scripts/check_routing_corpus.sh` enforces the list and
 checks that every board has a manifest row and every row a board.
 
+These boards are test inputs only: they must not become shipped examples,
+sample projects, templates, documentation figures or demo content, and
+only the routing tests read them; the gate fails on any other reader. The
+full rule: `docs/LICENSING.md`, "Third-party test data".
+
 ## Storage
 
 The `.snxpcb` files are stored in Git LFS (`.gitattributes`). A clone
 without the LFS objects has pointer files in their place; the routing
-tests skip such a board and say so. `git lfs pull` fetches them.
+tests skip such a board and say so, unless
+`SIGNEX_REQUIRE_ROUTING_CORPUS=1`, which makes the load check fail on it
+(CI sets it when it fetches the corpus). `git lfs pull` fetches them.
 
 ## Adding or replacing a board
 

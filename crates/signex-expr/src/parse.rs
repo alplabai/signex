@@ -47,6 +47,15 @@ use crate::{MAX_EXPR_CHAIN, MAX_EXPR_DEPTH, MAX_EXPR_LEN};
 /// The name of the constant π.
 const PI_NAME: &str = "pi";
 
+/// Names the parser reads as constants, never as a reference. A host must
+/// not bind a value under one of them: the constant would silently win.
+pub const RESERVED_CONSTANTS: &[&str] = &[PI_NAME];
+
+/// True when `name` is a reserved constant ([`RESERVED_CONSTANTS`]).
+pub fn is_reserved_constant(name: &str) -> bool {
+    RESERVED_CONSTANTS.contains(&name)
+}
+
 // =========================================================================
 // Parser
 // =========================================================================
