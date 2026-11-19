@@ -721,3 +721,7 @@ mod preferences_pages;
 // conflict banner's Show, Delete on a built-in profile.
 #[path = "regression/preferences_keymap_page.rs"]
 mod preferences_keymap_page;
+
+// Preferences ▸ Library: Distributor APIs and Component Classes pages.
+#[path = "regression/preferences_library_pages.rs"]
+mod preferences_library_pages;

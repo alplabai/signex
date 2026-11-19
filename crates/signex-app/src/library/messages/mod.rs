@@ -733,9 +733,22 @@ pub enum SettingsMsg {
     /// Outcome of the background keyring delete of a token that a
     /// cancelled DigiKey flow stored before the cancel landed.
     DigiKeyStaleTokenRemoved(Result<(), String>),
+    /// Disconnect was pressed on the connected DigiKey card.
+    DigiKeyDisconnectRequested,
+    /// The keyring delete Disconnect started has finished.
+    DigiKeyDisconnected(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),
     PreferenceUp(DistributorSource),
     PreferenceDown(DistributorSource),
+    /// The grip of a row in the order list was pressed: a drag began.
+    PreferenceDragStarted(DistributorSource),
+    /// The pointer entered a row of the order list while a drag is on.
+    PreferenceDragHovered(DistributorSource),
+    /// The drag was released over a row: the dragged distributor takes
+    /// that row's place, and the order is saved like Up / Down.
+    PreferenceDropped(DistributorSource),
+    /// The mouse button was released anywhere on the page: the drag ends.
+    PreferenceDragEnded,
 }

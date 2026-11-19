@@ -225,13 +225,14 @@ preferences-annotate-undo-help = How many undo steps one annotate run is. One st
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
-preferences-classes-help = Seeds the class registry of newly-created libraries. Per-library edits live inside each .snxlib's manifest (forthcoming Library Properties pane); this list controls only what new libraries inherit.
+preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.
 preferences-classes-key = Key
 preferences-classes-label = Label
 preferences-classes-remove = Remove
-preferences-classes-empty = No classes defined. Click "+ Add Class" to add one or "Reset to Defaults" to restore the seed list.
+preferences-classes-empty = No classes defined. Add Class to add one, or Reset to Defaults to restore the seed list.
 preferences-classes-add = + Add Class
-preferences-classes-reset = Reset to Defaults
+# The ellipsis says the button asks before it acts.
+preferences-classes-reset = Reset to Defaults…
 
 ## The banner for a preferences file that could not be loaded
 # Bold first line of the banner.
@@ -465,3 +466,29 @@ preferences-keymap-no-shortcut = —
 preferences-keymap-no-rows-in-filter = No shortcuts in this context.
 # Recorder popover, while keys are being captured.
 preferences-keymap-recording-live = ● Recording
+
+## Component Classes page (Library ▸ Component Classes)
+# Placeholder of the filter field above the table.
+preferences-classes-filter = Filter classes
+# How many classes the list holds; $count is a whole number.
+preferences-classes-count = { $count ->
+    [one] { $count } class
+   *[other] { $count } classes
+}
+# Column captions: the key is what a part stores, the label what pickers show.
+preferences-classes-key-note = stored in parts
+preferences-classes-label-note = shown in pickers
+# Pill on the row Add Class just appended.
+preferences-classes-new = new
+# $filter is the text typed in the filter field.
+preferences-classes-no-match = No class matches "{ $filter }".
+# $key is the repeated key; $label the class that already has it.
+preferences-classes-key-duplicate = The key "{ $key }" is already used by { $label }. Keys must be unique.
+preferences-classes-key-missing = This class has no key. Give it one, or Save leaves the class out.
+# Asked by Reset to Defaults…; $count is how many classes the list holds and
+# $defaults how many default classes replace them.
+preferences-classes-reset-confirm = { $count ->
+    [one] Replace the one class in this list
+   *[other] Replace the { $count } classes in this list
+} with the { $defaults } default classes?
+preferences-classes-reset-confirm-yes = Reset

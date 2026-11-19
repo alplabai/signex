@@ -181,8 +181,16 @@ impl Signex {
                     }
                 }
             }
+            SettingsMsg::DigiKeyDisconnectRequested => return self.request_digikey_disconnect(),
+            SettingsMsg::DigiKeyDisconnected(result) => self.finish_digikey_disconnect(result),
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
+                // An edited key is untested again; a test still running
+                // keeps its "Testing…" line until its result arrives.
+                if !self.library.settings.mouser_in_flight {
+                    self.library.settings.mouser_key_verified = None;
+                    self.library.settings.mouser_status = None;
+                }
             }
             SettingsMsg::MouserTest => {
                 if self.library.settings.mouser_in_flight {
@@ -244,6 +252,7 @@ impl Signex {
             }
             SettingsMsg::MouserTestResult(result) => {
                 self.library.settings.mouser_in_flight = false;
+                self.library.settings.mouser_key_verified = Some(result.is_ok());
                 self.library.settings.mouser_status = Some(match result {
                     Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
                     Err(e) => {
@@ -254,8 +263,101 @@ impl Signex {
             }
             SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
             SettingsMsg::PreferenceDown(src) => self.swap_preferred_order(src, false),
+            SettingsMsg::PreferenceDragStarted(src) => {
+                self.library.settings.preferred_order_drag = Some(src);
+                self.library.settings.preferred_order_drop_target = None;
+            }
+            SettingsMsg::PreferenceDragHovered(src) => {
+                if self.library.settings.preferred_order_drag.is_some() {
+                    self.library.settings.preferred_order_drop_target = Some(src);
+                }
+            }
+            SettingsMsg::PreferenceDropped(target) => {
+                self.library.settings.preferred_order_drop_target = None;
+                if let Some(src) = self.library.settings.preferred_order_drag.take() {
+                    self.move_preferred_order(src, target);
+                }
+            }
+            SettingsMsg::PreferenceDragEnded => {
+                self.library.settings.preferred_order_drag = None;
+                self.library.settings.preferred_order_drop_target = None;
+            }
         }
         Task::none()
+    }
+
+    /// Disconnect: delete the stored DigiKey token off the `update` thread
+    /// (keyring IO can block on an unlock prompt). Ignored while a Connect or
+    /// another keyring delete is outstanding: the keyring has one slot, and
+    /// `digikey_worker_busy` keeps a single writer (see `DigiKeyConnect`).
+    fn request_digikey_disconnect(&mut self) -> Task<Message> {
+        let settings = &mut self.library.settings;
+        if settings.digikey_in_flight
+            || settings.digikey_worker_busy
+            || settings.digikey_account_email.is_none()
+        {
+            return Task::none();
+        }
+        settings.digikey_worker_busy = true;
+        settings.digikey_disconnect_error = None;
+        let remove = settings.digikey_token_remover;
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(remove)
+                    .await
+                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+            },
+            |result| {
+                Message::Library(LibraryMessage::Settings(SettingsMsg::DigiKeyDisconnected(
+                    result,
+                )))
+            },
+        )
+    }
+
+    /// The Disconnect delete finished: on success the account is gone; on
+    /// failure the token is still stored, so the card keeps "Connected" and
+    /// shows why, and the reason reaches the Messages panel.
+    fn finish_digikey_disconnect(&mut self, result: Result<(), String>) {
+        let settings = &mut self.library.settings;
+        settings.digikey_worker_busy = false;
+        match result {
+            Ok(()) => {
+                settings.digikey_account_email = None;
+                settings.digikey_status = None;
+                tracing::info!(
+                    target: "signex::distributor",
+                    distributor = "digikey",
+                    "the DigiKey account was disconnected and its token removed"
+                );
+            }
+            Err(reason) => {
+                crate::diagnostics::log_warning(digikey_disconnect_failure_message(&reason));
+                settings.digikey_disconnect_error = Some(reason);
+            }
+        }
+    }
+
+    /// Drop the dragged `src` on `target`'s row: `src` takes that place and
+    /// the rows between shift by one. Saved exactly like Up / Down.
+    fn move_preferred_order(
+        &mut self,
+        src: signex_library::DistributorSource,
+        target: signex_library::DistributorSource,
+    ) {
+        let order = &mut self.library.settings.preferred_order;
+        let (Some(from), Some(to)) = (
+            order.iter().position(|s| *s == src),
+            order.iter().position(|s| *s == target),
+        ) else {
+            return;
+        };
+        if from == to {
+            return;
+        }
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        self.save_preferred_order();
     }
 
     /// Move `src` one slot up (or down) the preferred-order list and
@@ -279,7 +381,14 @@ impl Signex {
             i + 1
         };
         order.swap(i, target);
-        let saved = crate::library::settings::persistence::save_preferred_order(order);
+        self.save_preferred_order();
+    }
+
+    /// Persist the preferred order; a failure is kept for the inline error.
+    fn save_preferred_order(&mut self) {
+        let saved = crate::library::settings::persistence::save_preferred_order(
+            &self.library.settings.preferred_order,
+        );
         self.library.settings.preferred_order_error = saved.err();
     }
 }
@@ -333,6 +442,11 @@ mod tests {
 /// Messages-panel text for a failed DigiKey connect.
 fn digikey_failure_message(reason: &str) -> String {
     format!("DigiKey: connecting the account failed: {reason}")
+}
+
+/// Messages-panel text for a Disconnect that could not remove the token.
+fn digikey_disconnect_failure_message(reason: &str) -> String {
+    format!("DigiKey: disconnecting the account failed, so its token is still stored: {reason}")
 }
 
 /// Messages-panel text for a failed Mouser key test.

@@ -171,4 +171,15 @@ define_ids! {
     PREFERENCES_KEYMAP_NO_SHORTCUT = "preferences-keymap-no-shortcut";
     PREFERENCES_KEYMAP_NO_ROWS_IN_FILTER = "preferences-keymap-no-rows-in-filter";
     PREFERENCES_KEYMAP_RECORDING_LIVE = "preferences-keymap-recording-live";
+    // Component Classes page.
+    PREFERENCES_CLASSES_FILTER = "preferences-classes-filter";
+    PREFERENCES_CLASSES_COUNT = "preferences-classes-count";
+    PREFERENCES_CLASSES_KEY_NOTE = "preferences-classes-key-note";
+    PREFERENCES_CLASSES_LABEL_NOTE = "preferences-classes-label-note";
+    PREFERENCES_CLASSES_NEW = "preferences-classes-new";
+    PREFERENCES_CLASSES_NO_MATCH = "preferences-classes-no-match";
+    PREFERENCES_CLASSES_KEY_DUPLICATE = "preferences-classes-key-duplicate";
+    PREFERENCES_CLASSES_KEY_MISSING = "preferences-classes-key-missing";
+    PREFERENCES_CLASSES_RESET_CONFIRM = "preferences-classes-reset-confirm";
+    PREFERENCES_CLASSES_RESET_CONFIRM_YES = "preferences-classes-reset-confirm-yes";
 }
