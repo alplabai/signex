@@ -77,10 +77,10 @@ mod placement_operands;
 mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
-mod routing;
 #[cfg(test)]
 mod repair_reset_operand_tests;
 mod repair_reset_operands;
+mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
