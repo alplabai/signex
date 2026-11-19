@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2267 — a canvas menu row runs against the window the menu opened in.
+#[path = "regression/context_menu_in_window.rs"]
+mod context_menu_in_window;
