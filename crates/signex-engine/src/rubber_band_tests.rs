@@ -1436,6 +1436,12 @@ pub(crate) struct RunCounts {
     pin_joined: usize,
     /// Moved pins of the cases held to the strict net check.
     strict_pins: usize,
+    /// Per kind of case and cause, the cases that fell back to a plain move
+    /// (`transform::rubber_band::reasons`, and the notices given).
+    fallbacks: std::collections::BTreeMap<(&'static str, &'static str), usize>,
+    /// Per kind of case, the cases whose only notice was a held pin kept off
+    /// the wire it landed in (spec gap (a)): a notice, not a fallback.
+    unjoined_only: std::collections::BTreeMap<&'static str, usize>,
 }
 
 impl RunCounts {
@@ -1450,6 +1456,12 @@ impl RunCounts {
         self.rerouted += other.rerouted;
         self.pin_joined += other.pin_joined;
         self.strict_pins += other.strict_pins;
+        for (key, n) in &other.fallbacks {
+            *self.fallbacks.entry(*key).or_default() += n;
+        }
+        for (key, n) in &other.unjoined_only {
+            *self.unjoined_only.entry(*key).or_default() += n;
+        }
     }
 }
 
@@ -1487,6 +1499,19 @@ fn random_rubber_band_moves_never_change_the_netlist() {
         "only {} cases rerouted wires",
         total.rerouted
     );
+    // Why the fallbacks fell back, a case counted once per cause it shows.
+    for ((kind, why), n) in &total.fallbacks {
+        eprintln!("fallback {kind}: {n} cases: {why}");
+    }
+    for (kind, n) in &total.unjoined_only {
+        eprintln!("notice only {kind}: {n} cases: a held pin kept off its landing wire");
+    }
+    for (kind, share) in [
+        ("symbol-only", total.symbols_only),
+        ("co-selected", total.co_selected),
+    ] {
+        eprintln!("{kind}: {} of {} cases fell back", share.warned, share.cases);
+    }
     // Measured at 22.6 % and 26.9 % (#1177); the caps leave about two points.
     for (kind, share, cap) in [
         ("symbol-only", total.symbols_only, 25),
@@ -1618,17 +1643,41 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     let plain = run(false);
     // A plain move keeps no contacts and leaves no record; drop a stale one.
     let _ = crate::exec::guarded::take_record();
+    let _ = crate::transform::rubber_band::reasons::take();
     let mut engine = run(true);
     let record = crate::exec::guarded::take_record();
+    let reasons = crate::transform::rubber_band::reasons::take();
     let warnings = engine.take_warnings();
     let unkept = engine.take_unkept_pins();
+    let kind = if selects_wire { "co-selected" } else { "symbol-only" };
     let share = if selects_wire {
         &mut counts.co_selected
     } else {
         &mut counts.symbols_only
     };
     share.cases += 1;
-    share.warned += usize::from(!warnings.is_empty());
+    // A fallback is a notice that something could not be kept; a held pin
+    // kept off the wire it landed in is told, but kept.
+    let fell_back = warnings.iter().any(|w| w.starts_with("could not keep"));
+    share.warned += usize::from(fell_back);
+    if fell_back {
+        let notices = (warnings.iter()).filter_map(|w| {
+            if !w.starts_with("could not keep") {
+                None
+            } else if w.contains("on the dragged wire") {
+                Some("notice: a dragged wire's contact parted")
+            } else {
+                Some("notice: a moved pin left as a plain move")
+            }
+        });
+        let causes: std::collections::BTreeSet<&'static str> =
+            reasons.iter().copied().chain(notices).collect();
+        for why in causes {
+            *counts.fallbacks.entry((kind, why)).or_default() += 1;
+        }
+    } else if !warnings.is_empty() {
+        *counts.unjoined_only.entry(kind).or_default() += 1;
+    }
     let after = engine.document();
     counts.rerouted += usize::from(
         after

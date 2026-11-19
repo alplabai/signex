@@ -756,6 +756,8 @@ impl<'a> Guard<'a> {
             };
             let (was, is) = (on(plain), on(&now));
             if was != is {
+                #[cfg(test)]
+                reasons::note("(b): a warned pin off its plain net");
                 want.extend(was);
                 got.extend(is);
             }
@@ -900,6 +902,10 @@ impl<'a> Guard<'a> {
             })
             .map(PinTip::old_key)
             .collect();
+        #[cfg(test)]
+        if !blamed.is_empty() {
+            reasons::note("blamed: a moved pin in the difference");
+        }
         // A live moved pin in the difference is the pin's to answer for, not
         // the wire's; a plain one is where the plain move put it, so a
         // difference on its net is the carried points'.
@@ -913,12 +919,21 @@ impl<'a> Guard<'a> {
             terminal || pin || net.labels.iter().any(|l| labels.contains(l))
         };
         let live_wires = || (wire_nets.iter()).filter(|(k, _)| !policy.plain.contains(k));
+        let before_wires = blamed.len();
         blamed.extend(
             live_wires()
                 .filter(|(_, nets)| nets.iter().any(&named))
                 .map(|(k, _)| *k),
         );
+        #[cfg(test)]
+        if blamed.len() > before_wires {
+            reasons::note("blamed: a carried point's net in the difference");
+        }
+        #[cfg(not(test))]
+        let _ = before_wires;
         if blamed.is_empty() {
+            #[cfg(test)]
+            reasons::note("blamed: no member, the contacts that edited");
             blamed = live()
                 .map(PinTip::old_key)
                 .chain(live_wires().map(|(k, _)| *k))
@@ -928,6 +943,8 @@ impl<'a> Guard<'a> {
             // pass's: one nothing explains takes every live contact a step
             // down, so the rounds end at the plain move at worst.
             if blamed.is_empty() {
+                #[cfg(test)]
+                reasons::note("blamed: nothing explains it, every live contact");
                 blamed = live()
                     .map(PinTip::old_key)
                     .chain(live_wires().map(|(k, _)| *k))
@@ -1151,5 +1168,29 @@ pub(crate) mod tally {
     /// The counts so far on this thread, starting again from zero.
     pub(crate) fn take() -> Tally {
         TALLY.with(|t| std::mem::take(&mut *t.borrow_mut()))
+    }
+}
+
+/// Why the guarded passes on this thread fell back, for the tests: each
+/// cause noted once per pass, taken by the test that counts them.
+#[cfg(test)]
+pub(crate) mod reasons {
+    use std::cell::RefCell;
+    use std::collections::BTreeSet;
+
+    thread_local! {
+        static NOTED: RefCell<BTreeSet<&'static str>> = const { RefCell::new(BTreeSet::new()) };
+    }
+
+    /// Note `why` for the pass running now.
+    pub(crate) fn note(why: &'static str) {
+        NOTED.with(|noted| {
+            noted.borrow_mut().insert(why);
+        });
+    }
+
+    /// The causes noted so far on this thread, starting again from none.
+    pub(crate) fn take() -> BTreeSet<&'static str> {
+        NOTED.with(|noted| std::mem::take(&mut *noted.borrow_mut()))
     }
 }

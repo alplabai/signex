@@ -159,6 +159,10 @@ impl Engine {
             patch |= fold(self);
             return patch;
         }
+        #[cfg(test)]
+        if !contacts.bailed.is_empty() {
+            crate::transform::rubber_band::reasons::note("a dragged wire cannot be carried whole");
+        }
         // The sheet as the edit left it: every round starts here.
         let moved = self.document.clone();
         // P, the one reference: exactly what the plain edit commits.
@@ -288,6 +292,8 @@ impl Engine {
             // a bare run: a held pin still touching the wire it landed in.
             let touching = self.held_tips_touching(contacts, at, &held_tips, &dots, &tips_now);
             if !touching.is_empty() {
+                #[cfg(test)]
+                crate::transform::rubber_band::reasons::note("(a): a held pin touches its wire");
                 let blamed = verdict.get_or_insert_with(Vec::new);
                 blamed.extend(touching);
                 blamed.sort_unstable();
@@ -321,6 +327,8 @@ impl Engine {
             // MAX_ROUNDS the blamed go straight to a plain move.
             for key in blamed {
                 if round >= MAX_ROUNDS {
+                    #[cfg(test)]
+                    crate::transform::rubber_band::reasons::note("the ladder ran out of rounds");
                     policy.plain.insert(key);
                 } else {
                     policy.escalate(key);

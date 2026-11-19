@@ -73,7 +73,7 @@ pub use wire_contacts::{
 
 pub use guard::{BeforeNets, Guard, Policy, before_nets};
 #[cfg(test)]
-pub(crate) use guard::{self_check, tally};
+pub(crate) use guard::{reasons, self_check, tally};
 
 use std::collections::{BTreeMap, HashSet};
 

@@ -93,6 +93,8 @@ pub(super) fn join_nets(
             continue;
         }
         if !WARNED_PIN_MAY_JOIN_CARRIED_NET && (warned(&all[a]) || warned(&all[b])) {
+            #[cfg(test)]
+            super::guard::reasons::note("(b): a carried point's join holds a warned pin");
             continue;
         }
         let mut joined = all[a].clone();
@@ -106,6 +108,8 @@ pub(super) fn join_nets(
             x.clone()
         } else {
             let Some(name) = name_of(&joined) else {
+                #[cfg(test)]
+                super::guard::reasons::note("a join of two named nets no label names");
                 continue;
             };
             name
