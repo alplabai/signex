@@ -74,21 +74,23 @@ bom-rule-missing-mpn = Missing MPN
 bom-rule-duplicate-designator = Duplicate designator
 bom-rule-empty-or-zero-qty = Empty or zero quantity
 bom-rule-unit-field-conflict = Conflicting unit fields
-# Footer issue count, one part per severity. $n is how many (a whole number,
-# at least 1), for the plural form; $count is the same number as text,
-# written without grouping.
+# Footer issue count, errors part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
 bom-issue-count-errors = { $n ->
     [one] { $count } error
    *[other] { $count } errors
 }
-# As above: $n picks the plural form; $count is the same number written
-# without grouping. Write { $count }, not { $n }.
+# Footer issue count, warnings part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
 bom-issue-count-warnings = { $n ->
     [one] { $count } warning
    *[other] { $count } warnings
 }
-# As above: $n picks the plural form; $count is the same number written
-# without grouping. Write { $count }, not { $n }.
+# Footer issue count, notes part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
 bom-issue-count-notes = { $n ->
     [one] { $count } note
    *[other] { $count } notes

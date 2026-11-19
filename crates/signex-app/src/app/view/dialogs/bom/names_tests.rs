@@ -15,7 +15,7 @@ fn xa() -> I18n {
 
 /// The text exactly as the footer shows it, bidi marks included: the
 /// former `summary()` text had none, so none may appear.
-fn plain(text: signex_i18n::Localized) -> String {
+fn shown(text: signex_i18n::Localized) -> String {
     text.into_string()
 }
 
@@ -47,6 +47,11 @@ fn column_headers_keep_the_exported_english() {
         assert_ne!(xa().message_plain(id, &[]), column.header());
     }
     assert_eq!(column_name(&BomColumn::Custom("MPN".into())), None);
+    // Its own message, not the Parameter Manager's "Reference" column.
+    assert_eq!(
+        column_name(&BomColumn::Reference),
+        Some(signex_i18n::ids::BOM_COLUMN_REFERENCE)
+    );
 }
 
 /// Every rule reads as `BomRule::label` did.
@@ -86,7 +91,7 @@ fn the_issue_count_keeps_the_summary_english() {
             for notes in 0..3 {
                 let report = report(errors, warnings, notes);
                 assert_eq!(
-                    issue_count_label(&report, &en).map(plain),
+                    issue_count_label(&report, &en).map(shown),
                     report.summary(),
                     "{errors} errors, {warnings} warnings, {notes} notes"
                 );
@@ -95,10 +100,10 @@ fn the_issue_count_keeps_the_summary_english() {
     }
     let mixed = report(2, 1, 2);
     assert_eq!(
-        issue_count_label(&mixed, &en).map(plain).as_deref(),
+        issue_count_label(&mixed, &en).map(shown).as_deref(),
         Some("2 errors, 1 warning, 2 notes")
     );
-    assert_ne!(issue_count_label(&mixed, &xa()).map(plain), mixed.summary());
+    assert_ne!(issue_count_label(&mixed, &xa()).map(shown), mixed.summary());
 }
 
 /// Large counts stay ungrouped, as `summary()` writes them.
@@ -107,11 +112,11 @@ fn large_issue_counts_stay_ungrouped() {
     let en = I18n::en_us();
     for (errors, notes) in [(1000, 0), (12345, 1000)] {
         let report = report(errors, 0, notes);
-        assert_eq!(issue_count_label(&report, &en).map(plain), report.summary());
+        assert_eq!(issue_count_label(&report, &en).map(shown), report.summary());
     }
     assert_eq!(
         issue_count_label(&report(12345, 0, 0), &en)
-            .map(plain)
+            .map(shown)
             .as_deref(),
         Some("12345 errors")
     );
