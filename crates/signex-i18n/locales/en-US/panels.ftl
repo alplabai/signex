@@ -182,7 +182,7 @@ panels-kind-variants = Variants
 # Schematic filter.
 panels-kind-sch-filter = SCH Filter
 # Schematic object list.
-panels-kind-sch-list = SCH List
+panels-kind-object-list = Object List
 # Bill of materials studio.
 panels-kind-bom-studio = BOM Studio
 panels-kind-favorites = Favorites
@@ -687,3 +687,81 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+
+## Object List panel (#1259): every object of the sheet or the project, listed
+## and selectable. The panel title is panels-kind-object-list.
+
+# Placeholder of the box that filters the list by name, value or text.
+panels-object-list-filter = Filter objects
+# Scope switch: only the sheet in view.
+panels-object-list-scope-sheet = This sheet
+# Scope switch: every sheet of the project.
+panels-object-list-scope-project = Project
+# Kind chip that shows every kind.
+panels-object-list-chip-all = All
+# Chip that opens the other kinds' chips.
+panels-object-list-chip-more = More ▾
+# The same chip while the other kinds are shown.
+panels-object-list-chip-fewer = Fewer ▴
+# Kind chips, one per kind of object.
+panels-object-list-kind-part = Parts
+panels-object-list-kind-label = Labels
+panels-object-list-kind-wire = Wires
+panels-object-list-kind-power-port = Power ports
+panels-object-list-kind-port = Ports
+panels-object-list-kind-sheet-symbol = Sheet symbols
+panels-object-list-kind-sheet-entry = Sheet entries
+panels-object-list-kind-text = Texts
+panels-object-list-kind-junction = Junctions
+panels-object-list-kind-bus = Buses
+panels-object-list-kind-drawing = Drawing objects
+panels-object-list-kind-directive = Directives
+# One-letter kind marks in the first column. C is a placed part (component).
+panels-object-list-letter-part = C
+panels-object-list-letter-label = L
+panels-object-list-letter-wire = W
+panels-object-list-letter-power-port = P
+panels-object-list-letter-port = O
+panels-object-list-letter-sheet-symbol = S
+panels-object-list-letter-sheet-entry = E
+panels-object-list-letter-text = T
+panels-object-list-letter-junction = J
+panels-object-list-letter-bus = B
+panels-object-list-letter-drawing = D
+panels-object-list-letter-directive = X
+# Column headings.
+panels-object-list-column-name = Name
+panels-object-list-column-value = Value / text
+panels-object-list-column-sheet = Sheet
+# Name column of an object that has no name of its own.
+panels-object-list-noun-wire = Wire
+panels-object-list-noun-text = Text
+panels-object-list-noun-junction = Junction
+panels-object-list-noun-bus = Bus
+panels-object-list-noun-drawing = Drawing
+panels-object-list-noun-blanket = Blanket
+panels-object-list-noun-compile-mask = Compile mask
+panels-object-list-noun-diff-pair = Differential pair
+# Value column words.
+panels-object-list-value-net-label = net label
+panels-object-list-value-power-port = power port
+panels-object-list-value-port = port
+panels-object-list-value-sheet-entry = sheet entry
+# Value column of a wire on a known net: the net, then the wire's length.
+panels-object-list-value-wire = { $net }, { $length }
+# The row under the drawn rows, while more rows match.
+panels-object-list-more-rows = … { $count } more
+# Caption under the list.
+panels-object-list-hint = Click selects on the canvas, double-click zooms to it.
+# Shown when no object matches the filter or the chips.
+panels-object-list-empty = No object matches.
+# Shown while the project's sheets are being read.
+panels-object-list-reading = Reading the project's sheets…
+# Empty state: no schematic in view (none open, or a board tab).
+panels-object-list-no-schematic = Open a schematic to list its objects.
+# Footer: the objects in scope and how many of them are selected.
+panels-object-list-footer =
+    { $total ->
+        [one] { $total } object
+       *[other] { $total } objects
+    } · { $selected } selected

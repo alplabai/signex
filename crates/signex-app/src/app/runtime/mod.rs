@@ -89,6 +89,7 @@ impl Signex {
         self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();
         let net_nav = self.refresh_net_nav();
+        let object_list = self.sync_object_list();
         let footprint_card = self.refresh_footprint_card();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -136,6 +137,7 @@ impl Signex {
             library_tabs,
             class_styles,
             net_nav,
+            object_list,
             footprint_card,
         ])
     }

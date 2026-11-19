@@ -811,7 +811,7 @@ define_ids! {
     PANELS_KIND_NET_CLASSES = "panels-kind-net-classes";
     PANELS_KIND_VARIANTS = "panels-kind-variants";
     PANELS_KIND_SCH_FILTER = "panels-kind-sch-filter";
-    PANELS_KIND_SCH_LIST = "panels-kind-sch-list";
+    PANELS_KIND_OBJECT_LIST = "panels-kind-object-list";
     PANELS_KIND_BOM_STUDIO = "panels-kind-bom-studio";
     PANELS_KIND_FAVORITES = "panels-kind-favorites";
     PANELS_KIND_SNIPPETS = "panels-kind-snippets";
