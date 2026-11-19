@@ -7,15 +7,18 @@
 //! ([`forms::Form::implied`]), the [`super::CommandContext`] facts the
 //! enablement gate in front of the route reads (probed, [`inputs::read_by`]),
 //! what resolving a `document` operand and the agent's one-step wrapping
-//! read (the agent session), and the hand annotations
-//! ([`annotations::ANNOTATIONS`]) for what a handler reads past its gate.
-//! The `basis` column says which: `handler` (the handler was read and
-//! annotated), `routing` (the form has no handler of its own to read) or
-//! `gate` (only the gate and the routing were read, not the handler).
+//! read (the origin, a port operand listed so its GUI-state read stays
+//! visible), and the hand annotations ([`annotations::ANNOTATIONS`]) for
+//! what a handler reads past its gate. The `basis` column says which:
+//! `handler` (the handler was read and annotated), `routing` (the form has
+//! no handler of its own to read) or `gate` (only the gate and the routing
+//! were read, not the handler); no core row may be `gate`.
 
 mod annotations;
 mod forms;
 mod inputs;
+#[cfg(test)]
+mod probe_tests;
 #[cfg(test)]
 mod tests;
 
@@ -59,11 +62,20 @@ struct Row {
 }
 
 impl Row {
-    /// The row has an implicit-inputs value: some input, or a read of its
-    /// handler or routing that found none. A gate-only row that found
-    /// nothing says nothing, so it has none.
+    /// The row has an implicit-inputs value: some implicit input, or a read
+    /// of its handler or routing that found none. A gate-only row that found
+    /// nothing implicit says nothing, so it has none; the origin, a port
+    /// operand, does not count.
     fn has_value(&self) -> bool {
-        !self.inputs.is_empty() || self.basis != Basis::Gate
+        self.inputs.iter().any(|input| !input.is_port_operand()) || self.basis != Basis::Gate
+    }
+
+    /// The kill criterion of ADR-0006 slice C (#2504): a core route that
+    /// reads a person's in-progress work or the render cache.
+    fn meets_the_kill_criterion(&self) -> bool {
+        self.owner == Owner::Core
+            && (self.inputs.contains(&Input::InProgressEdit)
+                || self.inputs.contains(&Input::RenderCache))
     }
 
     fn inputs_cell(&self) -> String {
@@ -129,8 +141,8 @@ fn row(
         }
         _ => {}
     }
-    if reads_the_agent_session(command, form) {
-        inputs.insert(Input::AgentSession);
+    if reads_the_origin(command, form) {
+        inputs.insert(Input::Origin);
     }
     let mut basis = if form.is_routing_only() {
         Basis::Routing
@@ -151,14 +163,15 @@ fn row(
     }
 }
 
-/// The route reads whether an agent is being served: a `document` operand
-/// resolves among an agent's documents only (`document_entries`), and
-/// `run_operands` wraps an agent's single edit in one undo step.
-fn reads_the_agent_session(command: &AppCommandId, form: Form) -> bool {
+/// The route reads who calls (today `agent.serving`): a `document` operand
+/// resolves among an agent's documents only (`document_entries`),
+/// `run_operands` wraps an agent's single edit in one undo step, and the
+/// agent channel's window-layout route answers from the agent's view.
+fn reads_the_origin(command: &AppCommandId, form: Form) -> bool {
     let resolves_a_document =
         matches!(form, Form::Operand | Form::Query | Form::Check) && takes_a_document(command);
     let one_step = form == Form::Operand && agent_edits::runs_as_one_step(command);
-    resolves_a_document || one_step
+    resolves_a_document || one_step || form == Form::AgentWindowLayout
 }
 
 /// `command` takes a `document` operand.

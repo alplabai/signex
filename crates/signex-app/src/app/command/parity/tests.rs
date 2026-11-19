@@ -2,12 +2,12 @@
 
 use std::collections::BTreeSet;
 
-use super::super::{CommandContext, enablement, needs};
+use super::super::CommandContext;
 use super::annotations::ANNOTATIONS;
 use super::forms::{Form, Owner, owner_of};
-use super::inputs::{FACTS, Input, MIN_PIVOTS, facts_read_by, pivots_of, read_by, samples};
+use super::inputs::{FACTS, Input};
 use super::{Basis, HEADER, rows, table_text};
-use crate::keymap::{AppCommandId, HeadlessUse, all_command_ids};
+use crate::keymap::HeadlessUse;
 
 const GOLDEN: &str = include_str!("testdata/parity.golden.tsv");
 const MISMATCH_NOTE: &str = "The parity table follows the routing code, so it changes whenever a route, \
@@ -64,9 +64,11 @@ fn every_row_has_implicit_inputs_from_the_vocabulary() {
         assert!(bases.contains(&cells[5]), "row `{line}` has no basis");
         let inputs = cells[4];
         assert!(!inputs.is_empty(), "row `{line}` has no implicit inputs");
+        // The origin is a port operand, not an implicit input.
+        let implicit = inputs != "none" && inputs != Input::Origin.word();
         assert!(
-            inputs != "none" || cells[5] != "gate",
-            "row `{line}` says `none` from its gate alone"
+            implicit || cells[5] != "gate",
+            "row `{line}` names no implicit input from its gate alone"
         );
         if inputs != "none" {
             for word in inputs.split(',') {
@@ -161,112 +163,37 @@ fn every_context_fact_is_listed() {
     assert_eq!(FACTS.len(), 30 + 14, "30 context facts and 14 board facts");
 }
 
-/// The probe finds exactly the facts a gate reads.
+/// No core row stands on its gate alone: every core route's handler was
+/// read, so the kill check covers them all (#2504).
 #[test]
-fn the_probe_reads_what_a_gate_reads() {
-    assert_eq!(
-        read_by(|ctx| ctx.has_selection && ctx.pcb.pasteable),
-        BTreeSet::from([Input::Selection, Input::Clipboard])
-    );
-    assert_eq!(
-        read_by(|ctx| ctx.drawing || ctx.can_tile_windows),
-        BTreeSet::from([Input::InProgressEdit, Input::Window])
-    );
-    assert!(read_by(|_| true).is_empty());
-    // A conjunction of six facts: each decides it only when the other five
-    // hold, which the probe still finds at least MIN_PIVOTS times.
-    let six = |ctx: &CommandContext| {
-        ctx.has_schematic
-            && ctx.has_selection
-            && ctx.drawing
-            && ctx.is_tiled
-            && ctx.pcb.pasteable
-            && ctx.pcb.any
-    };
-    assert!(pivots_of(six).values().all(|pivots| *pivots >= MIN_PIVOTS));
-    assert_eq!(
-        facts_read_by(|ctx| ctx.has_schematic
-            && ctx.has_selection
-            && ctx.drawing
-            && ctx.is_tiled
-            && ctx.pcb.pasteable
-            && ctx.pcb.any),
-        BTreeSet::from([
-            "has_schematic",
-            "has_selection",
-            "drawing",
-            "is_tiled",
-            "pcb.pasteable",
-            "pcb.any",
-        ])
+fn no_core_row_is_gate_only() {
+    let unread: Vec<String> = rows()
+        .iter()
+        .filter(|row| row.owner == Owner::Core && row.basis == Basis::Gate)
+        .map(|row| format!("{}\t{}", row.id, row.form.name()))
+        .collect();
+    assert!(
+        unread.is_empty(),
+        "core rows whose handler was not read; annotate them in parity/annotations.rs:\n{}",
+        unread.join("\n")
     );
 }
 
-/// A gate the table probes, named.
-type Gate = (String, Box<dyn Fn(&CommandContext) -> bool>);
-
-/// Every gate the table probes: each `needs()` gate, and the locked-selection
-/// refusal, which depends on the id only through its gate.
-fn every_gate() -> Vec<Gate> {
-    let mut gates: Vec<Gate> = Vec::new();
-    for id in all_command_ids() {
-        let command = AppCommandId::new(id).expect("catalog id is valid");
-        let gate = needs::needs(&command);
-        let names = [
-            format!("{gate:?}"),
-            format!("explains_refusal_in with {gate:?}"),
-        ];
-        if gates.iter().any(|(known, _)| *known == names[0]) {
-            continue;
-        }
-        let [needs_name, refusal_name] = names;
-        if let Some(gate) = gate {
-            gates.push((needs_name, Box::new(move |ctx| gate.is_met(ctx))));
-        } else {
-            gates.push((needs_name, Box::new(|_| true)));
-        }
-        gates.push((
-            refusal_name,
-            Box::new(move |ctx| enablement::explains_refusal_in(&command, ctx)),
-        ));
-    }
-    gates
-}
-
-/// Every fact a gate reads decides it in at least `MIN_PIVOTS` samples, so
-/// none needs more than 6 other facts set; a gate drifting toward facts the
-/// sample count could miss fails here first.
+/// The kill list as the golden spells it: core rows that read in-progress
+/// edits or the render cache. The origin never puts a row on it.
 #[test]
-fn every_found_fact_is_pivotal_often() {
-    for (name, gate) in every_gate() {
-        for (fact, pivots) in pivots_of(gate) {
-            assert!(
-                pivots >= MIN_PIVOTS,
-                "{name}: `{fact}` decides it in {pivots} samples only; raise SAMPLES"
-            );
-        }
-    }
-}
-
-/// The probe sets `pcb.footprints` to 0 or 2 only, which is sound while no
-/// gate tells 1 from 0 or 2.
-#[test]
-fn no_gate_reads_the_footprint_count() {
-    for (name, gate) in every_gate() {
-        for ctx in samples() {
-            let answers: Vec<bool> = [0, 1, 2]
-                .into_iter()
-                .map(|footprints| {
-                    let mut ctx = ctx;
-                    ctx.pcb.footprints = footprints;
-                    gate(&ctx)
-                })
-                .collect();
-            assert!(
-                answers.iter().all(|answer| *answer == answers[0]),
-                "{name} reads the footprint count; give the probe that fact"
-            );
-        }
+fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
+    for row in rows() {
+        let words = row.inputs_cell();
+        let listed = row.owner == Owner::Core
+            && (words.contains("in-progress edit") || words.contains("render cache"));
+        assert_eq!(
+            row.meets_the_kill_criterion(),
+            listed,
+            "{} {}",
+            row.id,
+            row.form.name()
+        );
     }
 }
 

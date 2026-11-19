@@ -58,6 +58,9 @@ pub(super) enum Form {
     HeadlessMissingOperand,
     HeadlessWithoutOperands,
     HeadlessNewDocument,
+    /// Tile and Untile on the agent channel (`run_agent_window_layout`,
+    /// #2249), outside `run_operands`.
+    AgentWindowLayout,
 }
 
 impl Form {
@@ -83,6 +86,7 @@ impl Form {
             Self::HeadlessMissingOperand => "headless_missing_operand",
             Self::HeadlessWithoutOperands => "headless_without_operands",
             Self::HeadlessNewDocument => "headless_new_document",
+            Self::AgentWindowLayout => "agent_window_layout",
         }
     }
 
@@ -110,6 +114,7 @@ impl Form {
                 | Self::Needs
                 | Self::StillRunsUnavailable
                 | Self::StillRunsRefusal
+                | Self::AgentWindowLayout
         )
     }
 
@@ -208,6 +213,9 @@ pub(super) fn routes_of(command: &AppCommandId) -> Vec<(Form, String)> {
     routes.extend(window_routes(command));
     routes.extend(refusal_routes(command));
     routes.extend(headless_routes(command));
+    if crate::app::agent::is_window_layout(command) {
+        routes.push((Form::AgentWindowLayout, "run_agent_window_layout".into()));
+    }
     routes
 }
 
@@ -389,10 +397,15 @@ pub(super) fn owner_of(
         Some(_) if form.is_headless() => Owner::Core,
         Some(HeadlessUse::WindowOnly) => Owner::Gui,
         Some(HeadlessUse::Runs) if form.needs_a_window() => Owner::Gui,
+        // A disabled command that still runs runs the bridge's handler.
         Some(HeadlessUse::Runs)
             if matches!(
                 form,
-                Form::Bridge | Form::BridgeContextMenu | Form::ActiveBar
+                Form::Bridge
+                    | Form::BridgeContextMenu
+                    | Form::ActiveBar
+                    | Form::StillRunsUnavailable
+                    | Form::StillRunsRefusal
             ) && headless_skips_the_bridge =>
         {
             Owner::Gui

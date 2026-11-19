@@ -1,7 +1,7 @@
 //! The implicit inputs of a parity row: the closed vocabulary, the
 //! [`CommandContext`] facts each stands for, and which facts a gate reads.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use super::super::CommandContext;
 
@@ -18,8 +18,10 @@ pub(super) enum Input {
     RenderCache,
     Clipboard,
     DialogAnswer,
-    /// Whether an agent's socket call is being served (`agent.serving`).
-    AgentSession,
+    /// Who calls, a person or an agent: a port operand of `execute` in
+    /// ADR-0006, not an implicit input, so it never meets the kill
+    /// criterion. Today the code reads it as GUI state (`agent.serving`).
+    Origin,
 }
 
 impl Input {
@@ -34,8 +36,13 @@ impl Input {
         Self::RenderCache,
         Self::Clipboard,
         Self::DialogAnswer,
-        Self::AgentSession,
+        Self::Origin,
     ];
+
+    /// A port operand rather than an implicit input.
+    pub(super) fn is_port_operand(self) -> bool {
+        self == Self::Origin
+    }
 
     pub(super) fn word(self) -> &'static str {
         match self {
@@ -49,13 +56,13 @@ impl Input {
             Self::RenderCache => "render cache",
             Self::Clipboard => "clipboard",
             Self::DialogAnswer => "dialog answer",
-            Self::AgentSession => "agent session",
+            Self::Origin => "origin",
         }
     }
 }
 
 /// Sets one [`CommandContext`] fact.
-type Set = fn(&mut CommandContext, bool);
+pub(super) type Set = fn(&mut CommandContext, bool);
 
 /// Every [`CommandContext`] fact and the inputs it stands for.
 /// `every_context_fact_is_listed` fails to compile when a field is added.
@@ -169,13 +176,10 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
 
 /// Contexts the probe samples. A fact that decides a gate only while `w`
 /// other facts hold given values is pivotal in about `SAMPLES / 2^w` of
-/// them, so one with `w` past about 10 could go unseen.
-/// `every_found_fact_is_pivotal_often` keeps the gates far from that.
+/// them, so a deep one can go unseen. `the_probe_finds_every_fact_a_gate_reads`
+/// checks the probe against an exhaustive enumeration of the facts each
+/// gate's source names, independently of what the probe found.
 const SAMPLES: usize = 1024;
-
-/// The fewest samples in which each fact a gate reads must be pivotal:
-/// `SAMPLES / 2^6`, so no fact found needs more than 6 others set.
-pub(super) const MIN_PIVOTS: usize = 16;
 
 /// Random contexts, the same on every run (a fixed xorshift seed).
 pub(super) fn samples() -> impl Iterator<Item = CommandContext> {
@@ -207,24 +211,27 @@ pub(super) fn read_by(gate: impl Fn(&CommandContext) -> bool) -> BTreeSet<Input>
 
 /// The facts whose flip changes `gate`'s answer in some sampled context.
 pub(super) fn facts_read_by(gate: impl Fn(&CommandContext) -> bool) -> BTreeSet<&'static str> {
-    pivots_of(gate).into_keys().collect()
-}
-
-/// For each fact `gate` reads, in how many sampled contexts its flip
-/// changes the answer.
-pub(super) fn pivots_of(gate: impl Fn(&CommandContext) -> bool) -> BTreeMap<&'static str, usize> {
-    let mut pivots = BTreeMap::new();
+    let mut read = BTreeSet::new();
     for ctx in samples() {
         for (name, _, set) in FACTS {
-            let (mut on, mut off) = (ctx, ctx);
-            set(&mut on, true);
-            set(&mut off, false);
-            if gate(&on) != gate(&off) {
-                *pivots.entry(*name).or_insert(0) += 1;
+            if decides(&gate, ctx, *set) {
+                read.insert(*name);
             }
         }
     }
-    pivots
+    read
+}
+
+/// Whether the fact `set` sets decides `gate` in `ctx`.
+pub(super) fn decides(
+    gate: impl Fn(&CommandContext) -> bool,
+    ctx: CommandContext,
+    set: Set,
+) -> bool {
+    let (mut on, mut off) = (ctx, ctx);
+    set(&mut on, true);
+    set(&mut off, false);
+    gate(&on) != gate(&off)
 }
 
 fn inputs_of(fact: &str) -> &'static [Input] {
