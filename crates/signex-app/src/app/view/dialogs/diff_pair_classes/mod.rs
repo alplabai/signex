@@ -380,7 +380,7 @@ fn class_form<'a>(
     ))
     .on_input_maybe(
         lock.is_none()
-            .then_some(|t| dpc(DiffPairClassesMsg::NameEdited(t))),
+            .then_some(|t: String| dpc(DiffPairClassesMsg::NameEdited(t))),
     )
     .size(TS.body)
     .padding([SP.xs, SP.s])
