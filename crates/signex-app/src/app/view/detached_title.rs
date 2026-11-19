@@ -30,7 +30,7 @@ impl Signex {
             ModalId::LibraryRecovery => library
                 .recovery
                 .as_ref()
-                .map(crate::library::recovery::title),
+                .map(|dialog| crate::library::recovery::title(dialog, &self.ui_state.i18n)),
             _ => None,
         }
         .unwrap_or_else(|| {

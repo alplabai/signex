@@ -7,7 +7,10 @@
 //! into one of the three modal flows defined here instead of merely
 //! logging-and-silently-failing. The user always gets a clear choice.
 //!
-//! Three dialogs:
+//! The three share one layout: an intro with a glyph, the facts in a
+//! key / value box, a caption saying what Skip for now leaves behind, and a
+//! footer with the destructive action on the left, then Skip for now, then
+//! the fix as the primary.
 //!
 //! 1. **Library missing** (`.snxlib` is gone) — *Locate…* re-opens the
 //!    file picker so the user can point Signex at a moved library.
@@ -19,11 +22,10 @@
 //!    which `git init`s a fresh repo at the parent directory and
 //!    commits only the library's own files (the `.snxlib`, its
 //!    folders and its ignore/attributes files) as a single
-//!    "snxlib re-init" commit. Past per-primitive history is lost
-//!    (the warning is bold-red on that button). *Skip (read-only)*
-//!    walks away — the dispatcher just logs and keeps going.
-//!    *Restore from remote* is reserved for when the manifest
-//!    records a `[users.<remote>]` URL; v0.9 leaves the button
+//!    "snxlib re-init" commit. Past per-primitive history is lost,
+//!    which a banner says. *Skip for now* closes the dialog; the library
+//!    stays unopened. *Restore from remote* is reserved for when the
+//!    manifest records a `[users.<remote>]` URL; v0.9 leaves the button
 //!    disabled because no remote field exists yet (Stage 13+).
 //!
 //! 3. **Broken primitive binding** (a row's `symbol_uuid` /
@@ -39,30 +41,31 @@
 //! `app/view/mod.rs::collect_overlays`, which runs every frame; the
 //! builder's own `is_some()` guard is the only open check.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use iced::widget::{Space, column, container};
-use iced::{Element, Widget};
-use signex_i18n::{I18n, ids, t};
+use iced::widget::{Column, Space, column, container};
+use iced::{Element, Length, Widget};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::theme_ext;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
 use super::modal_chrome::{
-    cancel_btn, danger_btn, footer_strip, header, primary_btn, secondary_btn,
+    danger_btn, footer_strip, header_with_note_closing, key_value_box, mono_value, notice_banner,
+    secondary_btn,
 };
 use crate::styles::{
-    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_hint, dialog_intro,
+    DialogButtonKind, DialogIcon, PillTone, Spacing, TypeScale, dialog_body, dialog_button,
+    dialog_intro, tokens,
 };
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
-const MODAL_W: f32 = 520.0;
+/// Width of the dialog card in the main window.
+pub(crate) const MODAL_W: f32 = 560.0;
 
 /// One of the three recovery flows. At most one is open at a time.
 #[derive(Debug, Clone)]
@@ -87,6 +90,9 @@ pub enum RecoveryDialog {
         library_path: PathBuf,
         table: String,
         row_id: Uuid,
+        /// The row's internal part number, when known; the dialog names the
+        /// row by it, else by `row_id`.
+        internal_pn: Option<String>,
         kind: PrimitiveKind,
         missing_uuid: Uuid,
     },
@@ -119,318 +125,375 @@ pub enum BrokenBindingChoice {
 
 /// Title of the recovery dialog; the native window title of a detached one
 /// reads the same.
-const TITLE_LIBRARY_MISSING: &str = "Library Missing";
-const TITLE_GIT_MISSING: &str = "Git Repository Missing";
-
-pub(crate) fn title(dialog: &RecoveryDialog) -> String {
+pub(crate) fn title(dialog: &RecoveryDialog, i18n: &I18n) -> String {
     match dialog {
-        RecoveryDialog::LibraryMissing { .. } => TITLE_LIBRARY_MISSING.to_owned(),
-        RecoveryDialog::GitMissing { .. } => TITLE_GIT_MISSING.to_owned(),
-        RecoveryDialog::BrokenPrimitiveBinding { kind, .. } => {
-            format!("Broken {} Binding", binding_kind_label(*kind))
+        RecoveryDialog::LibraryMissing { .. } => {
+            i18n.message_plain(ids::LIBRARY_RECOVERY_MISSING_TITLE, &[])
+        }
+        RecoveryDialog::GitMissing { .. } => {
+            i18n.message_plain(ids::LIBRARY_RECOVERY_GIT_TITLE, &[])
+        }
+        RecoveryDialog::BrokenPrimitiveBinding { kind, .. } => i18n.message_plain(
+            ids::LIBRARY_RECOVERY_BINDING_TITLE,
+            &[("kind", signex_i18n::Arg::from(kind_arg(*kind)))],
+        ),
+    }
+}
+
+/// The `$kind` selector of the binding messages.
+fn kind_arg(kind: PrimitiveKind) -> &'static str {
+    match kind {
+        PrimitiveKind::Symbol => "symbol",
+        PrimitiveKind::Footprint => "footprint",
+        PrimitiveKind::Sim => "sim",
+        // PrimitiveKind is #[non_exhaustive]; future variants read
+        // generically until the catalog gets a per-kind entry.
+        _ => "other",
+    }
+}
+
+/// The library's name as the dialogs show it: its file stem.
+fn library_name(path: &Path) -> String {
+    path.file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+/// The muted note in the header: the project file that lists a missing
+/// library (`project_file`, when known), or the library a history or
+/// binding dialog is about.
+pub(crate) fn note(dialog: &RecoveryDialog, project_file: Option<String>) -> Option<String> {
+    match dialog {
+        RecoveryDialog::LibraryMissing { .. } => project_file,
+        RecoveryDialog::GitMissing { path, .. } => Some(library_name(path)),
+        RecoveryDialog::BrokenPrimitiveBinding { library_path, .. } => {
+            Some(library_name(library_path))
         }
     }
 }
 
-fn binding_kind_label(kind: PrimitiveKind) -> &'static str {
-    match kind {
-        PrimitiveKind::Symbol => "Symbol",
-        PrimitiveKind::Footprint => "Footprint",
-        PrimitiveKind::Sim => "Sim Model",
-        // PrimitiveKind is #[non_exhaustive]; future variants render
-        // generically until the dialog gets a per-kind override.
-        _ => "Primitive",
+/// The intro's title and secondary text.
+pub(crate) fn intro_texts(dialog: &RecoveryDialog, i18n: &I18n) -> (String, String) {
+    match dialog {
+        RecoveryDialog::BrokenPrimitiveBinding { table, kind, .. } => {
+            binding_intro_texts(i18n, *kind, table)
+        }
+        _ => {
+            let (title, secondary) = match dialog {
+                RecoveryDialog::LibraryMissing { .. } => (
+                    ids::LIBRARY_RECOVERY_MISSING_INTRO_TITLE,
+                    ids::LIBRARY_RECOVERY_MISSING_INTRO_TEXT,
+                ),
+                _ => (
+                    ids::LIBRARY_RECOVERY_GIT_INTRO_TITLE,
+                    ids::LIBRARY_RECOVERY_GIT_INTRO_TEXT,
+                ),
+            };
+            (
+                t!(i18n, title).into_string(),
+                t!(i18n, secondary).into_string(),
+            )
+        }
     }
 }
 
-/// Render the active recovery dialog.
+/// [`intro_texts`] with a one-letter table name: the texts the window
+/// height was measured with.
+pub(crate) fn reference_intro_texts(dialog: &RecoveryDialog, i18n: &I18n) -> (String, String) {
+    match dialog {
+        RecoveryDialog::BrokenPrimitiveBinding { kind, .. } => {
+            binding_intro_texts(i18n, *kind, "x")
+        }
+        _ => intro_texts(dialog, i18n),
+    }
+}
+
+fn binding_intro_texts(i18n: &I18n, kind: PrimitiveKind, table: &str) -> (String, String) {
+    (
+        t!(i18n, ids::LIBRARY_RECOVERY_BINDING_INTRO_TITLE, "kind" => kind_arg(kind)).into_string(),
+        t!(
+            i18n,
+            ids::LIBRARY_RECOVERY_BINDING_INTRO_TEXT,
+            "kind" => kind_arg(kind),
+            "table" => table.to_owned()
+        )
+        .into_string(),
+    )
+}
+
+/// The caption under the facts: what Skip for now leaves behind.
+pub(crate) fn caption(dialog: &RecoveryDialog, i18n: &I18n) -> Localized {
+    match dialog {
+        RecoveryDialog::LibraryMissing { path } => t!(
+            i18n,
+            ids::LIBRARY_RECOVERY_MISSING_CAPTION,
+            "library" => library_name(path)
+        ),
+        RecoveryDialog::GitMissing { .. } => t!(i18n, ids::LIBRARY_RECOVERY_GIT_CAPTION),
+        RecoveryDialog::BrokenPrimitiveBinding { .. } => {
+            t!(i18n, ids::LIBRARY_RECOVERY_BINDING_CAPTION)
+        }
+    }
+}
+
+/// The banners between the facts and the caption, in order: a failed
+/// re-init, then the fixed warning that re-init loses the history.
+pub(crate) fn banners(dialog: &RecoveryDialog, i18n: &I18n) -> Vec<Localized> {
+    match dialog {
+        RecoveryDialog::GitMissing { error, .. } => {
+            let failed = error.as_ref().map(|reason| {
+                t!(
+                    i18n,
+                    ids::LIBRARY_RECOVERY_GIT_REINIT_FAILED,
+                    "error" => reason.clone()
+                )
+            });
+            failed
+                .into_iter()
+                .chain(std::iter::once(t!(
+                    i18n,
+                    ids::LIBRARY_RECOVERY_GIT_REINIT_WARNING
+                )))
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Number of key / value rows in the facts box.
+pub(crate) fn fact_rows(dialog: &RecoveryDialog) -> usize {
+    match dialog {
+        RecoveryDialog::GitMissing { remote: None, .. } => 1,
+        _ => 2,
+    }
+}
+
+/// Render the active recovery dialog. `project_file` names the project
+/// that lists a missing library, when known.
 pub fn view<'a>(
     dialog: &'a RecoveryDialog,
+    project_file: Option<String>,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    match dialog {
-        RecoveryDialog::LibraryMissing { path } => {
-            library_missing_view(path, tokens, i18n, windowed)
-        }
-        RecoveryDialog::GitMissing {
-            path,
-            remote,
-            error,
-        } => git_missing_view(
-            path,
-            remote.as_deref(),
-            error.as_deref(),
-            tokens,
-            i18n,
-            windowed,
+    let (cancel, icon) = match dialog {
+        RecoveryDialog::LibraryMissing { .. } => (
+            LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+            DialogIcon::Folder,
         ),
-        RecoveryDialog::BrokenPrimitiveBinding {
-            library_path,
-            table,
-            row_id,
-            kind,
-            missing_uuid,
-        } => broken_binding_view(
-            library_path,
-            table,
-            *row_id,
-            *kind,
-            *missing_uuid,
-            tokens,
-            i18n,
-            windowed,
+        RecoveryDialog::GitMissing { .. } => (
+            LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
+            DialogIcon::Git,
         ),
-    }
-}
-
-fn library_missing_view<'a>(
-    path: &'a std::path::Path,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    windowed: bool,
-) -> Element<'a, LibraryMessage> {
-    let header = header(
-        TITLE_LIBRARY_MISSING,
-        LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+        RecoveryDialog::BrokenPrimitiveBinding { .. } => (
+            LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+            DialogIcon::Warn,
+        ),
+    };
+    let header = header_with_note_closing(
+        &title(dialog, i18n),
+        note(dialog, project_file),
+        cancel,
         windowed,
         tokens,
     );
 
-    let body = column![
-        dialog_intro(
-            DialogIcon::Warn,
-            "The library file is missing",
-            Some(
-                "Signex couldn't find the library's .snxlib file. \
-                 It may have been moved, renamed, or deleted."
-                    .to_owned()
-            ),
-            tokens,
-        ),
-        dialog_hint(format!("Expected: {}", path.display()), tokens),
+    let (intro_title, intro_text) = intro_texts(dialog, i18n);
+    let mut body: Column<Element<'a, LibraryMessage>> = column![
+        dialog_intro(icon, intro_title, Some(intro_text), tokens),
+        key_value_box(facts(dialog, i18n, tokens), tokens),
     ]
     .spacing(SP.m);
+    for banner in banners(dialog, i18n) {
+        body = body.push(notice_banner(
+            PillTone::Err,
+            text(banner).size(TS.body).boxed(),
+            Vec::new(),
+            tokens,
+        ));
+    }
+    body = body.push(
+        text(caption(dialog, i18n))
+            .size(TS.caption)
+            .color(tokens::resolve(tokens).ink4)
+            .boxed(),
+    );
 
-    let footer = footer_strip(
-        Vec::new(),
-        vec![
-            cancel_btn(
-                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
-                tokens,
+    // As tall as the content in the main window; in its own window (sized
+    // to the content) the footer stays at the bottom.
+    let mut card = column![header, dialog_body(body), Space::new().height(SP.l)];
+    if windowed {
+        card = card.push(Space::new().height(Length::Fill).boxed());
+    }
+    container(
+        card.push(footer(dialog, i18n, tokens))
+            .width(super::card_len(windowed, MODAL_W))
+            .height(if windowed {
+                Length::Fill
+            } else {
+                Length::Shrink
+            }),
+    )
+    .style(crate::styles::modal_card(tokens))
+    .clip(true)
+    .boxed()
+}
+
+/// The facts box rows of `dialog`.
+fn facts<'a>(
+    dialog: &RecoveryDialog,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Vec<(Localized, Element<'a, LibraryMessage>)> {
+    let plain = |value: String| text(UserText::new(value)).size(TS.body).boxed();
+    match dialog {
+        RecoveryDialog::LibraryMissing { path } => vec![
+            (
+                t!(i18n, ids::LIBRARY_RECOVERY_KEY_LIBRARY),
+                plain(library_name(path)),
             ),
+            (
+                t!(i18n, ids::LIBRARY_RECOVERY_KEY_EXPECTED),
+                mono_value(path.display().to_string(), tokens),
+            ),
+        ],
+        RecoveryDialog::GitMissing { path, remote, .. } => {
+            let mut rows = vec![(
+                t!(i18n, ids::LIBRARY_RECOVERY_KEY_LIBRARY),
+                plain(library_name(path)),
+            )];
+            if let Some(url) = remote {
+                rows.push((
+                    t!(i18n, ids::LIBRARY_RECOVERY_KEY_REMOTE),
+                    mono_value(url.clone(), tokens),
+                ));
+            }
+            rows
+        }
+        RecoveryDialog::BrokenPrimitiveBinding {
+            row_id,
+            internal_pn,
+            missing_uuid,
+            ..
+        } => vec![
+            (
+                t!(i18n, ids::LIBRARY_RECOVERY_KEY_ROW),
+                mono_value(
+                    internal_pn.clone().unwrap_or_else(|| row_id.to_string()),
+                    tokens,
+                ),
+            ),
+            (
+                t!(i18n, ids::LIBRARY_RECOVERY_KEY_MISSING_UUID),
+                mono_value(missing_uuid.to_string(), tokens),
+            ),
+        ],
+    }
+}
+
+/// The destructive action on the left, then Skip for now, then the fix.
+fn footer<'a>(
+    dialog: &RecoveryDialog,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let skip_label = t!(i18n, ids::LIBRARY_RECOVERY_SKIP_FOR_NOW);
+    let (destroy, skip, fix) = match dialog {
+        RecoveryDialog::LibraryMissing { .. } => (
             danger_btn(
                 t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT),
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
                 tokens,
             ),
-            primary_btn(
+            LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+            dialog_button(
                 t!(i18n, ids::LIBRARY_RECOVERY_LOCATE),
-                LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Locate),
+                DialogButtonKind::Primary,
+                Some(LibraryMessage::RecoveryLibraryMissing(
+                    LibraryMissingChoice::Locate,
+                )),
                 tokens,
             ),
-        ],
-        tokens,
-    );
-
-    container(
-        column![header, dialog_body(body), Space::new().height(SP.l), footer]
-            .width(super::card_len(windowed, MODAL_W)),
-    )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true)
-    .boxed()
-}
-
-fn git_missing_view<'a>(
-    path: &'a std::path::Path,
-    remote: Option<&'a str>,
-    error: Option<&'a str>,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    windowed: bool,
-) -> Element<'a, LibraryMessage> {
-    let danger = theme_ext::error_color(tokens);
-
-    let header = header(
-        TITLE_GIT_MISSING,
-        LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
-        windowed,
-        tokens,
-    );
-
-    let mut summary_lines = column![
-        dialog_intro(
-            DialogIcon::Warn,
-            "The library's history is missing",
-            Some(
-                "The library's .snxlib file is intact, but its .git/ \
-                 directory is missing. Past per-primitive history can't \
-                 be read until the repository is restored."
-                    .to_owned()
-            ),
-            tokens,
         ),
-        dialog_hint(format!("Library: {}", path.display()), tokens),
-    ]
-    .spacing(SP.m);
-
-    if let Some(url) = remote {
-        summary_lines = summary_lines.push(dialog_hint(format!("Remote: {}", url), tokens));
-    }
-
-    if let Some(reason) = error {
-        summary_lines = summary_lines.push(
-            text(raw(format!("Re-init failed: {reason}")))
-                .size(TS.body)
-                .color(danger)
-                .boxed(),
-        );
-    }
-
-    summary_lines = summary_lines.push(
-        text(raw("Re-init creates a fresh repository at the parent \
-         directory. Past commits are lost; new edits are tracked \
-         from this point forward."))
-        .size(TS.body)
-        .color(danger)
-        .boxed(),
-    );
-
-    // Restoring is the affirmative action once a remote is known; until
-    // then it is drawn disabled.
-    let restore_button: Element<'a, LibraryMessage> = if remote.is_some() {
-        primary_btn(
-            t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
-            LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote),
-            tokens,
-        )
-    } else {
-        dialog_button(
-            t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
-            DialogButtonKind::Secondary,
-            None,
-            tokens,
-        )
-    };
-
-    let footer = footer_strip(
-        Vec::new(),
-        vec![
-            cancel_btn(
-                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
-                tokens,
-            ),
-            secondary_btn(
-                t!(i18n, ids::LIBRARY_RECOVERY_SKIP_READ_ONLY),
-                LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
-                tokens,
-            ),
-            restore_button,
+        // Restoring is the fix once a remote is known; until then it is
+        // drawn disabled.
+        RecoveryDialog::GitMissing { remote, .. } => (
             danger_btn(
                 t!(i18n, ids::LIBRARY_RECOVERY_REINIT),
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::ReInit),
                 tokens,
             ),
-        ],
-        tokens,
-    );
-
-    container(
-        column![
-            header,
-            dialog_body(summary_lines),
-            Space::new().height(SP.l),
-            footer
-        ]
-        .width(super::card_len(windowed, MODAL_W)),
-    )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true)
-    .boxed()
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the variant's five fields plus the shared tokens, catalog and window flag"
-)]
-fn broken_binding_view<'a>(
-    library_path: &'a std::path::Path,
-    table: &'a str,
-    row_id: Uuid,
-    kind: PrimitiveKind,
-    missing_uuid: Uuid,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    windowed: bool,
-) -> Element<'a, LibraryMessage> {
-    let kind_label = binding_kind_label(kind);
-
-    let header = header(
-        &format!("Broken {} Binding", kind_label),
-        LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
-        windowed,
-        tokens,
-    );
-
-    let body = column![
-        dialog_intro(
-            DialogIcon::Warn,
-            format!("The {} is missing", kind_label.to_lowercase()),
-            Some(format!(
-                "A row in '{}' references a {} that no longer exists on disk.",
-                table,
-                kind_label.to_lowercase()
-            )),
-            tokens,
-        ),
-        column![
-            dialog_hint(format!("Library: {}", library_path.display()), tokens),
-            dialog_hint(format!("Row: {}", row_id), tokens),
-            dialog_hint(format!("Missing UUID: {}", missing_uuid), tokens),
-        ]
-        .spacing(SP.xs),
-    ]
-    .spacing(SP.m);
-
-    let footer = footer_strip(
-        Vec::new(),
-        vec![
-            cancel_btn(
-                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+            LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
+            dialog_button(
+                t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
+                DialogButtonKind::Primary,
+                remote.as_ref().map(|_| {
+                    LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote)
+                }),
                 tokens,
             ),
+        ),
+        RecoveryDialog::BrokenPrimitiveBinding { .. } => (
             danger_btn(
                 t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_ROW),
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
                 tokens,
             ),
-            primary_btn(
+            LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+            dialog_button(
                 t!(i18n, ids::LIBRARY_RECOVERY_REBIND),
-                LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Rebind),
+                DialogButtonKind::Primary,
+                Some(LibraryMessage::RecoveryBrokenBinding(
+                    BrokenBindingChoice::Rebind,
+                )),
                 tokens,
             ),
-        ],
+        ),
+    };
+    footer_strip(
+        vec![destroy],
+        vec![secondary_btn(skip_label, skip, tokens), fix],
         tokens,
-    );
-
-    container(
-        column![header, dialog_body(body), Space::new().height(SP.l), footer]
-            .width(super::card_len(windowed, MODAL_W)),
     )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true)
-    .boxed()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_types::theme::ThemeId;
     use std::path::PathBuf;
+
+    fn binding(kind: PrimitiveKind, internal_pn: Option<&str>) -> RecoveryDialog {
+        RecoveryDialog::BrokenPrimitiveBinding {
+            library_path: PathBuf::from("/libs/passives/passives.snxlib"),
+            table: "resistors".into(),
+            row_id: Uuid::nil(),
+            internal_pn: internal_pn.map(str::to_owned),
+            kind,
+            missing_uuid: Uuid::nil(),
+        }
+    }
+
+    fn all_dialogs() -> Vec<RecoveryDialog> {
+        vec![
+            RecoveryDialog::LibraryMissing {
+                path: PathBuf::from("/libs/power-ics/power-ics.snxlib"),
+            },
+            RecoveryDialog::GitMissing {
+                path: PathBuf::from("/libs/passives/passives.snxlib"),
+                remote: None,
+                error: None,
+            },
+            RecoveryDialog::GitMissing {
+                path: PathBuf::from("/libs/passives/passives.snxlib"),
+                remote: Some("git@example.com:hw/passives.git".into()),
+                error: Some("no git identity".into()),
+            },
+            binding(PrimitiveKind::Footprint, Some("R-0805-1K-1%")),
+            binding(PrimitiveKind::Symbol, None),
+        ]
+    }
 
     #[test]
     fn library_missing_carries_path() {
@@ -467,6 +530,7 @@ mod tests {
             library_path: lib.clone(),
             table: "resistors".into(),
             row_id: row,
+            internal_pn: None,
             kind: PrimitiveKind::Symbol,
             missing_uuid: missing,
         };
@@ -482,6 +546,74 @@ mod tests {
                 assert!(matches!(kind, PrimitiveKind::Symbol));
             }
             _ => panic!("variant mismatch"),
+        }
+    }
+
+    /// The titles come from the catalog and read as before.
+    #[test]
+    fn the_titles_read_as_the_dialogs_name_them() {
+        let i18n = I18n::en_us();
+        let dialogs = all_dialogs();
+        assert_eq!(title(&dialogs[0], &i18n), "Library Missing");
+        assert_eq!(title(&dialogs[1], &i18n), "Git Repository Missing");
+        assert_eq!(title(&dialogs[3], &i18n), "Broken Footprint Binding");
+        assert_eq!(title(&dialogs[4], &i18n), "Broken Symbol Binding");
+    }
+
+    /// The header note names the library a history or binding dialog is
+    /// about; a missing library's note is the project file, when known.
+    #[test]
+    fn the_note_names_the_project_or_the_library() {
+        let dialogs = all_dialogs();
+        assert_eq!(note(&dialogs[0], None), None);
+        assert_eq!(
+            note(&dialogs[0], Some("dcdc.snxprj".into())).as_deref(),
+            Some("dcdc.snxprj")
+        );
+        assert_eq!(note(&dialogs[1], None).as_deref(), Some("passives"));
+        assert_eq!(note(&dialogs[3], None).as_deref(), Some("passives"));
+    }
+
+    /// The facts box has a Remote row only when a remote is known; a failed
+    /// re-init adds a banner above the fixed history warning.
+    #[test]
+    fn the_git_dialog_shows_remote_and_failure_only_when_known() {
+        let i18n = I18n::en_us();
+        let dialogs = all_dialogs();
+        assert_eq!(fact_rows(&dialogs[1]), 1);
+        assert_eq!(fact_rows(&dialogs[2]), 2);
+        assert_eq!(banners(&dialogs[1], &i18n).len(), 1);
+        let shown: Vec<String> = banners(&dialogs[2], &i18n)
+            .into_iter()
+            .map(Localized::into_string)
+            .collect();
+        assert_eq!(shown.len(), 2);
+        assert!(shown[0].contains("no git identity"), "{shown:?}");
+        assert!(
+            shown[1].contains("all earlier commits are lost"),
+            "{shown:?}"
+        );
+        assert!(banners(&dialogs[0], &i18n).is_empty());
+    }
+
+    /// Every case draws from tokens alone in every built-in theme, in the
+    /// main window and in its own.
+    #[test]
+    fn every_case_draws_in_every_theme() {
+        let i18n = I18n::en_us();
+        for id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(*id);
+            for dialog in &all_dialogs() {
+                for windowed in [false, true] {
+                    drop(view(
+                        dialog,
+                        Some("dcdc.snxprj".into()),
+                        &tokens,
+                        &i18n,
+                        windowed,
+                    ));
+                }
+            }
         }
     }
 }

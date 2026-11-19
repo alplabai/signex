@@ -10,8 +10,8 @@ program (`<exe dir>\library\Stock.snxlib` on Windows,
 
 An installed Signex always mounts the stock library read-only. Opening a
 stock symbol or footprint for editing goes to **Copy to Library** (#813):
-the copy lands in a library of the user's own and the stock file is never
-written.
+the user picks one of their writable libraries and presses Copy, the copy
+lands there, and the stock file is never written.
 
 ## Maintainers: edit it in Signex (#1892)
 

@@ -103,6 +103,19 @@ fn read_only_repair_notice(path: &std::path::Path) -> crate::app::state::ErrorNo
     )
 }
 
+impl Signex {
+    /// File name of the project that lists the library the open Library
+    /// Missing dialog is about; the dialog's header shows it.
+    pub(crate) fn recovery_project_file(&self) -> Option<String> {
+        let owner = self.library.missing.open_owner()?;
+        let project = self.document_state.project_by_id(owner)?;
+        project
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    }
+}
+
 /// Handle the user's choice from the *Library missing* recovery dialog.
 pub(super) fn handle_recovery_library_missing(
     app: &mut Signex,

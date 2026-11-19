@@ -22,7 +22,7 @@ use crate::styles::{
 
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
-pub(crate) const CLOSE_PROMPT_W: f32 = 520.0;
+pub(crate) const CLOSE_PROMPT_W: f32 = 500.0;
 pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
 pub(crate) const EDIT_ROW_W: f32 = 720.0;
@@ -41,7 +41,7 @@ pub(crate) const NOTE_LINE_H: f32 = TS.body * LINE_HEIGHT + 2.0 * NOTE_LINE_PAD_
 
 /// [`notice_banner`]: padding, gap between glyph and text, glyph size.
 pub(crate) const BANNER_PAD_Y: f32 = 7.0;
-const BANNER_PAD_X: f32 = 10.0;
+pub(crate) const BANNER_PAD_X: f32 = 10.0;
 pub(crate) const BANNER_GAP: f32 = 8.0;
 pub(crate) const BANNER_GLYPH: f32 = 14.0;
 
@@ -316,12 +316,13 @@ pub(crate) fn key_value_box<'a>(
 /// does not fit; hovering shows it whole.
 pub(crate) fn mono_value<'a>(value: String, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let shown = text(signex_i18n::UserText::new(value.clone()))
+    let shown: Element<'a, LibraryMessage> = text(signex_i18n::UserText::new(value.clone()))
         .size(TS.body)
         .font(mono)
         .wrapping(Wrapping::None)
         .ellipsis(Ellipsis::Middle)
-        .width(Length::Fill);
+        .width(Length::Fill)
+        .boxed();
     let whole = container(
         text(signex_i18n::UserText::new(value))
             .size(TS.body)
