@@ -38,7 +38,7 @@ pub fn shown_in(spelling: &str, i18n: &signex_i18n::I18n) -> String {
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
-    CatalogTextExt, CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind,
+    CatalogTextExt, CommandGroup, CommandMetadata, HeadlessUse, KeyRepeat, Operand, OperandKind,
     all_command_ids, category_title, command_menu_message, command_menu_text, fallback_label,
     metadata_for, metadata_for_str, offered_in,
 };

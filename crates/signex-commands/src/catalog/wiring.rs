@@ -1,7 +1,9 @@
 //! Wiring commands: wires, buses and their entries, net labels, ports,
 //! off-sheet connectors and signal harnesses.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, KeyRepeat, operands,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const WIRING: &[CommandMetadata] = &[
@@ -193,6 +195,7 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2373: how the Arc tool's clicks make an arc. Changes no board. No
@@ -204,6 +207,7 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2389: the routing tools of the Route group. Each route is one undo

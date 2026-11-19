@@ -1,7 +1,7 @@
 //! View commands: zoom, centre, refresh, auto focus, the board view
 //! rotation and origin marker, measuring and the display unit.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, KeyRepeat};
 use signex_i18n_ids::command_ids;
 
 pub(super) const VIEW: &[CommandMetadata] = &[
@@ -103,6 +103,7 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2316: turn the board view on screen. View state only (no undo step,
@@ -159,6 +160,7 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -203,6 +205,7 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2390: the board in 3D, or flat again. View state only (no undo
@@ -215,6 +218,7 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -225,6 +229,7 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
 ];

@@ -1,7 +1,9 @@
 //! Selection commands: the select tools, select and unselect all, the
 //! selection modes, connection selection and cross-probing.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, KeyRepeat, operands,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const SELECTION: &[CommandMetadata] = &[
@@ -63,6 +65,7 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -73,6 +76,7 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -125,6 +129,7 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2417: the schematic Selection Filter (SCH Filter panel, Active Bar

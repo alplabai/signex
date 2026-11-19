@@ -207,6 +207,17 @@ pub enum HeadlessUse {
     Runs,
 }
 
+/// What a held key's auto-repeat does to a command bound to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KeyRepeat {
+    /// Every repeat runs it again: a nudge, an arrow, a zoom step, undo.
+    #[default]
+    Runs,
+    /// A held key runs it once: a cycle or toggle would otherwise spin
+    /// through its states while the key is down (Hakan, 2026-11-19).
+    Ignored,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandMetadata {
     pub id: &'static str,
@@ -235,14 +246,17 @@ pub struct CommandMetadata {
     /// pre-placement form and project defaults as for a click. Empty: the
     /// command has no operand form (#1934).
     pub operands: &'static [Operand],
+    /// Whether a held key's auto-repeat runs it again. Defaults to
+    /// [`KeyRepeat::Runs`].
+    pub key_repeat: KeyRepeat,
 }
 
 impl CommandMetadata {
     /// Base value for struct-update syntax (`..CommandMetadata::DEFAULT`)
     /// in the const catalog tables below — every entry there
     /// re-specifies `id`/`category`/`label`/`menu_label`/`group`
-    /// explicitly, so only the four descriptor fields actually take this
-    /// default (`None` / `None` / `Always` / all-`false`).
+    /// explicitly, so only the descriptor fields actually take this default
+    /// (`None` / `None` / `Always` / all-`false` / no operands / `Runs`).
     pub const DEFAULT: Self = Self {
         id: "",
         category: "",
@@ -260,6 +274,7 @@ impl CommandMetadata {
             hidden: false,
         },
         operands: &[],
+        key_repeat: KeyRepeat::Runs,
     };
 
     /// How a headless caller may use this command, or `None` while nobody
@@ -505,6 +520,9 @@ pub fn offered_in(command: &AppCommandId, live: &[ShortcutContext]) -> bool {
 pub fn fallback_label(command: &AppCommandId) -> String {
     categories::title_words(command.as_str())
 }
+
+#[cfg(test)]
+mod key_repeat_tests;
 
 #[cfg(test)]
 mod tests {

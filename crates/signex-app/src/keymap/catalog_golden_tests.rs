@@ -13,7 +13,7 @@ use super::{
     AppCommandId, CompiledKeymap, Platform, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
 };
-use signex_commands::catalog::KeyBind;
+use signex_commands::catalog::{KeyBind, KeyRepeat};
 use signex_i18n::{I18n, t};
 
 const CATALOG: &str = include_str!("testdata/catalog.golden.tsv");
@@ -65,6 +65,8 @@ fn flags(meta: &CommandMetadata) -> String {
         (f.mutates_doc, "mutates_doc"),
         (f.undoable, "undoable"),
         (f.hidden, "hidden"),
+        // Not a `CommandFlags` bit, but a row property all the same.
+        (meta.key_repeat == KeyRepeat::Ignored, "no_key_repeat"),
     ]
     .into_iter()
     .filter_map(|(on, name)| on.then_some(name))

@@ -1,7 +1,7 @@
 //! Search commands: find, find items headless, find and replace, step
 //! through the matches, and the Search panel.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, KeyRepeat, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const SEARCH: &[CommandMetadata] = &[
@@ -74,6 +74,7 @@ pub(super) const SEARCH: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
