@@ -1,0 +1,715 @@
+//! Hand annotations of the parity table: what a route reads past its gate,
+//! which the routing code does not say. Read from the handlers; a regenerate
+//! (`UPDATE_GOLDEN=1`) keeps them, since they live here and not in the
+//! golden. An empty list says the route was read and reads nothing implicit.
+//!
+//! Tool state or settings: a value the person flips while working (grid,
+//! snap, Move Keeps Wires, the Shift+E hotspots) is tool state, even when it
+//! is persisted. A saved library or profile value (machine rules, saved
+//! layer sets, filter presets, new-project defaults, the locale where it
+//! shapes what a command writes or answers) is settings. A translated
+//! refusal, log line or undo label is not a read of the locale.
+
+use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
+use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
+use super::forms::Form::{Operand, Query, StillRunsRefusal, StillRunsUnavailable};
+use super::inputs::Input::{self, *};
+
+/// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
+pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
+    // Core edits and runs that read past their gate.
+    // A project without rules runs with the machine's ERC overrides
+    // (`erc_rule_settings`).
+    (&["run_erc"], Bridge, &[RenderCache, Settings]),
+    (
+        &[
+            "select_all",
+            "zoom_to_fit",
+            "zoom_to_all_objects",
+            "show_all_design_objects",
+        ],
+        Bridge,
+        &[RenderCache],
+    ),
+    // The offset is the grid margin past the sheet's content.
+    (
+        &["smart_paste", "paste_special"],
+        Bridge,
+        &[Clipboard, RenderCache, ToolState],
+    ),
+    // The placement epoch and the grid of the pasted copy.
+    (&["paste"], Bridge, &[Clipboard, ToolState]),
+    (
+        &["select_board_net", "highlight_board_net"],
+        Bridge,
+        &[Selection, Cursor],
+    ),
+    (
+        &["select_board_net", "highlight_board_net"],
+        Operand,
+        &[Selection, Cursor],
+    ),
+    // The clearances come from `board_design_rules`, which falls back on the
+    // machine rules (`drc_inputs`).
+    (
+        &["tune_net_length", "tune_diff_pair"],
+        Operand,
+        &[ActiveDocument, Selection, Settings],
+    ),
+    // The board tools' clearances: `run` -> `clearance_rules` ->
+    // `board_design_rules` -> `drc_inputs` (board_tools, handlers/pcb_drc.rs).
+    (
+        &[
+            "stitch_vias",
+            "add_teardrops",
+            "remove_teardrops",
+            "gloss_selected_routes",
+            "board_shape_from_selection",
+            "keepout_from_selection",
+            "arrange_in_box",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // The PDF's printed text is in the UI locale (`print_text`).
+    (&["export_board_pdf"], Operand, &[Settings]),
+    // Save As of a background sheet is refused (`active_path`).
+    (&["save_document_as"], Operand, &[ActiveDocument]),
+    // The rfd picker (`save_as_dialog_for_active_tab`).
+    (&["save_document_as"], Bridge, &[DialogAnswer]),
+    // `close_tab` commits the sheet's title-block drafts and settles a board
+    // sketch, whose refused bake keeps the tab; an agent's close of another
+    // tab parks it in the background (`agent.serving`).
+    (
+        &["close_active_document"],
+        Operand,
+        &[ActiveDocument, InProgressEdit, Origin],
+    ),
+    (&["close_active_document"], Bridge, &[InProgressEdit]),
+    (&["close_active_document"], CloseInWindow, &[InProgressEdit]),
+    // A wire drawn on the sheet, or rules text not applied, refuses the step.
+    (&["undo", "redo"], Operand, &[InProgressEdit]),
+    // Save settles owed work first: `begin_document_path_save` ->
+    // `save_primitive_tab_at` -> `prepare_primitive_save` ->
+    // `snapshot_primitive` runs `settle_pending_solve`
+    // (dispatch/library/editor/primitive_save.rs). Owed work and drafts are
+    // core-bound (ADR-0006), so nothing implicit.
+    (&["save_document"], Operand, &[]),
+    // Machine configuration (ADR-0006 `CoreSettings`): the saved layer sets
+    // and tab-name style of `ui_state.layer_strip`, written to the prefs.
+    (
+        &[
+            "show_layer_set",
+            "save_layer_set",
+            "delete_layer_set",
+            "set_layer_tab_names",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // A project without rules of its own edits from the machine rules
+    // (`rules_text_of` falls back on `ui_state.machine_drc_rules`); a preset
+    // comes from the machine's profile library.
+    (
+        &[
+            "rules_add",
+            "rules_set",
+            "rules_remove",
+            "rules_enable",
+            "rules_matrix_set",
+            "rules_set_create",
+            "rules_set_edit",
+            "rules_set_apply",
+            "rules_preset_apply",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // Read: they act on the named document and their operands only. A board
+    // edit repaints the board's canvas when that board is in view; the
+    // repaint is a projection and reads nothing into the result.
+    (
+        &[
+            "clear_all_net_colors",
+            "color_net",
+            "export_board_report",
+            "export_board_step",
+            "export_assembly_svg",
+            "board_assembly_drawing",
+            "board_report_bom",
+            "board_report_components",
+            "board_report_net_length",
+            "board_report_netlist",
+            "add_net_class",
+            "rename_net_class",
+            "delete_net_class",
+            "set_net_class_rules",
+            "assign_board_net_class",
+            "set_layer_stack",
+            "lock_board_items",
+            "unlock_board_items",
+            "set_via_span",
+            "set_layer_sizes",
+            "set_pad_shape",
+            "hide_layer",
+            "highlight_layer",
+            "hide_layer_group",
+            "show_layer_group",
+            "set_layer_visible",
+            "set_active_layer",
+            "set_layer_color",
+            "show_used_layers_only",
+            "set_object_visible",
+            "set_object_transparency",
+            "set_board_graphic",
+            "set_footprint_text",
+            "repour_all",
+            "panelize_board",
+            "remove_board_panel",
+            "set_board_panel",
+            "swap_pins",
+            "swap_gates",
+            "save_board_reuse_block",
+            "place_board_reuse_block",
+            "autoplace_fields",
+            "sync_sheet_pins",
+            "set_sheet_symbol_size",
+            "set_symbol_parameter",
+            "project_move_sheet",
+            "project_add_variant",
+            "project_rename_variant",
+            "project_remove_variant",
+            "project_set_active_variant",
+            "project_move_library",
+            "project_set_annotate_undo",
+            "project_set_version_control",
+            "project_set_requirement",
+            "project_enable_requirement",
+        ],
+        Operand,
+        &[],
+    ),
+    // The DRC results act on the board in view only (`drc_results_board`,
+    // handlers/pcb_drc_results.rs); Show also centres that window's camera
+    // (`center_on_world` reads the canvas `viewport`). The last DRC run
+    // (`interaction_state.pcb_drc`, `PcbDrc` in app/state/pcb_drc.rs) is
+    // core-bound session state, check results being an ADR-0006 core
+    // category listed in scripts/uifree-state.txt, so it is no implicit input.
+    (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
+    (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // A waiver is refused on a stale last run (`set_drc_waiver`): the core
+    // session state above, so nothing implicit.
+    (
+        &["waive_drc_violation", "unwaive_drc_violation"],
+        Operand,
+        &[],
+    ),
+    // The net must be in the GUI's resolved-net cache
+    // (`ui_state.net_class_styles.knows_net`), derived from the documents
+    // like the render cache, and refused while it is not resolved yet.
+    (&["assign_net_class"], Operand, &[RenderCache]),
+    // An agent's revert is refused while the person draws, types into or
+    // moves on that sheet in any window (`person_busy_on`).
+    (
+        &["revert"],
+        Operand,
+        &[ActiveDocument, Window, InProgressEdit],
+    ),
+    // Adding or removing a requirement clears the Project tab's typed
+    // requirement drafts.
+    (
+        &["project_add_requirement", "project_remove_requirement"],
+        Operand,
+        &[InProgressEdit],
+    ),
+    // A run already going in the Project tab skips this one.
+    (&["project_run_requirements"], Operand, &[Window]),
+    // The board update targets the window acting, else the active document.
+    (
+        &["update_pcb_from_schematic"],
+        Operand,
+        &[ActiveDocument, Window],
+    ),
+    // The new document joins the active document's project.
+    (
+        &["new_pcb_document", "new_schematic_sheet"],
+        Operand,
+        &[ActiveDocument],
+    ),
+    // The DXF file comes from the picker; it lands on the active layer.
+    (
+        &["import_dxf", "import_dxf_outline"],
+        Bridge,
+        &[DialogAnswer, ToolState],
+    ),
+    // Without a `layer` operand it lands on the board's active layer.
+    (&["import_dxf", "import_dxf_outline"], Operand, &[ToolState]),
+    // The turn adds to the angle the board's canvas shows now: view state of
+    // the window, like its zoom, not the document's render cache.
+    (&["view_rotate"], Bridge, &[Window]),
+    (&["view_rotate"], Operand, &[Window]),
+    // Rotate and mirror bend an open wire run (corner rule), turn the part
+    // or the Bus Entry on the cursor (tool), else the selection.
+    (
+        &[
+            "rotate_clockwise",
+            "rotate_counterclockwise",
+            "mirror_x",
+            "mirror_y",
+        ],
+        Bridge,
+        &[ActiveDocument, Selection, ToolState, InProgressEdit],
+    ),
+    (
+        &[
+            "rotate_selection",
+            "rotate_selection_cw",
+            "flip_selected_x",
+            "flip_selected_y",
+        ],
+        ActiveBar,
+        &[ActiveDocument, Selection, ToolState, InProgressEdit],
+    ),
+    (
+        &[
+            "rotate_clockwise",
+            "rotate_counterclockwise",
+            "mirror_x",
+            "mirror_y",
+            "rotate_selection",
+            "rotate_selection_cw",
+            "flip_selected_x",
+            "flip_selected_y",
+        ],
+        StillRunsRefusal,
+        &[ActiveDocument, Selection, ToolState, InProgressEdit],
+    ),
+    // The part on the cursor flips, else the board selection.
+    (
+        &["flip_selection"],
+        Bridge,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    (
+        &["flip_selection"],
+        StillRunsRefusal,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    // The active tab's selection: a footprint editor's, a board's or a sheet's.
+    (
+        &[
+            "delete_selection",
+            "bring_drawings_forward",
+            "bring_drawings_to_front",
+            "send_drawings_backward",
+            "send_drawings_to_back",
+        ],
+        Bridge,
+        &[ActiveDocument, Selection],
+    ),
+    (
+        &["delete_selection"],
+        StillRunsRefusal,
+        &[ActiveDocument, Selection],
+    ),
+    // The same handler as the bridge row.
+    (
+        &["cut"],
+        StillRunsRefusal,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    (
+        &["smart_paste", "paste_special"],
+        StillRunsRefusal,
+        &[Clipboard, RenderCache, ToolState],
+    ),
+    // The annotate pass uses the dialog's lock set and order.
+    (
+        &[
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ],
+        Bridge,
+        &[ActiveDocument, DialogAnswer],
+    ),
+    (
+        &[
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ],
+        StillRunsUnavailable,
+        &[ActiveDocument, DialogAnswer],
+    ),
+    (&["save_document_as"], StillRunsUnavailable, &[DialogAnswer]),
+    // DRC of the board in view, unless one is running for it; a project
+    // without rules is checked with the machine rules (`start_pcb_drc` ->
+    // `drc_inputs`).
+    (&["run_drc"], Bridge, &[ActiveDocument, Settings]),
+    // Checks read from memory, the active tab's render snapshot not used
+    // (`erc_check_inputs`), confined by the origin. A project without rules
+    // is checked with the machine's ERC overrides (`erc_rule_settings_quiet`)
+    // or DRC rules (`ui_state.machine_drc_rules`): configuration.
+    (
+        &["check_erc", "check_drc", "check_requirements"],
+        Check,
+        &[Settings],
+    ),
+    // The answer names the view angle of the board's canvas.
+    (&["document_info"], Query, &[Window]),
+    // `rules_explain` and `rules_get` read the board's last DRC run
+    // (`interaction_state.pcb_drc`, `PcbDrc` in app/state/pcb_drc.rs), which
+    // is core-bound session state (check results, an ADR-0006 core category
+    // in scripts/uifree-state.txt), not an implicit input. A project without
+    // rules reads the machine rules (`ui_state.machine_drc_rules`), a preset
+    // diff the machine's profile library, and the project settings the
+    // machine's annotate undo default: configuration.
+    (
+        &[
+            "project_settings",
+            "rules_conflicts",
+            "rules_effective",
+            "rules_explain",
+            "rules_get",
+            "rules_list",
+            "rules_matrix_get",
+            "rules_preset_diff",
+        ],
+        Query,
+        &[Settings],
+    ),
+    // Read: operands only.
+    (
+        &[
+            "board_panel",
+            "find_items",
+            "find_similar_items",
+            "measure_board",
+            "query_board_nets",
+            "query_pins",
+            "read_document",
+        ],
+        Query,
+        &[],
+    ),
+    // What the open or the new project dialog answers.
+    (
+        &["new_document", "open_document", "new_project_with_profile"],
+        HeadlessNewDocument,
+        &[DialogAnswer],
+    ),
+    // The menu row's gate, the main window's tiles and the active tab.
+    (
+        &[
+            "tile_windows_horizontally",
+            "tile_windows_vertically",
+            "untile_documents",
+        ],
+        AgentWindowLayout,
+        &[Window, ActiveDocument],
+    ),
+    // The listings narrow to an agent's documents (`document_entries`).
+    (&["list_documents", "resolve"], Query, &[Origin]),
+    // The grid the copy is stored on (`copy_selection`).
+    (&["copy", "cut", "duplicate"], Bridge, &[ToolState]),
+    (&["new_document", "open_document"], Bridge, &[DialogAnswer]),
+    // A new project takes the machine's default rule profile and annotate
+    // undo setting (`start_new_project`): configuration.
+    (
+        &["new_document", "new_project_with_profile"],
+        Operand,
+        &[Settings],
+    ),
+    (&["open_document"], Operand, &[]),
+    (
+        &["new_pcb_document", "new_schematic_sheet"],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
+    ),
+    // The preset is looked up among the saved filter presets
+    // (`interaction_state.custom_filter_presets`, prefs-backed through
+    // fonts/presets.rs): configuration.
+    (&["apply_selection_filter_preset"], Operand, &[Settings]),
+    (&["set_selection_filters"], Operand, &[]),
+    (
+        &[
+            "align_bottom",
+            "align_horizontal_centers",
+            "align_left",
+            "align_right",
+            "align_to_grid",
+            "align_top",
+            "align_vertical_centers",
+            "distribute_horizontally",
+            "distribute_vertically",
+            "bring_to_front",
+            "move_to_front",
+            "send_to_back",
+        ],
+        ActiveBar,
+        &[ActiveDocument, Selection],
+    ),
+    (&["unselect_all"], Bridge, &[Selection]),
+    // The placement handlers: a point must be where a click lands (grid,
+    // and for a wire the electrical grid on the sheet in view); what the
+    // operands leave out comes from the pre-placement form.
+    (
+        &["place_wire", "draw_wire"],
+        Operand,
+        &[ToolState, RenderCache],
+    ),
+    (&["place_bus", "draw_bus"], Operand, &[ToolState]),
+    (
+        &[
+            "draw_line",
+            "draw_graphic_line",
+            "draw_rectangle",
+            "place_net_label",
+            "place_local_net_label",
+            "place_global_label",
+            "place_hierarchical_label",
+        ],
+        Operand,
+        &[PrePlacementForm, ToolState],
+    ),
+    (
+        &[
+            "place_power_symbol",
+            "place_no_connect",
+            "place_junction",
+            "place_no_erc",
+            "place_text",
+            "place_text_string",
+            "place_blanket",
+            "edit_blanket",
+            "place_compile_mask",
+            "place_diff_pair",
+            "place_component",
+            "place_sheet_symbol",
+            "place_sheet_entry",
+            "place_design_block",
+            "import_graphics",
+        ],
+        Operand,
+        &[ToolState],
+    ),
+    // Move Keeps Wires.
+    (
+        &["set_object_position", "set_object_rotation"],
+        Operand,
+        &[ToolState],
+    ),
+    // The tool defaults, and the active layer when `layer` is not given.
+    (
+        &["add_board_graphic"],
+        Operand,
+        &[PrePlacementForm, ToolState],
+    ),
+    // GUI routes.
+    (&["find_similar_objects"], Bridge, &[Cursor, RenderCache]),
+    (&["find_similar_objects"], BridgeContextMenu, &[RenderCache]),
+    (
+        &["cancel_current_tool"],
+        Bridge,
+        &[ToolState, InProgressEdit],
+    ),
+    (
+        &["center_on_cursor", "center_view_at_cursor"],
+        Bridge,
+        &[Cursor, Window],
+    ),
+    (
+        &[
+            "change_component",
+            "edit_library_symbol",
+            "edit_selected_symbol_in_symbol_editor",
+            "open_datasheet",
+            "create_sheet_from_sheet_symbol",
+            "open_child_sheet",
+            "sync_sheet_pins",
+            "drag_keep_connections",
+            "go_to_net_partner",
+            "highlight_related_net_objects",
+        ],
+        Bridge,
+        &[Selection],
+    ),
+    (&["autoplace_fields"], Bridge, &[ActiveDocument, Selection]),
+    (&["clear_all_net_colors"], ActiveBar, &[ActiveDocument]),
+    (&["clear_net_color", "color_net"], ActiveBar, &[Selection]),
+    (
+        &[
+            "bring_to_front_of",
+            "send_to_back_of",
+            "select_connection",
+            "move_selection_xy",
+            "drag_selection",
+        ],
+        ActiveBar,
+        &[Selection],
+    ),
+    (&["select_expand_connection"], Bridge, &[Selection]),
+    (
+        &[
+            "drag",
+            "lasso_select",
+            "toggle_selection",
+            "tool_select",
+            "place_component",
+        ],
+        ActiveBar,
+        &[],
+    ),
+    (&["highlight_net_under_cursor"], Bridge, &[Cursor]),
+    (
+        &["highlight_net_under_cursor"],
+        BridgeContextMenu,
+        &[ActiveDocument],
+    ),
+    // `copy_attributes_at` (#1669): mid-draw it adds a vertex through the
+    // canvas click path (tool state, the draw in progress); otherwise it
+    // copies from the object under the point or the selection.
+    (
+        &["copy_attributes_or_add_vertex"],
+        Bridge,
+        &[Cursor, Selection, ToolState, InProgressEdit],
+    ),
+    (
+        &["copy_attributes_or_add_vertex"],
+        BridgeContextMenu,
+        &[ActiveDocument, Selection, ToolState, InProgressEdit],
+    ),
+    (
+        &[
+            "edit_value",
+            "edit_reference_designator",
+            "edit_footprint_field",
+            "edit_text_in_place",
+        ],
+        Bridge,
+        &[Cursor, Selection],
+    ),
+    (
+        &["select_node_or_connection_item"],
+        Bridge,
+        &[Cursor, RenderCache],
+    ),
+    (
+        &["placement_accept"],
+        Bridge,
+        &[InProgressEdit, RenderCache],
+    ),
+    (
+        &["zoom_to_selection_area"],
+        Bridge,
+        &[Selection, RenderCache],
+    ),
+    (
+        &[
+            "cycle_fast_grid",
+            "cycle_snap_grid_backward",
+            "previous_grid",
+            "next_grid",
+            "fast_grid_1",
+            "fast_grid_2",
+            "toggle_visible_grid",
+            "toggle_electrical_grid",
+            "cycle_unit",
+            "cycle_selection_mode",
+            "cycle_wire_bus_graphic_mode",
+            "cycle_wiring_mode",
+            "placement_properties",
+        ],
+        Bridge,
+        &[ToolState],
+    ),
+    (
+        &["switch_segment_posture"],
+        Bridge,
+        &[ToolState, InProgressEdit],
+    ),
+    (
+        &[
+            "footprint_mode_pads",
+            "footprint_mode_sketch",
+            "footprint_mode_view_3d",
+            "footprint_recompute_courtyard_outline",
+            "next_sheet",
+            "previous_sheet",
+            "open_project_options",
+        ],
+        Bridge,
+        &[ActiveDocument],
+    ),
+    (
+        &[
+            "find_next",
+            "find_previous",
+            "clear_net_highlighting",
+            "next_highlighted_net_item",
+            "previous_highlighted_net_item",
+            "next_document_tab",
+            "previous_document_tab",
+            "sheet_navigation_back",
+            "sheet_navigation_forward",
+            "toggle_auto_focus",
+            "toggle_floating_panels",
+            "toggle_search_panel",
+            "toggle_layers_panel",
+            "toggle_properties_panel",
+            "toggle_schematic_filter_panel",
+            "toggle_schematic_list_panel",
+        ],
+        Bridge,
+        &[Window],
+    ),
+    // Dialogs, pickers and panels that open on nothing implicit, and the
+    // tools that are only armed.
+    (
+        &[
+            "annotate_schematic",
+            "reset_schematic_designators",
+            "find",
+            "find_text",
+            "find_and_replace",
+            "open_command_palette",
+            "open_grid_properties",
+            "open_net_color_palette",
+            "open_net_inspector",
+            "open_preferences",
+            "open_schematic_preferences",
+            "show_current_command_hotkeys",
+            "show_current_command_shortcuts",
+            "new_project_with_profile",
+            "toggle_cross_select_mode",
+            "place_wire_to_bus_entry",
+        ],
+        Bridge,
+        &[],
+    ),
+    (&["open_project_options"], BridgeContextMenu, &[]),
+    // Planned Active Bar tools: they only say they are not built yet.
+    (PLANNED, ActiveBar, &[]),
+    (PLANNED, StillRunsUnavailable, &[]),
+];
+
+const PLANNED: &[&str] = &[
+    "draw_bezier",
+    "draw_ellipse",
+    "draw_elliptical_arc",
+    "draw_round_rectangle",
+    "place_device_sheet_symbol",
+    "place_graphic",
+    "place_harness_connector",
+    "place_harness_entry",
+    "place_parameter_set",
+    "place_reuse_block",
+    "place_signal_harness",
+];
+
+/// The hand annotation of `(id, form)`, if any.
+pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {
+    ANNOTATIONS
+        .iter()
+        .find(|(ids, annotated, _)| *annotated == form && ids.contains(&id))
+        .map(|(_, _, inputs)| *inputs)
+}
