@@ -29,6 +29,8 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod held_flip_tests;
+#[cfg(test)]
 mod layout_keys_tests;
 #[cfg(test)]
 mod resize_tests;
@@ -349,12 +351,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 physical_key,
                 modifiers,
                 text,
+                repeat,
                 ..
             }) => self.on_key_pressed(
                 key,
                 *physical_key,
                 modifiers,
                 text.as_ref().and_then(|s| s.chars().next()),
+                *repeat,
             ),
             _ => None,
         }

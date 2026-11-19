@@ -30,19 +30,21 @@ impl FootprintCanvas<'_> {
     /// v0.24 Track D — key handling: clipboard shortcuts, rotate / flip,
     /// then the Sketch-mode numeric placement input. `typed_char` is
     /// the first codepoint of the event's platform text (or None).
+    /// `repeat`: an OS auto-repeat of a held key.
     pub(in crate::library::editor::footprint::canvas) fn on_key_pressed(
         &self,
         key: &keyboard::Key,
         physical: keyboard::key::Physical,
         modifiers: &keyboard::Modifiers,
         typed_char: Option<char>,
+        repeat: bool,
     ) -> Option<canvas::Action<LibraryMessage>> {
         // Letters match on any layout (#2095): Cyrillic `с` is `c`.
         let letter = crate::keymap::shortcut_char(key, physical);
         if let Some(a) = self.key_clipboard(letter, modifiers) {
             return Some(a);
         }
-        if let Some(a) = self.key_rotate_flip(key, letter, modifiers) {
+        if let Some(a) = self.key_rotate_flip(key, letter, modifiers, repeat) {
             return Some(a);
         }
         self.key_sketch_input(key, modifiers, typed_char)
@@ -84,12 +86,14 @@ impl FootprintCanvas<'_> {
 
     /// v0.26-G — Space (rotate 90°) / X (flip layer) on the selected
     /// pad. Altium parity; only fires when there's a pad to act on so
-    /// the canvas doesn't swallow Space / X from sketch tools.
+    /// the canvas doesn't swallow Space / X from sketch tools. A held X
+    /// flips once (docs/DECISIONS.md, "Held keys"); Space keeps repeating.
     fn key_rotate_flip(
         &self,
         key: &keyboard::Key,
         letter: Option<char>,
         modifiers: &keyboard::Modifiers,
+        repeat: bool,
     ) -> Option<canvas::Action<LibraryMessage>> {
         if !modifiers.command() && !modifiers.alt() {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Space))
@@ -106,6 +110,9 @@ impl FootprintCanvas<'_> {
                 );
             }
             if letter == Some('x') && self.state.selected_pad.is_some() {
+                if repeat {
+                    return Some(canvas::Action::capture());
+                }
                 return Some(
                     canvas::Action::publish(LibraryMessage::EditorEvent {
                         library_path: self.address.library_path.clone(),

@@ -164,3 +164,38 @@ fn a_held_shift_space_beside_a_main_wire_run_bends_it_once() {
     assert_held_shift_space_bends_once(&mut app, window);
     assert_eq!(rotation(&app, "b.snxsch", symbol), 0.0, "not turned");
 }
+
+/// (d) A wire run open in the main window and a footprint selected in an
+/// undocked board window: the rotate handler takes the board path there and
+/// never reaches the wire run, so a held Shift+Space turns the footprint on
+/// every repeat (#2553).
+#[test]
+fn a_held_shift_space_in_a_board_window_beside_a_wire_run_keeps_turning() {
+    let mut rig = rig();
+    let window = rig.window;
+    let u1 = uuid::Uuid::from_u128(0x10);
+    super::pcb_placement_window_tests::in_window(&mut rig.app, window, click(10.0, 10.0));
+    // The main window's wire run, as the Wire tool leaves it mid-run.
+    rig.app.interaction_state.current_tool = Tool::Wire;
+    rig.app.interaction_state.wire_drawing = true;
+    assert!(rig.app.is_drawing_wire_run(), "a wire run is open");
+    let turn = |app: &Signex| {
+        (app.document_state
+            .pcb_board(&rig.a)
+            .expect("board")
+            .footprints
+            .iter())
+        .find(|f| f.uuid == u1)
+        .expect("U1")
+        .rotation
+    };
+    send(&mut rig.app, window, shift_space(false));
+    let mut last = turn(&rig.app);
+    assert_ne!(last, 0.0, "the first press turns U1");
+    for _ in 0..REPEATS {
+        send(&mut rig.app, window, shift_space(true));
+        let now = turn(&rig.app);
+        assert_ne!(now, last, "held: U1 turns on every repeat");
+        last = now;
+    }
+}
