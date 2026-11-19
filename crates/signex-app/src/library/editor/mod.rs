@@ -23,7 +23,6 @@ pub mod alternate_symbols;
 pub mod datasheet_picker;
 pub mod footprint;
 mod header;
-pub mod inert;
 pub(crate) mod kit;
 mod measurement_cell;
 pub mod params;
@@ -40,6 +39,7 @@ use iced::{Color, Element, Length};
 use signex_i18n::{I18n, ids, t};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
+use signex_widgets::inert;
 use signex_widgets::text;
 use signex_widgets::theme_ext;
 
