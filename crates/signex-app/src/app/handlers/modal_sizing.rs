@@ -120,11 +120,18 @@ impl Signex {
         let fixed = crate::app::handlers::erc::modal_size(modal);
         let ui = &self.ui_state;
         let height = match modal {
+            // The grouped list: a heading per group over its rows, capped
+            // where it scrolls; the list-changed note is a one-line callout.
             ModalId::AppQuitConfirm => ui.app_quit_confirm.as_ref().map(|c| {
+                use crate::app::view::dialogs::graphite_list::{LIST_ROW_H, list_box_height};
+                use crate::styles::{LINE_HEIGHT, Spacing, TypeScale};
+                let callout = TypeScale::DEFAULT.body * LINE_HEIGHT + 3.0 * Spacing::DEFAULT.m;
+                let (groups, rows) = self.quit_list_shape(c);
                 LIST_DIALOG_BASE
-                    + list_height(c.dirty_paths.len() + c.dirty_rows.len())
+                    + list_box_height(groups, rows, LIST_ROW_H)
+                        .min(LIST_MAX_HEIGHT + LIST_BOX_CHROME)
                     + if ui.quit_confirm_refreshed {
-                        NOTE_HEIGHT
+                        callout
                     } else {
                         0.0
                     }

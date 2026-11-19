@@ -1,8 +1,9 @@
 # Dialogs.
 
-# Autosave recovery card: how long ago the recovered copy was written.
-# $age is an already-worded duration, such as "5 minutes ago".
-dialog-autosave-recovery-autosaved-age = autosaved { $age }
+# Autosave recovery prompt, the recovery copy's row: how long ago the copy
+# was written and when. $age is an already-worded duration, such as
+# "5 minutes ago"; $time is a clock time, such as "14:26" or "Nov 16 17:40".
+dialog-autosave-recovery-autosaved-age = autosaved { $age } · { $time }
 
 ## Tools ▸ Assign Footprints (#2248): the project's placed parts and the
 ## footprints their library rows offer.

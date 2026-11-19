@@ -1,23 +1,119 @@
-//! The recovery prompt (#1164): a schematic was opened and a recovery copy
-//! with edits its file lacks exists. Restore / Discard / Decide later; Esc is
-//! Decide later (`OpenOverlays::rung`), so a stray key never deletes or
-//! loads anything.
+//! The recovery prompt (#1164): a document was opened and a recovery copy
+//! with edits its file lacks exists. The two versions are listed with their
+//! times, the newer one marked. Discard / Decide later / Restore; Esc and the
+//! header close are Decide later (`OpenOverlays::rung`), so a stray key never
+//! deletes or loads anything.
+
+use std::time::{Duration, SystemTime};
 
 use super::*;
-use iced::widget::{Space, column, container, row};
+use iced::widget::{Column, column, container};
 use iced::{Element, Length, Widget};
-use signex_i18n::{ids, t};
-use signex_widgets::text;
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::{Label, text};
 
-use super::widgets::modal_title_header;
+use super::graphite_list::{
+    LIST_TILE_ROW_H, accent_pill, kind_code, kind_tile, list_box, list_row,
+};
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer_split, dialog_hint, dialog_message,
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer_split,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Ages under a day show the time of day only.
+const DAY_SECS: u64 = 86_400;
+
+/// The local wall-clock time `age_secs` before `checked_at` in `zone`:
+/// "14:26" within a day of the check, else "Nov 16 17:40".
+pub(super) fn clock_time<Tz>(checked_at: SystemTime, age_secs: u64, zone: &Tz) -> String
+where
+    Tz: chrono::TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
+    let at = checked_at
+        .checked_sub(Duration::from_secs(age_secs))
+        .unwrap_or(checked_at);
+    let local = chrono::DateTime::<chrono::Utc>::from(at).with_timezone(zone);
+    let pattern = if age_secs < DAY_SECS {
+        "%H:%M"
+    } else {
+        "%b %-d %H:%M"
+    };
+    local.format(pattern).to_string()
+}
+
+/// The recovery copy is the newer version: it gets the "newer" pill, and
+/// Restore is the primary action.
+fn copy_is_newer(offer: &RecoveryOffer) -> bool {
+    !offer.older_than_file
+}
+
+/// The role of Restore: primary only while the copy is the newer version;
+/// with newer saved work the footer has no primary action.
+pub(super) fn restore_kind(offer: &RecoveryOffer) -> DialogButtonKind {
+    if copy_is_newer(offer) {
+        DialogButtonKind::Primary
+    } else {
+        DialogButtonKind::Secondary
+    }
+}
+
+/// The medium-weight UI face of a version's name and of the lead line.
+fn medium() -> iced::Font {
+    iced::Font {
+        weight: iced::font::Weight::Medium,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    }
+}
+
+/// One version row: the kind tile, the version's name over its caption, and
+/// the "newer" pill when it is the newer one.
+fn version_row<'a>(
+    i18n: &I18n,
+    tile: Option<Element<'a, Message>>,
+    title: Localized,
+    caption: Element<'a, Message>,
+    newer: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let name = text(title)
+        .size(TS.body)
+        .font(medium())
+        .color(crate::styles::ti(tokens.text));
+    let mut cells: Vec<Element<'a, Message>> = tile.into_iter().collect();
+    cells.push(
+        column![name, caption]
+            .spacing(SP.xs / 2.0)
+            .width(Length::Fill)
+            .boxed(),
+    );
+    if newer {
+        cells.push(accent_pill(t!(i18n, ids::DIALOG_RECOVERY_NEWER), tokens));
+    }
+    list_row(cells, LIST_TILE_ROW_H)
+}
+
+/// The one-line caption under a version's name; `mono` for a path.
+fn caption<'a>(
+    label: impl Into<Label<'a>>,
+    mono: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let line = text(label)
+        .size(TS.caption)
+        .color(crate::styles::tokens::resolve(tokens).ink4)
+        .wrapping(iced::widget::text::Wrapping::None);
+    if mono {
+        line.font(super::graphite::mono()).boxed()
+    } else {
+        line.boxed()
+    }
+}
 
 impl Signex {
     pub(in crate::app::view) fn view_autosave_recovery(
@@ -38,6 +134,107 @@ impl Signex {
         self.autosave_recovery_card(offer, true)
     }
 
+    /// The header: the title, and a close that is Decide later, as its
+    /// tooltip says.
+    fn autosave_recovery_header<'a>(&self, later: Message) -> Element<'a, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let tip = container(
+            text(t!(i18n, ids::DIALOG_RECOVERY_CLOSE_TOOLTIP))
+                .size(TS.caption)
+                .color(crate::styles::ti(tokens.text)),
+        )
+        .padding([SP.xs, SP.m])
+        .style(signex_widgets::active_bar_dropdown::tooltip_style(
+            crate::styles::tokens::hover_overlay(tokens),
+            crate::styles::ti(tokens.border),
+        ));
+        let close = signex_widgets::tooltip(
+            super::header::neutral_close_button(tokens, later),
+            tip,
+            iced::widget::tooltip::Position::Bottom,
+        )
+        .gap(SP.xs)
+        .boxed();
+        super::header::graphite_header_closing(
+            t!(i18n, ids::DIALOG_TITLE_AUTOSAVE_RECOVERY).into_string(),
+            None,
+            Some(close),
+            None,
+            super::header::DIALOG_HEADER_H,
+            tokens,
+        )
+    }
+
+    /// The two version rows: the recovery copy, then the saved file. A
+    /// Component Preview row has no file: its second row names the library,
+    /// with no time.
+    fn recovery_versions<'a>(
+        &self,
+        offer: &RecoveryOffer,
+        library: Option<String>,
+    ) -> Element<'a, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let code: Option<MessageId> = if library.is_some() {
+            Some(ids::PANELS_TAB_KIND_COMPONENT)
+        } else {
+            kind_code(&offer.path)
+        };
+        let tile = || code.map(|code| kind_tile(i18n, code, tokens));
+        let zone = chrono::Local;
+        let copy_caption = caption(
+            t!(
+                i18n,
+                ids::DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE,
+                "age" => describe_age(offer.age_secs),
+                "time" => clock_time(offer.checked_at, offer.age_secs, &zone)
+            ),
+            false,
+            tokens,
+        );
+        let saved_caption = match (library, offer.saved_age_secs) {
+            (Some(library), _) => caption(UserText::new(library), false, tokens),
+            (None, Some(age)) => caption(
+                t!(
+                    i18n,
+                    ids::DIALOG_RECOVERY_SAVED_TIME,
+                    "path" => offer.path.display().to_string(),
+                    "time" => clock_time(offer.checked_at, age, &zone)
+                ),
+                true,
+                tokens,
+            ),
+            (None, None) => caption(
+                UserText::new(offer.path.display().to_string()),
+                true,
+                tokens,
+            ),
+        };
+        let newer = copy_is_newer(offer);
+        list_box(
+            vec![
+                version_row(
+                    i18n,
+                    tile(),
+                    t!(i18n, ids::DIALOG_RECOVERY_COPY),
+                    copy_caption,
+                    newer,
+                    tokens,
+                ),
+                version_row(
+                    i18n,
+                    tile(),
+                    t!(i18n, ids::DIALOG_RECOVERY_SAVED),
+                    saved_caption,
+                    !newer,
+                    tokens,
+                ),
+            ],
+            tokens,
+        )
+    }
+
     fn autosave_recovery_card(
         &self,
         offer: &RecoveryOffer,
@@ -47,24 +244,26 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
-        let header_content = modal_title_header(
-            t!(i18n, ids::DIALOG_TITLE_AUTOSAVE_RECOVERY).into_string(),
-            later.clone(),
-            tokens,
-        );
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {
-            header_content.boxed()
+            self.autosave_recovery_header(later.clone())
         };
 
-        // A Component Preview row has no file: the prompt names the part.
-        let row_name = self
+        // A Component Preview row has no file: the prompt names the part
+        // and its library.
+        let (row_name, library) = self
             .library
             .editors
             .iter()
             .find(|(address, _)| address.synthetic_tab_path() == offer.path)
-            .map(|(_, editor)| editor.row.internal_pn.as_str().to_string());
+            .map(|(address, editor)| {
+                (
+                    editor.row.internal_pn.as_str().to_string(),
+                    self.library.library_label(&address.library_path),
+                )
+            })
+            .unzip();
         let name = row_name.unwrap_or_else(|| {
             offer
                 .path
@@ -72,95 +271,67 @@ impl Signex {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| offer.path.display().to_string())
         });
-        let mut body = column![dialog_message(
-            t!(
-                i18n,
-                ids::DIALOG_RECOVERY_FOUND,
-                "name" => name.as_str(),
-                "age" => describe_age(offer.age_secs)
-            ),
-            tokens,
-        )]
-        .spacing(SP.m);
-        if offer.older_than_file {
-            body = body.push(
-                text(t!(i18n, ids::DIALOG_RECOVERY_OLDER, "name" => name.as_str()))
-                    .size(TS.body)
-                    .color(crate::styles::ti(tokens.warning))
-                    .boxed(),
-            );
-        }
-        body = body.push(dialog_hint(
-            t!(
-                i18n,
-                ids::DIALOG_RECOVERY_HINT,
-                "undo" => crate::keymap::shown("Mod+Z")
-            )
-            .into_string(),
-            tokens,
-        ));
 
-        let restore = dialog_button(
-            t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE),
-            DialogButtonKind::Primary,
-            Some(Message::Autosave(AutosaveMsg::Recovery(
-                RecoveryChoice::Restore,
-            ))),
-            tokens,
-        );
-        let discard = dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_DISCARD),
-            DialogButtonKind::Danger,
-            Some(Message::Autosave(AutosaveMsg::Recovery(
-                RecoveryChoice::Discard,
-            ))),
-            tokens,
-        );
-        // Restore and Discard at the left, a quiet Decide later at the
-        // right; Esc keeps meaning Decide later.
+        let lead = text(t!(i18n, ids::DIALOG_RECOVERY_FOUND, "name" => name.as_str()))
+            .size(TS.label)
+            .font(medium())
+            .color(crate::styles::ti(tokens.text));
+        // The copy is newer: what Restore does. The saved file is newer: the
+        // warning that Restore replaces that newer work.
+        let note = if copy_is_newer(offer) {
+            super::graphite::callout(
+                DialogIcon::Info,
+                t!(
+                    i18n,
+                    ids::DIALOG_RECOVERY_RESTORE_HINT,
+                    "undo" => crate::keymap::shown_in("Mod+Z", i18n)
+                ),
+                tokens,
+            )
+        } else {
+            super::graphite::callout(
+                DialogIcon::Warn,
+                t!(i18n, ids::DIALOG_RECOVERY_OLDER, "name" => name.as_str()),
+                tokens,
+            )
+        };
+        // Shown in both cases: the one place Decide later (and so Esc) is
+        // explained.
+        let later_hint = text(t!(i18n, ids::DIALOG_RECOVERY_LATER_HINT))
+            .size(TS.caption)
+            .color(crate::styles::tokens::resolve(tokens).ink4)
+            .width(Length::Fill);
+        let body: Column<Element<'_, Message>> = column![
+            column![lead.boxed(), self.recovery_versions(offer, library)].spacing(SP.m),
+            column![note, later_hint.boxed()].spacing(SP.m),
+        ]
+        .spacing(SP.l);
+
+        let choose = |choice| Some(Message::Autosave(AutosaveMsg::Recovery(choice)));
+        // Discard deletes the copy: alone at the left. Decide later, then
+        // Restore, at the right.
         let footer = dialog_footer_split(
-            vec![restore, discard],
             vec![dialog_button(
-                t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_LATER),
-                DialogButtonKind::Ghost,
-                Some(later),
+                t!(i18n, ids::DIALOG_BUTTON_DISCARD),
+                DialogButtonKind::Danger,
+                choose(RecoveryChoice::Discard),
                 tokens,
             )],
+            vec![
+                dialog_button(
+                    t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_LATER),
+                    DialogButtonKind::Cancel,
+                    Some(later),
+                    tokens,
+                ),
+                dialog_button(
+                    t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE),
+                    restore_kind(offer),
+                    choose(RecoveryChoice::Restore),
+                    tokens,
+                ),
+            ],
         );
-        let body: Element<'_, Message> = {
-            let r = crate::styles::tokens::resolve(tokens);
-            let card = container(
-                row![
-                    text(signex_i18n::UserText::new(name.clone()))
-                        .size(TS.dense)
-                        .font(crate::fonts::iced_font_for_family(
-                            crate::fonts::CHROME_MONO_FONT,
-                        ))
-                        .color(crate::styles::ti(tokens.text)),
-                    Space::new().width(Length::Fill),
-                    text(signex_i18n::t!(
-                        self.ui_state.i18n,
-                        signex_i18n::ids::DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE,
-                        "age" => describe_age(offer.age_secs)
-                    ))
-                    .size(TS.label)
-                    .color(r.ink3),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([SP.m, SP.l])
-            .width(Length::Fill)
-            .style(crate::styles::card(tokens));
-            row![
-                super::graphite::recovery_icon_tile(tokens),
-                column![body.boxed(), card.boxed()]
-                    .spacing(SP.l)
-                    .width(Length::Fill)
-                    .boxed()
-            ]
-            .spacing(SP.l)
-            .boxed()
-        };
         let dialog = container(
             column![header, dialog_body(body), footer].width(if windowed {
                 Length::Fill
@@ -180,3 +351,7 @@ impl Signex {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "autosave_recovery_tests.rs"]
+mod tests;

@@ -491,9 +491,10 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::CreateChildSheet => iced::Size::new(560.0, 206.0),
         ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),
         ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
-        ModalId::AutosaveRecovery => iced::Size::new(540.0, 187.0),
+        // The two version rows, the note and its caption (#2262).
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 320.0),
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
-        ModalId::AppQuitConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::AppQuitConfirm => iced::Size::new(500.0, 310.0),
         ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),
         ModalId::LibraryEditRow => iced::Size::new(640.0, 600.0),
         ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
