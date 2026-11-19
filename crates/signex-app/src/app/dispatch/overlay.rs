@@ -640,6 +640,11 @@ impl Signex {
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
             }
+            ErcMsg::ProfileMenuToggled => self.handle_erc_profile_menu_toggled(),
+            ErcMsg::ProfileMenuRowChosen(action) => {
+                self.ui_state.erc_profile_menu_open = false;
+                self.dispatch_erc_message(action.message())
+            }
         }
     }
 

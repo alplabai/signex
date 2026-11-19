@@ -698,6 +698,8 @@ mod project_tab_support;
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]

@@ -259,3 +259,11 @@ dialog-title-library-recovery = Library Recovery
 dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
+
+## ERC dialog (#2413): where the rules come from, and the Profile menu
+# Pill under the title: the dialog edits the rules stored in the project.
+dialog-erc-source-project = Rules: this project
+# Pill under the title: the dialog edits this machine's "User Default" rule profile.
+dialog-erc-source-user-default = User Default
+# Footer menu button holding Store / Save as profile / Update from profile.
+dialog-erc-profile-menu = Profile
