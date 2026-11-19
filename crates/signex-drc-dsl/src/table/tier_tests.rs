@@ -136,3 +136,45 @@ fn a_tier_is_named_by_one_token_everywhere() {
         assert_eq!(super::presets::tier_id(tier), tier.token());
     }
 }
+
+#[test]
+fn the_rules_grid_shows_each_tier_card_value_as_the_all_row_default() {
+    use super::LimitField as F;
+    use super::grid::{CellSource, GridScope, resolve};
+    for tier in FabTemplate::ALL {
+        let c = tier.capabilities();
+        let seeded = with_tier(&DrcRuleSet::default(), tier).unwrap();
+        let rows = table(seeded.dsl.as_deref().unwrap_or_default());
+        let card = [
+            (F::MinClearance, c.clearance),
+            (F::MinWidth, c.track_width),
+            (F::MinDiameter, c.via_diameter),
+            (F::MinDrill, c.via_drill),
+            (F::MinHole, c.hole),
+            (F::MinAnnular, c.annular_ring),
+            (F::MinHoleSpacing, c.hole_to_hole),
+            (F::MinEdgeClearance, c.edge_clearance),
+            (F::MinSliver, c.mask_sliver),
+            (F::MinSilkPad, c.silk_to_pad),
+        ];
+        for (field, mm) in card {
+            let cell = resolve(&rows, &seeded.sets, &GridScope::All, &[], field)
+                .unwrap_or_else(|| panic!("{tier:?} {field:?} has a cell"));
+            assert_eq!(cell.source, CellSource::Default, "{tier:?} {field:?}");
+            let shown: f64 = cell.value.trim_end_matches("mm").parse().unwrap();
+            assert!(
+                (shown - mm).abs() < 1e-9,
+                "{tier:?} {field:?}: {shown} vs {mm}"
+            );
+            // A net of any class inherits the same floor.
+            let net = resolve(
+                &rows,
+                &seeded.sets,
+                &GridScope::Net("GND".into()),
+                &[GridScope::Class("Power".into()), GridScope::All],
+                field,
+            );
+            assert_eq!(net, Some(cell), "{tier:?} {field:?}");
+        }
+    }
+}

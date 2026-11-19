@@ -3,7 +3,10 @@
 //! one rule per kind it limits for that scope; changing the set rewrites
 //! every rule it wrote, so the rule text stays the format Run DRC reads.
 //! The set itself (`NamedRuleSet`) lives beside the text in `rules.drc`.
-//! See `docs/DRC_RULES.md`, "Rule sets".
+//! The Rules grid shows them as constraint sets and reads which set wrote a
+//! rule ([`writer_of`]). See `docs/DRC_RULES.md`, "Rule sets".
+
+use std::collections::BTreeMap;
 
 use signex_drc::NetScope;
 use signex_types::project::{NamedRuleSet, RuleSetUse};
@@ -13,7 +16,7 @@ use super::edit::{
 };
 use super::matrix::{free_name, slug};
 use super::render::severity_word;
-use super::{LimitField, RowLimit, RuleDraft, RuleKind, table};
+use super::{LimitField, RULE_ID_PREFIX, RowLimit, RuleDraft, RuleKind, table};
 
 /// Whether `name` can name a set: letters, digits and `_`, not starting
 /// with a digit (it starts the names of the rules the set writes).
@@ -254,4 +257,29 @@ pub fn values_text(set: &NamedRuleSet) -> String {
         .map(|(id, value)| format!("{id}={value}"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The set that wrote rule `rule` (`name` or `user::name`) and the use it
+/// wrote it for, from the project's sets by name; `None` for a rule no
+/// set wrote. The rules grid shows such a value as the set's.
+pub fn writer_of<'s>(
+    sets: &'s BTreeMap<String, NamedRuleSet>,
+    rule: &str,
+) -> Option<(&'s str, &'s RuleSetUse)> {
+    let rule = rule.strip_prefix(RULE_ID_PREFIX).unwrap_or(rule);
+    sets.iter().find_map(|(name, set)| {
+        set.uses
+            .iter()
+            .find(|u| u.rules.iter().any(|r| r == rule))
+            .map(|u| (name.as_str(), u))
+    })
+}
+
+/// The scopes `set` is applied to, in the order applied. A use whose scope
+/// no longer reads (edited by hand in `rules.drc`) is left out.
+pub fn applied_scopes(set: &NamedRuleSet) -> Vec<NetScope> {
+    set.uses
+        .iter()
+        .filter_map(|u| parse_scope(&u.scope).ok())
+        .collect()
 }
