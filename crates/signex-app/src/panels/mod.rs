@@ -18,6 +18,7 @@ pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
 mod placed_edit;
+mod pre_placement;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -151,13 +152,14 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+#[cfg(test)]
+pub(crate) use pre_placement::pre_placement_readout;
+pub use pre_placement::{PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
-#[cfg(test)]
-pub(crate) use properties::pre_placement_readout;
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
+pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
     PROPERTY_ROW_PAD_X, view_properties,
