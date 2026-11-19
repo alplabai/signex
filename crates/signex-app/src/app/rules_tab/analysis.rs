@@ -90,6 +90,7 @@ impl Signex {
         let shown_key = self.rules_shown_key(id);
         let kept = self.rules_tab_mut(id).analysis.take();
         let text_moved = kept.as_ref().is_some_and(|kept| kept.key.text != key.text);
+        let rebuilt = !kept.as_ref().is_some_and(|kept| kept.key == key);
         let mut analysis = match kept {
             Some(analysis) if analysis.key == key => analysis,
             _ => self.analyse_rules(id, key),
@@ -109,6 +110,11 @@ impl Signex {
         }
         self.rules_tab_mut(id).analysis = Some(analysis);
         self.sync_rules_matrix(id);
+        // The grid's rows follow the text, the board and the classes.
+        if rebuilt {
+            self.sync_rules_grid(id);
+        }
+        self.refresh_rules_drawing(id);
     }
 
     fn rules_analysis_key(&self, id: ProjectId) -> Option<AnalysisKey> {

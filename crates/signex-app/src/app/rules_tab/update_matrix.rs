@@ -184,8 +184,11 @@ impl Signex {
             }
             RulesTabMsg::OpenRequested { .. }
             | RulesTabMsg::DomainPicked { .. }
-            | RulesTabMsg::FilterPicked { .. }
-            | RulesTabMsg::SearchEdited { .. }
+            | RulesTabMsg::GridActed { .. }
+            | RulesTabMsg::PreviewActed { .. }
+            | RulesTabMsg::SetsToggled { .. }
+            | RulesTabMsg::InheritedToggled { .. }
+            | RulesTabMsg::OverriddenOnlyToggled { .. }
             | RulesTabMsg::RowSelected { .. }
             | RulesTabMsg::CellOpened { .. }
             | RulesTabMsg::CellEdited { .. }

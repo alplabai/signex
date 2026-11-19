@@ -22,6 +22,10 @@ impl Signex {
                 Task::none()
             }
             RulesTabMsg::DrcRequested { project_id } => self.run_rules_drc(project_id),
+            RulesTabMsg::GridActed { project_id, msg } => self.act_on_rules_grid(project_id, msg),
+            RulesTabMsg::PreviewActed { project_id, msg } => {
+                self.act_on_rules_drawing(project_id, msg)
+            }
             RulesTabMsg::ScopeShown { project_id, rule } => {
                 self.show_rule_scope(project_id, &rule);
                 Task::none()
@@ -48,15 +52,15 @@ impl Signex {
     fn apply_rules_tab_message(&mut self, msg: RulesTabMsg) {
         match msg {
             RulesTabMsg::DomainPicked { project_id, domain } => {
+                self.pick_rules_domain(project_id, domain);
+            }
+            RulesTabMsg::SetsToggled { project_id } => self.toggle_rules_sets(project_id),
+            RulesTabMsg::InheritedToggled { project_id } => {
                 let tab = self.rules_tab_mut(project_id);
-                tab.domain = domain;
-                tab.edit = None;
+                tab.hide_inherited = !tab.hide_inherited;
             }
-            RulesTabMsg::FilterPicked { project_id, filter } => {
-                self.rules_tab_mut(project_id).filter = filter;
-            }
-            RulesTabMsg::SearchEdited { project_id, text } => {
-                self.rules_tab_mut(project_id).search = text;
+            RulesTabMsg::OverriddenOnlyToggled { project_id } => {
+                self.toggle_rules_overridden_only(project_id);
             }
             RulesTabMsg::RowSelected { project_id, rule } => {
                 self.rules_tab_mut(project_id).selected = Some(rule);
@@ -152,6 +156,8 @@ impl Signex {
             RulesTabMsg::OpenRequested { .. }
             | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
+            | RulesTabMsg::GridActed { .. }
+            | RulesTabMsg::PreviewActed { .. }
             | RulesTabMsg::ScopeShown { .. } => {}
         }
     }
@@ -277,7 +283,7 @@ impl Signex {
     /// Run `edit` on the rule text and store the result, with the severity
     /// entries following `follows`, as one undo step; a refusal is kept for
     /// the tab to show. Whether it was stored.
-    fn edit_rules(
+    pub(super) fn edit_rules(
         &mut self,
         id: ProjectId,
         follows: &[WrittenRuleEdit<'_>],
