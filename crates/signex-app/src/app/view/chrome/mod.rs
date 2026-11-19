@@ -457,9 +457,11 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
+        // The banner's actions are small buttons at the caption size (the
+        // Preferences mock's `btn sm`).
         let one_line = natural::<()>(
             signex_widgets::text(signex_widgets::raw(RESET))
-                .size(TS.body)
+                .size(TS.caption)
                 .boxed(),
             RESET,
         );
