@@ -30,6 +30,9 @@ const SP: Spacing = Spacing::DEFAULT;
 /// 12 px body.
 const ORDER_COLUMN_W: f32 = TS.body * 280.0 / 12.0;
 
+/// Vertical padding of a status pill: half the hairline gap.
+const PILL_PAD_Y: f32 = SP.xs / 2.0;
+
 /// Render the Distributor APIs page body: the cards beside the order list.
 pub fn view<'a>(
     settings: &'a DistributorSettings,
@@ -99,7 +102,7 @@ fn status_pill<'a>(
             .size(TS.caption)
             .wrapping(iced::widget::text::Wrapping::None),
     )
-    .padding([SP.xs / 2.0, SP.s + SP.xs])
+    .padding([PILL_PAD_Y, SP.s + SP.xs])
     .style(crate::styles::pill(tokens, tone))
     .boxed()
 }
