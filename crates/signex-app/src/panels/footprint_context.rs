@@ -232,6 +232,16 @@ pub struct FootprintEditorPanelContext {
     /// The field or callout under the pointer (mirror of
     /// `editor.state.properties_hover`).
     pub illustration_hover: signex_widgets::property_illustration::IllustrationHover,
+    /// Extent of the courtyard in mm, `[min_x, min_y, max_x, max_y]`: the
+    /// generated rectangle, else the outline-following polygon's extent;
+    /// `None` without a courtyard.
+    pub courtyard_extent_mm: Option<[f64; 4]>,
+    /// How far the generated courtyard grows past the pads, in mm.
+    pub courtyard_expansion_mm: f64,
+    /// The editor's pads as the Footprint page illustration draws them.
+    pub pad_outlines: Vec<PadOutlineSummary>,
+    /// The sketch's solve state, as the canvas chip names it.
+    pub sketch_state: SketchStateSummary,
 }
 
 /// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad
@@ -703,4 +713,27 @@ pub struct MountingHoleProps {
     pub plated: bool,
     /// The net name; empty means no net.
     pub net: String,
+}
+
+/// One pad as the Footprint page illustration draws it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadOutlineSummary {
+    /// Centre in mm.
+    pub position_mm: [f64; 2],
+    /// Width and height in mm, before rotation.
+    pub size_mm: [f64; 2],
+    pub rotation_deg: f64,
+    /// The four corners turned by the rotation, in mm.
+    pub corners_mm: [[f64; 2]; 4],
+    pub shape: signex_library::PadShape,
+    /// The pad has a drill hole.
+    pub has_drill: bool,
+}
+
+/// The sketch's solve state: the tone of its pill and the catalog message
+/// that names it (no sketch, not solved, under, fully or over-constrained).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SketchStateSummary {
+    pub tone: crate::styles::PillTone,
+    pub label: signex_i18n::MessageId,
 }

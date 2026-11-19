@@ -364,6 +364,160 @@ editors-pattern-skip-letters = Skip I/O/Q/S/X/Z (IPC-7351)
 editors-pattern-start-row = Start row
 editors-pattern-start-col = Start col
 
+## Footprint Properties body: header, pages and sections (#124)
+# Header with nothing selected.
+editors-fp-props-title = Footprint
+# Status line under it. $pads is a whole number.
+editors-fp-props-status = { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    }
+# Status line once the sketch was solved. $state names the solve state.
+editors-fp-props-status-solved = { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    } · { $state }
+# The three pages of the Properties panel with nothing selected.
+editors-fp-props-page-footprint = Footprint
+editors-fp-props-page-snap = Snap & Grid
+editors-fp-props-page-sketch = Sketch
+editors-fp-props-section-footprint = Footprint
+editors-fp-props-name = Name
+editors-fp-props-description = Description
+editors-fp-props-designator = Designator
+# Beside the designator: it is the default for placed parts.
+editors-fp-props-designator-default = default
+# The component type (Standard, Mechanical…).
+editors-fp-props-type = Type
+editors-fp-props-height = Height (mm)
+editors-fp-props-version = Version
+editors-fp-props-section-courtyard = Courtyard & Silkscreen
+# Enable header: the courtyard follows the pads.
+editors-fp-props-courtyard = Courtyard (generated)
+# Size of the courtyard. $width and $height are millimetre numbers.
+editors-fp-props-courtyard-size = { $width } × { $height } mm
+# How far the generated courtyard grows past the pads.
+editors-fp-props-expansion = Expansion
+# A length in millimetres. $value is a number.
+editors-fp-props-length-mm = { $value } mm
+# Leader label of the courtyard in the illustration.
+editors-fp-props-illustration-courtyard = Courtyard
+editors-fp-props-section-snap = Snap Options
+editors-fp-props-snapping = Snapping
+editors-fp-props-snap-all-layers = All Layers
+editors-fp-props-snap-current-layer = Current Layer
+editors-fp-props-snap-off = Off
+editors-fp-props-snap-grids = Grids
+editors-fp-props-snap-guides = Guides
+editors-fp-props-snap-axes = Axes
+editors-fp-props-snap-objects = Objects for snapping
+editors-fp-props-object-track-vertices = Track Vertices
+editors-fp-props-object-track-lines = Track Lines
+editors-fp-props-object-arc-centers = Arc Centers
+editors-fp-props-object-intersections = Intersections
+editors-fp-props-object-pad-centers = Pad Centers
+editors-fp-props-object-pad-vertices = Pad Vertices
+editors-fp-props-object-pad-edges = Pad Edges
+editors-fp-props-object-via-centers = Via Centers
+editors-fp-props-object-texts = Texts
+editors-fp-props-object-regions = Regions
+editors-fp-props-object-footprint-origins = Footprint Origins
+editors-fp-props-object-body-points = 3D Body Snap Points
+editors-fp-props-snap-distance = Snap Distance
+editors-fp-props-axis-snap-range = Axis Snap Range
+# Beside Axis Snap Range while snapping to axes is off.
+editors-fp-props-axes-off = Axes off
+# The active grid's step, where the Grid Manager is not shown.
+editors-fp-props-grid-step-row = Grid step (mm)
+# Note in the snap illustration while snapping is off.
+editors-fp-props-illustration-snapping-off = Snapping off
+editors-fp-props-section-grids = Grid Manager
+# Header button that adds a grid.
+editors-fp-props-grid-add = + Add
+editors-fp-props-grid-name = Name
+editors-fp-props-grid-step = Step
+editors-fp-props-grid-display = Display
+editors-fp-props-grid-lines = Lines
+editors-fp-props-grid-dots = Dots
+editors-fp-props-grid-hidden = Hidden
+# Opens the Grid Properties dialog of the active grid.
+editors-fp-props-grid-properties = Properties…
+editors-fp-props-delete = Delete
+editors-fp-props-grid-none = No grids
+editors-fp-props-section-solve = Sketch solve
+# Pill of a fully constrained sketch: no degree of freedom left.
+editors-fp-props-dof-zero = DOF 0
+editors-fp-props-entities = Entities
+editors-fp-props-constraints = Constraints
+editors-fp-props-iterations = Iterations
+editors-fp-props-residual = Residual
+editors-fp-props-elapsed = Elapsed
+# A solve time. $ms is a whole number of milliseconds.
+editors-fp-props-elapsed-value = { $ms } ms
+editors-fp-props-over-constrained = Over-constrained
+editors-fp-props-not-solved = Not solved yet
+editors-fp-props-redundant = Redundant
+# A constraint that restates earlier ones. $kind names the constraint.
+editors-fp-props-redundant-row = { $kind } — already implied by earlier constraints
+editors-fp-props-conflicts = Conflicts (worst first)
+# More rows than the list shows. $count is a whole number.
+editors-fp-props-more = … +{ $count } more
+# A count in a section header pill. $count is a whole number.
+editors-fp-props-count = { $count }
+editors-fp-props-section-parameters = Parameters
+editors-fp-props-parameters-none = None yet: add one through an expression.
+editors-fp-props-parameter-placeholder = expression…
+editors-fp-props-section-warnings = Solve warnings
+editors-fp-props-warnings-none = None
+editors-fp-props-open-sketch = Open the sketch (Edit Sketch in the active bar) to see the constraints on the canvas.
+# Hint at the bottom of the panel, by editor mode.
+editors-fp-props-hint-pads = Click a pad to edit its properties.
+editors-fp-props-hint-sketch = Click a sketch entity (Point, Line, Arc or Circle) to edit it.
+editors-fp-props-hint-view3d = 3D View: use the 3D preview pane to inspect the body.
+# A sketch entity kind. $kind is the entity kind's name in the code.
+editors-fp-props-entity-kind = { $kind ->
+        [Point] Point
+        [Line] Line
+        [Arc] Arc
+        [Circle] Circle
+       *[other] Entity
+    }
+# Header of a selected sketch entity. $kind is its localized kind.
+editors-fp-props-entity-heading = Sketch entity · { $kind }
+# Status line of a selected sketch entity. $constraints is a whole number.
+editors-fp-props-entity-status = { $constraints ->
+        [one] { $constraints } constraint attached
+       *[other] { $constraints } constraints attached
+    }
+# The same, with the entity's constraint state. $state names it.
+editors-fp-props-entity-status-dof = { $constraints ->
+        [one] { $constraints } constraint attached
+       *[other] { $constraints } constraints attached
+    } · { $state }
+editors-fp-props-section-entity = Entity
+editors-fp-props-kind = Kind
+editors-fp-props-role = Role
+editors-fp-props-construction = Construction
+editors-fp-props-yes = Yes
+editors-fp-props-no = No
+editors-fp-props-attached = Attached constraints
+editors-fp-props-banner-under = Under-constrained: degrees of freedom are left.
+editors-fp-props-banner-full = Fully constrained: no degree of freedom is left.
+editors-fp-props-banner-over = Over-constrained: a constraint conflicts with the others.
+# A silk graphic kind. $kind is the graphic kind's name in the code.
+editors-fp-props-silk-kind = { $kind ->
+        [Line] Line
+        [Text] Text
+        [Rectangle] Rectangle
+        [Circle] Circle
+        [Arc] Arc
+       *[other] Polygon
+    }
+# Header of a selected silk graphic. $kind is its localized kind.
+editors-fp-props-silk-heading = Silk graphic · { $kind }
+editors-fp-props-section-silk = Silk graphic
+editors-fp-props-index = Index
+
 ## Component editor empty states
 editors-component-alternates-empty = No alternate drawings; the row uses its default symbol only.
 editors-component-datasheets-empty = No datasheet on this component yet.

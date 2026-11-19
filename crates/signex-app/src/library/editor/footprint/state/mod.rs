@@ -65,7 +65,7 @@ use super::layers::LayerVisibility;
 
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.
-const COURTYARD_SLACK_MM: f64 = 0.25;
+pub(crate) const COURTYARD_SLACK_MM: f64 = 0.25;
 
 /// v0.14 — typed-delta "Move Selection By X, Y" modal. `None` on
 /// `FootprintEditorState::move_by_modal` means the modal is closed.
