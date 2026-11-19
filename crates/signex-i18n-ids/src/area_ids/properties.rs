@@ -270,4 +270,25 @@ define_ids! {
     PROPERTIES_PIN_HIDDEN_TIP = "properties-pin-hidden-tip";
     PROPERTIES_PINS_COUNT = "properties-pins-count";
     PROPERTIES_SECTION_PINS = "properties-section-pins";
+    PROPERTIES_KIND_WIRE = "properties-kind-wire";
+    PROPERTIES_KIND_BUS = "properties-kind-bus";
+    PROPERTIES_KIND_NET_LABEL = "properties-kind-net-label";
+    PROPERTIES_KIND_GLOBAL_PORT = "properties-kind-global-port";
+    PROPERTIES_KIND_HIERARCHICAL_PORT = "properties-kind-hierarchical-port";
+    PROPERTIES_KIND_POWER_PORT = "properties-kind-power-port";
+    PROPERTIES_KIND_TEXT_NOTE = "properties-kind-text-note";
+    PROPERTIES_LENGTH_DERIVED = "properties-length-derived";
+    PROPERTIES_END_X = "properties-end-x";
+    PROPERTIES_END_Y = "properties-end-y";
+    PROPERTIES_CALLOUT_START = "properties-callout-start";
+    PROPERTIES_POWER_STYLE_SHORT_POWER_GROUND = "properties-power-style-short-power-ground";
+    PROPERTIES_POWER_STYLE_SHORT_SIGNAL_GROUND = "properties-power-style-short-signal-ground";
+    PROPERTIES_POWER_NET_EXCLUDES = "properties-power-net-excludes";
+    PROPERTIES_JUSTIFY_TOP = "properties-justify-top";
+    PROPERTIES_JUSTIFY_MIDDLE = "properties-justify-middle";
+    PROPERTIES_JUSTIFY_BOTTOM = "properties-justify-bottom";
+    PROPERTIES_DEGREES_SHORT = "properties-degrees-short";
+    PROPERTIES_SECTION_NET = "properties-section-net";
+    PROPERTIES_SECTION_NET_PARAMS = "properties-section-net-params";
+    PROPERTIES_TEXT_SIZE_UNIT = "properties-text-size-unit";
 }

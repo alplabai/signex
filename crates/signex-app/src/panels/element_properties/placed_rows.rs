@@ -30,7 +30,7 @@ pub(super) struct RowLook {
 
 /// One editable box: the draft while typed, else the shown value. Enter
 /// commits it; a locked object gets the read-only value box instead.
-fn edit_box<'a>(
+pub(super) fn edit_box<'a>(
     label: Label<'a>,
     item: SelectedItem,
     field: PlacedField,

@@ -423,3 +423,33 @@ properties-pin-hidden-tip = Hidden on the sheet
 properties-pins-count = { $count }
 # Title of the Pins section; its count shows in a pill beside it.
 properties-section-pins = Pins
+
+## Single-selection headers and rows of wires, labels, ports and notes (#2523, g1)
+
+properties-kind-wire = Wire
+properties-kind-bus = Bus
+properties-kind-net-label = Net Label
+properties-kind-global-port = Global Port
+properties-kind-hierarchical-port = Hierarchical Port
+properties-kind-power-port = Power Port
+properties-kind-text-note = Text Note
+# Caption under a wire's or bus's header: Length is read-only.
+properties-length-derived = Length is derived from Start and End
+properties-end-x = End X ({ $unit })
+properties-end-y = End Y ({ $unit })
+# Illustration callout at a wire's or bus's start point.
+properties-callout-start = Start
+# Short power-port style names under the glyph tiles; the tooltip has the full name.
+properties-power-style-short-power-ground = Pwr GND
+properties-power-style-short-signal-ground = Sig GND
+# Tooltip on High Speed and Differential Pair while Power Net is on.
+properties-power-net-excludes = A power net is neither high speed nor one side of a differential pair.
+properties-justify-top = Top
+properties-justify-middle = Middle
+properties-justify-bottom = Bottom
+# A power port's net, and the parameters, rules and classes on it.
+properties-section-net = Net
+properties-section-net-params = Net Parameters
+properties-text-size-unit = Text Size ({ $unit })
+# One step of a 4-step Rotation control, e.g. 90°.
+properties-degrees-short = { $degrees }°
