@@ -125,6 +125,8 @@ pub(crate) fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(app, Message::Rename(RenameMsg::Submit));
 }
@@ -511,6 +513,8 @@ fn opening_an_unopened_rewrite_parent_during_the_rename_is_refused() {
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let rename = f.app.update(Message::Rename(RenameMsg::Submit));
 

@@ -62,6 +62,11 @@ pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
 pub static VIEW_ANGLE_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.view_angle"));
 
+/// Widget id of the Rename dialog's name field, focused with its text
+/// selected when the dialog opens.
+pub static RENAME_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.rename.name"));
+
 /// The in-place editor. `kind` says which text of `uuid` it edits: a label
 /// or text note, a part's designator (`SymbolRefField`) or value
 /// (`SymbolValField`), or, as `Symbol`, the part's footprint, which has no
@@ -531,6 +536,14 @@ pub struct RenameDialogState {
     /// trio stays grouped under the new project name. `false` is the
     /// per-file rename used by sheet leaves.
     pub is_project_rename: bool,
+    /// Sheet symbols of the file's own project that place it, read from the
+    /// Model when the dialog opened. The rename re-points them, and the
+    /// dialog says so.
+    pub placing_symbols: Vec<crate::app::path_ops::PlacingSymbol>,
+    /// The composed new name, when another file the Model knows in the same
+    /// folder already has it. Set on every edit; Rename is withheld while it
+    /// stands.
+    pub name_clash: Option<String>,
 }
 
 /// One file/directory entry surfaced on the Enable Version Control
@@ -541,13 +554,32 @@ pub struct RenameDialogState {
 pub struct TrackItem {
     pub absolute: std::path::PathBuf,
     pub relative: String,
-    /// Short kind badge ("Schematic", "PCB", "Library", "Folder",
-    /// "Config", etc.) shown next to the path in the picker.
-    pub label: String,
+    /// What the entry is; the picker shows its catalog name next to the
+    /// path.
+    pub kind: TrackKind,
     /// True for directory entries — drives trailing-slash in the
     /// generated `.gitignore` pattern.
     pub is_directory: bool,
     pub tracked: bool,
+}
+
+/// The kind of a [`TrackItem`] row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackKind {
+    /// The `.snxprj`.
+    Project,
+    /// A schematic sheet.
+    Schematic,
+    /// The board.
+    Pcb,
+    /// A project-local library folder.
+    Library,
+    /// A library's `library.toml`.
+    Config,
+    /// A library's `components.tsv`.
+    Components,
+    /// A library subfolder.
+    Folder,
 }
 
 /// Whether the Enable Version Control modal is initialising a
@@ -593,10 +625,12 @@ pub struct EnableVersionControlState {
     /// "Track binary 3D models via Git LFS" checkbox. Off by
     /// default; only writes `.gitattributes` when on.
     pub use_lfs: bool,
-    /// Pre-formatted intro paragraph that interpolates the working
-    /// tree path. Computed once at modal-open time so the view
-    /// doesn't allocate a fresh `String` on every render frame.
-    pub intro_text: String,
+    /// Subject of the first commit, prefilled from the catalog ("Initial
+    /// version of <name>"). Enable is withheld while it is blank.
+    pub commit_message: String,
+    /// "Commit every save" (project scope): on success `enable_git` is
+    /// turned on only when this is set. On by default.
+    pub commit_every_save: bool,
     /// Last error from a confirm attempt — surfaces inline so the
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.

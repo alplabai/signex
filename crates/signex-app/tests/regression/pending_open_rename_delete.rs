@@ -75,6 +75,8 @@ fn rename_dialog(target: &Path, to: &str) -> RenameDialogState {
         buffer: to.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     }
 }
 
@@ -264,6 +266,8 @@ fn renaming_a_project_folder_with_a_restore_still_running_is_refused() {
         buffer: "Q".to_string(),
         error: None,
         is_project_rename: true,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));

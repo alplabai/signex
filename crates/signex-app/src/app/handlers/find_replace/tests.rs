@@ -930,6 +930,8 @@ fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
         buffer: "power.snxsch".into(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let before = app.document_state.documents_epoch;
     let rename = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));

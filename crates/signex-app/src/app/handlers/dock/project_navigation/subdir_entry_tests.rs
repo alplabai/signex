@@ -37,6 +37,8 @@ fn submit_rename(app: &mut Signex, target: PathBuf, new_name: &str) {
         buffer: new_name.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     // The move runs on a worker (#859); settle drives its completion.
     crate::app::path_ops::settle(app, Message::Rename(RenameMsg::Submit));

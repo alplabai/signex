@@ -248,6 +248,12 @@ pub enum EnableVersionControlMsg {
         project_dir: std::path::PathBuf,
         outcome: EnableVersionControlOutcome,
     },
+    /// "Select all" was clicked: every row is ticked.
+    AllTicked,
+    /// The first commit message field was edited.
+    CommitMessageChanged(String),
+    /// The "Commit every save" switch was flipped.
+    CommitEverySaveToggled,
 }
 
 /// What an Enable Version Control run did on disk.

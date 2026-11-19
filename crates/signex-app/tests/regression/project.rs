@@ -102,6 +102,8 @@ fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
 }
 

@@ -13,7 +13,8 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
         project_name: "demo".to_string(),
         items: Vec::new(),
         use_lfs: false,
-        intro_text: String::new(),
+        commit_message: "Initial version".to_string(),
+        commit_every_save: true,
         error: None,
         working: false,
         scanning: false,
@@ -25,6 +26,56 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
 fn confirm(app: &mut Signex) {
     let task = app.handle_enable_version_control_confirm();
     crate::app::handlers::menu::export::settle(app, task);
+}
+
+/// Load a project "demo" at `dir` (no sheets, `enable_git` off).
+fn push_demo_project(app: &mut Signex, dir: &std::path::Path) -> crate::app::state::ProjectId {
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(crate::app::state::LoadedProject {
+            id,
+            path: dir.join("demo.snxprj"),
+            data: signex_types::project::ProjectData {
+                document_id: None,
+                description: None,
+                name: "demo".to_string(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
+                agent_journal: Default::default(),
+                fab_outputs: None,
+                requirements: Default::default(),
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    id
+}
+
+fn send(app: &mut Signex, msg: crate::app::EnableVersionControlMsg) {
+    let _ = app.update(Message::EnableVersionControl(msg));
+}
+
+fn dialog(app: &Signex) -> &crate::app::EnableVersionControlState {
+    app.ui_state
+        .enable_version_control
+        .as_ref()
+        .expect("dialog")
 }
 
 /// `.git` already exists, so the library refuses to initialise: the dialog
@@ -107,40 +158,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
     let mut app = open_dialog_on(tmp.path());
-    let id = app.document_state.mint_project_id();
-    app.document_state
-        .projects
-        .push(crate::app::state::LoadedProject {
-            id,
-            path: tmp.path().join("demo.snxprj"),
-            data: signex_types::project::ProjectData {
-                document_id: None,
-                description: None,
-                name: "demo".to_string(),
-                dir: tmp.path().to_string_lossy().into_owned(),
-                schematic_root: None,
-                pcb_file: None,
-                sheets: Vec::new(),
-                variant_definitions: Vec::new(),
-                active_variant: None,
-                libraries: Vec::new(),
-                enable_git: false,
-                net_classes: Vec::new(),
-                rules: None,
-                annotation: None,
-                schematic_defaults: Default::default(),
-                project_defaults: Default::default(),
-                agent_journal: Default::default(),
-                fab_outputs: None,
-                requirements: Default::default(),
-                parameters: Default::default(),
-                unknown: Default::default(),
-            },
-            pending_libraries: Default::default(),
-            case_fold: Default::default(),
-            case_probed: false,
-            case_decided: false,
-        });
+    push_demo_project(&mut app, tmp.path());
 
     let task = app.handle_enable_version_control_confirm();
     let state = app.ui_state.enable_version_control.as_ref().unwrap();
@@ -329,4 +347,159 @@ fn sibling_projects_in_the_folder_are_refused_before_git_init() {
     let state = app.ui_state.enable_version_control.as_ref().expect("open");
     let error = state.error.as_deref().expect("the reason is shown");
     assert!(error.contains("more than this project"), "{error}");
+}
+
+/// #26 — the dialog opens with the catalog's first commit message for the
+/// project, plain text (no isolation marks), and Commit every save on.
+#[test]
+fn the_dialog_opens_with_a_first_commit_message_and_commit_every_save_on() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let (mut app, _task) = Signex::new();
+    push_demo_project(&mut app, tmp.path());
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(crate::app::state::project_fs::git_marker(tmp.path()), false);
+    app.open_enable_version_control_dialog(vec![0]);
+    let st = dialog(&app);
+    assert_eq!(st.commit_message, "Initial version of demo");
+    assert!(st.commit_every_save);
+    assert_eq!(
+        st.items.first().map(|i| i.kind),
+        Some(crate::app::contracts::TrackKind::Project)
+    );
+}
+
+/// #26 — the edited first commit message is the subject of the repository's
+/// first commit.
+#[test]
+fn the_first_commit_carries_the_dialog_message() {
+    let _ = crate::diagnostics::init_logging();
+    signex_library::git_identity::test_identity::install();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    push_demo_project(&mut app, tmp.path());
+    send(
+        &mut app,
+        crate::app::EnableVersionControlMsg::CommitMessageChanged(
+            "  First board of demo  ".to_string(),
+        ),
+    );
+
+    confirm(&mut app);
+
+    let repo = git2::Repository::open(tmp.path()).expect("a repository");
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.message(), Some("First board of demo"), "trimmed");
+}
+
+/// #26 — a blank first commit message withholds Enable: Confirm starts
+/// nothing until the message has text again.
+#[test]
+fn a_blank_commit_message_refuses_confirm() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    send(
+        &mut app,
+        crate::app::EnableVersionControlMsg::CommitMessageChanged("   ".to_string()),
+    );
+    let task = app.handle_enable_version_control_confirm();
+    assert_eq!(task.units(), 0, "no run starts");
+    assert!(!dialog(&app).working);
+    assert!(!tmp.path().join(".git").exists());
+}
+
+/// #26 — Select all ticks every row; edits wait while a run is in flight.
+#[test]
+fn select_all_ticks_every_row() {
+    use crate::app::contracts::TrackKind;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    let row = |name: &str, tracked: bool| crate::app::TrackItem {
+        absolute: tmp.path().join(name),
+        relative: name.to_string(),
+        kind: TrackKind::Folder,
+        is_directory: true,
+        tracked,
+    };
+    app.ui_state.enable_version_control.as_mut().unwrap().items = vec![
+        row("assets", true),
+        row("outputs", false),
+        row("docs", false),
+    ];
+
+    send(&mut app, crate::app::EnableVersionControlMsg::AllTicked);
+    assert!(dialog(&app).items.iter().all(|i| i.tracked));
+
+    send(&mut app, crate::app::EnableVersionControlMsg::ToggleItem(1));
+    app.ui_state
+        .enable_version_control
+        .as_mut()
+        .unwrap()
+        .working = true;
+    send(&mut app, crate::app::EnableVersionControlMsg::AllTicked);
+    send(
+        &mut app,
+        crate::app::EnableVersionControlMsg::CommitEverySaveToggled,
+    );
+    let st = dialog(&app);
+    assert!(!st.items[1].tracked, "frozen while the run is in flight");
+    assert!(st.commit_every_save, "frozen while the run is in flight");
+}
+
+fn created() -> crate::app::EnableVersionControlOutcome {
+    crate::app::EnableVersionControlOutcome::Created {
+        adapter_error: None,
+        commit_warning: None,
+    }
+}
+
+/// #26 — with Commit every save turned off the repository is recorded but
+/// `enable_git` stays off: no General step, nothing dirty.
+#[test]
+fn commit_every_save_off_leaves_enable_git_off() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    push_demo_project(&mut app, tmp.path());
+    send(
+        &mut app,
+        crate::app::EnableVersionControlMsg::CommitEverySaveToggled,
+    );
+    assert!(!dialog(&app).commit_every_save);
+
+    app.handle_enable_version_control_finished(
+        crate::app::VersionControlScope::Project,
+        tmp.path().to_path_buf(),
+        created(),
+    );
+
+    assert!(!app.document_state.projects[0].data.enable_git);
+    assert!(app.document_state.error_notice.is_none(), "no failure card");
+    assert!(
+        app.ui_state.enable_version_control.is_none(),
+        "the dialog closes"
+    );
+    assert!(
+        !app.document_state.project_fs.facts.lacks_git(tmp.path()),
+        "the repository is recorded"
+    );
+}
+
+/// #26 — with Commit every save on (as the dialog opens) a success turns
+/// `enable_git` on, as before the switch existed.
+#[test]
+fn commit_every_save_on_turns_enable_git_on() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    push_demo_project(&mut app, tmp.path());
+    assert!(dialog(&app).commit_every_save);
+
+    app.handle_enable_version_control_finished(
+        crate::app::VersionControlScope::Project,
+        tmp.path().to_path_buf(),
+        created(),
+    );
+
+    assert!(app.document_state.projects[0].data.enable_git);
 }

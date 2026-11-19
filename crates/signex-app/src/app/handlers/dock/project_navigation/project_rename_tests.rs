@@ -48,6 +48,8 @@ pub(super) fn submit_rename(
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     app.update(Message::Rename(RenameMsg::Submit))
 }

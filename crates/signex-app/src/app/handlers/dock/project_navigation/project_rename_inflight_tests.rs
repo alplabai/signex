@@ -645,6 +645,8 @@ fn a_rename_is_refused_while_a_recovery_check_still_runs() {
         buffer: "other.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let task = fx
         .app
@@ -799,6 +801,8 @@ fn renaming_a_closed_sheet_carries_its_earlier_run_copy() {
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let task = fx
         .app

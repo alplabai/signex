@@ -162,6 +162,8 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
         buffer: "PSU.snxsch".to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
     for message in driver.join().unwrap() {

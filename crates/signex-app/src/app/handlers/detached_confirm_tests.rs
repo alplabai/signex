@@ -217,6 +217,8 @@ fn a_notice_raised_over_a_detached_dialog_gets_its_own_window() {
         buffer: "p".into(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let _ = app.sync_detached_modals();
     app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
@@ -316,6 +318,8 @@ fn the_locking_window_is_the_topmost_dialog_every_time() {
         buffer: "p".into(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     raise_quit_confirm(&mut app, main);
     let quit = app

@@ -38,6 +38,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                 buffer: "p".into(),
                 error: None,
                 is_project_rename: false,
+                placing_symbols: Vec::new(),
+                name_clash: None,
             })
         }
         ModalId::RemoveDialog => {
@@ -59,7 +61,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                 project_name: "p".into(),
                 items: Vec::new(),
                 use_lfs: false,
-                intro_text: String::new(),
+                commit_message: "Initial version".to_string(),
+                commit_every_save: true,
                 error: None,
                 working: false,
                 scanning: false,

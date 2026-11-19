@@ -190,6 +190,8 @@ fn submit_rename_task(app: &mut Signex, target: &Path, new_name: &str) -> iced::
         buffer: new_name.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     app.update(Message::Rename(RenameMsg::Submit))
 }
@@ -1451,6 +1453,8 @@ fn a_project_rename_during_a_library_rename_is_refused() {
         buffer: "other".to_string(),
         error: None,
         is_project_rename: true,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     });
     let second = f.app.update(Message::Rename(RenameMsg::Submit));
     assert!(run_task_messages(second).is_empty());
