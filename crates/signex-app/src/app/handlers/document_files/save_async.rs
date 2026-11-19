@@ -280,7 +280,44 @@ impl Signex {
             .map(|key| self.autosave_after_save(key))
             .collect();
         tasks.push(project_write);
+        tasks.push(self.refresh_project_thumbnail(&path));
         Task::batch(tasks)
+    }
+
+    /// The Start screen preview of the project that owns the document just
+    /// saved at `saved` (review #1): the project's board when it has one and
+    /// that board was saved, else its root sheet when that is loaded. The
+    /// render is kept at once and written to the cache in a task; any other
+    /// save leaves the preview as it is.
+    pub(crate) fn refresh_project_thumbnail(&mut self, saved: &std::path::Path) -> Task<Message> {
+        let Some(project) = self.owning_project(saved) else {
+            return Task::none();
+        };
+        let fold = project.case_fold;
+        let same = |a: &std::path::Path, b: &std::path::Path| {
+            crate::app::state::scope::path_key_with(a, fold)
+                == crate::app::state::scope::path_key_with(b, fold)
+        };
+        let thumbnail = match Self::project_board(project) {
+            // The first board in project order: a project names one board.
+            Some(board_path) if same(saved, board_path.as_path()) => self
+                .document_state
+                .pcb_board(saved)
+                .map(crate::project_thumbnail::snapshot::board),
+            Some(_) => None,
+            None => crate::app::project_sheets::project_root_sheet_path(project).and_then(|root| {
+                self.document_state
+                    .engines
+                    .iter()
+                    .find(|(path, _)| same(path.as_path(), root.as_path()))
+                    .map(|(_, engine)| crate::project_thumbnail::snapshot::sheet(engine.document()))
+            }),
+        };
+        let project_path = project.path.clone();
+        match thumbnail {
+            Some(thumbnail) => self.keep_project_thumbnail(project_path, thumbnail),
+            None => Task::none(),
+        }
     }
 
     /// A Save As landed and the engine now stands for the new file: it takes
@@ -505,4 +542,71 @@ impl Signex {
 pub(crate) fn is_pcb_path(path: &std::path::Path) -> bool {
     use crate::app::file_extension::has_extension;
     has_extension(path, "snxpcb") || has_extension(path, "standard_pcb")
+}
+
+/// The project preview a save rebuilds (review #1).
+#[cfg(test)]
+mod thumbnail_tests {
+    use std::path::PathBuf;
+
+    use signex_types::schematic::SchematicSheet;
+
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    use crate::project_thumbnail::tests::small_sheet;
+    use crate::project_thumbnail::{Ink, ThumbnailKind};
+
+    fn project_path() -> PathBuf {
+        PathBuf::from("/w/thumb/ProjectA.snxprj")
+    }
+
+    #[test]
+    fn saving_a_sheet_of_a_project_without_a_board_renders_its_root_sheet() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch", "Sub.snxsch"]);
+        let root = PathBuf::from("/w/thumb/Top.snxsch");
+        let sub = PathBuf::from("/w/thumb/Sub.snxsch");
+        open_with(&mut app.document_state, &root, small_sheet());
+        open_with(&mut app.document_state, &sub, SchematicSheet::default());
+        let _task = app.refresh_project_thumbnail(&sub);
+        let kept = app
+            .ui_state
+            .project_thumbnails
+            .get(&project_path())
+            .expect("rendered");
+        assert_eq!(kept.kind, ThumbnailKind::Sheet);
+        let wires = kept.primitives.iter().filter(|p| p.ink == Ink::Wire);
+        assert_eq!(
+            wires.count(),
+            1,
+            "the root sheet's wire, not the empty sub-sheet"
+        );
+        assert!(kept.primitives.iter().any(|p| p.ink == Ink::PowerPort));
+    }
+
+    #[test]
+    fn a_sheet_save_leaves_the_preview_of_a_project_with_a_board() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch"]);
+        app.document_state.projects[0].data.pcb_file = Some("Board.snxpcb".to_string());
+        let root = PathBuf::from("/w/thumb/Top.snxsch");
+        open_with(&mut app.document_state, &root, small_sheet());
+        let _task = app.refresh_project_thumbnail(&root);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
+
+    #[test]
+    fn a_root_sheet_that_is_not_loaded_renders_nothing() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch", "Sub.snxsch"]);
+        let sub = PathBuf::from("/w/thumb/Sub.snxsch");
+        open_with(&mut app.document_state, &sub, small_sheet());
+        let _task = app.refresh_project_thumbnail(&sub);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
+
+    #[test]
+    fn a_loose_sheet_renders_nothing() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch"]);
+        let loose = PathBuf::from("/w/elsewhere/Loose.snxsch");
+        open_with(&mut app.document_state, &loose, small_sheet());
+        let _task = app.refresh_project_thumbnail(&loose);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
 }

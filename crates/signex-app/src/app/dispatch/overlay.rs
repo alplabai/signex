@@ -104,6 +104,7 @@ impl Signex {
                 Task::none()
             }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
+            ProjectMsg::Thumbnail(msg) => self.dispatch_project_thumbnail_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
