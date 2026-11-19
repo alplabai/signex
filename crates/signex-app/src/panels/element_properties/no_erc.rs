@@ -83,14 +83,34 @@ mod tests {
         (ctx, id)
     }
 
-    fn clicked(ctx: &PanelContext, label: &str) -> Vec<PanelMsg> {
-        let view = super::super::view_selected_element_properties(
+    const WINDOW: iced::Size = iced::Size::new(400.0, 4000.0);
+    const FOOTER: &str = "1 object selected";
+
+    fn view_of(ctx: &PanelContext) -> Element<'_, PanelMsg> {
+        super::super::view_selected_element_properties(
             ctx,
             Color::WHITE,
             Color::WHITE,
             Color::BLACK,
-        );
-        crate::layout_probe::messages_on_click(view, iced::Size::new(400.0, 4000.0), label)
+        )
+    }
+
+    fn laid_out(ctx: &PanelContext) -> Vec<crate::layout_probe::LaidOutText> {
+        crate::layout_probe::lay_out_texts(view_of(ctx), WINDOW)
+    }
+
+    /// The checkbox of the row labelled `label`: the box sits after the
+    /// fixed label column, so a click on the label text itself hits nothing.
+    fn rule_box(texts: &[crate::layout_probe::LaidOutText], label: &str) -> iced::Point {
+        let at = crate::layout_probe::find(texts, label).bounds;
+        iced::Point::new(
+            at.x + crate::panels::PROPERTY_LABEL_WIDTH + 16.0,
+            at.center_y(),
+        )
+    }
+
+    fn clicked_at(ctx: &PanelContext, at: iced::Point) -> Vec<PanelMsg> {
+        crate::layout_probe::messages_on_click_at(view_of(ctx), WINDOW, None, at)
     }
 
     fn rule_label() -> String {
@@ -102,7 +122,10 @@ mod tests {
             .to_string()
     }
 
-    /// #49: while All rules is on, the per-rule boxes take no click.
+    /// #49: while All rules is on, the per-rule boxes take no click. The
+    /// veiled list reports no text to the probe, so the box is found in the
+    /// open list and moved down by the All rules caption, read off the
+    /// footer below the section.
     #[test]
     fn all_rules_on_disables_the_per_rule_boxes() {
         let (ctx, _) = view_with("", false);
@@ -110,7 +133,15 @@ mod tests {
             ctx.selection_form
                 .no_erc_all_rules_on(ctx.selected_uuid.unwrap(), &[])
         );
-        let messages = clicked(&ctx, &rule_label());
+        let (open, _) = view_with("", true);
+        let open_texts = laid_out(&open);
+        let on_texts = laid_out(&ctx);
+        let caption = crate::layout_probe::find(&on_texts, FOOTER).bounds.y
+            - crate::layout_probe::find(&open_texts, FOOTER).bounds.y;
+        assert!(caption > 0.0, "the All rules caption sits above the list");
+        let open_box = rule_box(&open_texts, &rule_label());
+        let veiled_box = iced::Point::new(open_box.x, open_box.y + caption);
+        let messages = clicked_at(&ctx, veiled_box);
         assert!(messages.is_empty(), "{messages:?}");
     }
 
@@ -118,7 +149,7 @@ mod tests {
     #[test]
     fn an_open_list_ticks_a_rule() {
         let (ctx, id) = view_with("", true);
-        let messages = clicked(&ctx, &rule_label());
+        let messages = clicked_at(&ctx, rule_box(&laid_out(&ctx), &rule_label()));
         assert!(
             messages.iter().any(|m| matches!(
                 m,

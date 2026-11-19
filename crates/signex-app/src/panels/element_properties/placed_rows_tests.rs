@@ -288,15 +288,16 @@ fn g1_undo(app: &mut Signex) {
     let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
 }
 
-/// #43: End X is an edit box; Enter moves the wire's end, keeps its start,
-/// is one undo step, and the read-only Length follows.
+/// #43: Start is one X / Y row (the shared Position row, #2523); End X is
+/// an edit box; Enter moves the wire's end, keeps its start, is one undo
+/// step, and the read-only Length follows.
 #[test]
 fn a_wires_end_is_editable_and_its_length_follows() {
     use crate::panels::{PanelMsg, PlacedEditMsg, PlacedField};
     let (_dir, mut app) = g1_app();
     let wire = SelectedItem::new(Uuid::from_u128(G1_WIRE), SelectedKind::Wire);
     let before = shown(&mut app, wire, Unit::Mm);
-    for label in ["Start X (mm)", "End X (mm)", "End Y (mm)", "Length"] {
+    for label in ["Start", "End X (mm)", "End Y (mm)", "Length"] {
         assert!(
             before.iter().any(|t| t == label),
             "lacks {label}: {before:?}"

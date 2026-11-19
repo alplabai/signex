@@ -71,7 +71,7 @@ fn the_wire_form_has_start_end_and_a_read_only_length() {
         "Start",
         "End",
         "Length",
-        "0.00",
+        "0.000",
         "Length is derived from Start and End",
         "Smallest",
         "Small",

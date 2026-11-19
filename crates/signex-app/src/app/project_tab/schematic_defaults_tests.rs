@@ -204,7 +204,8 @@ fn placed_text_stores_the_project_font() {
 
 /// #2034: the pre-placement Position shows Y from the page origin, and
 /// follows an origin change while the tool is armed; a typed Y is read from
-/// the page origin too (#2532).
+/// the page origin too (#2532). Position is an edit field, so it shows a
+/// length's field text (three decimals in mm).
 #[test]
 fn the_pre_placement_position_reads_y_from_the_page_origin() {
     use crate::panels::{PageOrigin, PositionField, PrePlacementPositionMsg};
@@ -229,7 +230,7 @@ fn the_pre_placement_position_reads_y_from_the_page_origin() {
     app.refresh_panel_ctx();
     assert_eq!(
         readout(&app),
-        ("7.00".to_owned(), "202.00".to_owned()),
+        ("7.000".to_owned(), "202.000".to_owned()),
         "Lower Left, A4"
     );
     let set_origin = |app: &mut Signex, origin| {
@@ -238,7 +239,7 @@ fn the_pre_placement_position_reads_y_from_the_page_origin() {
         )));
     };
     set_origin(&mut app, PageOrigin::UpperLeft);
-    assert_eq!(readout(&app), ("7.00".to_owned(), "8.00".to_owned()));
+    assert_eq!(readout(&app), ("7.000".to_owned(), "8.000".to_owned()));
 
     set_origin(&mut app, PageOrigin::LowerLeft);
     let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
