@@ -1,6 +1,7 @@
-//! The draft behind the New Project dialog (#2232): profile, fab template
-//! and every value, as one plain struct the dialog and the
-//! `new_project_with_profile` command both drive.
+//! The draft behind the New Project dialog (#2232): the fab tier card, its
+//! copper layer count and every value, as one plain struct the dialog and
+//! the `new_project_with_profile` command both drive. Tiers and layer
+//! counts: `docs/PROJECT_SETUP.md`, "Profiles".
 
 use super::rule_file::RuleTemplate;
 use super::setup::{
@@ -12,22 +13,35 @@ use super::user_profile::{
 use crate::designator::DesignatorStandard;
 use crate::schematic::{SheetOrientation, SheetSize};
 
-/// A starting point for the board rules.
+/// A starting point for the board rules: a fab tier (#2537), or Custom.
+/// The copper layer count is a separate choice on every card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SetupProfile {
-    Hobby,
     Standard,
+    Advanced,
     Hdi,
     Custom,
 }
 
+/// Board thickness every tier starts from, in mm.
+const TIER_THICKNESS_MM: f64 = 1.6;
+
+/// The copper layer stepper on a card moves by this many layers.
+pub const LAYER_STEP: u8 = 2;
+
+/// The fewest copper layers the card stepper offers.
+pub const MIN_STEPPED_LAYERS: u8 = 2;
+
 impl SetupProfile {
-    pub const ALL: [Self; 4] = [Self::Hobby, Self::Standard, Self::Hdi, Self::Custom];
+    pub const ALL: [Self; 4] = [Self::Standard, Self::Advanced, Self::Hdi, Self::Custom];
+
+    /// The fab tiers, in card order.
+    pub const TIERS: [Self; 3] = [Self::Standard, Self::Advanced, Self::Hdi];
 
     pub const fn token(self) -> &'static str {
         match self {
-            Self::Hobby => "hobby",
             Self::Standard => "standard",
+            Self::Advanced => "advanced",
             Self::Hdi => "hdi",
             Self::Custom => "custom",
         }
@@ -37,24 +51,78 @@ impl SetupProfile {
         Self::ALL.into_iter().find(|p| p.token() == token)
     }
 
-    /// The rules of this profile. `Custom` starts from the standard values
-    /// on `custom_layers` copper layers.
-    pub fn pcb(self, custom_layers: u8) -> PcbDefaults {
-        let (layers, thickness, clearance, track, via, drill) = match self {
-            Self::Hobby => (2, 1.6, 0.2, 0.25, 0.6, 0.3),
-            Self::Standard => (4, 1.6, 0.15, 0.2, 0.5, 0.25),
-            Self::Hdi => (6, 1.2, 0.1, 0.1, 0.3, 0.15),
-            Self::Custom => (custom_layers, 1.6, 0.15, 0.2, 0.5, 0.25),
-        };
+    /// The generic fab class this tier is; `None` for Custom.
+    pub const fn fab_template(self) -> Option<FabTemplate> {
+        match self {
+            Self::Standard => Some(FabTemplate::Standard),
+            Self::Advanced => Some(FabTemplate::Advanced),
+            Self::Hdi => Some(FabTemplate::Hdi),
+            Self::Custom => None,
+        }
+    }
+
+    /// The tier card of a generic fab class.
+    pub const fn from_fab(fab: FabTemplate) -> Self {
+        match fab {
+            FabTemplate::Standard => Self::Standard,
+            FabTemplate::Advanced => Self::Advanced,
+            FabTemplate::Hdi => Self::Hdi,
+        }
+    }
+
+    /// The copper layer count the card's stepper starts on.
+    pub const fn default_layers(self) -> u8 {
+        match self {
+            Self::Standard | Self::Custom => 4,
+            Self::Advanced => 6,
+            Self::Hdi => 8,
+        }
+    }
+
+    /// `(clearance, track, via size, via drill)` in mm: the canonical tier
+    /// table. Custom starts from Standard's.
+    pub const fn rule_values(self) -> (f64, f64, f64, f64) {
+        match self {
+            Self::Standard | Self::Custom => (0.15, 0.2, 0.5, 0.25),
+            Self::Advanced => (0.1, 0.125, 0.4, 0.2),
+            Self::Hdi => (0.075, 0.075, 0.25, 0.1),
+        }
+    }
+
+    /// The profile's shipped rules on `layers` copper layers.
+    pub fn rules_on(self, layers: u8) -> PcbDefaults {
+        let (clearance, track, via, drill) = self.rule_values();
         PcbDefaults {
             copper_layers: layers,
-            thickness_mm: thickness,
+            thickness_mm: TIER_THICKNESS_MM,
             clearance_mm: clearance,
             track_width_mm: track,
             via_diameter_mm: via,
             via_drill_mm: drill,
         }
     }
+
+    /// The profile's shipped rules on its default layer count; Custom on
+    /// `custom_layers`.
+    pub fn pcb(self, custom_layers: u8) -> PcbDefaults {
+        let layers = match self {
+            Self::Custom => custom_layers,
+            tier => tier.default_layers(),
+        };
+        self.rules_on(layers)
+    }
+}
+
+/// `layers` moved by `delta` on the card stepper: even counts from
+/// [`MIN_STEPPED_LAYERS`] to 32. An odd count steps on to the next even one
+/// in the direction moved.
+pub fn stepped_layers(layers: u8, delta: i8) -> u8 {
+    let mut next = i16::from(layers) + i16::from(delta);
+    if next % i16::from(LAYER_STEP) != 0 {
+        next += i16::from(delta.signum());
+    }
+    let max = i16::from(*COPPER_LAYERS.end());
+    u8::try_from(next.clamp(i16::from(MIN_STEPPED_LAYERS), max)).unwrap_or(MIN_STEPPED_LAYERS)
 }
 
 /// A generic fabrication capability class: the minimums of the base DRC
@@ -85,14 +153,12 @@ impl FabTemplate {
     }
 }
 
-/// Where the stepper starts when the user first picks Custom.
-const CUSTOM_START_LAYERS: u8 = 8;
-
 /// Everything the dialog decides.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectSetup {
     pub profile: SetupProfile,
-    /// The generic class last applied, if any.
+    /// The tier whose `fab_*` rules the new project gets, when the Fab tier
+    /// field picked one.
     pub fab: Option<FabTemplate>,
     /// An imported rule file is applied.
     pub imported: bool,
@@ -101,7 +167,9 @@ pub struct ProjectSetup {
     pub designators: DesignatorStandard,
     /// The user profile picked, by id; `None` while a built-in card is.
     pub user_profile: Option<String>,
-    custom_layers: u8,
+    /// Each card's stepper, in [`SetupProfile::ALL`] order; `None` shows
+    /// the profile's own count.
+    card_layers: [Option<u8>; 4],
 }
 
 /// A project's setup as a dialog starts from it, and the user profile it
@@ -118,17 +186,27 @@ impl Default for ProjectSetup {
     }
 }
 
+const fn card_slot(profile: SetupProfile) -> usize {
+    match profile {
+        SetupProfile::Standard => 0,
+        SetupProfile::Advanced => 1,
+        SetupProfile::Hdi => 2,
+        SetupProfile::Custom => 3,
+    }
+}
+
 impl ProjectSetup {
+    /// The draft on `profile`'s shipped values and default layer count.
     pub fn from_profile(profile: SetupProfile) -> Self {
         Self {
             profile,
             fab: None,
             imported: false,
-            pcb: profile.pcb(CUSTOM_START_LAYERS),
+            pcb: profile.rules_on(profile.default_layers()),
             sheet: SheetDefaults::default(),
             designators: DEFAULT_DESIGNATORS,
             user_profile: None,
-            custom_layers: CUSTOM_START_LAYERS,
+            card_layers: [None; 4],
         }
     }
 
@@ -152,7 +230,6 @@ impl ProjectSetup {
 
     fn select_user(&mut self, id: &str) {
         self.profile = SetupProfile::Custom;
-        self.custom_layers = self.pcb.copper_layers;
         self.user_profile = Some(id.to_string());
     }
 
@@ -169,43 +246,68 @@ impl ProjectSetup {
         self.user_profile.is_none() && self.profile == profile
     }
 
-    /// Pick a profile card. A fixed profile resets the rules and layers to
-    /// its values; Custom keeps what is set.
-    pub fn pick_profile(&mut self, profile: SetupProfile) {
+    /// The layer count `profile`'s card shows: the one stepped to, else the
+    /// profile's own (an edited built-in's, else the shipped default).
+    pub fn card_layers(&self, profile: SetupProfile, users: &[UserProfile]) -> u8 {
+        self.card_layers[card_slot(profile)].unwrap_or_else(|| match profile {
+            SetupProfile::Custom => profile.default_layers(),
+            tier => tier.values(users).copper_layers,
+        })
+    }
+
+    /// Pick a profile card. A tier takes its rules (an edited built-in's
+    /// override, else the shipped table) on the card's layer count; Custom
+    /// keeps the rules shown and takes its card's layer count.
+    pub fn pick_profile(&mut self, profile: SetupProfile, users: &[UserProfile]) {
+        let layers = self.card_layers(profile, users);
         self.user_profile = None;
         self.profile = profile;
-        if profile == SetupProfile::Custom {
-            self.pcb.copper_layers = self.custom_layers;
-        } else {
+        if profile != SetupProfile::Custom {
             self.fab = None;
             self.imported = false;
-            self.pcb = profile.pcb(self.custom_layers);
+            self.pcb = profile.values(users);
         }
+        self.pcb.copper_layers = layers;
     }
 
-    /// The layer count the Custom card shows and uses.
-    pub fn custom_layers(&self) -> u8 {
-        self.custom_layers
+    /// The stepper on `profile`'s card moved by `delta` layers: that card is
+    /// picked on the new count.
+    pub fn step_card_layers(&mut self, profile: SetupProfile, delta: i8, users: &[UserProfile]) {
+        let layers = stepped_layers(self.card_layers(profile, users), delta);
+        self.card_layers[card_slot(profile)] = Some(layers);
+        self.pick_profile(profile, users);
     }
 
-    /// Set the copper layer count; the profile becomes Custom.
+    /// Set the copper layer count, clamped to what a board can have. The
+    /// picked card keeps its tier: the layer count is its own choice.
     pub fn set_layers(&mut self, layers: u8) {
         let layers = layers.clamp(*COPPER_LAYERS.start(), *COPPER_LAYERS.end());
-        self.custom_layers = layers;
+        if self.user_profile.is_none() {
+            self.card_layers[card_slot(self.profile)] = Some(layers);
+        }
         self.pcb.copper_layers = layers;
-        self.profile = SetupProfile::Custom;
-        self.user_profile = None;
     }
 
-    /// Fill clearance, track and via sizes from a generic class.
+    /// Step the copper layer count as the card stepper does.
+    pub fn step_layers(&mut self, delta: i8) {
+        self.set_layers(stepped_layers(self.pcb.copper_layers, delta));
+    }
+
+    /// The Fab tier field picked `fab`: its card, the tier's rules on the
+    /// layer count shown, and the tier's `fab_*` rules in the new project.
     pub fn apply_fab(&mut self, fab: FabTemplate) {
-        let (clearance, track, via, drill) = fab.minimums();
+        let layers = self.pcb.copper_layers;
+        let (clearance, track, via, drill) = SetupProfile::from_fab(fab).rule_values();
         self.set_rules(clearance, track, via, drill);
+        self.user_profile = None;
+        self.profile = SetupProfile::from_fab(fab);
+        self.set_layers(layers);
         self.fab = Some(fab);
         self.imported = false;
     }
 
-    /// Fill the rules from an imported rule file.
+    /// Fill the rules from an imported rule file: they are no tier's, so
+    /// the Custom card is picked.
     pub fn apply_template(&mut self, template: &RuleTemplate) {
         self.set_rules(
             template.clearance_mm,
@@ -213,6 +315,8 @@ impl ProjectSetup {
             template.via_diameter_mm,
             template.via_drill_mm,
         );
+        self.user_profile = None;
+        self.profile = SetupProfile::Custom;
         if let Some(layers) = template.copper_layers {
             self.set_layers(layers);
         }
@@ -254,12 +358,14 @@ impl ProjectSetup {
         match defaults.profile.as_deref() {
             None => {}
             Some(id) => match resolve_profile(id, users) {
-                Some(ProfileRef::BuiltIn(profile)) if defaults.pcb.is_none() => {
-                    setup.pick_profile(profile);
-                }
-                Some(ProfileRef::BuiltIn(profile)) => {
-                    setup.profile = profile;
-                    setup.user_profile = None;
+                Some(ProfileRef::BuiltIn(profile) | ProfileRef::Edited { profile, .. }) => {
+                    if defaults.pcb.is_none() {
+                        setup.pick_profile(profile, users);
+                    } else {
+                        setup.profile = profile;
+                        setup.user_profile = None;
+                        setup.card_layers[card_slot(profile)] = Some(setup.pcb.copper_layers);
+                    }
                 }
                 Some(ProfileRef::User(user)) => {
                     if defaults.pcb.is_none() {
@@ -296,7 +402,7 @@ impl ProjectSetup {
         }
         if let Some(builtin) = SetupProfile::from_token(token) {
             let mut setup = project.setup.clone();
-            setup.pick_profile(builtin);
+            setup.pick_profile(builtin, users);
             return Ok(setup);
         }
         if let Some(user) = find_user_profile(token, users) {
@@ -305,7 +411,7 @@ impl ProjectSetup {
             return Ok(setup);
         }
         Err(format!(
-            "profile `{token}` is not project, hobby, standard, hdi, custom or a saved profile"
+            "profile `{token}` is not project, standard, advanced, hdi, custom or a saved profile"
         ))
     }
 
@@ -320,24 +426,21 @@ impl ProjectSetup {
         format!("{} {word}", size.token(SheetOrientation::Landscape))
     }
 
-    /// The draft for defaults a project already stores: the profile whose
-    /// rules they match (else Custom), and the stored sheet and designator
-    /// standard. A project that stores none starts on Standard.
+    /// The draft for defaults a project already stores: the tier whose
+    /// shipped rules they match on their layer count (else Custom), and the
+    /// stored sheet and designator standard. A project that stores none
+    /// starts on Standard.
     pub fn from_stored(
         defaults: &ProjectDefaults,
         designators: Option<DesignatorStandard>,
     ) -> Self {
         let mut setup = Self::default();
         if let Some(pcb) = &defaults.pcb {
-            setup.custom_layers = pcb.copper_layers;
-            setup.profile = [
-                SetupProfile::Hobby,
-                SetupProfile::Standard,
-                SetupProfile::Hdi,
-            ]
-            .into_iter()
-            .find(|p| p.pcb(pcb.copper_layers) == *pcb)
-            .unwrap_or(SetupProfile::Custom);
+            setup.profile = SetupProfile::TIERS
+                .into_iter()
+                .find(|p| p.rules_on(pcb.copper_layers) == *pcb)
+                .unwrap_or(SetupProfile::Custom);
+            setup.card_layers[card_slot(setup.profile)] = Some(pcb.copper_layers);
             setup.pcb = pcb.clone();
         }
         if let Some(sheet) = &defaults.sheet {
@@ -354,7 +457,7 @@ impl ProjectSetup {
     /// `thickness`, `clearance`, `track`, `via`, `drill` (mm), `sheet`,
     /// `title_block` (`true`/`false`), `designators` (`ieee315`,
     /// `din40719_2`, `iec81346_2`) and `fab` (`standard`, `advanced`, `hdi`:
-    /// the tier's minimums, and its `fab_*` rules in the new project). Keys
+    /// the tier's rules, and its `fab_*` rules in the new project). Keys
     /// apply in written order.
     pub fn apply_overrides(&mut self, text: &str) -> Result<(), String> {
         for pair in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
