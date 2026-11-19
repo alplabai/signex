@@ -28,7 +28,7 @@ pub(crate) fn window_height() -> f32 {
 /// The offset `text` stands for in mm, typed in `unit`; 0 while the text is
 /// not a number (empty, `-`), as Apply reads it.
 pub(crate) fn offset_mm(text: &str, unit: Unit) -> f64 {
-    signex_widgets::LengthFormat::new(signex_i18n::I18n::en_us_ref(), unit)
+    signex_widgets::LengthFormat::new(&signex_i18n::I18n::en_us(), unit)
         .parse(text)
         .unwrap_or(0.0)
 }
