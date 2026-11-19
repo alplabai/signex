@@ -191,10 +191,9 @@ part row opens its Component Preview tab.
 
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
-**Copy to Library** dialog lists the writable libraries with the first one
-selected. You pick a library and press **Copy to <library>** (or **New
-Library…** creates one); Signex remembers the choice and opens the copy for
-editing under the stock name. The stock original is never changed. If no
+**Copy to Library** dialog lists the writable libraries. A click on a library
+copies into it at once (or **New Library…** creates one); Signex remembers the
+choice and opens the copy for editing under the stock name. The stock original is never changed. If no
 writable library is open, the dialog says so and offers **New Library…**.
 
 **Pick Symbol** (and Pick Footprint, Pick Sim Model) binds a primitive to a

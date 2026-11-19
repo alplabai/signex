@@ -380,3 +380,63 @@ fn picking_another_symbol_while_opening_drops_the_opening_state_and_keeps_the_ne
     assert_eq!(open.copy_confirm.as_ref(), Some(&loose));
     assert_eq!(bound_symbol(&f), before, "the newer pick is not linked");
 }
+
+/// Link without copying binds only a symbol the library lists. A file in
+/// the library's folder that the library skipped (it did not parse, or its
+/// uuid clashes) would leave the row on a Broken binding: the picker says
+/// so instead and nothing is bound, whether the library was already open or
+/// opens for the link.
+#[test]
+fn linking_a_held_file_the_library_does_not_list_binds_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+    let held = chosen_held(&mut f);
+    let before = bound_symbol(&f);
+    f.app.library.open_library(snxlib.clone()).expect("mount x");
+    f.app
+        .library
+        .library_at_mut(&snxlib)
+        .expect("mounted")
+        .cached_symbols
+        .retain(|s| s.uuid != held.uuid);
+
+    // Already open: the link is refused at once.
+    picker(&mut f.app, PrimitivePickerMsg::OpenLibraryConfirmed);
+    assert_eq!(bound_symbol(&f), before, "nothing bound");
+    let open = f.app.library.primitive_picker.as_ref().expect("still open");
+    let error = open.error.clone().expect("the reason is shown");
+    assert!(
+        error.contains("does not list") && error.contains("HELD"),
+        "{error}"
+    );
+
+    // Opening for the link: the mount lands, the link is refused the same way.
+    // (The mount request above may have read the library again.)
+    f.app
+        .library
+        .library_at_mut(&snxlib)
+        .expect("mounted")
+        .cached_symbols
+        .retain(|s| s.uuid != held.uuid);
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(held.clone()));
+    f.app
+        .library
+        .primitive_picker
+        .as_mut()
+        .unwrap()
+        .opening_library = Some(snxlib.clone());
+    let link = f.app.picker_link_after_mount(&snxlib);
+    settle(&mut f.app, link);
+    f.app.picker_mount_settled(&snxlib, None);
+    assert_eq!(bound_symbol(&f), before, "nothing bound after the mount");
+    let open = f.app.library.primitive_picker.as_ref().expect("still open");
+    assert!(
+        open.error
+            .as_deref()
+            .is_some_and(|e| e.contains("does not list")),
+        "{:?}",
+        open.error
+    );
+}

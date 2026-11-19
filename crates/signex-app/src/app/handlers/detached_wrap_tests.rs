@@ -119,20 +119,32 @@ fn a_long_part_number_and_table_keep_the_delete_confirm_footer_in_its_window() {
 
 #[test]
 fn a_short_name_leaves_the_close_and_delete_windows_at_their_base_height() {
+    use crate::library::close_prompt::{LIST_MAX_H, list_height};
+    use crate::library::modal_chrome::NOTE_LINE_H;
     let mut app = app_on(ThemeId::GraphiteLight);
-    let base = |app: &Signex, modal| app.modal_window_size_of(modal, None).height;
-    // The list follows the draft count (#136), so the base is the height
-    // for one draft under the one-letter name the base was measured with.
+    let height = |app: &Signex| {
+        app.modal_window_size_of(ModalId::LibraryCloseConfirm, None)
+            .height
+    };
     let confirm = |name: &str| crate::library::state::CloseLibraryConfirmState {
         library_path: "l.snxlib".into(),
         library_name: name.into(),
         dirty_editors: Vec::new(),
         dirty_paths: vec!["l.snxlib".into()],
     };
-    app.library.close_library_confirm = Some(confirm("x"));
-    let before = base(&app, ModalId::LibraryCloseConfirm);
+    // Written out on its own, not through the sizing code: the fixed window
+    // with its longest list swapped for a one-draft list (#136), the note
+    // line naming the library, and what Graphite adds (the intro title and
+    // the dense footer). A short name wraps nothing, so nothing more.
+    let fixed = crate::app::handlers::erc::modal_size(ModalId::LibraryCloseConfirm).height;
+    let graphite = crate::styles::DIALOG_INTRO_EXTRA + crate::styles::dense_footer_height()
+        - crate::styles::dialog_footer_height();
+    let logical = (fixed - LIST_MAX_H + list_height(1) + NOTE_LINE_H + graphite).ceil();
+    let expected = (logical * app.ui_state.ui_scale).ceil();
     app.library.close_library_confirm = Some(confirm("l"));
-    assert_eq!(base(&app, ModalId::LibraryCloseConfirm), before);
+    assert_eq!(height(&app), expected, "a one-letter name keeps the base");
+    app.library.close_library_confirm = Some(confirm("x"));
+    assert_eq!(height(&app), expected, "any short name keeps the base");
 }
 
 #[test]
@@ -145,7 +157,6 @@ fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
             label: LONG.repeat(2),
             previous_unavailable: None,
             error: None,
-            selected: None,
         });
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy);

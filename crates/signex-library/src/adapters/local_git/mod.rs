@@ -72,8 +72,7 @@ const LFS_EXTENSIONS: &[&str] = &["step", "stp", "wrl", "iges"];
 ///
 /// `enable_git` defaults to **off** — fresh libraries land on disk as
 /// plain files with no `.git/` directory. Users opt in via the
-/// "Enable version control" checkbox on the New Library Options
-/// modal; flipping it on runs `git init` + records an initial commit
+/// "Enable version control" switch in the New Library dialog; flipping it on runs `git init` + records an initial commit
 /// just like the legacy behaviour. LFS only matters when version
 /// control is on (no point in `.gitattributes` without a repo).
 #[derive(Debug, Default, Clone, Copy)]

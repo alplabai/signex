@@ -262,7 +262,7 @@ pub struct LoadedProject {
     pub path: PathBuf,
     pub data: ProjectData,
     /// Libraries the user has authored via the New Library flow but not
-    /// yet committed to disk. The Library Options modal's Create button
+    /// yet committed to disk. The New Library dialog's Create button
     /// only registers an entry here + flips the project dirty bit;
     /// `commands::create_pending_library` runs at project-save time
     /// to actually write the `.snxlib`. Closes

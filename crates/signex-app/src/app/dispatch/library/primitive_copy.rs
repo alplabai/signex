@@ -120,35 +120,70 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.as_ref() else {
             return Task::none();
         };
-        let Some((library, uuid)) = picker
-            .copy_confirm
-            .as_ref()
-            .and_then(|s| Some((s.library.clone()?, s.uuid)))
-        else {
+        let Some(symbol) = picker.copy_confirm.clone().filter(|s| s.library.is_some()) else {
             return Task::none();
         };
         if picker.opening_library.is_some() || picker.copying {
             return Task::none();
         }
-        let mounted = self.library.library_at(&library).map(|lib| lib.library_id);
+        let Some(library) = symbol.library.clone() else {
+            return Task::none();
+        };
+        let mounted = self.library.library_at(&library).is_some();
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
         picker.error = None;
-        let Some(library_id) = mounted else {
+        if !mounted {
             picker.opening_library = Some(library.clone());
             return self.mount_added_libraries(vec![library]);
-        };
-        picker.copy_confirm = None;
-        let pick = pick_task(signex_library::PrimitiveRef::new(library_id, uuid));
+        }
+        let pick = self.link_listed_symbol(&library, &symbol);
+        if let Some(picker) = self.library.primitive_picker.as_mut() {
+            picker.copy_confirm = None;
+        }
         Task::batch([self.mount_added_libraries(vec![library]), pick])
+    }
+
+    /// The pick that binds the row to `symbol` in the mounted library at
+    /// `path`, only when that library lists the symbol's uuid. Membership
+    /// comes from the directory the file sits in; the library may still have
+    /// skipped the file (it did not parse, or its uuid clashes), and a row
+    /// bound to a uuid the library does not hold would show Broken binding
+    /// from then on. Then the picker's error line says so and nothing binds.
+    fn link_listed_symbol(
+        &mut self,
+        path: &std::path::Path,
+        symbol: &LooseSymbol,
+    ) -> Task<Message> {
+        let Some(lib) = self.library.library_at(path) else {
+            return Task::none();
+        };
+        if lib.cached_symbols.iter().any(|s| s.uuid == symbol.uuid) {
+            return pick_task(signex_library::PrimitiveRef::new(
+                lib.library_id,
+                symbol.uuid,
+            ));
+        }
+        let reason = signex_i18n::t!(
+            &self.ui_state.i18n,
+            signex_i18n::ids::LIBRARY_PRIMITIVE_PICKER_NOT_LISTED,
+            "library" => lib.display_name.clone(),
+            "name" => symbol.name.clone()
+        )
+        .into_string();
+        crate::diagnostics::log_warning(reason.clone());
+        if let Some(picker) = self.library.primitive_picker.as_mut() {
+            picker.error = Some(reason);
+        }
+        Task::none()
     }
 
     /// The link a just-mounted library completes: when `path` is the library
     /// the picker is opening for "Link without copying", the pick of that
     /// library's symbol through the usual [`PrimitivePickerMsg::Pick`]. Call
     /// it before [`Self::picker_mount_settled`], which drops the question.
-    pub(super) fn picker_link_after_mount(&self, path: &std::path::Path) -> Task<Message> {
+    pub(super) fn picker_link_after_mount(&mut self, path: &std::path::Path) -> Task<Message> {
         let Some(picker) = self.library.primitive_picker.as_ref() else {
             return Task::none();
         };
@@ -157,18 +192,12 @@ impl Signex {
         }
         let Some(symbol) = picker
             .copy_confirm
-            .as_ref()
+            .clone()
             .filter(|s| s.library.as_deref() == Some(path))
         else {
             return Task::none();
         };
-        let Some(lib) = self.library.library_at(path) else {
-            return Task::none();
-        };
-        pick_task(signex_library::PrimitiveRef::new(
-            lib.library_id,
-            symbol.uuid,
-        ))
+        self.link_listed_symbol(path, &symbol)
     }
 
     /// A mount finished: if it is the library the picker is opening, end the

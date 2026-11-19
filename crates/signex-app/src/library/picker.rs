@@ -22,14 +22,14 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{button, text, text_input};
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerEntry, PickerMode, PickerState};
-use crate::library::editor::kit::{lifecycle_label, lifecycle_tone};
+use crate::library::editor::kit::{lifecycle_text, lifecycle_tone};
 use crate::styles::{ChromeMetrics, Radii};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -148,7 +148,7 @@ pub fn view<'a>(
             let is_selected = picker.selected.as_ref().is_some_and(|(p, c)| {
                 p.as_path() == &*entry.path && c.row_id == entry.summary.row_id
             });
-            list_col = list_col.push(part_row(entry, is_selected, tokens));
+            list_col = list_col.push(part_row(entry, is_selected, i18n, tokens));
         }
         scrollable(list_col)
             .height(Length::Fill)
@@ -344,6 +344,7 @@ fn table_head<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, LibraryMessa
 /// state's tone.
 fn lifecycle_cell<'a>(
     state: signex_library::LifecycleState,
+    i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let (_, ink) = crate::styles::pill_colors(tokens, lifecycle_tone(state));
@@ -358,8 +359,7 @@ fn lifecycle_cell<'a>(
             },
             ..container::Style::default()
         });
-    // raw: the lifecycle word, as the library browser's pills show it.
-    let word = text(raw(lifecycle_label(state))).size(TS.body).color(ink);
+    let word = text(lifecycle_text(i18n, state)).size(TS.body).color(ink);
     row![dot, word]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
@@ -371,6 +371,7 @@ fn lifecycle_cell<'a>(
 fn part_row<'a>(
     entry: &'a PickerEntry,
     is_selected: bool,
+    i18n: &I18n,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let summary = &entry.summary;
@@ -398,7 +399,7 @@ fn part_row<'a>(
         .boxed();
     let line = row![
         cell(pn, 0),
-        cell(lifecycle_cell(summary.state, tokens), 1),
+        cell(lifecycle_cell(summary.state, i18n, tokens), 1),
         cell(mpn, 2),
         cell(description, 3),
     ]
@@ -495,7 +496,7 @@ mod tests {
                 signex_library::LifecycleState::Deprecated,
                 signex_library::LifecycleState::Obsolete,
             ] {
-                let _ = lifecycle_cell(state, &tokens);
+                let _ = lifecycle_cell(state, i18n, &tokens);
             }
             let _ = search_field(
                 t!(i18n, ids::LIBRARY_PICKER_SEARCH),

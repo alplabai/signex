@@ -25,8 +25,8 @@ use super::state::{EditRowModalState, LibraryState};
 
 pub use bindings::Binding;
 pub(crate) use checks::pn_conflict;
+pub(crate) use delete_confirm::delete_intro_texts;
 pub use delete_confirm::view_delete_confirm;
-pub(crate) use delete_confirm::{delete_caption_height, delete_intro_texts};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;

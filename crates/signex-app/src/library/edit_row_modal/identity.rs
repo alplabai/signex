@@ -11,7 +11,7 @@ use signex_widgets::{PickListPlaceholder, text, text_input, theme_ext};
 
 use super::super::messages::{BrowserEditMsg, LibraryMessage};
 use super::super::state::EditRowModalState;
-use crate::library::editor::kit::lifecycle_label;
+use crate::library::editor::kit::lifecycle_text;
 use crate::panels::form_look::text_input_style;
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -35,23 +35,37 @@ impl std::fmt::Display for ClassPick {
 }
 
 /// `pick_list` adapter for the Lifecycle State dropdown, shown with the
-/// state's display label (the one its pill uses).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LifecyclePick(LifecycleState);
+/// state's word from the catalog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LifecyclePick {
+    state: LifecycleState,
+    label: String,
+}
 
 impl std::fmt::Display for LifecyclePick {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(lifecycle_label(self.0))
+        f.write_str(&self.label)
     }
 }
 
-const LIFECYCLE_OPTIONS: [LifecyclePick; 5] = [
-    LifecyclePick(LifecycleState::Draft),
-    LifecyclePick(LifecycleState::InReview),
-    LifecyclePick(LifecycleState::Released),
-    LifecyclePick(LifecycleState::Deprecated),
-    LifecyclePick(LifecycleState::Obsolete),
+const LIFECYCLE_STATES: [LifecycleState; 5] = [
+    LifecycleState::Draft,
+    LifecycleState::InReview,
+    LifecycleState::Released,
+    LifecycleState::Deprecated,
+    LifecycleState::Obsolete,
 ];
+
+/// The State dropdown's options, in lifecycle order.
+fn lifecycle_options(i18n: &I18n) -> Vec<LifecyclePick> {
+    LIFECYCLE_STATES
+        .iter()
+        .map(|&state| LifecyclePick {
+            state,
+            label: lifecycle_text(i18n, state).into_string(),
+        })
+        .collect()
+}
 
 /// A field caption over its control.
 fn labelled<'a>(
@@ -159,23 +173,20 @@ pub(super) fn view<'a>(
         .width(Length::Fill)
         .padding(SP.s + SP.xs);
 
-    let selected_state = LIFECYCLE_OPTIONS
+    let state_options = lifecycle_options(i18n);
+    let selected_state = state_options
         .iter()
-        .find(|p| p.0 == edit.draft.state)
-        .copied();
-    let state_picker = pick_list(
-        selected_state,
-        LIFECYCLE_OPTIONS.to_vec(),
-        LifecyclePick::to_string,
-    )
-    .graphite()
-    .on_select({
-        let send = send.clone();
-        move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.0))
-    })
-    .placeholder_label(t!(i18n, ids::LIBRARY_EDIT_ROW_STATE_PLACEHOLDER))
-    .width(Length::Fill)
-    .padding(SP.s + SP.xs);
+        .find(|p| p.state == edit.draft.state)
+        .cloned();
+    let state_picker = pick_list(selected_state, state_options, LifecyclePick::to_string)
+        .graphite()
+        .on_select({
+            let send = send.clone();
+            move |pick: LifecyclePick| send(BrowserEditMsg::SetState(pick.state))
+        })
+        .placeholder_label(t!(i18n, ids::LIBRARY_EDIT_ROW_STATE_PLACEHOLDER))
+        .width(Length::Fill)
+        .padding(SP.s + SP.xs);
 
     let pn_class_state = row![
         pn_cell.width(Length::FillPortion(PN_SHARE)),

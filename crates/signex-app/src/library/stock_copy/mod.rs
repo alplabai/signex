@@ -88,10 +88,6 @@ pub struct StockCopyState {
     pub previous_unavailable: Option<PathBuf>,
     /// The last attempt's failure, shown in the dialog.
     pub error: Option<String>,
-    /// The library the user selected in the list (`.snxlib` path); the
-    /// primary button copies into it. The first writable library when the
-    /// dialog opens.
-    pub selected: Option<PathBuf>,
 }
 
 /// Where the copy goes.
@@ -106,9 +102,8 @@ pub enum CopyTarget {
 /// Events of the "Copy to Library" dialog and its copy.
 #[derive(Debug, Clone)]
 pub enum StockCopyMsg {
-    /// The user selected a library row in the dialog; nothing is copied yet.
-    TargetSelected(PathBuf),
-    /// The user confirmed the copy into this mounted writable library.
+    /// The user clicked a mounted writable library in the dialog: the copy
+    /// goes there at once.
     TargetPicked(PathBuf),
     /// The user asked to create a new library to copy into.
     NewLibraryRequested,

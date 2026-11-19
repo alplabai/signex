@@ -183,7 +183,6 @@ fn open(app: &mut Signex, modal: ModalId) {
                 label: "R".into(),
                 previous_unavailable: None,
                 error: None,
-                selected: None,
             })
         }
         ModalId::LibraryUpdates => {
@@ -608,11 +607,12 @@ fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
             .find(|t| t.text.contains("No writable library"))
             .expect("the empty-list hint");
         let gap = cancel.y - (hint.bounds.y + hint.bounds.height);
-        // The hint sits in a card (#134): its padding and border add to the gap.
+        // The hint sits in a card (#134): its padding and border add to the
+        // gap, so the card's inset comes off before the old 48 px bound.
         let card = crate::library::stock_copy::EMPTY_CARD_PAD_Y + crate::styles::HAIRLINE;
         assert!(
-            (0.0..=48.0 + card).contains(&gap),
-            "{theme_id:?}: {gap} px between the hint and the footer"
+            (0.0..=48.0).contains(&(gap - card)),
+            "{theme_id:?}: {gap} px between the hint and the footer ({card} px card inset)"
         );
     }
 }

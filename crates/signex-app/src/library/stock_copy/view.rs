@@ -1,9 +1,9 @@
 //! The "Copy to Library" dialog. A pure read of [`StockCopyState`] and the
 //! open libraries' names; every colour comes from theme tokens.
 //!
-//! The writable libraries are radio rows; the primary button copies into the
-//! selected one. With no writable library a card says so and New Library…
-//! is the primary.
+//! The writable libraries are rows; a click on one copies into it at once
+//! (one-click copy is kept: m134 leaves select-then-confirm undecided). With
+//! no writable library a card says so. New Library… is the primary.
 
 use std::path::{Path, PathBuf};
 
@@ -12,15 +12,14 @@ use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, radio, raw, text};
+use signex_widgets::{button, raw, text};
 
 use super::{StockCopyMsg, StockCopyState};
 use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{cancel_btn, footer_strip, header, notice_banner, primary_btn};
 use crate::library::state::LibraryState;
 use crate::styles::{
-    DialogButtonKind, DialogIcon, HAIRLINE, PillTone, Radii, Spacing, TypeScale, dialog_button,
-    dialog_intro, ti, tokens,
+    DialogIcon, HAIRLINE, PillTone, Radii, Spacing, TypeScale, dialog_intro, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -39,10 +38,9 @@ pub(crate) const LIST_PAD: f32 = 4.0;
 pub(crate) const EMPTY_CARD_PAD_Y: f32 = 18.0;
 const EMPTY_CARD_PAD_X: f32 = 12.0;
 /// Inner horizontal padding of a row, the gap between its parts, and the
-/// sizes of its radio and library glyph.
+/// size of its library glyph.
 const ROW_PAD_X: f32 = 8.0;
 const ROW_GAP: f32 = 8.0;
-const RADIO: f32 = 14.0;
 const GLYPH: f32 = 14.0;
 
 /// The intro's title and secondary text; the window height follows their
@@ -69,17 +67,10 @@ pub(crate) fn list_height(rows: usize) -> f32 {
     rows.min(LIST_MAX_ROWS) as f32 * ROW_H + 2.0 * (LIST_PAD + HAIRLINE)
 }
 
-/// The selected library, if it is still one of the writable ones.
-fn selected_library<'l>(
-    writable: &[(&'l Path, &'l str)],
-    selected: Option<&Path>,
-) -> Option<(usize, &'l Path, &'l str)> {
-    let selected = selected?;
-    writable
-        .iter()
-        .enumerate()
-        .find(|(_, (root, _))| *root == selected)
-        .map(|(index, (root, name))| (index, *root, *name))
+/// The message a click on the row of `root` sends: the copy into that
+/// library, at once.
+pub(crate) fn row_message(root: &Path) -> LibraryMessage {
+    LibraryMessage::StockCopy(StockCopyMsg::TargetPicked(root.to_path_buf()))
 }
 
 pub fn view<'a>(
@@ -115,47 +106,25 @@ pub fn view<'a>(
     }
 
     let writable = library.writable_libraries();
-    let selected = selected_library(&writable, state.selected.as_deref());
-    let new_library = LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested);
-    let new_library_label = t!(i18n, ids::LIBRARY_STOCK_COPY_NEW_LIBRARY);
-    let cancel_button = cancel_btn(t!(i18n, ids::DIALOG_BUTTON_CANCEL), cancel, tokens);
-    let footer = if writable.is_empty() {
-        // Nothing to copy into: creating a library is the one way on.
+    if writable.is_empty() {
         body = body.push(empty_card(i18n, tokens));
-        footer_strip(
-            Vec::new(),
-            vec![
-                cancel_button,
-                primary_btn(new_library_label, new_library, tokens),
-            ],
-            tokens,
-        )
     } else {
-        let selected_index = selected.map(|(index, _, _)| index);
-        body = body.push(library_list(&writable, selected_index, tokens));
-        let confirm = match selected {
-            Some((_, _, name)) => {
-                t!(i18n, ids::LIBRARY_STOCK_COPY_TO, "library" => name.to_owned())
-            }
-            None => t!(i18n, ids::LIBRARY_STOCK_COPY_COPY),
-        };
-        let copy = selected.map(|(_, root, _)| {
-            LibraryMessage::StockCopy(StockCopyMsg::TargetPicked(root.to_path_buf()))
-        });
-        footer_strip(
-            vec![dialog_button(
-                new_library_label,
-                DialogButtonKind::Secondary,
-                Some(new_library),
+        body = body.push(library_list(&writable, tokens));
+    }
+
+    // The one primary action follows the quiet Cancel at the right end.
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            cancel_btn(t!(i18n, ids::DIALOG_BUTTON_CANCEL), cancel, tokens),
+            primary_btn(
+                t!(i18n, ids::LIBRARY_STOCK_COPY_NEW_LIBRARY),
+                LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),
                 tokens,
-            )],
-            vec![
-                cancel_button,
-                dialog_button(confirm, DialogButtonKind::Primary, copy, tokens),
-            ],
-            tokens,
-        )
-    };
+            ),
+        ],
+        tokens,
+    );
 
     // In the main window the card is as tall as its content; in its own
     // window it fills the window, which is sized to the content.
@@ -204,16 +173,14 @@ fn empty_card<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, LibraryMessa
     .boxed()
 }
 
-/// The writable libraries as radio rows in a bordered box; the selected row
-/// is tinted.
+/// The writable libraries as rows in a bordered box.
 fn library_list<'a>(
     writable: &[(&Path, &str)],
-    selected: Option<usize>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let rows = writable.iter().enumerate().map(|(index, (root, name))| {
-        library_row(index, root.to_path_buf(), name, selected, tokens)
-    });
+    let rows = writable
+        .iter()
+        .map(|(root, name)| library_row(root.to_path_buf(), name, tokens));
     let line = ti(tokens.border);
     let inner = list_height(writable.len()) - 2.0 * (LIST_PAD + HAIRLINE);
     container(
@@ -235,35 +202,18 @@ fn library_list<'a>(
     .boxed()
 }
 
-/// One library: radio, library glyph, name, and its folder in muted mono.
-/// A click anywhere on the row selects it; nothing is copied yet.
-fn library_row<'a>(
-    index: usize,
-    root: PathBuf,
-    name: &str,
-    selected: Option<usize>,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+/// One library: library glyph, name, and its folder in muted mono. A click
+/// anywhere on the row copies into that library.
+fn library_row<'a>(root: PathBuf, name: &str, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let r = tokens::resolve(tokens);
-    let is_selected = selected == Some(index);
-    let ink = if is_selected {
-        r.accent_soft_ink
-    } else {
-        ti(tokens.text)
-    };
+    let ink = ti(tokens.text);
     let folder = root
         .parent()
         .map(|dir| dir.display().to_string())
         .unwrap_or_default();
-    let pick = LibraryMessage::StockCopy(StockCopyMsg::TargetSelected(root));
-    let on_radio = pick.clone();
+    let pick = row_message(&root);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let line = row![
-        radio(UserText::new(String::new()), index, selected, move |_| {
-            on_radio
-        })
-        .size(RADIO)
-        .boxed(),
         DialogIcon::Library.glyph_element(GLYPH, ink),
         text(UserText::new(name.to_owned()))
             .size(TS.body)
@@ -284,7 +234,7 @@ fn library_row<'a>(
     ]
     .spacing(ROW_GAP)
     .align_y(Alignment::Center);
-    let (tint, hover) = (r.accent_soft, tokens::hover_overlay(tokens));
+    let hover = tokens::hover_overlay(tokens);
     button(line)
         .height(Length::Fixed(ROW_H))
         .width(Length::Fill)
@@ -295,15 +245,8 @@ fn library_row<'a>(
                 status,
                 iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed
             );
-            let background = if is_selected {
-                Some(Background::Color(tint))
-            } else if hovered {
-                Some(Background::Color(hover))
-            } else {
-                None
-            };
             iced::widget::button::Style {
-                background,
+                background: hovered.then_some(Background::Color(hover)),
                 text_color: ink,
                 border: Border {
                     radius: Radii::GRAPHITE.small.into(),

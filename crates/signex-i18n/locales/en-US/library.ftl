@@ -206,11 +206,9 @@ library-edit-row-reload-saved = Reload saved version
 library-picker-next = Next
 library-primitive-picker-browse = Browse filesystem…
 library-primitive-picker-open-library = Open library
-library-primitive-picker-dont-copy = Don't copy
 library-recovery-remove-from-project = Remove from project
 library-recovery-locate = Locate…
 library-recovery-restore-remote = Restore from remote
-library-recovery-skip-read-only = Skip (read-only)
 library-recovery-reinit = Re-init (lose history)
 library-recovery-remove-row = Remove row
 library-recovery-rebind = Re-bind…
@@ -249,10 +247,6 @@ library-order-save-failed = Could not save the order: { $error }
 library-stock-copy-intro-title = Copy { $label } to a library
 # Intro text under the title.
 library-stock-copy-intro-text = The stock library is read-only. The copy opens for editing; the stock original is not changed.
-# Primary button: copy into the selected library. $library is its name.
-library-stock-copy-to = Copy to { $library }
-# Primary button while no library is selected.
-library-stock-copy-copy = Copy
 # The chosen library can no longer take the copy. $path is its file.
 library-stock-copy-not-writable = { $path } is not open and writable; pick another library.
 
@@ -337,6 +331,15 @@ library-edit-row-class-placeholder = Select class…
 library-edit-row-state = State
 # Placeholder of the State dropdown.
 library-edit-row-state-placeholder = Select lifecycle…
+# The lifecycle states of a component row, as its State dropdown and the
+# Place Component State column show them.
+library-lifecycle-draft = Draft
+library-lifecycle-in-review = In review
+library-lifecycle-released = Released
+library-lifecycle-deprecated = Deprecated
+library-lifecycle-obsolete = Obsolete
+# A state written by a newer version of Signex.
+library-lifecycle-unknown = Unknown
 # Field label, also the field's placeholder.
 library-edit-row-manufacturer = Manufacturer
 # Field label: manufacturer part number; also the field's placeholder.
@@ -410,8 +413,6 @@ library-delete-row-title = Delete Component?
 library-delete-row-intro-title = Delete { $pn }?
 # Intro text; $pn is the row's part number, $table its table.
 library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
-# Caption under the intro text.
-library-delete-row-caption = Placed parts keep their embedded copy.
 
 ## Place Component picker (#129)
 # Dialog title of the picker when it places a part.
@@ -487,6 +488,9 @@ library-primitive-picker-copy-into = Copy into { $library }
 library-primitive-picker-copying = Copying…
 # Shown while the library that holds the symbol is being opened.
 library-primitive-picker-opening = Opening library…
+# Link without copying found the library open but without the symbol; nothing
+# is bound. $library is the library, $name the symbol.
+library-primitive-picker-not-listed = { $library } does not list { $name }; nothing was linked.
 
 ## Document Options dialog of a library (#132)
 # Header note: $name is the library's display name.

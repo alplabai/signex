@@ -23,11 +23,9 @@ define_ids! {
     LIBRARY_PICKER_NEXT = "library-picker-next";
     LIBRARY_PRIMITIVE_PICKER_BROWSE = "library-primitive-picker-browse";
     LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY = "library-primitive-picker-open-library";
-    LIBRARY_PRIMITIVE_PICKER_DONT_COPY = "library-primitive-picker-dont-copy";
     LIBRARY_RECOVERY_REMOVE_FROM_PROJECT = "library-recovery-remove-from-project";
     LIBRARY_RECOVERY_LOCATE = "library-recovery-locate";
     LIBRARY_RECOVERY_RESTORE_REMOTE = "library-recovery-restore-remote";
-    LIBRARY_RECOVERY_SKIP_READ_ONLY = "library-recovery-skip-read-only";
     LIBRARY_RECOVERY_REINIT = "library-recovery-reinit";
     LIBRARY_RECOVERY_REMOVE_ROW = "library-recovery-remove-row";
     LIBRARY_RECOVERY_REBIND = "library-recovery-rebind";
@@ -53,8 +51,6 @@ define_ids! {
     // Copy to Library (#134)
     LIBRARY_STOCK_COPY_INTRO_TITLE = "library-stock-copy-intro-title";
     LIBRARY_STOCK_COPY_INTRO_TEXT = "library-stock-copy-intro-text";
-    LIBRARY_STOCK_COPY_TO = "library-stock-copy-to";
-    LIBRARY_STOCK_COPY_COPY = "library-stock-copy-copy";
     LIBRARY_STOCK_COPY_NOT_WRITABLE = "library-stock-copy-not-writable";
     // Close Library (#136)
     LIBRARY_CLOSE_INTRO_TITLE = "library-close-intro-title";
@@ -93,6 +89,12 @@ define_ids! {
     LIBRARY_EDIT_ROW_CLASS_PLACEHOLDER = "library-edit-row-class-placeholder";
     LIBRARY_EDIT_ROW_STATE = "library-edit-row-state";
     LIBRARY_EDIT_ROW_STATE_PLACEHOLDER = "library-edit-row-state-placeholder";
+    LIBRARY_LIFECYCLE_DRAFT = "library-lifecycle-draft";
+    LIBRARY_LIFECYCLE_IN_REVIEW = "library-lifecycle-in-review";
+    LIBRARY_LIFECYCLE_RELEASED = "library-lifecycle-released";
+    LIBRARY_LIFECYCLE_DEPRECATED = "library-lifecycle-deprecated";
+    LIBRARY_LIFECYCLE_OBSOLETE = "library-lifecycle-obsolete";
+    LIBRARY_LIFECYCLE_UNKNOWN = "library-lifecycle-unknown";
     LIBRARY_EDIT_ROW_MANUFACTURER = "library-edit-row-manufacturer";
     LIBRARY_EDIT_ROW_MPN = "library-edit-row-mpn";
     LIBRARY_EDIT_ROW_DESCRIPTION = "library-edit-row-description";
@@ -128,7 +130,6 @@ define_ids! {
     LIBRARY_DELETE_ROW_TITLE = "library-delete-row-title";
     LIBRARY_DELETE_ROW_INTRO_TITLE = "library-delete-row-intro-title";
     LIBRARY_DELETE_ROW_INTRO = "library-delete-row-intro";
-    LIBRARY_DELETE_ROW_CAPTION = "library-delete-row-caption";
     LIBRARY_PICKER_TITLE_PLACE = "library-picker-title-place";
     LIBRARY_PICKER_TITLE_CHANGE = "library-picker-title-change";
     LIBRARY_PICKER_TITLE_DATASHEET = "library-picker-title-datasheet";
@@ -162,6 +163,7 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_COPY_INTO = "library-primitive-picker-copy-into";
     LIBRARY_PRIMITIVE_PICKER_COPYING = "library-primitive-picker-copying";
     LIBRARY_PRIMITIVE_PICKER_OPENING = "library-primitive-picker-opening";
+    LIBRARY_PRIMITIVE_PICKER_NOT_LISTED = "library-primitive-picker-not-listed";
     LIBRARY_DOCUMENT_OPTIONS_NOTE = "library-document-options-note";
     LIBRARY_DOCUMENT_OPTIONS_SHEET_COLOR = "library-document-options-sheet-color";
     LIBRARY_DOCUMENT_OPTIONS_GRID = "library-document-options-grid";

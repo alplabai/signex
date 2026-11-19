@@ -706,7 +706,7 @@ fn template_rows_have_a_pill_and_no_remove_and_custom_rows_keep_it() {
 // ─── #137: the delete-row confirm ────────────────────────────────────
 
 #[test]
-fn the_delete_confirm_says_placed_parts_keep_their_copy_and_its_close_cancels() {
+fn the_delete_confirm_names_the_row_and_its_close_cancels() {
     let (_app, root, row_id) = app_with_browser();
     let confirm = crate::library::state::DeleteConfirmState {
         table: TABLE.into(),
@@ -727,10 +727,14 @@ fn the_delete_confirm_says_placed_parts_keep_their_copy_and_its_close_cancels() 
         "Delete Component?",
         "Delete R-1500?",
         "Delete row R-1500 from R? This cannot be undone from the UI.",
-        "Placed parts keep their embedded copy.",
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
     }
+    // The m137 caption is only a proposal: it is not drawn until accepted.
+    assert!(
+        !texts.iter().any(|t| t.contains("embedded copy")),
+        "{texts:?}"
+    );
     let clicked = crate::layout_probe::messages_on_click(build(), size, "\u{00D7}");
     assert!(
         clicked

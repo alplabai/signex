@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::*;
+use crate::library::messages::LibraryMessage;
 use crate::library::state::LibraryState;
 
 #[test]
@@ -30,7 +31,6 @@ fn the_dialog_draws_in_every_theme_from_tokens_alone() {
         label: "R".into(),
         previous_unavailable: Some(PathBuf::from("/gone/Gone.snxlib")),
         error: Some("not writable".into()),
-        selected: Some(PathBuf::from("/libs/mine/Mine.snxlib")),
     };
     for id in ThemeId::BUILTINS {
         let tokens = theme_tokens(*id);
@@ -60,6 +60,19 @@ fn the_library_list_follows_its_rows_up_to_the_cap() {
         list_height(view::LIST_MAX_ROWS),
         list_height(view::LIST_MAX_ROWS + 10)
     );
+}
+
+/// #134: a click on a library row copies into it at once; there is no
+/// separate select step (one-click copy is kept until m134 is decided).
+#[test]
+fn a_library_row_click_copies_into_that_library_at_once() {
+    let root = Path::new("/libs/mine/Mine.snxlib");
+    match view::row_message(root) {
+        LibraryMessage::StockCopy(StockCopyMsg::TargetPicked(picked)) => {
+            assert_eq!(picked, root);
+        }
+        other => panic!("a row click must copy at once, got {other:?}"),
+    }
 }
 
 /// #134: the intro reads as the dialog's mockup words it.

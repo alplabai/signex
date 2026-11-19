@@ -2,24 +2,19 @@
 //! action row's Delete Selected button. The header's close runs the same
 //! Cancel as the footer.
 
-use iced::widget::{Space, column, container, row};
+use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::text;
 
 use super::super::messages::LibraryMessage;
 use super::super::modal_chrome::{cancel_btn, danger_btn, footer_strip, header};
 use super::super::state::DeleteConfirmState;
-use crate::styles::{DIALOG_ICON_TILE, DialogIcon, LINE_HEIGHT, dialog_intro};
+use crate::styles::{DialogIcon, dialog_intro};
 
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const CONFIRM_W: f32 = 480.0;
-
-/// Gap between the intro's secondary text and the caption under it.
-const CAPTION_GAP: f32 = SP.s + SP.xs;
 
 /// The delete confirm's intro title and secondary text; the window height
 /// follows their wrapped line counts (`app/handlers/modal_sizing.rs`).
@@ -34,11 +29,6 @@ pub(crate) fn delete_intro_texts(i18n: &I18n, internal_pn: &str, table: &str) ->
         )
         .into_string(),
     )
-}
-
-/// Height the caption line under the intro adds to the dialog.
-pub(crate) fn delete_caption_height() -> f32 {
-    CAPTION_GAP + TS.caption * LINE_HEIGHT
 }
 
 /// Delete-row confirm modal.
@@ -56,23 +46,15 @@ pub fn view_delete_confirm<'a>(
     let header = header(&title, cancel.clone(), windowed, tokens);
 
     let (intro_title, msg_label) = delete_intro_texts(i18n, &confirm.internal_pn, &confirm.table);
-    // The caption sits under the intro's text column, past the icon tile and
-    // the tile's gap (`dialog_intro`).
-    let caption = row![
-        Space::new().width(DIALOG_ICON_TILE + SP.m + 2.0),
-        text(t!(i18n, ids::LIBRARY_DELETE_ROW_CAPTION))
-            .size(TS.caption)
-            .color(crate::styles::tokens::resolve(tokens).ink4)
-            .width(Length::Fill),
-    ];
 
     // As tall as its text: the footer follows it, with no empty band.
     let body = container(
-        column![
-            dialog_intro(DialogIcon::Trash, intro_title, Some(msg_label), tokens),
-            Space::new().height(CAPTION_GAP),
-            caption,
-        ]
+        column![dialog_intro(
+            DialogIcon::Trash,
+            intro_title,
+            Some(msg_label),
+            tokens
+        )]
         .padding([14.0, SP.xl])
         .width(Length::Fill),
     )

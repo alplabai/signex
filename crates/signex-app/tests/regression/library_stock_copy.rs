@@ -789,11 +789,11 @@ fn the_preview_open_editor_button_opens_a_writable_symbol() {
     assert!(w.app.document_state.error_notice.is_none());
 }
 
-/// #134: the dialog selects, then copies. It opens with the first writable
-/// library selected; choosing another row writes nothing; the primary
-/// button copies into the row that is selected.
+/// #134: one click copies. With two writable libraries listed, a click on
+/// the second copies into it at once and the first stays untouched (the
+/// select-then-confirm flow of m134 is undecided, so one-click is kept).
 #[test]
-fn selecting_a_library_writes_nothing_until_the_copy_is_confirmed() {
+fn a_click_on_a_library_copies_into_it_at_once() {
     let mut w = world();
     let stock_r = w.stock_r();
     let two = w.tmp.path().join("two/Two.snxlib");
@@ -813,33 +813,23 @@ fn selecting_a_library_writes_nothing_until_the_copy_is_confirmed() {
     let (first_before, other_before) = (bytes_of(&dir_of(&first)), bytes_of(&dir_of(&other)));
 
     w.open(&stock_r);
-    let dialog = w.app.library.stock_copy.as_ref().expect("the dialog opens");
+    assert!(w.app.library.stock_copy.is_some(), "the dialog opens");
+    assert!(w.editor_paths().is_empty(), "nothing opens before a click");
     assert_eq!(
-        dialog.selected.as_deref(),
-        Some(first.as_path()),
-        "the first writable library starts selected"
+        bytes_of(&dir_of(&other)),
+        other_before,
+        "nothing written yet"
     );
 
-    w.settle(Message::Library(LibraryMessage::StockCopy(
-        StockCopyMsg::TargetSelected(other.clone()),
-    )));
-
-    let dialog = w.app.library.stock_copy.as_ref().expect("still open");
-    assert_eq!(dialog.selected.as_deref(), Some(other.as_path()));
-    assert!(w.editor_paths().is_empty(), "nothing opens on a selection");
-    assert_eq!(bytes_of(&dir_of(&first)), first_before, "nothing written");
-    assert_eq!(bytes_of(&dir_of(&other)), other_before, "nothing written");
-
-    let selected = dialog.selected.clone().expect("a selection");
-    w.pick(&selected);
+    w.pick(&other);
 
     let copy = dir_of(&other).join("symbols/R.snxsym");
-    assert!(copy.is_file(), "the copy goes to the selected library");
+    assert!(copy.is_file(), "the copy goes to the clicked library");
     assert_eq!(w.editor_paths(), vec![copy]);
     assert_eq!(
         bytes_of(&dir_of(&first)),
         first_before,
-        "the library not selected stays untouched"
+        "the library not clicked stays untouched"
     );
     assert!(w.app.library.stock_copy.is_none());
 }
