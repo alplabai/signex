@@ -10,14 +10,19 @@
 //!
 //! A hit names *where* it is (`target`, `placement`), not *what it said*:
 //! [`replace_commands`] re-reads the text from the document it is given.
+//!
+//! How a needle matches (Match case, Whole word, Regex) is one
+//! [`FindQuery`] that scan and replace both take (#2525).
 
 mod fold;
+mod query;
 mod replace;
 mod scan;
 
 #[cfg(test)]
 mod tests;
 
+pub use query::{FindQuery, MatchOptions, PatternError};
 pub use replace::{designator_commands, replace_all_ci, replace_commands};
 pub use scan::scan_sheet;
 

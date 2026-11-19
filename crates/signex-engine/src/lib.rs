@@ -100,8 +100,8 @@ pub use exec::change_component::{
 };
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
-    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
-    scan_sheet,
+    DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
+    replace_all_ci, replace_commands, scan_sheet,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,

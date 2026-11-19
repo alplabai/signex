@@ -20,6 +20,8 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true }
+# Find and Replace regex mode (#2525).
+regex = { workspace = true }
 [dev-dependencies]
 signex-erc = { workspace = true }
 # #2389: the router's results are checked by the design rule check.

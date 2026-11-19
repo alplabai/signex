@@ -487,23 +487,42 @@ multi-sheet columns and the parameter-matching checkboxes).
 
 **Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
 profile) search the text of labels, text notes, designators and values. The
-**Scope** row chooses how far the search reaches:
+**Find / Replace** switch in the dialog's header changes between the two in
+place. The pill inside the Find field counts the matches. The three toggles
+beside it choose how the text matches:
+
+- **Match case** (`Aa`): upper and lower case differ. Off, case is ignored.
+- **Whole word** (`ab`), on by default: a match may not touch a letter, digit
+  or `_` on either side, so `VOUT` does not find `VOUT_3V3` or `VOUT_SENSE`.
+  Turn it off to find text inside longer names.
+- **Regular expression** (`.*`): the Find text is a regular expression, and
+  the replacement may use its groups (`$1`, `${name}`). An invalid expression
+  marks the field and finds nothing.
+
+The **Scope** switch chooses how far the search reaches:
 
 - **Sheet** searches the active sheet only.
 - **Project** searches every sheet of the project, including sheets you have
-  not opened. Results are grouped under the sheet they are on. A sheet that
-  cannot be read, or that was written by a newer Signex and is read-only in
-  this build, is not searched; the dialog says so and the Messages panel names
-  it.
+  not opened. A sheet that cannot be read, or that was written by a newer
+  Signex and is read-only in this build, is not searched; a warning line under
+  the results says so and the Messages panel names it.
 
-Click a result to open its sheet and zoom to the item. `F3` steps to the next
-result and `Shift+F3` to the previous one (in both profiles), wrapping at the
-ends. A sheet placed more than once shows one designator result per placement,
-labelled "placement 2 of 3".
+Results are grouped by kind (Net Label, Text Note, Designator, Value), each
+with its matches highlighted and its sheet in the right-hand column. Click a
+result to open its sheet and zoom to the item; the footer reads "Match 2 of 5".
+`F3` steps to the next result and `Shift+F3` to the previous one (in both
+profiles), wrapping at the ends. A sheet placed more than once shows one
+designator result per placement, labelled "placement 2 of 3".
+
+In Replace mode every result has an include box, all set at first, and shows
+what it becomes (`VOUT → VOUT_3V3`). The primary button counts the included
+results ("Replace 1 of 5") and replaces only those; a cleared row stays as it
+is. Changing the Find text, a toggle or the scope sets every box again.
+**Replace Current** replaces the selected result.
 
 **Replace Current** and **Replace All** replace only the matched text, not the
-whole field, and match without regard to case. In **Project** scope a Replace
-All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+whole field. A Replace All is one undo step; in **Project** scope `Ctrl+Z` on
+any of the changed sheets reverts every one of
 them together. If one of those sheets was edited afterwards, the undo is
 refused and the Messages panel names the sheet; undo the newer edit first.
 
