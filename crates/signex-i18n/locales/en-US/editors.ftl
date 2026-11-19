@@ -387,3 +387,90 @@ editors-wire-corner-vertical-first = Corner: 90°, vertical first
 editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
 editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
 editors-wire-corner-any-angle = Corner: any angle
+
+## Footprint Pad Properties (Graphite, #125)
+# Header, first line: the selected pad's number.
+editors-fp-pad-title = Pad { $number }
+# Header, second line: the pad's place among the footprint's pads. $index and $pads are whole numbers.
+editors-fp-pad-place = { $index } of { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    }
+# Header while a pad is being placed: the form edits the next pad.
+editors-fp-pad-next-title = Next pad
+# Link in the header that opens the pad's profile in Sketch mode.
+editors-fp-pad-edit-in-sketch = Edit in Sketch ▸
+# Kind pill of a non-plated hole.
+editors-fp-pad-pill-npth = NPTH
+editors-fp-pad-section-properties = Properties
+# The section of an SMD pad: it has one layer, so no pad stack.
+editors-fp-pad-section-pad-top = Pad · Top Layer
+editors-fp-pad-section-pad-bottom = Pad · Bottom Layer
+editors-fp-pad-section-pad-stack = Pad Stack
+editors-fp-pad-section-paste-solder = Paste & Solder
+editors-fp-pad-section-features = Pad Features
+# Pad stack modes of a through-hole pad.
+editors-fp-pad-stack-simple = Simple
+editors-fp-pad-stack-top-middle-bottom = Top-Middle-Bottom
+editors-fp-pad-stack-full = Full Stack
+# Layer chips under the illustration of a through-hole pad.
+editors-fp-pad-layers = Layers
+editors-fp-pad-layer-top = Top
+editors-fp-pad-layer-inner = Inner
+# Every inner copper layer, named by position: L1 is Top and Ln is Bottom.
+editors-fp-pad-layer-inner-range = L2…Ln−1
+editors-fp-pad-layer-bottom = Bottom
+editors-fp-pad-size = Size X / Y
+editors-fp-pad-position = X / Y (mm)
+editors-fp-pad-copper-offset = Copper offset
+# Hole shapes the pad model stores.
+editors-fp-pad-hole-round = Round
+editors-fp-pad-hole-slot = Slot
+editors-fp-pad-hole-size = Size
+editors-fp-pad-hole-width-length = Width / Length
+editors-fp-pad-plated = Plated
+editors-fp-pad-tolerance = Tolerance +/−
+# Beside Thermal relief while it is off: the pad connects to a plane directly.
+editors-fp-pad-thermal-off = off · direct connect
+editors-fp-pad-air-gap = Air gap
+editors-fp-pad-spoke-width = Spoke width
+editors-fp-pad-spokes = Spokes
+# Where a value comes from: the board's design rule, or a value typed for this pad.
+editors-fp-pad-rule = Rule
+editors-fp-pad-manual = Manual
+# Tag in a value cell that the board's design rule decides.
+editors-fp-pad-rule-tag = rule
+editors-fp-pad-expansion = Expansion
+editors-fp-pad-top-paste = Top Paste
+editors-fp-pad-bottom-paste = Bottom Paste
+editors-fp-pad-top-solder-mask = Top Solder mask
+editors-fp-pad-bottom-solder-mask = Bottom Solder mask
+# Beside a paste layer that is switched off.
+editors-fp-pad-paste-off = off
+# Beside a solder mask layer: an opening over the pad, or the mask covers it.
+editors-fp-pad-mask-opening = opening
+editors-fp-pad-mask-tented = tented
+editors-fp-pad-no-through-hole-paste = No paste on through-hole pads and holes.
+# Why a typed value was not taken. The field keeps the last good value.
+editors-fp-pad-invalid-number = Enter a number
+editors-fp-pad-invalid-positive = Must be greater than 0
+editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
+# Illustration labels. $value is a length in mm, already formatted.
+editors-fp-pad-callout-title = Pad { $number } · { $layer }
+editors-fp-pad-callout-size-x = Size X { $value }
+editors-fp-pad-callout-size-y = Size Y { $value }
+editors-fp-pad-callout-diameter = Size Ø { $value }
+# $value is a whole-number percentage.
+editors-fp-pad-callout-corner = Corner radius { $value }%
+editors-fp-pad-callout-hole-plated = Hole, plated
+editors-fp-pad-callout-slot-plated = Slot, plated
+editors-fp-pad-callout-hole-npth = Hole, no copper
+editors-fp-pad-callout-solder-mask = Solder mask
+# $layer is a solder mask layer name, such as Top Solder mask.
+editors-fp-pad-callout-tented = { $layer } off: tented
+# Between the parts of the pad header's second line.
+editors-fp-pad-separator = ·
+# Placeholder of the next pad's designator: numbered automatically.
+editors-fp-pad-auto = (auto)
+# Placeholder of a pad net that is not set.
+editors-fp-pad-unassigned = (unassigned)
