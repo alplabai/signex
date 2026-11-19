@@ -471,7 +471,7 @@ mod symbol_body_style;
 mod text_extents_save;
 #[path = "regression/window_tile_rows.rs"]
 mod window_tile_rows;
-// #2249: Window ▸ Tile shows the documents in panes; Untile.
+// #2249: View ▸ Window ▸ Tile shows the documents in panes; Untile.
 #[path = "regression/document_tiling.rs"]
 mod document_tiling;
 

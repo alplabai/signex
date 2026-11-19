@@ -280,7 +280,7 @@ fn design_rows_without_a_schematic_are_greyed() {
         "Tools/Annotation/Force Annotate All Schematics",
         "Project/Electrical Rules Check",
         "Design/Parameter Manager...",
-        "Reports/Bill of Materials…",
+        "Tools/Reports/Bill of Materials…",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }

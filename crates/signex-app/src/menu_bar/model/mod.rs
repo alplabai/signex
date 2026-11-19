@@ -86,14 +86,15 @@ impl MenuItem {
 }
 
 /// The English titles of the root menus, left to right, which the tests pin;
-/// the bar reads [`ROOT_TITLE_IDS`].
+/// the bar reads [`ROOT_TITLE_IDS`]. Reports and Window are submenus of Tools
+/// and View: docs/MENU_BAR.md#root-menus
 #[cfg(test)]
-pub const ROOT_TITLES: [&str; 10] = [
-    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
+pub const ROOT_TITLES: [&str; 8] = [
+    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Help",
 ];
 
 /// The catalog message of each root title, left to right.
-const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
+const ROOT_TITLE_IDS: [signex_i18n::MessageId; 8] = [
     signex_i18n::ids::MENU_FILE,
     signex_i18n::menu_ids::MENU_EDIT,
     signex_i18n::menu_ids::MENU_VIEW,
@@ -101,8 +102,6 @@ const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
     signex_i18n::menu_ids::MENU_PLACE,
     signex_i18n::menu_ids::MENU_DESIGN,
     signex_i18n::menu_ids::MENU_TOOLS,
-    signex_i18n::menu_ids::MENU_REPORTS,
-    signex_i18n::menu_ids::MENU_WINDOW,
     signex_i18n::menu_ids::MENU_HELP,
 ];
 
@@ -124,8 +123,6 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::place(ctx),
         menus::design(ctx),
         menus::tools(ctx),
-        menus::reports(ctx),
-        menus::window(ctx),
         menus::help(ctx),
     ];
     MenuBarModel {

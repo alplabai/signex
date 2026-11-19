@@ -645,7 +645,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
     // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
     // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
-    // Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
+    // View ▸ Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
     // Mask (#2420) add nine.
@@ -676,7 +676,7 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
 }
 
 /// The chrome clamps its search bar with this width; it is derived from the
-/// model's root titles and must follow the root titles (52 label chars, 10 roots).
+/// model's root titles and must follow the root titles (39 label chars, 8 roots).
 #[test]
 fn approx_menu_bar_width_is_unchanged() {
     let titles: Vec<String> = menu_bar_model(&MenuContext::default())
@@ -688,13 +688,78 @@ fn approx_menu_bar_width_is_unchanged() {
     assert_eq!(
         super::model::ROOT_TITLES,
         [
-            "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window",
-            "Help"
+            "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Help"
         ]
     );
     assert_eq!(
         super::approx_menu_bar_width(&signex_i18n::I18n::en_us()),
-        622.0
+        500.5
+    );
+}
+
+/// The entry titles of `menu`, `---` for a separator and `title>` for a
+/// submenu.
+fn entry_titles(menu: &Menu) -> Vec<String> {
+    menu.entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item) => item.label.clone(),
+            MenuEntry::Submenu(sub) => format!("{}>", sub.title),
+            MenuEntry::Separator => "---".to_owned(),
+        })
+        .collect()
+}
+
+/// #2524 and the 2026-11-19 decisions: Reports is the submenu right under
+/// Tools ▸ Annotation, and Window the last entry of View after a separator,
+/// with every old root row in it in the old order.
+#[test]
+fn reports_and_window_are_submenus_of_tools_and_view() {
+    let model = menu_bar_model(&MenuContext::default());
+    let root = |title: &str| {
+        model
+            .menus
+            .iter()
+            .find(|menu| menu.title == title)
+            .unwrap_or_else(|| panic!("no root {title}"))
+    };
+    let submenu = |menu: &Menu, title: &str| {
+        menu.entries
+            .iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Submenu(sub) if sub.title == title => Some(sub.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no submenu {title} in {}", menu.title))
+    };
+    let tools = entry_titles(root("Tools"));
+    assert_eq!(tools[..3], ["Annotation>", "Reports>", "---"]);
+    let view = entry_titles(root("View"));
+    assert_eq!(view[view.len() - 2..], ["---", "Window>"]);
+    assert_eq!(
+        entry_titles(&submenu(root("Tools"), "Reports")),
+        [
+            "Bill of Materials…",
+            "Netlist (Protel .NET)...",
+            "ERC Report…",
+            "---",
+            "Board Bill of Materials…",
+            "Board Netlist…",
+            "Net Lengths…",
+            "Component Report…",
+            "Export Report as CSV…",
+            "Assembly Drawings as SVG…",
+        ]
+    );
+    assert_eq!(
+        entry_titles(&submenu(root("View"), "Window")),
+        [
+            "Tile Horizontally",
+            "Tile Vertically",
+            "Untile",
+            "---",
+            "Close All Documents",
+        ]
     );
 }
 

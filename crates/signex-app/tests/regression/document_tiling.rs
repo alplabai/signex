@@ -1,5 +1,5 @@
-//! #2249 - Window ▸ Tile Horizontally / Tile Vertically show the main
-//! window's documents in panes, and Window ▸ Untile, or closing down to one
+//! #2249 - View ▸ Window ▸ Tile Horizontally / Tile Vertically show the main
+//! window's documents in panes, and View ▸ Window ▸ Untile, or closing down to one
 //! document, goes back to one. Each entry point (menu row, palette, built-in
 //! key) is driven through `Signex::update`.
 

@@ -216,8 +216,8 @@ fn up_hierarchy_is_greyed_on_a_top_level_sheet() {
 fn stub_rows_are_not_live() {
     let app = one_symbol_selected();
     for path in [
-        "Window/Tile Horizontally",
-        "Window/Tile Vertically",
+        "View/Window/Tile Horizontally",
+        "View/Window/Tile Vertically",
         "Tools/Annotation/Back Annotate Schematics...",
         "Tools/Annotation/Number Schematic Sheets...",
     ] {
