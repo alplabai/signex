@@ -100,6 +100,11 @@ impl Catalog {
                     .map(Message::PassiveCalculator)
                     .boxed(),
             ),
+            section::view(
+                "Property illustrations",
+                tokens,
+                crate::illustration::view(tokens)
+            ),
         ]
         .spacing(20)
         .padding(20);

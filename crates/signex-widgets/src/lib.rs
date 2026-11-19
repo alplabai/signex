@@ -12,6 +12,7 @@ mod house_extra;
 pub mod icon_button;
 mod label;
 pub mod passive_calculator;
+pub mod property_illustration;
 pub mod segmented;
 pub mod status_bar;
 pub mod tab_pill;
