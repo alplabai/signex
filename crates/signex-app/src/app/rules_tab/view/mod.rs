@@ -25,7 +25,6 @@ use signex_drc::{Effective, RuleResult};
 use signex_drc_dsl::table::catalog::Domain;
 use signex_drc_dsl::table::{RuleRow, RuleTable};
 use signex_i18n::{I18n, UserText, ids, t};
-use signex_types::pcb::PcbBoard;
 use signex_types::project::{DrcRuleSet, NamedRuleSet};
 use signex_types::theme::ThemeTokens;
 use signex_types::violation::Severity;
@@ -58,7 +57,6 @@ pub(super) struct Frame<'a> {
     pub origin: RulesOrigin,
     pub checked: Cow<'a, Checked>,
     pub running: bool,
-    pub board: Option<&'a PcbBoard>,
     /// The selected rule's sample value and the net it is for.
     pub why: Option<&'a (Effective, String)>,
     /// The net classes' names, for the matrix.
@@ -71,19 +69,30 @@ pub(super) struct Frame<'a> {
 
 impl<'a> Frame<'a> {
     /// The rule's results in the last run, by rule id.
+    /// `None` while the run is stale or the rule changed since it ran: an
+    /// old count must not speak for the rule as it is now.
     pub fn result(&self, row: &RuleRow) -> Option<RuleResult> {
         match &*self.checked {
-            Checked::Ran { results, .. } => {
+            Checked::Ran {
+                stale: false,
+                results,
+                used,
+            } if used.get(&row.name) == row.compiled.as_ref() => {
                 Some(results.get(&row.id()).copied().unwrap_or_default())
             }
             _ => None,
         }
     }
 
-    /// The per-rule results of the last run, when there was one.
+    /// The per-rule results of the last run, when there was one and the
+    /// board has not changed since.
     pub fn results(&self) -> Option<&BTreeMap<String, RuleResult>> {
         match &*self.checked {
-            Checked::Ran { results, .. } => Some(results),
+            Checked::Ran {
+                stale: false,
+                results,
+                ..
+            } => Some(results),
             _ => None,
         }
     }
@@ -253,7 +262,6 @@ impl Signex {
             origin,
             checked,
             running,
-            board: board.map(|(_, board)| board),
             why: analysis.and_then(|analysis| analysis.why.as_ref()),
             classes,
             layer: self.rules_drc_layer(id),
