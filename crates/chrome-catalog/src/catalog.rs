@@ -94,6 +94,11 @@ impl Catalog {
                     .map(Message::PassiveCalculator)
                     .boxed(),
             ),
+            section::view(
+                "Dimension labels",
+                tokens,
+                crate::dimension_label::view(tokens)
+            ),
         ]
         .spacing(20)
         .padding(20);

@@ -5,6 +5,7 @@
 
 pub mod active_bar;
 pub mod chevron;
+pub mod dimension_label;
 pub mod dropdown_style;
 pub mod history_pane;
 mod house;
