@@ -15,6 +15,9 @@ use crate::styles::{
     tokens::{composite_over, hover_overlay, resolve},
 };
 
+/// A button style chosen at run time from one of the looks.
+type ButtonStyleFn = Box<dyn Fn(&iced::Theme, button::Status) -> button::Style>;
+
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 /// Edge of an icon in a row or a button (14 px at the default base).
@@ -210,7 +213,7 @@ fn sized_button<'a>(
             .boxed(),
     );
     let radius = size.radius();
-    let style: Box<dyn Fn(&iced::Theme, button::Status) -> button::Style> = match look {
+    let style: ButtonStyleFn = match look {
         Look::Outline => Box::new(outline_button(tokens)),
         Look::Primary => Box::new(styles::primary_button(tokens)),
         Look::Ghost => Box::new(ghost_link(tokens)),

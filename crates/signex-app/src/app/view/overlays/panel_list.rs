@@ -4,7 +4,6 @@
 //! board nobody opened are left out, and so is a group left empty.
 
 use super::*;
-use iced::Widget as _;
 use iced::widget::{Column, container, row, svg};
 use signex_i18n::{MessageId, UserText, ids, t};
 
