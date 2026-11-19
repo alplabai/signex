@@ -622,26 +622,36 @@ value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
 
 ## Layer tab menu
 
-A right-click on a layer tab under the board opens its menu (#2379, #2394):
+A right-click on a layer tab under the board opens its menu (#2379, #2394,
+#104). Every row has one 16 px icon column, so the labels line up whether or
+not a row has an icon:
 
-- Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
-  picking it again ends the highlight), Show only this layer and Show all
-  layers. Show only this layer makes the layer active and hides every other
-  layer the Layers panel lists; the board outline and the Multi-Layer row
-  keep their state, as in single-layer mode.
-- Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
-  mask (solder mask and adhesive), paste, mechanical (board outline,
-  documentation and mechanical layers) and all.
-- Layer stack... runs `board_layer_stack` (#2401) from the window the menu
-  was opened in and is greyed exactly when that command is. Drill symbols...
-  and Layer drawing order... are greyed with the reason as their hover text:
-  neither editor exists yet.
-- Short, Medium and Long tab names and Show layer numbers. Short names are
-  `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
-  `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A
-  number goes in front: a copper layer's place in the stack (1 is the top),
-  a mechanical layer's index; technical layers have none.
-- Flip board view: the board seen from below. The view is mirrored left to
+- Hide <layer> (eye crossed out), Highlight <layer> (every other layer is
+  drawn dimmed; picking it again ends the highlight), Show only this layer
+  (eye) and Show all layers (no icon). Show only this layer makes the layer
+  active and hides every other layer the Layers panel lists; the board
+  outline and the Multi-Layer row keep their state, as in single-layer mode.
+- Hide layers ▸ and Show layers ▸, no icon; the launcher of the open flyout
+  keeps the current-row look, and pointing at the other one switches the
+  flyout. A flyout has a HIDE or SHOW header, then All layers, a line, and
+  one row per kind: signal, plane, silkscreen, mask (solder mask and
+  adhesive), paste and mechanical (board outline, documentation and
+  mechanical layers).
+- Layer stack... (layers icon) runs `board_layer_stack` (#2401) from the
+  window the menu was opened in and is greyed exactly when that command is.
+  Drill symbols... and Layer drawing order... are greyed with the reason as
+  their hover text: neither editor exists yet.
+- A TAB NAMES header over one switch, Short | Medium | Long, lined up with
+  the labels; a click on a cell sets the style and closes the menu. Short
+  names are `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium
+  names are `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long
+  name.
+- Show layer numbers, a checkbox in the icon column; a click anywhere on the
+  row turns the numbers on or off and closes the menu. A number goes in
+  front: a copper layer's place in the stack (1 is the top), a mechanical
+  layer's index; technical layers have none.
+- Flip board view (mirror icon), straight after Show layer numbers with no
+  line between them: the board seen from below. The view is mirrored left to
   right (the turn of the view, #2316, still applies on top), board text
   reads mirrored, a box selection keeps its left-to-right and right-to-left
   meaning on screen, and within one emphasis the copper nearer the bottom is
@@ -654,14 +664,22 @@ never the board file. The tab names are per user (`prefs.json`,
 
 ## Layer sets
 
+The strip under the board is 28 px tall. It lists the board's visible
+layers only: a layer the view hides has no tab until it is shown again. The
+active layer's tab is filled with the soft accent and has the accent bar
+along its top. When the tabs are wider than the window the strip scrolls
+sideways with the thin scrollbar instead of widening the window (#104).
+
 The button at the left end of the layer tabs names the set the tabs list and
-opens the set menu (#2394): All Layers, Signal Layers, Plane Layers,
+opens the set menu (#2394); it is drawn pressed while its menu is open. The
+menu has a LAYER SETS header, then All Layers, Signal Layers, Plane Layers,
 Non-signal Layers (every layer but copper), Mechanical Layers, then the sets
-the user saved, then Save current as set... and Manage sets.... Picking a set
-shows its layers and hides every other listed layer (the board outline keeps
-its state), and the tabs list only the set's layers. An active layer the set
-hides moves into the set. All Layers and Show all layers list and show every
-layer again.
+the user saved, each with a "saved" hint at the right, then Save current as
+set... (plus icon) and Manage sets.... The set the view shows has its check
+in the icon column. Picking a set shows its layers and hides every other
+listed layer (the board outline keeps its state), and the tabs list only the
+set's layers. An active layer the set hides moves into the set. All Layers
+and Show all layers list and show every layer again.
 
 Save current as set... turns the card into a name field; Enter or Save saves
 the layers the view shows under that name (a set of the same name is
