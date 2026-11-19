@@ -4,7 +4,6 @@
 
 use iced::widget::{Row, column};
 use iced::{Color, Element, Widget};
-use signex_i18n::I18n;
 use signex_types::theme::{Color as ThemeColor, ThemeTokens};
 use signex_widgets::chips::{
     ChipMetrics, ChipStyle, ChipTone, FilterSet, TabChip, TabChipStyle, choice_chips, filter_chips,
@@ -92,7 +91,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         &FilterSet::new([Sample::A, Sample::D]),
         chip_style(tokens),
         m,
-        I18n::en_us_ref(),
+        crate::locale::en_us(),
         ignore,
     );
     let neutral = ChipTone {
@@ -118,7 +117,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         Sample::B,
         tab_style(tokens),
         m,
-        I18n::en_us_ref(),
+        crate::locale::en_us(),
         ignore,
     );
     let seg_style = SegmentedStyle::new(

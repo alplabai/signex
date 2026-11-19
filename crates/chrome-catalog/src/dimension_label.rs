@@ -5,7 +5,6 @@ use std::sync::LazyLock;
 
 use iced::widget::{Row, Space, container, stack};
 use iced::{Background, Border, Element, Point, Theme, Vector, Widget};
-use signex_i18n::I18n;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::LengthFormat;
@@ -20,7 +19,7 @@ use crate::theme;
 
 /// The samples show millimetres in the en-US locale.
 fn format() -> LengthFormat<'static> {
-    LengthFormat::new(I18n::en_us_ref(), Unit::Mm)
+    LengthFormat::new(crate::locale::en_us(), Unit::Mm)
 }
 
 /// Label text size, the caption step of the type scale; the drawing and

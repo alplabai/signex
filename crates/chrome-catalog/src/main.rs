@@ -9,6 +9,7 @@ mod flow_progress;
 mod graphite_tokens;
 mod icon;
 mod illustration;
+mod locale;
 mod modal_card;
 mod project_tree;
 mod section;
