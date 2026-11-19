@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(reason.clone(), reason);
         assert!(!reason.is_empty());
         assert!(WaiverReason::with_text("  \n ").is_empty());
-        assert!(WaiverReason::default() == "");
+        assert_eq!(WaiverReason::default().text(), "");
     }
 
     #[test]

@@ -271,7 +271,7 @@ fn a_row_names_its_layer_place_and_objects() {
         .into_string()
         .replace(['\u{2068}', '\u{2069}'], "");
     let line = format!("{layer} · 1.000, 2.000 mm · 2 objects");
-    assert!(shown.iter().any(|t| *t == line), "{line}: {shown:?}");
+    assert!(shown.contains(&line), "{line}: {shown:?}");
 }
 
 /// AV-13: Waive opens the shared form under the row: Reason and Author,
