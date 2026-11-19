@@ -469,7 +469,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
     match modal {
         ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 191.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 261.0),
         ModalId::ReprefixConfirm => iced::Size::new(560.0, 500.0),
         ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
         ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),

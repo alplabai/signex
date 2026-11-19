@@ -581,6 +581,10 @@ pub struct UiState {
     /// Reset-and-renumber confirmation modal. When true, the Design →
     /// Reset menu item shows a confirm before discarding every number.
     pub annotate_reset_confirm: bool,
+    /// The Annotate dialog's session: change-list view and filter, sheet
+    /// ticks, the Fixed options fold and which reset the confirm runs.
+    /// Boxed: a closed dialog costs one pointer (#2412).
+    pub annotate_session: Box<crate::app::handlers::erc::AnnotateSession>,
     /// Per-modal offset in window pixels from the centered position.
     /// Updated when the user drags the title bar. Persists until the app
     /// closes so reopening a dialog lands where it was last placed.

@@ -121,6 +121,21 @@ pub enum AnnotateMsg {
         result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
         hold: crate::autosave::SaveHold,
     },
+    /// The change list's Changes / All switch was picked (#75).
+    ListViewPicked(crate::app::handlers::erc::AnnotateListView),
+    /// The change list's filter text was edited (#75).
+    ListFilterEdited(String),
+    /// A sheet row's tick was clicked: the sheet file (every placement row
+    /// of it) joins or leaves the run (#75).
+    SheetTickToggled(std::path::PathBuf),
+    /// The sheets table's header tick was clicked: tick (`true`) or untick
+    /// every sheet.
+    AllSheetsTicked(bool),
+    /// The "Fixed options" group was opened or closed.
+    FixedOptionsToggled,
+    /// Reset All (`ResetOnly`) or Reset & Renumber (`ResetAndRenumber`) was
+    /// pressed in the dialog footer: open the confirm for that reset (#76).
+    ResetPressed(signex_engine::AnnotateMode),
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under

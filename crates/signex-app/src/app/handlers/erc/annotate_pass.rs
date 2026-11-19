@@ -75,12 +75,34 @@ impl Signex {
         // order over the same set, and numbers a sheet file placed more than
         // once per placement as this pass does, so the number it promises for
         // a sheet is the number this pass assigns it (#435, #1919).
-        let locked = self.ui_state.annotate_locked.clone();
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
             &project_set,
             active_path.as_deref(),
         );
+        // Sheets the Annotate dialog unticked (#75) stay as they are: their
+        // symbols act as locked, so their designators keep their numbers in
+        // the counter. Re-prefix always covers the whole project.
+        let unticked = if reprefix.is_none() {
+            self.annotate_unticked_sheets()
+        } else {
+            Default::default()
+        };
+        let locked = super::annotate_preview::rows::with_unticked_locked(
+            &self.ui_state.annotate_locked,
+            &unticked,
+            ordered_paths.iter().map(|path| {
+                let symbols = (self.document_state.engines.get(path))
+                    .map(|engine| engine.document().symbols.as_slice())
+                    .or_else(|| project_set.sheets.get(path).map(|s| s.symbols.as_slice()))
+                    .unwrap_or(&[]);
+                (path.as_path(), symbols)
+            }),
+        );
+        let in_run: Vec<std::path::PathBuf> = (ordered_paths.iter())
+            .filter(|path| !unticked.contains(*path))
+            .cloned()
+            .collect();
         let read_only = read_only_sheets(&self.document_state, &project_set);
         let resets = reprefix.is_none()
             && matches!(
@@ -92,7 +114,7 @@ impl Signex {
         // designators that sheet keeps and could collide with them (#1753).
         if reprefix.is_none()
             && matches!(mode, signex_engine::AnnotateMode::ResetAndRenumber)
-            && self.refuse_reset_that_skips(label, &project_set, &ordered_paths, &read_only)
+            && self.refuse_reset_that_skips(label, &project_set, &in_run, &read_only)
         {
             return PassApplied::without_writes(Task::none());
         }
@@ -134,7 +156,7 @@ impl Signex {
                 reprefix,
                 placements: &placements[sheet],
             };
-            if read_only.contains(path) {
+            if read_only.contains(path) || unticked.contains(path) {
                 continue;
             }
             if active_path.as_deref() == Some(path.as_path()) {
