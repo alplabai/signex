@@ -24,6 +24,9 @@ const SP: Spacing = Spacing::DEFAULT;
 /// disabled control.
 pub const DEPENDENT_VEIL_ALPHA: f32 = 1.0 - DISABLED_OPACITY;
 
+/// A checkbox style function, boxed so the caller can capture its tokens.
+pub type CheckboxLook<'a> = Box<dyn Fn(&Theme, checkbox::Status) -> checkbox::Style + 'a>;
+
 /// The caller's form look for an [`EnableSection`].
 pub struct EnableSectionStyle<'a> {
     /// Ink of the header label: the secondary text token, a step above the
@@ -37,7 +40,7 @@ pub struct EnableSectionStyle<'a> {
     /// Face of the header label; it is drawn at medium weight.
     pub font: Font,
     /// The form checkbox look the header starts from.
-    pub checkbox: Box<dyn Fn(&Theme, checkbox::Status) -> checkbox::Style + 'a>,
+    pub checkbox: CheckboxLook<'a>,
     /// Frame of the header's hover note.
     pub tip: Box<dyn Fn(&Theme) -> container::Style + 'a>,
 }
