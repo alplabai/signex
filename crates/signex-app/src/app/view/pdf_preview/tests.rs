@@ -161,8 +161,8 @@ fn folded_sections_show_their_summaries() {
 #[test]
 fn bookmarks_and_nets_has_no_component_parameters_box() {
     let (app, _task) = Signex::new();
-    let mut preview = four_sheets();
-    preview.dialog.sections.toggle(PdfSection::BookmarksAndNets);
+    // `four_sheets` already opens every section, Bookmarks and Nets too.
+    let preview = four_sheets();
     let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
     assert!(
         texts
