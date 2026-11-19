@@ -18,10 +18,6 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-### Changed — symbol editor: Properties
-
-- The symbol editor's Pins dock panel is now the **Pins** tab of the Properties panel: a compact list with a filter by number or name, part chips, **+ Pin**, and marks on a duplicate or empty number and an empty name; a row selects its pin, and **‹ Pins** goes back to the list. Pin names and the Hidden flag are edited in the pin's fields. The symbol, pin and graphic forms take the Graphite layout with a line-art illustration whose callouts follow the hovered field, and a rectangle gains a Width / Height pair (#122, #123).
-
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._

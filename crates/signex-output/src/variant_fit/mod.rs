@@ -37,7 +37,7 @@ pub fn part_is_fitted(units: &[&Symbol], variant: Option<&str>) -> bool {
             .map(|unit| resolve_active_variant_fitted(unit, variant)),
     );
     let base = merge_fit_states(units.iter().map(|unit| resolve_base_variant_fitted(unit)));
-    own.or(base).unwrap_or(!units.iter().any(|unit| unit.dnp))
+    signex_bom::fit_of(own, base, units.iter().any(|unit| unit.dnp))
 }
 
 /// Whether one placed symbol is fitted in `variant`; `None` is Base.

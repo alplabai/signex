@@ -96,6 +96,8 @@ fn tools(library: &LibraryState, ctx: &PanelContext, key: Option<ComponentsPanel
                 row_id: key.row_id,
             })
         }),
+        delete_blocked: (writable && !has_browser)
+            .then_some(ids::LIBRARY_PANEL_DELETE_NEEDS_BROWSER),
     }
 }
 

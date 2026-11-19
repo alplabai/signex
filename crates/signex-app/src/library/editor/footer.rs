@@ -3,8 +3,8 @@
 //! confirm, the summary of the fields that do not parse (lib-07), then the
 //! Ctrl+S hint, Release…, Save & Close, Cancel and the primary Save, which
 //! stays disabled while a field does not parse and names it in a tooltip
-//! (lib-06). A read-only library shows its note and Copy to Library…
-//! instead.
+//! (lib-06). A read-only library shows its note and a disabled Copy to
+//! Library… instead.
 
 use iced::widget::{Space, Widget, container, row};
 use iced::{Element, Length, Theme};
@@ -13,7 +13,7 @@ use signex_widgets::{button, text, theme_ext, tooltip};
 
 use super::kit::{self, SP, TS};
 use crate::library::messages::{EditorMsg, LibraryMessage};
-use crate::library::state::{ComponentPreviewState, EditorAddress, LibraryState};
+use crate::library::state::{ComponentPreviewState, EditorAddress};
 
 /// What each footer action does now: `None` leaves the button disabled.
 #[derive(Debug, Clone)]
@@ -49,14 +49,13 @@ pub(super) fn actions(state: &ComponentPreviewState, address: &EditorAddress) ->
 
 pub(super) fn view<'a>(
     state: &'a ComponentPreviewState,
-    library_state: &LibraryState,
     tokens: &'a signex_types::theme::ThemeTokens,
     i18n: &I18n,
     address: &EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let line = if read_only {
-        read_only_line(state, library_state, tokens, i18n)
+        read_only_line(tokens, i18n)
     } else {
         editable_line(state, tokens, i18n, address)
     };
@@ -68,28 +67,33 @@ pub(super) fn view<'a>(
 }
 
 /// "Read-only library - this component cannot be changed." and Copy to
-/// Library…, which opens the stock-copy flow on the row's symbol.
+/// Library…, disabled with a "not available yet" tooltip: no component
+/// row copy exists (#134), and the symbol-only stock copy is another flow.
 fn read_only_line<'a>(
-    state: &'a ComponentPreviewState,
-    library_state: &LibraryState,
     tokens: &'a signex_types::theme::ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let copy = (!state.row.is_symbol_unbound())
-        .then(|| super::preview::symbol_path(state, library_state))
-        .flatten()
-        .map(|path| LibraryMessage::OpenPrimitiveEditor { path });
+    let copy = tooltip(
+        kit::secondary_action(
+            t!(i18n, ids::EDITORS_COMPONENT_COPY_TO_LIBRARY),
+            None,
+            tokens,
+        ),
+        container(
+            text(t!(i18n, ids::EDITORS_COMPONENT_COPY_TO_LIBRARY_UNAVAILABLE)).size(TS.caption),
+        )
+        .padding([SP.xs, SP.s]),
+        iced::widget::tooltip::Position::Top,
+    )
+    .style(crate::styles::context_menu(tokens))
+    .boxed();
     row![
         text(t!(i18n, ids::EDITORS_COMPONENT_READ_ONLY_FOOTER))
             .size(TS.body)
             .color(theme_ext::text_secondary(tokens))
             .boxed(),
         Space::new().width(Length::Fill).boxed(),
-        kit::secondary_action(
-            t!(i18n, ids::EDITORS_COMPONENT_COPY_TO_LIBRARY),
-            copy,
-            tokens
-        ),
+        copy,
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
@@ -288,6 +292,22 @@ mod tests {
         state.dirty = false;
         state.stale_base = true;
         assert!(actions(&state, &address).reload.is_some());
+    }
+
+    /// A read-only library's Copy to Library… is drawn but sends nothing:
+    /// no component row copy exists yet, and the symbol-only flow is not it.
+    #[test]
+    fn copy_to_library_is_disabled_in_a_read_only_library() {
+        let (state, address) = editor();
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let label = t!(i18n, ids::EDITORS_COMPONENT_COPY_TO_LIBRARY).to_string();
+        let clicked = crate::layout_probe::messages_on_click(
+            view(&state, &tokens, &i18n, &address, true),
+            iced::Size::new(900.0, 80.0),
+            &label,
+        );
+        assert!(clicked.is_empty(), "{clicked:?}");
     }
 
     /// Cancel is the editor's close path, which asks about unsaved edits.

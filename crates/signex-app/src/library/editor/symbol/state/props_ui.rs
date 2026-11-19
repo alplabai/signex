@@ -43,6 +43,8 @@ pub enum SymbolPropsMsg {
     PinsBackPressed,
     /// `+ Pin` on the Pins tab: arm the Add Pin tool.
     AddPinPressed,
+    /// `Edit pins in table…` / `Back to the pin list` on the Pins tab.
+    PinTableToggled,
     PartStepPressed(PartStep),
     BodyPicked(BodyStyle),
     IllustrationHovered(IllustrationMsg),
@@ -54,6 +56,9 @@ pub struct SymbolPropsUi {
     pub tab: SymbolPropsTab,
     pub pin_filter: String,
     pub part_chip: PartChip,
+    /// The Pins tab shows the pin table (name and hidden edited in place
+    /// for every listed pin) instead of the compact list.
+    pub pin_table: bool,
     pub hover: IllustrationHover,
 }
 
@@ -65,6 +70,7 @@ impl SymbolPropsUi {
             SymbolPropsMsg::TabPicked(tab) => self.tab = *tab,
             SymbolPropsMsg::PinFilterChanged(query) => self.pin_filter.clone_from(query),
             SymbolPropsMsg::PartChipPicked(chip) => self.part_chip = *chip,
+            SymbolPropsMsg::PinTableToggled => self.pin_table = !self.pin_table,
             SymbolPropsMsg::IllustrationHovered(hover) => self.hover.update(hover.clone()),
             SymbolPropsMsg::PinsBackPressed => {
                 self.tab = SymbolPropsTab::Pins;
@@ -93,6 +99,16 @@ mod tests {
         assert_eq!(ui.tab, SymbolPropsTab::Pins);
         assert_eq!(ui.pin_filter, "in");
         assert_eq!(ui.part_chip, PartChip::Part(2));
+    }
+
+    #[test]
+    fn the_pin_table_toggle_is_panel_state() {
+        let mut ui = SymbolPropsUi::default();
+        assert!(!ui.pin_table);
+        assert!(ui.apply(&SymbolPropsMsg::PinTableToggled));
+        assert!(ui.pin_table);
+        assert!(ui.apply(&SymbolPropsMsg::PinTableToggled));
+        assert!(!ui.pin_table);
     }
 
     #[test]

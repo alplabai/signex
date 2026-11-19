@@ -44,6 +44,7 @@ impl Signex {
             SymbolPropsMsg::TabPicked(_)
             | SymbolPropsMsg::PinFilterChanged(_)
             | SymbolPropsMsg::PartChipPicked(_)
+            | SymbolPropsMsg::PinTableToggled
             | SymbolPropsMsg::IllustrationHovered(_) => return Task::none(),
         };
         self.update(Message::Library(

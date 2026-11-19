@@ -599,6 +599,14 @@ define_ids! {
     EDITORS_PINS_SUMMARY = "editors-pins-summary";
     EDITORS_PINS_COLUMN_NUMBER = "editors-pins-column-number";
     EDITORS_PINS_COLUMN_NAME = "editors-pins-column-name";
+    EDITORS_PINS_COLUMN_ELECTRICAL = "editors-pins-column-electrical";
+    EDITORS_PINS_COLUMN_PART = "editors-pins-column-part";
+    EDITORS_PINS_COLUMN_HIDDEN = "editors-pins-column-hidden";
+    EDITORS_PINS_COLUMN_LENGTH = "editors-pins-column-length";
+    EDITORS_PINS_COLUMN_ORIENTATION = "editors-pins-column-orientation";
+    EDITORS_PINS_NAME_PLACEHOLDER = "editors-pins-name-placeholder";
+    EDITORS_PINS_HIDDEN = "editors-pins-hidden";
+    EDITORS_PINS_SHOWN = "editors-pins-shown";
     EDITORS_PIN_TYPE_INPUT = "editors-pin-type-input";
     EDITORS_PIN_TYPE_OUTPUT = "editors-pin-type-output";
     EDITORS_PIN_TYPE_BIDIRECTIONAL = "editors-pin-type-bidirectional";
@@ -812,7 +820,6 @@ define_ids! {
     PANELS_KIND_LIBRARY = "panels-kind-library";
     PANELS_KIND_SCH_LIBRARY = "panels-kind-sch-library";
     PANELS_KIND_FOOTPRINT_LIBRARY = "panels-kind-footprint-library";
-    PANELS_KIND_SYMBOL_PINS = "panels-kind-symbol-pins";
     PANELS_KIND_PCB_NETS = "panels-kind-pcb-nets";
     PANELS_KIND_LAYERS = "panels-kind-layers";
     PANELS_KIND_HISTORY = "panels-kind-history";

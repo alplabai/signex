@@ -177,7 +177,6 @@ pub(super) fn build_symbol_editor_panel_ctx(
             |p| sym_state::pin_on_part(p, editor.view()),
         ),
         props,
-        toggled_sections: app.document_state.panel_ctx.collapsed_sections.clone(),
         display,
     })
 }

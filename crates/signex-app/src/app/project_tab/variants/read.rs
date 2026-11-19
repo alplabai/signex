@@ -12,6 +12,7 @@ use signex_output::{ExportContext, ProjectMetadata, VariantMatrix};
 
 use super::super::general::tab_message;
 use super::super::{ProjectSection, ProjectTabMsg};
+use crate::app::core::parts_read_error::PartsReadError;
 use crate::app::handlers::menu::export::placements::netlist_placements;
 use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_quiet_from, open_sheets_snapshot, project_graph_quiet,
@@ -80,7 +81,7 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || read_parts(read))
                     .await
-                    .map_err(|error| format!("the read did not finish: {error}"))
+                    .map_err(|error| PartsReadError::Interrupted(error.to_string()))
                     .and_then(|parts| parts)
             },
             move |parts| {
@@ -101,7 +102,7 @@ impl Signex {
         project_id: ProjectId,
         generation: u64,
         epoch: u64,
-        parts: Arc<Result<VariantMatrix, String>>,
+        parts: Arc<Result<VariantMatrix, PartsReadError>>,
     ) {
         let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
             return;
@@ -117,19 +118,16 @@ impl Signex {
 
 /// The matrix of the project's parts. Blocking: reads closed sheets.
 /// Refused when the project has no root sheet or it could not be read.
-fn read_parts(read: PartsRead) -> Result<VariantMatrix, String> {
+fn read_parts(read: PartsRead) -> Result<VariantMatrix, PartsReadError> {
     let Some(root) = read.root else {
-        return Err("the project has no root sheet".to_string());
+        return Err(PartsReadError::NoRootSheet);
     };
     let set = assemble_project_sheets_quiet_from(&read.open, &read.pages, &root, read.fold);
     let dir = Some(read.dir.as_path());
     let graph = project_graph_quiet(&set.sheets, dir, Some(root.as_path()), set.fold);
     let root_key = sheet_key_with(&root, dir, set.fold);
     if !graph.sheets.contains_key(&root_key) {
-        return Err(format!(
-            "the root sheet {} could not be read",
-            root.display()
-        ));
+        return Err(PartsReadError::RootUnreadable(root.clone()));
     }
     let roots = project_roots(root_key, &set, &graph, dir, set.fold);
     let walk = signex_net::ProjectGraph {

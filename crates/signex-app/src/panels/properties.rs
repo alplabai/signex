@@ -223,9 +223,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if let Some(sym) = ctx.symbol_editor.as_ref() {
         return view_symbol_editor_properties(
             sym,
+            &ctx.collapsed_sections,
             ctx.numeric_draft.as_ref(),
-            muted,
-            primary,
             border_c,
             &ctx.tokens,
             &ctx.i18n,

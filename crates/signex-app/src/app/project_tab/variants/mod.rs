@@ -16,6 +16,8 @@ mod summary;
 #[cfg(test)]
 mod tests;
 
+use crate::app::core::parts_read_error::PartsReadError;
+
 use iced::font::Weight;
 use iced::widget::{Column, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
@@ -35,8 +37,23 @@ use crate::styles::{PillTone, Radii, ti};
 #[derive(Clone, Copy)]
 enum Parts<'v> {
     Reading,
-    Failed(&'v str),
+    Failed(&'v PartsReadError),
     Read(&'v VariantMatrix),
+}
+
+/// The catalog message of a failed parts read.
+fn read_failed(i18n: &I18n, why: &PartsReadError) -> Localized {
+    match why {
+        PartsReadError::NoRootSheet => t!(i18n, ids::PROJECT_VARIANTS_READ_NO_ROOT),
+        PartsReadError::RootUnreadable(path) => t!(
+            i18n,
+            ids::PROJECT_VARIANTS_READ_ROOT_UNREADABLE,
+            "path" => path.display().to_string()
+        ),
+        PartsReadError::Interrupted(reason) => {
+            t!(i18n, ids::PROJECT_VARIANTS_READ_FAILED, "reason" => reason.as_str())
+        }
+    }
 }
 
 /// Everything the Variants views read, borrowed from the model.
@@ -202,10 +219,7 @@ fn main<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .height(Length::Fill);
     col = col.push(match m.parts {
         Parts::Reading => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
-        Parts::Failed(why) => problem(
-            t!(m.i18n, ids::PROJECT_VARIANTS_READ_FAILED, "reason" => why),
-            m.tokens,
-        ),
+        Parts::Failed(why) => problem(read_failed(m.i18n, why), m.tokens),
         Parts::Read(matrix) => matrix::view(m, matrix),
     });
     col.boxed()

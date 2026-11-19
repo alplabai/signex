@@ -47,6 +47,7 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         edit: None,
         delete: (sym.symbols_in_file.len() > 1)
             .then(|| panel(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx))),
+        delete_blocked: None,
     };
     KindView {
         crumb,

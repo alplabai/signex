@@ -133,3 +133,27 @@ fn the_library_panel_draws_its_chips_and_no_open_library_footer() {
         "the footer row is gone"
     );
 }
+
+/// A detached Library panel window (and its SCH Library / Footprint Library
+/// aliases) draws the real panel with its kind chips, not the planned card.
+#[test]
+fn a_detached_library_window_draws_the_kind_chips() {
+    for kind in [
+        PanelKind::Library,
+        PanelKind::SchLibrary,
+        PanelKind::FootprintLibrary,
+    ] {
+        let (mut app, _main) = app_with_sheet();
+        let detached = iced::window::Id::unique();
+        app.ui_state
+            .windows
+            .insert(detached, crate::app::state::WindowKind::DetachedPanel(kind));
+        let texts = crate::layout_probe::lay_out_texts(app.view(detached), WINDOW);
+        for chip in ["Symbols", "Footprints", "Parts"] {
+            assert!(
+                texts.iter().any(|t| t.text == chip),
+                "no {chip} chip in the detached {kind:?} window"
+            );
+        }
+    }
+}

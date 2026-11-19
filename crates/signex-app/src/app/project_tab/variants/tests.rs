@@ -317,7 +317,7 @@ fn a_sheet_edit_makes_the_read_stale_and_an_older_read_is_dropped() {
     assert!(tab(&app, id).variant_parts_reading);
 
     // The first read's result lands late: it is dropped.
-    let late = Arc::new(Err("late".to_string()));
+    let late = Arc::new(Err(super::PartsReadError::NoRootSheet));
     let epoch = app.document_state.sheet_edit_epoch;
     app.install_variant_parts(id, first, epoch, late);
     assert!(
@@ -327,4 +327,24 @@ fn a_sheet_edit_makes_the_read_stale_and_an_older_read_is_dropped() {
             .is_some_and(Result::is_ok)
     );
     assert!(tab(&app, id).variant_parts_reading);
+}
+
+/// A failed parts read shows a catalog message per cause; only the path is
+/// user content.
+#[test]
+fn a_failed_read_names_its_cause_from_the_catalog() {
+    use signex_i18n::{I18n, ids, t};
+    let i18n = I18n::en_us();
+    let no_root = super::read_failed(&i18n, &super::PartsReadError::NoRootSheet).to_string();
+    assert_eq!(
+        no_root,
+        t!(i18n, ids::PROJECT_VARIANTS_READ_NO_ROOT).to_string()
+    );
+    let unreadable = super::read_failed(
+        &i18n,
+        &super::PartsReadError::RootUnreadable(std::path::PathBuf::from("top.snxsch")),
+    )
+    .to_string();
+    assert!(unreadable.contains("top.snxsch"), "{unreadable}");
+    assert_ne!(unreadable, no_root);
 }

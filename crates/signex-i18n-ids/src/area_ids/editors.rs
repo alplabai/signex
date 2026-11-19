@@ -112,6 +112,8 @@ define_ids! {
     EDITORS_SYMPROPS_PIN_FILTER = "editors-symprops-pin-filter";
     EDITORS_SYMPROPS_ADD_PIN = "editors-symprops-add-pin";
     EDITORS_SYMPROPS_ADD_PIN_TIP = "editors-symprops-add-pin-tip";
+    EDITORS_SYMPROPS_PIN_TABLE_OPEN = "editors-symprops-pin-table-open";
+    EDITORS_SYMPROPS_PIN_TABLE_CLOSE = "editors-symprops-pin-table-close";
     EDITORS_SYMPROPS_CHIP_ALL = "editors-symprops-chip-all";
     EDITORS_SYMPROPS_PINS_ISSUES = "editors-symprops-pins-issues";
     EDITORS_SYMPROPS_COLUMN_TYPE = "editors-symprops-column-type";
@@ -216,4 +218,5 @@ define_ids! {
     EDITORS_COMPONENT_SAVE_BLOCKED = "editors-component-save-blocked";
     EDITORS_COMPONENT_FOOTER_UNPARSED = "editors-component-footer-unparsed";
     EDITORS_COMPONENT_COPY_TO_LIBRARY = "editors-component-copy-to-library";
+    EDITORS_COMPONENT_COPY_TO_LIBRARY_UNAVAILABLE = "editors-component-copy-to-library-unavailable";
 }

@@ -59,10 +59,7 @@ pub(super) fn view<'a>(m: &Manager<'_>) -> Element<'a, Message> {
             col = col.push(note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens));
         }
         Parts::Failed(why) => {
-            col = col.push(problem(
-                t!(m.i18n, ids::PROJECT_VARIANTS_READ_FAILED, "reason" => why),
-                m.tokens,
-            ));
+            col = col.push(problem(super::read_failed(m.i18n, why), m.tokens));
         }
         Parts::Read(_) => {}
     }

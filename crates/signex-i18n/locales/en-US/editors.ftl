@@ -21,6 +21,30 @@ editors-pins-column-number = #
 # Column heading: the pin name.
 editors-pins-column-name = NAME
 
+# Pin table column heading: the pin's electrical type.
+editors-pins-column-electrical = ELECTRICAL TYPE
+
+# Pin table column heading: which part of a multi-part symbol the pin belongs to.
+editors-pins-column-part = PART
+
+# Pin table column heading: whether the pin is hidden.
+editors-pins-column-hidden = HIDDEN
+
+# Pin table column heading: the pin length in millimetres.
+editors-pins-column-length = LENGTH (mm)
+
+# Pin table column heading: the direction the pin points.
+editors-pins-column-orientation = ORIENTATION
+
+# Placeholder of the pin table's name field.
+editors-pins-name-placeholder = name
+
+# Toggle in the pin table's Hidden column: the pin is hidden.
+editors-pins-hidden = Hidden
+
+# Toggle in the pin table's Hidden column: the pin is shown.
+editors-pins-shown = Shown
+
 ## Pin electrical types (the Pins tab, Pin properties and the Pin Map tab).
 
 editors-pin-type-input = Input
@@ -413,6 +437,10 @@ editors-symprops-select-hint = Click on the canvas to select a pin or a graphic,
 # Pins tab.
 editors-symprops-pin-filter = Filter by number or name
 editors-symprops-add-pin = + Pin
+# Pins tab: switch the compact list to the pin table (name and hidden
+# edited in place for every listed pin), and back.
+editors-symprops-pin-table-open = Edit pins in table…
+editors-symprops-pin-table-close = Back to the pin list
 editors-symprops-add-pin-tip = Add a pin to the current part
 # Part chip: every pin.
 editors-symprops-chip-all = All
@@ -569,5 +597,7 @@ editors-component-footer-unparsed = { $count ->
     [one] { $field } does not parse: { $reason }
    *[other] { $count } fields do not parse. { $field }: { $reason }
 }
-# Read-only footer button: copy the row's symbol into a writable library.
+# Read-only footer button: copy the component row into a writable library.
 editors-component-copy-to-library = Copy to Library…
+# Tooltip on the disabled Copy to Library… until a component row copy exists.
+editors-component-copy-to-library-unavailable = Copying a component to another library is not available yet.

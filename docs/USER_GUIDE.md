@@ -245,8 +245,8 @@ pad that pin lands on. The footer has **Reload saved version**, **Release…**
 While a typed value does not parse, the header says how many fields do not
 parse (click it to jump to the first one), the field is outlined with its
 error under it, and **Save** stays disabled with a tooltip naming the field.
-A stock-library component shows a read-only footer with **Copy to Library…**,
-which copies its symbol.
+A component of a read-only library shows a read-only footer with **Copy to
+Library…**, disabled until copying a component to another library exists.
 
 To place a part, open a schematic sheet, then either:
 
@@ -314,7 +314,11 @@ is empty or used twice shows the number in red; a pin with no name reads
 *no name*. Click a row to select that pin: Properties shows its fields, under
 a drawing of the pin whose labels light up as you point at the fields.
 **‹ Pins** clears the selection and goes back to the list. Pin names and the
-Hidden flag are edited in the pin's fields. A selected rectangle has a
+Hidden flag are edited in the pin's fields, or for many pins at once with
+**Edit pins in table…**, which turns the list into a table (number, name,
+electrical type, part, hidden, length, orientation) where each name is typed
+in place and **Shown / Hidden** toggles; **Back to the pin list** returns.
+A selected rectangle has a
 **Width / Height** pair next to its Start and End corners; changing it moves
 the End corner.
 

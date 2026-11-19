@@ -70,6 +70,8 @@ define_ids! {
     PROJECT_VARIANTS_STATUS_BASE = "project-variants-status-base";
     PROJECT_VARIANTS_READING = "project-variants-reading";
     PROJECT_VARIANTS_READ_FAILED = "project-variants-read-failed";
+    PROJECT_VARIANTS_READ_NO_ROOT = "project-variants-read-no-root";
+    PROJECT_VARIANTS_READ_ROOT_UNREADABLE = "project-variants-read-root-unreadable";
     PROJECT_VARIANTS_STALE = "project-variants-stale";
     PROJECT_VARIANTS_READ_AGAIN = "project-variants-read-again";
     PROJECT_VARIANTS_EMPTY_TITLE = "project-variants-empty-title";

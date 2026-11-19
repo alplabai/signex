@@ -95,7 +95,7 @@ pub(crate) fn view<'a>(
             address.clone(),
             i18n,
         );
-        let footer = footer::view(state, library_state, tokens, i18n, &address, read_only);
+        let footer = footer::view(state, tokens, i18n, &address, read_only);
         column![header, tabs, body, footer]
             .spacing(0)
             .width(Length::Fill)

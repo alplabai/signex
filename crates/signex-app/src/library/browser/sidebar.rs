@@ -161,7 +161,7 @@ fn view_table_list<'a>(
         .size(BROWSER_TEXT_SIZE);
         let confirm =
             button(text(t!(i18n, ids::LIBRARY_BROWSER_CREATE_TABLE)).size(BROWSER_TEXT_SIZE))
-                .padding([SP.s, 10.0])
+                .padding([SP.s, SP.m])
                 .on_press(LibraryMessage::BrowserConfirmAddTable {
                     library_path: library_for_confirm,
                 })
@@ -171,7 +171,7 @@ fn view_table_list<'a>(
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c),
         )
-        .padding([SP.s, 10.0])
+        .padding([SP.s, SP.m])
         .on_press(LibraryMessage::BrowserCancelAddTable {
             library_path: library_for_cancel,
         })
@@ -180,7 +180,7 @@ fn view_table_list<'a>(
             text_color: wash_ink,
             border: Border {
                 width: 0.0,
-                radius: 3.0.into(),
+                radius: crate::styles::Radii::GRAPHITE.small.into(),
                 color: iced::Color::TRANSPARENT,
                 ..Border::default()
             },
@@ -188,7 +188,7 @@ fn view_table_list<'a>(
         });
         let mut form: Column<Element<'a, LibraryMessage>> = column![
             name_input,
-            row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
+            row![cancel, Space::new().width(SP.s), confirm,].align_y(iced::Alignment::Center),
         ]
         .spacing(SP.s)
         .padding([SP.xs, SP.m]);
@@ -399,9 +399,9 @@ fn rename_form<'a>(
     let mut form: Column<Element<'a, LibraryMessage>> = column![
         row![
             name_input,
-            Space::new().width(4),
+            Space::new().width(SP.s),
             cancel,
-            Space::new().width(2),
+            Space::new().width(SP.xs),
             confirm,
         ]
         .align_y(iced::Alignment::Center),

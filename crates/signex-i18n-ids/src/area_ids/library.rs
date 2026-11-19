@@ -71,6 +71,7 @@ define_ids! {
     LIBRARY_PANEL_ADD = "library-panel-add";
     LIBRARY_PANEL_EDIT = "library-panel-edit";
     LIBRARY_PANEL_DELETE = "library-panel-delete";
+    LIBRARY_PANEL_DELETE_NEEDS_BROWSER = "library-panel-delete-needs-browser";
     LIBRARY_PANEL_PARTS_OF = "library-panel-parts-of";
     LIBRARY_PANEL_PADS = "library-panel-pads";
     LIBRARY_PANEL_COUNT = "library-panel-count";

@@ -78,9 +78,6 @@ pub struct SymbolEditorPanelContext {
     /// The Properties panel's own state for this editor: tab, Pins filter,
     /// part chip and illustration hover (#122, #123).
     pub props: crate::library::editor::symbol::SymbolPropsUi,
-    /// The Properties sections the user toggled away from their default
-    /// (`PanelMsg::ToggleSection`).
-    pub toggled_sections: CollapsedSections,
     /// Per-`.snxlib` display settings (sheet color, grid, unit),
     /// resolved by `runtime.rs` from the
     /// containing library; falls back to defaults for lone-file

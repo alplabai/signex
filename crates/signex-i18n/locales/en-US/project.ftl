@@ -111,7 +111,11 @@ project-variants-status-base =
        *[other] { $parts } parts · 1 variant
     }
 project-variants-reading = Reading the project's parts…
+# $reason is the system's own text for why the read stopped.
 project-variants-read-failed = The parts could not be read: { $reason }
+project-variants-read-no-root = The parts could not be read: the project has no root sheet.
+# $path is the root sheet's file path.
+project-variants-read-root-unreadable = The parts could not be read: the root sheet { $path } could not be read.
 project-variants-stale = The sheets changed since the parts were read.
 project-variants-read-again = Read again
 project-variants-empty-title = This project has one variant, Base

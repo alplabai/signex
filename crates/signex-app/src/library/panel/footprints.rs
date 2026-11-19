@@ -48,6 +48,7 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         add: Some(panel(PanelMsg::FpLibraryAddInternal)),
         edit: selected.map(|i| panel(PanelMsg::FpLibraryEditInternal(i))),
         delete: selected.map(|i| panel(PanelMsg::FpLibraryDeleteInternal(i))),
+        delete_blocked: None,
     };
     KindView {
         crumb,

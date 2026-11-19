@@ -168,7 +168,14 @@ pub struct ProjectTabState {
     /// Base does.
     pub variants_only_differ: bool,
     /// The parts by variants matrix last read, or why it could not be read.
-    pub variant_parts: Option<std::sync::Arc<Result<signex_output::VariantMatrix, String>>>,
+    pub variant_parts: Option<
+        std::sync::Arc<
+            Result<
+                signex_output::VariantMatrix,
+                crate::app::core::parts_read_error::PartsReadError,
+            >,
+        >,
+    >,
     /// `DocumentState::sheet_edit_epoch` when `variant_parts` was read.
     pub variant_parts_epoch: u64,
     /// The newest parts read started; an older one's result is dropped.
@@ -330,7 +337,12 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         generation: u64,
         epoch: u64,
-        parts: std::sync::Arc<Result<signex_output::VariantMatrix, String>>,
+        parts: std::sync::Arc<
+            Result<
+                signex_output::VariantMatrix,
+                crate::app::core::parts_read_error::PartsReadError,
+            >,
+        >,
     },
     /// A Move up / Move down button of the Libraries table (#1691), with the
     /// library's path as the project stores it.

@@ -203,6 +203,9 @@ library-panel-place = Place
 library-panel-add = Add
 library-panel-edit = Edit
 library-panel-delete = Delete
+# Tooltip on the disabled Delete of the Parts kind: the delete confirmation
+# runs in the library's Library Browser tab.
+library-panel-delete-needs-browser = Open the library in the Library Browser to delete a row
 # Section under the symbol list. $symbol is the active symbol's name.
 library-panel-parts-of = Parts of { $symbol }
 # Pad count of a footprint row. $count is a whole number.

@@ -287,6 +287,9 @@ pub(super) struct Tools {
     pub add: Option<DockMessage>,
     pub edit: Option<DockMessage>,
     pub delete: Option<DockMessage>,
+    /// Why Delete is disabled, when the reason is not plain (its tooltip
+    /// then says it instead of "Delete").
+    pub delete_blocked: Option<signex_i18n::MessageId>,
 }
 
 /// The toolbar: Place, Add and Edit at the left, Delete as an icon at
@@ -301,13 +304,15 @@ pub(super) fn toolbar<'a>(
         add,
         edit,
         delete,
+        delete_blocked,
     } = tools;
+    let delete_tip = t!(i18n, delete_blocked.unwrap_or(ids::LIBRARY_PANEL_DELETE));
     let bar = row![
         tool_button(PLACE, t!(i18n, ids::LIBRARY_PANEL_PLACE), place, tokens),
         tool_button(PLUS, t!(i18n, ids::LIBRARY_PANEL_ADD), add, tokens),
         tool_button(EDIT, t!(i18n, ids::LIBRARY_PANEL_EDIT), edit, tokens),
         Space::new().width(Length::Fill).boxed(),
-        delete_button(delete, tokens, i18n),
+        delete_button(delete, delete_tip, tokens),
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
@@ -374,11 +379,11 @@ fn tool_button<'a>(
     .boxed()
 }
 
-/// The Delete icon button at the right end of the toolbar.
+/// The Delete icon button at the right end of the toolbar, `tip` on hover.
 fn delete_button<'a>(
     on_press: Option<DockMessage>,
+    tip: Localized,
     tokens: &ThemeTokens,
-    i18n: &I18n,
 ) -> Element<'a, DockMessage> {
     let ink = ti(tokens.text_secondary);
     let shown = if on_press.is_some() { ink } else { dimmed(ink) };
@@ -398,12 +403,7 @@ fn delete_button<'a>(
             },
             ..button::Style::default()
         });
-    hint_tooltip(
-        b.boxed(),
-        t!(i18n, ids::LIBRARY_PANEL_DELETE),
-        tokens,
-        Position::Bottom,
-    )
+    hint_tooltip(b.boxed(), tip, tokens, Position::Bottom)
 }
 
 /// Fill of a list row: the neutral selection token when selected (the

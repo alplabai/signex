@@ -12,12 +12,16 @@ use iced::{Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 
-use super::{NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection, form_look};
+use super::{
+    CollapsedSections, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
+    form_look,
+};
 use crate::library::editor::pin_labels::part_label;
 
 mod graphic;
 mod illustration;
 mod pin;
+mod pin_table;
 mod pins_tab;
 mod rows;
 mod symbol;
@@ -25,11 +29,12 @@ mod symbol;
 use rows::{Form, Look};
 
 /// Properties panel content for the active `.snxsym` editor tab.
+/// `toggled` is the live `PanelContext::collapsed_sections`, so a
+/// `PanelMsg::ToggleSection` shows on the next frame.
 pub(super) fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
+    toggled: &CollapsedSections,
     draft: Option<&NumericDraft>,
-    _muted: Color,
-    _primary: Color,
     border_c: Color,
     tokens: &ThemeTokens,
     i18n: &I18n,
@@ -39,7 +44,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
         tokens,
         i18n,
         hover: &sym.props.hover,
-        toggled: &sym.toggled_sections,
+        toggled,
         draft,
     };
     let body = match &sym.selected {

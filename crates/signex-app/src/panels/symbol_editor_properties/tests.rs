@@ -91,14 +91,13 @@ fn ctx(pins: Vec<SymbolPinSummary>, selected: SymbolEditorSelection) -> SymbolEd
         active_body: signex_types::schematic::BodyStyle::Normal,
         part_drawing: PartDrawing::default(),
         props: Default::default(),
-        toggled_sections: CollapsedSections::new(),
         display: SymbolDisplayOptions::default(),
     }
 }
 
 struct Fixture {
     tokens: ThemeTokens,
-    i18n: I18n,
+    i18n: std::sync::Arc<I18n>,
     hover: IllustrationHover,
     toggled: CollapsedSections,
 }
@@ -354,4 +353,85 @@ fn the_part_pill_names_the_shared_part_and_lettered_parts() {
     assert_eq!(shown(0), "Part 0 (shared)");
     assert_eq!(shown(2), "Part 2 (B)");
     assert_eq!(shown(30), "Part 30");
+}
+
+/// A section header toggled through `Signex::update` shows on the next
+/// frame: Properties reads the live `collapsed_sections`, not a copy taken
+/// when the symbol context was built.
+#[test]
+fn a_toggled_section_opens_without_a_context_rebuild() {
+    use crate::app::{Message, Signex, SymbolDocument, TabInfo, TabKind};
+    use crate::dock::DockMessage;
+    use crate::library::editor::symbol::SymbolPropsMsg;
+    use signex_library::{Symbol, SymbolFile};
+
+    let (mut app, _task) = Signex::new();
+    let path = std::path::PathBuf::from("toggle.snxsym");
+    let file = SymbolFile::from_symbol(Symbol::empty("TOGGLE"));
+    app.document_state
+        .symbol_editors
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
+    app.document_state.tabs.push(TabInfo {
+        title: "TOGGLE".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::SymbolEditor(path),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    let panel = |app: &mut Signex, msg: PanelMsg| {
+        let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
+    };
+    panel(
+        &mut app,
+        PanelMsg::SymbolProps(SymbolPropsMsg::TabPicked(SymbolPropsTab::Symbol)),
+    );
+    let bound = t!(app.ui_state.i18n, ids::EDITORS_SYMPROPS_VALUE_BOUND).to_string();
+    let fields_open = |app: &Signex| {
+        let view = crate::panels::view_panel(
+            crate::panels::PanelKind::Properties,
+            &app.document_state.panel_ctx,
+        );
+        lay_out_texts(view, DOCK).iter().any(|t| t.text == bound)
+    };
+    assert!(app.document_state.panel_ctx.symbol_editor.is_some());
+    assert!(!fields_open(&app), "Fields starts folded");
+    panel(&mut app, PanelMsg::ToggleSection("symprops.fields".into()));
+    assert!(fields_open(&app), "the toggle opened Fields");
+}
+
+/// The Pins tab keeps the bulk edit of the old Pins panel reachable: Edit
+/// pins in table… asks for the table, and in the table a row's Hidden cell
+/// toggles that pin through the Pin properties' message.
+#[test]
+fn the_pin_table_opens_from_the_pins_tab_and_toggles_hidden_in_place() {
+    let fx = Fixture::new();
+    let mut sym = ctx(opamp_pins(), SymbolEditorSelection::None);
+    sym.props.tab = SymbolPropsTab::Pins;
+    let open = t!(fx.i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_OPEN).into_string();
+    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), DOCK, &open);
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, PanelMsg::SymbolProps(SymbolPropsMsg::PinTableToggled))),
+        "{messages:?}"
+    );
+
+    sym.props.pin_table = true;
+    sym.props.pin_filter = "OUTB".to_string();
+    let texts = lay_out_texts(stacked(pins_tab::view(&sym, &fx.form())), DOCK);
+    let close = t!(fx.i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_CLOSE).into_string();
+    find(&texts, &close);
+    find(
+        &texts,
+        &t!(fx.i18n, ids::EDITORS_PINS_COLUMN_ORIENTATION).into_string(),
+    );
+    let shown = t!(fx.i18n, ids::EDITORS_PINS_SHOWN).into_string();
+    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), DOCK, &shown);
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, PanelMsg::SymEditorTogglePinHidden(6))),
+        "{messages:?}"
+    );
 }
