@@ -100,6 +100,11 @@ impl Catalog {
                 crate::board_palette::view(tokens)
             ),
             section::view(
+                "Constraint grid and class matrix",
+                tokens,
+                crate::constraint_grid::view_samples(tokens)
+            ),
+            section::view(
                 "Passive network calculator control",
                 tokens,
                 self.passive_calculator

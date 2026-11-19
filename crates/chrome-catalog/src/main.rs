@@ -6,6 +6,7 @@ mod enable_section;
 mod chips;
 mod dimension_label;
 mod flow_progress;
+mod constraint_grid;
 mod icon;
 mod illustration;
 mod modal_card;
