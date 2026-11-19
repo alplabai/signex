@@ -87,7 +87,7 @@ fn a_unit_placed_nowhere_is_filed_under_the_first_units_sheet() {
 
 #[test]
 fn the_project_pass_uses_placement_designators_and_no_erc_directives() {
-    use signex_types::schematic::{NoConnect, SymbolInstance};
+    use signex_types::schematic::{NoErcDirective, SymbolInstance};
     let placement = |n: u128| format!("/{}", Uuid::from_u128(n));
     let mut sheet = sheet_with_units(&[1]);
     sheet.symbols[0].reference = "U?".into();
@@ -112,9 +112,22 @@ fn the_project_pass_uses_placement_designators_and_no_erc_directives() {
         "one finding per placement, none for U?"
     );
 
-    sheet.no_erc_directives.push(NoConnect {
-        uuid: Uuid::now_v7(),
-        position: Point::new(25.4, 25.4),
-    });
+    let marker = NoErcDirective::new(Uuid::now_v7(), Point::new(25.4, 25.4));
+    sheet.no_erc_directives.push(marker);
+    assert!(project_units_not_placed(&[("s", &sheet)]).is_empty());
+}
+
+/// #1699: the project pass honours a No-ERC directive's rule list.
+#[test]
+fn the_project_pass_skips_a_no_erc_directive_for_another_rule() {
+    use signex_erc::RuleId;
+    use signex_types::schematic::NoErcDirective;
+    let mut sheet = sheet_with_units(&[1]);
+    let mut marker = NoErcDirective::new(Uuid::now_v7(), Point::new(25.4, 25.4));
+    marker.rules = vec![RuleId::builtin(RuleKind::UnusedPin).0];
+    sheet.no_erc_directives.push(marker);
+    assert_eq!(project_units_not_placed(&[("s", &sheet)]).len(), 1);
+
+    sheet.no_erc_directives[0].rules = vec![RuleId::builtin(RuleKind::UnitsNotPlaced).0];
     assert!(project_units_not_placed(&[("s", &sheet)]).is_empty());
 }

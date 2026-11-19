@@ -156,12 +156,15 @@ fn every_context_fact_is_listed() {
                 footprints: _,
                 pad_pair: _,
                 one_footprint: _,
+                routes: _,
+                hovered: _,
+                net: _,
             },
         turn_in_hand: _,
     } = CommandContext::default();
     let names: BTreeSet<&str> = FACTS.iter().map(|(name, _, _)| *name).collect();
     assert_eq!(names.len(), FACTS.len(), "a fact is listed twice");
-    assert_eq!(FACTS.len(), 30 + 14, "30 context facts and 14 board facts");
+    assert_eq!(FACTS.len(), 30 + 17, "30 context facts and 17 board facts");
 }
 
 /// No core row stands on its gate alone: every core route's handler was
@@ -203,7 +206,6 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 const KILL_LIST: &[(&str, &str)] = &[
     ("assign_net_class", "operand_handler"),
     ("close_active_document", "operand_handler"),
-    ("draw_wire", "operand_handler"),
     ("flip_selected_x", "active_bar"),
     ("flip_selected_x", "refusal_needs"),
     ("flip_selected_x", "disabled_still_runs_refusal"),
@@ -218,7 +220,6 @@ const KILL_LIST: &[(&str, &str)] = &[
     ("mirror_y", "disabled_still_runs_refusal"),
     ("paste_special", "bridge"),
     ("paste_special", "disabled_still_runs_refusal"),
-    ("place_wire", "operand_handler"),
     ("project_add_requirement", "operand_handler"),
     ("project_remove_requirement", "operand_handler"),
     ("redo", "operand_handler"),

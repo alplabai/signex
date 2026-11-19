@@ -64,6 +64,29 @@ fn a_newer_snxfpt_format_is_refused_by_name() {
     }
 }
 
+/// #2207: a file with no token, or a garbled one, is refused, never read
+/// as some version.
+#[test]
+fn a_missing_or_garbled_snxfpt_token_is_refused() {
+    let tokenless = file_text("snxfpt/1").replacen("format = \"snxfpt/1\"\n", "", 1);
+    assert!(!tokenless.contains("format"), "{tokenless}");
+    match FootprintFile::from_toml_str(&tokenless) {
+        Err(FootprintFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), None, "{reason}");
+        }
+        other => panic!("expected UnsupportedFormat, got {other:?}"),
+    }
+    for garbled in ["snxfpt/x", "snxsym/v1", "snxfpt/1.01", ""] {
+        assert!(
+            matches!(
+                FootprintFile::from_toml_str(&file_text(garbled)),
+                Err(FootprintFileError::UnsupportedFormat(_))
+            ),
+            "{garbled}"
+        );
+    }
+}
+
 #[test]
 fn a_trapezoid_delta_without_copper_is_reported_by_pad() {
     let mut fp = Footprint::empty("TRAP");

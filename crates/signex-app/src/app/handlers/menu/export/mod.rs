@@ -447,7 +447,9 @@ fn build_scope(
         Some(project) => owned_pages(project, &pages, &sheet_set),
         None => loose_pages(document_state, active_path),
     };
-    let metadata = export_metadata(active_engine, owning_project);
+    let mut metadata = export_metadata(active_engine, owning_project);
+    // The clock and file times the computed tokens print, as kept in state.
+    metadata.document_facts = document_state.times.facts();
     // The active sheet's page, matched under the project's case rules (#694):
     // `A.snxsch` and `a.snxsch` are one file on a case-insensitive volume, but
     // `signex-output` compares paths exactly. Hand it the page's own spelling.
@@ -587,17 +589,17 @@ fn build_scope(
     };
 
     issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying);
-    Some((
-        ExportContext {
-            sheets,
-            metadata,
-            netlist,
-            netlist_sheets,
-            netlist_placements,
-            current_sheet: Some(current_sheet),
-        },
-        issues,
-    ))
+    let mut ctx = ExportContext {
+        sheets,
+        metadata,
+        netlist,
+        netlist_sheets,
+        netlist_placements,
+        current_sheet: Some(current_sheet),
+    };
+    // Every output prints references as the project's standard shows them.
+    ctx.show_references_for(owning_project.and_then(|p| p.data.designator_standard()));
+    Some((ctx, issues))
 }
 
 impl Signex {
@@ -738,6 +740,9 @@ fn isolate_undeclared_current(
         }
         .for_placement(placement, ""),
     ];
+    // The page read from the engine prints as the scope's do (#1416); the
+    // rest are already shown, and showing is idempotent.
+    ctx.show_references_for(document_state.designator_standard_for(source));
     ctx.current_sheet = Some(source.to_path_buf());
     true
 }

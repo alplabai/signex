@@ -5,15 +5,15 @@
 
 use signex_types::schematic::SchematicSheet;
 
-use crate::Violation;
 use crate::context::{no_erc_directive_at, placement_designators};
 use crate::rules::{PlacedUnit, missing_units, units_finding};
+use crate::{RuleId, RuleKind, Violation};
 
 /// Every units-not-placed finding across `sheets`, each filed under the sheet
 /// that holds the part's first unit. `sheets` order decides which `U?`-free
 /// units pair up and which sheet a finding lands on; pass a stable order. A
-/// finding located on a No-ERC directive of its sheet is dropped, as the
-/// per-sheet run would.
+/// finding located on a No-ERC directive of its sheet that silences the rule
+/// is dropped, as the per-sheet run would.
 pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Vec<(K, Violation)> {
     let mut owners: Vec<(&K, &SchematicSheet)> = Vec::new();
     let mut units: Vec<PlacedUnit> = Vec::new();
@@ -56,6 +56,16 @@ pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Ve
         .collect()
 }
 
+/// Whether a No-ERC directive of `sheet` that silences `UnitsNotPlaced` sits
+/// at `at`.
 fn has_no_erc_directive_at(sheet: &SchematicSheet, at: &signex_types::schematic::Point) -> bool {
-    no_erc_directive_at(sheet.no_erc_directives.iter().map(|d| &d.position), at)
+    let rule = RuleId::builtin(RuleKind::UnitsNotPlaced);
+    no_erc_directive_at(
+        sheet
+            .no_erc_directives
+            .iter()
+            .map(|d| (&d.position, d.rules.as_slice())),
+        at,
+        rule.as_str(),
+    )
 }

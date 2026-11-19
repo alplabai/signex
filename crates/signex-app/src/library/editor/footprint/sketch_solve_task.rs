@@ -24,7 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_sketch::expr::ExprError;
+use signex_expr::ExprError;
 use signex_sketch::solver::{FullSolveOutput, Solver};
 use signex_sketch::{SketchData, SolveError, parameter};
 use uuid::Uuid;

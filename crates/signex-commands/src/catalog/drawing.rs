@@ -131,6 +131,17 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "edit_no_erc_rules",
+        category: "place",
+        label: command_ids::CMD_EDIT_NO_ERC_RULES,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::EDIT_NO_ERC_RULES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "place_board_arc",
         category: "place",
         label: command_ids::CMD_PLACE_BOARD_ARC,

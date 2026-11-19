@@ -195,11 +195,20 @@ impl SchematicCanvas<'_> {
         drag_offset: Option<(f64, f64)>,
         revision: u64,
     ) -> Option<drag_layers::DragFrame> {
+        let (dx, dy) = drag_offset?;
+        let (gx, gy) = self.ghost_delta(dx, dy);
+        // A grip drag always shows the engine's sheet, kept wires or not.
+        if let Some(grip) = state.held_grip() {
+            let held = (grip.wire, grip.start);
+            return state
+                .ghost
+                .ready_grip_frame(revision, &self.selected, held, gx, gy);
+        }
+        // A move ghost built in another wiring mode is stale (#1669); a grip
+        // drag above has no wiring mode.
         if !self.keeps_wires(state) || !state.ghost.is_built_for(self.prefs.drag_wiring) {
             return None;
         }
-        let (dx, dy) = drag_offset?;
-        let (gx, gy) = self.ghost_delta(dx, dy);
         state.ghost.ready_frame(revision, &self.selected, gx, gy)
     }
 

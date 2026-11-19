@@ -564,3 +564,27 @@ fn a_designator_edit_on_a_projects_panel_child_while_rebuilding_writes_the_defau
         "the other placement did not"
     );
 }
+
+/// #1416: under EN IEC 81346-2 full class codes a `-` typed before the
+/// designator, as the canvas shows it, is not stored, so annotation keeps
+/// numbering the bare code; the page still prints the sign.
+#[test]
+fn a_typed_product_aspect_sign_is_stored_bare_under_the_full_codes() {
+    use signex_types::designator::DesignatorStandard;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_once_with_an_entry(&dir);
+    app.document_state.projects[0]
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
+    let id = child_symbol(&app);
+
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "-QAC9".into()),
+    )));
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    assert_eq!(symbol.reference, "QAC9");
+    assert_eq!(current_page(&app, &child).0, "-QAC9");
+}

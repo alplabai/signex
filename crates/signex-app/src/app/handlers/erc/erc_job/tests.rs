@@ -232,9 +232,10 @@ fn a_per_sheet_finding_no_emitted_project_finding_covers_is_kept() {
         .get_mut(&key)
         .unwrap()
         .no_erc_directives
-        .push(signex_types::schematic::NoConnect {
+        .push(signex_types::schematic::NoErcDirective {
             uuid: Uuid::now_v7(),
             position: pt(0.0, 0.0),
+            rules: Vec::new(),
         });
     f.run(&["root.snxsch"], &HashMap::new());
 

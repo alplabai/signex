@@ -177,6 +177,9 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
         ("pcb.one_footprint", &[Selection], |c, v| {
             c.pcb.one_footprint = v
         }),
+        ("pcb.routes", &[Selection], |c, v| c.pcb.routes = v),
+        ("pcb.hovered", &[Cursor], |c, v| c.pcb.hovered = v),
+        ("pcb.net", &[Selection, Cursor], |c, v| c.pcb.net = v),
     ]
 };
 

@@ -548,12 +548,12 @@ fn a_hidden_kind_of_object_is_not_drawn() {
     assert!(snapshot.vias.is_empty());
 }
 
-/// #2363: a colour the view gives a copper layer recolours its copper and
-/// leaves the other layers in the palette colour.
+/// #2363, 2026-11-18: a colour the board gives a copper layer recolours its
+/// copper and leaves the other layers in the palette colour.
 #[test]
 fn a_layer_colour_recolours_its_copper() {
-    let board = board();
-    let mut view = PcbLayerView::default();
+    let mut board = board();
+    let view = PcbLayerView::default();
     let (snapshot, before) = lines_of(&board, &view);
     let line = |snapshot: &PcbSnapshot, scene: &Scene, net: u32| {
         let i = snapshot.traces.iter().position(|t| t.net == net).unwrap();
@@ -561,13 +561,14 @@ fn a_layer_colour_recolours_its_copper() {
     };
     let top_before = line(&snapshot, &before, 1);
     let bottom_before = line(&snapshot, &before, 2);
-    view.set_layer_colour(TOP, Some([255, 0, 255]));
+    let magenta = signex_types::theme::Color::new(255, 0, 255, 255);
+    board.options.set_layer_color(TOP, Some(magenta));
     let (snapshot, after) = lines_of(&board, &view);
     let top = line(&snapshot, &after, 1);
     assert_eq!([top[0], top[1], top[2]], [1.0, 0.0, 1.0]);
     assert_eq!(top[3], top_before[3], "the palette's alpha is kept");
     assert_eq!(line(&snapshot, &after, 2), bottom_before);
-    view.set_layer_colour(TOP, None);
+    board.options.set_layer_color(TOP, None);
     let (snapshot, reset) = lines_of(&board, &view);
     assert_eq!(line(&snapshot, &reset, 1), top_before);
 }
@@ -613,4 +614,67 @@ fn a_copper_arc_fades_with_arcs_not_tracks() {
     for (a, b) in before.lines.iter().zip(&arcs.lines) {
         assert!((b.color[3] - a.color[3] * 0.5).abs() < 1e-6);
     }
+}
+
+/// A free pad at `x` on `layers`, through-hole with a drill when `through`.
+fn free_pad(n: u128, x: f64, layers: &[&str], through: bool) -> signex_types::pcb::Pad {
+    use signex_types::pcb::{DrillDef, Pad, PadShape, PadType, Point};
+    Pad {
+        unknown_columns: Default::default(),
+        unknown: Default::default(),
+        uuid: uuid::Uuid::from_u128(n),
+        number: String::new(),
+        pad_type: if through { PadType::Thru } else { PadType::Smd },
+        shape: PadShape::Circle,
+        position: Point::new(x, 10.0),
+        size: Point::new(1.6, 1.6),
+        drill: through.then(|| DrillDef {
+            diameter: 0.8,
+            shape: String::new(),
+        }),
+        layers: layers.iter().map(|l| (*l).to_owned()).collect(),
+        net: None,
+        roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
+        rotation: 0.0,
+        layer_sizes: None,
+        net_locked: false,
+    }
+}
+
+/// 2026-11-18: a through via and a through-hole pad span every layer and
+/// are drawn in the Multi-Layer colour; a free SMD pad on Top is drawn in
+/// the Top Layer colour.
+#[test]
+fn through_copper_takes_the_multi_layer_colour_and_smd_its_layer() {
+    let mut board = board();
+    board.free.pads = vec![
+        free_pad(1, 10.0, &["TopCopper", "BottomCopper"], true),
+        free_pad(2, 20.0, &["TopCopper"], false),
+    ];
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &PcbLayerView::default());
+    let theme = ResolvedTheme::builtin_default();
+    let multi = theme.color(signex_gfx::style::ColorSlot::MultiLayer);
+    assert_eq!(snapshot.vias.len(), 1);
+    let via = &snapshot.vias[0];
+    assert_eq!(via.ink, CopperInk::MultiLayer);
+    assert_eq!(
+        theme.copper_ink_color(via.ink, signex_gfx::style::ColorSlot::Junction),
+        multi
+    );
+    let pad_at = |x: f32| {
+        snapshot
+            .pads
+            .iter()
+            .find(|p| (p.center[0] - x).abs() < 1e-3)
+            .unwrap_or_else(|| panic!("no pad at {x}"))
+    };
+    assert_eq!(pad_at(10.0).ink, CopperInk::MultiLayer);
+    let smd = pad_at(20.0);
+    assert_eq!(smd.ink, CopperInk::Layer(CopperLayer::Top));
+    assert_eq!(
+        theme.copper_ink_color(smd.ink, signex_gfx::style::ColorSlot::Junction),
+        theme.board_layer_color(TOP)
+    );
 }

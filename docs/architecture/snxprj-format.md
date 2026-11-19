@@ -218,8 +218,12 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
 "annotation": { "designator_standard": "din40719_2" }
 ```
 
-- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
-  means the library symbol's own designator letters decide. The section is
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`,
+  `iec81346_2_full` (#1416); absent means the library symbol's own designator
+  letters decide. Under `iec81346_2_full` a reference is stored without the
+  product-aspect sign (`QAC1`); display and export add it (`-QAC1`). A build
+  that does not know a value keeps the section unchanged and applies none. The
+  section is
   omitted entirely when nothing is set, so an untouched project re-saves
   byte-identical.
 - Placement derives the reference prefix from the part's component class under
@@ -320,7 +324,8 @@ never renames anything
   is written back on save. Every save stamps `"format": "snxprj/1"`. A file
   with no token predates it and loads as version 1. A file with any other
   token (a newer `snxprj/2`, or garbage) is refused with
-  `ProjectError::UnsupportedFormat` and is never rewritten: a newer version may
+  `ProjectError::UnsupportedFormat` (the shared policy in
+  `docs/FORMAT_VERSIONS.md`) and is never rewritten: a newer version may
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.

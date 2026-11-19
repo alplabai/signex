@@ -1,10 +1,11 @@
-//! A No-ERC directive suppresses every diagnostic located at its point, for
-//! built-in and DSL rules alike (issue #349). Suppression is positional only.
+//! A No-ERC directive suppresses the diagnostics located at its point, for
+//! built-in and DSL rules alike (issue #349): every rule when it names none,
+//! else only the rules it names (#1699).
 
 use signex_erc::engine::{self, EvalFn};
 use signex_erc::{Diagnostic, ErcContext, LocationSpace, RuleId, RuleKind};
 use signex_types::format::SnxSchematic;
-use signex_types::schematic::{NoConnect, Point, SchematicSheet, Wire};
+use signex_types::schematic::{NoErcDirective, Point, SchematicSheet, Wire};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -12,7 +13,7 @@ fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
 }
 
-fn sheet(wires: Vec<Wire>, directives: Vec<NoConnect>) -> SchematicSheet {
+fn sheet(wires: Vec<Wire>, directives: Vec<NoErcDirective>) -> SchematicSheet {
     SchematicSheet {
         paper_size: "A4".to_string(),
         wires,
@@ -30,15 +31,19 @@ fn wire(a: Point, b: Point) -> Wire {
     }
 }
 
-fn directive(p: Point) -> NoConnect {
-    NoConnect {
-        uuid: Uuid::now_v7(),
-        position: p,
-    }
+fn directive(p: Point) -> NoErcDirective {
+    NoErcDirective::new(Uuid::now_v7(), p)
+}
+
+/// A directive at `p` that silences only `rules`.
+fn directive_for(p: Point, rules: &[RuleKind]) -> NoErcDirective {
+    let mut d = directive(p);
+    d.rules = rules.iter().map(|k| RuleId::builtin(*k).0).collect();
+    d
 }
 
 /// One wire (0,0)-(12.7,0), on the connection grid: two dangling endpoints.
-fn one_wire(directives: Vec<NoConnect>) -> SchematicSheet {
+fn one_wire(directives: Vec<NoErcDirective>) -> SchematicSheet {
     sheet(vec![wire(pt(0.0, 0.0), pt(12.7, 0.0))], directives)
 }
 
@@ -142,4 +147,35 @@ fn snxsch_with_directive_roundtrips_a_no_edit_save() {
     let diags = run(&loaded.sheet);
     assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 0);
     assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
+}
+
+#[test]
+fn a_directive_for_the_rule_suppresses_it() {
+    let marker = directive_for(pt(0.0, 0.0), &[RuleKind::DanglingWire]);
+    let diags = run(&one_wire(vec![marker]));
+    assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 0);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
+}
+
+#[test]
+fn a_directive_for_another_rule_leaves_the_diagnostic() {
+    let marker = directive_for(pt(0.0, 0.0), &[RuleKind::UnusedPin]);
+    let diags = run(&one_wire(vec![marker]));
+    assert_eq!(dangling_at(&diags, pt(0.0, 0.0)), 1);
+    assert_eq!(dangling_at(&diags, pt(12.7, 0.0)), 1);
+}
+
+#[test]
+fn a_listed_rule_is_suppressed_and_another_rule_at_the_point_still_reported() {
+    let rule: EvalFn = Arc::new(|_ctx: &ErcContext| {
+        vec![
+            Diagnostic::new(RuleKind::UnusedPin, "listed", pt(5.0, 5.0)),
+            Diagnostic::new(RuleKind::OrphanLabel, "not listed", pt(5.0, 5.0)),
+        ]
+    });
+    let marker = directive_for(pt(5.0, 5.0), &[RuleKind::UnusedPin]);
+    let ctx = ErcContext::from_snapshot(&sheet(Vec::new(), vec![marker]));
+    let diags = engine::run_all_with_dsl(&ctx, &[rule]);
+    let messages: Vec<&str> = diags.iter().map(|d| d.message.as_str()).collect();
+    assert_eq!(messages, vec!["not listed"]);
 }

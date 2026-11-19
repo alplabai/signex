@@ -72,6 +72,7 @@ fn every_field_is_accounted_for() {
         no_erc_directives: _,
         directives: _,
         title_block: _,
+        variables: _,
         lib_symbols: _,
         text_widths: _,
         text_extents: _,

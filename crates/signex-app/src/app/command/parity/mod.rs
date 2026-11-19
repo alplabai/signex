@@ -120,31 +120,26 @@ fn rows() -> Vec<Row> {
 /// (`(edit.handler)(app, &edit.args)` in `run_edits`,
 /// command/agent_edits/group_run.rs), and an edit may be any command
 /// `runs_as_one_step` accepts. So its row reads what those handlers' rows
-/// read, less what does not apply while an agent's edit list runs:
-/// - render cache: under `agent_edit_running()` the wire snap reads the
-///   edited sheet's engine, not the render snapshot (`snap_wire_point`,
-///   app/actions.rs).
+/// read. No member reads the render cache: the wire snap reads the edited
+/// sheet's engine (`snap_wire_on_edit_sheet`, #2542).
 ///
-/// Every other input is kept, the active document included: the active-tab
-/// gate is skipped, but kept here as a superset rather than argued away.
+/// Every input is kept, the active document included: the active-tab gate is
+/// skipped, but kept here as a superset rather than argued away.
 fn derive_apply_edits(rows: &mut [Row]) {
     let mut read = BTreeSet::new();
     for row in rows.iter().filter(|row| row.form == Form::Operand) {
         let command = AppCommandId::new(row.id).expect("catalog id is valid");
         if agent_edits::runs_as_one_step(&command) {
-            // The exclusion below holds for the wire snap alone; a member
-            // that reaches the render cache some other way must be argued
-            // here first.
+            // A member that reads the render cache would put `apply_edits` on
+            // the kill list; argue it here first.
             assert!(
-                !row.inputs.contains(&Input::RenderCache)
-                    || matches!(row.id, "place_wire" | "draw_wire"),
-                "{} reads the render cache inside an edit list; check it before excluding",
+                !row.inputs.contains(&Input::RenderCache),
+                "{} reads the render cache inside an edit list",
                 row.id
             );
             read.extend(row.inputs.iter().copied());
         }
     }
-    read.remove(&Input::RenderCache);
     if let Some(row) = rows
         .iter_mut()
         .find(|row| row.id == "apply_edits" && row.form == Form::Operand)

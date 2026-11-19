@@ -113,6 +113,9 @@ impl Signex {
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
         let anchor = self.document_state.active_path.clone();
         self.commit_drafts_in_scope_of(anchor.as_deref());
+        if let Some(anchor) = anchor.as_deref() {
+            self.report_part_field_issues_in_scope_of(anchor);
+        }
         if !self.document_state.has_active_engine() {
             log::warn!("Netlist export: no active schematic");
             return Some(Task::none());
