@@ -280,3 +280,39 @@ preferences-paste-designators-next-free = Next free number
 ## Annotate undo: the choices
 preferences-annotate-undo-project = One step for the whole project
 preferences-annotate-undo-per-sheet = Per sheet
+
+## Keyboard shortcuts page (#145)
+# Profile picker entries. $name is the profile's name, $count its number of bindings.
+preferences-keymap-profile-option-built-in = { $name } · { $count ->
+    [one] { $count } binding
+   *[other] { $count } bindings
+}
+preferences-keymap-profile-option-custom = { $name } (custom) · { $count ->
+    [one] { $count } binding
+   *[other] { $count } bindings
+}
+preferences-keymap-import = Import…
+preferences-keymap-export = Export…
+# Conflict banner, before the clashing keys. $count is the number of conflicts.
+preferences-keymap-conflict-lead = { $count ->
+    [one] { $count } conflict in active profile:
+   *[other] { $count } conflicts in active profile:
+}
+# Conflict banner, after the clashing keys. $first and $second are the two commands.
+preferences-keymap-conflict-pair = is bound to both { $first } and { $second }.
+# Conflict banner, after keys macOS keeps for itself. $command is the command bound to them.
+preferences-keymap-conflict-reserved = is reserved by macOS but bound to { $command }.
+# Banner button: turns on the Conflicts filter.
+preferences-keymap-show = Show
+# Context filter chips; the context names reuse the table's.
+preferences-keymap-filter-all = All
+preferences-keymap-filter-conflicts = Conflicts
+# Marks the column the table is sorted by, ascending.
+preferences-keymap-sorted-ascending = ▲
+# Between the strokes of a key sequence: P then W.
+preferences-keymap-then = then
+# Shortcut cell of a command with no key.
+preferences-keymap-no-shortcut = —
+preferences-keymap-no-rows-in-filter = No shortcuts in this context.
+# Recorder popover, while keys are being captured.
+preferences-keymap-recording-live = ● Recording
