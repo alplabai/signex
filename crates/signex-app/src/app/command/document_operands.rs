@@ -318,7 +318,9 @@ pub(super) fn save_as(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// `close_active_document document=..`: close that document's tab, as its
 /// close button does. Closing another tab leaves the active one as it was;
 /// closing the active one moves the active tab to a neighbour, as that button
-/// does (a headless run opens a document and closes it by name).
+/// does (a headless run opens a document and closes it by name). A close the
+/// tab survives (a refused board sketch bake) is refused with the reason, and
+/// so is an agent's close of a sheet holding the person's title-block draft.
 pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let entry = match named(app, args) {
         Ok(entry) => entry,
@@ -327,19 +329,39 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(key) = entry.key.clone() else {
         return refused(format!("{} is not open in a tab", entry.name));
     };
-    let index = app
-        .document_state
-        .tabs
-        .iter()
-        .position(|tab| DocumentKey::of(tab).as_ref() == Some(&key));
-    match index {
-        // An agent's close of another tab leaves the person's session alone.
-        Some(index) if app.agent.serving && index != app.document_state.active_tab => {
-            ran(app.close_background_tab_parking_dirty(index))
+    let tab_of = |app: &Signex| {
+        app.document_state
+            .tabs
+            .iter()
+            .position(|tab| DocumentKey::of(tab).as_ref() == Some(&key))
+    };
+    let Some(index) = tab_of(app) else {
+        return refused(format!("{} is not open in a tab", entry.name));
+    };
+    let tab_path = app.document_state.tabs[index].path.clone();
+    // An agent's close of another tab leaves the person's session alone.
+    let task = if app.agent.serving && index != app.document_state.active_tab {
+        // The person's typed title-block text is theirs to commit or drop.
+        if app
+            .document_state
+            .drafts
+            .title_block_sheets()
+            .contains(&tab_path)
+        {
+            return refused(format!(
+                "{} holds the person's pending title-block draft; it stays open until they commit or drop it",
+                entry.name
+            ));
         }
-        Some(index) => ran(app.close_tab_parking_dirty(index)),
-        None => refused(format!("{} is not open in a tab", entry.name)),
+        app.close_background_tab_parking_dirty(index)
+    } else {
+        app.close_tab_parking_dirty(index)
+    };
+    // A refused board sketch bake keeps the tab open (#2234).
+    if tab_of(app).is_some() {
+        return refused(app.board_sketch_held_reason(&tab_path));
     }
+    ran(task)
 }
 
 /// `assign_net_class document=.. net_name=N [class=C]`: put the net in the
