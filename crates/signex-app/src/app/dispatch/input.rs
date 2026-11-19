@@ -648,6 +648,7 @@ impl Signex {
             key,
             physical_key,
             modifiers,
+            repeat,
             ..
         } = event
         else {
@@ -659,6 +660,10 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
+        // A held key runs a cycle or toggle once (Hakan, 2026-11-19).
+        if *repeat && self.repeat_is_ignored(window, target, &stroke) {
+            return Claim::Swallow;
+        }
         Claim::consume(Message::Ui(UiMsg::KeymapStroke {
             window: Some(window),
             stroke,
@@ -676,16 +681,52 @@ impl Signex {
     ) -> bool {
         let contexts = self.shortcut_contexts(Some(window));
         let keymap = &self.ui_state.active_keymap;
-        let mut with_prefix = if self.ui_state.keymap_pending_target == Some(target) {
+        [
+            self.after_pending_chord(target, stroke),
+            vec![stroke.clone()],
+        ]
+        .iter()
+        .any(|sequence| {
+            let lookup = keymap.lookup(sequence, &contexts);
+            lookup.command.is_some() || lookup.matched || lookup.pending
+        })
+    }
+
+    /// Whether `stroke` would run a command whose catalog row ignores a held
+    /// key's auto-repeat: the command after the pending chord prefix, or, when
+    /// that sequence is no binding and no prefix, the stroke's own command.
+    fn repeat_is_ignored(
+        &self,
+        window: iced::window::Id,
+        target: InputTarget,
+        stroke: &KeyStroke,
+    ) -> bool {
+        let contexts = self.shortcut_contexts(Some(window));
+        let keymap = &self.ui_state.active_keymap;
+        let chord = keymap.lookup(&self.after_pending_chord(target, stroke), &contexts);
+        let command = match chord.command {
+            Some(command) => Some(command),
+            None if chord.matched || chord.pending => None,
+            None => {
+                keymap
+                    .lookup(std::slice::from_ref(stroke), &contexts)
+                    .command
+            }
+        };
+        command
+            .and_then(|command| crate::keymap::metadata_for(&command))
+            .is_some_and(|meta| meta.key_repeat == crate::keymap::KeyRepeat::Ignored)
+    }
+
+    /// The pending chord prefix of `target`, if any, followed by `stroke`.
+    fn after_pending_chord(&self, target: InputTarget, stroke: &KeyStroke) -> Vec<KeyStroke> {
+        let mut sequence = if self.ui_state.keymap_pending_target == Some(target) {
             self.ui_state.keymap_pending_sequence.clone()
         } else {
             Vec::new()
         };
-        with_prefix.push(stroke.clone());
-        [with_prefix, vec![stroke.clone()]].iter().any(|sequence| {
-            let lookup = keymap.lookup(sequence, &contexts);
-            lookup.command.is_some() || lookup.matched || lookup.pending
-        })
+        sequence.push(stroke.clone());
+        sequence
     }
 }
 
@@ -732,6 +773,9 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod key_repeat_tests;
 
 #[cfg(test)]
 mod physical_key_tests;
