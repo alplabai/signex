@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use signex_net::{NetSignature, pt_key, uf::Key};
+use signex_net::{NetSignature, pt_key, uf, uf::Key};
 use signex_types::schematic::Point;
 
 /// Spec gap (a), provisional: a pin that keep-wires holds on its old net and
@@ -73,7 +73,7 @@ pub(super) fn join_nets(
         lone_at.insert(root, all.len());
         all.push(net);
     }
-    let mut parent: Vec<usize> = (0..all.len()).collect();
+    let mut parent: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
     for (a, b) in joins {
         let mut index = |slot: Slot| match slot {
             Slot::Net(n) if n < named => Some(n),
@@ -81,14 +81,13 @@ pub(super) fn join_nets(
             Slot::Lone(root) => Some(*lone_at.entry(root).or_insert_with(|| {
                 let next = all.len();
                 all.push(super::guard::empty_net());
-                parent.push(next);
                 next
             })),
         };
         let (Some(a), Some(b)) = (index(*a), index(*b)) else {
             continue;
         };
-        let (a, b) = (find(&mut parent, a), find(&mut parent, b));
+        let (a, b) = (uf::find(&mut parent, a), uf::find(&mut parent, b));
         if a == b {
             continue;
         }
@@ -116,15 +115,7 @@ pub(super) fn join_nets(
         };
         all[a] = joined;
         all[b] = super::guard::empty_net();
-        parent[b] = a;
+        parent.insert(b, a);
     }
     all
-}
-
-fn find(parent: &mut [usize], mut at: usize) -> usize {
-    while parent[at] != at {
-        parent[at] = parent[parent[at]];
-        at = parent[at];
-    }
-    at
 }
