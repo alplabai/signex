@@ -27,6 +27,11 @@ const MESSAGE_MAX: f32 = 200.0;
 /// padding, the two-line intro, the one-line hint and the footer, with no list
 /// area (13 + 33 + 9 + 17 + 13 + 53 px on the legacy layout).
 const STOCK_COPY_EMPTY: f32 = 140.0;
+/// New Library: what a refusal banner adds to the window besides its text
+/// lines — the gap above it, its padding and the action button row.
+const REFUSAL_BANNER: f32 = 60.0;
+/// Characters a line of the New Library refusal banner holds.
+const REFUSAL_LINE_CHARS: usize = 80;
 
 /// Height a Graphite theme adds to `modal`'s window over the legacy layout
 /// the sizes here were measured on: what the shell's intro adds over the
@@ -193,6 +198,17 @@ impl Signex {
                         ((title, &text), (ref_title, &ref_text)),
                     )
             }),
+            ModalId::LibraryCreateOptions => self
+                .library
+                .create_options
+                .as_ref()
+                .and_then(|c| c.refusal.as_deref())
+                .map(|reason| {
+                    let line = crate::styles::TypeScale::DEFAULT.body * crate::styles::LINE_HEIGHT;
+                    fixed.height
+                        + REFUSAL_BANNER
+                        + wrapped_lines(reason, REFUSAL_LINE_CHARS) as f32 * line
+                }),
             ModalId::LibraryDeleteConfirm => owner
                 .and_then(|path| self.library.library_browsers.get(path))
                 .and_then(|b| b.delete_confirm.as_ref())
