@@ -95,4 +95,34 @@ define_ids! {
     PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
     PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
     PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
+    // c13 unions-change-paste: the Unions panel and popover (#158).
+    PANELS_KIND_UNIONS = "panels-kind-unions";
+    UNIONS_PANEL_EMPTY_TITLE = "panels-unions-empty-title";
+    UNIONS_PANEL_EMPTY_BODY = "panels-unions-empty-body";
+    UNIONS_PANEL_FILTER = "panels-unions-filter";
+    UNIONS_PANEL_CREATE = "panels-unions-create";
+    UNIONS_PANEL_THIS_SHEET = "panels-unions-this-sheet";
+    UNIONS_PANEL_PROJECT = "panels-unions-project";
+    UNIONS_PANEL_TAGS = "panels-unions-tags";
+    UNIONS_PANEL_NONE = "panels-unions-none";
+    UNIONS_PANEL_SELECT_MEMBERS = "panels-unions-select-members";
+    UNIONS_PANEL_LOCK = "panels-unions-lock";
+    UNIONS_PANEL_UNLOCK = "panels-unions-unlock";
+    UNIONS_PANEL_HIDE = "panels-unions-hide";
+    UNIONS_PANEL_SHOW = "panels-unions-show";
+    UNIONS_FOOT_HIDDEN = "panels-unions-foot-hidden";
+    UNIONS_FOOT_HIDDEN_NOTE = "panels-unions-foot-hidden-note";
+    UNIONS_FOOT_MEMBERS = "panels-unions-foot-members";
+    UNIONS_FOOT_WIRES = "panels-unions-foot-wires";
+    UNIONS_FOOT_OTHERS = "panels-unions-foot-others";
+    UNIONS_FOOT_ADD = "panels-unions-foot-add";
+    UNIONS_FOOT_REMOVE = "panels-unions-foot-remove";
+    UNIONS_FOOT_BREAK = "panels-unions-foot-break";
+    UNIONS_CREATE_TITLE = "panels-unions-create-title";
+    UNIONS_CREATE_NAME = "panels-unions-create-name";
+    UNIONS_CREATE_TAGS = "panels-unions-create-tags";
+    UNIONS_CREATE_ADD_TAG = "panels-unions-create-add-tag";
+    UNIONS_CREATE_LOCK = "panels-unions-create-lock";
+    UNIONS_CREATE_CONFIRM = "panels-unions-create-confirm";
+    UNIONS_TAG_REMOVE = "panels-unions-tag-remove";
 }

@@ -135,6 +135,47 @@ impl Signex {
         )
     }
 
+    /// The Create Union popover (#158), laid at the point it opened: a
+    /// click-outside layer that cancels it, then the card.
+    pub(in crate::app::view) fn union_popover_overlay(&self) -> Vec<Element<'_, Message>> {
+        let Some(popover) = self.ui_state.unions.popover.as_ref() else {
+            return Vec::new();
+        };
+        let wrap = |msg| {
+            Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(msg),
+            ))
+        };
+        let card = crate::app::unions::popover_view(
+            popover,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.tokens,
+        )
+        .map(wrap)
+        .boxed();
+        Self::anchored_layers(
+            wrap(crate::app::unions::UnionPopoverMsg::Cancelled),
+            crate::app::view::context_menu::AnchoredMenu::new(card, popover.anchor),
+        )
+    }
+
+    /// The Smart Paste dialog (#155). In-window only.
+    pub(in crate::app::view) fn smart_paste_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.smart_paste.as_deref()?;
+        let size = crate::app::view::dialogs::fit_modal_size(
+            self.ui_state.window_size,
+            crate::smart_paste::DIALOG_SIZE,
+        );
+        let card = crate::smart_paste::view(
+            state,
+            size,
+            &self.document_state.panel_ctx.tokens,
+            &self.ui_state.i18n,
+        )
+        .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)));
+        Some(self.wrap_centred_dialog(card, crate::smart_paste::DIALOG_SIZE))
+    }
+
     /// Keyboard-shortcuts reference modal.
     pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;

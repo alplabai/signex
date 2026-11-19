@@ -133,6 +133,14 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
+            // #158: the selection holds a member of a union.
+            union_selected: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| {
+                    !signex_engine::unions::unions_of_items(engine.document(), &canvas.selected)
+                        .is_empty()
+                }),
             // The window's own facts, so a row greys exactly when the menu
             // bar's row and the keystroke for the same command would.
             commands: self.command_context(Some(window_id)),
@@ -226,6 +234,9 @@ pub(super) struct CanvasSelection {
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
+    /// The selection holds a member of a union: Add / Remove / Break apply
+    /// (#158).
+    pub(super) union_selected: bool,
     /// The window's command facts: every command row is live exactly when
     /// its own enablement rule allows it here (#2419).
     pub(super) commands: CommandContext,
@@ -315,12 +326,11 @@ pub(super) fn canvas_menu_entries(
                 ContextSubmenu::Arrange,
             ));
         }
-        v.push(dd_planned_because(
-            i18n,
-            Some(ic::icon_dd_unions(tid)),
+        // #158: the live Unions flyout (it was a planned stub).
+        v.push(launcher(
+            ic::icon_dd_unions(tid),
             menu_ids::CTX_UNIONS,
-            menu_ids::CTX_UNIONS_PLANNED,
-            true,
+            ContextSubmenu::Unions,
         ));
         v.push(dd_planned_submenu(
             i18n,
@@ -450,6 +460,27 @@ fn net_rows(
             "open_net_color_palette",
         ),
         assign,
+    ]
+}
+
+/// Unions submenu (#158): Create Union… and Add Selection to Union (the
+/// union picked in the Unions panel) with a selection; Remove and Break
+/// while the selection holds a member of a union. Each row is also gated by
+/// its command's own rule.
+pub(super) fn unions_entries(
+    i18n: &I18n,
+    selection: CanvasSelection,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |id: &'static str, applies: bool| {
+        dd_ruled(i18n, None, id, &hint(id), &selection.commands, applies)
+    };
+    vec![
+        row("create_union", selection.has_selection),
+        row("add_to_union", selection.has_selection),
+        row("remove_from_union", selection.union_selected),
+        DropdownEntry::Separator,
+        row("break_union", selection.union_selected),
     ]
 }
 

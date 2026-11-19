@@ -84,6 +84,7 @@ altium	bind	Global	V N	command:open_net_inspector
 altium	bind	Global	W H	command:tile_windows_horizontally
 altium	bind	Global	W U	command:untile_documents
 altium	bind	Global	W V	command:tile_windows_vertically
+altium	bind	Schematic	⌘G	command:create_union
 altium	bind	Schematic	P C	command:place_off_sheet_connector
 altium	bind	Schematic	P R	command:place_port
 altium	bind	Schematic	P S	command:place_sheet_symbol
@@ -179,6 +180,10 @@ altium	hint	-	-	open_parameter_manager
 altium	hint	-	-	set_symbol_parameter
 altium	hint	-	-	lock_board_items
 altium	hint	-	-	unlock_board_items
+altium	hint	-	⌘G	create_union
+altium	hint	-	-	add_to_union
+altium	hint	-	-	remove_from_union
+altium	hint	-	-	break_union
 altium	hint	-	-	bring_drawings_forward
 altium	hint	-	-	bring_drawings_to_front
 altium	hint	-	-	send_drawings_backward
@@ -686,6 +691,10 @@ classic	hint	-	-	open_parameter_manager
 classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
+classic	hint	-	-	create_union
+classic	hint	-	-	add_to_union
+classic	hint	-	-	remove_from_union
+classic	hint	-	-	break_union
 classic	hint	-	-	bring_drawings_forward
 classic	hint	-	-	bring_drawings_to_front
 classic	hint	-	-	send_drawings_backward

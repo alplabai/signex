@@ -34,6 +34,9 @@ impl Signex {
     /// Start a paste-family request: read the project's numbers first when
     /// the numbering needs them, then carry on.
     pub(crate) fn begin_paste(&mut self, intent: PasteIntent) -> Task<Message> {
+        // A new paste numbers by the preference again: a Smart Paste's own
+        // rule held only for the copies it put on the cursor (#155).
+        self.interaction_state.paste_designators_override = None;
         let request = PasteRequest {
             intent,
             epoch: self.interaction_state.placement_epoch,
@@ -131,6 +134,9 @@ impl Signex {
         }
         self.adopt_clipboard_text(text.as_deref());
         match request.intent {
+            // In a window Paste Special opens the Smart Paste dialog (#155); a
+            // headless run pastes at once, as before.
+            PasteIntent::SmartPaste if self.smart_paste_opens_dialog() => self.open_smart_paste(),
             PasteIntent::SmartPaste => self.handle_clipboard_smart_paste_requested(),
             PasteIntent::Array => self.open_paste_array(),
             _ => self.handle_clipboard_paste_requested(),

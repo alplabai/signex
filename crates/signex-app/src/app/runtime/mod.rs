@@ -45,6 +45,7 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
+        self.sync_unions_panel();
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their
@@ -619,6 +620,10 @@ impl Signex {
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
+            unions: self.union_view(
+                self.document_state
+                    .sheet_path_for_window(window, &self.ui_state),
+            ),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }
     }

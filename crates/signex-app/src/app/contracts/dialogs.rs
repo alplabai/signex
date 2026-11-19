@@ -951,6 +951,11 @@ pub enum EditMsg {
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
+    /// Named unions (#158): the canvas menu rows, the keymap and the Create
+    /// Union popover.
+    Unions(crate::app::unions::UnionsMsg),
+    /// A Smart Paste dialog event (#155).
+    SmartPasteDialog(crate::smart_paste::SmartPasteMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

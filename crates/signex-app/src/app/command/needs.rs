@@ -386,7 +386,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
-        | "repair_pin_junctions" => Needs::Schematic,
+        | "repair_pin_junctions"
+        // #158: the unions of the sheet in view; the handler says what to
+        // select when nothing fits.
+        | "create_union"
+        | "add_to_union"
+        | "remove_from_union"
+        | "break_union" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc"
         | "reannotate_board"

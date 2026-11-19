@@ -39,6 +39,7 @@ pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 use text_width::{WidthSlot, WidthSources};
 pub mod text;
+pub mod unions;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -221,6 +222,9 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::DIRECTIVES) {
         dst.directives.clone_from(&src.directives);
+    }
+    if invalidation.intersects(R::UNIONS) {
+        dst.unions.clone_from(&src.unions);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(&src.child_sheets);

@@ -80,6 +80,10 @@ pub(crate) enum OverlayId {
     FindReplace,
     FindSimilar,
     PasteArray,
+    /// The Create Union popover (#158).
+    UnionPopover,
+    /// Edit ▸ Paste Special (#155).
+    SmartPaste,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -150,7 +154,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 72] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -182,6 +186,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
     OverlayId::PasteArray,
+    OverlayId::UnionPopover,
+    OverlayId::SmartPaste,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -311,6 +317,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FindReplace
         | OverlayId::FindSimilar
         | OverlayId::PasteArray
+        | OverlayId::UnionPopover
+        | OverlayId::SmartPaste
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -369,6 +377,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
+            | OverlayId::UnionPopover
     )
 }
 
@@ -532,6 +541,8 @@ impl Signex {
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
+            OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),

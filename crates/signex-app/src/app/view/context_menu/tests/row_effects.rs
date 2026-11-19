@@ -267,13 +267,43 @@ fn paste_row_puts_the_copy_on_the_cursor() {
     assert_eq!(doc(&app).symbols.len(), 1, "a paste is placed by a click");
 }
 
+/// #155: the row opens the Smart Paste dialog (it used to place the copy at
+/// once); its Paste puts the copy on the cursor and a click places it as one
+/// undo step.
 #[test]
-fn smart_paste_row_places_the_copy_at_once() {
+fn smart_paste_row_opens_the_smart_paste_dialog() {
     let (mut app, text) = app_that_copied();
     let task = press(&mut app, "smart_paste");
     assert_menu_closed(&app, "smart paste");
     settle_answering_clipboard(&mut app, task, &text);
-    assert_eq!(doc(&app).symbols.len(), 2, "the copy was not placed");
+    assert!(
+        app.ui_state.smart_paste.is_some(),
+        "the dialog did not open"
+    );
+    assert_eq!(doc(&app).symbols.len(), 1, "nothing lands before Paste");
+
+    let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+        crate::smart_paste::SmartPasteMsg::PasteConfirmed,
+    )));
+    assert!(
+        app.ui_state.smart_paste.is_none(),
+        "Paste closes the dialog"
+    );
+    assert!(
+        app.interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.kind.is_paste()),
+        "the copy is on the cursor"
+    );
+    let steps = app.document_state.active_engine().unwrap().undo_position();
+    let _ = app.handle_placement_click(40.64, 40.64);
+    assert_eq!(doc(&app).symbols.len(), 2, "the click placed the copy");
+    assert_eq!(
+        app.document_state.active_engine().unwrap().undo_position(),
+        steps + 1,
+        "one undo step"
+    );
     assert!(app.interaction_state.placement.is_none());
 }
 

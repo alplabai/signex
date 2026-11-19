@@ -439,6 +439,9 @@ impl Signex {
             ContextSubmenu::SheetActions => {
                 sheet_actions_entries(i18n, tid, self.canvas_menu_inputs(window_id).0, &hint)
             }
+            ContextSubmenu::Unions => {
+                super::menus::unions_entries(i18n, self.canvas_menu_inputs(window_id).0, &hint)
+            }
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action

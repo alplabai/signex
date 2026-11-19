@@ -159,6 +159,10 @@ impl Signex {
                 }
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
+                // A union's name tab selects the union (#158).
+                if self.select_union_at_tab(world_x, world_y) {
+                    return Task::none();
+                }
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
@@ -191,6 +195,8 @@ impl Signex {
                     }
                     self.interaction_state.clicked_pin = clicked_pin;
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
+                    // A member brings its whole union along (#158).
+                    self.expand_selection_to_unions();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();

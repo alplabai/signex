@@ -27,7 +27,7 @@ use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge
 use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
-use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
+use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, unions_entries};
 use super::submenu::{
     align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
 };
@@ -64,7 +64,6 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Canvas: planned rows that run nothing yet (docs/MENU_BAR.md,
     // "Sheet right-click menu").
     ("References", "planned submenu stub"),
-    ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
@@ -327,6 +326,8 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     "sheet actions",
                     sheet_actions_entries(i18n, TID, selection, &hint),
                 ),
+                // #158: the Unions flyout.
+                ("unions", unions_entries(i18n, selection, &hint)),
             ];
             for (name, rows) in flyouts {
                 check_rows(

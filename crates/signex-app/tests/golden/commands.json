@@ -15,6 +15,11 @@
     "category": "pcb"
   },
   {
+    "id": "add_to_union",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "align_bottom",
     "group": "Schematic",
     "category": "modify"
@@ -145,6 +150,11 @@
     "category": "design"
   },
   {
+    "id": "break_union",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "break_wire",
     "group": "General",
     "category": "modify"
@@ -258,6 +268,11 @@
     "id": "create_sheet_symbol_from_sheet",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "create_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "cross_probe",
@@ -1328,6 +1343,11 @@
     "id": "remove_board_panel",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "remove_from_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "remove_last_vertex",

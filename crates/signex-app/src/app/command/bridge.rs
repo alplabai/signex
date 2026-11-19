@@ -74,6 +74,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
     let extras = |msg| Message::Edit(EditMsg::Extras(msg));
+    let unions = |msg| Message::Edit(EditMsg::Unions(msg));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -183,6 +184,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
+        // #158: named unions of the sheet in view.
+        "create_union" => unions(crate::app::unions::UnionsMsg::CreateRequested),
+        "add_to_union" => unions(crate::app::unions::UnionsMsg::AddSelectionRequested),
+        "remove_from_union" => unions(crate::app::unions::UnionsMsg::RemoveSelectionRequested),
+        "break_union" => unions(crate::app::unions::UnionsMsg::BreakRequested),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.
         "open_project_options" => match &args.context.project {

@@ -673,3 +673,13 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## c13 unions-change-paste
+cmd-create-union = Create a union from the selection
+cmd-menu-create-union = Create Union…
+cmd-add-to-union = Add the selection to the selected union
+cmd-menu-add-to-union = Add Selection to Union
+cmd-remove-from-union = Remove the selection from its union
+cmd-menu-remove-from-union = Remove Selection from Union
+cmd-break-union = Break the selected union
+cmd-menu-break-union = Break Union

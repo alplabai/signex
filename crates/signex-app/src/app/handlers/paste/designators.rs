@@ -82,9 +82,14 @@ impl PasteNumbering {
 }
 
 impl Signex {
-    /// The numbering for a paste onto `target`, in the saved preference's mode.
+    /// The numbering for a paste onto `target`, in the saved preference's
+    /// mode, or the mode a Smart Paste on the cursor was given (#155).
     pub(crate) fn paste_numbering(&self, target: &Path) -> PasteNumbering {
-        self.paste_numbering_with(target, self.ui_state.paste_designators)
+        let mode = self
+            .interaction_state
+            .paste_designators_override
+            .unwrap_or(self.ui_state.paste_designators);
+        self.paste_numbering_with(target, mode)
     }
 
     /// The numbering for a paste onto `target` in `mode`. Next free starts

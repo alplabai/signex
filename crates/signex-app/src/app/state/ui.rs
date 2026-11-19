@@ -519,6 +519,10 @@ pub struct UiState {
     pub assign_footprints_reads: u64,
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
+    /// Named unions: hidden per sheet, the panel and the popover (#158).
+    pub unions: crate::app::unions::UnionsState,
+    /// The open Smart Paste dialog (#155).
+    pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers

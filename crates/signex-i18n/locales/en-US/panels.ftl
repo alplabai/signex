@@ -737,3 +737,51 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## c13 unions-change-paste
+
+# The Unions dock panel and the Create Union popover (#158).
+panels-kind-unions = Unions
+panels-unions-empty-title = No schematic sheet in view
+panels-unions-empty-body = Open a sheet to list its unions.
+panels-unions-filter = Filter by name or #tag
+panels-unions-create = Create from selection
+panels-unions-this-sheet = This sheet
+panels-unions-project = Project
+panels-unions-tags = Tags
+panels-unions-none = No unions here. Select objects and use Create Union to group them.
+panels-unions-select-members = Select members
+panels-unions-lock = Lock
+panels-unions-unlock = Unlock
+panels-unions-hide = Hide
+panels-unions-show = Show
+# The panel foot of a hidden union; $name is the union's name.
+panels-unions-foot-hidden = { $name } is hidden
+panels-unions-foot-hidden-note = Hidden on the canvas only. Show it to add, remove or rename members. Not an undo step.
+panels-unions-foot-members = { $count ->
+    [one] 1 member
+   *[other] { $count } members
+}
+panels-unions-foot-wires = { $count ->
+    [one] + 1 wire
+   *[other] + { $count } wires
+}
+panels-unions-foot-others = { $count ->
+    [one] + 1 other object
+   *[other] + { $count } other objects
+}
+panels-unions-foot-add = Add selection
+panels-unions-foot-remove = Remove selection
+panels-unions-foot-break = Break union
+# The popover title; $count is how many objects the union groups.
+panels-unions-create-title = { $count ->
+    [one] Create union · 1 object
+   *[other] Create union · { $count } objects
+}
+panels-unions-create-name = Name
+panels-unions-create-tags = Tags
+panels-unions-create-add-tag = add tag
+panels-unions-create-lock = Lock after creating
+panels-unions-create-confirm = Create
+# Removes a tag pill.
+panels-unions-tag-remove = ×

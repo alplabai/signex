@@ -214,6 +214,10 @@ pub struct InteractionState {
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
+    /// The designator rule of the Smart Paste on the cursor (#155): its
+    /// dialog's choice, used instead of the preference until the next paste
+    /// starts.
+    pub paste_designators_override: Option<crate::paste_prefs::PasteDesignators>,
     /// Token for library reads. Every pick takes a new value and carries it,
     /// so only the LATEST pick may arm a session; Esc, a right-click and any
     /// tool change bump it too, so a read that finishes after a cancel arms

@@ -29,6 +29,10 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
+    /// The Create Union popover (#158).
+    union_popover_open: bool,
+    /// The Smart Paste dialog (#155).
+    smart_paste_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -299,6 +303,18 @@ impl OpenOverlays {
             OverlayId::PasteArray => self.paste_array_open.then(|| {
                 Message::Edit(crate::app::EditMsg::PasteArray(
                     crate::paste_array::PasteArrayMsg::Closed,
+                ))
+            }),
+            OverlayId::UnionPopover => self.union_popover_open.then(|| {
+                Message::Edit(crate::app::EditMsg::Unions(
+                    crate::app::unions::UnionsMsg::Popover(
+                        crate::app::unions::UnionPopoverMsg::Cancelled,
+                    ),
+                ))
+            }),
+            OverlayId::SmartPaste => self.smart_paste_open.then(|| {
+                Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                    crate::smart_paste::SmartPasteMsg::Cancelled,
                 ))
             }),
             OverlayId::KeyboardShortcuts => self
@@ -630,6 +646,8 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
             find_similar_open: self.ui_state.find_similar.is_some(),
             paste_array_open: self.ui_state.paste_array.is_some(),
+            union_popover_open: self.ui_state.unions.popover.is_some(),
+            smart_paste_open: self.ui_state.smart_paste.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -1191,6 +1209,20 @@ mod tests {
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
                 crate::paste_array::PasteArrayMsg::Closed
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.union_popover_open = true),
+            Some(Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(
+                    crate::app::unions::UnionPopoverMsg::Cancelled
+                )
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.smart_paste_open = true),
+            Some(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                crate::smart_paste::SmartPasteMsg::Cancelled
             )))
         ));
         assert!(matches!(
@@ -1760,6 +1792,8 @@ mod tests {
             find_replace_open,
             find_similar_open,
             paste_array_open,
+            union_popover_open,
+            smart_paste_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1821,6 +1855,8 @@ mod tests {
             ("find_replace_open", |o| o.find_replace_open = true),
             ("find_similar_open", |o| o.find_similar_open = true),
             ("paste_array_open", |o| o.paste_array_open = true),
+            ("union_popover_open", |o| o.union_popover_open = true),
+            ("smart_paste_open", |o| o.smart_paste_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),

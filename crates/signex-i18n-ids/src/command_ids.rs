@@ -650,5 +650,14 @@ define_ids! {
         CMD_CATEGORY_PCB = "cmd-category-pcb";
         CMD_CATEGORY_UNCATEGORIZED = "cmd-category-uncategorized";
         CMD_UNNAMED = "cmd-unnamed";
+        // c13 unions-change-paste (#158).
+        CMD_CREATE_UNION = "cmd-create-union";
+        CMD_MENU_CREATE_UNION = "cmd-menu-create-union";
+        CMD_ADD_TO_UNION = "cmd-add-to-union";
+        CMD_MENU_ADD_TO_UNION = "cmd-menu-add-to-union";
+        CMD_REMOVE_FROM_UNION = "cmd-remove-from-union";
+        CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
+        CMD_BREAK_UNION = "cmd-break-union";
+        CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
     }
 }
