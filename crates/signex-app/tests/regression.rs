@@ -706,3 +706,6 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+#[path = "regression/multi_channel.rs"]
+mod multi_channel;

@@ -673,3 +673,10 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## c13 multi-channel-compiled
+
+cmd-compile-project = Compile the project
+cmd-menu-compile-project = Compile Project
+cmd-open-compiled-design = Open Compiled Design panel
+cmd-menu-open-compiled-design = Compiled Design

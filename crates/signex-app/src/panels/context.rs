@@ -110,6 +110,9 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Compiled Design panel, and the multi-channel rows of a sheet
+    /// symbol and a channel tab in Properties (#1279, #1308).
+    pub compiled_design: super::compiled_design::CompiledDesignView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).

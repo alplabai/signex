@@ -417,6 +417,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("assign_footprints", "AssignFootprints"),
     ("repair_pin_junctions", "RepairPinJunctions"),
     ("open_net_inspector", "OpenNetInspector"),
+    // #1308: fixture name only.
+    ("open_compiled_design", "OpenCompiledDesign"),
     // #2408, #2409: fixture names only.
     ("stitch_vias", "StitchVias"),
     ("add_teardrops", "AddTeardrops"),

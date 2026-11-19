@@ -44,22 +44,38 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    // ── Properties (identity and geometry, all editable) ──
+    // ── Multi-channel caption and illustration (#1279) ──
+    let repeat_view = ctx
+        .compiled_design
+        .sheet_symbol
+        .as_ref()
+        .filter(|view| view.sheet_symbol == id);
+    if let Some(view) = repeat_view {
+        col = col.push(super::child_sheet_repeat::caption(ctx, view));
+        col = col.push(super::child_sheet_repeat::illustration(ctx, view));
+    }
+
+    // ── Sheet (identity and geometry, all editable) ──
     col = col.push(
         ctx.collapsible(
             "sel_child_sheet_props",
-            signex_i18n::ids::PANELS_PLACED_PROPERTIES,
+            signex_i18n::ids::PROPERTIES_SHEET_SYMBOL_SECTION,
             &ctx.collapsed_sections,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
-                c = c.push(child_sheet_text_row(
-                    signex_i18n::t!(i18n, signex_i18n::ids::PANELS_CHILD_SHEET_NAME),
-                    &name,
-                    border_c,
-                    muted,
-                    move |s| PanelMsg::ChildSheetNameTyping(id, s),
-                    PanelMsg::CommitChildSheetName(id),
+                // The sheet symbol's designator; `Repeat(CH, 1, 4)` here
+                // repeats the sheet (#1279).
+                c = c.push(super::child_sheet_repeat::linked(
+                    super::child_sheet_repeat::FIELD_DESIGNATOR,
+                    child_sheet_text_row(
+                        signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_SHEET_SYMBOL_DESIGNATOR),
+                        &name,
+                        border_c,
+                        muted,
+                        move |s| PanelMsg::ChildSheetNameTyping(id, s),
+                        PanelMsg::CommitChildSheetName(id),
+                    ),
                 ));
                 c = c.push(child_sheet_text_row(
                     signex_i18n::t!(i18n, signex_i18n::ids::PANELS_CHILD_SHEET_FILE),
@@ -80,6 +96,11 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
         )
         .boxed(),
     );
+
+    // ── Repeat, Channel naming and Entries (#1279) ──
+    if let Some(view) = repeat_view {
+        col = col.push(super::child_sheet_repeat::sections(ctx, view));
+    }
 
     // ── Style (editable) ──
     col = col.push(

@@ -143,7 +143,9 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
-            | PanelKind::PcbNets => PanelPosition::Left,
+            | PanelKind::PcbNets
+            // A sibling tab of Projects (#1308, drawn option of the decide).
+            | PanelKind::CompiledDesign => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties

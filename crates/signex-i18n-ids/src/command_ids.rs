@@ -650,5 +650,10 @@ define_ids! {
         CMD_CATEGORY_PCB = "cmd-category-pcb";
         CMD_CATEGORY_UNCATEGORIZED = "cmd-category-uncategorized";
         CMD_UNNAMED = "cmd-unnamed";
+        // c13 multi-channel-compiled
+        CMD_COMPILE_PROJECT = "cmd-compile-project";
+        CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
+        CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
+        CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
     }
 }

@@ -7,7 +7,10 @@
 //! single-file module.
 
 mod body_row;
+mod channel_naming_menu;
+mod channel_view;
 mod child_sheet;
+mod child_sheet_repeat;
 mod directive;
 mod drawing;
 mod drawing_preview;
@@ -33,6 +36,7 @@ mod text_note;
 pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
+pub(super) use channel_view::channel_view_properties;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
 pub(super) use drawing::view_drawing_properties;

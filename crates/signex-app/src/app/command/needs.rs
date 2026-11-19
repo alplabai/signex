@@ -512,6 +512,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
+        "compile_project" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         "untile_documents" => Needs::Tiled,
         _ => return None,

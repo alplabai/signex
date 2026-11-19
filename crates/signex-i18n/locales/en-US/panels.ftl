@@ -737,3 +737,53 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## c13 multi-channel-compiled
+
+panels-kind-compiled-design = Compiled Design
+# Tooltip of the panel's title-row button and the out-of-date banner's button.
+panels-compiled-design-recompile = Recompile
+# The panel's mode switch.
+panels-compiled-design-mode-sheets = Sheets
+panels-compiled-design-mode-nets = Nets
+panels-compiled-design-find = Find sheet, channel or net
+panels-compiled-design-column-sheet = Sheet / channel
+panels-compiled-design-column-parts = Parts
+panels-compiled-design-column-nets = Nets
+panels-compiled-design-column-net = Net
+panels-compiled-design-column-sheets = Sheets
+# The out-of-date banner. $count is the number of changed sheets, $time the
+# time of the last compile (12:41).
+panels-compiled-design-stale =
+    { $count ->
+        [one] 1 sheet changed since { $time }. Counts may be wrong.
+       *[other] { $count } sheets changed since { $time }. Counts may be wrong.
+    }
+# Tooltip of the amber dot on a changed row.
+panels-compiled-design-stale-row = Changed since the last compile ({ $time })
+panels-compiled-design-empty-title = Not compiled yet
+panels-compiled-design-empty-body = Compile the project to see repeated sheets as channels, with part and net counts per sheet.
+panels-compiled-design-compile = Compile project
+panels-compiled-design-empty-note = Nothing is written to disk; the result lives in memory until the project closes.
+panels-compiled-design-compiling = Compiling…
+panels-compiled-design-no-project = Open a sheet of a project to compile it.
+panels-compiled-design-no-match = No sheet, channel or net matches.
+# The footer after a compile.
+panels-compiled-design-footer = { $parts } parts · { $nets } nets · { $sheets } sheets ({ $channels } channels)
+# The footer before the first compile. $files is the number of sheet files.
+panels-compiled-design-footer-none = { $files } sheet files · not compiled
+# The strip under a repeated sheet's canvas: the editable sheet, then one tab
+# per channel.
+panels-channel-strip-editor = Editor
+# The selected channel tab's count; $count is its parts.
+panels-channel-strip-parts = { $count } parts
+# The count of a channel tab that is not selected.
+panels-channel-strip-count = { $count }
+# The caption of a channel card in the compiled view.
+panels-channel-card-caption = { $parts } parts · { $nets } nets
+# Shown in the compiled view before the project is compiled.
+panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# The Messages line when an edit is tried in a channel tab. $channel is CH1.
+panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
+# The compile result in Messages.
+panels-compiled-design-failed = Compile project: { $reason }

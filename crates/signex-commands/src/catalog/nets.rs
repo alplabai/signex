@@ -117,6 +117,17 @@ pub(super) const NETS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // View ▸ Compiled Design (#1308).
+    CommandMetadata {
+        id: "open_compiled_design",
+        category: "panels",
+        label: command_ids::CMD_OPEN_COMPILED_DESIGN,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_COMPILED_DESIGN),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "assign_net_class",
         category: "design",

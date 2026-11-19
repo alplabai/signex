@@ -11,6 +11,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
+pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
@@ -228,6 +229,9 @@ pub enum PanelKind {
     /// netlist, filterable, each expandable to its pins, labels, ports and
     /// sheets; a click goes to the member (#1269).
     NetInspector,
+    /// The compiled hierarchy: repeated sheets expanded into channels, with
+    /// part and net counts per sheet (#1308).
+    CompiledDesign,
 }
 
 /// All available panel kinds for the panel list button.
@@ -259,6 +263,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::PcbNets,
     PanelKind::History,
     PanelKind::NetInspector,
+    PanelKind::CompiledDesign,
 ];
 
 impl PanelKind {
@@ -317,6 +322,7 @@ impl PanelKind {
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
+            PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
         }
     }
 
@@ -349,6 +355,7 @@ impl PanelKind {
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
+            PanelKind::CompiledDesign => "Compiled Design",
         }
     }
 }
@@ -413,6 +420,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
+        PanelKind::CompiledDesign => return compiled_design::view(ctx),
     };
 
     panel_scrollable(content).boxed()

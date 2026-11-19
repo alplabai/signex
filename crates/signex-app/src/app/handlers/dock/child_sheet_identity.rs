@@ -22,7 +22,8 @@ impl Signex {
     }
 
     /// Commit the buffered Name for sheet `id`. Nothing typed, nothing done.
-    pub(super) fn commit_child_sheet_name(&mut self, id: uuid::Uuid) {
+    /// The Repeat rows of a sheet symbol write through here too (#1279).
+    pub(crate) fn commit_child_sheet_name(&mut self, id: uuid::Uuid) {
         let Some(name) = take_buffer(&mut self.document_state.panel_ctx.child_sheet_name_buf, id)
         else {
             return;

@@ -311,6 +311,20 @@ pub fn build_renderer_snapshot(
         let min_y = y0.min(y1) as f32;
         let max_x = x0.max(x1) as f32;
         let max_y = y0.max(y1) as f32;
+        // A repeated sheet draws as a stack with a ×N pill (#1279).
+        let accent = focus_color(to_iced(&colors.selection), focus_set, sheet.uuid);
+        let is_repeated = super::repeat_stack::push_repeat_stack(
+            sheet,
+            &super::repeat_stack::StackLook {
+                outline: to_rgba(color),
+                accent: to_rgba(accent),
+                badge_ink: to_rgba(to_iced(&colors.paper)),
+                stroke_mm: overrides.defaults.shape_stroke_mm(sheet.stroke_width) as f32,
+                family: resolve_family(None, document_family),
+            },
+            &mut polygons,
+            &mut parameter_texts,
+        );
         polygons.push(PolygonInput {
             vertices: vec![
                 [min_x, min_y],
@@ -330,7 +344,7 @@ pub fn build_renderer_snapshot(
                 min_y + screen_px_to_world_mm(6.0, transform.scale) as f32,
             ],
             size_mm: 1.05,
-            color: to_rgba(color),
+            color: to_rgba(if is_repeated { accent } else { color }),
             bold: false,
             italic: false,
             family: resolve_family(None, document_family),
