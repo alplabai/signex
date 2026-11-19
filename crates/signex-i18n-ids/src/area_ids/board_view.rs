@@ -52,11 +52,13 @@ define_ids! {
     PCB_VIEW_PRESET_DEFAULT = "pcb-view-preset-default";
     PCB_VIEW_3D = "pcb-view-3d";
     PCB_VIEW_SINGLE_LAYER = "pcb-view-single-layer";
+    PCB_VIEW_SINGLE_LAYER_SHORT = "pcb-view-single-layer-short";
     PCB_VIEW_OFF = "pcb-view-off";
     PCB_VIEW_ON = "pcb-view-on";
     PCB_VIEW_MONO = "pcb-view-mono";
     PCB_VIEW_SHOW_GRID = "pcb-view-show-grid";
     PCB_VIEW_OBJECT = "pcb-view-object";
+    PCB_VIEW_OBJECT_COLUMN = "pcb-view-object-column";
     PCB_VIEW_DRAFT = "pcb-view-draft";
     PCB_VIEW_TRANSPARENCY = "pcb-view-transparency";
     PCB_VIEW_MIXED = "pcb-view-mixed";
@@ -64,5 +66,6 @@ define_ids! {
     PCB_VIEW_DIMMED = "pcb-view-dimmed";
     PCB_VIEW_HIGHLIGHTED = "pcb-view-highlighted";
     PCB_VIEW_MASKED = "pcb-view-masked";
+    PCB_VIEW_OPTIONS_ON = "pcb-view-options-on";
     PCB_VIEW_OPTION = "pcb-view-option";
 }

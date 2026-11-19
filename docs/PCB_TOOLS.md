@@ -756,16 +756,24 @@ canvas (the Board Outline colour draws the board edge too), the dot and the
 board texts draw it. The Keep-Out dots are greyed: the board's keepout
 regions keep the palette colour.
 
-**View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
-Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All
-Objects (Mixed while the rows differ) and one row per kind of object, each
-with an eye, Draft (greyed) and a Transparency slider. Pads, Vias, Arcs,
-Tracks, Polygons, Regions, Fills, Texts, Dimensions and Keepouts can be
-hidden; a hidden kind is neither drawn nor picked. Texts covers footprint
-texts, board strings and text frames, box and all. Pads, Vias, Arcs (copper
-arcs; Tracks never fades them), Tracks, Polygons, Regions and Fills can be
-drawn transparent. Mask and Dim Settings and the Additional Options chips
-are greyed until the view can draw them.
+**View Options**: above the sections, Configuration is one labelled field
+reading Default, greyed until presets exist. General Settings holds 3D
+Off/On, Single Layer Off/On (Mono is greyed; the tooltip gives the full
+name, Single Layer Mode) and the Show Grid switch. Object Visibility is a
+grid of four columns under a header: eye, Object, Draft and Transparency (a
+slider and its percent). All Objects comes first, in medium weight; while
+the rows differ its eye is faded and Transparency reads Mixed. Then one row
+per kind of object, each with an eye, Draft (greyed) and a Transparency
+slider. Pads, Vias, Arcs, Tracks, Polygons, Regions, Fills, Texts,
+Dimensions and Keepouts can be hidden; a hidden kind is neither drawn nor
+picked. Texts covers footprint texts, board strings and text frames, box and
+all. Pads, Vias, Arcs (copper arcs; Tracks never fades them), Tracks,
+Polygons, Regions and Fills can be drawn transparent; the other kinds show a
+greyed slider. Mask and Dim Settings uses the same columns, so its percents
+line up with the object rows; its sliders show what the view draws today
+and are greyed. Additional Options is closed by default and its header
+counts the options that are on; its eleven checkboxes are greyed until the
+view can draw them.
 
 All of this is the board view's state, for the session; nothing touches the
 board file. Saving the view, presets and every greyed control are tracked in
