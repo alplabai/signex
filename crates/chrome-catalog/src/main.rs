@@ -1,3 +1,4 @@
+mod board_palette;
 mod bom_modal;
 mod catalog;
 mod graphite_tokens;
