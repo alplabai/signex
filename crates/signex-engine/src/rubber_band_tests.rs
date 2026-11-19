@@ -1166,6 +1166,45 @@ fn items_per_net(sheet: &SchematicSheet, stable: &std::collections::HashSet<Uuid
         .collect()
 }
 
+/// The carried wires as items, and the labels and sheet pins the plain move
+/// moved onto one of them.
+fn riding_items(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    carried: &[Uuid],
+) -> std::collections::HashSet<Item> {
+    use signex_net::{point_on_segment, pt_key};
+    let on_carried = |p: &Point| {
+        (plain.wires.iter())
+            .filter(|w| carried.contains(&w.uuid))
+            .any(|w| point_on_segment(pt_key(p), pt_key(&w.start), pt_key(&w.end)))
+    };
+    let mut out: std::collections::HashSet<Item> =
+        carried.iter().map(|id| Item::Wire(*id)).collect();
+    for label in &plain.labels {
+        let moved = (before.labels.iter())
+            .any(|old| old.uuid == label.uuid && pt_key(&old.position) != pt_key(&label.position));
+        if moved && on_carried(&label.position) {
+            out.insert(Item::Label(label.uuid));
+        }
+    }
+    let pins = |sheet: &SchematicSheet| -> Vec<(Uuid, Point)> {
+        (sheet.child_sheets.iter())
+            .flat_map(|c| c.pins.iter().map(|p| (p.uuid, p.position)))
+            .collect()
+    };
+    let was = pins(before);
+    for (id, at) in pins(plain) {
+        let moved = was
+            .iter()
+            .any(|(old, p)| *old == id && pt_key(p) != pt_key(&at));
+        if moved && on_carried(&at) {
+            out.insert(Item::SheetPin(id));
+        }
+    }
+    out
+}
+
 /// Wires the plain move moved that sit where it put them in `after` too: the
 /// selected wires, which carry their joins along.
 fn carried_wires(
@@ -1317,12 +1356,10 @@ pub(crate) fn check_closure_oracle(
         }
     }
     let (bi, pi, ri) = (net_index(&b), net_index(&p), net_index(&r));
-    // What rides on a carried wire in the plain move (the wire, a co-selected
-    // label on it) goes where the wire's kept joins go.
-    let riding: std::collections::HashSet<Item> = (p.iter())
-        .filter(|net| carried.iter().any(|id| net.contains(&Item::Wire(*id))))
-        .flat_map(|net| net.iter().cloned())
-        .collect();
+    // What rides on a carried wire goes where the wire's kept joins go: the
+    // wire itself, and a label or sheet pin the move took along that lies on
+    // it in the plain move. (Moved pins are left out of every check below.)
+    let riding = riding_items(before, plain, &carried);
     for net in &b {
         let live: Vec<&Item> = net
             .iter()
@@ -1403,6 +1440,8 @@ struct RunCounts {
     co_selected: Share,
     /// Cases that edited wires.
     rerouted: usize,
+    /// Cases whose plain move minted a pin dot (skipped by the strict check).
+    pin_joined: usize,
 }
 
 impl RunCounts {
@@ -1415,6 +1454,7 @@ impl RunCounts {
             mine.warned += theirs.warned;
         }
         self.rerouted += other.rerouted;
+        self.pin_joined += other.pin_joined;
     }
 }
 
@@ -1434,6 +1474,13 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     );
     let exercised = total.symbols_only.cases + total.co_selected.cases;
     assert!(exercised > 4000, "only {exercised} cases");
+    // The strict net check skips a case whose plain move minted a pin dot;
+    // a bound keeps that skip from growing into a blind spot.
+    assert!(
+        total.pin_joined * 10 < exercised,
+        "{} of {exercised} cases skipped the strict check for a pin dot",
+        total.pin_joined
+    );
     assert!(
         total.rerouted * 3 > exercised,
         "only {} cases rerouted wires",
@@ -1488,6 +1535,22 @@ thread_local! {
     /// The failures `property_run` collected under `RUBBER_BAND_ALL`.
     static COLLECTED: std::cell::RefCell<Vec<String>> =
         const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Whether the plain move minted a pin dot: a new dot at a moved pin end's
+/// new tip (decision 2026-11-18), not a T where wires meet.
+fn plain_pin_dots(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    items: &[SelectedItem],
+) -> bool {
+    let tips: std::collections::HashSet<_> = (crate::moved_pin_tips(plain, items).iter())
+        .map(crate::PinTip::old_key)
+        .collect();
+    plain.junctions.iter().any(|dot| {
+        !before.junctions.iter().any(|old| old.uuid == dot.uuid)
+            && tips.contains(&signex_net::pt_key(&dot.position))
+    })
 }
 
 /// One case of [`property_run`]: case `index` of `seed`.
@@ -1561,22 +1624,19 @@ fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
         "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
         describe(after)
     );
-    // A pin end the plain move put inside a wire joins it through a new
-    // dot (2026-11-18): the user's placement, which may join two nets,
-    // not the pass's doing. Such a case is held to the checks above only.
-    let pin_joined = (plain.document().junctions.iter())
-        .any(|dot| !sheet.junctions.iter().any(|old| old.uuid == dot.uuid));
-    let oracle = if pin_joined {
-        Ok(())
-    } else {
-        check_closure_oracle(
-            &sheet,
-            plain.document(),
-            after,
-            &warned_items(&sheet, &unkept),
-            &moved_pin_items(&tips),
-        )
-    };
+    // A pin end the plain move put inside a wire joins it through a new pin
+    // dot (2026-11-18): the user's placement, which may join two nets. The
+    // closure oracle reads the plain nets, so it still holds such a case; only
+    // the strict net equality below skips it (counted, and bounded).
+    let pin_joined = plain_pin_dots(&sheet, plain.document(), &items);
+    counts.pin_joined += usize::from(pin_joined);
+    let oracle = check_closure_oracle(
+        &sheet,
+        plain.document(),
+        after,
+        &warned_items(&sheet, &unkept),
+        &moved_pin_items(&tips),
+    );
     if let Err(why) = oracle {
         panic!(
             "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
@@ -1590,8 +1650,7 @@ fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
     if selects_wire || moves_power || pin_joined {
         // Co-selected items move plainly, wherever the user puts them, and
         // a power port landing on a net merges it by name: the closure
-        // oracle above is the check for these cases (for a pin join, the
-        // overlap and zero-length checks).
+        // oracle above is the check for these cases, as for a pin join.
         return;
     }
     // A warned pin keeps the old plain behaviour; every other net stays.
@@ -2191,22 +2250,9 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
     assert_eq!(e.take_unkept_pins().len(), 5);
 }
 
-/// Diagnostics for cases of `random_rubber_band_moves_never_change_the_netlist`
-/// (a SHORT the keep-wires run makes and the plain move does not); run with
+/// Diagnostic for any case of `random_rubber_band_moves_never_change_the_netlist`:
+/// `DIAG_SEED` (hex with `0x`, or decimal) and `DIAG_CASE`; run with
 /// `--ignored --nocapture`.
-#[test]
-#[ignore = "diagnostic: prints one random case"]
-fn diagnose_seed_5eed0963_case_238() {
-    diagnose_case(0x5EED_0963, 238);
-}
-
-#[test]
-#[ignore = "diagnostic: prints one random case"]
-fn diagnose_seed_5eed0963_case_364() {
-    diagnose_case(0x5EED_0963, 364);
-}
-
-/// Any case: `DIAG_SEED` (hex with `0x`, or decimal) and `DIAG_CASE`.
 #[test]
 #[ignore = "diagnostic: prints the case DIAG_SEED and DIAG_CASE name"]
 fn diagnose_case_from_env() {
