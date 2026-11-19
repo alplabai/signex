@@ -543,6 +543,14 @@ could not be opened and nothing else is opened in its place; if the symbol is
 gone but the sheet is still there, the sheet opens and the Messages panel says
 the item is no longer on it.
 
+The palette opens in the title bar's search field: you type in the field
+itself, its key cap reads `Esc` while the palette is open, and the results hang
+just under it. A typed query lists the group with the best match first (a net
+name puts **NETS** first); with nothing typed, commands come first. The footer
+says how many rows matched. On a narrow window the field becomes a square
+search button beside the theme toggle; click it, or press the palette's
+shortcut, and type in the box at the top of the results.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
