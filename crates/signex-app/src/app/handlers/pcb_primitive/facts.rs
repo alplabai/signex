@@ -58,7 +58,8 @@ impl Signex {
                     })
                     .collect();
                 let lock = item_lock(tracks.iter().any(|s| s.locked));
-                let common = self.primitive_common(board, target, lock)?;
+                let mut common = self.primitive_common(board, target, lock)?;
+                common.locked_count = mixed_lock(tracks.iter().map(|s| s.locked));
                 PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
             }
             ItemRef::Via(_) => {
@@ -71,7 +72,8 @@ impl Signex {
                     })
                     .collect();
                 let lock = item_lock(vias.iter().any(|v| v.locked));
-                let common = self.primitive_common(board, target, lock)?;
+                let mut common = self.primitive_common(board, target, lock)?;
+                common.locked_count = mixed_lock(vias.iter().map(|v| v.locked));
                 PcbPrimitiveFacts::Via(via_facts(board, common, &vias, i18n))
             }
             ItemRef::Pad { .. } => {
@@ -248,6 +250,9 @@ impl Signex {
             },
             picking_net: panel.net_pick.as_ref() == Some(&target),
             placement_paused: false,
+            hover: panel.hover.clone(),
+            unstored_open: panel.unstored_open,
+            locked_count: None,
             show_more: panel.show_more,
             search: panel.search.clone(),
             target,
@@ -471,6 +476,13 @@ fn pad_layer(fp: &signex_types::pcb::Footprint, pad: &Pad) -> Option<PcbLayer> {
     pcb_geom::copper_layers(mask)
         .first()
         .map(|c| PcbLayer::Copper(*c))
+}
+
+/// Locked and total items when only some of `locks` are set; `None` when
+/// all or none are (#2523, the header lock's tooltip).
+fn mixed_lock(locks: impl Iterator<Item = bool>) -> Option<(usize, usize)> {
+    let (locked, total) = locks.fold((0, 0), |(l, t), on| (l + usize::from(on), t + 1));
+    (locked > 0 && locked < total).then_some((locked, total))
 }
 
 /// A selection with a locked track or via takes no edit but its unlock

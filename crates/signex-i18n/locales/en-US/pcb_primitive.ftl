@@ -40,10 +40,6 @@ pcb-prim-selected = Selected
 pcb-prim-total = Total
 pcb-prim-show-more = Show More
 pcb-prim-show-less = Show Less
-# Show More rows: how much of the net is on the board.
-pcb-prim-net-tracks = Tracks on net
-pcb-prim-net-vias = Vias on net
-pcb-prim-net-pads = Pads on net
 pcb-prim-no-net = No Net
 pcb-prim-no-class = No Class
 pcb-prim-not-applicable = N/A
@@ -212,7 +208,6 @@ pcb-prim-dimension-count = { $count ->
     [one] 1 Dimension
    *[other] { $count } Dimensions
 }
-pcb-prim-center = Centre (X/Y)
 pcb-prim-radius = Radius
 # Angles are read from the board origin with Y up; the arc runs
 # counter-clockwise from the start angle to the end angle.
@@ -227,3 +222,60 @@ pcb-prim-offset = Offset
 pcb-prim-precision = Precision
 pcb-prim-value = Value
 pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6
+
+## w2/prim-shell (#2523): the panel shell, Net Information, the Track, Arc
+## and Drawing panels and their illustrations.
+# A field whose selected items differ.
+pcb-prim-mixed = Mixed
+# A value that cannot be shown yet.
+pcb-prim-no-value = —
+pcb-prim-unit-mm = mm
+pcb-prim-unit-degrees = °
+# The header lock of a selection where only some items are locked.
+pcb-prim-locked-count = { $locked } of { $total } locked
+pcb-prim-lock-unsupported = Arcs, strings, dimensions and drawings cannot be locked yet; the board does not store a lock for them.
+pcb-prim-unlock = Unlock
+pcb-prim-shelved-pill = Shelved
+# The header pill of one pad: its component's designator and the pad's.
+pcb-prim-pad-pill = { $component }-{ $pad }
+# The closed group of rows the board cannot store yet.
+pcb-prim-unstored = { $count ->
+    [one] Not stored yet · 1 row
+   *[other] Not stored yet · { $count } rows
+}
+# A closed Net Information header: the net and its class.
+pcb-prim-net-summary = { $net } · { $class }
+# After Show More: what else is on the net.
+pcb-prim-net-counts = · { $tracks ->
+    [one] 1 track
+   *[other] { $tracks } tracks
+}, { $vias ->
+    [one] 1 via
+   *[other] { $vias } vias
+}, { $pads ->
+    [one] 1 pad
+   *[other] { $pads } pads
+} on net
+pcb-prim-ends = Ends
+pcb-prim-ends-round = Round
+pcb-prim-ends-square = Square
+pcb-prim-ends-flat = Flat
+pcb-prim-ends-copper-tip = Copper keeps round ends until square and flat ends are decided for copper (DRC and Gerber).
+pcb-prim-ends-unstored-tip = Not stored yet: the board stores no end cap for a drawing, so its ends are round.
+# Point rows; their two fields are marked X and Y.
+pcb-prim-point-start = Start
+pcb-prim-point-end = End
+pcb-prim-centre = Centre
+# An arc's start and end angle on one row.
+pcb-prim-angles = Angles
+## Labels in the illustrations.
+# $value is already formatted.
+pcb-prim-drawing-width-value = Width { $value }
+pcb-prim-drawing-height = Height
+# $layer is the layer's name.
+pcb-prim-drawing-layer-ends = { $layer } · round ends
+# An inner copper layer named by its place in the stack: L1 is the top.
+pcb-prim-drawing-inner-layer = L{ $number }
+# The net of the track about to be placed.
+pcb-prim-drawing-next = { $net } · next
+pcb-prim-drawing-cursor = cursor

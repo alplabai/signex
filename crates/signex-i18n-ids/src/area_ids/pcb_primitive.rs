@@ -28,9 +28,6 @@ define_ids! {
     PCB_PRIM_TOTAL = "pcb-prim-total";
     PCB_PRIM_SHOW_MORE = "pcb-prim-show-more";
     PCB_PRIM_SHOW_LESS = "pcb-prim-show-less";
-    PCB_PRIM_NET_TRACKS = "pcb-prim-net-tracks";
-    PCB_PRIM_NET_VIAS = "pcb-prim-net-vias";
-    PCB_PRIM_NET_PADS = "pcb-prim-net-pads";
     PCB_PRIM_NO_NET = "pcb-prim-no-net";
     PCB_PRIM_NO_CLASS = "pcb-prim-no-class";
     PCB_PRIM_NOT_APPLICABLE = "pcb-prim-not-applicable";
@@ -153,7 +150,6 @@ define_ids! {
     PCB_PRIM_TEXT_COUNT = "pcb-prim-text-count";
     PCB_PRIM_DIMENSION_TITLE = "pcb-prim-dimension-title";
     PCB_PRIM_DIMENSION_COUNT = "pcb-prim-dimension-count";
-    PCB_PRIM_CENTER = "pcb-prim-center";
     PCB_PRIM_RADIUS = "pcb-prim-radius";
     PCB_PRIM_START_ANGLE = "pcb-prim-start-angle";
     PCB_PRIM_END_ANGLE = "pcb-prim-end-angle";
@@ -172,4 +168,34 @@ define_ids! {
     PCB_PRIM_POUR_COPPER = "pcb-prim-pour-copper";
     PCB_PRIM_POUR_COPPER_VALUE = "pcb-prim-pour-copper-value";
     PCB_PRIM_POUR_COPPER_TIP = "pcb-prim-pour-copper-tip";
+    // w2/prim-shell (#2523): the panel shell, Net Information, the Track,
+    // Arc and Drawing panels and their illustrations.
+    PCB_PRIM_MIXED = "pcb-prim-mixed";
+    PCB_PRIM_NO_VALUE = "pcb-prim-no-value";
+    PCB_PRIM_UNIT_MM = "pcb-prim-unit-mm";
+    PCB_PRIM_UNIT_DEGREES = "pcb-prim-unit-degrees";
+    PCB_PRIM_LOCKED_COUNT = "pcb-prim-locked-count";
+    PCB_PRIM_LOCK_UNSUPPORTED = "pcb-prim-lock-unsupported";
+    PCB_PRIM_UNLOCK = "pcb-prim-unlock";
+    PCB_PRIM_SHELVED_PILL = "pcb-prim-shelved-pill";
+    PCB_PRIM_PAD_PILL = "pcb-prim-pad-pill";
+    PCB_PRIM_UNSTORED = "pcb-prim-unstored";
+    PCB_PRIM_NET_SUMMARY = "pcb-prim-net-summary";
+    PCB_PRIM_NET_COUNTS = "pcb-prim-net-counts";
+    PCB_PRIM_ENDS = "pcb-prim-ends";
+    PCB_PRIM_ENDS_ROUND = "pcb-prim-ends-round";
+    PCB_PRIM_ENDS_SQUARE = "pcb-prim-ends-square";
+    PCB_PRIM_ENDS_FLAT = "pcb-prim-ends-flat";
+    PCB_PRIM_ENDS_COPPER_TIP = "pcb-prim-ends-copper-tip";
+    PCB_PRIM_ENDS_UNSTORED_TIP = "pcb-prim-ends-unstored-tip";
+    PCB_PRIM_POINT_START = "pcb-prim-point-start";
+    PCB_PRIM_POINT_END = "pcb-prim-point-end";
+    PCB_PRIM_CENTRE = "pcb-prim-centre";
+    PCB_PRIM_ANGLES = "pcb-prim-angles";
+    PCB_PRIM_DRAWING_WIDTH_VALUE = "pcb-prim-drawing-width-value";
+    PCB_PRIM_DRAWING_HEIGHT = "pcb-prim-drawing-height";
+    PCB_PRIM_DRAWING_LAYER_ENDS = "pcb-prim-drawing-layer-ends";
+    PCB_PRIM_DRAWING_INNER_LAYER = "pcb-prim-drawing-inner-layer";
+    PCB_PRIM_DRAWING_NEXT = "pcb-prim-drawing-next";
+    PCB_PRIM_DRAWING_CURSOR = "pcb-prim-drawing-cursor";
 }

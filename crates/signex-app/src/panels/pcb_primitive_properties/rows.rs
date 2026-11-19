@@ -49,6 +49,34 @@ pub(super) struct Section<'a> {
     look: Look<'a>,
     rows: Vec<Element<'a, PanelMsg>>,
     title: MessageId,
+    collapse: Option<Collapse<'a>>,
+}
+
+/// How a collapsible section folds: its key in the panel's collapsed set,
+/// whether it starts closed, and the summary its header shows.
+struct Collapse<'a> {
+    key: &'static str,
+    closed_by_default: bool,
+    summary: Option<Label<'a>>,
+}
+
+impl Collapse<'_> {
+    /// The entry the panel's set holds for this section. A section open by
+    /// default records "closed" under its key; one closed by default records
+    /// "opened" under `<key>:opened`.
+    fn set_key(&self) -> String {
+        if self.closed_by_default {
+            format!("{}:opened", self.key)
+        } else {
+            self.key.to_string()
+        }
+    }
+
+    fn is_closed(&self, ctx: &PanelContext) -> bool {
+        let recorded =
+            crate::panels::widgets::is_section_collapsed(&self.set_key(), &ctx.collapsed_sections);
+        recorded != self.closed_by_default
+    }
 }
 
 impl<'a> Section<'a> {
@@ -57,7 +85,24 @@ impl<'a> Section<'a> {
             look,
             rows: Vec::new(),
             title,
+            collapse: None,
         }
+    }
+
+    /// A section the chevron in its header folds; `summary` sits right in
+    /// the header (a closed Net Information names the net and its class).
+    pub fn collapsible(
+        mut self,
+        key: &'static str,
+        closed_by_default: bool,
+        summary: Option<Label<'a>>,
+    ) -> Self {
+        self.collapse = Some(Collapse {
+            key,
+            closed_by_default,
+            summary,
+        });
+        self
     }
 
     /// Add `row`, labelled `label`, when the search lets it through.
@@ -78,17 +123,34 @@ impl<'a> Section<'a> {
             return None;
         }
         let title = self.look.t(self.title);
-        let mut col: Column<Element<'a, PanelMsg>> = column![
-            container(crate::panels::widgets::section_title(
-                title,
-                self.look.tokens(),
-                &self.look.ctx.i18n
-            ))
-            .padding([SP.s, PAD_X])
-        ]
-        .spacing(SP.xs);
-        for r in self.rows {
-            col = col.push(r);
+        let Some(collapse) = self.collapse else {
+            let mut col: Column<Element<'a, PanelMsg>> = column![
+                container(crate::panels::widgets::section_title(
+                    title,
+                    self.look.tokens(),
+                    &self.look.ctx.i18n
+                ))
+                .padding([SP.s, PAD_X])
+            ]
+            .spacing(SP.xs);
+            for r in self.rows {
+                col = col.push(r);
+            }
+            return Some(col.boxed());
+        };
+        let is_closed = collapse.is_closed(self.look.ctx);
+        let header = super::linked::section_header(
+            self.look,
+            title,
+            !is_closed,
+            collapse.summary,
+            collapse.set_key(),
+        );
+        let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
+        if !is_closed {
+            for r in self.rows {
+                col = col.push(r);
+            }
         }
         Some(col.boxed())
     }
@@ -188,17 +250,48 @@ pub(super) fn field<'a>(
     unit: Option<Localized>,
     look: Look<'a>,
 ) -> Element<'a, PanelMsg> {
+    let input = input(common, field, value, look).style(form_look::text_input_style);
+    match unit {
+        Some(unit) => row![input, text(unit).size(TS.dense).color(look.muted)]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        None => input.boxed(),
+    }
+}
+
+/// The text input of `field`, unstyled: the draft while one is typed, else
+/// `value`. A value the selected items do not share reads "Mixed" in
+/// italics. It sends what is typed and Enter while the selection is
+/// editable.
+pub(super) fn input<'a>(
+    common: &PrimitiveCommon,
+    field: PrimitiveField,
+    value: Option<String>,
+    look: Look<'a>,
+) -> iced::widget::TextInput<'a, PanelMsg> {
     let shown = common
         .drafts
         .get(&field)
         .cloned()
         .or(value)
         .unwrap_or_default();
-    let mut input = text_input(UserText::new(String::new()), shown)
+    let is_mixed = shown.is_empty() && common.target.items.len() > 1;
+    let placeholder = if is_mixed {
+        Label::from(look.t(signex_i18n::ids::PCB_PRIM_MIXED))
+    } else {
+        Label::from(UserText::new(String::new()))
+    };
+    let mut input = text_input(placeholder, shown)
         .size(TS.body)
         .padding(SP.s)
-        .style(form_look::text_input_style)
         .width(Length::Fill);
+    if is_mixed {
+        input = input.font(iced::Font {
+            style: iced::font::Style::Italic,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        });
+    }
     if common.target.is_placement() && super::is_placement_focus(field) {
         input = input.id(super::PLACEMENT_INPUT_ID.clone());
     }
@@ -218,13 +311,7 @@ pub(super) fn field<'a>(
             })
             .on_submit(PanelMsg::PcbPrimitive(submitted));
     }
-    match unit {
-        Some(unit) => row![input, text(unit).size(TS.dense).color(look.muted)]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-        None => input.boxed(),
-    }
+    input
 }
 
 /// A length field in mm.
@@ -451,8 +538,17 @@ pub(super) fn template_rows<'a>(look: Look<'a>, common: &PrimitiveCommon, s: &mu
     );
 }
 
-/// The Net dropdown and its pick button.
+/// The Net row: its dropdown and pick button.
 pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, PanelMsg> {
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_NET,
+        net_value(look, common),
+    )
+}
+
+/// The Net dropdown and its pick button.
+pub(super) fn net_value<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, PanelMsg> {
     use signex_i18n::ids;
     let target = common.target.clone();
     let list = dropdown(common, &common.nets, common.net.clone(), move |choice| {
@@ -473,19 +569,30 @@ pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Elemen
         }));
     }
     let pick = with_tip(look, pick.boxed(), ids::PCB_PRIM_PICK_NET);
-    labelled(
-        look,
-        ids::PCB_PRIM_NET,
-        row![container(list).width(Length::Fill), pick]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-    )
+    row![container(list).width(Length::Fill), pick]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 /// The Layer row of an arc, string or dimension (#2373): its colour chip
 /// and a dropdown of the layers it can move to.
 pub(super) fn any_layer_row<'a>(
+    look: Look<'a>,
+    common: &'a PrimitiveCommon,
+    layers: &'a [super::AreaLayerChoice],
+    layer: Option<&'a super::AreaLayerChoice>,
+) -> Element<'a, PanelMsg> {
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_LAYER,
+        any_layer_value(look, common, layers, layer),
+    )
+}
+
+/// The colour chip and Layer dropdown of an arc, string, dimension or
+/// drawing.
+pub(super) fn any_layer_value<'a>(
     look: Look<'a>,
     common: &'a PrimitiveCommon,
     layers: &'a [super::AreaLayerChoice],
@@ -511,14 +618,10 @@ pub(super) fn any_layer_row<'a>(
             ))
         },
     );
-    labelled(
-        look,
-        signex_i18n::ids::PCB_PRIM_LAYER,
-        row![swatch, container(list).width(Length::Fill)]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-    )
+    row![swatch, container(list).width(Length::Fill)]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 /// A text field: the draft while one is typed, else `value`.
