@@ -17,6 +17,9 @@ fn blanket(class: Option<&str>) -> SchDirective {
         end: Point::new(10.0, 5.0),
         net_class: class.map(str::to_string),
         erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     }
 }
 
@@ -57,6 +60,7 @@ fn a_region_without_area_or_a_non_finite_point_is_refused() {
     let lost = SchDirective::DiffPair {
         uuid: id(3),
         position: Point::new(f64::NAN, 0.0),
+        class: None,
     };
     assert!(
         engine
@@ -183,6 +187,9 @@ fn the_properties_rows_name_the_directive_and_its_parameters() {
         end: Point::new(10.0, 5.0),
         net_class: Some("HighSpeed".into()),
         erc_exclusions: vec!["builtin::unused_pin".into(), "*".into()],
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     });
     let details = engine
         .describe_single_selection(&[item()])
@@ -194,10 +201,96 @@ fn the_properties_rows_name_the_directive_and_its_parameters() {
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.clone())
     };
-    assert_eq!(row("Type").as_deref(), Some("Blanket"));
+    assert_eq!(row("Type").as_deref(), Some("Net Blanket"));
     assert_eq!(row("Net Class").as_deref(), Some("HighSpeed"));
     assert_eq!(
         row("ERC Exclusions").as_deref(),
         Some("builtin::unused_pin, *")
     );
+}
+
+fn net_parameters(width: Option<f64>) -> SchDirective {
+    SchDirective::NetParameters {
+        uuid: id(1),
+        position: Point::new(5.0, 0.0),
+        net_class: Some("POWER_IN".into()),
+        diff_pair_class: None,
+        rules: signex_types::schematic::NetRules {
+            width_mm: width,
+            ..Default::default()
+        },
+        show_on_flag: false,
+    }
+}
+
+#[test]
+fn a_net_parameters_directive_places_as_one_step_and_its_edits_are_a_typing_run() {
+    let mut engine = placed(net_parameters(None));
+    assert_eq!(engine.document().directives, [net_parameters(None)]);
+    for width in [0.8, 0.85, 0.9] {
+        let done = engine
+            .execute(Command::UpdateDirective {
+                directive: net_parameters(Some(width)),
+            })
+            .unwrap();
+        assert!(done.changed);
+        assert_eq!(
+            done.patch_pair.map(|p| p.document),
+            Some(DocumentPatch::DIRECTIVES)
+        );
+    }
+    assert_eq!(engine.document().directives, [net_parameters(Some(0.9))]);
+    // The typing run is one step; the placement another.
+    engine.undo().unwrap();
+    assert_eq!(engine.document().directives, [net_parameters(None)]);
+    engine.undo().unwrap();
+    assert!(engine.document().directives.is_empty());
+}
+
+#[test]
+fn a_net_parameters_directive_with_a_non_finite_rule_is_refused() {
+    let mut engine = placed(net_parameters(None));
+    assert!(matches!(
+        engine.execute(Command::UpdateDirective {
+            directive: net_parameters(Some(f64::INFINITY)),
+        }),
+        Err(EngineError::InvalidDirectiveRegion)
+    ));
+    assert_eq!(engine.document().directives, [net_parameters(None)]);
+}
+
+#[test]
+fn the_properties_rows_of_net_parameters_name_its_net_and_rules() {
+    let mut sheet = test_sheet();
+    sheet.wires.push(signex_types::schematic::Wire {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(10.0, 0.0),
+        ..Default::default()
+    });
+    sheet.labels.push(signex_types::schematic::Label::new(
+        "VBUS",
+        Point::new(0.0, 0.0),
+        signex_types::schematic::LabelType::Net,
+    ));
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute(Command::PlaceDirective {
+            directive: net_parameters(Some(0.8)),
+        })
+        .unwrap();
+    let details = engine
+        .describe_single_selection(&[item()])
+        .expect("details");
+    let row = |key: &str| {
+        details
+            .info
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+    };
+    assert_eq!(row("Type").as_deref(), Some("Net Parameters"));
+    assert_eq!(row("Net Class").as_deref(), Some("POWER_IN"));
+    assert_eq!(row("Width").as_deref(), Some("0.80"));
+    assert_eq!(row("Clearance").as_deref(), Some(""));
+    assert_eq!(row("Show On Flag").as_deref(), Some("false"));
 }

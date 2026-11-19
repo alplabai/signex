@@ -665,5 +665,7 @@ define_ids! {
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
         // c13 sch-harness (#1280)
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
+        CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
+        CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";
     }
 }

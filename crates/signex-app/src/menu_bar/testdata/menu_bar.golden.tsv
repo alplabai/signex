@@ -137,10 +137,10 @@ Place/Ports & Connectors/Signal Harness	item	Signal Harness	-	-	PlaceSignalHarne
 Place/Ports & Connectors/Harness Connector	item	Harness Connector	-	-	PlaceHarnessConnector	01-00000	cmd:place_harness_connector
 Place/Ports & Connectors/Harness Entry	item	Harness Entry	-	-	PlaceHarnessEntry	01-00000	cmd:place_harness_entry
 Place/Directives	submenu	Directives	-	-	-	-	-
-Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
+Place/Directives/Net Parameters	item	Net Parameters	-	-	PlaceParameterSet	01-00000	cmd:place_parameter_set
 Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc
 Place/Directives/Differential Pair	item	Differential Pair	-	-	PlaceDiffPair	01-00000	cmd:place_diff_pair
-Place/Directives/Blanket	item	Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
+Place/Directives/Net Blanket	item	Net Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
 Place/Directives/Compile Mask	item	Compile Mask	-	-	PlaceCompileMask	01-00000	cmd:place_compile_mask
 Place/Graphics	submenu	Graphics	-	-	-	-	-
 Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
@@ -167,6 +167,7 @@ Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes
+Design/Differential Pair Classes…	item	Differential Pair Classes…	-	-	OpenDiffPairClasses	01001001	cmd:open_diff_pair_classes
 Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Design/---	separator	-	-	-	-	-	-
 Design/Create Sheet Symbol From Sheet...	item	Create Sheet Symbol From Sheet...	-	-	CreateSheetSymbolFromSheet	01000000	cmd:create_sheet_symbol_from_sheet

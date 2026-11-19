@@ -757,6 +757,8 @@ pub enum PanelMsg {
     EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// A Net Parameters edit or a hover in a directive's Properties (#1281).
+    Directive(super::DirectivePanelMsg),
     /// Edit the rules a No-ERC directive silences (#1699).
     EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font

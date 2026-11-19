@@ -19,6 +19,7 @@ use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
+mod schematic_rules;
 mod summary;
 mod table;
 #[cfg(test)]
@@ -84,14 +85,21 @@ impl Signex {
         let mut card = Column::new()
             .push(header)
             .push(container(top).padding([SP.l, SP.xl]).boxed());
+        // #1281: the rules the schematic asks for, below the board's rows.
+        let rules = schematic_rules::section(&self.update_pcb_rule_rows(state), i18n, tokens);
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
-            let scrolled = column![
+            let mut scrolled = column![
                 table::body(state, list, i18n, tokens),
                 container(notes_view(list, i18n, tokens)).padding([SP.m, SP.xl]),
             ];
+            if let Some(rules) = rules {
+                scrolled = scrolled.push(rules);
+            }
             card = card
                 .push(table::headings(i18n, tokens))
                 .push(scrollable(scrolled).height(Length::Fill).boxed());
+        } else if let Some(rules) = rules {
+            card = card.push(scrollable(rules).height(Length::Fill).boxed());
         } else {
             card = card.push(Space::new().height(Length::Fill).boxed());
         }
@@ -163,7 +171,10 @@ impl Signex {
         tokens: &ThemeTokens,
     ) -> Vec<Element<'a, Message>> {
         let ready = state.ready_list();
-        let count = state.execute_count();
+        let count = state.execute_count()
+            + crate::app::update_pcb::rules_from_schematic::pending(
+                &self.update_pcb_rule_rows(state),
+            );
         let can_execute = ready.is_some() && count > 0 && self.update_pcb_execute_block().is_none();
         let execute = match ready {
             Some(_) => t!(i18n, ids::UPDATE_PCB_EXECUTE_COUNT, "count" => count),

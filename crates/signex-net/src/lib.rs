@@ -19,7 +19,15 @@ pub use parts::{DesignPart, design_parts};
 pub mod cross_probe;
 
 mod directives;
+pub use directives::{
+    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
+    fill_pattern_classes, net_parameters,
+};
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod diff_pair_classes;
+pub use diff_pair_classes::{
+    ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
+};
 
 mod net_class;
 pub use net_class::{

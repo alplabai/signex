@@ -578,6 +578,7 @@ fn stitch_named(graph: &ProjectGraph, want: Want, naming: &ChannelNaming) -> Sti
             }),
     );
 
+    crate::directives::apply_project_classes(graph.sheets, &mut nets);
     let reports = names::collect_reports(multi, pinless, &nets);
     Stitched {
         netlist: ProjectNetlist {

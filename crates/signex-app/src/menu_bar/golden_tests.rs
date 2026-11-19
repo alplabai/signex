@@ -474,6 +474,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_signal_harness", "PlaceSignalHarness"),
     ("place_harness_connector", "PlaceHarnessConnector"),
     ("place_harness_entry", "PlaceHarnessEntry"),
+    // #1281, #1489: Net Parameters goes live; the diff-pair class dialog.
+    ("place_parameter_set", "PlaceParameterSet"),
+    ("open_diff_pair_classes", "OpenDiffPairClasses"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

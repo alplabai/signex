@@ -175,6 +175,15 @@ pub(super) const NETS: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+    // #1489: Design ▸ Differential Pair Classes… opens the project's class
+    // dialog; OK applies it as one step of the project history. No key.
+    CommandMetadata {
+        id: "open_diff_pair_classes",
+        category: "design",
+        label: command_ids::CMD_OPEN_DIFF_PAIR_CLASSES,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DIFF_PAIR_CLASSES),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

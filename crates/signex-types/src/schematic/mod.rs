@@ -838,6 +838,9 @@ pub use directive::{
     ALL_ERC_RULES, DIFF_PAIR_SUFFIXES, DirectiveKind, SchDirective, diff_pair_base,
     parse_erc_exclusions,
 };
+pub use directive::{
+    BlanketPour, DIFF_PAIR_SUFFIX_PAIRS, DiffPairHalves, NetRules, diff_pair_halves,
+};
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod sheet;

@@ -121,6 +121,9 @@ impl Signex {
             }
             ActiveBarAction::PlaceHarnessEntry => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::HarnessEntry)));
+            // #1281: one click on a wire places the Net Parameters flag.
+            ActiveBarAction::PlaceParameterSet => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NetParameters)));
             }
             // Sheet symbol has its own tool: a hierarchical sheet, not a
             // plain rectangle.

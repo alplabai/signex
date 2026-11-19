@@ -112,7 +112,10 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
-`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420), and
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
+`place_parameter_set` (#1281: `at` on a wire, refused off one; optional
+`class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
+`via_hole` in mm, and `current` in A, information only), and
 `edit_no_erc_rules` (#1699, see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
 `document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on

@@ -6,6 +6,8 @@
 mod detail;
 mod matrix;
 mod presets;
+// #1281: "from schematic" under a rule Update PCB wrote.
+mod schematic_source;
 mod sets;
 mod table;
 mod text_view;

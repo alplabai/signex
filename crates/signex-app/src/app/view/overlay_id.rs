@@ -105,6 +105,8 @@ pub(crate) enum OverlayId {
     BoardReannotate,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
+    /// Design ▸ Differential Pair Classes… (#1489).
+    DiffPairClasses,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
@@ -150,7 +152,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -202,6 +204,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::SheetSync,
     OverlayId::BoardReannotate,
     OverlayId::FabOutputs,
+    OverlayId::DiffPairClasses,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
     OverlayId::AnnotateDialog,
@@ -330,6 +333,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::SheetSync
         | OverlayId::BoardReannotate
         | OverlayId::FabOutputs
+        | OverlayId::DiffPairClasses
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
         | OverlayId::AnnotateDialog
@@ -555,6 +559,7 @@ impl Signex {
             OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
+            OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),

@@ -348,6 +348,14 @@ impl Signex {
             .then(|| self.view_board_reannotate_dialog())
     }
 
+    /// Design ▸ Differential Pair Classes… (#1489), while open.
+    pub(in crate::app::view) fn diff_pair_classes_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .diff_pair_classes
+            .is_some()
+            .then(|| self.view_diff_pair_classes_dialog())
+    }
+
     pub(in crate::app::view) fn fab_outputs_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .fab_outputs

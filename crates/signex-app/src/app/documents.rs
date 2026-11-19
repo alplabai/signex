@@ -1064,6 +1064,8 @@ pub enum Tool {
     HarnessConnector,
     /// One click on a connector's flat side adds an entry there (#1280).
     HarnessEntry,
+    /// One click on a wire places a Net Parameters flag there (#1281).
+    NetParameters,
 }
 
 impl std::fmt::Display for Tool {
@@ -1088,7 +1090,7 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
-            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::Blanket => write!(f, "Place Net Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
             Tool::Bezier => write!(f, "Draw Bezier"),
@@ -1098,6 +1100,7 @@ impl std::fmt::Display for Tool {
             Tool::HarnessWire => write!(f, "Draw Signal Harness"),
             Tool::HarnessConnector => write!(f, "Place Harness Connector"),
             Tool::HarnessEntry => write!(f, "Place Harness Entry"),
+            Tool::NetParameters => write!(f, "Place Net Parameters"),
         }
     }
 }

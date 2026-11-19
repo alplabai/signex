@@ -105,6 +105,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("corners", OperandKind::Text),
     // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
     ("rules", OperandKind::Text),
+    // #1281: a Net Parameters directive's diff-pair class, via hole and
+    // current (A).
+    ("diff_pair_class", OperandKind::Text),
+    ("via_hole", OperandKind::Text),
+    ("current", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

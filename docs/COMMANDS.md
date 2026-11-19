@@ -131,6 +131,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
+| `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
@@ -252,7 +253,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_rectangle` | Draw rectangle | place | — | — |
 | `draw_round_rectangle` | Draw round rectangle | place | — | — |
 | `draw_wire` | Draw wire | place | — | — |
-| `edit_blanket` | Edit blanket parameters | place | — | — |
+| `edit_blanket` | Edit net blanket parameters | place | — | — |
 | `edit_no_erc_rules` | Edit No ERC rules | place | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
@@ -276,7 +277,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
 | `open_selection_filter` | Open the selection filter of the sheet | select | — | — |
-| `place_blanket` | Place blanket | place | — | — |
+| `place_blanket` | Place net blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | `P U` | `Z` |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
@@ -296,7 +297,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_no_erc` | Place Generic No ERC directive | place | `P V N` | — |
 | `place_note` | Place note | place | — | — |
 | `place_off_sheet_connector` | Place off sheet connector | place | `P C` | `H` |
-| `place_parameter_set` | Place parameter set | place | — | — |
+| `place_parameter_set` | Place net parameters | place | — | — |
 | `place_port` | Place port | place | `P R` | `Mod+L` |
 | `place_power_symbol` | Place power symbol | place | — | `P` |
 | `place_reuse_block` | Place reuse block | place | — | — |

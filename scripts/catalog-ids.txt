@@ -166,6 +166,7 @@ open_command_palette
 open_compiled_design
 open_components_panel
 open_datasheet
+open_diff_pair_classes
 open_document
 open_drc_panel
 open_erc_dialog

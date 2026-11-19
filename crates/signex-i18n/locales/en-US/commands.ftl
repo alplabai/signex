@@ -372,14 +372,15 @@ cmd-place-port = Place port
 cmd-menu-place-port = Port
 cmd-place-off-sheet-connector = Place off sheet connector
 cmd-menu-place-off-sheet-connector = Off Sheet Connector
-cmd-place-parameter-set = Place parameter set
-cmd-menu-place-parameter-set = Parameter Set
+cmd-place-parameter-set = Place net parameters
+# Noun: a directive flag on one wire that sets its net's class and rules.
+cmd-menu-place-parameter-set = Net Parameters
 cmd-place-diff-pair = Place diff pair
 cmd-menu-place-diff-pair = Differential Pair
-cmd-place-blanket = Place blanket
+cmd-place-blanket = Place net blanket
 # Noun: a directive that covers an area of the sheet.
-cmd-menu-place-blanket = Blanket
-cmd-edit-blanket = Edit blanket parameters
+cmd-menu-place-blanket = Net Blanket
+cmd-edit-blanket = Edit net blanket parameters
 cmd-edit-no-erc-rules = Edit No ERC rules
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
@@ -692,3 +693,6 @@ cmd-menu-open-compiled-design = Compiled Design
 ## c13 sch-harness
 
 cmd-open-harness-definitions = Open the harness definitions
+## c13 sch-net-directives
+cmd-open-diff-pair-classes = Open the project's differential pair classes
+cmd-menu-open-diff-pair-classes = Differential Pair Classes…

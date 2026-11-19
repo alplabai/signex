@@ -46,4 +46,10 @@ define_ids! {
     UPDATE_PCB_FIX_SHEET_CLOSED = "update-pcb-fix-sheet-closed";
     UPDATE_PCB_FIX_NOT_SET = "update-pcb-fix-not-set";
     UPDATE_PCB_EXECUTE_COUNT = "update-pcb-execute-count";
+    UPDATE_PCB_SCHEMATIC_RULES = "update-pcb-schematic-rules";
+    UPDATE_PCB_RULE_CHANGED = "update-pcb-rule-changed";
+    UPDATE_PCB_RULE_ADDED = "update-pcb-rule-added";
+    UPDATE_PCB_RULE_UNCHANGED = "update-pcb-rule-unchanged";
+    UPDATE_PCB_RULE_WAS = "update-pcb-rule-was";
+    UPDATE_PCB_RULES_NOTE = "update-pcb-rules-note";
 }

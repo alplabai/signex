@@ -144,3 +144,15 @@ new-pcb-exists = A file named { $file } is already in the project folder.
 new-pcb-check-failed = Could not check whether { $file } is already in the project folder: { $why }
 new-pcb-no-project = Open a project to add a PCB to it.
 new-pcb-created = Created { $board } in { $project }. It is written when you save it.
+
+## c13 sch-net-directives
+## Update PCB: the rules the schematic's Net Parameters directives ask for (#1281).
+
+update-pcb-schematic-rules = Rules from the schematic
+# Execute rewrites a rule of that name edited in the Rules tab: the schematic wins.
+update-pcb-rule-changed = differs · schematic wins
+update-pcb-rule-added = new rule
+update-pcb-rule-unchanged = up to date
+# The rule as the Rules tab has it now. $text is a line of rule text.
+update-pcb-rule-was = now: { $text }
+update-pcb-rules-note = Execute writes these into the project's design rules, marked "from schematic" in the Rules tab.

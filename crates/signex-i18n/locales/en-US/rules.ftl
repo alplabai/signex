@@ -190,3 +190,7 @@ rules-preset-changed = Changed { $rule }
 rules-preset-removed = Removed { $rule }
 rules-preset-apply = Apply
 rules-preset-cancel = Cancel
+
+## c13 sch-net-directives
+# Under a rule Update PCB wrote from the schematic's Net Parameters directives (#1281).
+rules-from-schematic = from schematic

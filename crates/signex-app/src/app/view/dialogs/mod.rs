@@ -18,6 +18,8 @@ mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
 mod confirms;
 mod create_child_sheet;
+// #1489: Design ▸ Differential Pair Classes….
+mod diff_pair_classes;
 mod erc;
 mod fab_outputs;
 mod graphite;

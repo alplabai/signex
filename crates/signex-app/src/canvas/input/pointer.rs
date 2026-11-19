@@ -49,7 +49,8 @@ impl SchematicCanvas<'_> {
             | Tool::Table
             | Tool::HarnessWire
             | Tool::HarnessConnector
-            | Tool::HarnessEntry => true,
+            | Tool::HarnessEntry
+            | Tool::NetParameters => true,
         }
     }
 

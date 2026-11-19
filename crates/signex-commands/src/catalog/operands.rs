@@ -130,6 +130,20 @@ pub const EDIT_BLANKET: &[Operand] = &[
     optional("exclude", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// A Net Parameters directive (#1281): the point on a wire it sits on, the
+/// net class and diff-pair class it gives that net, and its routing rules
+/// (lengths in mm, `current` in A, information only).
+pub const NET_PARAMETERS: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("class", OperandKind::Text),
+    optional("diff_pair_class", OperandKind::Text),
+    optional("width", OperandKind::Text),
+    optional("clearance", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_hole", OperandKind::Text),
+    optional("current", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// A wire run, checked against the sheet before it lands (#2199): `allow_merge`
 /// lets it join two differently named nets, `allow_open` leaves an end
 /// unconnected, `dry_run` reports without changing anything.

@@ -227,6 +227,9 @@ impl Signex {
                 self.directive_region_point(tool, p, ClickKind::Click);
             }
             Tool::DiffPair => self.diff_pair_click(signex_types::schematic::Point::new(wx, wy)),
+            Tool::NetParameters => {
+                self.net_parameters_click(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Text => {
                 let note_text = self
                     .document_state

@@ -190,6 +190,9 @@ fn blanket(n: u128, class: &str) -> SchDirective {
         end: pt(140.0, 5.0 * n as f64 + 3.0),
         net_class: Some(class.to_string()),
         erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     }
 }
 

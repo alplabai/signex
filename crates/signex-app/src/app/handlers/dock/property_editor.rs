@@ -165,7 +165,10 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
-                self.edit_blanket_field(*uuid, edit);
+                self.blanket_panel_edited(*uuid, edit);
+            }
+            crate::panels::PanelMsg::Directive(event) => {
+                self.directive_panel_event(event);
             }
             crate::panels::PanelMsg::EditNoErcRules(uuid, edit) => {
                 self.edit_no_erc_rules(*uuid, edit);

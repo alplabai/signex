@@ -825,6 +825,11 @@
     "category": "edit"
   },
   {
+    "id": "open_diff_pair_classes",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "open_document",
     "group": "General",
     "category": "file"

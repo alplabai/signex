@@ -47,6 +47,15 @@ pub(crate) use body_row::{
 pub(super) use channel_view::channel_view_properties;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
+// #1281: the Net Parameters and Net Blanket surfaces.
+mod blanket;
+#[cfg(test)]
+mod net_directive_tests;
+mod net_parameters;
+pub use directive::{
+    BlanketNetRow, DirectivePanel, DirectivePanelMsg, DraftField, NetParametersEdit, NetRule,
+    OutlineField,
+};
 pub(super) use drawing::view_drawing_properties;
 pub(super) use font_row::font_family_row;
 pub use footprint_card::{

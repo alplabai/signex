@@ -97,6 +97,9 @@ pub enum ProjectGeneralCommand {
     /// The kinds of file Fabrication Outputs writes (#2489); `None` is the
     /// defaults. Always a step of its own.
     SetFabOutputs(Option<FabOutputKinds>),
+    /// The project's differential pair classes as the Differential Pair
+    /// Classes dialog's OK leaves them (#1489). Always a step of its own.
+    SetDiffPairClasses(Vec<signex_types::diff_pair_class::DiffPairClass>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -126,6 +129,7 @@ struct GeneralSnapshot {
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
     fab_outputs: Option<FabOutputKinds>,
+    diff_pair_classes: Vec<signex_types::diff_pair_class::DiffPairClass>,
     sections: SectionsSnapshot,
     /// The project's rules, held only by the two sides of a
     /// [`ProjectGeneralCommand::SetFabTier`] step.
@@ -142,6 +146,7 @@ impl GeneralSnapshot {
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
             fab_outputs: data.fab_outputs,
+            diff_pair_classes: data.schematic_design.diff_pair_classes.clone(),
             sections: SectionsSnapshot::of(data),
             rules: None,
         }
@@ -168,6 +173,7 @@ impl GeneralSnapshot {
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
         data.fab_outputs = self.fab_outputs;
+        data.schematic_design.diff_pair_classes = self.diff_pair_classes;
         self.sections.restore(data);
     }
 }
@@ -252,6 +258,7 @@ impl ProjectGeneralHistory {
                 | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
                 | ProjectGeneralCommand::SetFabTier { .. }
                 | ProjectGeneralCommand::SetFabOutputs(_)
+                | ProjectGeneralCommand::SetDiffPairClasses(_)
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -309,6 +316,9 @@ impl ProjectGeneralHistory {
                 data.rules = Some(*rules);
             }
             ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
+            ProjectGeneralCommand::SetDiffPairClasses(classes) => {
+                data.schematic_design.diff_pair_classes = classes;
+            }
         }
         if GeneralSnapshot::of_step(data, owns_rules) == before {
             return false;

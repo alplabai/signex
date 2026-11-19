@@ -438,7 +438,7 @@ fn place_menu_greys_only_the_planned_tools() {
     // (#1249), which are greyed with the shared tooltip.
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {
-            let planned = matches!(it.label.as_str(), "Parameter Set" | "Device Sheet Symbol");
+            let planned = matches!(it.label.as_str(), "Device Sheet Symbol");
             assert_eq!(it.disabled, planned, "{}", it.label);
             assert_eq!(
                 it.tooltip.as_deref(),
@@ -548,10 +548,10 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "VCC Power Port",
             "+5 Power Port",
             "+12 Power Port",
-            "Parameter Set",
+            "Net Parameters",
             "Generic No ERC",
             "Differential Pair",
-            "Blanket",
+            "Net Blanket",
             "Compile Mask",
             "Signal Harness",
             "Harness Connector",

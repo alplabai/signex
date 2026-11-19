@@ -259,3 +259,66 @@ dialog-title-library-recovery = Library Recovery
 dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
+
+## c13 sch-net-directives
+## Design ▸ Differential Pair Classes… (#1489).
+
+dialog-dpc-title = Differential Pair Classes
+# $project is the project name; $classes and $pairs are whole numbers.
+dialog-dpc-subtitle = { $project } · { $classes ->
+        [one] { $classes } class
+       *[other] { $classes } classes
+    } · { $pairs ->
+        [one] { $pairs } pair
+       *[other] { $pairs } pairs
+    }
+# Under a class name: how many pairs use it. $count is a whole number.
+dialog-dpc-pairs = { $count ->
+        [one] { $count } pair
+       *[other] { $count } pairs
+    }
+# The button that opens a class row's menu.
+dialog-dpc-menu = ⋯
+dialog-dpc-rename = Rename
+dialog-dpc-duplicate = Duplicate
+dialog-dpc-delete = Delete
+dialog-dpc-new-class = New class
+dialog-dpc-pairs-from = Pairs come from Differential Pair directives on the schematic, or from Create Pair from Nets in the PCB panel.
+dialog-dpc-class = Class
+dialog-dpc-name = Name
+dialog-dpc-impedance = Impedance
+dialog-dpc-width-gap = Width / Gap
+dialog-dpc-on-top = on Top, from the stack
+dialog-dpc-max-skew = Max skew
+dialog-dpc-max-uncoupled = Max uncoupled
+# A limit the Rules tab owns and no rule sets yet.
+dialog-dpc-not-set = —
+dialog-dpc-edit-in-rules = Edit in Rules ▸ High Speed
+dialog-dpc-unit-mm = mm
+dialog-dpc-unit-ohm = Ω
+dialog-dpc-unit-pct = %
+dialog-dpc-plus-minus = ±
+dialog-dpc-members = Members
+dialog-dpc-col-pair = Pair
+dialog-dpc-col-p = P net
+dialog-dpc-col-n = N net
+dialog-dpc-col-source = Source
+# Where a pair comes from. $sheet is the sheet file.
+dialog-dpc-source-directive = directive · { $sheet }
+dialog-dpc-no-members = No pair on the open sheets uses this class.
+dialog-dpc-pairing = Pairing
+dialog-dpc-pair-by-suffix = Pair nets by suffix _P/_N, DP/DN, +/-
+dialog-dpc-no-class = The project has no differential pair class. Add one with New class.
+dialog-dpc-footer = Shown in PCB panel ▸ Differential Pairs mode.
+dialog-dpc-cancel = Cancel
+dialog-dpc-ok = OK
+dialog-dpc-blank-name = Every class needs a name.
+dialog-dpc-duplicate-name = Two classes have the same name.
+# Callouts of the preview. $value is a length in mm, or —.
+dialog-dpc-width-label = Width { $value } mm
+dialog-dpc-gap-label = Gap { $value } mm
+dialog-dpc-zdiff-label = Zdiff { $ohm } Ω ± { $pct } %
+dialog-dpc-p-net = P net
+dialog-dpc-n-net = N net
+dialog-dpc-no-project = Differential Pair Classes: open a project first.
+dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
