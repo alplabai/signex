@@ -16,7 +16,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::dimension::Dimension;
-use crate::symbols::{LiteralContext, apply_suffix, is_unit_char, prefix_factor};
+use crate::symbols::{
+    LiteralContext, apply_suffix, is_unit_char, prefix_factor, refuses_prefix_only,
+};
 
 /// A unit attached to a [`Quantity`].
 ///
@@ -242,8 +244,9 @@ pub fn parse_quantity(s: &str) -> Result<Quantity, UnitError> {
     parse_quantity_with(s, LiteralContext::General)
 }
 
-/// [`parse_quantity`] in an explicit context; only a bare `m` reads
-/// differently (see [`crate::symbols::bare_m_meaning`]).
+/// [`parse_quantity`] in an explicit context: a bare `m` reads differently
+/// (see [`crate::symbols::bare_m_meaning`]), and
+/// [`LiteralContext::Geometry`] refuses prefix-only and RKM literals.
 pub fn parse_quantity_with(s: &str, context: LiteralContext) -> Result<Quantity, UnitError> {
     let trimmed = s.trim();
     let (num_part, suffix) = split_suffix(trimmed);
@@ -254,6 +257,7 @@ pub fn parse_quantity_with(s: &str, context: LiteralContext) -> Result<Quantity,
         return Err(UnitError::Parse(s.to_string()));
     }
     let value = match parse_rkm(num) {
+        Some(_) if refuses_prefix_only(context) => return Err(UnitError::Parse(s.to_string())),
         Some(v) => v,
         None => parse_finite(num, s)?,
     };

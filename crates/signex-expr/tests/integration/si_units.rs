@@ -122,3 +122,23 @@ fn values_show_in_their_named_unit() {
     assert_eq!(value("2.54mm").unwrap().to_string(), "2.54mm");
     assert_eq!(value("4.7k").unwrap().to_string(), "4700");
 }
+
+#[test]
+fn geometry_context_refuses_prefix_only_literals() {
+    assert_eq!(bare_m_meaning(LiteralContext::Geometry), BareM::Refused);
+    for literal in ["10m", "1u", "4k7", "2n", "2n2", "5k"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Geometry).is_err(),
+            "{literal} must be refused in a sketch parameter"
+        );
+    }
+    assert_eq!(
+        parse_quantity_with("10mm", LiteralContext::Geometry).unwrap(),
+        Quantity::length(10.0)
+    );
+    assert_eq!(
+        parse_quantity_with("16", LiteralContext::Geometry).unwrap(),
+        Quantity::count(16.0)
+    );
+    assert!(signex_expr::parse_with("1u + 1mm", LiteralContext::Geometry).is_err());
+}

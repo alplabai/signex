@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Controls for scripts/check_routing_corpus.sh: each shape the gate must catch
-# fails it, and a complete corpus passes.
+# fails it, and a complete corpus passes. Portable like the gate: bash 3.2
+# (macOS) and POSIX tools, no `sed -i`.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,7 +11,8 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 failures=0
 
-HEADER=$'slug\tupstream\tcommit\tsource_path\tspdx\tlicense_source\tlicense_text\tnotice\tattribution\tnotes\tconverter\tloss_report\tlayers\tsize_class'
+TAB="$(printf '\t')"
+HEADER="slug${TAB}upstream${TAB}commit${TAB}source_path${TAB}spdx${TAB}license_source${TAB}license_text${TAB}notice${TAB}attribution${TAB}notes${TAB}converter${TAB}loss_report${TAB}layers${TAB}size_class"
 SHA=0123456789abcdef0123456789abcdef01234567
 
 # row <slug> <spdx> <notice>
@@ -97,8 +99,37 @@ printf 'x\n' > "$TMP/short_sha/$C/board-51.snxpcb"
 expect short_sha fail
 
 make_tree "$TMP/wrong_header" 50
-sed -i '1s/^slug/name/' "$TMP/wrong_header/$C/MANIFEST.tsv"
+sed '1s/^slug/name/' "$TMP/wrong_header/$C/MANIFEST.tsv" > "$TMP/wrong_header.tsv"
+mv "$TMP/wrong_header.tsv" "$TMP/wrong_header/$C/MANIFEST.tsv"
 expect wrong_header fail
+
+# The use rule: only testdata/ and the routing tests read the corpus.
+make_tree "$TMP/read_by_app_code" 50
+mkdir -p "$TMP/read_by_app_code/crates/signex-app/src"
+printf 'const BOARD: &str = "../../testdata/routing-corpus/board-1.snxpcb";\n' \
+  > "$TMP/read_by_app_code/crates/signex-app/src/demo.rs"
+expect read_by_app_code fail
+
+make_tree "$TMP/read_by_an_example" 50
+mkdir -p "$TMP/read_by_an_example/examples/demo"
+printf '{"pcb_file": "../../testdata/routing-corpus/board-1.snxpcb"}\n' \
+  > "$TMP/read_by_an_example/examples/demo/demo.snxprj"
+expect read_by_an_example fail
+
+make_tree "$TMP/read_by_another_engine_test" 50
+mkdir -p "$TMP/read_by_another_engine_test/crates/signex-engine/tests/output"
+printf 'let dir = "testdata/routing-corpus";\n' \
+  > "$TMP/read_by_another_engine_test/crates/signex-engine/tests/output/golden.rs"
+expect read_by_another_engine_test fail
+
+make_tree "$TMP/read_by_the_routing_tests" 50
+mkdir -p "$TMP/read_by_the_routing_tests/crates/signex-engine/tests/routing"
+printf 'let dir = "../../testdata/routing-corpus";\n' \
+  > "$TMP/read_by_the_routing_tests/crates/signex-engine/tests/routing/fixtures.rs"
+mkdir -p "$TMP/read_by_the_routing_tests/docs"
+printf 'The boards live in `testdata/routing-corpus/`.\n' \
+  > "$TMP/read_by_the_routing_tests/docs/PCB_TOOLS.md"
+expect read_by_the_routing_tests pass
 
 # A tree without the manifest is an error, never a pass.
 mkdir -p "$TMP/no_manifest"

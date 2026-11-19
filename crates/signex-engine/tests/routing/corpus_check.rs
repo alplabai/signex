@@ -139,9 +139,19 @@ fn fault(fixture: &Fixture) -> Option<String> {
     }
 }
 
+/// Set to `1` where the corpus's Git LFS objects were fetched (CI does when
+/// the corpus or its readers change): an unfetched board or an empty corpus
+/// then fails instead of being skipped.
+const REQUIRE_CORPUS: &str = "SIGNEX_REQUIRE_ROUTING_CORPUS";
+
 #[test]
 fn every_corpus_board_loads_with_the_converter_invariants() {
+    let required = std::env::var(REQUIRE_CORPUS).is_ok_and(|v| v == "1");
     let paths = corpus_paths();
+    assert!(
+        !required || !paths.is_empty(),
+        "{REQUIRE_CORPUS}=1 but testdata/routing-corpus holds no boards"
+    );
     let workers = thread::available_parallelism().map_or(2, |n| n.get());
     let chunk = paths.len().div_ceil(workers).max(1);
     let faults: Vec<String> = thread::scope(|scope| {
@@ -150,8 +160,14 @@ fn every_corpus_board_loads_with_the_converter_invariants() {
             .map(|part| {
                 scope.spawn(move || {
                     part.iter()
-                        .filter_map(|path| load(path))
-                        .filter_map(|fixture| fault(&fixture))
+                        .filter_map(|path| match load(path) {
+                            Some(fixture) => fault(&fixture),
+                            None if required => Some(format!(
+                                "{}: a Git LFS pointer, not a board ({REQUIRE_CORPUS}=1)",
+                                path.display()
+                            )),
+                            None => None,
+                        })
                         .collect::<Vec<_>>()
                 })
             })
