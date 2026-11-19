@@ -205,8 +205,17 @@ pub fn muted_text(tokens: &ThemeTokens) -> Color {
     ti(tokens.text_secondary)
 }
 
-/// Text of a disabled control: secondary text at half strength.
+/// Text of a disabled control: the theme's `ink4` when it sets one (both
+/// Graphite themes do), else secondary text at half strength.
 pub fn disabled_text(tokens: &ThemeTokens) -> Color {
+    tokens
+        .extended
+        .ink4
+        .map_or_else(|| half_secondary(tokens), ti)
+}
+
+/// Secondary text at half strength: the derived `ink4`.
+fn half_secondary(tokens: &ThemeTokens) -> Color {
     let c = ti(tokens.text_secondary);
     Color { a: c.a * 0.5, ..c }
 }
@@ -305,7 +314,7 @@ pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
         ),
         line_strong: pick(e.line_strong, ti(tokens.border)),
         ink3: pick(e.ink3, muted_text(tokens)),
-        ink4: pick(e.ink4, disabled_text(tokens)),
+        ink4: pick(e.ink4, half_secondary(tokens)),
         accent_text: pick(e.accent_text, accent),
         accent_soft: pick(e.accent_soft, tint(accent, SOFT_TINT_ALPHA)),
         accent_soft_ink: pick(e.accent_soft_ink, ti(tokens.text)),

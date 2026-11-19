@@ -60,6 +60,7 @@ impl Catalog {
     fn view(&self) -> Element<'_, Message> {
         let tokens = &self.tokens;
         let body = column![
+            crate::graphite_tokens::section(self.theme, tokens),
             section::view(
                 "Document tabs (3 visible, middle is active)",
                 tokens,

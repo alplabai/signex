@@ -3,7 +3,8 @@
 //! The colour tokens in [`super::tokens`] stop a view from hard-coding a
 //! colour; these stop it from hard-coding `.size(11)` / `.padding([4, 14])`.
 //! Both scales are pure functions of a single base size, so a future
-//! base-font-size preference rescales the whole chrome from one number.
+//! base-font-size preference rescales the whole chrome from one number. The
+//! values live in `signex_widgets::theme_ext` so widgets read the same scale.
 //!
 //! There is no base-size preference yet (only `ui_font` is persisted), so
 //! views read [`TypeScale::default`] / [`Spacing::default`], which is the
@@ -31,118 +32,6 @@
 //! Literals outside the table fold onto `heading` (15, 16), `display` (20),
 //! `glyph` (24), `banner` (the 64 px pause icon) and `micro` (4, separator rows).
 
-/// Base size, in px, that the scales are defined against. It is the `body`
-/// size.
-pub const DEFAULT_BASE_SIZE: f32 = 12.0;
-
-/// The base the ratios in this file were authored against: the pre-#1956
-/// `body` literal. Lengths written in px at that base are rescaled by
-/// [`chrome_px`].
-const REFERENCE_BASE_SIZE: f32 = 11.0;
-
-/// A fixed chrome length, authored in px at an 11 px base, scaled to the
-/// default base so it keeps its proportion to the text it holds.
-pub const fn chrome_px(px_at_reference: f32) -> f32 {
-    px_at_reference * DEFAULT_BASE_SIZE / REFERENCE_BASE_SIZE
-}
-
-/// iced's default relative line height (the fork's `LineHeight::default()`;
-/// 0.14 used 1.3). Chrome heights that hold one line of text derive from it;
-/// `typography_tests` ties it to the framework value.
-pub const LINE_HEIGHT: f32 = 1.375;
-
-/// Thickness, in px, of a divider rule. A line weight, not a spacing gap, so
-/// it stays 1 px whatever the base size.
-pub const HAIRLINE: f32 = 1.0;
-
-/// Text sizes, smallest to largest.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TypeScale {
-    /// Hints, secondary status lines, small badges (10 px at an 11 px base).
-    pub caption: f32,
-    /// Uppercase section labels (11 px at the default 12 px base).
-    pub section: f32,
-    /// Default running text and controls (11 px at an 11 px base).
-    pub body: f32,
-    /// Dense tables and mono readouts (12 px at the default 12 px base).
-    pub dense: f32,
-    /// Emphasised control labels and inputs (12 px at an 11 px base).
-    pub label: f32,
-    /// Card / section titles (13 px at an 11 px base).
-    pub title: f32,
-    /// Dialog headings (14 px at an 11 px base).
-    pub heading: f32,
-    /// Product name in the About card (20 px).
-    pub display: f32,
-    /// Status icons drawn as text glyphs (24 px).
-    pub glyph: f32,
-    /// Rows of rule characters used as thin separators (4 px).
-    pub micro: f32,
-    /// The large pause icon on the placement-paused card (64 px).
-    pub banner: f32,
-}
-
-impl TypeScale {
-    /// The scale at [`DEFAULT_BASE_SIZE`].
-    pub const DEFAULT: Self = Self::from_base(DEFAULT_BASE_SIZE);
-
-    /// Derive every step from `base` (the `body` size).
-    pub const fn from_base(base: f32) -> Self {
-        Self {
-            caption: base * 10.0 / 11.0,
-            section: base * 11.0 / 12.0,
-            body: base,
-            dense: base,
-            label: base * 12.0 / 11.0,
-            title: base * 13.0 / 11.0,
-            heading: base * 14.0 / 11.0,
-            display: base * 20.0 / 11.0,
-            glyph: base * 24.0 / 11.0,
-            micro: base * 4.0 / 11.0,
-            banner: base * 64.0 / 11.0,
-        }
-    }
-}
-
-impl Default for TypeScale {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
-
-/// Padding / gap steps, smallest to largest.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Spacing {
-    /// Hairline gaps between tightly packed items (2 px at an 11 px base).
-    pub xs: f32,
-    /// Control padding, list-row gaps (4 px).
-    pub s: f32,
-    /// Standard gap between controls (8 px).
-    pub m: f32,
-    /// Section and card padding (12 px at an 11 px base).
-    pub l: f32,
-    /// Outer dialog padding (16 px).
-    pub xl: f32,
-}
-
-impl Spacing {
-    /// The scale at [`DEFAULT_BASE_SIZE`].
-    pub const DEFAULT: Self = Self::from_base(DEFAULT_BASE_SIZE);
-
-    /// Derive every step from `base` (the `body` size).
-    pub const fn from_base(base: f32) -> Self {
-        Self {
-            xs: base * 2.0 / 11.0,
-            s: base * 4.0 / 11.0,
-            m: base * 8.0 / 11.0,
-            l: base * 12.0 / 11.0,
-            xl: base * 16.0 / 11.0,
-        }
-    }
-}
-
-impl Default for Spacing {
-    fn default() -> Self {
-        Self::DEFAULT
-    }
-}
+pub use signex_widgets::theme_ext::{
+    DEFAULT_BASE_SIZE, HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px,
+};
