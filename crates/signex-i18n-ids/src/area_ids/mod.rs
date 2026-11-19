@@ -16,6 +16,7 @@ mod editors;
 mod fab_outputs;
 mod file_dialog;
 mod find;
+mod fp_props;
 mod library;
 mod notice;
 mod overlay;
@@ -50,6 +51,7 @@ pub use editors::*;
 pub use fab_outputs::*;
 pub use file_dialog::*;
 pub use find::*;
+pub use fp_props::*;
 pub use library::*;
 pub use notice::*;
 pub use overlay::*;
@@ -88,6 +90,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
         find::FIND,
+        fp_props::FP_PROPS,
         library::LIBRARY,
         notice::NOTICE,
         overlay::OVERLAY,

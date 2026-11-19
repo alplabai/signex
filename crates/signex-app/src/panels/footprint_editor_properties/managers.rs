@@ -1,241 +1,155 @@
-//! Grid Manager + Other section + grid_manager_btn — the per-editor
-//! library Options surfaces below the Pad form.
+//! The Grid Manager: a compact table of the editor's grids (Name / Step /
+//! Display), "+ Add" in the header, Properties… and Delete acting on the
+//! active grid. The first column picks the active grid; its step is
+//! editable in place, the other rows read greyed.
 
-use iced::widget::{Column, Space, container, row};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
-use signex_widgets::{raw, text};
+use iced::widget::{Column, Row, Space, container, row};
+use iced::{Element, Length, Widget as _};
+use signex_i18n::{UserText, ids, t};
+use signex_widgets::{checkbox, raw, text, text_input};
 
-use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
-use crate::styles::{Spacing, TypeScale};
+use super::super::PanelMsg;
+use super::body::{Ctx, caption, fields, ghost, is_open, rule, section};
+use super::illustration::linked_field;
+use crate::library::editor::footprint::state::{GridDef, GridDisplay};
+use crate::panels::form_look;
+use crate::styles::tokens::resolve;
+use crate::styles::{Spacing, TypeScale, ti};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
-/// row is highlighted; clicking another row activates it (mirrors its
-/// step / display style onto `snap_options`). The footer's Add /
-/// Properties / Delete operate on the active row.
-pub(super) fn render_grid_manager<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
-    fp: &'a FootprintEditorPanelContext,
-    primary: Color,
-    muted: Color,
-    border_c: Color,
-) -> Column<Element<'a, PanelMsg>> {
-    // Header row — Altium PCB Library editor columns: Prior / Name /
-    // Color / Origin / Enabled. "Step" stays as a sub-row info line
-    // since Altium puts it in the Properties dialog, not the grid row.
-    col = col.push(
-        container(
-            row![
-                text(raw("Prior"))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fixed(40.0)),
-                text(raw("Name"))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fill),
-                text(raw("Color"))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fixed(40.0)),
-                text(raw("Origin"))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fixed(60.0)),
-                text(raw("Enabled"))
-                    .size(TS.caption)
-                    .color(muted)
-                    .width(Length::Fixed(50.0)),
-            ]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([SP.xs, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(super::super::thin_sep(border_c));
+const KEY: &str = "fp_grid_manager";
+/// Width of the active column and of the Step column, in captions.
+const CHECK_EM: f32 = 2.0;
+const STEP_EM: f32 = 6.0;
 
-    let active_idx = fp.active_grid_idx;
-    if fp.grids.is_empty() {
-        col = col.push(
-            container(text(raw("(no grids)")).size(TS.caption).color(muted))
-                .padding([SP.s, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-        );
-    } else {
-        for (idx, g) in fp.grids.iter().enumerate() {
-            let is_active = idx == active_idx;
-            let row_bg = if is_active {
-                iced::Color::from_rgba(0.30, 0.55, 0.95, 0.16)
-            } else {
-                iced::Color::TRANSPARENT
-            };
-            // Color swatch — placeholder white until GridDef.color lands.
-            // Click does nothing yet.
-            let swatch = container(Space::new())
-                .width(Length::Fixed(20.0))
-                .height(Length::Fixed(14.0))
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(Color::from_rgba8(0xff, 0xff, 0xff, 1.0))),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-            // Enabled column — checkbox toggling active grid.
-            let enabled_check = signex_widgets::checkbox(is_active)
-                .on_toggle(move |_| PanelMsg::FpEditorGridSetActive(idx))
-                .size(TS.label)
-                .spacing(0);
-            col = col.push(
-                container(
-                    row![
-                        text(raw(format!("{}", (idx + 1) * 10)))
-                            .size(TS.caption)
-                            .color(if is_active { primary } else { muted })
-                            .width(Length::Fixed(40.0)),
-                        text(signex_i18n::UserText::new(g.name.as_str()))
-                            .size(TS.caption)
-                            .color(if is_active { primary } else { muted })
-                            .width(Length::Fill),
-                        container(swatch).width(Length::Fixed(40.0)).padding([0, 0]),
-                        text(raw("0,0"))
-                            .size(TS.caption)
-                            .color(muted)
-                            .width(Length::Fixed(60.0)),
-                        container(enabled_check)
-                            .width(Length::Fixed(50.0))
-                            .center_x(Length::Shrink),
-                    ]
-                    .spacing(SP.s)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([3.0, SP.m])
-                .width(Length::Fill)
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(row_bg)),
-                    ..Default::default()
-                })
-                .boxed(),
-            );
-        }
+fn display_label(display: GridDisplay) -> signex_i18n::MessageId {
+    match display {
+        GridDisplay::Lines => ids::EDITORS_FP_PROPS_GRID_LINES,
+        GridDisplay::Dots => ids::EDITORS_FP_PROPS_GRID_DOTS,
+        GridDisplay::Hidden => ids::EDITORS_FP_PROPS_GRID_HIDDEN,
     }
-    // Action footer — Add / Properties / Delete using primary
-    // (orange-accent) buttons + a unicode trash glyph for Delete to
-    // mirror Altium's icon-style footer.
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(
-            row![
-                Space::new().width(Length::Fill),
-                grid_manager_btn(
-                    "Add",
-                    Some(PanelMsg::FpEditorGridManagerAdd),
-                    primary,
-                    border_c,
-                ),
-                grid_manager_btn(
-                    "Properties",
-                    Some(PanelMsg::FpEditorGridManagerProperties),
-                    primary,
-                    border_c,
-                ),
-                grid_manager_btn(
-                    "\u{1F5D1}",
-                    if fp.grids.len() > 1 {
-                        Some(PanelMsg::FpEditorGridManagerDelete)
-                    } else {
-                        None
-                    },
-                    primary,
-                    border_c,
-                ),
-            ]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col
 }
 
-/// v0.18.13 — Other section. Today carries only a Units toggle;
-/// future home for additional document-level options.
-pub(super) fn render_other_section<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
-    _fp: &'a FootprintEditorPanelContext,
-    palette: PanelPalette,
-    unit: signex_types::coord::Unit,
-    i18n: &signex_i18n::I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        input_bg,
-        ..
-    } = palette;
-    use signex_types::coord::Unit;
-    // Units row — mm/mils segmented selector (Altium parity). Reuses
-    // the schematic Properties panel's `seg_btn` widget so the chrome
-    // matches byte-for-byte.
-    col = col.push(super::super::form_label(signex_i18n::t!(
-        i18n,
-        signex_i18n::ids::PANELS_PROPERTIES_UNITS
-    )));
-    col = col.push(
-        container(
-            row![
-                super::super::seg_btn(
-                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_UNIT_MM),
-                    unit == Unit::Mm,
-                    PanelMsg::SetUnit(Unit::Mm),
-                    input_bg,
-                    primary,
-                    muted,
-                ),
-                super::super::seg_btn(
-                    signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_UNIT_MILS),
-                    unit == Unit::Mil,
-                    PanelMsg::SetUnit(Unit::Mil),
-                    input_bg,
-                    primary,
-                    muted,
-                ),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([SP.xs, SP.m])
-        .boxed(),
-    );
-    col
-}
-
-/// Shared button factory for the Grid / Guide Manager footers.
-/// Uses iced's built-in `button::primary` (accent-filled) so the
-/// chrome matches the "+ Add Filter" call-to-action button in the
-/// Custom Selection Filters section above.
-pub(super) fn grid_manager_btn<'a>(
-    label: &'static str,
-    on_press: Option<PanelMsg>,
-    primary: Color,
-    _border_c: Color,
+/// One table line: the active column, then Name, Step and Display.
+fn table_row<'a>(
+    check: Element<'a, PanelMsg>,
+    name: Element<'a, PanelMsg>,
+    step: Element<'a, PanelMsg>,
+    display: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    let mut btn = signex_widgets::button(text(raw(label)).size(TS.caption).color(primary))
-        .padding([SP.s, 10.0])
-        .style(iced::widget::button::primary);
-    if let Some(msg) = on_press {
-        btn = btn.on_press(msg);
+    container(
+        row![
+            container(check).width(Length::Fixed(TS.caption * CHECK_EM)),
+            container(name).width(Length::Fill),
+            container(step)
+                .width(Length::Fixed(TS.caption * STEP_EM))
+                .align_x(iced::alignment::Horizontal::Right),
+            container(display).width(Length::Fill),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.xs, SP.m])
+    .width(Length::Fill)
+    .boxed()
+}
+
+fn grid_row<'a>(cx: Ctx<'a, '_>, idx: usize, grid: &'a GridDef) -> Element<'a, PanelMsg> {
+    let tokens = cx.tokens;
+    let is_active = idx == cx.fp.active_grid_idx;
+    let ink = if is_active {
+        ti(tokens.text)
+    } else {
+        resolve(tokens).ink4
+    };
+    let check = checkbox(is_active)
+        .on_toggle(move |_| PanelMsg::FpEditorGridSetActive(idx))
+        .size(TS.body)
+        .spacing(0)
+        .style(form_look::checkbox_style)
+        .boxed();
+    let name = text(UserText::new(grid.name.as_str()))
+        .size(TS.body)
+        .color(ink)
+        .boxed();
+    let step = format!("{:.3}", grid.step_mm);
+    let step = if is_active {
+        let input = text_input(UserText::new(String::new()), step)
+            .on_input(PanelMsg::FpEditorSetSnapGridStep)
+            .size(TS.body)
+            .padding(SP.xs)
+            .style(form_look::text_input_style)
+            .boxed();
+        linked_field(input, fields::GRID_STEP, &cx.fp.illustration_hover, tokens)
+    } else {
+        // raw: the step is a measured number, not language.
+        text(raw(step)).size(TS.body).color(ink).boxed()
+    };
+    let display = text(t!(cx.i18n, display_label(grid.fine_display)))
+        .size(TS.body)
+        .color(ink)
+        .boxed();
+    table_row(check, name, step, display)
+}
+
+/// The Grid Manager section.
+pub(super) fn view_grid_manager<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let Ctx {
+        fp, tokens, i18n, ..
+    } = cx;
+    let add = ghost(
+        t!(i18n, ids::EDITORS_FP_PROPS_GRID_ADD),
+        Some(PanelMsg::FpEditorGridManagerAdd),
+        tokens,
+    );
+    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_GRIDS);
+    col = col.push(section(KEY, &title, Some(add), cx.collapsed, tokens, i18n));
+    if !is_open(KEY, cx.collapsed) {
+        return col;
     }
-    btn.boxed()
+    if fp.grids.is_empty() {
+        return col.push(caption(t!(i18n, ids::EDITORS_FP_PROPS_GRID_NONE), tokens));
+    }
+    let head = |id: signex_i18n::MessageId| {
+        text(t!(i18n, id))
+            .size(TS.caption)
+            .color(resolve(tokens).ink4)
+            .boxed()
+    };
+    col = col.push(table_row(
+        Space::new().boxed(),
+        head(ids::EDITORS_FP_PROPS_GRID_NAME),
+        head(ids::EDITORS_FP_PROPS_GRID_STEP),
+        head(ids::EDITORS_FP_PROPS_GRID_DISPLAY),
+    ));
+    col = col.push(rule(tokens));
+    for (idx, grid) in fp.grids.iter().enumerate() {
+        col = col.push(grid_row(cx, idx, grid));
+    }
+    // Delete keeps one grid: the editor always snaps to an active one.
+    let delete = (fp.grids.len() > 1).then_some(PanelMsg::FpEditorGridManagerDelete);
+    let actions = Row::new()
+        .spacing(SP.s)
+        .push(Space::new().width(Length::Fill).boxed())
+        .push(ghost(
+            t!(i18n, ids::EDITORS_FP_PROPS_GRID_PROPERTIES),
+            Some(PanelMsg::FpEditorGridManagerProperties),
+            tokens,
+        ))
+        .push(ghost(
+            t!(i18n, ids::EDITORS_FP_PROPS_DELETE),
+            delete,
+            tokens,
+        ));
+    col.push(
+        container(actions)
+            .padding([SP.xs, SP.m])
+            .width(Length::Fill)
+            .boxed(),
+    )
 }
