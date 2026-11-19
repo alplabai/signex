@@ -72,7 +72,6 @@ pub(super) fn view<'a>(
                     radius: 0.0.into(),
                     ..Border::default()
                 },
-                icon: style.muted_ink,
                 placeholder: style.muted_ink,
                 value: style.ink,
                 selection: style.accent_soft,

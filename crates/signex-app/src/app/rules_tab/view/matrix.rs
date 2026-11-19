@@ -24,9 +24,7 @@ use crate::app::rules_tab::matrix::{
 use crate::styles::{Radii, ti, tokens, tokens::resolve};
 
 static UNDO: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(
-        include_bytes!("../../../../../assets/icons/chrome/undo.svg").as_slice(),
-    )
+    svg::Handle::from_memory(include_bytes!("../../../../assets/icons/chrome/undo.svg").as_slice())
 });
 
 /// The fallbacks before the tab's first analysis: none.

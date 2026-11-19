@@ -18,7 +18,7 @@ use signex_widgets::{button, text};
 use super::{Frame, SP, TS, up, user};
 use crate::app::Message;
 use crate::app::rules_tab::{RulesTabMsg, RulesText};
-use crate::styles::{Radii, ti, tokens, tokens::resolve};
+use crate::styles::{Radii, ti, tokens::resolve};
 
 /// Line height of the code field and its gutter, in em of the text size.
 const LINE_EM: f32 = 1.3;

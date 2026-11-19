@@ -230,7 +230,6 @@ fn bare_input(
     move |_: &Theme, _| iced::widget::text_input::Style {
         background: Background::Color(iced::Color::TRANSPARENT),
         border: Border::default(),
-        icon: r.ink3,
         placeholder: r.ink4,
         value: ink,
         selection: r.accent_soft,

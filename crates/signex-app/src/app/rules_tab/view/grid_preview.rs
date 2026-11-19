@@ -18,12 +18,14 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let state = frame.state;
     let id = frame.id;
     if let Some(target) = state.drawing_target.as_ref() {
-        return drawing::view(&state.drawing, target, frame.i18n, frame.tokens).map(move |msg| {
-            up(RulesTabMsg::PreviewActed {
-                project_id: id,
-                msg,
+        return drawing::view(&state.drawing, target, frame.i18n, frame.tokens)
+            .map(move |msg| {
+                up(RulesTabMsg::PreviewActed {
+                    project_id: id,
+                    msg,
+                })
             })
-        });
+            .boxed();
     }
     let note = if state.grid.view.selected().is_some() {
         ids::RULES_GRID_PREVIEW_NONE

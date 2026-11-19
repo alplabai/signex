@@ -20,7 +20,7 @@ use crate::app::rules_tab::{PresetPreview, RulesTabMsg};
 use crate::styles::{PillTone, Radii, ti, tokens, tokens::resolve};
 
 static CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!("../../../../../assets/icons/close.svg").as_slice())
+    svg::Handle::from_memory(include_bytes!("../../../../assets/icons/close.svg").as_slice())
 });
 
 fn mono() -> iced::Font {
