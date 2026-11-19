@@ -118,6 +118,7 @@ fn the_reset_rows_follow_the_board_colours() {
     let colours = TabColours {
         own: true,
         any: true,
+        read_only: false,
     };
     let rows = rows(layer_tab_menu_entries(
         &I18n::en_us(),
@@ -138,6 +139,31 @@ fn the_reset_rows_follow_the_board_colours() {
         sent("Reset all layer colours"),
         Some(PcbViewMsg::LayerColoursReset)
     );
+}
+
+/// A read-only board keeps its colours: the colour rows are greyed, as its
+/// colour commands are.
+#[test]
+fn a_read_only_board_greys_the_colour_rows() {
+    let layer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let view = PcbLayerView::default();
+    let prefs = LayerStripPrefs::default();
+    let colours = TabColours {
+        own: true,
+        any: true,
+        read_only: true,
+    };
+    let rows = rows(layer_tab_menu_entries(
+        &I18n::en_us(),
+        &state(layer, &view, &prefs, colours),
+    ));
+    for label in ["Layer colour...", "Reset layer colour", "Reset all layer colours"] {
+        let row = rows.iter().find(|(l, _, _)| l == label);
+        assert!(
+            row.is_some_and(|(_, message, _)| message.is_none()),
+            "{label} is greyed"
+        );
+    }
 }
 
 /// A layer the Layers panel has no colour row for greys Layer colour...

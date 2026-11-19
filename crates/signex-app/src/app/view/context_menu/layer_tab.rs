@@ -37,6 +37,9 @@ pub(super) struct TabColours {
     pub own: bool,
     /// Some layer has one.
     pub any: bool,
+    /// The board takes no edit (its colour commands are greyed): the
+    /// colours are saved with it.
+    pub read_only: bool,
 }
 
 fn menu_msg(event: LayerTabMenuMsg) -> Message {
@@ -89,7 +92,7 @@ fn colour_editable(layer: PcbLayer) -> bool {
 /// The colour rows (2026-11-18): Layer colour..., Reset layer colour and
 /// Reset all layer colours.
 fn colour_rows(i18n: &I18n, layer: PcbLayer, colours: TabColours) -> Vec<DropdownEntry<Message>> {
-    let edit = if colour_editable(layer) {
+    let edit = if colour_editable(layer) && !colours.read_only {
         dd_msg(
             None,
             &text(i18n, ids::PCB_LAYER_TAB_COLOUR),
@@ -112,12 +115,12 @@ fn colour_rows(i18n: &I18n, layer: PcbLayer, colours: TabColours) -> Vec<Dropdow
         live_row(
             &text(i18n, ids::PCB_LAYER_TAB_COLOUR_RESET),
             pick(reset),
-            colours.own,
+            colours.own && !colours.read_only,
         ),
         live_row(
             &text(i18n, ids::PCB_LAYER_TAB_COLOUR_RESET_ALL),
             pick(PcbViewMsg::LayerColoursReset),
-            colours.any,
+            colours.any && !colours.read_only,
         ),
     ]
 }
@@ -281,10 +284,15 @@ impl Signex {
             crate::keymap::AppCommandId::new(LAYER_STACK_COMMAND).is_ok_and(|id| {
                 crate::app::command::is_enabled(&id, &self.command_context(menu.window))
             });
+        let colours_live = crate::keymap::AppCommandId::new("reset_layer_colors")
+            .is_ok_and(|id| {
+                crate::app::command::is_enabled(&id, &self.command_context(menu.window))
+            });
         let board = self.pcb_view_target(menu.window).map(|(_, board)| board);
         let colours = board.map_or_else(TabColours::default, |board| TabColours {
             own: board.options.layer_color(menu.layer).is_some(),
             any: !board.options.layer_colors.is_empty(),
+            read_only: !colours_live,
         });
         let layers: &[LayerDef] = board.map(|b| b.layers.as_slice()).unwrap_or_default();
         let state = TabMenuState {
