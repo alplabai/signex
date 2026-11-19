@@ -5859,6 +5859,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-gerber"
+version = "26.11.0"
+dependencies = [
+ "pcb-geom",
+ "serde_json",
+ "signex-output",
+ "signex-types",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "signex-gfx"
 version = "26.11.0"
 dependencies = [
