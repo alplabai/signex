@@ -67,8 +67,8 @@ panels-components-badge-installed = INSTALLED
 panels-components-badge-global = GLOBAL
 panels-components-badge-stock = STOCK
 
-# Empty list: nothing is mounted.
-panels-components-nothing-mounted = No libraries mounted. Use "+ Add" or open a project.
+# Title of the empty-list card: nothing is mounted.
+panels-components-nothing-mounted = No libraries mounted
 # Empty Project section: no project is open.
 panels-components-empty-no-project = No project libraries. Open a project to populate this section.
 # Empty Project section: the open project declares no library. The path
@@ -734,3 +734,37 @@ panels-net-inspector-empty-parts-body = Nothing named { $filter } in { $total ->
 panels-net-inspector-clear-filter = Clear filter
 # Under a no-match title while the filter is empty: the project lists nothing.
 panels-net-inspector-empty-none = The project has nothing to list here yet.
+
+## Components panel rows, chips, Recently placed and empty states (#2535)
+
+# Body of the "No libraries mounted" card.
+panels-components-nothing-mounted-body = Use “+ Add” or open a project.
+# Buttons of the "No libraries mounted" card.
+panels-components-add-library = Add Library…
+panels-components-open-project = Open Project…
+# Caption at the right of the source chips. $count is a whole number.
+panels-components-library-count = { $count ->
+        [one] { $count } library
+       *[other] { $count } libraries
+    }
+# Library header count while a filter is active. $shown and $total are whole numbers.
+panels-components-shown-of-total = { $shown } of { $total }
+# No part matches the filter. $filter is the typed text.
+panels-components-no-match = No components match “{ $filter }”
+# Button that empties the filter.
+panels-components-clear-filter = Clear
+# Inline button on a hovered row, a recent part and the details title row.
+panels-components-place = Place
+# Switch next to Add: rows with a symbol thumbnail and a description.
+panels-components-previews = Previews
+panels-components-previews-tooltip = Rows with symbol preview (remembered as a preference)
+# Section title above the parts placed from this panel, in capitals.
+panels-components-recent-title = RECENTLY PLACED
+# How often a recent part was placed this session. $count is a whole number.
+panels-components-recent-uses = ×{ $count }
+# Hint card before anything was placed from the panel.
+panels-components-recent-empty = Parts you place from this panel show here.
+# Second line of the details title: the description, then the library.
+panels-components-details-subtitle = { $description } · { $library }
+# Second line of the drag card while a row is dragged toward the canvas.
+panels-components-drag-release = release to place
