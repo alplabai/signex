@@ -8,6 +8,7 @@
 //!   (text is shown as 2-byte glyph ids for the Identity-H Type0 fonts)
 //! - `set_stroke_color(r, g, b)` — `RG`
 //! - `set_stroke_alpha(alpha)` — `gs` with a page `/ExtGState` holding `/CA`
+//! - `set_fill_alpha(alpha)` — `gs` with a page `/ExtGState` holding `/ca`
 //!
 //! Tracks current stroke colour/width/alpha to avoid redundant ops.
 //! Coordinates in PDF points (bottom-left origin).
@@ -33,11 +34,13 @@ pub struct RgbColor {
 /// The stroke opacity a PDF draws with by default.
 const OPAQUE_LEVEL: u8 = u8::MAX;
 
-/// A finished page: its content stream and the stroke-alpha levels the
-/// stream names with `gs`, which the page's `/ExtGState` must define.
+/// A finished page: its content stream and the stroke- and fill-alpha
+/// levels the stream names with `gs`, which the page's `/ExtGState` must
+/// define.
 pub struct PageContent {
     pub bytes: Vec<u8>,
     pub stroke_alphas: BTreeSet<u8>,
+    pub fill_alphas: BTreeSet<u8>,
 }
 
 /// Stroke alpha (0.0-1.0) as a 0-255 level, the precision a wire colour has.
@@ -50,18 +53,31 @@ fn stroke_alpha_name(level: u8) -> String {
     format!("CA{level}")
 }
 
-/// Define one `/ExtGState` entry per stroke-alpha level a page uses.
-pub(super) fn write_stroke_alpha_states(resources: &mut Resources<'_>, levels: &BTreeSet<u8>) {
-    if levels.is_empty() {
+/// The `/ExtGState` resource name of a fill-alpha level, e.g. `ca46`.
+fn fill_alpha_name(level: u8) -> String {
+    format!("ca{level}")
+}
+
+/// Define one `/ExtGState` entry per stroke- and fill-alpha level a page
+/// uses: the stroke levels first, then the fill levels.
+pub(super) fn write_alpha_states(resources: &mut Resources<'_>, content: &PageContent) {
+    if content.stroke_alphas.is_empty() && content.fill_alphas.is_empty() {
         return;
     }
     let mut states = resources.ext_g_states();
-    for &level in levels {
+    for &level in &content.stroke_alphas {
         let name = stroke_alpha_name(level);
         states
             .insert(Name(name.as_bytes()))
             .start::<ExtGraphicsState<'_>>()
             .stroking_alpha(f32::from(level) / 255.0);
+    }
+    for &level in &content.fill_alphas {
+        let name = fill_alpha_name(level);
+        states
+            .insert(Name(name.as_bytes()))
+            .start::<ExtGraphicsState<'_>>()
+            .non_stroking_alpha(f32::from(level) / 255.0);
     }
 }
 
@@ -71,6 +87,8 @@ pub struct PdfSurface<'a> {
     fonts: &'a mut FontUsage,
     current_stroke_alpha: u8,
     stroke_alphas: BTreeSet<u8>,
+    current_fill_alpha: u8,
+    fill_alphas: BTreeSet<u8>,
     current_stroke_r: f32,
     current_stroke_g: f32,
     current_stroke_b: f32,
@@ -88,6 +106,8 @@ impl<'a> PdfSurface<'a> {
             fonts,
             current_stroke_alpha: OPAQUE_LEVEL,
             stroke_alphas: BTreeSet::new(),
+            current_fill_alpha: OPAQUE_LEVEL,
+            fill_alphas: BTreeSet::new(),
             current_stroke_r: 0.0,
             current_stroke_g: 0.0,
             current_stroke_b: 0.0,
@@ -99,21 +119,34 @@ impl<'a> PdfSurface<'a> {
     }
 
     /// Finish and return the encoded Content stream bytes.
-    /// A stream that set a stroke alpha must use `finish_page()` instead.
+    /// A stream that set a stroke or fill alpha must use `finish_page()`
+    /// instead.
     pub fn finish(self) -> Vec<u8> {
         debug_assert!(
-            self.stroke_alphas.is_empty(),
-            "stroke alpha set on a surface finished with finish(); use finish_page()"
+            self.stroke_alphas.is_empty() && self.fill_alphas.is_empty(),
+            "alpha set on a surface finished with finish(); use finish_page()"
         );
         self.bytes
     }
 
-    /// Finish a page that may stroke with alpha: the stream plus the
+    /// Finish a page that may draw with alpha: the stream plus the
     /// `/ExtGState` levels it names.
     pub fn finish_page(self) -> PageContent {
         PageContent {
             bytes: self.bytes,
             stroke_alphas: self.stroke_alphas,
+            fill_alphas: self.fill_alphas,
+        }
+    }
+
+    /// Set fill (and text) opacity (0.0-1.0). Emits `gs` only if the level
+    /// changed.
+    pub fn set_fill_alpha(&mut self, alpha: f32) {
+        let level = alpha_level(alpha);
+        if level != self.current_fill_alpha {
+            self.write_operator(&format!("/{} gs\n", fill_alpha_name(level)));
+            self.fill_alphas.insert(level);
+            self.current_fill_alpha = level;
         }
     }
 
@@ -266,6 +299,18 @@ mod tests {
             page.stroke_alphas.into_iter().collect::<Vec<_>>(),
             [128, 255]
         );
+    }
+
+    #[test]
+    fn fill_alpha_names_its_own_graphics_state() {
+        let mut fonts = FontUsage::new();
+        let mut surf = PdfSurface::new(&mut fonts);
+        surf.set_fill_alpha(0.18);
+        surf.set_fill_alpha(0.18);
+        let page = surf.finish_page();
+        assert_eq!(String::from_utf8(page.bytes).unwrap(), "/ca46 gs\n");
+        assert_eq!(page.fill_alphas.into_iter().collect::<Vec<_>>(), [46]);
+        assert!(page.stroke_alphas.is_empty());
     }
 
     #[test]
