@@ -271,8 +271,14 @@ impl Signex {
         //
         // A bare modifier or lock key is the exception: it is never a
         // stroke, but it is how the user reaches `Shift+G` mid-chord, and
-        // on Windows a held one auto-repeats `KeyPressed`.
+        // on Windows a held one auto-repeats `KeyPressed`. So is an
+        // auto-repeat nobody turned into a message (the keymap swallows the
+        // repeat of a run-once command): the same key is still down, so the
+        // chord wait runs out and fires once.
+        let swallowed_repeat =
+            message.is_none() && matches!(&event, keyboard::Event::KeyPressed { repeat: true, .. });
         if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
+            && !swallowed_repeat
             && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
         {
             self.cancel_pending_chord();
@@ -636,8 +642,9 @@ impl Signex {
     /// multi-stroke chord buffer lives in `UiState`.
     ///
     /// A stroke iced cannot express as a `KeyStroke` (a bare modifier
-    /// press) is ignored. Being last, `Pass` and `Swallow` are equivalent
-    /// here — `Pass` says the honest thing: nobody wanted it.
+    /// press) is passed: nobody wanted it. The auto-repeat of a stroke that
+    /// runs a `KeyRepeat::Ignored` command is swallowed: the keymap saw the
+    /// key, and `handle_key_input` keeps the pending chord for it.
     fn claim_keymap(
         &self,
         target: InputTarget,
@@ -660,7 +667,7 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
-        // A held key runs a cycle or toggle once (Hakan, 2026-11-19).
+        // A held key runs a cycle or toggle once: docs/DECISIONS.md, "Held keys".
         if *repeat && self.repeat_is_ignored(window, target, &stroke) {
             return Claim::Swallow;
         }

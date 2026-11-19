@@ -1,16 +1,18 @@
-//! A held key runs a cycle or toggle once (Hakan, 2026-11-19): the
-//! auto-repeat `KeyPressed` events that follow the first press are swallowed
-//! for a catalog command marked `KeyRepeat::Ignored`, and still run for the
-//! rest. Every event goes the app's own key path, `Message::Input(KeyInput)`.
+//! A held key runs a run-once command once (`docs/DECISIONS.md`, "Held
+//! keys"): the auto-repeat `KeyPressed` events after the first press are
+//! swallowed for a catalog command marked `KeyRepeat::Ignored`, still run for
+//! the rest, and never abandon a pending chord. Every event goes the app's own
+//! key path, `Message::Input(KeyInput)`.
 
 use super::*;
-use crate::app::{TabInfo, TabKind, Tool, ToolMessage};
+use crate::app::{EditMsg, TabInfo, TabKind, Tool, ToolMessage};
 use crate::keymap::{
     AppCommandId, CompiledKeymap, Platform, ShortcutBinding, ShortcutBindingAction,
     ShortcutContext, ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
 };
 use iced::keyboard::{Key, Modifiers as Held, key::Code, key::Named, key::Physical};
 use signex_types::corner::DragWiringMode;
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 
 const REPEATS: usize = 5;
 
@@ -35,12 +37,7 @@ fn shift_space(repeat: bool) -> keyboard::Event {
 }
 
 fn slash(repeat: bool) -> keyboard::Event {
-    press(
-        Key::Character("/".into()),
-        Code::Slash,
-        Held::empty(),
-        repeat,
-    )
+    letter("/", Code::Slash, repeat)
 }
 
 fn letter(c: &str, code: Code, repeat: bool) -> keyboard::Event {
@@ -57,13 +54,16 @@ fn routed(app: &Signex, event: &keyboard::Event) -> Option<Message> {
     app.route_key(window, event)
 }
 
-/// A booted app with one empty schematic sheet, bound to `bindings`.
-fn app_with(bindings: &[(&str, &str)]) -> Signex {
-    let path = std::path::PathBuf::from("key-repeat.snxsch");
-    let sheet = signex_types::schematic::SchematicSheet {
+fn empty_sheet() -> SchematicSheet {
+    SchematicSheet {
         paper_size: "A4".to_string(),
         ..Default::default()
-    };
+    }
+}
+
+/// A booted app showing `sheet`, bound to `bindings` only.
+fn app_with_sheet(bindings: &[(&str, &str)], sheet: SchematicSheet) -> Signex {
+    let path = std::path::PathBuf::from("key-repeat.snxsch");
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let engine = signex_engine::Engine::new(sheet).expect("engine");
@@ -97,6 +97,10 @@ fn app_with(bindings: &[(&str, &str)]) -> Signex {
     app.ui_state.active_keymap =
         std::sync::Arc::new(CompiledKeymap::compile_for(&profile, Platform::MacOs));
     app
+}
+
+fn app_with(bindings: &[(&str, &str)]) -> Signex {
+    app_with_sheet(bindings, empty_sheet())
 }
 
 /// The booted keymap (Altium on every platform) binds ⌃Space to
@@ -152,7 +156,7 @@ fn held_corner_keys_step_the_corner_rule_once_while_drawing() {
     }
 }
 
-/// A command that is not a cycle or toggle still runs on every repeat.
+/// A command that is not a cycle, toggle or flip still runs on every repeat.
 #[test]
 fn a_held_zoom_key_still_repeats() {
     let app = app_with(&[("PGUP", "zoom_in_at_cursor")]);
@@ -175,27 +179,95 @@ fn a_held_zoom_key_still_repeats() {
     }
 }
 
-/// A chord that ends on a cycle or toggle fires on its real strokes, and a
-/// held last stroke does not fire it again.
+/// `G` is a run-once command and the prefix of `G V`: pressing it waits for
+/// the chord. Holding it must neither drop that wait nor fire the command
+/// early; the timeout then runs it exactly once.
 #[test]
-fn a_chord_to_a_toggle_fires_once_and_ignores_the_held_last_key() {
-    let mut app = app_with(&[("G V", "toggle_visible_grid")]);
+fn a_held_chord_prefix_runs_its_command_once_at_the_timeout() {
+    let mut app = app_with(&[
+        ("G", "cycle_wiring_mode"),
+        ("G V", "open_net_color_palette"),
+    ]);
     send(&mut app, letter("g", Code::KeyG, false));
-    assert!(
-        matches!(
-            routed(&app, &letter("v", Code::KeyV, false)),
-            Some(Message::Ui(UiMsg::KeymapStroke { .. }))
-        ),
-        "the chord's last stroke reaches the keymap"
+    let generation = app
+        .ui_state
+        .keymap_chord_wait
+        .expect("G waits on G V")
+        .generation;
+    for _ in 0..REPEATS {
+        send(&mut app, letter("g", Code::KeyG, true));
+    }
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        DragWiringMode::Auto,
+        "nothing fires while the key is held"
     );
-    assert!(
-        routed(&app, &letter("v", Code::KeyV, true)).is_none(),
-        "a held last stroke of the chord is swallowed"
+    let _ = app.update(Message::Ui(UiMsg::KeymapChordTimedOut { generation }));
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        DragWiringMode::HorizontalFirst,
+        "the timeout runs the held command exactly once"
     );
-    // The chord prefix itself is no command: its repeat still routes.
-    let app = app_with(&[("G V", "toggle_visible_grid")]);
-    assert!(
-        routed(&app, &letter("g", Code::KeyG, true)).is_some(),
-        "a held chord prefix still reaches the keymap"
+    assert!(app.ui_state.keymap_pending_sequence.is_empty());
+    assert!(app.ui_state.keymap_chord_wait.is_none());
+}
+
+/// `G V` toggles the grid and `V` alone is a run-once command: the chord
+/// fires once on its real strokes, and holding its last key runs neither the
+/// chord again nor `V`'s own command.
+#[test]
+fn a_chord_fires_once_and_its_held_last_key_runs_nothing() {
+    let mut app = app_with(&[("G V", "toggle_visible_grid"), ("V", "cycle_wiring_mode")]);
+    let grid = app.ui_state.grid_visible;
+    send(&mut app, letter("g", Code::KeyG, false));
+    send(&mut app, letter("v", Code::KeyV, false));
+    assert_ne!(
+        app.ui_state.grid_visible, grid,
+        "the chord toggled the grid"
     );
+    for _ in 0..REPEATS {
+        send(&mut app, letter("v", Code::KeyV, true));
+        assert_ne!(app.ui_state.grid_visible, grid, "the chord ran once");
+    }
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        DragWiringMode::Auto,
+        "a held V does not run V's own command"
+    );
+}
+
+/// A held flip key flips the selected symbol once: one undo step.
+#[test]
+fn a_held_flip_key_flips_the_selection_once() {
+    let uuid = uuid::Uuid::now_v7();
+    let sheet = SchematicSheet {
+        symbols: vec![Symbol {
+            uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            position: Point::new(50.0, 50.0),
+            ..Default::default()
+        }],
+        ..empty_sheet()
+    };
+    let mut app = app_with_sheet(&[("L", "flip_selected_x")], sheet);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(uuid, SelectedKind::Symbol)];
+    let mirror = |app: &Signex| {
+        let engine = app.document_state.active_engine().expect("engine");
+        let symbol = &engine.document().symbols[0];
+        (symbol.mirror_x, symbol.mirror_y)
+    };
+    let before = mirror(&app);
+    send(&mut app, letter("l", Code::KeyL, false));
+    let flipped = mirror(&app);
+    assert_ne!(flipped, before, "the first press flips");
+    for _ in 0..REPEATS {
+        send(&mut app, letter("l", Code::KeyL, true));
+        assert_eq!(mirror(&app), flipped, "a repeat must not flip again");
+    }
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(mirror(&app), before, "one undo takes the flip back");
+    let engine = app.document_state.active_engine().expect("engine");
+    assert!(!engine.can_undo(), "the held key made one undo step");
 }
