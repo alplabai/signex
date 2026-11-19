@@ -1,120 +1,248 @@
-//! Default Component Classes section — the seed class-registry editor
-//! (add / edit / remove / reset). Moved verbatim from the former
-//! single-file `preferences` module.
+//! Library ▸ Component Classes page: the classes every new library starts
+//! with (`prefs.json::component_classes`). Edits land on the draft list and
+//! are kept by Save; this page's own view state (filter, drag, hover, the
+//! pending Reset and the row Add Class appended) is [`ClassesViewState`].
 
-use super::*;
-use iced::widget::{Column, Space, Widget, column, container, row};
-use iced::{Element, Length};
+mod rules;
+mod table;
+
+use iced::widget::{Space, container, mouse_area, row};
+use iced::{Background, Border, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
-use signex_widgets::{button, text, text_input};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::{text, text_input};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+use super::setting_row;
+use super::{PrefMsg, PrefNav, PrefsView};
+use crate::styles::{
+    DialogButtonKind, Radii, Spacing, TypeScale, dialog_button, ti, tokens::resolve,
+};
 
-pub(super) fn content_component_classes<'a>(
-    classes: &'a [crate::fonts::ComponentClassEntry],
-    i18n: &I18n,
-) -> Element<'a, PrefMsg> {
-    let header = column![
-        text(t!(i18n, ids::PREFERENCES_CLASSES_TITLE))
-            .size(TS.heading)
-            .style(text_primary),
-        text(t!(i18n, ids::PREFERENCES_CLASSES_HELP))
-            .size(TS.body)
-            .style(text_muted),
-    ]
-    .spacing(6);
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
-    let column_header = row![
-        container(
-            text(t!(i18n, ids::PREFERENCES_CLASSES_KEY))
-                .size(TS.body)
-                .style(text_muted)
-        )
-        .width(Length::FillPortion(2)),
-        container(
-            text(t!(i18n, ids::PREFERENCES_CLASSES_LABEL))
-                .size(TS.body)
-                .style(text_muted)
-        )
-        .width(Length::FillPortion(3)),
-        container(Space::new()).width(80),
-    ]
-    .spacing(SP.m)
-    .padding([SP.s, 0.0]);
+/// Width of the filter field in the toolbar.
+const FILTER_W: f32 = 240.0;
 
-    let mut rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(classes.len());
-    for (idx, entry) in classes.iter().enumerate() {
-        let key_input = text_input(
-            t!(i18n, ids::PLACEHOLDER_COMPONENT_CLASS_KEY),
-            entry.key.as_str(),
-        )
-        .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
-        .padding(5)
-        .size(TS.label)
-        .width(Length::FillPortion(2));
-        let label_input = text_input(
-            t!(i18n, ids::PLACEHOLDER_COMPONENT_CLASS_LABEL),
-            entry.label.as_str(),
-        )
-        .on_input(move |s| PrefMsg::ComponentClassEditLabel {
-            index: idx,
-            label: s,
-        })
-        .padding(5)
-        .size(TS.label)
-        .width(Length::FillPortion(3));
-        let remove_btn = button(
-            container(text(t!(i18n, ids::PREFERENCES_CLASSES_REMOVE)).size(TS.body))
-                .padding([SP.s, 10.0])
-                .center_x(Length::Fill),
-        )
-        .on_press(PrefMsg::ComponentClassRemove { index: idx })
-        .style(danger_button_style)
-        .width(80);
+/// View state of the Component Classes page. Reset to its default whenever
+/// Preferences opens; never saved.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ClassesViewState {
+    /// Text of the filter field. It narrows the rows shown, never the list.
+    pub filter: String,
+    /// Reset to Defaults… was pressed and waits for its confirmation.
+    pub reset_pending: bool,
+    /// Index of the row whose grip is being dragged.
+    pub dragging: Option<usize>,
+    /// Index of the row under the pointer: its × shows, and during a drag
+    /// it is the drop target.
+    pub hovered: Option<usize>,
+    /// Index of the row Add Class appended: tinted with a "new" pill until
+    /// the list is saved.
+    pub new_row: Option<usize>,
+}
 
-        rows.push(
-            row![key_input, label_input, remove_btn]
-                .spacing(SP.m)
-                .align_y(iced::Alignment::Center)
-                .boxed(),
-        );
+impl ClassesViewState {
+    /// Widget id of the key field of the row Add Class appended.
+    pub fn new_key_input_id() -> iced::widget::Id {
+        iced::widget::Id::new("signex.preferences.classes.new_key")
     }
 
-    let body: Element<'a, PrefMsg> = if rows.is_empty() {
-        text(t!(i18n, ids::PREFERENCES_CLASSES_EMPTY))
-            .size(TS.body)
-            .style(text_muted)
-            .boxed()
-    } else {
-        Column::with_children(rows).spacing(6).boxed()
-    };
+    /// Widget id of the table's scroller, scrolled to the end on Add Class.
+    pub fn table_scroll_id() -> iced::widget::Id {
+        iced::widget::Id::new("signex.preferences.classes.table")
+    }
 
-    let add_btn = button(
-        container(text(t!(i18n, ids::PREFERENCES_CLASSES_ADD)).size(TS.body)).padding([5.0, SP.l]),
-    )
-    .on_press(PrefMsg::ComponentClassAdd)
-    .style(primary_button_style);
+    /// Row `from` was moved to `to`: the drag is over and the new row keeps
+    /// its marker.
+    pub fn row_moved(&mut self, from: usize, to: usize) {
+        self.dragging = None;
+        self.hovered = None;
+        self.new_row = self.new_row.map(|row| rules::follow_move(row, from, to));
+    }
 
-    let reset_btn = button(
-        container(text(t!(i18n, ids::PREFERENCES_CLASSES_RESET)).size(TS.body))
-            .padding([5.0, SP.l]),
-    )
-    .on_press(PrefMsg::ComponentClassResetDefaults)
-    .style(secondary_button_style);
+    /// Row `index` was removed: indices after it shift up by one.
+    pub fn row_removed(&mut self, index: usize) {
+        self.dragging = None;
+        self.hovered = None;
+        self.new_row = self
+            .new_row
+            .and_then(|row| rules::follow_remove(row, index));
+    }
+}
 
-    let toolbar = row![
-        add_btn,
-        Space::new().width(8),
-        reset_btn,
+/// Messages of the Component Classes page's own view state. Key and label
+/// edits stay on `PrefMsg::ComponentClassEditKey` / `EditLabel`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClassesViewMsg {
+    /// The filter text changed.
+    FilterChanged(String),
+    /// "+ Add Class" was pressed: a row is appended and its key focused.
+    AddRequested,
+    /// "Reset to Defaults…" was pressed: the confirmation shows.
+    ResetRequested,
+    /// The Reset confirmation was accepted: the list becomes the defaults.
+    ResetConfirmed,
+    /// The Reset confirmation was dismissed: nothing changes.
+    ResetCancelled,
+    /// The × of a row was pressed.
+    RemoveRequested(usize),
+    /// The pointer entered a row.
+    RowEntered(usize),
+    /// The pointer left a row.
+    RowLeft(usize),
+    /// The grip of a row was pressed: a drag began.
+    DragStarted(usize),
+    /// The drag was released over row `to`: row `from` takes its place.
+    RowMoved { from: usize, to: usize },
+    /// The mouse button was released anywhere on the page: the drag ends.
+    DragEnded,
+}
+
+fn classes_msg(msg: ClassesViewMsg) -> PrefMsg {
+    PrefMsg::ClassesView(msg)
+}
+
+/// The page: heading, toolbar, the Reset confirmation while it is asked,
+/// and the table.
+pub(super) fn content_component_classes<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let (i18n, tokens, classes, view) = (
+        v.i18n,
+        v.panel_tokens,
+        v.draft_component_classes,
+        v.classes_view,
+    );
+    let unsaved = v.dirty_pages.contains(&PrefNav::ComponentClasses);
+    let mut items = vec![
+        setting_row::page_heading(
+            t!(i18n, ids::PREFERENCES_CLASSES_TITLE),
+            t!(i18n, ids::PREFERENCES_CLASSES_HELP),
+            tokens,
+        ),
+        toolbar(classes.len(), &view.filter, tokens, i18n),
+    ];
+    if view.reset_pending {
+        items.push(reset_confirmation(classes.len(), tokens, i18n));
+    }
+    items.push(table::table(classes, view, unsaved, tokens, i18n));
+    // A release anywhere on the page ends a drag; one over a row has already
+    // moved it there. Always a mouse area, so the tree keeps its shape (and
+    // a field its focus) when a drag starts.
+    let mut area = mouse_area(setting_row::page(items));
+    if view.dragging.is_some() {
+        area = area.on_release(classes_msg(ClassesViewMsg::DragEnded));
+    }
+    area.boxed()
+}
+
+/// Filter field, class count, then Reset to Defaults… and + Add Class at
+/// the right end.
+fn toolbar<'a>(
+    count: usize,
+    filter: &'a str,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PrefMsg> {
+    row![
+        filter_field(filter, tokens, i18n),
+        text(t!(i18n, ids::PREFERENCES_CLASSES_COUNT, "count" => count))
+            .size(TS.caption)
+            .color(resolve(tokens).ink3),
         Space::new().width(Length::Fill),
+        dialog_button(
+            t!(i18n, ids::PREFERENCES_CLASSES_RESET),
+            DialogButtonKind::Ghost,
+            Some(classes_msg(ClassesViewMsg::ResetRequested)),
+            tokens,
+        ),
+        dialog_button(
+            t!(i18n, ids::PREFERENCES_CLASSES_ADD),
+            DialogButtonKind::Secondary,
+            Some(classes_msg(ClassesViewMsg::AddRequested)),
+            tokens,
+        ),
     ]
-    .spacing(0)
-    .align_y(iced::Alignment::Center);
+    .spacing(SP.m)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
 
-    column![header, column_header, body, Space::new().height(8), toolbar]
-        .spacing(10)
-        .padding(20)
-        .boxed()
+/// The "Filter classes" field: a search glyph and a borderless input in a
+/// Graphite field frame.
+fn filter_field<'a>(query: &'a str, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
+    let r = resolve(tokens);
+    let (hint, ink) = (r.ink4, ti(tokens.text));
+    let glyph = iced::widget::svg(crate::icons::icon_chrome_search(
+        signex_types::theme::ThemeId::GraphiteDark,
+    ))
+    .width(TS.label)
+    .height(TS.label)
+    .style(move |_: &Theme, _| iced::widget::svg::Style {
+        color: Some(hint),
+        ..Default::default()
+    });
+    let input = text_input(t!(i18n, ids::PREFERENCES_CLASSES_FILTER), query)
+        .on_input(|q| classes_msg(ClassesViewMsg::FilterChanged(q)))
+        .padding(Padding::ZERO)
+        .size(TS.body)
+        .width(Length::Fill)
+        .style(move |_: &Theme, _| text_input::Style {
+            background: Background::Color(iced::Color::TRANSPARENT),
+            border: Border::default(),
+            placeholder: hint,
+            value: ink,
+            selection: iced::Color { a: 0.3, ..ink },
+        });
+    container(
+        row![glyph, input]
+            .spacing(SP.s + SP.xs / 2.0)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.s, SP.m])
+    .width(FILTER_W)
+    .style(crate::styles::field(tokens, false))
+    .boxed()
+}
+
+/// The inline confirmation Reset to Defaults… asks before replacing the list.
+fn reset_confirmation<'a>(count: usize, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
+    let (fill, line) = (resolve(tokens).warn_soft, ti(tokens.warning));
+    let question = t!(
+        i18n,
+        ids::PREFERENCES_CLASSES_RESET_CONFIRM,
+        "count" => count,
+        "defaults" => crate::fonts::DEFAULT_COMPONENT_CLASSES.len()
+    );
+    container(
+        row![
+            text(question).size(TS.body).width(Length::Fill),
+            dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Secondary,
+                Some(classes_msg(ClassesViewMsg::ResetCancelled)),
+                tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::PREFERENCES_CLASSES_RESET_CONFIRM_YES),
+                DialogButtonKind::Danger,
+                Some(classes_msg(ClassesViewMsg::ResetConfirmed)),
+                tokens,
+            ),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.m, SP.l])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            width: 1.0,
+            color: line,
+            radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
 }

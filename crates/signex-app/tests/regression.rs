@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// Preferences ▸ Library: Distributor APIs and Component Classes pages.
+#[path = "regression/preferences_library_pages.rs"]
+mod preferences_library_pages;

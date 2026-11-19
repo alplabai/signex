@@ -68,4 +68,15 @@ define_ids! {
     PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE = "preferences-paste-designators-next-free";
     PREFERENCES_ANNOTATE_UNDO_PROJECT = "preferences-annotate-undo-project";
     PREFERENCES_ANNOTATE_UNDO_PER_SHEET = "preferences-annotate-undo-per-sheet";
+    // Component Classes page.
+    PREFERENCES_CLASSES_FILTER = "preferences-classes-filter";
+    PREFERENCES_CLASSES_COUNT = "preferences-classes-count";
+    PREFERENCES_CLASSES_KEY_NOTE = "preferences-classes-key-note";
+    PREFERENCES_CLASSES_LABEL_NOTE = "preferences-classes-label-note";
+    PREFERENCES_CLASSES_NEW = "preferences-classes-new";
+    PREFERENCES_CLASSES_NO_MATCH = "preferences-classes-no-match";
+    PREFERENCES_CLASSES_KEY_DUPLICATE = "preferences-classes-key-duplicate";
+    PREFERENCES_CLASSES_KEY_MISSING = "preferences-classes-key-missing";
+    PREFERENCES_CLASSES_RESET_CONFIRM = "preferences-classes-reset-confirm";
+    PREFERENCES_CLASSES_RESET_CONFIRM_YES = "preferences-classes-reset-confirm-yes";
 }
