@@ -521,7 +521,6 @@ panels-properties-needs-schematic = Properties are available when a schematic is
 panels-properties-open-project = Open a project
 panels-properties-nothing-selected = Nothing selected
 panels-properties-one-object-selected = 1 object selected
-panels-properties-no-placement-options = Click to place. No per-instance options.
 panels-properties-tab-general = General
 panels-properties-tab-parameters = Parameters
 panels-properties-template-defaults = Template: using A-series defaults

@@ -1032,6 +1032,9 @@ pub enum PanelMsg {
     ResetChildSheetStyle(uuid::Uuid),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
+    /// Pre-placement: a typed Position X / Y (a wire's Start / End) or a
+    /// picked justification anchor (#2532).
+    PrePlacementPosition(super::PrePlacementPositionMsg),
     /// Set snap grid size (mm).
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.

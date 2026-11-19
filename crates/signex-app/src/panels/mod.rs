@@ -18,7 +18,7 @@ pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
 mod placed_edit;
-mod pre_placement;
+pub mod pre_placement;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -104,8 +104,8 @@ pub use properties_parameters::{
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_choice_row, form_edit_row, form_font_link_row, form_input_row, form_input_row_untipped,
-    form_label, form_pick_row, form_rotation_row, justification_grid, net_numeric_row,
-    net_params_add_bar, net_params_header, net_params_tabs, preplacement_justification_grid,
+    form_label, form_pick_row, justification_grid, net_numeric_row, net_params_add_bar,
+    net_params_header, net_params_tabs,
     props_tab_btn, section_hdr, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
@@ -155,9 +155,10 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
-#[cfg(test)]
-pub(crate) use pre_placement::pre_placement_readout;
-pub use pre_placement::{PrePlacementData, PrePlacementKind, PrePlacementStyle};
+pub use pre_placement::{
+    PlacementPosition, PositionField, PrePlacementData, PrePlacementKind,
+    PrePlacementPositionMsg, PrePlacementStyle,
+};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};

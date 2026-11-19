@@ -574,9 +574,14 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
-                // OK button: resume placement but keep pre_placement so the
-                // next click uses the values the user just edited.
+                // OK / Enter: resume placement and keep pre_placement so the
+                // next click uses the values the user just edited; a typed
+                // position places the next object there at once (#2532).
                 self.interaction_state.active_canvas_mut().placement_paused = false;
+                follow = self.place_at_typed_position();
+            }
+            crate::panels::PanelMsg::PrePlacementPosition(msg) => {
+                self.handle_pre_placement_position(msg);
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;

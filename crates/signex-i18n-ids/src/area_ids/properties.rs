@@ -16,7 +16,6 @@ define_ids! {
     PROPERTIES_SECTION_PARAMETERS = "properties-section-parameters";
     PROPERTIES_SECTION_PAGE_OPTIONS = "properties-section-page-options";
     PROPERTIES_SECTION_SELECTION_FILTERS = "properties-section-selection-filters";
-    PROPERTIES_XY = "properties-xy";
     PROPERTIES_POSITION = "properties-position";
     PROPERTIES_SIZE = "properties-size";
     PROPERTIES_NAME = "properties-name";
@@ -228,4 +227,23 @@ define_ids! {
     PROPERTIES_PARAMETERS_FOOTER = "properties-parameters-footer";
     PROPERTIES_SHEET_VARIABLE_ADD_ROW = "properties-sheet-variable-add-row";
     PROPERTIES_SHEET_VARIABLE_UNRESOLVED = "properties-sheet-variable-unresolved";
+    PROPERTIES_PRE_PLACEMENT_TITLE = "properties-pre-placement-title";
+    PROPERTIES_PRE_PLACEMENT_APPLIES = "properties-pre-placement-applies";
+    PROPERTIES_PRE_PLACEMENT_SEPARATOR = "properties-pre-placement-separator";
+    PROPERTIES_PRE_PLACEMENT_KEY_ENTER = "properties-pre-placement-key-enter";
+    PROPERTIES_PRE_PLACEMENT_KEY_ESC = "properties-pre-placement-key-esc";
+    PROPERTIES_PRE_PLACEMENT_BACK_TO_PLACING = "properties-pre-placement-back-to-placing";
+    PROPERTIES_PRE_PLACEMENT_START = "properties-pre-placement-start";
+    PROPERTIES_PRE_PLACEMENT_LENGTH_DERIVED = "properties-pre-placement-length-derived";
+    PROPERTIES_PRE_PLACEMENT_NO_OPTIONS = "properties-pre-placement-no-options";
+    PROPERTIES_PRE_PLACEMENT_NO_OPTIONS_HINT = "properties-pre-placement-no-options-hint";
+    PROPERTIES_ANCHOR_TOP_LEFT = "properties-anchor-top-left";
+    PROPERTIES_ANCHOR_TOP = "properties-anchor-top";
+    PROPERTIES_ANCHOR_TOP_RIGHT = "properties-anchor-top-right";
+    PROPERTIES_ANCHOR_LEFT = "properties-anchor-left";
+    PROPERTIES_ANCHOR_CENTER = "properties-anchor-center";
+    PROPERTIES_ANCHOR_RIGHT = "properties-anchor-right";
+    PROPERTIES_ANCHOR_BOTTOM_LEFT = "properties-anchor-bottom-left";
+    PROPERTIES_ANCHOR_BOTTOM = "properties-anchor-bottom";
+    PROPERTIES_ANCHOR_BOTTOM_RIGHT = "properties-anchor-bottom-right";
 }

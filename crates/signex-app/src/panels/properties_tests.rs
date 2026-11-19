@@ -28,7 +28,6 @@ const PLAIN: &[(MessageId, &str)] = &[
         ids::PROPERTIES_SECTION_SELECTION_FILTERS,
         "Custom Selection Filters",
     ),
-    (ids::PROPERTIES_XY, "(X/Y)"),
     (ids::PANELS_PLACED_ROTATION, "Rotation"),
     (ids::PROPERTIES_POSITION, "Position"),
     (ids::PROPERTIES_SIZE, "Size"),
@@ -305,128 +304,6 @@ fn texts(ctx: &PanelContext) -> Vec<LaidOutText> {
         .collect()
 }
 
-/// The panel built from a real context shows its section titles and its
-/// rows from the catalog: upper-cased titles, a label beside its value.
-#[test]
-fn the_tab_form_shows_its_sections_and_rows_from_the_catalog() {
-    let shown = texts(&net_label_form(0.0));
-    let has = |label: &str| shown.iter().any(|t| t.text == label);
-    for label in ["LOCATION", "PROPERTIES", "(X/Y)", "Rotation", "Net Name"] {
-        assert!(has(label), "{label:?} missing from {shown:#?}");
-    }
-    let xy = shown.iter().find(|t| t.text == "(X/Y)").expect("label");
-    let expected = pre_placement_readout(
-        net_label_form(0.0).pre_placement.as_ref().expect("form"),
-        &net_label_form(0.0),
-    );
-    let value = shown
-        .iter()
-        .find(|t| t.text == expected)
-        .unwrap_or_else(|| panic!("the X/Y reading {expected:?} in {shown:#?}"));
-    assert!(
-        value.bounds.x > xy.bounds.x && (value.bounds.y - xy.bounds.y).abs() < 4.0,
-        "the reading sits beside its label: {xy:?} {value:?}"
-    );
-}
-
-/// The Rotation pick list names its entries as `format!("{:.0} Degrees")`
-/// did and hands back the rotation itself: Command + wheel over the closed
-/// list picks the next entry, 90 after 0.
-#[test]
-fn the_rotation_pick_list_is_typed() {
-    let en = I18n::en_us();
-    let names: Vec<String> = [0.0, 90.0, 180.0, 270.0, 45.0]
-        .into_iter()
-        .map(|deg| properties_parameters_rotation_label(&en, deg))
-        .collect();
-    assert_eq!(
-        names,
-        [
-            "0 Degrees",
-            "90 Degrees",
-            "180 Degrees",
-            "270 Degrees",
-            "45 Degrees"
-        ]
-    );
-
-    let ctx = net_label_form(0.0);
-    let shown = texts(&ctx);
-    let label = shown
-        .iter()
-        .find(|t| t.text == "Rotation")
-        .expect("the Rotation row");
-    let over_list = iced::Point::new(
-        WINDOW.width - 60.0,
-        label.bounds.y + label.bounds.height / 2.0,
-    );
-    let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
-        )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
-    ];
-    let messages = messages_for_events(
-        view_panel(PanelKind::Properties, &ctx),
-        WINDOW,
-        over_list,
-        &events,
-    );
-    let picked: Vec<f64> = messages
-        .into_iter()
-        .filter_map(|m| match m {
-            PanelMsg::SetPrePlacementRotation(deg) => Some(deg),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(picked, [90.0], "the list hands back the next rotation");
-}
-
-/// A stored 89.9999 highlights the 90 entry, as the string-matched list
-/// did (`{:.0}` reads 90): Command + wheel picks the entry after it, 180.
-#[test]
-fn a_rotation_that_rounds_to_a_step_selects_that_step() {
-    let ctx = net_label_form(89.9999);
-    let shown = texts(&ctx);
-    assert_eq!(beside(&shown, "Rotation"), "90 Degrees");
-    let label = shown
-        .iter()
-        .find(|t| t.text == "Rotation")
-        .expect("the Rotation row");
-    let over_list = iced::Point::new(
-        WINDOW.width - 60.0,
-        label.bounds.y + label.bounds.height / 2.0,
-    );
-    let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
-        )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
-    ];
-    let picked: Vec<f64> = messages_for_events(
-        view_panel(PanelKind::Properties, &ctx),
-        WINDOW,
-        over_list,
-        &events,
-    )
-    .into_iter()
-    .filter_map(|m| match m {
-        PanelMsg::SetPrePlacementRotation(deg) => Some(deg),
-        _ => None,
-    })
-    .collect();
-    assert_eq!(picked, [180.0], "the 90 entry is the selected one");
-}
-
-/// The name a rotation entry shows.
-fn properties_parameters_rotation_label(i18n: &I18n, degrees: f64) -> String {
-    crate::panels::properties_parameters::rotation_choice(i18n, degrees).label
-}
-
 /// A panel context with one object of `kind` selected and `info` its rows.
 fn one_selected(kind: SelectedKindForTest, info: &[(&str, &str)]) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
@@ -655,13 +532,6 @@ fn each_pick_list_shows_the_stored_entry() {
         &[("Type", "Text"), ("Font Family", "Signex Probe Sans")],
     );
     check("Font", beside(&texts(&note), "Font"), "Signex Probe Sans");
-
-    let turned = net_label_form(90.0);
-    check(
-        "Rotation",
-        beside(&texts(&turned), "Rotation"),
-        "90 Degrees",
-    );
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 

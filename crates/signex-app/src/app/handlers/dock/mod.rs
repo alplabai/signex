@@ -15,6 +15,7 @@ mod panel_controls;
 mod panel_open;
 mod part_field_issues;
 mod placed_edit;
+mod pre_placement_position;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;

@@ -225,7 +225,13 @@ attached:
   turn the part on the cursor, not whatever is selected on the sheet.
 - Press `Tab` to open the pre-placement properties in the Properties panel:
   the value, the designator and the rotation. Placement pauses until you press
-  **Resume**.
+  **Resume** or **OK**.
+- The Position X and Y in that form follow the cursor. Type a position (Y
+  counts from the sheet's page origin) and press **OK** or `Enter`: the next
+  object is placed there without a click. The wire tool takes a Start and an
+  End and places one straight wire between them. A typed position is used
+  once; the object after it starts from the cursor again. Every placement
+  tool has this form.
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for

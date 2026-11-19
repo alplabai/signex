@@ -202,11 +202,12 @@ fn placed_text_stores_the_project_font() {
     assert_eq!(doc.text_notes[0].font_size, pp_mm, "note size = form size");
 }
 
-/// #2034: the pre-placement X/Y readout shows Y from the page origin, and
-/// follows an origin change while the tool is armed.
+/// #2034: the pre-placement Position shows Y from the page origin, and
+/// follows an origin change while the tool is armed; a typed Y is read from
+/// the page origin too (#2532).
 #[test]
-fn the_pre_placement_readout_reads_y_from_the_page_origin() {
-    use crate::panels::PageOrigin;
+fn the_pre_placement_position_reads_y_from_the_page_origin() {
+    use crate::panels::{PageOrigin, PositionField, PrePlacementPositionMsg};
     let (mut app, _sheet, _window) = app();
     app.document_state.panel_ctx.pre_placement = Some(app.document_state.new_pre_placement(
         String::new(),
@@ -221,14 +222,38 @@ fn the_pre_placement_readout_reads_y_from_the_page_origin() {
             .pre_placement
             .as_ref()
             .expect("armed");
-        crate::panels::pre_placement_readout(pre, &app.document_state.panel_ctx)
+        let ([x, y, ..], _) =
+            crate::panels::pre_placement::location_texts(pre, &app.document_state.panel_ctx);
+        (x, y)
     };
     app.refresh_panel_ctx();
-    assert_eq!(readout(&app), "7.00, 202.00", "Lower Left, A4");
+    assert_eq!(
+        readout(&app),
+        ("7.00".to_owned(), "202.00".to_owned()),
+        "Lower Left, A4"
+    );
+    let set_origin = |app: &mut Signex, origin| {
+        let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::SetPageOrigin(origin),
+        )));
+    };
+    set_origin(&mut app, PageOrigin::UpperLeft);
+    assert_eq!(readout(&app), ("7.00".to_owned(), "8.00".to_owned()));
+
+    set_origin(&mut app, PageOrigin::LowerLeft);
     let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
-        crate::panels::PanelMsg::SetPageOrigin(PageOrigin::UpperLeft),
+        crate::panels::PanelMsg::PrePlacementPosition(PrePlacementPositionMsg::FieldTyped(
+            PositionField::Y,
+            "200".to_owned(),
+        )),
     )));
-    assert_eq!(readout(&app), "7.00, 8.00");
+    let typed = app
+        .document_state
+        .panel_ctx
+        .pre_placement
+        .as_ref()
+        .and_then(|pp| pp.position.value(PositionField::Y));
+    assert_eq!(typed, Some(10.0), "200 up from the bottom of A4 is 10 down");
 }
 
 /// Review of #2026: every defaults change (an edit, a pick, an undo) redraws

@@ -72,8 +72,6 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         muted,
         primary,
         border: border_c,
-        input_bg,
-        input_bdr,
         ..
     } = palette;
 
@@ -158,14 +156,10 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed();
     }
 
-    // ── Pre-placement properties (TAB pressed during tool) ──
-    // TAB pauses placement and edits the properties the NEXT click will
-    // commit with. We render a full Altium-style Location + Properties
-    // form bound to the pre_placement data — not the live engine.
+    // Tab pauses placement; the form edits what the next object is placed
+    // with (#2532).
     if let Some(ref pp) = ctx.pre_placement {
-        return super::pre_placement::view_pre_placement(
-            pp, ctx, muted, primary, border_c, input_bg, input_bdr,
-        );
+        return super::pre_placement::view(pp, ctx);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──

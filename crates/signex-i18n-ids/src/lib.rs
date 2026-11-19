@@ -564,7 +564,6 @@ define_ids! {
     PANELS_PROPERTIES_OPEN_PROJECT = "panels-properties-open-project";
     PANELS_PROPERTIES_NOTHING_SELECTED = "panels-properties-nothing-selected";
     PANELS_PROPERTIES_ONE_OBJECT_SELECTED = "panels-properties-one-object-selected";
-    PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS = "panels-properties-no-placement-options";
     PANELS_PROPERTIES_TAB_GENERAL = "panels-properties-tab-general";
     PANELS_PROPERTIES_TAB_PARAMETERS = "panels-properties-tab-parameters";
     PANELS_PROPERTIES_TEMPLATE_DEFAULTS = "panels-properties-template-defaults";
