@@ -6,6 +6,7 @@
 pub mod active_bar;
 pub mod chevron;
 pub mod dropdown_style;
+pub mod flow_progress;
 pub mod history_pane;
 mod house;
 mod house_extra;
