@@ -509,6 +509,10 @@ pub struct UiState {
     /// How many Paste Array dialogs were opened: tags each one so a numbers
     /// read answers only the dialog that asked for it.
     pub paste_array_opens: u64,
+    /// In-place text editors opened this session; the key hint above the
+    /// editor shows for the first few. Not persisted: no preference stores
+    /// such counters.
+    pub text_edit_opens: u32,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.

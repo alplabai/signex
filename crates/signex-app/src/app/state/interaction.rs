@@ -203,6 +203,8 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
+    /// The values the current Tab pause began with; `None` when not paused.
+    pub placement_pause: Option<super::PlacementPause>,
     /// The last label or text note placed, for "Repeat last item" (#1253).
     pub last_placement: Option<super::LastPlacement>,
     /// Designator numbers for pasted parts (Next free), seeded when a paste
