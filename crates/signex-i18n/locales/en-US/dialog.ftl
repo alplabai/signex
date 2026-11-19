@@ -14,7 +14,7 @@ dialog-assign-footprints-subtitle =
         [one] { $count } part
        *[other] { $count } parts
     }
-dialog-assign-footprints-intro = Each part can take only the footprints its own library row offers. Tick several parts to set them at once. Apply changes the open sheets as one undo step; nothing is saved until you save.
+dialog-assign-footprints-intro = Each part can take only the footprints its own library row offers. Apply changes the open sheets as one undo step; nothing is saved until you save.
 dialog-assign-footprints-reading = Reading the project's sheets…
 # $why is the system's reason, in English.
 dialog-assign-footprints-read-failed = The sheets could not be read: { $why }
@@ -53,6 +53,57 @@ dialog-assign-footprints-err-not-changed = { $path } refused the change. Nothing
 dialog-assign-footprints-err-stale = The footprint of { $part } changed after the list was read. Nothing was changed; open the dialog again.
 dialog-assign-footprints-cancel = Cancel
 dialog-assign-footprints-apply = Apply
+# Reason pill of a part with no library link (a hand-made part).
+dialog-assign-footprints-no-link = No library link
+# Placeholder of the filter field above the table.
+dialog-assign-footprints-filter = Filter designator, value or row
+# Filter chips above the table; each shows its count beside it.
+dialog-assign-footprints-chip-all = All
+dialog-assign-footprints-chip-changed = Changed
+dialog-assign-footprints-chip-no-alternates = No alternates
+# The chips and the filter field list no part.
+dialog-assign-footprints-filtered-empty = No part matches the filter.
+# The ticked bar: $count is how many parts are ticked (a whole number).
+dialog-assign-footprints-ticked =
+    { $count ->
+        [one] { $count } ticked
+       *[other] { $count } ticked
+    }
+dialog-assign-footprints-clear-ticks = Clear ticks
+# The footprint preview column on the right.
+dialog-assign-footprints-preview-title = Footprint preview
+dialog-assign-footprints-preview-expand = Expand preview
+dialog-assign-footprints-preview-collapse = Narrow preview
+dialog-assign-footprints-preview-caption = Click a row to preview its footprint. A change draws the current and the new footprint side by side at the same scale. Read-only here; pads are edited in the footprint editor.
+# The previewed part: $designator and $value as the part holds them.
+dialog-assign-footprints-preview-part = { $designator } · { $value }
+# A fact the preview cannot state.
+dialog-assign-footprints-preview-none = —
+dialog-assign-footprints-preview-loading = Reading the footprint…
+# $why is the system's reason, in English.
+dialog-assign-footprints-preview-failed = The footprint could not be read: { $why }
+dialog-assign-footprints-preview-unlinked = This footprint is not in an open library, so it cannot be drawn.
+# Tags under the two footprints of a change: the current one and the new one.
+dialog-assign-footprints-preview-now = NOW
+dialog-assign-footprints-preview-new = NEW
+# Layer legend chips under the preview.
+dialog-assign-footprints-legend-top-copper = Top copper
+dialog-assign-footprints-legend-silkscreen = Silkscreen
+dialog-assign-footprints-legend-courtyard = Courtyard
+# Facts under the preview.
+dialog-assign-footprints-fact-pads = Pads
+dialog-assign-footprints-fact-pad-one = Pad 1 (mm)
+dialog-assign-footprints-fact-courtyard = Courtyard (mm)
+dialog-assign-footprints-fact-pin-map = Pin map
+# A size in mm: $w by $h, or the diameter $d of a round pad.
+dialog-assign-footprints-size-rect = { $w } × { $h }
+dialog-assign-footprints-size-round = Ø { $d }
+# Every pin keeps its pad. $pairs lists "1 → 1, 2 → 2".
+dialog-assign-footprints-pin-map-matches = { $pairs } · matches
+# Pins whose pad number is not on the new footprint; $numbers is a list.
+dialog-assign-footprints-pin-map-missing = Pads { $numbers } are not on the new footprint
+# Between the current and the new value of a fact.
+dialog-assign-footprints-arrow = →
 
 dialog-annotate-matching-unavailable = Parameter matching is not available yet.
 dialog-annotate-sheet-options-unavailable = Start and Add Suffix cannot be changed yet.
