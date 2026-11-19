@@ -502,10 +502,11 @@ pub struct UiState {
     /// Generation of the newest Assign Footprints read. Outside the dialog's
     /// state so a reopened dialog never takes an older read.
     pub assign_footprints_reads: u64,
-    /// The Net Inspector panel's filter and expanded nets (#1269).
-    pub net_inspector: crate::panels::NetInspectorState,
-    /// The Object List panel's picks and rows (#1259).
-    pub object_list: crate::panels::ObjectListState,
+    /// The Net Inspector panel's mode, filter and expanded rows (#1269);
+    /// boxed so its growth stays off `UiState` (#2412).
+    pub net_inspector: Box<crate::panels::NetInspectorState>,
+    /// The Object List panel's picks and rows (#1259); boxed as above.
+    pub object_list: Box<crate::panels::ObjectListState>,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers

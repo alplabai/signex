@@ -226,7 +226,7 @@ impl Signex {
         }
         let warm = self.warm_net_index_for_pin_rows();
         let (status, data) = self.net_inspector_source();
-        let state = self.ui_state.net_inspector.clone();
+        let state = (*self.ui_state.net_inspector).clone();
         let same_source = match (&data, &self.document_state.net_nav.inspector_source) {
             (Some(data), Some((built, built_state))) => {
                 Arc::ptr_eq(data, built) && *built_state == state
