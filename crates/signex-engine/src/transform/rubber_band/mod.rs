@@ -59,6 +59,8 @@
 //! own. A selected wire carries what joins it (its ends, and the dots and
 //! sheet pins on its span) by the same rules, see [`wire_contacts`].
 
+#[cfg(test)]
+mod counters;
 mod env;
 mod guard;
 mod guard_local;

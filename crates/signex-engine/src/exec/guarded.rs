@@ -51,6 +51,8 @@ struct Reference<'r> {
     /// Dotless T points of the moved sheet the plain move leaves bare: an edit
     /// of a wire there must not dot them (#107: no connection).
     bare: &'r HashSet<signex_net::uf::Key>,
+    /// Every pin tip, where the move put it (the rounds do not move parts).
+    pin_tips: &'r HashSet<signex_net::uf::Key>,
 }
 
 #[cfg(test)]
@@ -71,6 +73,8 @@ pub(crate) struct Record {
     /// from the start, apart from the policy, so a pin that rode on such a
     /// wire and sits on one of these keys is judged on its own.
     pub(crate) bailed: HashSet<signex_net::uf::Key>,
+    /// The wires those points are on: they moved plainly, carrying nothing.
+    pub(crate) bailed_wires: Vec<Uuid>,
     /// Every carried point, `(old, new)`, bailed ones included.
     pub(crate) wires: Vec<(Point, Point)>,
     /// The moved pins the pin pass kept (not those riding on a carried wire).
@@ -152,9 +156,10 @@ impl Engine {
         items: &[SelectedItem],
         followed: &[SelectedItem],
         fold: Fold<'_>,
+        unfollowed: Option<SchematicSheet>,
     ) -> DocumentPatch {
         let plain_items = [items, followed].concat();
-        if contacts.is_empty() {
+        if contacts.is_empty() && unfollowed.is_none() {
             let mut patch = self.reconciled_patch(&plain_items);
             patch |= fold(self);
             return patch;
@@ -165,7 +170,12 @@ impl Engine {
         }
         // The sheet as the edit left it: every round starts here.
         let moved = self.document.clone();
-        // P, the one reference: exactly what the plain edit commits.
+        // P, the one reference: exactly what the plain edit commits, so with
+        // the wire ends past a dragged bus's entries where they were
+        // (`unfollowed`): the rounds' shifts of them are checked too.
+        if let Some(unfollowed) = unfollowed {
+            self.document = unfollowed;
+        }
         self.reconciled_patch(&plain_items);
         fold(self);
         let plain = std::mem::take(&mut self.document);
@@ -175,11 +185,14 @@ impl Engine {
             .collect();
         let mut bare = crate::transform::bare_t_keys(&moved);
         bare.retain(|k| !dotted.contains(k));
+        let pin_tips: HashSet<signex_net::uf::Key> =
+            crate::transform::pin_owners(&moved).into_keys().collect();
         let reference = Reference {
             moved: &moved,
             plain: &plain,
             plain_dots: &plain_dots,
             bare: &bare,
+            pin_tips: &pin_tips,
         };
         let contacts = self.needed_contacts(contacts, &moved, &plain);
         self.guarded_rounds(before, &contacts, items, followed, &reference, fold)
@@ -215,9 +228,12 @@ impl Engine {
             Some(base) => base.derive_at(&bare, &keys).1,
             None => signex_net::net_signatures_at(&bare, &keys).1,
         };
+        // The pin ends, read once for every point that asks.
+        let owners = std::cell::OnceCell::new();
         for (point, at) in contacts.wires.iter().zip(found.chunks(2)) {
             let kept = at.len() == 2 && at[0].0 == at[1].0;
-            if !kept || lone_wire_end(&bare, point.old_key()) {
+            let pins = || owners.get_or_init(|| crate::transform::pin_owners(&bare));
+            if !kept || lone_wire_end(&bare, point.old_key(), pins) {
                 needed.wires.push(*point);
             }
         }
@@ -267,7 +283,7 @@ impl Engine {
             .map(|tip| tip.now(at.moved))
             .collect();
         for round in 0.. {
-            self.document = at.moved.clone();
+            self.document.clone_from(at.moved);
             let carried = crate::carry_points(&mut self.document, &contacts.wires, items, &policy);
             let pins = crate::follow_moved_pins(&mut self.document, &contacts.tips, items, &policy);
             let mut touched = [items, followed].concat();
@@ -287,7 +303,8 @@ impl Engine {
             patch |= fold(self);
             let mut edited = carried.edited_tips;
             edited.extend(pins.edited_tips);
-            let mut verdict = guard.check(&self.document, &contacts.tips, &policy, &edited);
+            let (equal, mut verdict) =
+                guard.judge(&self.document, &contacts.tips, &policy, &edited);
             // Spec gap (a), which the net comparison cannot see when the wire is
             // a bare run: a held pin still touching the wire it landed in.
             let touching = self.held_tips_touching(contacts, at, &held_tips, &dots, &tips_now);
@@ -299,16 +316,43 @@ impl Engine {
                 blamed.sort_unstable();
                 blamed.dedup();
             }
+            // A wire the round laid over a pin end that the plain move leaves
+            // free: a bare touch with no dot (no connection, #107) and no
+            // notice. The contacts that edited take it down the ladder.
+            if verdict.is_none() && self.makes_bare_taps(&touched, at) {
+                #[cfg(test)]
+                crate::transform::rubber_band::reasons::note("a new bare touch of a pin end");
+                let live = live_keys(contacts, &policy, &edited);
+                if !live.is_empty() {
+                    verdict = Some(live);
+                }
+            }
             let Some(blamed) = verdict else {
-                self.warn_plain_pins(&guard, &contacts.tips, &policy);
-                self.warn_plain_wire_points(before, contacts, &policy, items);
-                self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
+                if !equal {
+                    // Every contact is plain and the nets still differ from the
+                    // intent: nothing is left to step down, so the plain move
+                    // itself is what is committed.
+                    self.document.clone_from(at.plain);
+                    patch = DocumentPatch::from_selected_items(&[items, followed].concat())
+                        | DocumentPatch::WIRES
+                        | DocumentPatch::JUNCTIONS;
+                }
+                // A drag preview's notices are never shown.
+                if self.preset_sheet.is_none() {
+                    self.warn_plain_pins(&guard, &contacts.tips, &policy);
+                    self.warn_plain_wire_points(before, contacts, &policy, items);
+                    self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
+                }
                 #[cfg(test)]
                 LAST.with(|last| {
                     let plain = policy.plain.clone();
                     let bailed = (contacts.bailed.iter())
                         .map(crate::WirePoint::old_key)
                         .collect();
+                    let mut bailed_wires: Vec<Uuid> =
+                        contacts.bailed.iter().map(crate::WirePoint::wire).collect();
+                    bailed_wires.sort_unstable();
+                    bailed_wires.dedup();
                     let wires = (contacts.wires.iter().chain(&contacts.bailed))
                         .map(|w| (w.old(), w.new_point()))
                         .collect();
@@ -316,6 +360,7 @@ impl Engine {
                     *last.borrow_mut() = Some(Record {
                         plain,
                         bailed,
+                        bailed_wires,
                         wires,
                         tips,
                     });
@@ -336,6 +381,33 @@ impl Engine {
             }
         }
         unreachable!("the escalation loop returns from inside")
+    }
+
+    /// Whether the round laid a wire it touched over a pin end with no dot
+    /// there, where the plain move has none: neither the same bare touch nor
+    /// a pin dot it made (a pin dot spec gap (a) left out is the held pin's,
+    /// told in its own notice).
+    fn makes_bare_taps(&self, touched: &[SelectedItem], at: &Reference<'_>) -> bool {
+        use signex_net::{point_on_segment, pt_key};
+        let ids: HashSet<Uuid> = (touched.iter())
+            .filter(|item| item.kind == signex_types::schematic::SelectedKind::Wire)
+            .map(|item| item.uuid)
+            .collect();
+        let inside = |k: signex_net::uf::Key, w: &signex_types::schematic::Wire| {
+            let (a, b) = (pt_key(&w.start), pt_key(&w.end));
+            a != k && b != k && point_on_segment(k, a, b)
+        };
+        let dot_at = |sheet: &SchematicSheet, k| {
+            (sheet.junctions.iter()).any(|j| pt_key(&j.position) == k)
+        };
+        (self.document.wires.iter())
+            .filter(|w| ids.contains(&w.uuid))
+            .flat_map(|w| at.pin_tips.iter().copied().filter(move |&k| inside(k, w)))
+            .any(|k| {
+                !dot_at(&self.document, k)
+                    && !at.plain_dots.iter().any(|d| pt_key(d) == k)
+                    && !(at.plain.wires.iter().any(|w| inside(k, w)) && !dot_at(at.plain, k))
+            })
     }
 
     /// Spec gap (a): the old keys of the held pins (`held`, indices into the
@@ -377,7 +449,12 @@ impl Engine {
         let keys: Vec<(signex_net::uf::Key, bool)> = (queries.iter())
             .flat_map(|(_, k, wire)| [(*k, false), (*wire, false)])
             .collect();
-        let (_, found) = signex_net::net_signatures_at(&self.document, &keys);
+        // From the pre-move connectivity when a drag preview has it, as the
+        // guard derives: the reached nets, not the whole sheet.
+        let (_, found) = match self.preset_base.as_deref() {
+            Some(base) => base.derive_at(&self.document, &keys),
+            None => signex_net::net_signatures_at(&self.document, &keys),
+        };
         (queries.iter().zip(found.chunks(2)))
             .filter(|(_, roots)| roots.len() == 2 && roots[0].0 == roots[1].0)
             .map(|((i, _, _), _)| contacts.tips[*i].old_key())
@@ -460,7 +537,11 @@ impl Engine {
 
 /// Whether only one wire end lies at `k` on `sheet`: no other wire end or
 /// span, label, dot, pin or child-sheet pin.
-fn lone_wire_end(sheet: &SchematicSheet, k: signex_net::uf::Key) -> bool {
+fn lone_wire_end<'p>(
+    sheet: &SchematicSheet,
+    k: signex_net::uf::Key,
+    pins: impl FnOnce() -> &'p crate::PinOwners,
+) -> bool {
     use signex_net::{point_on_segment, pt_key};
     let ends = (sheet.wires.iter())
         .filter(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
@@ -477,5 +558,27 @@ fn lone_wire_end(sheet: &SchematicSheet, k: signex_net::uf::Key) -> bool {
         || (sheet.child_sheets.iter())
             .flat_map(|c| c.pins.iter())
             .any(|p| pt_key(&p.position) == k);
-    !through && !marked && !crate::transform::pin_owners(sheet).contains_key(&k)
+    !through && !marked && !pins().contains_key(&k)
+}
+
+/// The live contacts' old keys to take down the ladder for a difference the
+/// net comparison does not name: those whose handling edited something, or
+/// every live one when none did.
+fn live_keys(
+    contacts: &Contacts,
+    policy: &crate::Policy,
+    edited: &[signex_net::uf::Key],
+) -> Vec<signex_net::uf::Key> {
+    let live: Vec<signex_net::uf::Key> = (contacts.tips.iter())
+        .map(crate::PinTip::old_key)
+        .chain(contacts.wires.iter().map(crate::WirePoint::old_key))
+        .filter(|k| !policy.plain.contains(k))
+        .collect();
+    let mut keys: Vec<_> = live.iter().copied().filter(|k| edited.contains(k)).collect();
+    if keys.is_empty() {
+        keys = live;
+    }
+    keys.sort_unstable();
+    keys.dedup();
+    keys
 }

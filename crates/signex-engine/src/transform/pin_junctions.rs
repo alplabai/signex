@@ -292,7 +292,7 @@ pub(crate) fn frozen_pin_dots(sheet: &SchematicSheet, frozen: &[Point]) -> Vec<J
 /// strictly inside a wire. What a plain move decided, for its guarded pass to
 /// keep (see [`frozen_pin_dots`]).
 #[must_use]
-pub fn new_pin_dots(before: &SchematicSheet, after: &SchematicSheet) -> Vec<Point> {
+pub(crate) fn new_pin_dots(before: &SchematicSheet, after: &SchematicSheet) -> Vec<Point> {
     let old: HashSet<uuid::Uuid> = before.junctions.iter().map(|j| j.uuid).collect();
     let fresh: Vec<Point> = (after.junctions.iter())
         .filter(|j| j.minted && !old.contains(&j.uuid))
@@ -325,7 +325,7 @@ pub(crate) fn tip_keys_of(sheet: &SchematicSheet, ids: &HashSet<uuid::Uuid>) -> 
 /// still meet there (it goes when the pin or the wire leaves). The no-short
 /// rule is the minting's ([`pin_dots_for`]), never a reason to drop a dot.
 #[must_use]
-pub fn pin_owners(sheet: &SchematicSheet) -> HashMap<Key, Vec<uuid::Uuid>> {
+pub(crate) fn pin_owners(sheet: &SchematicSheet) -> HashMap<Key, Vec<uuid::Uuid>> {
     let mut owners: HashMap<Key, Vec<uuid::Uuid>> = HashMap::new();
     for symbol in &sheet.symbols {
         for tip in symbol_pin_tips(sheet, symbol) {

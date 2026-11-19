@@ -4,18 +4,20 @@
 //! move has been rubber-banded and junctions reconciled, the candidate sheet's
 //! nets are compared with what the user's move asks for - terminals, labels,
 //! child-sheet pins and the net name, via [`signex_net::net_signatures`] - and
-//! any difference is a bug in the route, not a feature: the offending tips are
-//! escalated (normal -> forced new path -> plain move) and the pass is run
-//! again. A plain tip is projected away on both sides of the comparison,
-//! because for it the user keeps the old behaviour and gets a warning. Each
-//! round escalates at least one tip, so there are at most two rounds per tip.
+//! any difference is a bug in the route, not a feature: the offending contacts
+//! (moved pins, and the points a dragged wire carries) are escalated (normal
+//! -> forced new path -> plain move) and the pass is run again. A plain pin is
+//! compared where the plain move put it, on exactly its plain net (provisional
+//! decision (b)), and the user gets a warning. Each round escalates at least
+//! one contact, so there are at most two rounds per contact.
 //!
-//! The reference is the *intent*, not the pre-move sheet: the plain-moved
-//! sheet's nets (a co-selected label, dot or wire that leaves its wire is the
-//! user's own edit), with every moved pin put on the net the plain move
-//! defines for it - the net at its old tip when something stays there to
-//! carry the connection, else the net it ends up on (a co-moved wire carries
-//! it along).
+//! The reference is the *intent*, not the pre-move sheet: the nets of the
+//! plain move as it is committed (a co-selected label, dot or wire that leaves
+//! its wire is the user's own edit), with every kept moved pin put on the net
+//! the plain move defines for it - the net at its old tip when something
+//! stays there to carry the connection, else the net it ends up on - and every
+//! kept carried point joining the net at its old place to the net its wire
+//! landed on (`intent`).
 
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -28,6 +30,8 @@ use signex_net::{
 use signex_types::schematic::{LabelType, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
+#[cfg(test)]
+pub(crate) use super::counters::{reasons, self_check, tally};
 use super::guard_local::LocalGuard;
 use super::intent::{self, Slot};
 use super::{PinIdent, PinTip, WirePoint};
@@ -791,9 +795,7 @@ impl<'a> Guard<'a> {
     }
 
     /// `None` when `candidate` has exactly the nets the move asks for;
-    /// otherwise the old-tip keys to blame. A difference that names no moved
-    /// pin is blamed on the tips whose handling edited something (`edited`),
-    /// and when there are none it is the user's own edit and stands.
+    /// otherwise the old-point keys to blame (see [`Self::blame`]).
     #[must_use]
     pub fn check(
         &self,
@@ -802,16 +804,24 @@ impl<'a> Guard<'a> {
         policy: &Policy,
         edited: &[Key],
     ) -> Option<Vec<Key>> {
+        self.judge(candidate, tips, policy, edited).1
+    }
+
+    /// [`Self::check`] with whether the nets are the ones asked for: a
+    /// difference with no live contact left to blame comes back unequal and
+    /// with nobody blamed.
+    #[must_use]
+    pub fn judge(
+        &self,
+        candidate: &SchematicSheet,
+        tips: &[PinTip],
+        policy: &Policy,
+        edited: &[Key],
+    ) -> (bool, Option<Vec<Key>>) {
+        let (equal, blamed, _local_used) = self.verdict(candidate, tips, policy, edited);
         #[cfg(test)]
-        {
-            let (equal, blamed, local_used) = self.verdict(candidate, tips, policy, edited);
-            tally::checked(local_used, equal, &blamed);
-            blamed
-        }
-        #[cfg(not(test))]
-        {
-            self.verdict(candidate, tips, policy, edited).1
-        }
+        tally::checked(_local_used, equal, &blamed);
+        (equal, blamed)
     }
 
     /// Whether the candidate has the nets the move asks for, who is blamed
@@ -1076,120 +1086,3 @@ pub(super) fn empty_net() -> NetSignature {
     }
 }
 
-/// Test switch for the check in [`derive_at`]; on unless a timing bench turns
-/// it off for its own thread.
-#[cfg(test)]
-pub(crate) mod self_check {
-    use std::cell::Cell;
-
-    thread_local! {
-        static ON: Cell<bool> = const { Cell::new(true) };
-    }
-
-    pub(crate) fn enabled() -> bool {
-        ON.with(Cell::get)
-    }
-
-    /// Turn the check off for this thread until the guard drops.
-    pub(crate) fn off() -> Off {
-        Off(ON.with(|flag| flag.replace(false)))
-    }
-
-    /// Restores the setting [`off`] found.
-    pub(crate) struct Off(bool);
-
-    impl Drop for Off {
-        fn drop(&mut self) {
-            ON.with(|flag| flag.set(self.0));
-        }
-    }
-}
-
-/// What the tests count on this thread: the guard's checks (how many ran on
-/// the nets the move reaches, how many over every net, how many fell back to
-/// every net, how many blamed a tip, what each decided), the follows the
-/// journal rewound and the reconciles that read fewer wires than the sheet.
-#[cfg(test)]
-pub(crate) mod tally {
-    use std::cell::RefCell;
-
-    use signex_net::uf::Key;
-
-    #[derive(Debug, Default, Clone, PartialEq, Eq)]
-    pub(crate) struct Tally {
-        pub(crate) guards_built_local: usize,
-        pub(crate) local_checks: usize,
-        pub(crate) full_checks: usize,
-        pub(crate) blames: usize,
-        /// Checks of a guard built local that fell back to every net.
-        pub(crate) fallbacks: usize,
-        /// Failed follows whose journal put back at least one wire end.
-        pub(crate) rewinds: usize,
-        /// Reconciles that indexed only the wires near the touched ones.
-        pub(crate) reconciles_narrowed: usize,
-        /// Each check's answer, in order.
-        pub(crate) decisions: Vec<(bool, Option<Vec<Key>>)>,
-    }
-
-    thread_local! {
-        static TALLY: RefCell<Tally> = RefCell::new(Tally::default());
-    }
-
-    pub(crate) fn guard_built_local() {
-        TALLY.with(|t| t.borrow_mut().guards_built_local += 1);
-    }
-
-    pub(super) fn checked(local: bool, equal: bool, blamed: &Option<Vec<Key>>) {
-        TALLY.with(|t| {
-            let mut t = t.borrow_mut();
-            if local {
-                t.local_checks += 1;
-            } else {
-                t.full_checks += 1;
-            }
-            t.blames += usize::from(blamed.is_some());
-            t.decisions.push((equal, blamed.clone()));
-        });
-    }
-
-    pub(crate) fn fell_back() {
-        TALLY.with(|t| t.borrow_mut().fallbacks += 1);
-    }
-
-    pub(crate) fn rewound() {
-        TALLY.with(|t| t.borrow_mut().rewinds += 1);
-    }
-
-    pub(crate) fn reconcile_narrowed() {
-        TALLY.with(|t| t.borrow_mut().reconciles_narrowed += 1);
-    }
-
-    /// The counts so far on this thread, starting again from zero.
-    pub(crate) fn take() -> Tally {
-        TALLY.with(|t| std::mem::take(&mut *t.borrow_mut()))
-    }
-}
-
-/// Why the guarded passes on this thread fell back, for the tests: each
-/// cause noted once per pass, taken by the test that counts them.
-#[cfg(test)]
-pub(crate) mod reasons {
-    use std::cell::RefCell;
-    use std::collections::BTreeSet;
-
-    thread_local! {
-        static NOTED: RefCell<BTreeSet<&'static str>> = const { RefCell::new(BTreeSet::new()) };
-    }
-
-    /// Note `why` for the pass running now.
-    pub(crate) fn note(why: &'static str) {
-        NOTED.with(|noted| {
-            noted.borrow_mut().insert(why);
-        });
-    }
-
-    /// The causes noted so far on this thread, starting again from none.
-    pub(crate) fn take() -> BTreeSet<&'static str> {
-        NOTED.with(|noted| std::mem::take(&mut *noted.borrow_mut()))
-    }
-}

@@ -164,10 +164,12 @@ pub use transform::bare_pin_taps;
 pub use transform::pin_junction_repairs;
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
-    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, WireContact, WirePoint, bailing_wires,
-    before_nets, carried_points, carry_points, follow_moved_pins, follow_moved_wires,
-    follow_wire_grip, held_at, moved_pin_tips, moved_wire_contacts, pin_dots_to_keep,
-    wire_contact_points,
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, WireContact, before_nets,
+    follow_moved_pins, follow_wire_grip, moved_pin_tips, moved_wire_contacts, wire_contact_points,
+};
+pub(crate) use transform::rubber_band::{
+    WirePoint, bailing_wires, carried_points, carry_points, follow_moved_wires, held_at,
+    pin_dots_to_keep,
 };
 
 pub(crate) use transform::{PreWires, TouchingPairs};

@@ -214,6 +214,10 @@ impl Engine {
         // Wires shifted at an entry far end only join the reconcile list: the
         // rubber band must not treat them as selected, or it would skip them
         // and leave their pin end behind.
+        // The plain move leaves them where they are: it is the reference the
+        // shifts are checked against.
+        let unfollowed =
+            (keep_wires && !followers.entries.is_empty()).then(|| self.document.clone());
         let followed = self.follow_bus_entry_ends(&followers, &items);
         let contacts = match (ownership, wire_contacts) {
             (Some(owners), Some(wires)) => self.contacts_of(owners, &wires, &items),
@@ -229,7 +233,7 @@ impl Engine {
         // A drag preview's pre-move sheet is the preview's own, shared.
         let preview_sheet = self.preset_sheet.clone();
         let pre_move = preview_sheet.as_deref().unwrap_or(&before);
-        let patch = self.keep_contacts(pre_move, &contacts, &items, &followed, &fold);
+        let patch = self.keep_contacts(pre_move, &contacts, &items, &followed, &fold, unfollowed);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
@@ -267,7 +271,7 @@ impl Engine {
             ..Default::default()
         };
         let fold = |engine: &mut Self| engine.merge_after_edit(adjacent);
-        let patch = self.keep_contacts(&before, &contacts, items, &[], &fold);
+        let patch = self.keep_contacts(&before, &contacts, items, &[], &fold, None);
         let patch_pair = PatchPair {
             semantic,
             document: patch,
