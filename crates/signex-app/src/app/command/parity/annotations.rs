@@ -64,11 +64,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["undo", "redo"], Operand, &[InProgressEdit]),
     // Read: they act on the named document and their operands only. A board
     // tool repaints the board's canvas when that board is in view; the
-    // repaint is a projection and reads nothing into the result.
+    // repaint is a projection and reads nothing into the result. Machine
+    // settings (`ui_state.machine_drc_rules`, the saved layer sets of
+    // `ui_state.layer_strip`) are configuration, not session state, and are
+    // not implicit inputs.
     (
         &[
             "save_document",
-            "assign_net_class",
             "clear_all_net_colors",
             "color_net",
             "export_board_pdf",
@@ -85,10 +87,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "delete_net_class",
             "set_net_class_rules",
             "assign_board_net_class",
-            "show_drc_violation",
-            "waive_drc_violation",
-            "unwaive_drc_violation",
-            "filter_drc_results",
             "set_layer_stack",
             "lock_board_items",
             "unlock_board_items",
@@ -127,7 +125,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_board_reuse_block",
             "place_board_reuse_block",
             "apply_edits",
-            "revert",
             "autoplace_fields",
             "sync_sheet_pins",
             "set_sheet_symbol_size",
@@ -154,6 +151,32 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         ],
         Operand,
         &[],
+    ),
+    // The DRC results act on the board in view only (`drc_results_board`,
+    // handlers/pcb_drc_results.rs); Show also centres that window's camera
+    // (`center_on_world` reads the canvas `viewport`). The last DRC run
+    // (`interaction_state.pcb_drc`, `PcbDrc` in app/state/pcb_drc.rs) is
+    // core-bound session state, check results being an ADR-0006 core
+    // category listed in scripts/uifree-state.txt, so it is no implicit input.
+    (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
+    (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // A waiver is refused on a stale last run (`set_drc_waiver`): the core
+    // session state above, so nothing implicit.
+    (
+        &["waive_drc_violation", "unwaive_drc_violation"],
+        Operand,
+        &[],
+    ),
+    // The net must be in the GUI's resolved-net cache
+    // (`ui_state.net_class_styles.knows_net`), derived from the documents
+    // like the render cache, and refused while it is not resolved yet.
+    (&["assign_net_class"], Operand, &[RenderCache]),
+    // An agent's revert is refused while the person draws, types into or
+    // moves on that sheet in any window (`person_busy_on`).
+    (
+        &["revert"],
+        Operand,
+        &[ActiveDocument, Window, InProgressEdit],
     ),
     // Adding or removing a requirement clears the Project tab's typed
     // requirement drafts.
@@ -284,7 +307,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // DRC of the board in view, unless one is running for it.
     (&["run_drc"], Bridge, &[ActiveDocument]),
     // Checks read from memory, the active tab's render snapshot not used
-    // (`erc_check_inputs`), confined by the origin.
+    // (`erc_check_inputs`), confined by the origin; DRC falls back on the
+    // machine rules, configuration and not session state.
     (
         &["check_erc", "check_drc", "check_requirements"],
         Check,
@@ -292,8 +316,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The answer names the view angle of the board's canvas.
     (&["document_info"], Query, &[Window]),
-    // Read: operands only. `rules_explain` reads the board's last DRC result,
-    // which the board's document state holds.
+    // Read: operands only. `rules_explain` and `rules_get` read the board's
+    // last DRC run (`interaction_state.pcb_drc`, `PcbDrc` in
+    // app/state/pcb_drc.rs), which is core-bound session state (check
+    // results, an ADR-0006 core category in scripts/uifree-state.txt), not
+    // an implicit input. A project without rules reads the machine rules
+    // (`ui_state.machine_drc_rules`), configuration and not session state.
     (
         &[
             "board_panel",
@@ -336,6 +364,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // The grid the copy is stored on (`copy_selection`).
     (&["copy", "cut", "duplicate"], Bridge, &[ToolState]),
     (&["new_document", "open_document"], Bridge, &[DialogAnswer]),
+    // A new project takes the machine's default rule profile and annotate
+    // undo setting (`ui_state`), configuration and not session state.
     (
         &["new_document", "open_document", "new_project_with_profile"],
         Operand,
@@ -346,11 +376,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         HeadlessWithoutOperands,
         &[ActiveDocument],
     ),
-    (
-        &["apply_selection_filter_preset", "set_selection_filters"],
-        Operand,
-        &[],
-    ),
+    // The preset is looked up among the person's saved filter presets
+    // (`interaction_state.custom_filter_presets`), tool configuration.
+    (&["apply_selection_filter_preset"], Operand, &[ToolState]),
+    (&["set_selection_filters"], Operand, &[]),
     (
         &[
             "align_bottom",

@@ -35,7 +35,7 @@ annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	ac
 apply_edits	operand_handler	run_operands: named document	core	origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
-apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
+apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	core	tool state	handler
 apply_selection_filter_preset	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_selection_filter_preset	headless_missing_operand	needs `name`	core	none	routing
 arrange_in_box	bridge	Pcb(Tools(ArrangeRequested))	gui	active document,selection	gate
@@ -50,7 +50,7 @@ assign_footprints	bridge	Project(AssignFootprints(Requested))	gui	active documen
 assign_footprints	in_window_rewrite	document_window	gui	window	routing
 assign_footprints	refusal_needs	Schematic	gui	active document	routing
 assign_footprints	headless_refusal	headless_refusal	core	none	routing
-assign_net_class	operand_handler	run_operands: named document	core	origin	handler
+assign_net_class	operand_handler	run_operands: named document	core	render cache,origin	handler
 assign_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 assign_net_class	headless_missing_operand	needs `document`	core	none	routing
 autoplace_fields	bridge	Edit(Extras(AutoplaceFieldsRequested))	gui	active document,selection	handler
@@ -358,7 +358,7 @@ fast_grid_1	headless_refusal	headless_refusal	core	none	routing
 fast_grid_2	bridge	Ui(FastGridPicked(1))	gui	tool state	handler
 fast_grid_2	in_window_rewrite	document_window	gui	window	routing
 fast_grid_2	headless_refusal	headless_refusal	core	none	routing
-filter_drc_results	operand_handler	run_operands: named document	core	origin	handler
+filter_drc_results	operand_handler	run_operands: named document	core	active document,origin	handler
 filter_drc_results	refusal_needs_operands	needs_operands_reason	gui	none	routing
 filter_drc_results	headless_missing_operand	needs `document`	core	none	routing
 find	bridge	Overlay(OpenFind)	gui	none	handler
@@ -1023,7 +1023,7 @@ reset_schematic_designators	in_window_rewrite	document_window	gui	window	routing
 reset_schematic_designators	headless_refusal	headless_refusal	core	none	routing
 resolve	query	run_query	core	origin	handler
 resolve	headless_missing_operand	needs `id`	core	none	routing
-revert	operand_handler	run_operands: named document	core	origin	handler
+revert	operand_handler	run_operands: named document	core	active document,window,in-progress edit,origin	handler
 revert	refusal_needs_operands	needs_operands_reason	gui	none	routing
 revert	headless_missing_operand	needs `document`	core	none	routing
 rotate_clockwise	bridge	Edit(RotateSelectedClockwise)	core	active document,selection,tool state,in-progress edit	handler
@@ -1232,7 +1232,7 @@ show_current_command_hotkeys	headless_refusal	headless_refusal	core	none	routing
 show_current_command_shortcuts	bridge	Menu(OpenKeyboardShortcuts)	gui	none	handler
 show_current_command_shortcuts	in_window_rewrite	document_window	gui	window	routing
 show_current_command_shortcuts	headless_refusal	headless_refusal	core	none	routing
-show_drc_violation	operand_handler	run_operands: named document	core	origin	handler
+show_drc_violation	operand_handler	run_operands: named document	core	active document,window,origin	handler
 show_drc_violation	refusal_needs_operands	needs_operands_reason	gui	none	routing
 show_drc_violation	headless_missing_operand	needs `document`	core	none	routing
 show_layer_group	operand_handler	run_operands: named document	core	origin	handler

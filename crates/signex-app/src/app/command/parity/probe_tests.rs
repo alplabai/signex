@@ -1,6 +1,12 @@
 //! The probe behind the gate-derived inputs, checked against an exhaustive
 //! enumeration of the facts each gate's source names, so a fact the sampled
 //! probe misses fails a test whatever the probe found.
+//!
+//! The source scan reads `ctx.<field>` and `helper(ctx)` only. It does not
+//! parse `helper(ctx, x)`, `&ctx`, a multi-variant `Self::A | Self::B` arm,
+//! or a helper defined outside needs.rs and enablement.rs; a gate written
+//! that way is caught by `the_source_scan_names_every_fact_the_probe_sees`
+//! when the probe still sees the fact.
 
 use std::collections::BTreeSet;
 
@@ -183,6 +189,27 @@ fn the_probe_finds_every_fact_a_gate_reads() {
         assert!(
             missed.is_empty(),
             "the probe misses {missed:?} of {name}; raise SAMPLES"
+        );
+    }
+}
+
+/// The scan reads every gate: each `Needs` gate but `Planned` names some
+/// fact, and every fact the probe sees in a gate is one the scan named, so a
+/// source shape the scan does not parse fails here instead of passing.
+#[test]
+fn the_source_scan_names_every_fact_the_probe_sees() {
+    for ((name, gate), named) in every_gate() {
+        let is_needs = name.starts_with("Some(") && !name.starts_with("explains");
+        if is_needs && name != "Some(Planned)" {
+            assert!(!named.is_empty(), "the scan names no fact of {name}");
+        }
+        let unnamed: Vec<&str> = facts_read_by(&gate)
+            .into_iter()
+            .filter(|fact| !named.contains(*fact))
+            .collect();
+        assert!(
+            unnamed.is_empty(),
+            "the probe sees {unnamed:?} in {name}, which the scan does not name"
         );
     }
 }

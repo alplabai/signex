@@ -197,6 +197,71 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
     }
 }
 
+/// The kill list, pinned: a row joining it or dropping off it is a
+/// maintainer decision (ADR-0006 slice C, #2504), not a regenerate.
+const KILL_LIST: &[(&str, &str)] = &[
+    ("assign_net_class", "operand_handler"),
+    ("close_active_document", "operand_handler"),
+    ("draw_wire", "operand_handler"),
+    ("flip_selected_x", "active_bar"),
+    ("flip_selected_x", "refusal_needs"),
+    ("flip_selected_x", "disabled_still_runs_refusal"),
+    ("flip_selected_y", "active_bar"),
+    ("flip_selected_y", "refusal_needs"),
+    ("flip_selected_y", "disabled_still_runs_refusal"),
+    ("mirror_x", "bridge"),
+    ("mirror_x", "refusal_needs"),
+    ("mirror_x", "disabled_still_runs_refusal"),
+    ("mirror_y", "bridge"),
+    ("mirror_y", "refusal_needs"),
+    ("mirror_y", "disabled_still_runs_refusal"),
+    ("paste_special", "bridge"),
+    ("paste_special", "disabled_still_runs_refusal"),
+    ("place_wire", "operand_handler"),
+    ("project_add_requirement", "operand_handler"),
+    ("project_remove_requirement", "operand_handler"),
+    ("redo", "operand_handler"),
+    ("revert", "operand_handler"),
+    ("rotate_clockwise", "bridge"),
+    ("rotate_clockwise", "refusal_needs"),
+    ("rotate_clockwise", "disabled_still_runs_refusal"),
+    ("rotate_counterclockwise", "bridge"),
+    ("rotate_counterclockwise", "refusal_needs"),
+    ("rotate_counterclockwise", "disabled_still_runs_refusal"),
+    ("rotate_selection", "active_bar"),
+    ("rotate_selection", "refusal_needs"),
+    ("rotate_selection", "disabled_still_runs_refusal"),
+    ("rotate_selection_cw", "active_bar"),
+    ("rotate_selection_cw", "refusal_needs"),
+    ("rotate_selection_cw", "disabled_still_runs_refusal"),
+    ("run_erc", "bridge"),
+    ("select_all", "bridge"),
+    ("smart_paste", "bridge"),
+    ("smart_paste", "disabled_still_runs_refusal"),
+    ("undo", "operand_handler"),
+];
+
+#[test]
+fn the_kill_list_is_the_pinned_one() {
+    let live: BTreeSet<(&str, &str)> = rows()
+        .iter()
+        .filter(|row| row.meets_the_kill_criterion())
+        .map(|row| (row.id, row.form.name()))
+        .collect();
+    let pinned: BTreeSet<(&str, &str)> = KILL_LIST.iter().copied().collect();
+    assert_eq!(
+        pinned.len(),
+        KILL_LIST.len(),
+        "a kill-list row is pinned twice"
+    );
+    let joined: Vec<_> = live.difference(&pinned).collect();
+    let dropped: Vec<_> = pinned.difference(&live).collect();
+    assert!(
+        joined.is_empty() && dropped.is_empty(),
+        "the kill list changed; joined {joined:?}, dropped {dropped:?}"
+    );
+}
+
 /// An id the catalog has not decided reads `undecided` on every form.
 #[test]
 fn an_undecided_id_is_undecided_on_every_form() {
