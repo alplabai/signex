@@ -612,9 +612,19 @@ fn each_pick_list_shows_the_stored_entry() {
     check("Origin", beside(&shown, "Origin"), "Lower Left");
     check("Line", beside(&shown, "Line"), "Dashed");
 
+    // Width is no pick list since #2523: a 2 x 2 grid of the four presets
+    // (wire_style_rows tests the press of each cell).
     let mut wire = one_selected(SelectedKindForTest::Wire, &[("Type", "Wire")]);
     wire.selected_wire_style = Some((WireWidthPreset::Medium, None));
-    check("Width", beside(&texts(&wire), "Width"), "Medium");
+    let wire_texts = texts(&wire);
+    for preset in WireWidthPreset::ALL {
+        let cell = wire_texts.iter().find(|t| t.text == preset.label());
+        check(
+            "Width",
+            cell.map_or("", |t| t.text.as_str()),
+            preset.label(),
+        );
+    }
 
     let body = one_selected(
         SelectedKindForTest::Symbol,

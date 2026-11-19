@@ -700,6 +700,8 @@ mod sheet_variables;
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/illustration_hover.rs"]
+mod illustration_hover;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]

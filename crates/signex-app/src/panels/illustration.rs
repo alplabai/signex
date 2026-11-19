@@ -129,7 +129,7 @@ pub(crate) fn is_field_highlighted(ctx: &PanelContext, field: &FieldId) -> bool 
 pub(crate) fn field_row<'a>(
     ctx: &PanelContext,
     field: FieldId,
-    content: impl Into<Element<'a, PanelMsg>>,
+    content: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
     let is_lit = is_field_highlighted(ctx, &field);
     let row = container(content)

@@ -276,3 +276,35 @@ properties-title-block-today = { $field } (today)
 properties-value-shows = Shows { $value }
 # Why a part value's `=` expression does not evaluate. $error is the reason.
 properties-value-error = Error: { $error }
+
+## Shared Properties rows (#2523)
+
+# One step of the Rotation control. $degrees is 0, 90, 180 or 270.
+properties-rotation-step = { $degrees }°
+# The first point of a wire or a bus, an X / Y pair.
+properties-start = Start
+# Axis tag inside a coordinate field.
+properties-axis-x = X
+properties-axis-y = Y
+# Width / height tag inside a size field.
+properties-axis-width = W
+properties-axis-height = H
+# The unit shown at the right of a length field. $unit is the unit symbol
+# (mm, mil, in, um); symbols are not translated.
+properties-unit-suffix = { $unit }
+# A Font Size entry. $size is the size in points.
+properties-font-size-pt = { $size } pt
+# Tooltips of the text style buttons.
+properties-style-bold = Bold
+properties-style-italic = Italic
+properties-style-underline = Underline
+properties-style-strike = Strike
+# The text style buttons: one letter each, drawn in its own style.
+properties-style-bold-glyph = B
+properties-style-italic-glyph = I
+properties-style-underline-glyph = U
+properties-style-strike-glyph = T
+# Tooltip of the header's more-actions button.
+properties-header-more = More
+# The glyph of the header's more-actions button.
+properties-header-more-glyph = ⋯

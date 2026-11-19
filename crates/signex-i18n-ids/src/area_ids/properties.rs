@@ -182,4 +182,22 @@ define_ids! {
     PROPERTIES_TITLE_BLOCK_TODAY = "properties-title-block-today";
     PROPERTIES_VALUE_SHOWS = "properties-value-shows";
     PROPERTIES_VALUE_ERROR = "properties-value-error";
+    PROPERTIES_ROTATION_STEP = "properties-rotation-step";
+    PROPERTIES_START = "properties-start";
+    PROPERTIES_AXIS_X = "properties-axis-x";
+    PROPERTIES_AXIS_Y = "properties-axis-y";
+    PROPERTIES_AXIS_WIDTH = "properties-axis-width";
+    PROPERTIES_AXIS_HEIGHT = "properties-axis-height";
+    PROPERTIES_UNIT_SUFFIX = "properties-unit-suffix";
+    PROPERTIES_FONT_SIZE_PT = "properties-font-size-pt";
+    PROPERTIES_STYLE_BOLD = "properties-style-bold";
+    PROPERTIES_STYLE_ITALIC = "properties-style-italic";
+    PROPERTIES_STYLE_UNDERLINE = "properties-style-underline";
+    PROPERTIES_STYLE_STRIKE = "properties-style-strike";
+    PROPERTIES_STYLE_BOLD_GLYPH = "properties-style-bold-glyph";
+    PROPERTIES_STYLE_ITALIC_GLYPH = "properties-style-italic-glyph";
+    PROPERTIES_STYLE_UNDERLINE_GLYPH = "properties-style-underline-glyph";
+    PROPERTIES_STYLE_STRIKE_GLYPH = "properties-style-strike-glyph";
+    PROPERTIES_HEADER_MORE = "properties-header-more";
+    PROPERTIES_HEADER_MORE_GLYPH = "properties-header-more-glyph";
 }
