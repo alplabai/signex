@@ -129,6 +129,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
+| `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
@@ -230,6 +231,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
 | `color_net` | Color net | view | — | — |
+| `compile_project` | Compile the project | design | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |

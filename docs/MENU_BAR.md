@@ -569,6 +569,26 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
 
+## View ▸ Compiled Design {#view-compiled-design}
+
+Runs `open_compiled_design` (#1308), which opens (or reveals) the Compiled
+Design panel, docked on the left as a tab beside Projects. The row sits under
+Net Inspector; the panel is also in the status bar's Panels list. No key is
+bound. Always available; with no sheet of a project open the panel says so.
+
+- The panel shows the last compile of the active document's project: its
+  hierarchy with every repeated sheet expanded into its channels (CH1, CH2,
+  ...), each row with the parts and nets of that sheet occurrence, and a
+  Nets mode listing every compiled net with the number of sheets it crosses.
+  Rules and states: `docs/MULTI_CHANNEL.md`, "Compiled Design panel".
+- `compile_project` (palette only, no menu row; Design category) compiles the
+  project off the UI thread with the project's channel naming. It needs a
+  sheet of a project (`Needs::ProjectSheet`, as Number Schematic Sheets). The
+  panel's Recompile button and its Compile project button run it too. The
+  result lives in memory until the project closes; nothing is written.
+  Recompile is never automatic: an edit to a compiled sheet only marks its
+  rows out of date.
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each

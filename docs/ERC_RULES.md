@@ -25,6 +25,18 @@ child placed by several symbols gets one finding per symbol.
 Sync Sheet Pins gives a new pin the direction of its child label's shape, so
 `sheet_pin_direction_conflict` only sees what the labels' shapes say.
 
+## Repeated sheets
+
+Added for #1279 (`docs/MULTI_CHANNEL.md`). A `Repeat(<net>)` sheet entry of
+a repeated sheet symbol joins channel k to member k of the bus it meets.
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `repeat_entry_needs_bus` | Error | A `Repeat(<net>)` entry of a sheet symbol named `Repeat(CH, 1, N)` meets no bus on the sheet, or a bus whose names carry fewer than N members (a bus-named entry on the bus names it too). Message: "Repeat entry X needs a bus of N members on the parent sheet". |
+
+`bad_hier_sheet_pin` matches a `Repeat(<net>)` entry with the child's port
+`<net>`.
+
 ## Completeness rules
 
 Added for #1286. They are the usual pre-fabrication checks: is every part
