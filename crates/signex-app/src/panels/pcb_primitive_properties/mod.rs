@@ -44,6 +44,7 @@ pub use facts::{
     PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts, TrackFacts, ViaFacts,
     ZoneFacts, ZoneKind, shared,
 };
+pub use zone::PourMsg;
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
@@ -149,6 +150,8 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         mode: StackMode,
     },
+    /// A pour's Copper card: Repour, Shelve and the board-wide menu (#2523).
+    Pour(PourMsg),
 }
 
 /// The panel for `facts`: header, then the kind's sections.

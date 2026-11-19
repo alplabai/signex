@@ -120,7 +120,9 @@ impl Signex {
                 let net = shared(zones.iter().map(|z| z.net));
                 let fills = self.current_pour_fills(&target.board);
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
-                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, fills, i18n))
+                let mut facts = super::zone::zone_facts(board, common, &zones, fills, i18n);
+                facts.menu_open = self.interaction_state.pcb_primitive.pour_menu_open;
+                PcbPrimitiveFacts::Zone(facts)
             }
             ItemRef::Text(_) | ItemRef::Arc(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_) => {
                 return self.free_primitive_facts(board, target);

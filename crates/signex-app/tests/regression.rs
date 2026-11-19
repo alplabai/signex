@@ -201,6 +201,10 @@ mod board_primitive_properties;
 // #2373, #2393: free arcs, pads, strings and dimensions on a board.
 #[path = "regression/board_free_primitives.rs"]
 mod board_free_primitives;
+// #2523: a pour's Shelve and Repour, string quick rotation, dimension
+// precision.
+#[path = "regression/board_pour_text_dimension_panel.rs"]
+mod board_pour_text_dimension_panel;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;

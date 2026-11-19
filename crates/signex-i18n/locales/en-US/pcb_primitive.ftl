@@ -227,3 +227,57 @@ pcb-prim-offset = Offset
 pcb-prim-precision = Precision
 pcb-prim-value = Value
 pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6
+
+## w2/zone-text-dim (#2523): the pour, string and dimension panels and
+## their illustrations.
+# The unit after an area field.
+pcb-prim-unit-mm2 = mm²
+pcb-prim-pour-fill-mode = Fill Mode
+pcb-prim-pour-fill-solid = Solid
+pcb-prim-pour-fill-hatched = Hatched
+pcb-prim-pour-hatched-tip = Hatched fill is not supported yet.
+pcb-prim-pour-thermal = Thermal Relief
+pcb-prim-pour-thermal-tip = Pours join the pads of their net solidly; thermal relief spokes are not drawn yet.
+pcb-prim-pour-spoke-gap = Spoke / Gap
+pcb-prim-pour-corners = Corners
+pcb-prim-pour-corner-sharp = Sharp
+pcb-prim-pour-corner-rounded = Rounded
+pcb-prim-pour-corner-chamfer = Chamfer
+pcb-prim-pour-corner-size = Corner Size
+pcb-prim-pour-corners-tip = Not stored yet: a pour's copper keeps sharp corners.
+# The label of the island rule; the field says "below" and the unit is mm².
+pcb-prim-pour-remove-islands = Remove Islands
+pcb-prim-pour-below = below
+pcb-prim-pour-shelved-value = shelved · no copper
+pcb-prim-pour-repour = Repour
+pcb-prim-pour-repour-shelved-tip = Unshelve the pour before repouring it
+pcb-prim-pour-shelve = Shelve
+pcb-prim-pour-shelve-tip = Keep the outline, show no copper
+pcb-prim-pour-unshelve = Unshelve
+# The button that opens the menu of board-wide pour commands.
+pcb-prim-pour-menu = ⋯
+pcb-prim-pour-menu-tip = All pours on the board
+pcb-prim-pour-repour-all = Repour all
+pcb-prim-pour-shelve-all = Shelve all
+pcb-prim-pour-unshelve-all = Unshelve all
+pcb-prim-pour-shelve-note = Shelve is one undo step and is saved with the board. Fields stay editable while shelved.
+## Labels in the pour illustration.
+pcb-prim-pour-drawing-spoke = Spoke Width
+pcb-prim-pour-drawing-gap = Air Gap
+pcb-prim-pour-drawing-direct = direct connect
+pcb-prim-pour-drawing-other-net = other net
+pcb-prim-pour-drawing-shelved = Shelved · outline kept, no copper
+pcb-prim-pour-drawing-keepout = Keepout · all copper
+# $net is the pour's net name, $layer its layer's name.
+pcb-prim-pour-drawing-note = { $net } · { $layer } · solid
+# A string's location; its two fields are marked X and Y.
+pcb-prim-string-position = Position
+pcb-prim-string-quick-rotation = Quick rotation
+# A quick rotation step; $degrees is a whole number.
+pcb-prim-string-rotation-step = { $degrees }°
+pcb-prim-string-drawing-origin = Position X/Y
+pcb-prim-dim-style = Style
+# A decimals step of the Precision control.
+pcb-prim-dim-precision-step = { $decimals }
+# $layer is the layer's name, $height the text height in mm.
+pcb-prim-dim-drawing-note = { $layer } · text { $height }

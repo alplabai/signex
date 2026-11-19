@@ -1,22 +1,122 @@
 //! The facts of the area panel (#2393): fills, solid regions, polygon pours
 //! and keepouts, read from the zones. The kind is named the way the pick
 //! filter names it (`pcb_geom::PickKind::of_zone`). A pour also shows its
-//! priority, island rules and the copper its fill holds (#2216).
+//! priority, island rules and the copper its fill holds (#2216), and its
+//! Copper card repours and shelves (#2523): Shelve is one board undo step,
+//! Repour refreshes the computed fill and changes nothing in the document.
+
+use std::path::Path;
 
 use pcb_geom::{ItemRef, PickKind, ZoneFills};
 use signex_engine::pcb::BoardCommand;
+use signex_engine::pcb::pour_edit::shelve_all_pours;
 use signex_engine::pcb::primitive_edit::{PrimitiveEditRefusal, ZoneEdit, zone_edit_command};
-use signex_i18n::I18n;
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
 
 use super::PrimitiveEdit;
+use crate::app::Signex;
+use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::pcb_primitive_properties::{
-    AreaLayerChoice, PrimitiveCommon, PrimitiveField, ZoneFacts, ZoneKind, shared,
+    AreaLayerChoice, PourMsg, PrimitiveCommon, PrimitiveField, PrimitiveTarget, ZoneFacts,
+    ZoneKind, shared,
 };
 use crate::pcb_canvas::layer_style;
+
+impl Signex {
+    /// An event of a pour's Copper card (#2523).
+    pub(crate) fn handle_pour_msg(&mut self, msg: &PourMsg) {
+        let panel = &mut self.interaction_state.pcb_primitive;
+        match msg {
+            PourMsg::MenuToggled => {
+                panel.pour_menu_open = !panel.pour_menu_open;
+                return;
+            }
+            PourMsg::RepourPressed => self.repour_board_in_view(true),
+            PourMsg::ShelveToggled { target, shelved } => self.shelve_pours(target, *shelved),
+            PourMsg::RepourAllPressed => self.repour_board_in_view(false),
+            PourMsg::ShelveAllPressed => self.shelve_all_pours_in_view(true),
+            PourMsg::UnshelveAllPressed => self.shelve_all_pours_in_view(false),
+        }
+        // A pick closes the menu.
+        self.interaction_state.pcb_primitive.pour_menu_open = false;
+    }
+
+    /// Shelve or unshelve the selected pours as one undo step.
+    fn shelve_pours(&mut self, target: &PrimitiveTarget, shelved: bool) {
+        if target.is_placement() {
+            return;
+        }
+        let zones: Vec<_> = target
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                ItemRef::Zone { zone, .. } => Some(*zone),
+                _ => None,
+            })
+            .collect();
+        let what = if shelved {
+            ids::PCB_PRIM_POUR_SHELVE
+        } else {
+            ids::PCB_PRIM_POUR_UNSHELVE
+        };
+        self.run_pour_command(&target.board, what, |board| {
+            zone_edit_command(board, &zones, ZoneEdit::Shelved(shelved))
+        });
+    }
+
+    /// Shelve or unshelve every pour of the board in view as one undo step.
+    fn shelve_all_pours_in_view(&mut self, shelved: bool) {
+        let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
+            return;
+        };
+        let what = if shelved {
+            ids::PCB_PRIM_POUR_SHELVE_ALL
+        } else {
+            ids::PCB_PRIM_POUR_UNSHELVE_ALL
+        };
+        self.run_pour_command(&path, what, |board| Ok(shelve_all_pours(board, shelved)));
+    }
+
+    /// Run the command `command` builds on the board at `path` as one
+    /// labelled undo step, or say in Messages why not. Nothing to change is
+    /// no step.
+    fn run_pour_command(
+        &mut self,
+        path: &Path,
+        what: MessageId,
+        command: impl FnOnce(&PcbBoard) -> Result<Option<BoardCommand>, PrimitiveEditRefusal>,
+    ) {
+        let Some(engine) = self.document_state.board_engine(path) else {
+            return;
+        };
+        if engine.board().unknown.newer_minor_source.is_some() {
+            let why = t!(self.ui_state.i18n, ids::PCB_PRIM_READ_ONLY).into_string();
+            self.refuse_primitive_edit(what, why);
+            return;
+        }
+        let revision = engine.revision();
+        let command = match command(engine.board()) {
+            Ok(Some(command)) => command,
+            Ok(None) => return,
+            Err(refusal) => {
+                self.refuse_primitive_edit(what, refusal.to_string());
+                return;
+            }
+        };
+        let label = t!(self.ui_state.i18n, what).into_string();
+        let step = CheckedStep {
+            label: &label,
+            expected_revision: revision,
+        };
+        if let Err(error) = self.execute_board_commands(path, vec![command], Some(step)) {
+            self.refuse_primitive_edit(what, error.to_string());
+        }
+    }
+}
 
 /// What kind of area `zone` is; `None` for a zone none of the tools makes.
 fn zone_kind(zone: &Zone) -> Option<ZoneKind> {
@@ -97,6 +197,17 @@ pub(super) fn zone_facts(
         min_island_area: shared(zones.iter().map(|z| z.min_island_area)),
         remove_dead_islands: shared(zones.iter().map(|z| z.remove_dead_islands)),
         copper: pour_copper(board, zones, fills),
+        shelved: zones
+            .iter()
+            .all(|z| z.is_pour())
+            .then(|| shared(zones.iter().map(|z| z.shelved)))
+            .flatten(),
+        thermal: shared(
+            zones
+                .iter()
+                .map(|z| (z.thermal_relief, z.thermal_width, z.thermal_gap)),
+        ),
+        menu_open: false,
         common,
     }
 }

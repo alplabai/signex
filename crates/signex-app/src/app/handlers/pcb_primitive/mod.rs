@@ -53,6 +53,8 @@ pub struct PcbPrimitivePanel {
     pub search: String,
     /// The pick button is waiting for a click on this board for these items.
     pub net_pick: Option<PrimitiveTarget>,
+    /// The pour Copper card's menu of board-wide commands is open (#2523).
+    pub pour_menu_open: bool,
 }
 
 impl PcbPrimitivePanel {
@@ -224,6 +226,7 @@ impl Signex {
                 };
                 self.apply_primitive_edit(target, PrimitiveEdit::Mode(*mode), what);
             }
+            M::Pour(m) => self.handle_pour_msg(m),
         }
         self.sync_pcb_board_summary();
     }

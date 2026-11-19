@@ -22,8 +22,9 @@ use crate::app::document_ids::DocumentKind;
 use crate::app::{Message, Signex};
 
 /// What each pour of `board` (each in `only`, when given) holds under
-/// `fills`, in board order: its identity, net, layer and priority, the
-/// pieces and area of its copper, and the islands its rules dropped.
+/// `fills`, in board order: its identity, net, layer and priority, whether
+/// it is shelved (#2523, then not filled), the pieces and area of its
+/// copper, and the islands its rules dropped.
 pub(crate) fn pour_report(
     board: &PcbBoard,
     fills: &ZoneFills,
@@ -43,6 +44,7 @@ pub(crate) fn pour_report(
                 "net_name": zone.net_name,
                 "layer": zone.layer,
                 "priority": zone.priority,
+                "shelved": zone.shelved,
                 "filled": fill.is_some(),
                 "pieces": fill.map_or(0, |f| f.pieces.len()),
                 "area_mm2": fill.map_or(0.0, |f| f.area_mm2()),

@@ -520,13 +520,3 @@ pub(super) fn any_layer_row<'a>(
             .boxed(),
     )
 }
-
-/// A text field: the draft while one is typed, else `value`.
-pub(super) fn text_field<'a>(
-    common: &PrimitiveCommon,
-    id: PrimitiveField,
-    value: Option<&str>,
-    look: Look<'a>,
-) -> Element<'a, PanelMsg> {
-    field(common, id, value.map(str::to_string), None, look)
-}
