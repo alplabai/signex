@@ -1,12 +1,12 @@
-//! The Update PCB from Schematic dialog (#1312, #2371): header, the summary
-//! chips and the stale or blocked banner, the table (`table.rs`) scrolling
-//! between the fixed column headings and the footer, the notes, and the
-//! Close / Report... / Validate / Execute footer. State and rules:
-//! `app/update_pcb/`.
+//! The Update PCB from Schematic dialog (#1312, #2371, #2533): the header,
+//! the count tiles and filter field (`summary.rs`), the stale or blocked
+//! banner, the Problems card (`problems.rs`), the grouped list
+//! (`table.rs`, rows from `change_rows.rs`) and the footer: Report... with
+//! the validation result on the left, Close, Validate and Execute on the
+//! right. State and rules: `app/update_pcb/`.
 
-use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Alignment, Element, Length, Widget as _};
-use signex_engine::pcb::eco::EcoChangeList;
+use iced::widget::{Column, Space, container, row, scrollable};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::UserText;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -16,9 +16,11 @@ use super::sizes;
 use crate::app::update_pcb::{BoardStatus, Phase, UpdatePcbState};
 use crate::app::{Message, Signex, UpdatePcbMsg};
 use crate::styles::{
-    DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
+    DialogButtonKind, Radii, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
+pub(super) mod change_rows;
+mod problems;
 mod summary;
 mod table;
 #[cfg(test)]
@@ -50,6 +52,14 @@ pub(super) fn link<'a>(label: Localized, msg: Message) -> Element<'a, Message> {
         .boxed()
 }
 
+/// The project's name for the subtitle: its file name without `.snxprj`.
+fn project_stem(name: &str) -> String {
+    std::path::Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_string())
+}
+
 impl Signex {
     pub(in crate::app::view) fn view_update_pcb_dialog(&self) -> Element<'_, Message> {
         self.wrap_centred_dialog(self.view_update_pcb_card(), sizes::UPDATE_PCB)
@@ -64,7 +74,7 @@ impl Signex {
         let subtitle = t!(
             i18n,
             ids::UPDATE_PCB_SUBTITLE,
-            "project" => state.project_name.clone(),
+            "project" => project_stem(&state.project_name),
             "board" => state.board_name()
         )
         .into_string();
@@ -76,32 +86,37 @@ impl Signex {
             super::header::DIALOG_HEADER_H,
             tokens,
         );
-        let mut top = Column::new().spacing(SP.m);
-        if let Some(list) = state.ready_list().filter(|l| !l.rows.is_empty()) {
-            top = top.push(summary::bar(list, &state.table, i18n, tokens));
+        let mut body = Column::new().spacing(SP.m).height(Length::Fill);
+        let ready = state.ready_list().filter(|l| !l.rows.is_empty());
+        if let Some(list) = ready {
+            body = body.push(summary::bar(list, &state.table, i18n, tokens));
         }
-        top = top.push(self.update_pcb_banner(state, i18n, tokens));
-        let mut card = Column::new()
-            .push(header)
-            .push(container(top).padding([SP.l, SP.xl]).boxed());
+        body = body.push(self.update_pcb_banner(state, i18n, tokens));
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
-            let scrolled = column![
-                table::body(state, list, i18n, tokens),
-                container(notes_view(list, i18n, tokens)).padding([SP.m, SP.xl]),
-            ];
-            card = card
-                .push(table::headings(i18n, tokens))
-                .push(scrollable(scrolled).height(Length::Fill).boxed());
+            if let Some(card) = problems::card(list, i18n, tokens) {
+                body = body.push(card);
+            }
+            body = body.push(list_frame(table::body(state, list, i18n, tokens), tokens));
         } else {
-            card = card.push(Space::new().height(Length::Fill).boxed());
+            body = body.push(Space::new().height(Length::Fill).boxed());
         }
         let footer = dialog_footer_split(
-            validation_line(state, i18n, tokens).into_iter().collect(),
+            self.update_pcb_footer_left(state, i18n, tokens),
             self.update_pcb_buttons(state, i18n, tokens),
         );
         let (width, height) =
             super::widgets::fit_modal_size(self.ui_state.window_size, sizes::UPDATE_PCB);
-        container(card.push(footer).width(Length::Fixed(width)))
+        let card = Column::new()
+            .push(header)
+            .push(
+                container(body)
+                    .padding([SP.l, SP.xl])
+                    .height(Length::Fill)
+                    .boxed(),
+            )
+            .push(footer)
+            .width(Length::Fixed(width));
+        container(card)
             .height(Length::Fixed(height))
             .style(crate::styles::modal_card(tokens))
             .clip(true)
@@ -156,6 +171,26 @@ impl Signex {
         }
     }
 
+    /// Report... and, beside it, the last Validate's verdict.
+    fn update_pcb_footer_left<'a>(
+        &self,
+        state: &UpdatePcbState,
+        i18n: &I18n,
+        tokens: &ThemeTokens,
+    ) -> Vec<Element<'a, Message>> {
+        let ready = state.ready_list();
+        let mut left = vec![dialog_button(
+            t!(i18n, ids::UPDATE_PCB_REPORT),
+            DialogButtonKind::Secondary,
+            ready.map(|_| up(UpdatePcbMsg::ReportRequested)),
+            tokens,
+        )];
+        if let Some(verdict) = validation_line(state, i18n, tokens) {
+            left.push(verdict);
+        }
+        left
+    }
+
     fn update_pcb_buttons<'a>(
         &self,
         state: &UpdatePcbState,
@@ -177,12 +212,6 @@ impl Signex {
                 tokens,
             ),
             dialog_button(
-                t!(i18n, ids::UPDATE_PCB_REPORT),
-                DialogButtonKind::Secondary,
-                ready.map(|_| up(UpdatePcbMsg::ReportRequested)),
-                tokens,
-            ),
-            dialog_button(
                 t!(i18n, ids::UPDATE_PCB_VALIDATE),
                 DialogButtonKind::Secondary,
                 ready.map(|_| up(UpdatePcbMsg::ValidateRequested)),
@@ -198,19 +227,61 @@ impl Signex {
     }
 }
 
-/// The last Validate's verdict, left of the footer buttons.
+/// The list in its hairline frame, scrolling inside the remaining height.
+/// Back Annotate frames its list the same way.
+pub(super) fn list_frame<'a>(
+    list: Element<'a, Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let edge = tokens::resolve(tokens).line_soft;
+    let fill = tokens::resolve(tokens).field;
+    container(
+        scrollable(list)
+            .direction(crate::styles::thin_vertical())
+            .style(crate::styles::scrollbar_style(tokens))
+            .height(Length::Fill),
+    )
+    .height(Length::Fill)
+    .clip(true)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            width: 1.0,
+            color: edge,
+            radius: Radii::GRAPHITE.card.into(),
+        },
+        ..container::Style::default()
+    })
+    .boxed()
+}
+
+/// The last Validate's verdict: a green ✓ or the red reason.
 fn validation_line<'a>(
     state: &UpdatePcbState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Option<Element<'a, Message>> {
-    Some(match state.validation.as_ref()? {
-        Ok(()) => line(t!(i18n, ids::UPDATE_PCB_VALID), tokens::accent(tokens)),
-        Err(why) => line(
+    let (glyph, words, ink) = match state.validation.as_ref()? {
+        Ok(()) => (
+            ids::UPDATE_PCB_STATUS_OK,
+            t!(i18n, ids::UPDATE_PCB_VALID),
+            ti(tokens.success),
+        ),
+        Err(why) => (
+            ids::CHANGE_ROW_ICON_BLOCKED,
             t!(i18n, ids::UPDATE_PCB_INVALID, "why" => why.as_str()),
             tokens::danger(tokens),
         ),
-    })
+    };
+    Some(
+        row![
+            text(t!(i18n, glyph)).size(TS.body).color(ink),
+            text(words).size(TS.body).color(ink),
+        ]
+        .spacing(SP.s)
+        .align_y(Alignment::Center)
+        .boxed(),
+    )
 }
 
 /// A banner line with its action button on the right.
@@ -225,19 +296,4 @@ pub(super) fn banner<'a>(
         bar = bar.push(action);
     }
     bar.boxed()
-}
-
-fn notes_view<'a>(list: &EcoChangeList, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
-    if list.notes.is_empty() {
-        return Space::new().boxed();
-    }
-    let muted = tokens::muted_text(tokens);
-    let mut col = Column::new().spacing(SP.xs).push(line(
-        t!(i18n, ids::UPDATE_PCB_NOTES_HEADING),
-        ti(tokens.text),
-    ));
-    for note in &list.notes {
-        col = col.push(line(texts::note(i18n, note), muted));
-    }
-    col.boxed()
 }
