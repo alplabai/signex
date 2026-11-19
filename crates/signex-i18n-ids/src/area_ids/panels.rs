@@ -83,4 +83,6 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_FILTER_PRESETS = "panels-filter-presets";
+    PANELS_FILTER_SAVE_CURRENT = "panels-filter-save-current";
 }

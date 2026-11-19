@@ -131,7 +131,7 @@ panels-filters-delete = Delete
 panels-filters-unnamed = Filter { $number }
 
 # Object kinds a selection filter can include.
-panels-filter-components = Components
+panels-filter-components = Parts
 panels-filter-wires = Wires
 panels-filter-buses = Buses
 panels-filter-sheet-symbols = Sheet Symbols
@@ -687,3 +687,10 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+
+## Selection Filter dropdown of the schematic Active Bar (#61)
+
+# Caption over the saved filter preset buttons.
+panels-filter-presets = Presets
+# Button: save the categories turned on now as a new preset.
+panels-filter-save-current = Save current

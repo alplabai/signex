@@ -212,3 +212,55 @@ ctx-fp-silk-header = { $kind } (silk)
 ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
+
+## Active Bar Power menu and the Place flyout's power rows (#61, #62): the
+## short port names; the full "Place … power port" text is the tooltip.
+
+ctx-power-common = Common
+ctx-power-styles = Styles
+ctx-power-grounds = Grounds
+ctx-power-gnd = GND
+ctx-power-vcc = VCC
+ctx-power-plus12 = +12
+ctx-power-plus5 = +5
+ctx-power-minus5 = -5
+ctx-power-arrow = Arrow
+ctx-power-wave = Wave
+ctx-power-bar = Bar
+ctx-power-circle = Circle
+ctx-power-signal-ground = Signal Ground
+ctx-power-earth = Earth
+
+## Sheet right-click menu (#62)
+
+# Muted first line with nothing selected; { $file } is the sheet's file name.
+ctx-sheet-context = schematic sheet · { $file }
+ctx-selection-count = { $count ->
+    [one] 1 item selected
+   *[other] { $count } items selected
+}
+# Muted first line with one part selected; { $selected } is ctx-selection-count.
+ctx-selection-part = { $reference } · { $value } · { $selected }
+# Greyed flyout gathering the features not built yet.
+ctx-planned-group = Planned ({ $count })
+ctx-place-group-wiring = Wiring
+ctx-place-group-ports-power = Ports and power
+ctx-place-group-parts-sheets = Parts and sheets
+ctx-place-group-directives-text = Directives and text
+# Greyed row of the Place flyout standing for the planned tools.
+ctx-place-planned-tools = { $count } planned tools…
+# { $names } lists the planned tools.
+ctx-place-planned-tools-tooltip = Planned: { $names }
+
+## Grid picker (#63)
+
+ctx-grid-imperial = Imperial
+ctx-grid-metric = Metric
+# A grid step in millimetres; { $mm } keeps '.' in every language.
+ctx-grid-mm-caption = { $mm } mm
+ctx-grid-properties = Grid Properties…
+ctx-grid-preview = Grid preview
+# { $step } is the ladder name of the step the preview shows.
+ctx-grid-preview-active = { $step } · active
+ctx-grid-preview-on-pitch = Pins on the 2.54 mm pitch land on this grid
+ctx-grid-preview-off-pitch = Pins on the 2.54 mm pitch fall between grid points
