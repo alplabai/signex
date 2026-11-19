@@ -1,16 +1,16 @@
 use signex_output::bom::BomPrice;
 use signex_output::{BomColumn, BomFormat, BomRow, BomTable};
 
-fn en() -> signex_i18n::I18n {
-    signex_i18n::I18n::en_us()
+fn en() -> &'static signex_i18n::I18n {
+    signex_i18n::I18n::en_us_ref()
 }
 
 fn price_status(table: &BomTable, columns: &[BomColumn]) -> Option<String> {
-    super::price_status(&en(), table, columns)
+    super::price_status(en(), table, columns)
 }
 
 fn status_line(table: &BomTable, columns: &[BomColumn], visible: usize) -> String {
-    super::status_line(&en(), table, columns, visible)
+    super::status_line(en(), table, columns, visible)
         .into_string()
         .replace(['\u{2068}', '\u{2069}'], "")
 }
