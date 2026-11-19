@@ -1,7 +1,8 @@
 //! Graphite look of the menu bar: the Signex mark in place of the wordmark,
 //! flat root buttons, and dropdowns with the shared menu card metrics (28 px
-//! rows, a mono shortcut column, a chevron column, soft separators, a width
-//! fitted to the rows). Legacy themes never reach it.
+//! rows, one check column, a right-aligned mono shortcut column, a chevron
+//! column only in a menu with a submenu row, soft separators, a width fitted
+//! to the rows). Legacy themes never reach it.
 
 use std::sync::LazyLock;
 
@@ -15,8 +16,9 @@ use super::{MenuColors, MenuMessage, model};
 
 /// Row metrics of a dropdown: the same card numbers as every context menu.
 const M: MenuMetrics = MenuMetrics::GRAPHITE;
-/// Width of the leading check-mark column of a toggle row: the width
-/// `MenuMetrics::fitted_width` reserves for it, so the card fits its rows.
+/// Width of the leading check-mark column every row keeps, so all labels of
+/// a dropdown start on one line: the width `MenuMetrics::fitted_width`
+/// reserves for a checked row, so the card fits its rows.
 const MARK_WIDTH: f32 = M.check_size;
 /// Glyph of the submenu chevron.
 const CHEVRON: &str = "\u{203A}";
@@ -111,22 +113,24 @@ impl RowShape {
 }
 
 /// Width of `menu`'s dropdown: its rows measured as a context-menu card in
-/// `ui_font`, between 200 and 320 px.
+/// `ui_font`, between 200 and 320 px. Every row counts the check column,
+/// which every row keeps.
 pub(super) fn dropdown_width(menu: &model::Menu, ui_font: &str) -> f32 {
     let rows: Vec<DropdownEntry<()>> = menu
         .entries
         .iter()
         .filter_map(|entry| match entry {
             model::MenuEntry::Item(item) => {
-                let mut row =
-                    DropdownItem::passive(item.label.clone()).checked(item.checked.is_some());
+                let mut row = DropdownItem::passive(item.label.clone()).checked(true);
                 if let Some(s) = &item.shortcut {
                     row = row.shortcut(s.text.clone());
                 }
                 Some(DropdownEntry::Item(row))
             }
             model::MenuEntry::Submenu(sub) => Some(DropdownEntry::Item(
-                DropdownItem::passive(sub.title.clone()).submenu(),
+                DropdownItem::passive(sub.title.clone())
+                    .checked(true)
+                    .submenu(),
             )),
             model::MenuEntry::Separator => None,
         })
@@ -139,7 +143,7 @@ pub(super) fn dropdown_padding() -> iced::Padding {
     iced::Padding::new(M.panel_pad)
 }
 
-/// One dropdown row: the check column of a toggle row, the label, the
+/// One dropdown row: the check column, the label, the
 /// right-aligned mono shortcut and the chevron column, in a button exactly
 /// one 28 px row tall and as wide as the card (the hover fill is the rect
 /// that takes the click).
@@ -196,27 +200,29 @@ pub(super) fn separator(mc: MenuColors) -> Element<'static, MenuMessage> {
     .boxed()
 }
 
-/// The leading cells of a row: the check column of a toggle row, the label
-/// and the gap that pushes the rest to the right edge.
+/// The leading cells of a row: the check column (the mark only on a checked
+/// toggle row), the label and the gap that pushes the rest to the right edge.
 fn cells(
     label: &str,
     ink: iced::Color,
     checked: Option<bool>,
 ) -> Row<Element<'static, MenuMessage>> {
-    let mut cells: Row<Element<'static, MenuMessage>> = Row::new()
+    let mark = if checked == Some(true) {
+        "\u{2713}"
+    } else {
+        ""
+    };
+    Row::new()
         .spacing(M.row_spacing)
         .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-    if let Some(on) = checked {
-        cells = cells.push(
-            text(raw(if on { "\u{2713}" } else { "" }))
+        .width(Length::Fill)
+        .push(
+            text(raw(mark))
                 .size(M.label_size)
                 .color(ink)
                 .width(Length::Fixed(MARK_WIDTH))
                 .boxed(),
-        );
-    }
-    cells
+        )
         .push(
             text(raw(label.to_owned()))
                 .size(M.label_size)
@@ -292,6 +298,34 @@ mod tests {
         assert!(w > BAR_LEFT_PAD + MARK_SIZE + MARK_GAP);
         // 39 label chars, 8 roots at 16 px padding.
         assert_eq!(w, 10.0 + 20.0 + 6.0 + 39.0 * 7.5 + 8.0 * 16.0);
+    }
+
+    /// Every row keeps the check column, so a toggle row needs no more width
+    /// than a plain row with the same label.
+    #[test]
+    fn every_dropdown_row_keeps_the_check_column() {
+        // Wide enough to clear the 200 px floor, narrow enough for 320 px.
+        let label = "Assembly Drawings as SVG Files";
+        let menu_of = |checked: Option<bool>| model::Menu {
+            title: "Root".to_owned(),
+            entries: vec![model::MenuEntry::Item(model::MenuItem {
+                label: label.to_owned(),
+                shortcut: None,
+                state: model::ItemState::Unavailable,
+                checked,
+            })],
+        };
+        let plain = dropdown_width(&menu_of(None), "");
+        assert_eq!(plain, dropdown_width(&menu_of(Some(true)), ""));
+        // The same row measured without a check column, fitted not clamped.
+        let unchecked: Vec<DropdownEntry<()>> =
+            vec![DropdownEntry::Item(DropdownItem::passive(label.to_owned()))];
+        let bare = M.fitted_width(&unchecked, f32::MAX, "");
+        assert!(
+            bare > M.min_width && plain < M.max_width,
+            "{bare} / {plain}"
+        );
+        assert_eq!(plain, bare + M.row_spacing + MARK_WIDTH);
     }
 
     /// One token per menu text: the bar roots, the dropdown and context-menu
