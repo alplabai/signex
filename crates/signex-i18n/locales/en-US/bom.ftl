@@ -72,17 +72,18 @@ bom-rule-missing-mpn = Missing MPN
 bom-rule-duplicate-designator = Duplicate designator
 bom-rule-empty-or-zero-qty = Empty or zero quantity
 bom-rule-unit-field-conflict = Conflicting unit fields
-# Footer issue count, one part per severity; $count is how many (a whole
-# number, at least 1).
-bom-issue-count-errors = { $count ->
+# Footer issue count, one part per severity. $n is how many (a whole number,
+# at least 1), for the plural form; $count is the same number as text,
+# written without grouping.
+bom-issue-count-errors = { $n ->
     [one] { $count } error
    *[other] { $count } errors
 }
-bom-issue-count-warnings = { $count ->
+bom-issue-count-warnings = { $n ->
     [one] { $count } warning
    *[other] { $count } warnings
 }
-bom-issue-count-notes = { $count ->
+bom-issue-count-notes = { $n ->
     [one] { $count } note
    *[other] { $count } notes
 }

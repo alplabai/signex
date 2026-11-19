@@ -115,7 +115,12 @@ pub(super) fn issue_count_label(
     ]
     .into_iter()
     .filter(|(count, _)| *count > 0)
-    .map(|(count, id)| Translatable::new(id).arg("count", count))
+    // `n` picks the plural; `count` is shown ungrouped, as `summary()` writes it.
+    .map(|(count, id)| {
+        Translatable::new(id)
+            .arg("n", count)
+            .arg("count", count.to_string())
+    })
     .rev()
     .reduce(|second, first| {
         Translatable::new(ids::BOM_ISSUE_COUNT_PAIR)

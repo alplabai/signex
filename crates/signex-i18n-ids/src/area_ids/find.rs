@@ -16,6 +16,7 @@ define_ids! {
     FIND_REPLACE_CURRENT = "find-replace-current";
     FIND_REPLACE_ALL = "find-replace-all";
     FIND_TARGETS = "find-targets";
+    FIND_KIND_NET_LABEL = "find-kind-net-label";
     FIND_KIND_TEXT_NOTE = "find-kind-text-note";
     FIND_SIMILAR_TITLE = "find-similar-title";
     FIND_SIMILAR_COL_PROPERTY = "find-similar-col-property";

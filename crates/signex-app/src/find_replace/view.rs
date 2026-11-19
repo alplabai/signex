@@ -40,7 +40,7 @@ type ResultLines = (MessageId, String);
 fn find_kind_label(kind: signex_engine::FindKind) -> MessageId {
     use signex_engine::FindKind;
     match kind {
-        FindKind::NetLabel => signex_i18n::command_ids::CMD_MENU_PLACE_NET_LABEL,
+        FindKind::NetLabel => ids::FIND_KIND_NET_LABEL,
         FindKind::TextNote => ids::FIND_KIND_TEXT_NOTE,
         FindKind::Designator => ids::PROPERTIES_DESIGNATOR,
         FindKind::Value => ids::PROPERTIES_VALUE,

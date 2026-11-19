@@ -16,6 +16,9 @@ find-no-matches = No matches
 find-replace-current = Replace Current
 find-replace-all = Replace All
 find-targets = Targets: labels, notes, designators, values
+# Kind of a match in the results list: a net label on the sheet (a noun,
+# not the Place command).
+find-kind-net-label = Net Label
 # Kind of a match in the results list: a text note on the sheet.
 find-kind-text-note = Text Note
 

@@ -98,3 +98,19 @@ fn the_issue_count_keeps_the_summary_english() {
     );
     assert_ne!(issue_count_label(&mixed, &xa()).map(plain), mixed.summary());
 }
+
+/// Large counts stay ungrouped, as `summary()` writes them.
+#[test]
+fn large_issue_counts_stay_ungrouped() {
+    let en = I18n::en_us();
+    for (errors, notes) in [(1000, 0), (12345, 1000)] {
+        let report = report(errors, 0, notes);
+        assert_eq!(issue_count_label(&report, &en).map(plain), report.summary());
+    }
+    assert_eq!(
+        issue_count_label(&report(12345, 0, 0), &en)
+            .map(plain)
+            .as_deref(),
+        Some("12345 errors")
+    );
+}
