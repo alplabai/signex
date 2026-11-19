@@ -6,7 +6,7 @@ use iced::Task;
 use signex_engine::ProjectGeneralCommand;
 
 use super::{
-    ClassField, DiffPairClassesMsg, DiffPairClassesState, MemberRow, free_name, new_class,
+    DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairMemberRow, free_name, new_class,
     set_field,
 };
 use crate::app::handlers::canvas::parse_value;
@@ -114,7 +114,7 @@ impl Signex {
         &self,
         id: crate::app::state::ProjectId,
         classes: &[signex_types::diff_pair_class::DiffPairClass],
-    ) -> Vec<MemberRow> {
+    ) -> Vec<PairMemberRow> {
         let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = self
             .document_state
             .engines
@@ -135,7 +135,7 @@ impl Signex {
         sheets.sort_by(|a, b| a.0.cmp(&b.0));
         signex_net::class_members(&sheets, classes)
             .into_iter()
-            .map(|m| MemberRow {
+            .map(|m| PairMemberRow {
                 class: m.pair.class.clone().unwrap_or_default(),
                 pair: m.pair.name.clone(),
                 positive: m.pair.positive.clone().unwrap_or_default(),
@@ -187,7 +187,7 @@ fn select(state: &mut DiffPairClassesState, index: usize) {
 
 /// A typed value: kept as the draft, stored when it reads as a number of 0
 /// or more (blank clears it).
-fn edit_field(state: &mut DiffPairClassesState, field: ClassField, text: String) {
+fn edit_field(state: &mut DiffPairClassesState, field: PairClassField, text: String) {
     if let Ok(value) = parse_value(&text)
         && let Some(class) = state.classes.get_mut(state.selected)
     {

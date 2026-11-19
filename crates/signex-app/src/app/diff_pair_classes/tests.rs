@@ -7,8 +7,8 @@ use signex_types::diff_pair_class::DiffPairClass;
 use signex_types::project::ProjectData;
 
 use super::{
-    ClassField, ClassProblem, DiffPairClassesMsg, DiffPairClassesState, MemberRow, free_name,
-    new_class,
+    DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, PairMemberRow,
+    free_name, new_class,
 };
 use crate::app::Signex;
 use crate::app::state::{LoadedProject, ProjectId};
@@ -28,7 +28,7 @@ fn state(names: &[&str], members: &[(&str, &str)]) -> DiffPairClassesState {
         menu: None,
         members: members
             .iter()
-            .map(|(class, pair)| MemberRow {
+            .map(|(class, pair)| PairMemberRow {
                 class: class.to_string(),
                 pair: pair.to_string(),
                 positive: format!("{pair}_P"),
@@ -56,9 +56,9 @@ fn a_new_name_is_free_and_a_class_with_pairs_cannot_be_deleted() {
 #[test]
 fn ok_is_refused_for_a_blank_or_repeated_name() {
     let mut s = state(&["USB", " USB "], &[]);
-    assert_eq!(s.problem(), Some(ClassProblem::DuplicateName));
+    assert_eq!(s.problem(), Some(PairClassProblem::DuplicateName));
     s.classes[1].name = "  ".to_string();
-    assert_eq!(s.problem(), Some(ClassProblem::BlankName));
+    assert_eq!(s.problem(), Some(PairClassProblem::BlankName));
     s.classes[1].name = " HDMI ".to_string();
     assert_eq!(s.problem(), None);
     assert_eq!(s.applied()[1].name, "HDMI");
@@ -112,11 +112,11 @@ fn ok_applies_every_edit_as_one_undo_step() {
     open(&mut app);
     send(
         &mut app,
-        DiffPairClassesMsg::FieldEdited(ClassField::Width, "0.2".into()),
+        DiffPairClassesMsg::FieldEdited(PairClassField::Width, "0.2".into()),
     );
     send(
         &mut app,
-        DiffPairClassesMsg::FieldEdited(ClassField::Gap, "0.15".into()),
+        DiffPairClassesMsg::FieldEdited(PairClassField::Gap, "0.15".into()),
     );
     send(&mut app, DiffPairClassesMsg::ClassAdded);
     send(&mut app, DiffPairClassesMsg::NameEdited("HDMI".into()));
@@ -177,15 +177,15 @@ fn a_typed_value_is_kept_while_typed_and_a_class_with_pairs_stays() {
     }
     send(
         &mut app,
-        DiffPairClassesMsg::FieldEdited(ClassField::Impedance, "9".into()),
+        DiffPairClassesMsg::FieldEdited(PairClassField::Impedance, "9".into()),
     );
     send(
         &mut app,
-        DiffPairClassesMsg::FieldEdited(ClassField::Impedance, "90.".into()),
+        DiffPairClassesMsg::FieldEdited(PairClassField::Impedance, "90.".into()),
     );
     send(&mut app, DiffPairClassesMsg::ClassDeleted(0));
     let s = app.ui_state.diff_pair_classes.as_deref().unwrap();
-    assert_eq!(s.draft(ClassField::Impedance), Some("90."));
+    assert_eq!(s.draft(PairClassField::Impedance), Some("90."));
     assert_eq!(s.classes[0].impedance_ohm, Some(90.0));
     assert_eq!(s.classes.len(), 1, "a class with pairs is not deleted");
 }

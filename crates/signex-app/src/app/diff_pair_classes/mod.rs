@@ -24,7 +24,7 @@ impl From<DiffPairClassesMsg> for crate::app::Message {
 
 /// A typed field of the selected class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ClassField {
+pub enum PairClassField {
     Impedance,
     Tolerance,
     Width,
@@ -48,7 +48,7 @@ pub enum DiffPairClassesMsg {
     /// The selected class's name as typed.
     NameEdited(String),
     /// A value of the selected class as typed.
-    FieldEdited(ClassField, String),
+    FieldEdited(PairClassField, String),
     PairBySuffixToggled(bool),
     /// "Edit in Rules ▸ High Speed": the Rules tab opens.
     RulesLinkClicked,
@@ -58,7 +58,7 @@ pub enum DiffPairClassesMsg {
 
 /// One pair of the project, as the Members table lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemberRow {
+pub struct PairMemberRow {
     pub class: String,
     pub pair: String,
     pub positive: String,
@@ -77,16 +77,16 @@ pub struct DiffPairClassesState {
     /// The class row whose menu is open.
     pub menu: Option<usize>,
     /// The pairs of the project's open sheets, by class.
-    pub members: Vec<MemberRow>,
+    pub members: Vec<PairMemberRow>,
     /// Text typed in a value field, kept while it is typed.
-    pub drafts: Vec<(ClassField, String)>,
+    pub drafts: Vec<(PairClassField, String)>,
     /// Why the last OK did not apply (a name used twice or left blank).
-    pub problem: Option<ClassProblem>,
+    pub problem: Option<PairClassProblem>,
 }
 
 /// Why OK was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClassProblem {
+pub enum PairClassProblem {
     BlankName,
     DuplicateName,
 }
@@ -133,7 +133,7 @@ impl DiffPairClassesState {
     }
 
     /// The draft of `field`, if one is typed.
-    pub fn draft(&self, field: ClassField) -> Option<&str> {
+    pub fn draft(&self, field: PairClassField) -> Option<&str> {
         self.drafts
             .iter()
             .find(|(f, _)| *f == field)
@@ -141,15 +141,15 @@ impl DiffPairClassesState {
     }
 
     /// The problem OK would meet: a blank name or one used twice.
-    pub fn problem(&self) -> Option<ClassProblem> {
+    pub fn problem(&self) -> Option<PairClassProblem> {
         if self.classes.iter().any(|c| c.name.trim().is_empty()) {
-            return Some(ClassProblem::BlankName);
+            return Some(PairClassProblem::BlankName);
         }
         let mut names: Vec<&str> = self.classes.iter().map(|c| c.name.trim()).collect();
         names.sort_unstable();
         let before = names.len();
         names.dedup();
-        (names.len() != before).then_some(ClassProblem::DuplicateName)
+        (names.len() != before).then_some(PairClassProblem::DuplicateName)
     }
 
     /// The classes OK writes: names trimmed.
@@ -166,22 +166,22 @@ impl DiffPairClassesState {
 }
 
 /// A stored value of `class` for `field`.
-pub fn field_value(class: &DiffPairClass, field: ClassField) -> Option<f64> {
+pub fn field_value(class: &DiffPairClass, field: PairClassField) -> Option<f64> {
     match field {
-        ClassField::Impedance => class.impedance_ohm,
-        ClassField::Tolerance => class.impedance_tolerance_pct,
-        ClassField::Width => class.width_mm,
-        ClassField::Gap => class.gap_mm,
+        PairClassField::Impedance => class.impedance_ohm,
+        PairClassField::Tolerance => class.impedance_tolerance_pct,
+        PairClassField::Width => class.width_mm,
+        PairClassField::Gap => class.gap_mm,
     }
 }
 
 /// Set `field` of `class`; `None` clears it.
-pub fn set_field(class: &mut DiffPairClass, field: ClassField, value: Option<f64>) {
+pub fn set_field(class: &mut DiffPairClass, field: PairClassField, value: Option<f64>) {
     let slot = match field {
-        ClassField::Impedance => &mut class.impedance_ohm,
-        ClassField::Tolerance => &mut class.impedance_tolerance_pct,
-        ClassField::Width => &mut class.width_mm,
-        ClassField::Gap => &mut class.gap_mm,
+        PairClassField::Impedance => &mut class.impedance_ohm,
+        PairClassField::Tolerance => &mut class.impedance_tolerance_pct,
+        PairClassField::Width => &mut class.width_mm,
+        PairClassField::Gap => &mut class.gap_mm,
     };
     *slot = value;
 }

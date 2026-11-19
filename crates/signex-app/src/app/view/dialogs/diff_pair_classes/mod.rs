@@ -14,7 +14,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{CheckboxLabel as _, button, checkbox, text, text_input};
 
 use crate::app::diff_pair_classes::{
-    ClassField, ClassProblem, DiffPairClassesMsg, DiffPairClassesState, field_value,
+    DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, field_value,
 };
 use crate::app::{Message, Signex};
 use crate::styles::{
@@ -36,7 +36,7 @@ fn dpc(msg: DiffPairClassesMsg) -> Message {
 }
 
 /// A value as a field shows it.
-fn shown(state: &DiffPairClassesState, field: ClassField) -> String {
+fn shown(state: &DiffPairClassesState, field: PairClassField) -> String {
     if let Some(draft) = state.draft(field) {
         return draft.to_string();
     }
@@ -107,8 +107,8 @@ impl Signex {
         ];
         if let Some(problem) = state.problem {
             let id = match problem {
-                ClassProblem::BlankName => ids::DIALOG_DPC_BLANK_NAME,
-                ClassProblem::DuplicateName => ids::DIALOG_DPC_DUPLICATE_NAME,
+                PairClassProblem::BlankName => ids::DIALOG_DPC_BLANK_NAME,
+                PairClassProblem::DuplicateName => ids::DIALOG_DPC_DUPLICATE_NAME,
             };
             extras.push(
                 text(t!(i18n, id))
@@ -303,7 +303,7 @@ fn form_row<'a>(
 /// A value box `width` wide for `field`, with its unit after it.
 fn value_box<'a>(
     state: &DiffPairClassesState,
-    field: ClassField,
+    field: PairClassField,
     width: f32,
     unit: signex_i18n::Localized,
     muted: Color,
@@ -371,7 +371,7 @@ fn class_form<'a>(
     let impedance = row![
         value_box(
             state,
-            ClassField::Impedance,
+            PairClassField::Impedance,
             80.0,
             t!(i18n, ids::DIALOG_DPC_UNIT_OHM),
             muted
@@ -381,7 +381,7 @@ fn class_form<'a>(
             .color(muted),
         value_box(
             state,
-            ClassField::Tolerance,
+            PairClassField::Tolerance,
             64.0,
             t!(i18n, ids::DIALOG_DPC_UNIT_PCT),
             muted
@@ -391,8 +391,8 @@ fn class_form<'a>(
     .align_y(iced::Alignment::Center)
     .boxed();
     let width_gap = row![
-        value_box(state, ClassField::Width, 96.0, mm(), muted),
-        value_box(state, ClassField::Gap, 96.0, mm(), muted),
+        value_box(state, PairClassField::Width, 96.0, mm(), muted),
+        value_box(state, PairClassField::Gap, 96.0, mm(), muted),
         text(t!(i18n, ids::DIALOG_DPC_ON_TOP))
             .size(TS.caption)
             .color(muted),
