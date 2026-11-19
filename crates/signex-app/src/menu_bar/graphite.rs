@@ -290,8 +290,8 @@ mod tests {
     fn the_graphite_row_is_wider_than_the_mark_and_every_root() {
         let w = approx_menu_bar_width(&signex_i18n::I18n::en_us());
         assert!(w > BAR_LEFT_PAD + MARK_SIZE + MARK_GAP);
-        // 52 label chars, 10 roots at 16 px padding.
-        assert_eq!(w, 10.0 + 20.0 + 6.0 + 52.0 * 7.5 + 10.0 * 16.0);
+        // 39 label chars, 8 roots at 16 px padding.
+        assert_eq!(w, 10.0 + 20.0 + 6.0 + 39.0 * 7.5 + 8.0 * 16.0);
     }
 
     /// One token per menu text: the bar roots, the dropdown and context-menu

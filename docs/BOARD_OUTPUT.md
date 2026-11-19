@@ -29,7 +29,7 @@ the column ids: `designators`, `quantity`, `value`, `footprint`,
 `vias`, `designator`, `x_mm`, `y_mm`, `rotation_deg`, `side`. Millimetres are
 written to the nm, degrees to a thousandth, trailing zeros dropped.
 
-Surfaces: Reports ▸ Board Bill of Materials..., Board Netlist..., Net
+Surfaces: Tools ▸ Reports ▸ Board Bill of Materials..., Board Netlist..., Net
 Lengths..., Component Report... (`board_report_bom`, `board_report_netlist`,
 `board_report_net_length`, `board_report_components`), the Board panel's
 Reports button (the BOM), the palette; Board Reports has a tab per table and
@@ -129,7 +129,7 @@ two never differ.
   centred `<text>` elements in Roboto (a viewer falls back to sans-serif).
   The bottom file is mirrored when Mirror the Bottom Side is on.
 
-Surfaces: Board Print / PDF's Export Assembly SVG, Reports ▸ Assembly Drawings
+Surfaces: Board Print / PDF's Export Assembly SVG, Tools ▸ Reports ▸ Assembly Drawings
 as SVG... and the palette's
 Assembly Drawings as SVG (`export_assembly_svg`) ask for a folder and write
 the drawings of the chosen assembly sets, both sides when none is chosen,

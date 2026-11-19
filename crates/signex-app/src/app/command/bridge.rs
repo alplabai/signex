@@ -271,8 +271,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Tools ▸ Library Editor (#2247).
         "open_library_browser" => Message::Library(LibraryMessage::LibraryEditorRequested),
-        // Tools ▸ Annotation ▸ Number Schematic Sheets and Window ▸ Tile
-        // (#2247).
+        // Tools ▸ Annotation ▸ Number Schematic Sheets and View ▸ Window ▸
+        // Tile (#2247).
         "number_schematic_sheets" => Message::from(crate::app::SheetNumberingMsg::Requested),
         "tile_windows_horizontally" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Stacked))
@@ -280,7 +280,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "tile_windows_vertically" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
         }
-        // Window ▸ Untile (#2249).
+        // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
@@ -300,7 +300,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
         }
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
-        // Reports > Bill of Materials opens the same one.
+        // Tools ▸ Reports ▸ Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),

@@ -1,4 +1,4 @@
-//! Tools ▸ Library Editor and Window ▸ Close All Documents, the rows #2247
+//! Tools ▸ Library Editor and View ▸ Window ▸ Close All Documents, the rows #2247
 //! wired from stubs.
 
 use super::*;
@@ -187,14 +187,14 @@ fn library_editor_opens_the_library_of_the_active_editor_tab() {
 
 #[test]
 fn close_all_documents_is_greyed_with_no_tab() {
-    assert!(!row_is_live(&bare_app(), "Window/Close All Documents"));
+    assert!(!row_is_live(&bare_app(), "View/Window/Close All Documents"));
     assert!(row_is_live(
         &symbol_editor_app(),
-        "Window/Close All Documents"
+        "View/Window/Close All Documents"
     ));
     assert!(row_is_live(
         &loaded_board_app(),
-        "Window/Close All Documents"
+        "View/Window/Close All Documents"
     ));
 }
 
@@ -215,7 +215,7 @@ fn close_all_documents_closes_every_tab() {
         kind: TabKind::SymbolEditor(extra),
     });
     assert_eq!(app.document_state.tabs.len(), 2);
-    let task = click(&mut app, "Window/Close All Documents");
+    let task = click(&mut app, "View/Window/Close All Documents");
     settle(&mut app, task);
     assert!(app.document_state.tabs.is_empty(), "every tab closed");
     assert!(app.document_state.active_engine().is_none());
@@ -230,7 +230,7 @@ fn close_all_documents_parks_a_dirty_sheet_like_the_tab_menu() {
         let path = app.document_state.active_path.clone().expect("path");
         app.document_state.mark_document_dirty(&path);
         let task = if via_menu {
-            click(&mut app, "Window/Close All Documents")
+            click(&mut app, "View/Window/Close All Documents")
         } else {
             app.update(Message::ContextMenu(crate::app::ContextMenuMsg::TabAction(
                 crate::app::TabContextAction::CloseAll,

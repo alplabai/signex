@@ -626,7 +626,7 @@ is nothing to lose at save time. Messages says once per opened sheet which file
 was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
-The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Reports**. Both need a schematic open.
+The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Tools ▸ Reports**. Both need a schematic open.
 Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
@@ -643,7 +643,7 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 **BOM (bill of materials)**
 
-1. Choose **Reports ▸ Bill of Materials…**.
+1. Choose **Tools ▸ Reports ▸ Bill of Materials…**.
 2. A preview of the table opens. Adjust the options and press **Export…**.
 3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
    (`.xlsx`) or HTML (`.html`).
@@ -655,7 +655,7 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+**Tools ▸ Reports** also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
@@ -1063,7 +1063,7 @@ whole panel.
 
 **Assembly drawings**
 
-- **Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
+- **Tools ▸ Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
   `<board>-assembly-top.svg` and `<board>-assembly-bottom.svg`.
 - For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
   / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
@@ -1078,7 +1078,7 @@ its holes and cutouts; each part is the body the 3D view shows.
 
 **Board reports**
 
-**Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
+**Tools ▸ Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
 and **Component Report…** show the board's tables; **Export Report as CSV…**
 saves the one in view.
 
