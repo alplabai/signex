@@ -76,7 +76,8 @@ pub use graphic::{
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{
-    BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, item_by_uuid, track_shape, via_shape,
+    BoardIndex, IndexedItem, ItemRef, ROOM_LABEL_HEIGHT_MM, ROOM_LABEL_INSET_MM, RectSelect,
+    Rejected, item_by_uuid, room_label_box, track_shape, via_shape,
 };
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};

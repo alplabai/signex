@@ -44,7 +44,7 @@ pub fn check_report(
     let mut waived = Vec::new();
     let mut lapsed: Vec<Value> = Vec::new();
     for v in &report.violations {
-        let Some(finding) = finding(report, v, net_names, board) else {
+        let Some(finding) = finding(report, v, pcb, net_names, board) else {
             continue;
         };
         match waiver_state(waivers, v, pcb) {
@@ -79,12 +79,15 @@ pub fn check_report(
 fn finding(
     report: &DrcReport,
     v: &Violation,
+    pcb: &PcbBoard,
     net_names: &BTreeMap<u32, String>,
     board: &str,
 ) -> Option<Finding> {
     let severity = report.severity_of(v)?;
     let (a, b) = (net_name(net_names, v.nets.0), net_name(net_names, v.nets.1));
-    let message = format!("{}, {a} / {b}", describe(v));
+    // A part outside its room is named with its room, not by nets (#2457).
+    let message =
+        crate::rooms::describe_on(pcb, v).unwrap_or_else(|| format!("{}, {a} / {b}", describe(v)));
     Some(Finding {
         rule: rule_of(v).to_string(),
         severity,
@@ -139,6 +142,11 @@ pub fn describe(v: &Violation) -> String {
         ViolationKind::PasteExpansion => size_text("paste expansion", v),
         ViolationKind::CourtyardOverlap if v.measured_nm == 0 => "courtyards overlap".to_string(),
         ViolationKind::CourtyardOverlap => gap_text("courtyard gap", v),
+        // With the board at hand, `rooms::describe_on` names the part and
+        // the room.
+        ViolationKind::PartOutsideRoom => {
+            format!("part {} mm outside its room", mm(v.measured_nm))
+        }
     }
 }
 
@@ -241,7 +249,8 @@ pub fn item_id(item: &ItemRef) -> String {
         | ItemRef::Arc(id)
         | ItemRef::FreePad(id)
         | ItemRef::Dimension(id)
-        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+        | ItemRef::Graphic { graphic: id, .. }
+        | ItemRef::Room(id) => id.to_string(),
         ItemRef::FootprintText { footprint, field } => format!("{footprint}/{}", field.id()),
     }
 }
@@ -258,6 +267,7 @@ pub(crate) fn item_label(item: &ItemRef) -> String {
         ItemRef::Dimension(_) => "dimension",
         ItemRef::Graphic { .. } => "drawing",
         ItemRef::FootprintText { .. } => "text",
+        ItemRef::Room(_) => "room",
     };
     format!("{kind} {}", item_id(item))
 }

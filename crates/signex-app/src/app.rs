@@ -45,6 +45,7 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;
 mod project_tab;
+pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;

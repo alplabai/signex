@@ -147,6 +147,7 @@ pub fn board_10k_tracks() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,

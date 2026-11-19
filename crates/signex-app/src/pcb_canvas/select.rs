@@ -646,6 +646,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::FootprintText { footprint, field } => {
             format!("{} of footprint {footprint}", field.id())
         }
+        ItemRef::Room(id) => format!("room {id}"),
     }
 }
 
@@ -672,6 +673,7 @@ mod tests {
         PcbBoard {
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,

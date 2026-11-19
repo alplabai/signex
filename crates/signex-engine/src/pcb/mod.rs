@@ -44,6 +44,7 @@ pub mod pour_edit;
 pub mod primitive_edit;
 mod replace;
 pub mod reuse_block;
+pub mod rooms;
 pub mod route;
 pub mod similar;
 pub mod snap;

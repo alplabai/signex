@@ -143,6 +143,11 @@ pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Loca
         | ViolationKind::SilkToPad
         | ViolationKind::SilkToSilk
         | ViolationKind::CourtyardOverlap => gap(),
+        // #2457: how far past the room's margin.
+        ViolationKind::PartOutsideRoom => t!(
+            i18n, ids::ROOMS_DRC_DETAIL,
+            "measured" => row.measured_mm.clone(), "margin" => row.required_mm.clone()
+        ),
         _ if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
         ViolationKind::TrackWidth
         | ViolationKind::ViaDiameter
@@ -178,6 +183,7 @@ pub(super) fn kind_label(kind: ViolationKind) -> signex_i18n::MessageId {
         ViolationKind::MaskExpansion => ids::DRC_KIND_MASK_EXPANSION,
         ViolationKind::PasteExpansion => ids::DRC_KIND_PASTE_EXPANSION,
         ViolationKind::CourtyardOverlap => ids::DRC_KIND_COURTYARD,
+        ViolationKind::PartOutsideRoom => ids::ROOMS_DRC_KIND,
     }
 }
 

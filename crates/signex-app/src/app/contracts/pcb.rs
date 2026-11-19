@@ -110,6 +110,10 @@ pub enum PcbMsg {
     PartSwap(PartSwapMsg),
     /// Design reuse blocks of the project (#2410).
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// A room of the board in view was edited in Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
+    /// Create Rooms from Sheets and its dialog (#2457).
+    CreateRooms(crate::app::rooms::CreateRoomsMsg),
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the

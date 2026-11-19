@@ -17,6 +17,7 @@ Place/Slice Pour	item	Slice Pour	-	-	PlaceBoardSlicePour	1
 Place/String	item	String	-	-	PlaceBoardString	1
 Place/Dimension	item	Dimension	-	-	PlaceBoardDimension	1
 Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1
+Place/Room	item	Room	-	-	PlaceBoardRoom	1
 Place/Graphics	submenu	Graphics	-	-	-	-
 Place/Graphics/Line	item	Line	-	-	PlaceBoardLine	1
 Place/Graphics/Arc	item	Arc	-	-	PlaceBoardGraphicArc	1

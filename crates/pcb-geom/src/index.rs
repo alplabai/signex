@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use rstar::{AABB, RTree, RTreeObject};
-use signex_types::pcb::{PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb::{PcbBoard, Point, Room, Segment, Via, Zone};
 use uuid::Uuid;
 
 use crate::body::footprint_body;
@@ -68,18 +68,44 @@ pub enum ItemRef {
         footprint: Uuid,
         field: BoardTextField,
     },
+    /// A room (#2457). Only the selection index holds it: one zero-width
+    /// capsule per outline edge and the box of its name, plus its area for
+    /// a click inside it, which picks it only when nothing else is there.
+    Room(Uuid),
 }
 
 impl ItemRef {
     /// Whether the index holds the item as several entries that share its
-    /// identity: a drawn area's or drawing's edges, an arc's chords, a
-    /// dimension's strokes.
+    /// identity: a drawn area's, drawing's or room's edges, an arc's chords,
+    /// a dimension's strokes.
     pub fn is_multi_part(self) -> bool {
         matches!(
             self,
-            Self::Zone { .. } | Self::Graphic { .. } | Self::Arc(_) | Self::Dimension(_)
+            Self::Zone { .. }
+                | Self::Graphic { .. }
+                | Self::Arc(_)
+                | Self::Dimension(_)
+                | Self::Room(_)
         )
     }
+}
+
+/// The height of a room's name on the board, mm; the canvas draws it this
+/// size and the selection index holds its box.
+pub const ROOM_LABEL_HEIGHT_MM: f64 = 1.0;
+/// How far the name sits in from the room's top-left corner, mm.
+pub const ROOM_LABEL_INSET_MM: f64 = 0.6;
+/// The width of one character of a room's name, mm: a bold sans-serif's
+/// mean advance at [`ROOM_LABEL_HEIGHT_MM`].
+const ROOM_LABEL_ADVANCE_MM: f64 = 0.62;
+
+/// The box of a room's name, least and greatest corner, mm: at the top-left
+/// of the box round its outline.
+pub fn room_label_box(room: &Room) -> Option<(Point, Point)> {
+    let b = room.outline.bounds()?;
+    let min = Point::new(b.x_mm + ROOM_LABEL_INSET_MM, b.y_mm + ROOM_LABEL_INSET_MM);
+    let width = room.name.chars().count() as f64 * ROOM_LABEL_ADVANCE_MM;
+    Some((min, Point::new(min.x + width, min.y + ROOM_LABEL_HEIGHT_MM)))
 }
 
 /// An item and its copper, as stored in the tree.
@@ -257,6 +283,9 @@ impl BoardIndex {
             }
             for graphic in &board.graphics {
                 crate::graphic_index::add_graphic(graphic, &mut areas, &mut items, &mut rejected);
+            }
+            for room in &board.rooms {
+                add_room(room, &mut areas, &mut items, &mut rejected);
             }
         }
         let mut seen = HashSet::new();
@@ -560,12 +589,84 @@ fn add_area(
     }
 }
 
+/// Index `room` (#2457): one zero-width capsule per edge of its outline and
+/// the box of its name, and the region the edges bound. A room whose uuid
+/// another room already has, or whose outline cannot convert, is listed as
+/// refused.
+fn add_room(
+    room: &Room,
+    areas: &mut Vec<Area>,
+    items: &mut Vec<IndexedItem>,
+    rejected: &mut Vec<Rejected>,
+) {
+    let item = ItemRef::Room(room.uuid);
+    if areas.iter().any(|a| a.item == item) {
+        rejected.push(Rejected {
+            item,
+            error: GeomError::DuplicateItem,
+        });
+        return;
+    }
+    let corners = room.outline.corners();
+    if corners.len() < 3 {
+        return;
+    }
+    let entries = corners
+        .iter()
+        .map(|p| PointNm::from_mm(*p, "room.outline"))
+        .collect::<Result<Vec<_>, _>>()
+        .and_then(|ring| {
+            let mut entries = (0..ring.len())
+                .map(|i| {
+                    let shape = Shape::Capsule {
+                        a: ring[i],
+                        b: ring[(i + 1) % ring.len()],
+                        radius: 0,
+                    };
+                    IndexedItem::new(item, shape)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if let Some((lo, hi)) = room_label_box(room) {
+                let lo = PointNm::from_mm(lo, "room.label")?;
+                let hi = PointNm::from_mm(hi, "room.label")?;
+                let label = Shape::Rect {
+                    center: PointNm::new(lo.x / 2 + hi.x / 2, lo.y / 2 + hi.y / 2),
+                    half_w: (hi.x - lo.x) / 2,
+                    half_h: (hi.y - lo.y) / 2,
+                    rotation_deg: 0.0,
+                };
+                entries.push(IndexedItem::new(item, label)?);
+            }
+            Ok((Polygon::new(ring, Vec::new()), entries))
+        });
+    match entries {
+        Ok((region, entries)) => {
+            let Some(bounds) = region.bounds() else {
+                return;
+            };
+            let count = entries.len();
+            items.extend(entries);
+            areas.push(Area {
+                item,
+                region,
+                bounds,
+                edges: count,
+                inside: true,
+            });
+        }
+        Err(error) => rejected.push(Rejected { item, error }),
+    }
+}
+
 /// How many entries each multi-part item other than a drawn area has.
 fn count_parts(items: &[IndexedItem]) -> BTreeMap<ItemRef, usize> {
     let mut parts = BTreeMap::new();
     for indexed in items {
         if indexed.item.is_multi_part()
-            && !matches!(indexed.item, ItemRef::Zone { .. } | ItemRef::Graphic { .. })
+            && !matches!(
+                indexed.item,
+                ItemRef::Zone { .. } | ItemRef::Graphic { .. } | ItemRef::Room(_)
+            )
         {
             *parts.entry(indexed.item).or_default() += 1;
         }

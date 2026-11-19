@@ -61,6 +61,8 @@ struct OpenOverlays {
     document_setup_open: bool,
     sheet_numbering_open: bool,
     board_reannotate_open: bool,
+    /// Create Rooms from Sheets (#2457).
+    create_rooms_open: bool,
     fab_outputs_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
@@ -357,6 +359,9 @@ impl OpenOverlays {
             OverlayId::BoardReannotate => self
                 .board_reannotate_open
                 .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
+            OverlayId::CreateRooms => self
+                .create_rooms_open
+                .then(|| Message::from(crate::app::rooms::CreateRoomsMsg::Cancelled)),
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
@@ -681,6 +686,7 @@ impl Signex {
             document_setup_open: self.ui_state.document_setup.is_some(),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
+            create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
@@ -1802,6 +1808,7 @@ mod tests {
             document_setup_open,
             sheet_numbering_open,
             board_reannotate_open,
+            create_rooms_open,
             fab_outputs_open,
             board_output_open,
             back_annotate_open,
@@ -1880,6 +1887,7 @@ mod tests {
             ("document_setup_open", |o| o.document_setup_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
+            ("create_rooms_open", |o| o.create_rooms_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),

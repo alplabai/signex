@@ -241,6 +241,11 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                     .filter_map(|fp| pcb_geom::footprint_text(fp, field)?.ok());
                 points.extend(placed.map(|text| text.placement.anchor.to_mm()));
             }
+            ItemRef::Room(id) => {
+                for r in board.rooms.iter().filter(|r| r.uuid == id) {
+                    points.extend(r.outline.corners());
+                }
+            }
         }
     }
     let first = points.first()?;

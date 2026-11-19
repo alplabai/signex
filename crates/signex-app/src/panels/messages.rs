@@ -681,6 +681,8 @@ pub enum PanelMsg {
     PcbComponent(super::PcbComponentMsg),
     /// The selected tracks', vias' or pads' panel (#2355).
     PcbPrimitive(super::PcbPrimitiveMsg),
+    /// Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
     /// The Layer Stack manager (#2401).
     LayerStack(super::LayerStackMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /

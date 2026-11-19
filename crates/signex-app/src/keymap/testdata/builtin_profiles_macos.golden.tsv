@@ -369,6 +369,8 @@ altium	hint	-	-	panelize_board
 altium	hint	-	-	remove_board_panel
 altium	hint	-	-	set_board_panel
 altium	hint	-	-	board_panel
+altium	hint	-	-	place_board_room
+altium	hint	-	-	create_rooms_from_sheets
 altium	hint	-	⇧+	next_layer
 altium	hint	-	"-"	prev_layer
 altium	hint	-	⇧*	next_signal_layer
@@ -867,6 +869,8 @@ classic	hint	-	-	panelize_board
 classic	hint	-	-	remove_board_panel
 classic	hint	-	-	set_board_panel
 classic	hint	-	-	board_panel
+classic	hint	-	-	place_board_room
+classic	hint	-	-	create_rooms_from_sheets
 classic	hint	-	⇧+	next_layer
 classic	hint	-	"-"	prev_layer
 classic	hint	-	⇧*	next_signal_layer

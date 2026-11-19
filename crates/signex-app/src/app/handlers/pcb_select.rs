@@ -209,6 +209,10 @@ impl Signex {
         // every press as a click: never a drag or a box (#2396).
         let tool_armed = self.own_board_tool().is_some() || self.own_board_measure().is_some();
         let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
+        // #2457: the selected rooms, and the one Place ▸ Room is drawing,
+        // stand out on the backdrop.
+        let rooms = self.rooms_overlay();
+        self.interaction_state.pcb_canvas.set_rooms_overlay(rooms);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;

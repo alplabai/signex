@@ -1,6 +1,6 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{
-    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
+    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, Room, RoomOutline, SymbolLink,
 };
 use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_panel::BoardPanel;
@@ -20,6 +20,7 @@ use super::lock;
 use super::options;
 use super::panel;
 use super::replace::{self, FootprintPad, Values};
+use super::rooms;
 use super::stack::{self, StackSnapshot};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
@@ -206,6 +207,40 @@ pub enum BoardCommand {
     /// may change later and an undo must restore what was there. The inverse
     /// is another one holding the old panel.
     SetBoardPanel { panel: Option<Box<BoardPanel>> },
+    /// Append a room (#2457). Refused for a uuid already used by a room, an
+    /// empty name, an outline without area or with a number that is not
+    /// finite, a colour that is not `#RRGGBB` and a negative margin. The
+    /// inverse is a [`BoardCommand::RemoveRoom`].
+    AddRoom { room: Box<Room> },
+    /// Remove a room; its parts stay. The inverse is a
+    /// [`BoardCommand::RestoreRoom`].
+    RemoveRoom { room: Uuid },
+    /// Put a removed room back at `index`; the inverse of
+    /// [`BoardCommand::RemoveRoom`].
+    RestoreRoom { room: Box<Room>, index: usize },
+    /// Put `room` over the room with its uuid: name, source, layer, shape and
+    /// outline, colour, Keep parts inside, margin and lock. Checked as
+    /// [`BoardCommand::AddRoom`]; a locked room that stays locked keeps its
+    /// outline. The inverse is another one holding the old room.
+    EditRoom { room: Box<Room> },
+    /// Move the room so its box starts at `to`, and its unlocked member
+    /// parts by the same distance, as one change. Refused for a locked room.
+    /// The inverse is a [`BoardCommand::PlaceRoom`].
+    MoveRoom { room: Uuid, to: Point },
+    /// Set a room's outline and put each named footprint at its origin: the
+    /// absolute form a move, a fit and a pull undo to, and its own inverse.
+    PlaceRoom {
+        room: Uuid,
+        outline: RoomOutline,
+        footprints: Vec<(Uuid, Point)>,
+    },
+    /// Fit the room round its member parts' bodies plus its margin. Refused
+    /// for a locked room and a room without members. The inverse is a
+    /// [`BoardCommand::PlaceRoom`].
+    FitRoomToParts { room: Uuid },
+    /// Pack the unlocked member parts outside the room into it, in rows. The
+    /// inverse is a [`BoardCommand::PlaceRoom`].
+    PullPartsIntoRoom { room: Uuid },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -257,6 +292,9 @@ pub enum BoardPatchKind {
     GraphicsChanged,
     /// The panel (#2410). Names no items.
     PanelChanged,
+    /// A room added, removed, edited or placed (#2457). The items are the
+    /// footprints moved with it.
+    RoomsChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -343,6 +381,18 @@ impl BoardCommand {
             Self::AddGraphics { graphics } => graphics::add(board, graphics),
             Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
             Self::SetBoardPanel { panel: new } => panel::set(board, new.map(|p| *p)),
+            Self::AddRoom { room } => rooms::add(board, *room),
+            Self::RemoveRoom { room } => rooms::remove(board, room),
+            Self::RestoreRoom { room, index } => rooms::restore(board, *room, index),
+            Self::EditRoom { room } => rooms::edit(board, *room),
+            Self::MoveRoom { room, to } => rooms::move_room(board, room, to),
+            Self::PlaceRoom {
+                room,
+                outline,
+                footprints,
+            } => rooms::place(board, room, outline, footprints),
+            Self::FitRoomToParts { room } => rooms::fit(board, room),
+            Self::PullPartsIntoRoom { room } => rooms::pull(board, room),
         }
     }
 }

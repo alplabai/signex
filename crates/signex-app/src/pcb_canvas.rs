@@ -22,6 +22,7 @@ mod marks;
 mod msg;
 mod panel_preview;
 mod part_ghost;
+mod rooms;
 mod select;
 mod snap_options;
 mod tessellate;
@@ -37,6 +38,7 @@ pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::PcbCanvasMsg;
+pub use rooms::{RoomMark, RoomsOverlay};
 pub use select::PcbSelectionState;
 pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
 
@@ -139,6 +141,9 @@ pub struct PcbCanvas {
     origin_marker_visible: bool,
     /// Guides, extra grids and the sheet of the shown board (#2374).
     marks: BoardMarks,
+    /// The rooms selected on the shown board and the one being drawn
+    /// (#2457), drawn standing out.
+    rooms_overlay: RoomsOverlay,
     /// Selection and hover copper to paint, set by the app from
     /// [`PcbSelectionState`] (#2191).
     highlight: Highlight,
@@ -194,6 +199,7 @@ impl PcbCanvas {
             board_grid_mm: None,
             origin_marker_visible: true,
             marks: BoardMarks::default(),
+            rooms_overlay: RoomsOverlay::default(),
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
@@ -312,6 +318,15 @@ impl PcbCanvas {
     pub fn set_board_marks(&mut self, marks: BoardMarks) {
         if self.marks != marks {
             self.marks = marks;
+            self.bg_cache.clear();
+        }
+    }
+
+    /// The rooms selected on the shown board and the one being drawn
+    /// (#2457); the backdrop repaints when they change.
+    pub fn set_rooms_overlay(&mut self, overlay: RoomsOverlay) {
+        if self.rooms_overlay != overlay {
+            self.rooms_overlay = overlay;
             self.bg_cache.clear();
         }
     }
@@ -776,6 +791,14 @@ impl canvas::Program<Message> for PcbCanvas {
             if let Some(panel) = &self.marks.panel {
                 panel_preview::draw_panel(frame, &camera, panel, &self.canvas_colors);
             }
+            // #2457: under the copper, which is a layer above this canvas.
+            rooms::draw_rooms(
+                frame,
+                &camera,
+                &self.marks.rooms,
+                &self.rooms_overlay,
+                &self.canvas_colors,
+            );
             marks::draw_guides(frame, &camera, size, &self.marks.guides);
             if self.origin_marker_visible {
                 let origin = crate::render_config::to_iced(&self.canvas_colors.cursor);

@@ -281,6 +281,15 @@ The design rule check reads it through `Zone::as_keepout` exactly as it reads
 a board-sketch keepout forbidding all copper, so a violation names the
 keepout zone's id.
 
+## Room
+
+`place_board_room` (#2457), the row after Keepout; no key in the shipped
+profiles. The first click is a corner, the room follows the pointer, and the
+second click places it as one undo step, named `Room N` in the next palette
+colour. Two corners on one line place nothing. The tool then ends and the new
+room is selected, so Properties shows it. Esc drops the first corner, then
+ends the tool. Rooms: [PCB_ROOMS.md](PCB_ROOMS.md).
+
 ## Polygon Pour
 
 `place_board_polygon_pour` (`P G`, #2216). Drawn like a Solid Region, on the

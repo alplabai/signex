@@ -164,6 +164,7 @@ impl PcbDefaults {
         PcbBoard {
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             // No outline yet: the origin is the empty area's bottom-left (#2384).
             options: crate::pcb_options::BoardOptions {
                 origin: crate::pcb_options::BoardOrigin::of_new_board(&[]),

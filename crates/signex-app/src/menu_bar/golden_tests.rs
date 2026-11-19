@@ -297,6 +297,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("fabrication_outputs", "FabricationOutputs"),
     // #2401: Design ▸ Layer Stack Manager.
     ("board_layer_stack", "BoardLayerStack"),
+    // #2457: Design ▸ Rooms and Place ▸ Room on a board.
+    ("create_rooms_from_sheets", "CreateRoomsFromSheets"),
+    ("place_board_room", "PlaceBoardRoom"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),

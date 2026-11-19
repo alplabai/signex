@@ -36,6 +36,7 @@ mod preferences;
 mod project;
 mod properties;
 mod requirements;
+mod rooms;
 mod rules;
 mod update_pcb;
 
@@ -73,6 +74,7 @@ pub use preferences::*;
 pub use project::*;
 pub use properties::*;
 pub use requirements::*;
+pub use rooms::*;
 pub use rules::*;
 pub use update_pcb::*;
 
@@ -114,6 +116,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         project::PROJECT,
         properties::PROPERTIES,
         requirements::REQUIREMENTS,
+        rooms::ROOMS,
         rules::RULES,
         update_pcb::UPDATE_PCB,
     ]

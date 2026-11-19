@@ -368,6 +368,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        // #2457: Place ▸ Room and Design ▸ Rooms ▸ Create Rooms from Sheets.
+        "place_board_room" => board_tool(BoardPlaceTool::Room),
+        "create_rooms_from_sheets" => Message::Pcb(PcbMsg::CreateRooms(
+            crate::app::rooms::CreateRoomsMsg::Requested,
+        )),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         // #2424: the Graphics tools.
         "place_board_line" => board_tool(BoardPlaceTool::Line),
