@@ -3,8 +3,9 @@
 //! (`transform::rubber_band::wire_contacts`) and the guarded pin pass
 //! (`transform::rubber_band`) never both act on one point.
 //!
-//! A selected wire's point (an end, or a dot on its span) is the carry pass's;
-//! a moved pin's old tip is the pin pass's. Where they meet:
+//! A selected wire's point (an end, or a dot or sheet pin on its span, as
+//! `moved_wire_contacts` lists them) is the carry pass's; a moved pin's old
+//! tip is the pin pass's. Where they meet:
 //!
 //! * a pin moving by the wire's own delta rides on the wire: the carry pass
 //!   has the point and the pin pass leaves the pin out;
@@ -15,12 +16,12 @@
 
 use std::collections::HashSet;
 
-use signex_net::{point_on_segment, pt_key, uf::Key};
-use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
+use signex_net::{pt_key, uf::Key};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
-/// A move's delta, bit for bit.
-type Delta = (u64, u64);
+/// A move's delta, in the netlist's 1 um key space.
+type Delta = Key;
 
 /// The moved pins and the selected wires' points of one move, read before it.
 pub(super) struct Ownership {
@@ -30,31 +31,21 @@ pub(super) struct Ownership {
 
 impl Ownership {
     pub(super) fn of(document: &SchematicSheet, moves: &[(SelectedItem, f64, f64)]) -> Self {
-        let dots: HashSet<Key> = (document.junctions.iter())
-            .map(|j| pt_key(&j.position))
-            .collect();
         let mut out = Self {
             tips: Vec::new(),
             wire_points: Vec::new(),
         };
         for (item, dx, dy) in moves {
-            let delta = (dx.to_bits(), dy.to_bits());
+            let delta = pt_key(&Point::new(*dx, *dy));
             if item.kind != SelectedKind::Wire {
                 let own = crate::moved_pin_tips(document, std::slice::from_ref(item));
                 out.tips.extend(own.into_iter().map(|tip| (tip, delta)));
                 continue;
             }
-            let Some(wire) = document.wires.iter().find(|w| w.uuid == item.uuid) else {
-                continue;
-            };
-            let (a, b) = (pt_key(&wire.start), pt_key(&wire.end));
-            out.wire_points.push((wire.uuid, a, delta));
-            out.wire_points.push((wire.uuid, b, delta));
-            for &k in &dots {
-                if k != a && k != b && point_on_segment(k, a, b) {
-                    out.wire_points.push((wire.uuid, k, delta));
-                }
-            }
+            // The points the carry pass carries: one source for both passes.
+            let points = crate::moved_wire_contacts(document, std::slice::from_ref(item));
+            out.wire_points
+                .extend(points.iter().map(|c| (item.uuid, c.old_key(), delta)));
         }
         out
     }

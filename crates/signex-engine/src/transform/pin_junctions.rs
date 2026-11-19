@@ -6,7 +6,7 @@
 //! already has such a bare contact is never changed on open: it is reported,
 //! and [`pin_junction_repairs`] is the one-step repair.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use signex_net::{SheetConnectivity, point_on_segment, pt_key, uf::Key};
 use signex_types::object_id::IdSource;
@@ -45,20 +45,23 @@ struct Nets<'s> {
 }
 
 impl Nets<'_> {
-    /// The connectivity, and the wire end and dot points that connect a pin.
+    /// The logical nets (wires, dots, same-name labels and power ports, as
+    /// the netlist has them), and the wire end, dot and label points that
+    /// connect a pin.
     fn built(&mut self) -> &mut (SheetConnectivity, HashSet<Key>) {
         let sheet = self.sheet;
         self.cache.get_or_insert_with(|| {
             let anchors = (sheet.wires.iter())
                 .flat_map(|w| [pt_key(&w.start), pt_key(&w.end)])
                 .chain(sheet.junctions.iter().map(|j| pt_key(&j.position)))
+                .chain(sheet.labels.iter().map(|l| pt_key(&l.position)))
                 .collect();
-            (SheetConnectivity::build(sheet), anchors)
+            (signex_net::logical_connectivity(sheet), anchors)
         })
     }
 
     /// Whether a pin end of `tips` other than the one at `k` is already on
-    /// the net of `wire`: it is a wire end or dot point of that net.
+    /// the logical net of `wire`: it is a wire end, dot or label point of it.
     fn net_holds_another(&mut self, wire: &Wire, k: Key, tips: &[Point]) -> bool {
         let (nets, anchors) = self.built();
         let net = nets.root_of(&wire.start);
@@ -257,14 +260,28 @@ pub(crate) fn pin_dots_for(
         .collect()
 }
 
-/// The pin tips of `sheet` that lie strictly inside a wire and may join it
-/// (see [`safe_taps`]), for judging the minted dots again: such a dot stays
-/// while its pin does, and goes once it would short its part.
-pub(crate) fn pin_taps(sheet: &SchematicSheet) -> HashSet<Key> {
-    let lines = WireLines::of(&sheet.wires);
-    (safe_taps(sheet, &lines, |_| true).into_iter())
+/// The pin tips of the parts of `sheet` named in `ids`.
+pub(crate) fn tip_keys_of(sheet: &SchematicSheet, ids: &HashSet<uuid::Uuid>) -> HashSet<Key> {
+    (sheet.symbols.iter())
+        .filter(|symbol| ids.contains(&symbol.uuid))
+        .flat_map(|symbol| symbol_pin_tips(sheet, symbol))
         .map(|tip| pt_key(&tip))
         .collect()
+}
+
+/// Every pin tip of `sheet` with the parts whose pin ends sit there, for
+/// judging an automatic pin dot again: it stays while a pin end and a wire
+/// still meet there (it goes when the pin or the wire leaves). The no-short
+/// rule is the minting's ([`pin_dots_for`]), never a reason to drop a dot.
+#[must_use]
+pub fn pin_owners(sheet: &SchematicSheet) -> HashMap<Key, Vec<uuid::Uuid>> {
+    let mut owners: HashMap<Key, Vec<uuid::Uuid>> = HashMap::new();
+    for symbol in &sheet.symbols {
+        for tip in symbol_pin_tips(sheet, symbol) {
+            owners.entry(pt_key(&tip)).or_default().push(symbol.uuid);
+        }
+    }
+    owners
 }
 
 #[cfg(test)]
@@ -289,7 +306,8 @@ mod tests {
     fn a_pin_mid_wire_is_a_bare_tap_and_one_on_the_end_is_not() {
         let sheet = sheet_with_tap();
         assert_eq!(bare_pin_taps(&sheet), vec![Point::new(20.0, 10.0)]);
-        assert_eq!(pin_taps(&sheet).len(), 1);
+        let tap = pt_key(&Point::new(20.0, 10.0));
+        assert!(pin_owners(&sheet).contains_key(&tap));
     }
 
     #[test]
@@ -316,7 +334,6 @@ mod tests {
         let r1 = add_resistor(&mut sheet, "R1", Point::new(20.0, 10.0)); // pins 15, 25
         let wire = add_wire(&mut sheet, (0.0, 10.0), (40.0, 10.0));
         assert!(bare_pin_taps(&sheet).is_empty());
-        assert!(pin_taps(&sheet).is_empty());
         let items = [
             SelectedItem::new(wire, SelectedKind::Wire),
             SelectedItem::new(r1, SelectedKind::Symbol),

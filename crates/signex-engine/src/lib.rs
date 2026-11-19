@@ -200,6 +200,11 @@ fn makes_pin_contacts(cmd: &Command) -> bool {
 
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
+/// Pin points in the netlist's 1 um key space.
+type PinKeys = std::collections::HashSet<signex_net::uf::Key>;
+/// Each pin point with the parts whose pin ends sit there.
+type PinOwners = std::collections::HashMap<signex_net::uf::Key, Vec<uuid::Uuid>>;
+
 #[derive(Debug)]
 pub struct Engine {
     document: SchematicSheet,
@@ -268,7 +273,11 @@ pub struct Engine {
     preset_sheet: Option<std::sync::Arc<SchematicSheet>>,
     /// Where pin ends touched a wire bare before the command in flight: the
     /// reconcile leaves those contacts be (`transform::pin_junctions`).
-    taps_before: Option<std::collections::HashSet<signex_net::uf::Key>>,
+    taps_before: Option<std::sync::Arc<PinKeys>>,
+    /// The bare pin contacts and the pin ends of the pre-move sheet, so a drag
+    /// preview does not scan the whole sheet for them on every frame.
+    preset_taps: Option<std::sync::Arc<PinKeys>>,
+    preset_pin_owners: Option<std::sync::Arc<PinOwners>>,
     /// Test switch: a move folds by weighing every wire, as it did before the
     /// fold looked only where wires changed.
     #[cfg(test)]
@@ -300,6 +309,9 @@ pub struct MovePreview {
     base: Option<std::sync::Arc<signex_net::NetBase>>,
     dots: Option<std::sync::Arc<transform::DotVerdicts>>,
     wires: std::sync::Arc<PreWires>,
+    /// The pre-move sheet's bare pin contacts and pin ends, read once.
+    taps: std::sync::Arc<PinKeys>,
+    pin_owners: std::sync::Arc<PinOwners>,
     /// Test switch: fold the moved sheet by weighing every wire.
     #[cfg(test)]
     full_scan_moves: bool,
@@ -321,6 +333,8 @@ impl MovePreview {
             base: Some(std::sync::Arc::new(base)),
             dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
             wires: std::sync::Arc::new(PreWires::new(&sheet.wires)),
+            taps: std::sync::Arc::new(transform::bare_tap_keys(sheet)),
+            pin_owners: std::sync::Arc::new(transform::pin_owners(sheet)),
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -385,6 +399,8 @@ impl MovePreview {
         engine.preset_dots.clone_from(&self.dots);
         engine.preset_wires = Some(self.wires.clone());
         engine.preset_sheet = Some(self.sheet.clone());
+        engine.preset_taps = Some(self.taps.clone());
+        engine.preset_pin_owners = Some(self.pin_owners.clone());
         #[cfg(test)]
         {
             engine.full_scan_moves = self.full_scan_moves;
@@ -454,6 +470,8 @@ impl Engine {
             preset_wires: None,
             preset_sheet: None,
             taps_before: None,
+            preset_taps: None,
+            preset_pin_owners: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -497,6 +515,8 @@ impl Engine {
             preset_wires: None,
             preset_sheet: None,
             taps_before: None,
+            preset_taps: None,
+            preset_pin_owners: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -706,7 +726,10 @@ impl Engine {
         // The bare pin contacts the sheet holds now: an edit that can make a
         // pin end touch a wire dots only the contacts it makes.
         self.taps_before = if makes_pin_contacts(&cmd) {
-            Some(transform::bare_tap_keys(&self.document))
+            let taps = self.preset_taps.clone().unwrap_or_else(|| {
+                std::sync::Arc::new(transform::bare_tap_keys(&self.document))
+            });
+            Some(taps)
         } else {
             None
         };

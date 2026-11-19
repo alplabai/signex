@@ -29,6 +29,14 @@ pub struct WireContact {
     old: Point,
 }
 
+impl WireContact {
+    /// Where the contact is before the move.
+    #[must_use]
+    pub fn old_key(&self) -> Key {
+        pt_key(&self.old)
+    }
+}
+
 /// The dots and child-sheet pins strictly inside `wire`'s span.
 fn span_points(document: &SchematicSheet, wire: &Wire) -> Vec<Point> {
     let (a, b) = (pt_key(&wire.start), pt_key(&wire.end));
@@ -192,19 +200,35 @@ pub fn follow_wire_grip(
             .collect();
         let ids: HashSet<Uuid> = square.iter().map(|item| item.uuid).collect();
         let (dx, dy) = (new.x - old.x, new.y - old.y);
+        let mut originals: Vec<(Uuid, Point, Point)> = Vec::new();
         for w in &mut document.wires {
             if !ids.contains(&w.uuid) {
                 continue;
             }
+            originals.push((w.uuid, w.start, w.end));
             w.start = Point::new(w.start.x + dx, w.start.y + dy);
             w.end = Point::new(w.end.x + dx, w.end.y + dy);
         }
-        out.touched.extend(square.iter().copied());
-        let mut items = square;
+        let mut items = square.clone();
         items.push(SelectedItem::new(wire, SelectedKind::Wire));
         let carried = follow_moved_wires(document, &contacts, &items, &HashSet::new());
+        // A square wire the carry could not carry whole is not shifted: it goes
+        // back where it was and follows the end like any attached wire, so its
+        // own joins are never parted.
+        for w in &mut document.wires {
+            if let Some((_, start, end)) = (originals.iter())
+                .find(|(id, _, _)| *id == w.uuid && carried.bailed.contains(id))
+            {
+                w.start = *start;
+                w.end = *end;
+            }
+        }
+        let shifted: Vec<SelectedItem> = (square.into_iter())
+            .filter(|item| !carried.bailed.contains(&item.uuid))
+            .collect();
+        out.touched.extend(shifted.iter().copied());
         out.touched.extend(carried.touched);
-        selected.extend(ids);
+        selected.extend(shifted.iter().map(|item| item.uuid));
     }
     let moves = [Move {
         old,

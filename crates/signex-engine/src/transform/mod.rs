@@ -202,7 +202,7 @@ impl Engine {
         // dot is the connection, as #107 has it (see `pin_junctions`). Found
         // before the index, so the wires near each new dot are in the index
         // that judges it: the local and the full-scan commit then agree.
-        let before = self.taps_before.as_ref();
+        let before = self.taps_before.as_deref();
         let mut pin_dots = pin_junctions::pin_dots_for(&self.document, items, before);
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
@@ -238,11 +238,40 @@ impl Engine {
         // Every minted dot is revalidated, not only those near `touched`: a
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
-        // A dot no wire meeting holds stays while a pin end inside a wire does.
-        let pin_taps = std::cell::OnceCell::new();
+        // A dot no wire meeting holds stays while a pin end still sits strictly
+        // inside a wire there: it goes when the pin or the wire leaves. The
+        // no-short rule is the minting's, never a reason to drop a dot.
+        let moved: std::collections::HashSet<uuid::Uuid> = (items.iter())
+            .filter(|item| item.kind == SelectedKind::Symbol)
+            .map(|item| item.uuid)
+            .collect();
+        let owners = std::cell::OnceCell::new();
+        let moved_tips = std::cell::OnceCell::new();
         let pin_holds = |at: &signex_types::schematic::Point| {
-            let taps = pin_taps.get_or_init(|| pin_junctions::pin_taps(&self.document));
-            taps.contains(&signex_net::pt_key(at))
+            let k = signex_net::pt_key(at);
+            let through = (index.segment_candidates(*at).into_iter()).any(|i| {
+                let wire = index.wire(i);
+                let (a, b) = (signex_net::pt_key(&wire.start), signex_net::pt_key(&wire.end));
+                k != a && k != b && signex_net::point_on_segment(k, a, b)
+            });
+            if !through {
+                return false;
+            }
+            // The pin ends of the sheet before the edit (a drag preview's,
+            // shared) less the moved parts', plus the moved parts' own.
+            let owners = owners.get_or_init(|| {
+                (self.preset_pin_owners.clone())
+                    .unwrap_or_else(|| std::sync::Arc::new(pin_owners(&self.document)))
+            });
+            let still = owners
+                .get(&k)
+                .is_some_and(|ids| ids.iter().any(|id| !moved.contains(id)));
+            if still {
+                return true;
+            }
+            let moved_tips =
+                moved_tips.get_or_init(|| pin_junctions::tip_keys_of(&self.document, &moved));
+            moved_tips.contains(&k)
         };
         let stale: std::collections::HashSet<uuid::Uuid> = self
             .document
@@ -644,7 +673,7 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
-pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs};
+pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs, pin_owners};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------

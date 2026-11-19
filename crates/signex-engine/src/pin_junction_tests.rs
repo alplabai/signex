@@ -185,3 +185,38 @@ fn reshaping_a_wire_leaves_an_old_bare_touch_bare() {
     assert!(dots(&engine).is_empty());
     assert_eq!(bare_pin_taps(engine.document()).len(), 1, "still reported");
 }
+
+/// An automatic pin dot goes only when its pin or its wire leaves (decision
+/// 2026-11-18): R1 stands across wires A and B, each pin dotted; a wire then
+/// joining A and B shorts R1 by the user's own hand, and both dots stay.
+#[test]
+fn an_unrelated_edit_keeps_a_pin_dot_whose_pin_and_wire_stay() {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 45.0));
+    let mut part = sheet.symbols.pop().expect("R1");
+    part.rotation = 90.0; // pins at (50, 40) and (50, 50)
+    add_wire(&mut sheet, (30.0, 40.0), (70.0, 40.0)); // A
+    add_wire(&mut sheet, (30.0, 50.0), (70.0, 50.0)); // B
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute(Command::PlaceSymbol { symbol: part })
+        .unwrap();
+    assert_eq!(dots(&engine).len(), 2, "each pin end on its wire is dotted");
+
+    let joint = signex_types::schematic::Wire {
+        uuid: Uuid::now_v7(),
+        start: Point::new(30.0, 40.0),
+        end: Point::new(30.0, 50.0),
+        ..Default::default()
+    };
+    engine
+        .execute(Command::PlaceWireSegmentAsIs { wire: joint })
+        .unwrap();
+    let mut left = dots(&engine);
+    left.sort_by(|a, b| a.y.total_cmp(&b.y));
+    assert_eq!(left, vec![Point::new(50.0, 40.0), Point::new(50.0, 50.0)]);
+    let both = net_shape(engine.document()).into_iter().any(|(_, pins)| {
+        pins.contains(&(r1, "1".to_string())) && pins.contains(&(r1, "2".to_string()))
+    });
+    assert!(both, "R1's pins stay on their wires, now one net");
+}

@@ -274,3 +274,31 @@ fn an_end_grip_onto_the_other_end_changes_nothing() {
     assert!(!done.changed);
     assert_eq!(wires(engine.document()), before_wires);
 }
+
+/// A grip drag never parts a square neighbour from its own joins: H's end
+/// grip moves; V stands square on that end and joins W, whose far end sits
+/// inside X with no dot. Shifting V would leave W behind (or dot that T), so
+/// V stays on W, and X's dotless T stays dotless.
+#[test]
+fn an_end_grip_leaves_a_square_neighbour_on_its_joins_when_it_cannot_carry_it() {
+    let mut sheet = test_sheet();
+    let h = add_wire(&mut sheet, (20.0, 40.0), (60.0, 40.0));
+    add_wire(&mut sheet, (60.0, 40.0), (60.0, 60.0)); // V
+    add_wire(&mut sheet, (60.0, 60.0), (90.0, 60.0)); // W
+    add_wire(&mut sheet, (90.0, 50.0), (90.0, 70.0)); // X, W's end on its side
+    let mut engine = Engine::new(sheet).unwrap();
+    grip(&mut engine, h, false, (70.0, 40.0));
+    let segs = segments(&engine);
+    let at_joint = (segs.iter())
+        .filter(|s| s.0 == (60.0, 60.0) || s.1 == (60.0, 60.0))
+        .count();
+    assert!(at_joint >= 2, "V still meets W: {segs:?}");
+    assert!(has(&segs, (60.0, 60.0), (90.0, 60.0)), "W stays: {segs:?}");
+    assert!(has(&segs, (90.0, 50.0), (90.0, 70.0)), "X stays: {segs:?}");
+    let side = Point::new(90.0, 60.0);
+    let dots = &engine.document().junctions;
+    assert!(
+        !dots.iter().any(|j| j.position == side),
+        "X's dotless T got a dot: {dots:?}"
+    );
+}
