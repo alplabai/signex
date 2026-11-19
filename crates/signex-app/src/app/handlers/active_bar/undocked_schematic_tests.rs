@@ -386,6 +386,7 @@ fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     let _ = f.app.update(Message::Edit(EditMsg::PasteTextRead {
         request,
@@ -416,6 +417,7 @@ fn a_paste_follow_up_for_a_window_without_a_canvas_is_cancelled_not_applied() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     {
         use crate::ignore::IgnoreResult;
@@ -446,6 +448,7 @@ fn a_paste_numbering_read_for_an_undocked_window_is_kept_for_its_sheet() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     let _ = f.app.update(Message::Edit(EditMsg::PasteCountersSeeded {
         request,

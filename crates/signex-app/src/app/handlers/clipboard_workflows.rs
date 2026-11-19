@@ -324,10 +324,11 @@ fn preview_shapes(
 }
 
 impl Signex {
-    /// Whether Paste Special opens the Smart Paste dialog: in a window yes,
-    /// in a headless run no (it pastes at once, as before #155).
-    pub(crate) fn smart_paste_opens_dialog(&self) -> bool {
-        self.headless_answers().is_none()
+    /// Whether Paste Special opens the Smart Paste dialog: for a person in a
+    /// window yes; for an agent (even in a window) or a headless run no, it
+    /// pastes at once as before #155, since nobody would answer the dialog.
+    pub(crate) fn smart_paste_opens_dialog(&self, request: &crate::app::PasteRequest) -> bool {
+        !request.from_agent && self.headless_answers().is_none()
     }
 
     /// Open the Smart Paste dialog for the copy (#155).

@@ -21,6 +21,9 @@ mod designators;
 mod seed;
 mod stamp;
 
+#[cfg(test)]
+mod origin_tests;
+
 use iced::Task;
 use signex_engine::CopiedSelection;
 
@@ -37,15 +40,21 @@ impl Signex {
         // A new paste numbers by the preference again: a Smart Paste's own
         // rule held only for the copies it put on the cursor (#155).
         self.interaction_state.paste_designators_override = None;
-        let request = PasteRequest {
+        let request = self.new_paste_request(intent);
+        match self.paste_seed_task(&request) {
+            Some(seeding) => seeding,
+            None => self.continue_paste(request),
+        }
+    }
+
+    /// A request made now, by whoever runs the command now.
+    fn new_paste_request(&self, intent: PasteIntent) -> PasteRequest {
+        PasteRequest {
             intent,
             epoch: self.interaction_state.placement_epoch,
             path: self.document_state.active_path.clone(),
             dialog: 0,
-        };
-        match self.paste_seed_task(&request) {
-            Some(seeding) => seeding,
-            None => self.continue_paste(request),
+            from_agent: self.agent.origin.is_agent(),
         }
     }
 
@@ -134,9 +143,11 @@ impl Signex {
         }
         self.adopt_clipboard_text(text.as_deref());
         match request.intent {
-            // In a window Paste Special opens the Smart Paste dialog (#155); a
-            // headless run pastes at once, as before.
-            PasteIntent::SmartPaste if self.smart_paste_opens_dialog() => self.open_smart_paste(),
+            // A person's Paste Special in a window opens the Smart Paste
+            // dialog (#155); an agent and a headless run paste at once.
+            PasteIntent::SmartPaste if self.smart_paste_opens_dialog(&request) => {
+                self.open_smart_paste()
+            }
             PasteIntent::SmartPaste => self.handle_clipboard_smart_paste_requested(),
             PasteIntent::Array => self.open_paste_array(),
             _ => self.handle_clipboard_paste_requested(),

@@ -887,6 +887,9 @@ pub struct PasteRequest {
     pub path: Option<PathBuf>,
     /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
     pub dialog: u64,
+    /// An agent asked (`Origin::Agent` when the request was made): Paste
+    /// Special pastes at once rather than opening a dialog no one answers.
+    pub from_agent: bool,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under

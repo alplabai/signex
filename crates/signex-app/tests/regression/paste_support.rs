@@ -11,6 +11,7 @@ pub(crate) fn request(app: &Signex, intent: PasteIntent) -> PasteRequest {
         epoch: app.interaction_state.placement_epoch,
         path: app.document_state.active_path.clone(),
         dialog: 0,
+        from_agent: false,
     }
 }
 
