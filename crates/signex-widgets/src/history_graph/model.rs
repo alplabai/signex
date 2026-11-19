@@ -84,6 +84,8 @@ pub fn initials(name: &str, email: &str) -> String {
         first
             .into_iter()
             .chain(last)
+            // Avatar initials, not translatable text: the letters come from a name.
+            // ast-grep-ignore: no-case-in-view
             .flat_map(char::to_uppercase)
             .collect()
     };
@@ -100,9 +102,11 @@ pub fn initials(name: &str, email: &str) -> String {
 pub fn author_color_index(email: &str, len: usize) -> usize {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0000_0100_0000_01b3;
+    // A hash key, never shown, so no language case rules apply.
+    // ast-grep-ignore: no-case-in-view
     let hash = email
         .trim()
-        .to_lowercase()
+        .to_ascii_lowercase()
         .bytes()
         .fold(OFFSET, |h, b| (h ^ u64::from(b)).wrapping_mul(PRIME));
     (hash % len as u64) as usize
