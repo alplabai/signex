@@ -69,6 +69,7 @@ exceptions = [
     { crate = "signex-library-server", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-mcad", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-net", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-notebook", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-output", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-renderer", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-req", allow = ["FSL-1.1-ALv2"] },
