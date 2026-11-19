@@ -63,6 +63,7 @@ struct OpenOverlays {
     sheet_sync_open: bool,
     board_reannotate_open: bool,
     fab_outputs_open: bool,
+    diff_pair_classes_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
     library_picker_open: bool,
@@ -357,6 +358,9 @@ impl OpenOverlays {
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
+            OverlayId::DiffPairClasses => self
+                .diff_pair_classes_open
+                .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
@@ -672,6 +676,7 @@ impl Signex {
             sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
+            diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             library_picker_open: self.library.picker.is_some()
@@ -1789,6 +1794,7 @@ mod tests {
             sheet_sync_open,
             board_reannotate_open,
             fab_outputs_open,
+            diff_pair_classes_open,
             board_output_open,
             back_annotate_open,
             library_picker_open,
@@ -1865,6 +1871,9 @@ mod tests {
             ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
+            ("diff_pair_classes_open", |o| {
+                o.diff_pair_classes_open = true
+            }),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
             ("selection_filter_custom_open", |o| {
