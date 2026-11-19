@@ -1,6 +1,5 @@
-//! Graphite paint of the Active Bar's irregular dropdowns: the Selection
-//! Filter's toggle chips and All / None segmented control, and the
-//! net-colour swatches. Legacy themes never reach this module.
+//! Graphite paint of the Selection Filter dropdown: its toggle chips and
+//! All / None segmented control. Legacy themes never reach this module.
 
 use iced::widget::{container, row};
 use iced::{Background, Border, Color, Element, Theme, Widget};
@@ -16,9 +15,6 @@ const SP: styles::Spacing = styles::Spacing::DEFAULT;
 const SEGMENT_FRAME_RADIUS: f32 = 8.0;
 /// Inset of the segment cells inside their frame.
 const SEGMENT_INSET: f32 = 2.0;
-/// Side and corner radius of a net-colour swatch (the mock's swatch).
-pub(super) const SWATCH_SIZE: f32 = 12.0;
-const SWATCH_RADIUS: f32 = 3.0;
 
 /// Colours of one filter chip.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -193,24 +189,6 @@ pub(super) fn all_none<M: Clone + 'static>(
         .boxed()
 }
 
-/// A net-colour swatch: 12 px, radius 3, strong hairline.
-pub(super) fn swatch_style(
-    t: &ThemeTokens,
-    color: Color,
-) -> impl Fn(&Theme) -> container::Style + use<> {
-    let edge = tokens::resolve(t).line_strong;
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(color)),
-        border: Border {
-            width: 1.0,
-            radius: SWATCH_RADIUS.into(),
-            color: edge,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,32 +226,32 @@ mod tests {
         assert_eq!(hex(on.ink), [0xF0, 0xB0, 0x8E]);
     }
 
-    /// Both Graphite filter and net-colour menus keep the legacy entry
-    /// shape (one chip grid; seven swatches, then the Custom / Clear rows).
+    /// Both Graphite filter and net-colour menus keep their entry shape:
+    /// one chip grid; seven swatch rows in the icon column, then the Custom
+    /// / Clear rows, every one an ordinary item row (#61).
     #[test]
     fn graphite_menus_keep_their_entries() {
         use signex_widgets::active_bar_dropdown::DropdownEntry;
+        let i18n = signex_i18n::I18n::en_us_ref();
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let t = theme_tokens(id);
             let filters: std::collections::HashSet<_> = crate::active_bar::SelectionFilter::ALL
                 .iter()
                 .copied()
                 .collect();
-            let entry = super::super::custom::filter_entry(&t, &filters, &[]);
+            let entry = super::super::custom::filter_entry(i18n, &t, &filters, &[]);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
-            let rows = super::super::custom::net_color_entries(
-                signex_i18n::I18n::en_us_ref(),
-                &t,
-                id,
-                false,
-                true,
-            );
+            let rows = super::super::custom::net_color_entries(i18n, &t, id, false, true);
             let swatches = rows
                 .iter()
-                .filter(|e| matches!(e, DropdownEntry::Custom(_)))
+                .filter(|e| matches!(e, DropdownEntry::Item(item) if item.swatch.is_some()))
                 .count();
             assert_eq!(swatches, 7);
             assert_eq!(rows.len(), 12);
+            assert!(
+                !rows.iter().any(|e| matches!(e, DropdownEntry::Custom(_))),
+                "no row draws its own label size"
+            );
         }
     }
 

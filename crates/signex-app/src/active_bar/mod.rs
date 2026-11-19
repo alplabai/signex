@@ -1,25 +1,31 @@
-//! Altium-style Active Bar — floating toolbar centered at top of canvas.
+//! Active Bar — floating toolbar centred at the top of the canvas.
 //!
-//! 13 icon buttons, each with an optional dropdown menu.
-//! Matches Altium Designer's schematic editor Active Bar exactly.
+//! 13 group buttons in four groups (Select / Place / Annotate), each with a
+//! dropdown menu behind its corner triangle.
 
-use iced::widget::{Widget, svg};
-use iced::{Background, Border, Color, Element, Theme};
-use signex_i18n::{I18n, MessageId, ids};
+use iced::Element;
+use signex_i18n::I18n;
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::{button, text};
 
-use crate::styles::{self, TypeScale};
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-
+mod action;
+mod bar;
 mod dropdown;
+mod filter;
 #[cfg(test)]
 mod glyph_tests;
 mod glyphs;
 mod layout;
 mod planned;
 pub mod presets;
+
+pub use action::{ActiveBarAction, requires_net_color, requires_selection};
+pub(crate) use action::{DIRECTIVES_DEFAULT_ACTION, action_enabled};
+use bar::bar_items;
+#[cfg(test)]
+pub(crate) use bar::{
+    drawn_trigger_centres, drawn_trigger_centres_for, drawn_trigger_centres_with,
+};
+pub use filter::SelectionFilter;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
@@ -33,122 +39,6 @@ pub(crate) use layout::{
     bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, is_planned, planned_name, refusal_line};
-
-/// Whether `action` needs at least one selected item to make sense.
-/// Transform / align / distribute family — Altium greys these out when
-/// the selection is empty. Net-colour picks are excluded because the
-/// NetColor flow is "arm-then-apply", not "act on selection".
-pub fn requires_selection(action: &ActiveBarAction) -> bool {
-    use ActiveBarAction::*;
-    matches!(
-        action,
-        Drag | DragSelection
-            | MoveSelection
-            | MoveSelectionXY
-            | MoveToFront
-            | RotateSelection
-            | RotateSelectionCW
-            | FlipSelectedX
-            | FlipSelectedY
-            | BringToFront
-            | BringToFrontOf
-            | SendToBack
-            | SendToBackOf
-            | AlignLeft
-            | AlignRight
-            | AlignTop
-            | AlignBottom
-            | AlignHorizontalCenters
-            | AlignVerticalCenters
-            | AlignToGrid
-            | DistributeHorizontally
-            | DistributeVertically
-    )
-}
-
-/// Whether `action` only makes sense when at least one net carries a
-/// custom colour override. The Clear / Clear-All Net Color actions go
-/// here; the seven NetColor pickers and Custom Color stay always-on
-/// (they're the "arm" phase that paints colours onto nets).
-pub fn requires_net_color(action: &ActiveBarAction) -> bool {
-    use ActiveBarAction::*;
-    matches!(action, ClearNetColor | ClearAllNetColors)
-}
-
-/// What the Directives group button does on a left click before any
-/// directive has been used. Must be an enabled action (#1248: it was the
-/// planned Parameter Set, leaving the whole button dead).
-pub(super) const DIRECTIVES_DEFAULT_ACTION: ActiveBarAction = ActiveBarAction::PlaceNoERC;
-
-/// Whether `action` is clickable given the current selection and
-/// net-colour state.
-///
-/// #633 — these two facts used to reach here through a pair of
-/// thread-locals that `view_bar` set for the duration of one render.
-/// Their reset value was `true`, so any path reaching a bar helper
-/// outside `view_bar` rendered a fully-enabled bar regardless of what
-/// was selected — a fallback that silently produced the wrong UI
-/// instead of failing. They are arguments now, so the compiler asks.
-pub(super) fn action_enabled(
-    action: &ActiveBarAction,
-    has_selection: bool,
-    has_net_colors: bool,
-) -> bool {
-    if is_planned(action) {
-        return false;
-    }
-    if requires_selection(action) && !has_selection {
-        return false;
-    }
-    if requires_net_color(action) && !has_net_colors {
-        return false;
-    }
-    true
-}
-
-/// Theme-derived colors for Active Bar chrome (all Copy+ʼstatic).
-/// `bar_bg` / `bar_border` were used by the bespoke bar container;
-/// since `view_bar` now delegates to
-/// `signex_widgets::active_bar::view`, those fields are unused but
-/// kept on the struct so the dropdown helpers below don't have to
-/// rebuild a separate palette.
-#[derive(Clone, Copy)]
-#[expect(
-    dead_code,
-    reason = "palette carried on the struct so the dropdown helpers need not rebuild it"
-)]
-struct AbColors {
-    text: Color,
-    bar_bg: Color,
-    bar_border: Color,
-    drop_bg: Color,
-    drop_border: Color,
-    sep: Color,
-    hover: Color,
-}
-
-impl AbColors {
-    fn from_tokens(tokens: &ThemeTokens) -> Self {
-        Self {
-            text: styles::ti(tokens.text),
-            bar_bg: styles::ti(tokens.toolbar_bg),
-            bar_border: styles::ti(tokens.border),
-            drop_bg: styles::ti(tokens.panel_bg),
-            drop_border: styles::ti(tokens.border),
-            sep: styles::ti(tokens.border),
-            hover: styles::ti(tokens.hover),
-        }
-    }
-}
-
-// ─── Icons ───────────────────────────────────────────────────
-//
-// Icon handles are resolved through `crate::icons`, which threads the
-// active `ThemeId` through every lookup so the accent colour tints to
-// the current theme without copying icon trees. All former `ICON_*`
-// and `DD_*` const-byte declarations now live in that module.
-
-use crate::icons as ic;
 
 // ─── Messages ────────────────────────────────────────────────
 
@@ -186,6 +76,12 @@ pub enum ActiveBarMsg {
     /// `index` (0..N). No-op if the index is out of range or the slot is
     /// empty. Source: shortcut buttons in the Filter dropdown.
     ApplyCustomFilter(usize),
+    /// "Save current" in the Filter dropdown was picked: the active filter
+    /// set becomes a new preset, while there is room for one.
+    FilterPresetSavePicked,
+    /// A cell of the corner-mode pill was picked: wires and buses bend by
+    /// this mode from now on.
+    CornerModePicked(signex_types::corner::CornerMode),
     /// `message` came from an overlay painted in the undocked window
     /// `window`: it acts on the sheet that window shows, not on the main
     /// window's (#1910).
@@ -204,235 +100,7 @@ pub struct FootprintFilterPreset {
     pub kinds: Vec<crate::library::editor::footprint::state::selection_filter::SelectionFilterKind>,
 }
 
-/// Selection filter categories — each can be independently toggled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum SelectionFilter {
-    Components,
-    Wires,
-    Buses,
-    SheetSymbols,
-    SheetEntries,
-    NetLabels,
-    Parameters,
-    Ports,
-    PowerPorts,
-    Texts,
-    DrawingObjects,
-    Other,
-}
-
-impl SelectionFilter {
-    pub const ALL: &'static [SelectionFilter] = &[
-        Self::Components,
-        Self::Wires,
-        Self::Buses,
-        Self::SheetSymbols,
-        Self::SheetEntries,
-        Self::NetLabels,
-        Self::Parameters,
-        Self::Ports,
-        Self::PowerPorts,
-        Self::Texts,
-        Self::DrawingObjects,
-        Self::Other,
-    ];
-
-    /// The catalog message of [`Self::label`].
-    pub fn message(self) -> signex_i18n::MessageId {
-        use signex_i18n::ids;
-        match self {
-            Self::Components => ids::PANELS_FILTER_COMPONENTS,
-            Self::Wires => ids::PANELS_FILTER_WIRES,
-            Self::Buses => ids::PANELS_FILTER_BUSES,
-            Self::SheetSymbols => ids::PANELS_FILTER_SHEET_SYMBOLS,
-            Self::SheetEntries => ids::PANELS_FILTER_SHEET_ENTRIES,
-            Self::NetLabels => ids::PANELS_FILTER_NET_LABELS,
-            Self::Parameters => ids::PANELS_FILTER_PARAMETERS,
-            Self::Ports => ids::PANELS_FILTER_PORTS,
-            Self::PowerPorts => ids::PANELS_FILTER_POWER_PORTS,
-            Self::Texts => ids::PANELS_FILTER_TEXTS,
-            Self::DrawingObjects => ids::PANELS_FILTER_DRAWING_OBJECTS,
-            Self::Other => ids::PANELS_FILTER_OTHER,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Components => "Components",
-            Self::Wires => "Wires",
-            Self::Buses => "Buses",
-            Self::SheetSymbols => "Sheet Symbols",
-            Self::SheetEntries => "Sheet Entries",
-            Self::NetLabels => "Net Labels",
-            Self::Parameters => "Parameters",
-            Self::Ports => "Ports",
-            Self::PowerPorts => "Power Ports",
-            Self::Texts => "Texts",
-            Self::DrawingObjects => "Drawing Objects",
-            Self::Other => "Other",
-        }
-    }
-
-    /// The category as a command operand spells it (`sheet_symbols`).
-    pub fn token(self) -> &'static str {
-        match self {
-            Self::Components => "components",
-            Self::Wires => "wires",
-            Self::Buses => "buses",
-            Self::SheetSymbols => "sheet_symbols",
-            Self::SheetEntries => "sheet_entries",
-            Self::NetLabels => "net_labels",
-            Self::Parameters => "parameters",
-            Self::Ports => "ports",
-            Self::PowerPorts => "power_ports",
-            Self::Texts => "texts",
-            Self::DrawingObjects => "drawing_objects",
-            Self::Other => "other",
-        }
-    }
-
-    /// The category an operand names, by [`Self::token`].
-    pub fn from_token(token: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|f| f.token() == token)
-    }
-}
-
-/// All actions available from Active Bar buttons and dropdown items.
-///
-/// `PartialEq` so `app::command::active_bar` can look an action up in its
-/// id table by value (#271). The ambiguity check in `action_label` only
-/// formats `Debug` when that list is non-empty, so a row render does not
-/// pay for it today.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ActiveBarAction {
-    // Selection modes
-    ToolSelect,
-    LassoSelect,
-    InsideArea,
-    OutsideArea,
-    TouchingRectangle,
-    TouchingLine,
-    SelectAll,
-    SelectConnection,
-    ToggleSelection,
-    // Move/Transform
-    Drag,
-    /// Interactive click-click move of one picked object (#271).
-    Move,
-    /// Interactive click-click move of the current selection (#271).
-    MoveSelection,
-    MoveSelectionXY,
-    DragSelection,
-    MoveToFront,
-    RotateSelection,
-    RotateSelectionCW,
-    FlipSelectedX,
-    FlipSelectedY,
-    BringToFront,
-    SendToBack,
-    BringToFrontOf,
-    SendToBackOf,
-    // Sheet symbols
-    PlaceSheetSymbol,
-    PlaceSheetEntry,
-    PlaceDeviceSheetSymbol,
-    PlaceReuseBlock,
-    // Align
-    AlignLeft,
-    AlignRight,
-    AlignHorizontalCenters,
-    DistributeHorizontally,
-    AlignTop,
-    AlignBottom,
-    AlignVerticalCenters,
-    DistributeVertically,
-    AlignToGrid,
-    // Wiring
-    DrawWire,
-    DrawBus,
-    PlaceBusEntry,
-    PlaceNetLabel,
-    PlaceJunction,
-    // Power
-    PlacePowerGND,
-    PlacePowerVCC,
-    PlacePowerPlus12,
-    PlacePowerPlus5,
-    PlacePowerMinus5,
-    PlacePowerArrow,
-    PlacePowerWave,
-    PlacePowerBar,
-    PlacePowerCircle,
-    PlacePowerSignalGND,
-    PlacePowerEarth,
-    // Harness
-    PlaceSignalHarness,
-    PlaceHarnessConnector,
-    PlaceHarnessEntry,
-    // Port
-    PlacePort,
-    PlaceOffSheetConnector,
-    // Directives
-    PlaceParameterSet,
-    PlaceNoERC,
-    PlaceDiffPair,
-    PlaceBlanket,
-    PlaceCompileMask,
-    // Text
-    PlaceTextString,
-    PlaceTextFrame,
-    PlaceNote,
-    // Shapes
-    DrawArc,
-    DrawFullCircle,
-    DrawEllipticalArc,
-    DrawEllipse,
-    DrawLine,
-    DrawRectangle,
-    DrawRoundRectangle,
-    DrawPolygon,
-    DrawBezier,
-    PlaceGraphic,
-    // Net Color
-    NetColorBlue,
-    NetColorLightGreen,
-    NetColorLightBlue,
-    NetColorRed,
-    NetColorFuchsia,
-    NetColorYellow,
-    NetColorDarkGreen,
-    /// Open the custom-colour picker modal for net-colour arming.
-    NetColorCustom,
-    ClearNetColor,
-    ClearAllNetColors,
-    // Component
-    PlaceComponent,
-}
-
 // ─── View: Active Bar ────────────────────────────────────────
-
-/// Hover text for a bar button: its name, plus the shared "planned" note
-/// when the button's left-click action is a placeholder tool (#1249), so a
-/// greyed Harness button explains itself like the rows in its dropdown.
-fn button_tooltip(left: &ActiveBarMsg, name: MessageId, i18n: &I18n) -> String {
-    let name = i18n.message_plain(name, &[]);
-    match left {
-        ActiveBarMsg::Action(action) if is_planned(action) => i18n.message_plain(
-            ids::CHROME_ACTIVE_BAR_PLANNED_TOOLTIP,
-            &[("name", name.into())],
-        ),
-        _ => name,
-    }
-}
-
-/// Action behind the draw-mode pill: re-select the tool that is
-/// already active, so a click never flips Bus drawing over to Wire.
-fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
-    match current_tool {
-        crate::app::Tool::Bus => ActiveBarAction::DrawBus,
-        _ => ActiveBarAction::DrawWire,
-    }
-}
 
 /// Render the Active Bar (the floating toolbar strip).
 #[expect(
@@ -449,319 +117,16 @@ pub fn view_bar<'a>(
     has_net_colors: bool,
     i18n: &I18n,
 ) -> Element<'a, ActiveBarMsg> {
-    let items = bar_items(
+    let state = bar::BarState {
         current_tool,
         corner_mode,
         last_tool,
-        tokens,
         tid,
         has_selection,
         has_net_colors,
-        i18n,
-    );
-    signex_widgets::active_bar::view(items, tokens)
-}
-
-/// The bar's slots in draw order. The leading slots must match
-/// `layout::SCHEMATIC_BAR_SLOTS` (pinned by `bar_items_follow_the_slot_table`).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "8 arguments: the bar reads independent slices of app state and owns none of them"
-)]
-fn bar_items(
-    current_tool: crate::app::Tool,
-    corner_mode: signex_types::corner::CornerMode,
-    last_tool: &std::collections::HashMap<String, ActiveBarAction>,
-    tokens: &ThemeTokens,
-    tid: ThemeId,
-    has_selection: bool,
-    has_net_colors: bool,
-    i18n: &I18n,
-) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
-    use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
-
-    // Helper: get last-used action for a group, or use default.
-    // A planned action is never a valid "last used" (it is disabled), so it
-    // falls back to the group default rather than killing the button.
-    let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
-        ActiveBarMsg::Action(
-            last_tool
-                .get(group)
-                .filter(|a| !is_planned(a))
-                .cloned()
-                .unwrap_or(default),
-        )
     };
-    // Graphite draws monochrome stroke glyphs only for the group defaults;
-    // the multi-colour per-action icons would tint into solid blobs, so a
-    // button keeps its group glyph. Power has monochrome family variants,
-    // so it follows the last-used port (see `glyphs`).
-
-    // Helper — build a button item with the schematic editor's
-    // standard pattern: left-click action + right-click dropdown +
-    // chevron indicator. Selection-aware enable inferred from the
-    // left action through `action_enabled`. The chevron uses the
-    // themed `chevron_45.svg` so its colour follows the active
-    // theme's accent and reads as a proper Altium-style triangle
-    // rather than a Unicode glyph.
-    let btn = |icon: svg::Handle,
-               selected: bool,
-               left: ActiveBarMsg,
-               right: Option<ActiveBarMsg>,
-               tooltip: MessageId|
-     -> ActiveBarItem<ActiveBarMsg> {
-        let enabled = match &left {
-            ActiveBarMsg::Action(a) => action_enabled(a, has_selection, has_net_colors),
-            _ => true,
-        };
-        let dropdown_indicator = if right.is_some() {
-            Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid)))
-        } else {
-            None
-        };
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Svg(icon),
-            tooltip: button_tooltip(&left, tooltip, i18n),
-            enabled,
-            selected,
-            on_press: Some(left),
-            on_right_press: right.clone(),
-            dropdown_indicator,
-        })
-    };
-
-    let mut items: Vec<ActiveBarItem<ActiveBarMsg>> = Vec::with_capacity(20);
-
-    items.push(btn(
-        ic::icon_filter(tid),
-        false,
-        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)),
-        ids::CHROME_ACTIVE_BAR_SELECTION_FILTER,
-    ));
-    items.push(btn(
-        ic::icon_move(tid),
-        false,
-        ActiveBarMsg::Action(ActiveBarAction::Move),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
-        ids::CHROME_ACTIVE_BAR_MOVE,
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    items.push(btn(
-        ic::icon_select(tid),
-        current_tool == crate::app::Tool::Select,
-        ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode)),
-        ids::CHROME_ACTIVE_BAR_SELECT,
-    ));
-    items.push(btn(
-        ic::icon_align(tid),
-        false,
-        ActiveBarMsg::Action(ActiveBarAction::AlignToGrid),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
-        ids::CHROME_ACTIVE_BAR_ALIGN,
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    items.push(btn(
-        ic::icon_wire(tid),
-        current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
-        last("wiring", ActiveBarAction::DrawWire),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
-        ids::CHROME_ACTIVE_BAR_WIRING,
-    ));
-    let power_icon =
-        glyphs::PowerGlyph::of(last_tool.get("power").filter(|a| !is_planned(a))).handle(tid);
-    items.push(btn(
-        power_icon,
-        false,
-        last("power", ActiveBarAction::PlacePowerGND),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
-        ids::CHROME_ACTIVE_BAR_POWER_PORT,
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    items.push(btn(
-        ic::icon_harness(tid),
-        false,
-        last("harness", ActiveBarAction::PlaceSignalHarness),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
-        ids::CHROME_ACTIVE_BAR_HARNESS,
-    ));
-    items.push(btn(
-        ic::icon_sheetsym(tid),
-        false,
-        last("sheet", ActiveBarAction::PlaceSheetSymbol),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
-        ids::CHROME_ACTIVE_BAR_SHEET_SYMBOL,
-    ));
-    items.push(btn(
-        ic::icon_port(tid),
-        false,
-        last("port", ActiveBarAction::PlacePort),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
-        ids::CHROME_ACTIVE_BAR_PORT,
-    ));
-    items.push(btn(
-        ic::icon_directives(tid),
-        false,
-        last("directives", DIRECTIVES_DEFAULT_ACTION),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
-        ids::CHROME_ACTIVE_BAR_DIRECTIVES,
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    items.push(btn(
-        ic::icon_text(tid),
-        current_tool == crate::app::Tool::Text,
-        last("text", ActiveBarAction::PlaceTextString),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
-        ids::CHROME_ACTIVE_BAR_TEXT,
-    ));
-    items.push(btn(
-        ic::icon_shapes(tid),
-        matches!(
-            current_tool,
-            crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle
-        ),
-        last("shapes", ActiveBarAction::DrawLine),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)),
-        ids::CHROME_ACTIVE_BAR_DRAWING_TOOLS,
-    ));
-    items.push(btn(
-        ic::icon_netcolor(tid),
-        false,
-        ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
-        Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)),
-        ids::CHROME_ACTIVE_BAR_NET_COLOR,
-    ));
-
-    // Draw-mode indicator (only visible while wire/bus is the active
-    // tool). Drops in as a Custom variant so the standard button
-    // styling doesn't apply.
-    if layout::shows_draw_mode_pill(current_tool) {
-        items.push(ActiveBarItem::Separator);
-        // The pill names the angle; the status bar says which leg leads.
-        let mode_label = match corner_mode {
-            signex_types::corner::CornerMode::Ortho90 => ids::CHROME_ACTIVE_BAR_CORNER_90,
-            signex_types::corner::CornerMode::Angle45Start
-            | signex_types::corner::CornerMode::Angle45End => ids::CHROME_ACTIVE_BAR_CORNER_45,
-            signex_types::corner::CornerMode::FreeAngle => ids::CHROME_ACTIVE_BAR_CORNER_ANY,
-        };
-        let pill_text = styles::ti(tokens.text);
-        let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
-        let pill: Element<'static, ActiveBarMsg> = button(
-            text(i18n.message(mode_label, &[]))
-                .size(TS.label)
-                .color(pill_text),
-        )
-        .padding([5, 7])
-        .on_press(ActiveBarMsg::Action(draw_mode_pill_action(current_tool)))
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(pill_bg)),
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                color: Color::TRANSPARENT,
-                ..Border::default()
-            },
-            ..button::Style::default()
-        })
-        .boxed();
-        // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
-        // because `slot_offsets` places every dropdown from these
-        // widths — see `ActiveBarItem::Custom`. This pill sits AFTER
-        // every dropdown trigger on this bar, so an error here would
-        // only shift the bar's centring, not the panels; state it
-        // correctly anyway.
-        items.push(ActiveBarItem::custom(pill, layout::DRAW_MODE_PILL_WIDTH_PX));
-    }
-
-    items
-}
-
-#[cfg(test)]
-mod pill_tests {
-    use super::*;
-    use crate::app::Tool;
-
-    /// #1379: the pill was hard-wired to `DrawWire`, so clicking it
-    /// while drawing a bus silently switched the tool to Wire.
-    #[test]
-    fn draw_mode_pill_keeps_the_active_drawing_tool() {
-        assert!(matches!(
-            draw_mode_pill_action(Tool::Bus),
-            ActiveBarAction::DrawBus
-        ));
-        assert!(matches!(
-            draw_mode_pill_action(Tool::Wire),
-            ActiveBarAction::DrawWire
-        ));
-    }
+    signex_widgets::active_bar::view(bar_items(&state, tokens, i18n), tokens)
 }
 
 #[cfg(test)]
 mod layout_tests;
-
-/// Window-space centre x of every dropdown trigger the view draws for
-/// `tool` in a window `window_width` wide under theme `tid`, derived from
-/// the drawn items and the widget's own row maths (not from `layout`'s
-/// slot table).
-#[cfg(test)]
-pub(crate) fn drawn_trigger_centres_for(
-    tool: crate::app::Tool,
-    window_width: f32,
-    tid: ThemeId,
-) -> Vec<(ActiveBarMenu, f32)> {
-    let tokens = signex_types::theme::theme_tokens(tid);
-    drawn_trigger_centres_with(tool, window_width, &tokens, tid)
-}
-
-/// [`drawn_trigger_centres_for`] with explicit `tokens`.
-#[cfg(test)]
-pub(crate) fn drawn_trigger_centres_with(
-    tool: crate::app::Tool,
-    window_width: f32,
-    tokens: &signex_types::theme::ThemeTokens,
-    tid: ThemeId,
-) -> Vec<(ActiveBarMenu, f32)> {
-    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
-    let m = Metrics::GRAPHITE;
-    let items = bar_items(
-        tool,
-        signex_types::corner::CornerMode::Ortho90,
-        &std::collections::HashMap::new(),
-        tokens,
-        tid,
-        false,
-        false,
-        &I18n::en_us(),
-    );
-    let (offsets, total) = slot_offsets(&items, &m);
-    let bar_left = (window_width - total) / 2.0;
-    items
-        .iter()
-        .zip(offsets)
-        .filter_map(|(item, left)| match item {
-            ActiveBarItem::Button(b) => match b.on_right_press {
-                Some(ActiveBarMsg::ToggleMenu(menu)) => {
-                    Some((menu, bar_left + left + item.width(&m) / 2.0))
-                }
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
-}
-
-/// [`drawn_trigger_centres_with`] under the Graphite metrics, which the
-/// canvas hit-test tests (Graphite prefs) use.
-#[cfg(test)]
-pub(crate) fn drawn_trigger_centres(
-    tool: crate::app::Tool,
-    window_width: f32,
-) -> Vec<(ActiveBarMenu, f32)> {
-    let tokens = signex_types::theme::theme_tokens(ThemeId::DEFAULT);
-    drawn_trigger_centres_with(tool, window_width, &tokens, ThemeId::DEFAULT)
-}

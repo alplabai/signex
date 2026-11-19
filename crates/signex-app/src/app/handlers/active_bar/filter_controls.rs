@@ -68,6 +68,22 @@ impl Signex {
         Task::none()
     }
 
+    /// "Save current" in the Filter dropdown: a new preset holding the active
+    /// filter set. Nothing happens at the preset limit.
+    pub(crate) fn handle_save_current_filter_preset(&mut self) -> Task<Message> {
+        let state = &mut self.interaction_state;
+        let active = &state.selection_filters;
+        let added = presets::add(
+            &mut state.custom_filter_presets,
+            &mut state.active_custom_filter_tab,
+            |f| active.contains(&f),
+        );
+        if !added {
+            return Task::none();
+        }
+        self.sync_and_persist_custom_filter_presets()
+    }
+
     /// A new preset with every kind on, focused for editing.
     pub(crate) fn handle_add_custom_filter_preset(&mut self) -> Task<Message> {
         let state = &mut self.interaction_state;

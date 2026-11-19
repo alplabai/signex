@@ -431,6 +431,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
+            &|id| self.keymap_shortcut_label(id),
         )
         .map(Message::ActiveBar)
         .boxed();
