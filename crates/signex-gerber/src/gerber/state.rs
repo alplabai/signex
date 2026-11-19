@@ -209,9 +209,10 @@ impl<'a> Reader<'a> {
         let last = self.source.last_line();
         // A region the file never ends; a contour not back at its start is
         // reported as it is closed, so a closed one is reported here.
-        let open = self.region.as_ref().map(|r| {
-            r.contour.len() < 2 || r.contour.first() == r.contour.last()
-        });
+        let open = self
+            .region
+            .as_ref()
+            .map(|r| r.contour.len() < 2 || r.contour.first() == r.contour.last());
         if let Some(closed) = open {
             if closed {
                 self.report(last, ProblemKind::UnclosedRegion);
