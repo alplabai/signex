@@ -105,6 +105,13 @@ pub(crate) struct NumberedRow<'a> {
     pub(crate) invalid: bool,
     /// Apply changes this row.
     pub(crate) changed: bool,
+    /// Another page has the same number.
+    pub(crate) clash: bool,
+    /// The number is above the page count.
+    pub(crate) out_of_range: bool,
+    /// After Apply the page follows its position (no manual entry): the
+    /// view draws the number in faint ink.
+    pub(crate) automatic: bool,
 }
 
 impl SheetNumberingState {
@@ -182,6 +189,17 @@ impl SheetNumberingState {
     /// The rows the view lists, in hierarchy order.
     pub(crate) fn numbered_rows(&self) -> Vec<NumberedRow<'_>> {
         let edits = self.edits();
+        let issues = self.issues();
+        let clashing = |index: usize| {
+            issues.iter().any(|issue| {
+                matches!(issue, NumberingIssue::Clash { pages, .. } if pages.contains(&index))
+            })
+        };
+        let above = |index: usize| {
+            issues.iter().any(
+                |issue| matches!(issue, NumberingIssue::OutOfRange { page, .. } if *page == index),
+            )
+        };
         self.rows()
             .iter()
             .enumerate()
@@ -190,7 +208,35 @@ impl SheetNumberingState {
                 draft: self.drafts.get(index).map_or("", String::as_str),
                 invalid: self.parsed(index).is_none(),
                 changed: edits.iter().any(|edit| edit.row == index),
+                clash: clashing(index),
+                out_of_range: above(index),
+                automatic: self.is_automatic(index),
             })
+            .collect()
+    }
+
+    /// Whether row `index` follows its position after Apply: a top-level
+    /// page always does; a placed page does when its number is its position
+    /// and no manual entry stays behind (an untouched hand number equal to
+    /// its position is kept until Auto-number clears it).
+    pub(crate) fn is_automatic(&self, index: usize) -> bool {
+        let Some(row) = self.rows().get(index) else {
+            return false;
+        };
+        if row.placement.is_none() {
+            return true;
+        }
+        let Some(number) = self.parsed(index) else {
+            return false;
+        };
+        number == row.position && (!row.manual || self.clear_manual || number != row.number)
+    }
+
+    /// The clashes, gaps and numbers above the count that hold Apply back.
+    pub(crate) fn blocking_issues(&self) -> Vec<NumberingIssue> {
+        self.issues()
+            .into_iter()
+            .filter(|issue| !matches!(issue, NumberingIssue::InvalidOverride { .. }))
             .collect()
     }
 
@@ -231,8 +277,13 @@ impl SheetNumberingState {
     }
 
     /// Apply is offered: the read is in, no Apply is waiting on the disk,
-    /// every number is valid and one changes.
-    pub(crate) fn can_apply(&self) -> bool {
-        self.read.is_some() && !self.checking && !self.has_invalid() && !self.edits().is_empty()
+    /// every number is valid, no clash, gap or number above the page count
+    /// stands, and one number changes.
+    pub fn can_apply(&self) -> bool {
+        self.read.is_some()
+            && !self.checking
+            && !self.has_invalid()
+            && self.blocking_issues().is_empty()
+            && !self.edits().is_empty()
     }
 }
