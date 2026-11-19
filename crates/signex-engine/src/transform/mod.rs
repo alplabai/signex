@@ -164,6 +164,20 @@ impl Engine {
     /// no longer holds for it. A user-placed dot (`Junction::minted == false`)
     /// is user data and is never considered for removal.
     pub(super) fn reconcile_wire_junctions(&mut self, items: &[SelectedItem]) -> bool {
+        self.reconcile_wire_junctions_frozen(items, None)
+    }
+
+    /// [`Self::reconcile_wire_junctions`] with its choices decided already (a
+    /// guarded move takes them from its plain move, see `exec::guarded`):
+    /// `frozen.pin_dots` lists the only places a pin dot may be minted, judged
+    /// by geometry alone and never by the candidate's own nets, and no wire dot
+    /// is minted on `frozen.bare`, a dotless T the plain move leaves bare (#107:
+    /// no connection). `None` decides them here.
+    pub(super) fn reconcile_wire_junctions_frozen(
+        &mut self,
+        items: &[SelectedItem],
+        frozen: Option<&Frozen<'_>>,
+    ) -> bool {
         // Each item's first wire of that id, found in one pass over the wires.
         let wanted: std::collections::HashSet<uuid::Uuid> = items
             .iter()
@@ -198,11 +212,27 @@ impl Engine {
         let verdict: Vec<Option<bool>> = (self.document.junctions.iter())
             .map(|j| if j.minted { kept(j) } else { None })
             .collect();
-        let judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
+        // A pin end the edit put inside a wire joins it through a dot; the
+        // dot is the connection, as #107 has it (see `pin_junctions`). Found
+        // before the index, so the wires near each new dot are in the index
+        // that judges it: the local and the full-scan commit then agree. A pin
+        // end where wires of two nets overlap gets no dot; the command names
+        // it in a notice once it is committed (`Engine::execute`).
+        let before = self.taps_before.as_deref();
+        let mut pin_dots = match frozen {
+            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen.pin_dots),
+            None => {
+                let decided = pin_junctions::pin_dots_for(&self.document, items, before);
+                self.crossed_taps.extend(decided.crossed);
+                decided.dots
+            }
+        };
+        let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
             .map(|(j, _)| j.position)
             .collect();
+        judged.extend(pin_dots.iter().map(|dot| dot.position));
         // Wire geometry is fixed for this pass (only junctions change), so one
         // index serves every query. Minting for a wire takes about eight
         // lookups, judging a dot three. The queries are all near a touched
@@ -215,15 +245,63 @@ impl Engine {
         );
         let mut changed = false;
         for wire in touched {
-            let minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
+            let mut minted = autoplace::junctions_for_wire(&wire, &self.document.junctions, &index);
+            if let Some(frozen) = frozen {
+                minted.retain(|dot| !frozen.bare.contains(&signex_net::pt_key(&dot.position)));
+            }
             changed |= !minted.is_empty();
             // Extend inside the loop so the next wire's dedup sees these.
             self.document.junctions.extend(minted);
         }
+        // A wire dot minted above may already stand where a pin dot would.
+        let dot_at: std::collections::HashSet<_> = (self.document.junctions.iter())
+            .map(|j| signex_net::pt_key(&j.position))
+            .collect();
+        pin_dots.retain(|dot| !dot_at.contains(&signex_net::pt_key(&dot.position)));
+        changed |= !pin_dots.is_empty();
+        self.document.junctions.extend(pin_dots);
 
         // Every minted dot is revalidated, not only those near `touched`: a
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
+        // A dot no wire meeting holds stays while a pin end still sits strictly
+        // inside a wire there: it goes when the pin or the wire leaves. The
+        // no-short rule is the minting's, never a reason to drop a dot.
+        let moved: std::collections::HashSet<uuid::Uuid> = (items.iter())
+            .filter(|item| item.kind == SelectedKind::Symbol)
+            .map(|item| item.uuid)
+            .collect();
+        let owners = std::cell::OnceCell::new();
+        let moved_tips = std::cell::OnceCell::new();
+        let pin_holds = |at: &signex_types::schematic::Point| {
+            let k = signex_net::pt_key(at);
+            let through = (index.segment_candidates(*at).into_iter()).any(|i| {
+                let wire = index.wire(i);
+                let (a, b) = (
+                    signex_net::pt_key(&wire.start),
+                    signex_net::pt_key(&wire.end),
+                );
+                k != a && k != b && signex_net::point_on_segment(k, a, b)
+            });
+            if !through {
+                return false;
+            }
+            // The pin ends of the sheet before the edit (a drag preview's,
+            // shared) less the moved parts', plus the moved parts' own.
+            let owners = owners.get_or_init(|| {
+                (self.preset_pin_owners.clone())
+                    .unwrap_or_else(|| std::sync::Arc::new(pin_owners(&self.document)))
+            });
+            let still = owners
+                .get(&k)
+                .is_some_and(|ids| ids.iter().any(|id| !moved.contains(id)));
+            if still {
+                return true;
+            }
+            let moved_tips =
+                moved_tips.get_or_init(|| pin_junctions::tip_keys_of(&self.document, &moved));
+            moved_tips.contains(&k)
+        };
         let stale: std::collections::HashSet<uuid::Uuid> = self
             .document
             .junctions
@@ -233,6 +311,7 @@ impl Engine {
             .filter(|(at, junction)| {
                 !verdict.get(*at).copied().flatten().unwrap_or_else(|| {
                     autoplace::wire_meeting_justifies_junction(junction.position, &index)
+                        || pin_holds(&junction.position)
                 })
             })
             .map(|(_, junction)| junction.uuid)
@@ -615,6 +694,7 @@ mod autoplace_request;
 mod bus_entry;
 mod dot_verdicts;
 mod merge;
+mod pin_junctions;
 mod region_wires;
 pub(crate) mod rubber_band;
 mod wire_index;
@@ -622,6 +702,18 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
+pub(crate) use pin_junctions::bare_t_keys;
+
+/// The choices a guarded round's reconcile takes from its plain move (see
+/// `Engine::reconcile_wire_junctions_frozen`).
+pub(crate) struct Frozen<'f> {
+    /// The only places a pin dot may be minted.
+    pub(crate) pin_dots: &'f [signex_types::schematic::Point],
+    /// Dotless T points the plain move leaves bare: no wire dot goes there.
+    pub(crate) bare: &'f std::collections::HashSet<signex_net::uf::Key>,
+}
+pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs};
+pub(crate) use pin_junctions::{crossed_taps_notice, new_pin_dots, pin_owners};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
@@ -660,6 +752,7 @@ impl_has_uuid!(
     signex_types::schematic::Label,
     signex_types::schematic::Junction,
     signex_types::schematic::NoConnect,
+    signex_types::schematic::NoErcDirective,
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
     signex_types::schematic::ChildSheet,

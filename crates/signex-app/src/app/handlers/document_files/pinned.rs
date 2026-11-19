@@ -63,6 +63,24 @@ impl Signex {
                 );
                 iced::Task::none()
             }
+            StartScreenMsg::SectionPicked(section) => {
+                self.interaction_state.start_section = section;
+                crate::start_screen::reveal_section(section)
+            }
+            StartScreenMsg::LibrariesPicked => self.open_start_screen_libraries(),
+        }
+    }
+
+    /// The Start screen's Libraries row: the Library Browser tab Tools ▸
+    /// Library Editor opens when a library is open, else the Library panel,
+    /// whose list offers Open Library.
+    fn open_start_screen_libraries(&mut self) -> iced::Task<Message> {
+        match self.library_editor_target() {
+            Some(path) => self.handle_open_library_browser(path),
+            None => {
+                let shown = self.show_panel(crate::panels::PanelKind::Library);
+                iced::Task::batch([shown, self.finish_update()])
+            }
         }
     }
 
@@ -115,10 +133,12 @@ impl Signex {
 
     /// Clear a row menu left open after the Start screen went away (a
     /// project or tab opened by another route), so it never comes back or
-    /// takes an Esc. Run from `finish_update`.
+    /// takes an Esc, and put the navigation back on Home for the next time
+    /// the Start screen shows. Run from `finish_update`.
     pub(crate) fn drop_start_row_menu_off_screen(&mut self) {
         if !self.start_screen_shown() {
             self.interaction_state.start_row_menu = None;
+            self.interaction_state.start_section = crate::start_screen::StartSection::Home;
         }
     }
 

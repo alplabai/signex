@@ -329,6 +329,12 @@ impl Signex {
             },
             ContextMenuMsg::Show(x, y) => self.show_canvas_context_menu(x, y, None),
             ContextMenuMsg::Close => {
+                // Title-bar drag diagnosis: a press in the strip that no
+                // widget captured never reached a drag zone.
+                let (x, y) = self.interaction_state.last_mouse_pos;
+                if y < crate::menu_bar::MENU_BAR_HEIGHT {
+                    tracing::debug!(x, y, "title bar: press reached no widget");
+                }
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -607,6 +613,10 @@ impl Signex {
                 self.handle_erc_run_finished(generation, &result)
             }
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::PinJunctionRepairRequested => {
+                self.repair_pin_junctions();
+                Task::none()
+            }
             ErcMsg::ProfileSaveDialogOpened => self.handle_profile_save_dialog_opened(),
             ErcMsg::ProfileSaveNameChanged(name) => self.handle_profile_save_name_changed(name),
             ErcMsg::ProfileSaveVersionChanged(version) => {

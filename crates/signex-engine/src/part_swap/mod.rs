@@ -117,9 +117,10 @@ pub fn rewire_pins(
     for mark in out
         .no_connects
         .iter_mut()
-        .chain(out.no_erc_directives.iter_mut())
+        .map(|n| &mut n.position)
+        .chain(out.no_erc_directives.iter_mut().map(|d| &mut d.position))
     {
-        moved |= swap(&mut mark.position);
+        moved |= swap(mark);
     }
     if !moved {
         return Ok(None);

@@ -108,6 +108,7 @@ pub fn fab_options(kinds: &FabOutputKinds, name: &str) -> FabOptions {
         test_netlist: kinds.test_netlist,
         ipc2581: kinds.ipc2581,
         odb: kinds.odb.then_some(form),
+        designator_standard: None,
     }
 }
 

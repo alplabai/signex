@@ -114,7 +114,7 @@ fn the_tabs_the_search_and_the_sections_are_listed() {
         "Bottom Layer",
         "Signal",
         "Plane",
-        "Overlay",
+        "Silkscreen",
         "Courtyard",
         "Coating",
         "Board Outline",
@@ -152,9 +152,9 @@ fn a_name_click_picks_the_layer_and_its_eye_toggles_it() {
 #[test]
 fn a_pair_row_eye_toggles_only_its_side() {
     let ctx = context(&PcbLayerView::default());
-    let label = find(&texts(&ctx), "Overlay").bounds;
-    let left = messages_along(&ctx, "Overlay", 0.0, label.x);
-    let right = messages_along(&ctx, "Overlay", label.x + label.width, WINDOW.width);
+    let label = find(&texts(&ctx), "Silkscreen").bounds;
+    let left = messages_along(&ctx, "Silkscreen", 0.0, label.x);
+    let right = messages_along(&ctx, "Silkscreen", label.x + label.width, WINDOW.width);
     let toggles = |sent: &[PanelMsg]| -> Vec<PcbLayer> {
         sent.iter()
             .filter_map(|m| match m {
@@ -183,15 +183,18 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
         picker: Some((BOTTOM, false)),
         ..LayersPanelUi::default()
     };
-    let mut view = PcbLayerView::default();
+    let view = PcbLayerView::default();
     let closed = draw_pixels(panel(&context(&view)), WINDOW);
     let open = context_with(&view, ui);
     assert!(
         listed(&open, "Colour"),
         "the colour row opens under the row"
     );
-    view.set_layer_colour(BOTTOM, Some([255, 0, 255]));
-    let ctx = context(&view);
+    let mut coloured = board();
+    let magenta = signex_types::theme::Color::new(255, 0, 255, 255);
+    coloured.options.set_layer_color(BOTTOM, Some(magenta));
+    let mut ctx = context(&view);
+    ctx.pcb_layers = PcbLayersPanel::new(&coloured, &view, ctx.pcb_layers.i18n.clone());
     assert_eq!(
         ctx.pcb_layers.colour(BOTTOM),
         iced::Color::from_rgb8(255, 0, 255)
@@ -208,11 +211,11 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
 fn used_on_hides_the_empty_layers() {
     let mut view = PcbLayerView::default();
     let all = context(&view);
-    assert!(listed(&all, "Bottom Layer") && listed(&all, "Overlay"));
+    assert!(listed(&all, "Bottom Layer") && listed(&all, "Silkscreen"));
     view.set_used_only(true);
     let used = context(&view);
     assert!(!listed(&used, "Bottom Layer"), "nothing is on Bottom");
-    assert!(!listed(&used, "Overlay"), "nothing is on an overlay");
+    assert!(!listed(&used, "Silkscreen"), "nothing is on a silkscreen");
     assert!(!listed(&used, "Coating"), "a row with no layer goes too");
     let sent = messages_on_click(panel(&used), WINDOW, "Used On");
     assert_eq!(
@@ -229,7 +232,7 @@ fn the_search_keeps_the_rows_whose_name_holds_it() {
     };
     let ctx = context_with(&PcbLayerView::default(), ui);
     assert!(listed(&ctx, "Courtyard"));
-    assert!(!listed(&ctx, "Overlay") && !listed(&ctx, "Bottom Layer"));
+    assert!(!listed(&ctx, "Silkscreen") && !listed(&ctx, "Bottom Layer"));
 }
 
 #[test]

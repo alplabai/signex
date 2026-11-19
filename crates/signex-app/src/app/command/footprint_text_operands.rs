@@ -128,6 +128,8 @@ pub(super) fn set_footprint_text(app: &mut Signex, args: &CommandArgs) -> Ran {
     ) else {
         return refused("needs the operands `designator`, `field` and `value`");
     };
+    // `-QAC1`, as the designator is shown, names the stored `QAC1` (#1416).
+    let designator = app.document_state.stored_reference_for(&path, designator);
     let Some(board) = app.document_state.pcb_board(&path) else {
         return refused("the board is not open");
     };

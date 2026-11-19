@@ -1,0 +1,83 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "tokay-lite-rev3-2",
+  "net_classes": [
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "IRLED",
+      "nets": [
+        "Net-(D10-A)",
+        "Net-(D10-K)",
+        "Net-(D11-A)",
+        "Net-(D11-K)",
+        "Net-(D12-A)",
+        "Net-(D13-K)",
+        "Net-(D14-A)",
+        "Net-(D15-K)",
+        "Net-(D16-A)",
+        "Net-(D17-K)",
+        "Net-(D8-A)",
+        "Net-(D8-K)"
+      ],
+      "trace_width": 0.5,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "PWR",
+      "nets": [
+        "+3V3",
+        "+5V",
+        "+BATT",
+        "Net-(D6-A)",
+        "Net-(J2-VBUS-PadA4)",
+        "Net-(Q3-S)",
+        "Net-(Q6-S)",
+        "Net-(U5-LX)",
+        "Net-(U7-VI)",
+        "VBUS"
+      ],
+      "trace_width": 0.2032,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.127,
+      "diff_pair_width": 0.2,
+      "name": "USB",
+      "nets": [
+        "/UD+",
+        "/UD-"
+      ],
+      "trace_width": 0.3,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.127,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "tokay-lite-rev3-2.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

@@ -36,4 +36,16 @@ pub(super) const ERC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // A dot on every pin end of the sheet that lies inside a wire with none
+    // (2026-11-18); opening a sheet only reports such contacts.
+    CommandMetadata {
+        id: "repair_pin_junctions",
+        category: "validation",
+        label: command_ids::CMD_REPAIR_PIN_JUNCTIONS,
+        menu_label: Some(command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
 ];

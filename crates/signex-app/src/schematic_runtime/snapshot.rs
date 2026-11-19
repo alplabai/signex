@@ -165,6 +165,10 @@ pub fn build_renderer_snapshot(
         &mut wire_line_styles,
     );
 
+    // A dot takes the colour most of its wires share, else its own rule.
+    let from_wires = signex_types::schematic::junction_wire_colors(snapshot, |wire| {
+        wire_color(overrides.wire_styling, wire)
+    });
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));
         if !point_visible(center, bounds, 6.0) {
@@ -175,7 +179,8 @@ pub fn build_renderer_snapshot(
             center: [junction.position.x as f32, junction.position.y as f32],
             radius_mm: overrides.defaults.junction_radius_mm(junction.diameter) as f32,
             color: to_rgba(focus_color(
-                junction_color(overrides.wire_styling, junction.uuid)
+                (from_wires.get(&junction.uuid).copied())
+                    .or_else(|| junction_color(overrides.wire_styling, junction.uuid))
                     .as_ref()
                     .map(to_iced)
                     .unwrap_or_else(|| to_iced(&colors.junction)),
@@ -213,6 +218,18 @@ pub fn build_renderer_snapshot(
             family: resolve_family(None, document_family),
             defaults: overrides.defaults,
         };
+        // "Fill symbol bodies": the theme tint or the user's colour, `None`
+        // when the preference is off.
+        if let Some(tint) = colors.body_tint {
+            symbol::push_body_fills(
+                &signex_types::schematic::default_body_fill_shapes(
+                    snapshot.body_of(symbol),
+                    symbol,
+                ),
+                focus_color(to_iced(&tint), focus_set, symbol.uuid),
+                &mut polygons,
+            );
+        }
         let mut sink = symbol::SymbolSink {
             wires: &mut wires,
             arcs: &mut arcs,
@@ -239,10 +256,12 @@ pub fn build_renderer_snapshot(
             .designators
             .and_then(|d| d.get(&symbol.uuid))
             .unwrap_or(&symbol.reference);
+        let reference =
+            signex_types::designator::display_reference(overrides.designator_standard, reference);
         if !reference.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                reference,
+                &reference,
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
@@ -251,10 +270,19 @@ pub fn build_renderer_snapshot(
         {
             reference_value_texts.push(text);
         }
+        // The value shows its special strings resolved and an `=` expression
+        // evaluated; the stored value, which the editor shows, keeps the
+        // source (#1596, #1986).
+        let value = super::drawn_value::drawn_value(
+            &snapshot.symbols,
+            symbol,
+            overrides.special_strings,
+            overrides.designator_standard,
+        );
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                &symbol.value,
+                &value,
                 snapshot.drawn_value_text(symbol).as_deref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
@@ -385,7 +413,7 @@ pub fn build_renderer_snapshot(
         }
 
         let content = match overrides.special_strings {
-            Some(special) => special.resolve(&note.text),
+            Some(special) => special.resolve_text(&note.text),
             None => note.text.clone(),
         };
         let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);

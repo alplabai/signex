@@ -21,6 +21,7 @@ mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 mod window_hierarchies;
@@ -302,6 +303,19 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // An `=` value's result or error, under its row (#1986).
+            let project = self
+                .document_state
+                .document_project(&path)
+                .map(|project| project.data.parameters.clone())
+                .unwrap_or_default();
+            let rows = value_evaluation::value_evaluation_rows(
+                engine.document(),
+                details.selected_uuid,
+                &project,
+                self.document_state.designator_standard_for(&path),
+            );
+            self.document_state.panel_ctx.selection_info.extend(rows);
             if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
                 self.document_state.panel_ctx.selected_wire_style = engine
                     .document()
@@ -480,9 +494,12 @@ impl Signex {
     /// Canvas colours for a given theme id — the one derivation shared by
     /// the schematic panel context and
     /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
-    /// each frame).
+    /// each frame), the symbol previews and the print / export palette. The
+    /// saved "Fill symbol bodies" preference sets the body tint.
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
-        signex_types::theme::canvas_colors(id)
+        self.ui_state
+            .symbol_body_fill
+            .apply(signex_types::theme::canvas_colors(id))
     }
 
     /// UI chrome tokens for a given theme id — the token twin of
@@ -595,6 +612,10 @@ impl Signex {
                 .sheet_path_for_window(window, &self.ui_state)
                 .map(|path| self.document_state.schematic_defaults_for(path))
                 .unwrap_or_default(),
+            designator_standard: self
+                .document_state
+                .sheet_path_for_window(window, &self.ui_state)
+                .and_then(|path| self.document_state.designator_standard_for(path)),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
