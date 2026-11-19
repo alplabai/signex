@@ -410,5 +410,8 @@ fn a_loop_through_two_closed_sheets_is_refused() {
                 && m.contains("places this sheet below it")
         })
         .collect();
-    assert!(!said.is_empty(), "refused as a loop, not for another reason");
+    assert!(
+        !said.is_empty(),
+        "refused as a loop, not for another reason"
+    );
 }

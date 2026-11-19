@@ -89,7 +89,13 @@ fn the_board_resets_run_on_the_named_board() {
     let document = format!("document={}", path.display());
 
     let answer = answered(run(&mut app, "reset_board_origin", &[&document]));
-    let origin = app.document_state.pcb_board(&path).expect("board").options.origin.at;
+    let origin = app
+        .document_state
+        .pcb_board(&path)
+        .expect("board")
+        .options
+        .origin
+        .at;
     assert!(origin != Point::ZERO, "the origin moved to the outline");
     assert_eq!(answer["origin"], serde_json::json!([origin.x, origin.y]));
 
@@ -112,5 +118,8 @@ fn the_board_resets_need_their_board() {
     }
     let nope = format!("document={}", dir.path().join("nope.snxpcb").display());
     let outcome = run(&mut app, "reset_board_origin", &[&nope]);
-    assert!(matches!(outcome, CommandOutcome::Disabled { .. }), "{outcome:?}");
+    assert!(
+        matches!(outcome, CommandOutcome::Disabled { .. }),
+        "{outcome:?}"
+    );
 }

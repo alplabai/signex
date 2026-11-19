@@ -242,8 +242,8 @@ fn an_export_over_existing_drawings_says_it_replaced_them() {
 #[test]
 fn the_assembly_drawings_print_the_shown_designators() {
     use signex_output::AssemblySvgOptions;
-    use signex_types::pcb_layer::BoardSide;
     use signex_types::designator::DesignatorStandard;
+    use signex_types::pcb_layer::BoardSide;
     let dir = tempfile::tempdir().unwrap();
     let (mut app, board) = app_with_board(dir.path());
     app.document_state.projects[0]

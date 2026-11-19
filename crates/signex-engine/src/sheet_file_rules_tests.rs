@@ -47,7 +47,10 @@ fn a_loop_two_levels_down_is_refused() {
         allow_merge: true,
         ..placement("b", &above, &graph, None)
     };
-    assert_eq!(check_sheet_file(&merged), Err(SheetFileRefusal::PlacesEditedSheet));
+    assert_eq!(
+        check_sheet_file(&merged),
+        Err(SheetFileRefusal::PlacesEditedSheet)
+    );
 }
 
 #[test]
@@ -66,7 +69,10 @@ fn the_sheet_itself_an_ancestor_and_an_escape_are_refused_in_that_order() {
         escapes_project: true,
         ..placement("a", &above, &graph, None)
     };
-    assert_eq!(check_sheet_file(&escaping), Err(SheetFileRefusal::EscapesProject));
+    assert_eq!(
+        check_sheet_file(&escaping),
+        Err(SheetFileRefusal::EscapesProject)
+    );
 }
 
 #[test]
@@ -85,8 +91,16 @@ fn an_unreadable_subtree_is_refused_unless_merged() {
     let Err(SheetFileRefusal::Unreadable(why)) = &refused else {
         panic!("refused for its unreadable child: {refused:?}");
     };
-    assert_eq!(why, &["broken.snxsch is unreadable (bad header)".to_string()]);
-    assert!(refused.unwrap_err().to_string().contains("broken.snxsch is unreadable"));
+    assert_eq!(
+        why,
+        &["broken.snxsch is unreadable (bad header)".to_string()]
+    );
+    assert!(
+        refused
+            .unwrap_err()
+            .to_string()
+            .contains("broken.snxsch is unreadable")
+    );
     let merged = SheetFilePlacement {
         allow_merge: true,
         ..placement("b", &above, &graph, None)

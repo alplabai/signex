@@ -89,7 +89,10 @@ fn the_command_and_the_panel_leave_the_same_sheet() {
             text: "3.3".into(),
         },
     );
-    panel(&mut by_panel, SheetVariableMsg::ValueSubmitted("VDD".into()));
+    panel(
+        &mut by_panel,
+        SheetVariableMsg::ValueSubmitted("VDD".into()),
+    );
     assert_eq!(variables(&by_command), variables(&by_panel));
     assert_eq!(variables(&by_command), [("VDD".into(), "3.3".into())]);
 }

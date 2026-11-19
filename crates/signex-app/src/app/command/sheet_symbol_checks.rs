@@ -22,7 +22,12 @@ fn file_name(path: &Path) -> String {
 }
 
 /// The graph node of `sheet`, read from `path`.
-fn read_node(path: &Path, sheet: &SchematicSheet, fold: CaseFold, in_project: bool) -> SheetGraphNode {
+fn read_node(
+    path: &Path,
+    sheet: &SchematicSheet,
+    fold: CaseFold,
+    in_project: bool,
+) -> SheetGraphNode {
     let dir = path.parent().unwrap_or_else(|| Path::new(""));
     let children = sheet
         .child_sheets
@@ -92,7 +97,11 @@ impl Signex {
     /// acts on (`signex_engine::check_sheet_file`): the project folder, the
     /// sheet itself, one above it, a loop at any depth and, unless
     /// `allow_merge`, an unreadable subtree and a file placed already.
-    pub(super) fn check_sheet_symbol_file(&self, path: &Path, allow_merge: bool) -> Result<(), String> {
+    pub(super) fn check_sheet_symbol_file(
+        &self,
+        path: &Path,
+        allow_merge: bool,
+    ) -> Result<(), String> {
         let escapes_project = self.prefetched_escape(path)?;
         let docs = &self.document_state;
         let sheet = docs.edit_path().ok_or("no schematic is open")?;

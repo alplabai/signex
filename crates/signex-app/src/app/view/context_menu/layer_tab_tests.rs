@@ -157,7 +157,11 @@ fn a_read_only_board_greys_the_colour_rows() {
         &I18n::en_us(),
         &state(layer, &view, &prefs, colours),
     ));
-    for label in ["Layer colour...", "Reset layer colour", "Reset all layer colours"] {
+    for label in [
+        "Layer colour...",
+        "Reset layer colour",
+        "Reset all layer colours",
+    ] {
         let row = rows.iter().find(|(l, _, _)| l == label);
         assert!(
             row.is_some_and(|(_, message, _)| message.is_none()),

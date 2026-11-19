@@ -284,10 +284,9 @@ impl Signex {
             crate::keymap::AppCommandId::new(LAYER_STACK_COMMAND).is_ok_and(|id| {
                 crate::app::command::is_enabled(&id, &self.command_context(menu.window))
             });
-        let colours_live = crate::keymap::AppCommandId::new("reset_layer_colors")
-            .is_ok_and(|id| {
-                crate::app::command::is_enabled(&id, &self.command_context(menu.window))
-            });
+        let colours_live = crate::keymap::AppCommandId::new("reset_layer_colors").is_ok_and(|id| {
+            crate::app::command::is_enabled(&id, &self.command_context(menu.window))
+        });
         let board = self.pcb_view_target(menu.window).map(|(_, board)| board);
         let colours = board.map_or_else(TabColours::default, |board| TabColours {
             own: board.options.layer_color(menu.layer).is_some(),

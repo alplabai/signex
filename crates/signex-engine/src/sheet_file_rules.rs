@@ -92,7 +92,9 @@ pub fn subtree_facts(graph: &SheetGraph, file: &str, edited: &str) -> SubtreeFac
         }
         match graph.get(&key) {
             Some(SheetGraphNode::Unreadable { name, why }) => {
-                facts.unreadable.push(format!("{name} is unreadable ({why})"));
+                facts
+                    .unreadable
+                    .push(format!("{name} is unreadable ({why})"));
             }
             Some(SheetGraphNode::Read {
                 children,
@@ -181,7 +183,9 @@ impl fmt::Display for SheetFileRefusal {
 
 /// Whether the file of `placement` may be placed: the subtree walk when it
 /// may, else why not.
-pub fn check_sheet_file(placement: &SheetFilePlacement<'_>) -> Result<SubtreeFacts, SheetFileRefusal> {
+pub fn check_sheet_file(
+    placement: &SheetFilePlacement<'_>,
+) -> Result<SubtreeFacts, SheetFileRefusal> {
     let SheetFilePlacement {
         edited,
         file,

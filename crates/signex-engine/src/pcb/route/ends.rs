@@ -73,7 +73,12 @@ pub fn copper_under(board: &PcbBoard, at: Point) -> Option<(CopperLayer, u32)> {
 /// active layer), so the first leg adds a via there and runs on the active
 /// layer (maintainer 2026-11-18). Over bare board it stays as it is, of no
 /// net.
-pub fn start_on_copper(board: &PcbBoard, at: Point, style: TrackStyle, net_set: bool) -> TrackStyle {
+pub fn start_on_copper(
+    board: &PcbBoard,
+    at: Point,
+    style: TrackStyle,
+    net_set: bool,
+) -> TrackStyle {
     if style.net != 0 || net_set {
         return style;
     }
