@@ -89,7 +89,12 @@ impl SetupProfile {
             None => FabTemplate::Standard,
         };
         let c = fab.capabilities();
-        (c.clearance, self.card_track_mm(), c.via_diameter, c.via_drill)
+        (
+            c.clearance,
+            self.card_track_mm(),
+            c.via_diameter,
+            c.via_drill,
+        )
     }
 
     /// The track width a card starts on, in mm (#2537).
