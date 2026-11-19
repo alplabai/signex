@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use signex_i18n::{ids, t};
 
 use super::super::super::*;
-use crate::start_screen::{StartRowMenu, StartScreenMsg};
+use crate::start_screen::{StartPage, StartRowMenu, StartScreenMsg};
 
 impl Signex {
     /// Route a Start screen row event. Exhaustive: a new event is a compile
@@ -63,6 +63,32 @@ impl Signex {
                 );
                 iced::Task::none()
             }
+            StartScreenMsg::PageSelected(page) => {
+                self.interaction_state.start_row_menu = None;
+                self.ui_state.start_screen.page = page;
+                iced::Task::none()
+            }
+            StartScreenMsg::ProjectFilterChanged(filter) => {
+                self.ui_state.start_screen.project_filter = filter;
+                iced::Task::none()
+            }
+            StartScreenMsg::ProjectScopePicked(scope) => {
+                self.ui_state.start_screen.project_scope = scope;
+                iced::Task::none()
+            }
+            StartScreenMsg::LibraryFilterChanged(filter) => {
+                self.ui_state.start_screen.library_filter = filter;
+                iced::Task::none()
+            }
+            StartScreenMsg::FilterCleared => {
+                let state = &mut self.ui_state.start_screen;
+                match state.page {
+                    StartPage::Projects => state.project_filter.clear(),
+                    StartPage::Libraries => state.library_filter.clear(),
+                    StartPage::Home => {}
+                }
+                iced::Task::none()
+            }
         }
     }
 
@@ -114,11 +140,16 @@ impl Signex {
     }
 
     /// Clear a row menu left open after the Start screen went away (a
-    /// project or tab opened by another route), so it never comes back or
-    /// takes an Esc. Run from `finish_update`.
+    /// project or tab opened by any route), so it never comes back or takes
+    /// an Esc, and send the screen back to Home, unfiltered, for the next
+    /// time it shows. Run from `finish_update`.
     pub(crate) fn drop_start_row_menu_off_screen(&mut self) {
-        if !self.start_screen_shown() {
-            self.interaction_state.start_row_menu = None;
+        if self.start_screen_shown() {
+            return;
+        }
+        self.interaction_state.start_row_menu = None;
+        if !self.ui_state.start_screen.is_home() {
+            self.ui_state.start_screen.go_home();
         }
     }
 

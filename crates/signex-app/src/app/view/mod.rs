@@ -618,35 +618,30 @@ impl Signex {
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
             // loaded, no document picked" keeps its own quieter hint.
-            use crate::start_screen::{self, Surface};
+            use crate::start_screen::{self, HintFacts, StartScreenData, Surface};
             let tokens = &self.document_state.panel_ctx.tokens;
+            let i18n = &self.ui_state.i18n;
             match Surface::select(self.document_state.active_project.is_some()) {
-                Surface::ProjectHint => start_screen::hint_view(tokens),
-                Surface::Start => {
-                    let open_shortcut = self.keymap_shortcut_label("open_document");
-                    let libraries: Vec<start_screen::LoadedLibrary> = self
-                        .library
-                        .open_libraries
-                        .iter()
-                        .map(|lib| {
-                            (
-                                lib.root
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().into_owned())
-                                    .unwrap_or_default(),
-                                lib.cached_components.len(),
-                            )
-                        })
-                        .collect();
-                    start_screen::view(
-                        tokens,
-                        &self.ui_state.i18n,
-                        &open_shortcut,
-                        self.ui_state.recent_projects.entries(),
-                        &self.ui_state.pinned_projects,
-                        &libraries,
-                    )
-                }
+                Surface::ProjectHint => start_screen::hint_view(
+                    tokens,
+                    i18n,
+                    HintFacts::of(self.document_state.active_loaded_project()),
+                ),
+                Surface::Start => start_screen::view(
+                    tokens,
+                    i18n,
+                    StartScreenData {
+                        open_shortcut: self.keymap_shortcut_label("open_document"),
+                        shortcuts_shortcut: self
+                            .keymap_shortcut_label("show_current_command_hotkeys"),
+                        recent: &self.ui_state.recent_projects,
+                        pinned: &self.ui_state.pinned_projects,
+                        libraries: start_screen::loaded_libraries(&self.library),
+                        thumbnails: &self.ui_state.project_thumbnails,
+                        state: &self.ui_state.start_screen,
+                        now: chrono::Utc::now(),
+                    },
+                ),
             }
         }
     }

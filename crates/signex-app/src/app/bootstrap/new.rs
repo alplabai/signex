@@ -520,6 +520,7 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                start_screen: Box::new(crate::start_screen::StartScreenState::at_boot()),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
@@ -865,6 +866,9 @@ impl Signex {
         let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
         app.note_unusable_setup_profiles(crate::fonts::unusable_setup_profiles(prefs));
+        app.ui_state
+            .recent_projects
+            .restore_opened(crate::fonts::read_recent_opened_from(prefs));
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,

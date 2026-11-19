@@ -391,6 +391,15 @@ canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
 
+// ─── Start screen (navigation rows, project rows and their menu) ───
+
+canonical_icon!(icon_start_book, "start/book.svg");
+canonical_icon!(icon_start_folder, "start/folder.svg");
+canonical_icon!(icon_start_home, "start/home.svg");
+canonical_icon!(icon_start_key, "start/key.svg");
+canonical_icon!(icon_start_pin, "start/pin.svg");
+canonical_icon!(icon_start_remove, "start/remove.svg");
+
 #[cfg(test)]
 mod tests {
     use super::*;
