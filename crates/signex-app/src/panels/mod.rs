@@ -45,6 +45,8 @@ mod erc_waivers;
 mod footprint_context;
 mod footprint_properties_msg;
 pub use footprint_properties_msg::FpPropertiesMsg;
+mod footprint_subform_msg;
+pub use footprint_subform_msg::{FpSubformMsg, expansion_buffer_key};
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;

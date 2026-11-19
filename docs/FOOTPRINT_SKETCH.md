@@ -114,3 +114,43 @@ parameters:
 In Sketch mode the same sections also follow a selected sketch entity, under
 its Entity section (kind, Role, position, construction, attached constraints
 and a banner with the entity's constraint state) and Snap Options.
+
+## Role sub-forms
+
+When the selected sketch entity carries a role, Properties shows the
+sub-form of each role it carries, one under the other: Pour, Keepout,
+Cutout, Sketch pad, then Pattern (a pattern's source is also a sketch pad,
+so both show). Each starts with a header (the object and a caption line),
+then a line-art illustration, then its sections. The forms live in
+`panels/footprint_editor_properties/subforms/`; the edits without a flat
+`FpEditor*` message are `FpSubformMsg`, handled in
+`app/handlers/dock/sch_library/footprint/role.rs`. Every edit is one undo
+step, re-solves and re-bakes the sketch, and dirties the tab.
+
+- **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
+  Top Layer and Bottom Layer, plus the stored layer when a file names
+  another one. A keepout on all layers or on the inner layers only cannot
+  be stored yet (`KeepoutAttr::layer` holds one board layer).
+- **Cutout.** **Limit depth (pocket)** is the inverse of
+  `BoardCutoutAttr::through`: ticked writes `through = false`. A cutout has
+  no stored depth, so the switch shows no Depth field.
+- **Sketch pad.** The copper size comes from the sketch profile and is
+  shown, not edited. Top Paste and Top Solder mask are enable sections: the
+  mask switch is ticked while the mask opens (`mask_top_tented = false`).
+  Each expansion is Rule (`paste_*_expr` / `mask_*_expr` empty) or Manual;
+  a plain number is stored as `<n>mm`, an expression as written, and text
+  that does not parse yet is kept in the editor's field buffers without
+  touching the pad. A paste expression clears the paste percentage of that
+  side. The bottom side and the hole details show only for a drilled pad.
+- **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
+  the kind it was made with. Start row / col and the letter skip apply to
+  BGA numbering and grey otherwise.
+
+The pattern illustration places and numbers the instances itself, reading
+the array's expressions with the sketch evaluator and the parameter table
+(`subforms/pattern_layout.rs`). It follows the bake's rules (grid cells row
+by row, a polar step of sweep / count, a mask or list entry skips an
+instance, a failed numbering expression falls back to the index) but the
+bake in `signex-bake::array` stays the authority: when a count, spacing or
+mask does not evaluate, or the pattern has more than 256 instances, the
+drawing shows the source pad only, with a note.

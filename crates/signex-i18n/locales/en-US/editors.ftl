@@ -628,3 +628,110 @@ editors-fp-pad-separator = ·
 editors-fp-pad-auto = (auto)
 # Placeholder of a pad net that is not set.
 editors-fp-pad-unassigned = (unassigned)
+## Footprint Properties role sub-forms: Pour, Keepout, Cutout, Pattern and
+## Sketch pad (#126). Lower-case words are captions and drawing labels.
+# Header caption of a pour or keepout; $layer is a board layer name.
+editors-role-region-caption = Region · { $layer }
+editors-role-pour-title = Pour
+editors-role-pour-section = Pour properties
+# Placeholder of an empty net field.
+editors-role-pour-no-net = (none)
+# Drawing label of a pour with no net.
+editors-role-pour-no-net-short = no net
+editors-role-pour-priority = Priority
+editors-role-pour-fill = Fill
+editors-role-pour-fill-solid = Solid
+editors-role-pour-fill-hatched = Hatched
+# A pour drawn as its outline only.
+editors-role-pour-fill-outline = Outline
+# Drawing label; $fill is one of the fill names above.
+editors-role-pour-fill-callout = Fill: { $fill }
+editors-role-pour-priority-callout = Priority { $priority }
+editors-role-keepout-title = Keepout
+editors-role-keepout-kinds = Keepout kinds
+editors-role-keepout-no-copper = No copper
+editors-role-keepout-no-routing = No routing
+editors-role-keepout-no-vias = No vias
+editors-role-keepout-no-pours = No pours
+editors-role-keepout-no-components = No components
+editors-role-keepout-no-drilling = No drilling
+editors-role-keepout-from-sketch = The region shape comes from the sketch (Role = Keepout).
+editors-role-keepout-blocks-nothing = No kind ticked: the keepout blocks nothing
+editors-role-cutout-title = Cutout
+editors-role-cutout-caption = Board cutout
+editors-role-cutout-section = Cutout properties
+editors-role-cutout-edge-radius = Edge radius
+# Placeholder of an empty edge radius: the corners stay sharp.
+editors-role-cutout-sharp-placeholder = (sharp)
+# Enable header: the cutout stops inside the board instead of going through.
+editors-role-cutout-pocket = Limit depth (pocket)
+editors-role-cutout-through = through the board
+editors-role-cutout-pocket-short = pocket
+# Drawing label of the board around a cutout.
+editors-role-cutout-board = board
+# Drawing callout; $radius is the edge radius expression as written.
+editors-role-cutout-radius-callout = Edge radius { $radius }
+editors-role-cutout-radius-sharp = Edge radius sharp
+editors-role-pattern-title = Pattern
+editors-role-pattern-instances = { $count ->
+    [one] { $count } instance
+   *[other] { $count } instances
+}
+# Header caption; $source, $first and $last are pad numbers.
+editors-role-pattern-range = Pad { $source } → pads { $first }…{ $last }
+editors-role-pattern-source = Pad { $source }
+editors-role-pattern-kind-linear = Linear
+editors-role-pattern-kind-grid = Grid
+editors-role-pattern-kind-polar = Polar
+editors-role-pattern-layout = Layout
+# Two fields on one row: the instance count and the step along X.
+editors-role-pattern-count-dx = Count / dX
+editors-role-pattern-dy = dY
+# Two fields on one row: columns and rows of a grid.
+editors-role-pattern-nx-ny = nx / ny
+editors-role-pattern-dx-dy = dX / dY
+# Two fields on one row: the instance count and the angle a polar pattern covers.
+editors-role-pattern-count-sweep = Count / Sweep
+editors-role-pattern-centre = Centre
+# The centre point of a polar pattern in mm.
+editors-role-pattern-centre-value = { $x }, { $y }
+editors-role-pattern-centre-lost = (centre lost)
+editors-role-pattern-repick = Re-pick
+editors-role-pattern-repicking = Click a Point… (Esc to cancel)
+editors-role-pattern-instance-grid = Instances (untick one to skip it)
+editors-role-pattern-numbering = Numbering
+editors-role-pattern-scheme = Scheme
+editors-role-pattern-scheme-linear = Linear (1, 2, 3, …)
+editors-role-pattern-scheme-bga = BGA (A1, A2, …)
+editors-role-pattern-scheme-explicit = Explicit list
+editors-role-pattern-start-row-col = Start row / col
+editors-role-pattern-delete = Delete pattern
+# Drawing callouts; $value is a length in mm.
+editors-role-pattern-dx-callout = dX { $value }
+editors-role-pattern-dy-callout = dY { $value }
+editors-role-pattern-legend = Source pad outlined · skipped instances dashed
+editors-role-pattern-unresolved = The pattern does not evaluate: only the source pad is drawn
+editors-role-pattern-too-many = { $count } instances: only the source pad is drawn
+editors-role-sketch-pad-title = Sketch pad
+# Header caption, followed by the Edit in Pads link; $kind is a pad kind name.
+editors-role-sketch-pad-caption = Pad { $number } · { $kind } · from sketch profile ·
+editors-role-sketch-pad-edit-in-pads = Edit in Pads ▸
+editors-role-sketch-pad-attributes = Pad Attributes
+# Section title; $layer is a copper layer name.
+editors-role-sketch-pad-side-section = Pad · { $layer }
+editors-role-sketch-pad-top-paste = Top Paste
+editors-role-sketch-pad-bottom-paste = Bottom Paste
+editors-role-sketch-pad-top-mask = Top Solder mask
+editors-role-sketch-pad-bottom-mask = Bottom Solder mask
+# State beside a switched-off paste header.
+editors-role-sketch-pad-off = off
+# State beside a solder mask header: open over the pad, or covering it.
+editors-role-sketch-pad-opening = opening
+editors-role-sketch-pad-tented = tented
+editors-role-sketch-pad-expansion = Expansion
+editors-role-sketch-pad-features = Pad Features
+editors-role-sketch-pad-mask-off = Top Solder mask off: tented
+# Drawing note: the copper size in mm, set by the sketch profile.
+editors-role-sketch-pad-size = { $width } × { $height } (from the sketch)
+# Drawing corner note; $layer is a copper layer name, $number the pad number.
+editors-role-sketch-pad-corner = { $layer } · pad { $number }

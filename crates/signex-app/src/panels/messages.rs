@@ -1097,6 +1097,8 @@ pub enum PanelMsg {
     /// View state of the footprint Properties panel: the illustration hover
     /// link and the page shown with nothing selected. Never an edit.
     FpProperties(super::FpPropertiesMsg),
+    /// The footprint role sub-forms: keepout layer, sketch pad expansions.
+    FpSubform(super::FpSubformMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

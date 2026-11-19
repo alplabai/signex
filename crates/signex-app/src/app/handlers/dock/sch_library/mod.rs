@@ -572,6 +572,7 @@ impl Signex {
             PanelMsg::FpEditorSetCutoutThrough { id, value } => {
                 self.fp_editor_set_cutout_through(*id, *value)
             }
+            PanelMsg::FpSubform(msg) => self.fp_subform_edited(msg),
             PanelMsg::BoardSketch(edit) => self.board_sketch_attr_edited(edit),
             PanelMsg::FpEditorEditArrayParam {
                 array_id,
