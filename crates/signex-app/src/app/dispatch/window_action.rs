@@ -130,9 +130,9 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 /// Whether the message a command resolved to edits the sheet an undocked
 /// window shows, so it runs in the window's swap. An explicit allow-list of
 /// variants (never a whole enum): sheet edits, selection, tools, in-place text
-/// edits, Active Bar actions, the view zoom and opening Find (the dialog then
-/// searches that window's sheet). Everything else (sheet stepping, project
-/// opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
+/// edits, Active Bar actions, the view zoom and opening Find or Find Similar
+/// (the dialog then works on that window's sheet). Everything else (sheet
+/// stepping, project opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
 /// toggles, and any message added later) runs on the main window, where it
 /// cannot load one sheet into another's canvas.
 fn command_edits_shown_sheet(message: &Message) -> bool {
@@ -174,6 +174,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | Sel::ConnectionItemAtCursorRequested
                 | Sel::CycleMode
                 | Sel::LassoCommit
+                | Sel::FindSimilar(crate::find_similar::FindSimilarMsg::OpenRequested { .. })
         ),
         Message::Tool(tool) => matches!(
             tool,
