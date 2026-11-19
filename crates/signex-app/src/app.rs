@@ -22,6 +22,7 @@ pub(crate) mod board_tools;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
+pub(crate) mod compare_board;
 pub mod contracts;
 pub(crate) mod core;
 mod dir_listing;
@@ -97,6 +98,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use compare_board::{CompareBoardMsg, CompareBoardState, CompareRead, JumpSide};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -164,6 +166,7 @@ impl Signex {
         // An Update PCB waiting for its board starts reading once it opened.
         tasks.push(self.sync_update_pcb());
         tasks.push(self.sync_back_annotate());
+        tasks.push(self.sync_compare_board());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

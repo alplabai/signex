@@ -64,6 +64,8 @@ struct OpenOverlays {
     fab_outputs_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
+    compare_board_open: bool,
+    compare_board_confirm_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -364,6 +366,14 @@ impl OpenOverlays {
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
+            OverlayId::CompareBoard => self
+                .compare_board_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::CloseRequested)),
+            // The child confirmation outranks its dialog: Esc cancels it
+            // and leaves the report open.
+            OverlayId::CompareBoardConfirm => self
+                .compare_board_confirm_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::ApplyCancelled)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -674,6 +684,12 @@ impl Signex {
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
+            compare_board_open: self.ui_state.compare_board.is_some(),
+            compare_board_confirm_open: self
+                .ui_state
+                .compare_board
+                .as_ref()
+                .is_some_and(|s| s.confirming),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -1789,6 +1805,8 @@ mod tests {
             fab_outputs_open,
             board_output_open,
             back_annotate_open,
+            compare_board_open,
+            compare_board_confirm_open,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1865,6 +1883,10 @@ mod tests {
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
+            ("compare_board_open", |o| o.compare_board_open = true),
+            ("compare_board_confirm_open", |o| {
+                o.compare_board_confirm_open = true
+            }),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),

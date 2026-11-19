@@ -498,6 +498,9 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
+    /// Compare Board with Schematic (#2462), while open. Boxed like
+    /// `back_annotate`.
+    pub compare_board: Option<Box<crate::app::CompareBoardState>>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the
@@ -829,6 +832,7 @@ mod tests {
             ),
             ("update_pcb", field_size(|ui| &ui.update_pcb)),
             ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            ("compare_board", field_size(|ui| &ui.compare_board)),
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),

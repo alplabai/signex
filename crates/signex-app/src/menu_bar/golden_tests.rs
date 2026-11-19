@@ -289,6 +289,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_pcb_document", "NewPcb"),
     ("new_schematic_sheet", "NewSchematic"),
     ("update_pcb_from_schematic", "UpdatePcb"),
+    // #2462: Project ▸ Compare Board with Schematic…, fixture name only.
+    ("compare_board_with_schematic", "CompareBoardWithSchematic"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
     // #2388: File ▸ Fabrication Outputs.

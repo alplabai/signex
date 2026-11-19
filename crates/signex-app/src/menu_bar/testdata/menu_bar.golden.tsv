@@ -103,6 +103,7 @@ View/Window/---	separator	-	-	-	-	-	-
 View/Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
+Project/Compare Board with Schematic…	item	Compare Board with Schematic…	-	-	CompareBoardWithSchematic	01000000	cmd:compare_board_with_schematic
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-

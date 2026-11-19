@@ -349,6 +349,7 @@ altium	hint	-	-	rules_set_apply
 altium	hint	-	-	rules_preset_diff
 altium	hint	-	-	rules_preset_apply
 altium	hint	-	-	update_pcb_from_schematic
+altium	hint	-	-	compare_board_with_schematic
 altium	hint	-	-	assign_footprints
 altium	hint	-	F	change_footprint
 altium	hint	-	P V	place_board_via
@@ -846,6 +847,7 @@ classic	hint	-	-	rules_set_apply
 classic	hint	-	-	rules_preset_diff
 classic	hint	-	-	rules_preset_apply
 classic	hint	-	-	update_pcb_from_schematic
+classic	hint	-	-	compare_board_with_schematic
 classic	hint	-	-	assign_footprints
 classic	hint	-	F	change_footprint
 classic	hint	-	-	place_board_via

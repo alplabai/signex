@@ -238,6 +238,7 @@ rules_set_apply	design	Apply a named rule set to a class or net	-	PCB	-	-	Always
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
+compare_board_with_schematic	pcb_sync	Compare board with schematic	Compare Board with Schematic…	Schematic	-	-	Always	gui_only	-
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-

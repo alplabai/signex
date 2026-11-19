@@ -49,6 +49,7 @@ clear_net_highlighting
 close_active_document
 close_all_documents
 color_net
+compare_board_with_schematic
 copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol

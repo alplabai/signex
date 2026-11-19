@@ -449,6 +449,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #1312: the Update PCB dialog for the document in view. Its headless
         // `apply=true` form runs through `run_operands`, not here.
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
+        // #2462: the Compare Board with Schematic report of the project in view.
+        "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
         // #2232: the setup dialogs; a headless run with `profile` makes the
