@@ -114,9 +114,9 @@ define_ids! {
     PCB_LAYER_TAB_DRILL_SYMBOLS_UNAVAILABLE = "pcb-layer-tab-drill-symbols-unavailable";
     PCB_LAYER_TAB_DRAWING_ORDER = "pcb-layer-tab-drawing-order";
     PCB_LAYER_TAB_DRAWING_ORDER_UNAVAILABLE = "pcb-layer-tab-drawing-order-unavailable";
-    PCB_LAYER_TAB_NAMES_SHORT = "pcb-layer-tab-names-short";
-    PCB_LAYER_TAB_NAMES_MEDIUM = "pcb-layer-tab-names-medium";
-    PCB_LAYER_TAB_NAMES_LONG = "pcb-layer-tab-names-long";
+    PCB_LAYER_TAB_NAMES = "pcb-layer-tab-names";
+    PCB_LAYER_TAB_NAME_STYLE = "pcb-layer-tab-name-style";
+    PCB_LAYER_TAB_FLYOUT = "pcb-layer-tab-flyout";
     PCB_LAYER_TAB_SHOW_NUMBERS = "pcb-layer-tab-show-numbers";
     PCB_LAYER_TAB_FLIP = "pcb-layer-tab-flip";
     PCB_LAYER_TAB_NUMBERED = "pcb-layer-tab-numbered";
@@ -133,6 +133,7 @@ define_ids! {
     PCB_LAYER_SET_SAVE = "pcb-layer-set-save";
     PCB_LAYER_SET_MANAGE = "pcb-layer-set-manage";
     PCB_LAYER_SET_NONE_SAVED = "pcb-layer-set-none-saved";
+    PCB_LAYER_SET_SAVED_HINT = "pcb-layer-set-saved-hint";
     PCB_LAYER_SET_NAME_PLACEHOLDER = "pcb-layer-set-name-placeholder";
     PCB_LAYER_SET_SAVE_BUTTON = "pcb-layer-set-save-button";
     PCB_LAYER_SET_DELETE = "pcb-layer-set-delete";

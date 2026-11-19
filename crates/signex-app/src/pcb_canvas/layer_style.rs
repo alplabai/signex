@@ -239,8 +239,8 @@ mod tests {
         let technical = |t: TechnicalLayer| match t {
             T::EdgeCuts => "Board Outline",
             T::Margin => "Margin",
-            T::SilkscreenTop => "Top Overlay",
-            T::SilkscreenBottom => "Bottom Overlay",
+            T::SilkscreenTop => "Top Silkscreen",
+            T::SilkscreenBottom => "Bottom Silkscreen",
             T::SolderMaskTop => "Top Solder",
             T::SolderMaskBottom => "Bottom Solder",
             T::PasteTop => "Top Paste",

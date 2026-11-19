@@ -15,11 +15,16 @@ pcb-layer-tab-highlight = Highlight { $layer }
 # Flyouts of the layer tab menu: one row per kind of layer.
 pcb-layer-tab-hide-layers = Hide layers
 pcb-layer-tab-show-layers = Show layers
+# Header of the open flyout, shown in capitals. $mode is hide or show.
+pcb-layer-tab-flyout = { $mode ->
+    [show] Show
+   *[hide] Hide
+}
 # A row of those flyouts. $kind is the kind's token.
 pcb-layer-kind = { $kind ->
     [signal] Signal layers
     [plane] Plane layers
-    [overlay] Overlay layers
+    [overlay] Silkscreen layers
     [mask] Mask layers
     [paste] Paste layers
     [mechanical] Mechanical layers
@@ -33,10 +38,14 @@ pcb-layer-tab-drill-symbols = Drill symbols...
 pcb-layer-tab-drill-symbols-unavailable = Drill symbols cannot be set yet.
 pcb-layer-tab-drawing-order = Layer drawing order...
 pcb-layer-tab-drawing-order-unavailable = The layer drawing order cannot be changed yet.
-# How the layer tabs name their layers, and their numbers.
-pcb-layer-tab-names-short = Short tab names
-pcb-layer-tab-names-medium = Medium tab names
-pcb-layer-tab-names-long = Long tab names
+# How the layer tabs name their layers, and their numbers: a header shown in
+# capitals over a Short | Medium | Long switch. $style is the style's token.
+pcb-layer-tab-names = Tab names
+pcb-layer-tab-name-style = { $style ->
+    [short] Short
+    [medium] Medium
+   *[long] Long
+}
 pcb-layer-tab-show-numbers = Show layer numbers
 # View the board from below: mirrored, bottom layers on top.
 pcb-layer-tab-flip = Flip board view
@@ -107,6 +116,8 @@ pcb-layer-set = { $set ->
 pcb-layer-set-save = Save current as set...
 pcb-layer-set-manage = Manage sets...
 pcb-layer-set-none-saved = No saved sets yet.
+# Hint at the right of a set the user saved, in the set menu.
+pcb-layer-set-saved-hint = saved
 pcb-layer-set-name-placeholder = Set name
 pcb-layer-set-save-button = Save
 pcb-layer-set-delete = Delete
@@ -261,8 +272,8 @@ pcb-layer-mechanical = Mechanical { $index }
 # The board edge: the outline and the rims of its openings.
 pcb-layer-board-outline = Board Outline
 pcb-layer-margin = Margin
-pcb-layer-silkscreen-top = Top Overlay
-pcb-layer-silkscreen-bottom = Bottom Overlay
+pcb-layer-silkscreen-top = Top Silkscreen
+pcb-layer-silkscreen-bottom = Bottom Silkscreen
 pcb-layer-solder-mask-top = Top Solder
 pcb-layer-solder-mask-bottom = Bottom Solder
 pcb-layer-paste-top = Top Paste
