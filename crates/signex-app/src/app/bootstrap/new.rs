@@ -353,7 +353,7 @@ impl Signex {
                 pinned_projects: crate::pinned_projects::PinnedProjects::from_paths(
                     crate::fonts::read_pinned_projects_from(prefs),
                 ),
-                project_thumbnails: crate::project_thumbnail::ProjectThumbnails::default(),
+                project_thumbnails: Box::default(),
                 first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,

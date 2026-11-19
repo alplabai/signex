@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use signex_library::{Footprint, FootprintFile};
-use signex_widgets::tree_view::{TreeIcon, TreeNode, get_node, resolve_path};
+use signex_widgets::tree_view::{TreeIcon, TreeKey, TreeNode, get_node, resolve_path};
 
 use crate::app::{
     CaseFold, ContextMenuMsg, FootprintDocument, LoadedProject, Message, ProjectId, Signex,
@@ -189,6 +189,33 @@ fn app_with_project_tree(tab: &str, case_fold: CaseFold) -> Signex {
     app
 }
 
+/// The row key a Reveal in Projects task selects, when it sends exactly two
+/// messages: "show the Projects panel" and the tree's own Select (a batch
+/// fixes no order). Read from the messages: in the iced fork `Task::done`
+/// counts no units.
+fn revealed_key(task: iced::Task<Message>) -> Option<TreeKey> {
+    use crate::panels::{PanelKind, PanelMsg};
+    use signex_widgets::tree_view::TreeMsg;
+    let sent = crate::persist::run_task::outputs(task);
+    let shows_projects = sent.iter().any(|m| {
+        matches!(
+            m,
+            Message::Overlay(crate::app::OverlayMsg::OpenPanel(PanelKind::Projects))
+        )
+    });
+    let selected = sent.iter().find_map(|m| match m {
+        Message::Dock(crate::dock::DockMessage::Panel(PanelMsg::Tree(TreeMsg::Select(key)))) => {
+            Some(key.clone())
+        }
+        _ => None,
+    });
+    if sent.len() == 2 && shows_projects {
+        selected
+    } else {
+        None
+    }
+}
+
 // Called on the handler, not through `update`: `finish_update` rebuilds the
 // hand-made tree from the (sheet-less) project, which is not under test.
 #[test]
@@ -207,14 +234,18 @@ fn reveal_in_projects_opens_the_folders_above_the_row_and_selects_it() {
     let task = app.handle_tab_context_action(TabContextAction::RevealInProjects(0));
     let tree = &app.document_state.panel_ctx.project_tree;
     assert!(tree[0].expanded && tree[0].children[0].expanded);
-    assert_eq!(task.units(), 2, "show Projects, then the tree's own Select");
+    assert_eq!(
+        revealed_key(task),
+        Some(key),
+        "show Projects, then the tree's own Select of the row"
+    );
 }
 
 #[test]
 fn reveal_in_projects_does_nothing_for_a_file_no_project_lists() {
     let mut app = app_with_project_tree("/w/elsewhere/b.snxsch", CaseFold::PRESERVE);
     let task = app.handle_tab_context_action(TabContextAction::RevealInProjects(0));
-    assert_eq!(task.units(), 0);
+    assert!(crate::persist::run_task::outputs(task).is_empty());
     assert!(!app.document_state.panel_ctx.project_tree[0].expanded);
 }
 
@@ -225,11 +256,11 @@ fn reveal_in_projects_does_nothing_for_a_file_no_project_lists() {
 fn reveal_in_projects_compares_paths_under_the_project_case_rule() {
     let mut folded = app_with_project_tree("/w/proj/B.snxsch", CaseFold::from_probe(true));
     let task = folded.handle_tab_context_action(TabContextAction::RevealInProjects(0));
-    assert_eq!(task.units(), 2);
+    assert!(revealed_key(task).is_some(), "B matches b when folded");
 
     let mut preserved = app_with_project_tree("/w/proj/B.snxsch", CaseFold::PRESERVE);
     let task = preserved.handle_tab_context_action(TabContextAction::RevealInProjects(0));
-    assert_eq!(task.units(), 0);
+    assert!(crate::persist::run_task::outputs(task).is_empty());
 }
 
 // ─── "+N" overflow menu ───────────────────────────────────────────

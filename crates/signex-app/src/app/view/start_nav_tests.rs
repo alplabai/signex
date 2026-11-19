@@ -74,7 +74,18 @@ fn a_strip_row_opens_keyboard_shortcuts_through_update() {
 fn the_projects_row_opens_the_projects_page_through_update() {
     use crate::start_screen::{ProjectScope, StartPage, StartScreenMsg};
     let (mut app, window) = start_screen_app();
-    let page = crate::layout_probe::messages_on_click(app.view(window), WIDE, "Projects")
+    // The docked Projects panel is labelled "Projects" too, further left:
+    // the navigation row is the rightmost "Projects" left of the hero.
+    let texts = lay_out_texts(app.view(window), WIDE);
+    let hero_x = find(&texts, HERO).bounds.x;
+    let row = texts
+        .iter()
+        .filter(|t| t.text == "Projects" && t.bounds.x < hero_x)
+        .max_by(|a, b| a.bounds.x.total_cmp(&b.bounds.x))
+        .expect("the navigation's Projects row")
+        .bounds;
+    let centre = iced::Point::new(row.center_x(), row.center_y());
+    let page = messages_on_click_at(app.view(window), WIDE, None, centre)
         .into_iter()
         .find(|m| {
             matches!(

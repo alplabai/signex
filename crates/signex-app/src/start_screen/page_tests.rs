@@ -98,7 +98,7 @@ fn show_all_appears_only_when_recent_has_more_than_five() {
 #[test]
 fn the_projects_page_filters_by_text_and_scope() {
     let i18n = I18n::en_us();
-    let recent = vec![
+    let recent = [
         PathBuf::from("/work/hw/dcdc/dcdc.snxprj"),
         PathBuf::from("/work/hw/Motor-Ctrl/motor.snxprj"),
         PathBuf::from("/work/hw/carrier/carrier.snxprj"),
@@ -216,7 +216,7 @@ fn the_libraries_page_lists_the_loaded_libraries() {
         open.iter().any(|m| matches!(
             m,
             Message::Library(crate::library::messages::LibraryMessage::OpenLibraryBrowser(p))
-                if *p == PathBuf::from("Stock.snxlib")
+                if p.as_path() == std::path::Path::new("Stock.snxlib")
         )),
         "Stock opens view-only: {open:?}"
     );

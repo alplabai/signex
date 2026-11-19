@@ -2,8 +2,10 @@
 //! sizes, and the fixture the page tests (`page_tests.rs`) share.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chrono::Utc;
+use iced::Widget as _;
 use signex_widgets::{raw, text};
 
 use super::*;
@@ -35,7 +37,7 @@ pub(super) struct Fixture {
     open_shortcut: String,
     shortcuts_shortcut: String,
     tokens: ThemeTokens,
-    i18n: I18n,
+    i18n: Arc<I18n>,
 }
 
 impl Fixture {
@@ -139,7 +141,8 @@ fn a_pinned_project_is_listed_only_under_pinned() {
     assert_eq!(sections.recent_total, MAX_START_RECENT);
     assert!(!sections.has_more_recent());
 
-    let none = project_sections(&all, &PinnedProjects::default());
+    let no_pins = PinnedProjects::default();
+    let none = project_sections(&all, &no_pins);
     assert!(none.pinned.is_empty());
     assert_eq!(none.recent.len(), MAX_START_RECENT);
     assert_eq!(none.recent_total, MAX_START_RECENT + 2);
@@ -414,7 +417,7 @@ fn every_button_label_fits_at_small_window_sizes() {
     let ts = crate::styles::TypeScale::DEFAULT;
     let recent = paths(MAX_START_RECENT + 2);
     let fx = Fixture::new(&recent);
-    let nav_labels: Vec<(String, f32)> = vec![
+    let nav_labels: [(String, f32); 2] = [
         ("New project".into(), ts.dense),
         ("Keyboard Shortcuts".into(), ts.label),
     ];
