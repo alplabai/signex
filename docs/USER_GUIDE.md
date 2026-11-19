@@ -65,18 +65,30 @@ buttons:
 ![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
 On your very first launch a small card titled **Welcome to Signex** also
-appears in the bottom-right corner of the window. It lists the three gestures
-you need immediately:
+appears in the bottom-right corner of the window. It lists what you need
+immediately, each with its gesture or key:
 
-- Right-click + drag to pan
-- Scroll to zoom
-- F1 for keyboard shortcuts
+- **Pan**: right-drag
+- **Zoom**: the mouse wheel (with the wheel set to Scroll, Ctrl + wheel, or
+  Cmd + wheel on macOS)
+- **Find any command**: the command palette key (`Ctrl+K` in the default
+  profile)
+- **All keyboard shortcuts**: `F1`
 
-Close it with the ✕ in its corner or with `Esc`. It is a reminder only; nothing
-else changes when you dismiss it.
+Its footer says what the mouse wheel is set to; **change** opens
+**Preferences ▸ Appearance**, where the Mouse wheel setting is, and leaves the
+card open. Close it with **Got it**, the ✕ in its corner or `Esc`. It is a
+reminder only; nothing else changes when you dismiss it, and it does not come
+back.
 
-`F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every binding in
-the active shortcut profile.
+`F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every working
+binding in the active shortcut profile, grouped by category in two columns.
+Type in the filter field to find a shortcut by its action or its key; the
+match is highlighted and the count under the list says how many match. The
+**Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
+starts on the editor you are in. **Edit in Preferences…** closes the sheet
+and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
+`Esc` closes it.
 
 ## 3. Create a project
 

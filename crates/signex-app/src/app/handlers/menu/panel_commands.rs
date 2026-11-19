@@ -54,7 +54,11 @@ impl Signex {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through
                 // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
+                // It opens with no filter, on the active editor's scope.
+                use crate::keyboard_shortcuts_modal::{ShortcutScope, ShortcutSheet};
                 self.ui_state.keyboard_shortcuts_open = true;
+                self.ui_state.shortcut_sheet =
+                    ShortcutSheet::opened(ShortcutScope::for_active_editor(self.has_active_pcb()));
                 self.ui_state.refresh_shortcut_sections();
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
@@ -78,5 +82,17 @@ impl Signex {
             )),
             _ => None,
         }
+    }
+
+    /// Open Preferences on `nav`: the Keyboard Shortcuts sheet's "Edit in
+    /// Preferences…" and the first-run card's "change" link. An open
+    /// Preferences keeps its drafts and only turns the page.
+    pub(crate) fn open_preferences_on(
+        &mut self,
+        nav: crate::preferences::PrefNav,
+    ) -> Task<Message> {
+        let open = self.dispatch_preferences_message(PreferencesMsg::Open);
+        let page = self.dispatch_preferences_message(PreferencesMsg::Nav(nav));
+        Task::batch([open, page])
     }
 }

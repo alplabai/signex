@@ -168,3 +168,74 @@ dialog-net-color-channel-r = R
 dialog-net-color-channel-g = G
 dialog-net-color-channel-b = B
 dialog-net-color-quick-pick = Quick Pick
+
+## Help ▸ About Signex (#2262)
+# The product name beside the mark.
+dialog-about-name = { -brand-name }
+dialog-about-tagline = AI-first electronics design automation
+# Keys of the version block; the values are the version, the licence name
+# and the operating system, shown as they are.
+dialog-about-version = Version
+dialog-about-license = License
+dialog-about-os = OS
+# Links to the user guide and the issue tracker, opened in the browser.
+dialog-about-documentation = Documentation
+dialog-about-report-issue = Report an Issue
+# Footer button: copies the version block for a bug report.
+dialog-about-copy-version = Copy version info
+
+## Help ▸ Keyboard Shortcuts (#2262)
+# Header subtitle. $profile is the keyboard-shortcut profile's name; $scope
+# is the editor the sheet lists (Schematic, PCB or All).
+dialog-shortcuts-subtitle = { $profile } profile · { $scope }
+dialog-shortcuts-filter-placeholder = Filter by action or key
+# The editor switch: which editor's shortcuts are listed.
+dialog-shortcuts-scope-schematic = Schematic
+dialog-shortcuts-scope-pcb = PCB
+dialog-shortcuts-scope-all = All
+# Under the list while a filter is typed. $shown and $total are whole numbers.
+dialog-shortcuts-count-filtered =
+    { $shown ->
+        [one] { $shown } of { $total } shortcuts matches. Clear the filter to see all categories.
+       *[other] { $shown } of { $total } shortcuts match. Clear the filter to see all categories.
+    }
+# Under the list with no filter. $total is a whole number; $scope as above.
+dialog-shortcuts-count-all =
+    { $total ->
+        [one] { $total } shortcut in { $scope }.
+       *[other] { $total } shortcuts in { $scope }.
+    }
+# Nothing matches. $query is the typed filter; $scope as above.
+dialog-shortcuts-no-match = No shortcut matches “{ $query }” in { $scope }.
+# Before a button that switches the list to All.
+dialog-shortcuts-try = Try
+# Nothing matches while All is already shown.
+dialog-shortcuts-no-match-all = Check the spelling, or clear the filter.
+# Footer note. $key is the key that opens and closes the sheet (F1).
+dialog-shortcuts-key-hint = { $key } opens and closes this sheet
+# Footer button: closes the sheet and opens the keyboard-shortcut page of
+# Preferences.
+dialog-shortcuts-edit-in-preferences = Edit in Preferences…
+
+## First-run card (#2262)
+dialog-tour-pan = Pan
+# The pan gesture: drag with the right mouse button.
+dialog-tour-pan-gesture = Right-drag
+dialog-tour-zoom = Zoom
+# The zoom gesture when the mouse wheel zooms.
+dialog-tour-zoom-wheel = Wheel
+# The zoom gesture when the mouse wheel scrolls. $modifier is the key held
+# with the wheel (Ctrl, or Cmd on macOS).
+dialog-tour-zoom-modified-wheel = { $modifier }+Wheel
+dialog-tour-find-command = Find any command
+dialog-tour-all-shortcuts = All keyboard shortcuts
+# Footer note before the "change" link. $mode is the Mouse wheel setting.
+dialog-tour-wheel-set =
+    Wheel set to { $mode ->
+        [scroll] Scroll
+       *[zoom] Zoom
+    } ·
+# Link that opens the Mouse wheel setting in Preferences.
+dialog-tour-wheel-change = change
+# Footer button: closes the card for good, like its ✕.
+dialog-tour-got-it = Got it

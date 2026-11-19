@@ -88,6 +88,26 @@ impl Signex {
                 select,
             } => self.handle_focus_at(world_x, world_y, select),
             OverlayMsg::ToggleAutoFocus => self.handle_toggle_auto_focus(),
+            // Help cards (#2262).
+            OverlayMsg::ShortcutsFilterChanged(filter) => {
+                self.ui_state.shortcut_sheet.filter = filter;
+                Task::none()
+            }
+            OverlayMsg::ShortcutsFilterCleared => {
+                self.ui_state.shortcut_sheet.filter.clear();
+                Task::none()
+            }
+            OverlayMsg::ShortcutsScopePicked(scope) => {
+                self.ui_state.shortcut_sheet.scope = scope;
+                Task::none()
+            }
+            OverlayMsg::ShortcutsPreferencesPressed => {
+                self.ui_state.keyboard_shortcuts_open = false;
+                self.open_preferences_on(crate::preferences::PrefNav::Keyboard)
+            }
+            OverlayMsg::FirstRunTourWheelChangePressed => {
+                self.open_preferences_on(crate::preferences::PrefNav::Appearance)
+            }
         }
     }
 

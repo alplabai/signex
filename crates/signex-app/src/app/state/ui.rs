@@ -154,6 +154,9 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The shortcuts sheet's filter text and scope, set afresh each time
+    /// the sheet opens (#2262).
+    pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
