@@ -11,11 +11,23 @@
 
 use crate::keymap::command_menu_message;
 use crate::library::editor::symbol::state::{
-    SymbolSelection, selected_is_deletable, selection_is_join_eligible,
+    SymbolSelection, selected_is_alignable, selected_is_deletable, selection_is_join_eligible,
 };
-use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
-use signex_i18n::{MessageId, menu_ids};
+use crate::library::messages::{
+    SymbolEditorMsg, SymbolRotatePivotMsg, SymbolSelectionMsg, SymbolToolMsg,
+};
+use signex_i18n::{MessageId, key_ids, menu_ids};
 use signex_library::Symbol;
+
+/// The glyph in a row's icon column; the view maps it to an SVG.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowIcon {
+    Place,
+    Rotate,
+    Align,
+    SelectAll,
+    Delete,
+}
 
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
 /// `symbol.`-namespaced command id (the command-registry epic will
@@ -24,14 +36,18 @@ use signex_library::Symbol;
 /// for a submenu header, which instead toggles `submenu`'s visibility.
 /// `submenu`, when present, holds the rows shown in place directly
 /// below this row while it's the open submenu (accordion — mirrors
-/// the footprint context menu's Place ▸ / Selection ▸ / View ▸
-/// expand-in-place behaviour), not a hover flyout.
+/// the footprint context menu's Place ▸ / Align ▸ expand-in-place
+/// behaviour), not a hover flyout. `keys` names the canvas key that does
+/// the same; `divider_before` draws a divider above the row.
 pub struct SymbolMenuRow {
     pub id: &'static str,
     pub label: MessageId,
     pub enabled: bool,
     pub msg: Option<SymbolEditorMsg>,
     pub submenu: Option<Vec<SymbolMenuRow>>,
+    pub icon: Option<RowIcon>,
+    pub keys: Option<MessageId>,
+    pub divider_before: bool,
 }
 
 impl SymbolMenuRow {
@@ -42,17 +58,33 @@ impl SymbolMenuRow {
             enabled,
             msg: Some(msg),
             submenu: None,
+            icon: None,
+            keys: None,
+            divider_before: false,
         }
     }
 
     fn submenu(id: &'static str, label: MessageId, children: Vec<SymbolMenuRow>) -> Self {
         Self {
-            id,
-            label,
-            enabled: true,
-            msg: None,
             submenu: Some(children),
+            msg: None,
+            ..Self::item(id, label, true, SymbolEditorMsg::Deselect)
         }
+    }
+
+    fn icon(mut self, icon: RowIcon) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    fn keys(mut self, keys: MessageId) -> Self {
+        self.keys = Some(keys);
+        self
+    }
+
+    fn after_divider(mut self) -> Self {
+        self.divider_before = true;
+        self
     }
 }
 
@@ -61,31 +93,55 @@ impl SymbolMenuRow {
 /// `enabled` (not row presence), so callers/tests get a stable id
 /// list regardless of selection state; the renderer greys out /
 /// disables clicks on a `enabled: false` row.
+///
+/// Order (m141): Place ▸, the transforms (Rotate Selection, Align ▸), a
+/// divider, Join into Polygon, Select All, Deselect All, Fit to Window,
+/// and Delete last.
 pub fn build_symbol_context_menu_rows(
     sym: &Symbol,
     view: crate::library::editor::symbol::state::PartView,
     selected: &Option<SymbolSelection>,
 ) -> Vec<SymbolMenuRow> {
+    let transformable = selected_is_alignable(selected);
     vec![
-        place_submenu(),
+        place_submenu().icon(RowIcon::Place),
+        // Space on the canvas: counter-clockwise about the world origin.
+        SymbolMenuRow::item(
+            "symbol.rotate-selection",
+            menu_ids::CTX_SYMBOL_ROTATE_SELECTION,
+            transformable,
+            SymbolEditorMsg::RotateSelected {
+                clockwise: false,
+                pivot: SymbolRotatePivotMsg::WorldOrigin,
+            },
+        )
+        .icon(RowIcon::Rotate)
+        .keys(key_ids::KEY_SPACE),
+        SymbolMenuRow::submenu(
+            "symbol.align",
+            menu_ids::CTX_ALIGN,
+            vec![SymbolMenuRow::item(
+                "symbol.align-to-grid",
+                menu_ids::CTX_SYMBOL_ALIGN_TO_GRID,
+                transformable,
+                SymbolEditorMsg::AlignSelectedToGrid,
+            )],
+        )
+        .icon(RowIcon::Align),
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
             menu_ids::CTX_SYMBOL_JOIN_POLYGON,
             selection_is_join_eligible(sym, view, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
-        ),
-        SymbolMenuRow::item(
-            "symbol.delete",
-            command_menu_message("delete_selection"),
-            selected_is_deletable(selected),
-            SymbolEditorMsg::DeleteSelected,
-        ),
+        )
+        .after_divider(),
         SymbolMenuRow::item(
             "symbol.select-all",
             command_menu_message("select_all"),
             true,
             SymbolEditorMsg::Select(SymbolSelectionMsg::All),
-        ),
+        )
+        .icon(RowIcon::SelectAll),
         SymbolMenuRow::item(
             "symbol.deselect-all",
             menu_ids::CTX_DESELECT_ALL,
@@ -98,6 +154,14 @@ pub fn build_symbol_context_menu_rows(
             true,
             SymbolEditorMsg::Fit,
         ),
+        SymbolMenuRow::item(
+            "symbol.delete",
+            command_menu_message("delete_selection"),
+            selected_is_deletable(selected),
+            SymbolEditorMsg::DeleteSelected,
+        )
+        .icon(RowIcon::Delete)
+        .keys(key_ids::KEY_DEL),
     ]
 }
 
@@ -169,8 +233,9 @@ mod tests {
         })
     }
 
-    /// The top-level id list is stable — the exact "full set" the
-    /// task names — regardless of selection state.
+    /// The top-level id list is stable regardless of selection state, in
+    /// the m141 order: Place ▸ first, the transforms, a divider, the kept
+    /// rows, Delete last.
     #[test]
     fn top_level_ids_are_stable() {
         let sym = Symbol::empty("T");
@@ -183,13 +248,35 @@ mod tests {
             row_ids(&rows),
             vec![
                 "symbol.place",
+                "symbol.rotate-selection",
+                "symbol.align",
                 "symbol.join-into-polygon",
-                "symbol.delete",
                 "symbol.select-all",
                 "symbol.deselect-all",
                 "symbol.fit-to-window",
+                "symbol.delete",
             ]
         );
+        let dividers: Vec<&str> = rows
+            .iter()
+            .filter(|r| r.divider_before)
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(dividers, ["symbol.join-into-polygon"]);
+        let align = find(&rows, "symbol.align");
+        let align_rows = align.submenu.as_ref().expect("Align is a submenu");
+        assert_eq!(row_ids(align_rows), vec!["symbol.align-to-grid"]);
+        assert!(matches!(
+            align_rows[0].msg,
+            Some(SymbolEditorMsg::AlignSelectedToGrid)
+        ));
+        assert!(matches!(
+            find(&rows, "symbol.rotate-selection").msg,
+            Some(SymbolEditorMsg::RotateSelected {
+                clockwise: false,
+                ..
+            })
+        ));
         let place = find(&rows, "symbol.place");
         let children = place.submenu.as_ref().expect("Place is a submenu");
         assert_eq!(
@@ -239,6 +326,29 @@ mod tests {
         assert!(find(&rows, "symbol.select-all").enabled);
         assert!(find(&rows, "symbol.fit-to-window").enabled);
         assert!(find(&rows, "symbol.place").enabled);
+        // Rotate would push an empty undo step with nothing selected.
+        assert!(!find(&rows, "symbol.rotate-selection").enabled);
+        let align = find(&rows, "symbol.align");
+        assert!(align.enabled);
+        assert!(!align.submenu.as_ref().expect("submenu")[0].enabled);
+    }
+
+    /// With a graphic selected, Rotate and Align To Grid are live.
+    #[test]
+    fn a_selection_enables_rotate_and_align_to_grid() {
+        let rows = build_symbol_context_menu_rows(
+            &Symbol::empty("T"),
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &Some(SymbolSelection::Graphic(0)),
+        );
+        assert!(find(&rows, "symbol.rotate-selection").enabled);
+        assert!(
+            find(&rows, "symbol.align")
+                .submenu
+                .as_ref()
+                .expect("submenu")[0]
+                .enabled
+        );
     }
 
     /// `SymbolSelection::All` is a no-op for `delete_selected`, so the

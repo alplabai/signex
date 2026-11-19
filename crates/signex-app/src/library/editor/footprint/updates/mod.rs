@@ -326,6 +326,16 @@ pub(crate) fn apply_footprint_primitive_edit(
         msg
     };
 
+    // A selection row of the right-click menu closes the menu, then runs
+    // its action as that action's own edit (its own undo step).
+    if let FootprintEditorMsg::ContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction::OnSelection(pick),
+    ) = msg
+    {
+        editor.state.context_menu = None;
+        return apply_footprint_primitive_edit(editor, context_menu::selection_message(pick));
+    }
+
     // v0.24 Phase 1 (Track B) — capture an undo snapshot ahead of
     // any mutating message. Selection-only / cursor-tracking /
     // tool-state messages are pure UI state and don't need history;

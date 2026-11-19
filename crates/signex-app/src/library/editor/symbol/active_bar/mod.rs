@@ -1,14 +1,11 @@
-//! SchLib editor's Active Bar — the floating tool bar over the
-//! `.snxsym` canvas, mirroring the schematic editor's Altium-style
-//! Active Bar pattern but with SchLib-specific tools.
+//! The symbol editor's floating active bar over the `.snxsym` canvas,
+//! grouped like the footprint editor's bar.
 //!
-//! v0.13 — Eight Altium dropdown menus (Filter / Snap / Place /
-//! Select / Align / Pin / Text / Shapes) live at the FRONT of the
-//! bar; their bodies come from `active_bar_dropdowns::entries`. The
-//! Select / Place Pin tool slots stay at the end of the bar for
-//! quick keyboard / single-click access. Pure-graphics tools (Line /
-//! Arc / Circle / Rectangle) live in the Shapes dropdown to keep the
-//! bar slim.
+//! Two groups split by a divider: selection (Filter, Snap, Move, Select,
+//! Align, then the Select tool) and placement (Pin, Shapes, Text, then the
+//! Place Pin tool). The eight dropdown triggers carry the corner
+//! indicator; their menus come from [`dropdowns::entries`]. Pure-graphics
+//! tools live in the Shapes dropdown to keep the bar slim.
 //!
 //! Built on `signex_widgets::active_bar::view`; the dropdown overlay and
 //! click-outside backstop are mounted by the symbol editor view.
@@ -19,7 +16,7 @@ use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use crate::app::SymbolDocument;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
-use crate::library::editor::symbol::state::SymActiveBarMenu;
+use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolFilterKind};
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
 mod dropdowns;
@@ -30,33 +27,63 @@ mod dropdowns;
 pub fn bar_items(editor: &SymbolDocument, theme_id: ThemeId) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active_tool = editor.tool;
+    let tool = |icon: ActiveBarIcon, tooltip: &str, pick: SymbolToolMsg, armed: SymbolTool| {
+        ActiveBarItem::Button(ActiveBarButton {
+            icon,
+            tooltip: tooltip.to_string(),
+            enabled: true,
+            selected: active_tool == armed,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(pick)),
+            }),
+            ..ActiveBarButton::default()
+        })
+    };
 
-    let mut items: Vec<ActiveBarItem<LibraryMessage>> = dropdown_trigger_items(editor, theme_id);
+    let mut triggers = dropdown_trigger_items(editor, theme_id);
+    let placement = triggers.split_off(SELECTION_TRIGGERS);
+
+    let mut items = triggers;
+    items.push(tool(
+        ActiveBarIcon::Svg(ic::icon_select(theme_id)),
+        "Select",
+        SymbolToolMsg::Select,
+        SymbolTool::Select,
+    ));
     items.push(ActiveBarItem::Separator);
-
-    items.push(ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(ic::icon_select(theme_id)),
-        tooltip: "Select".into(),
-        enabled: true,
-        selected: active_tool == SymbolTool::Select,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
-            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(SymbolToolMsg::Select)),
-        }),
-        ..ActiveBarButton::default()
-    }));
-    items.push(ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{2192}"),
-        tooltip: "Place Pin".into(),
-        enabled: true,
-        selected: active_tool == SymbolTool::AddPin,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
-            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin)),
-        }),
-        ..ActiveBarButton::default()
-    }));
+    items.extend(placement);
+    items.push(tool(
+        ActiveBarIcon::Glyph("\u{2192}"),
+        "Place Pin",
+        SymbolToolMsg::AddPin,
+        SymbolTool::AddPin,
+    ));
     items
+}
+
+/// The triggers of the selection group (Filter, Snap, Move, Select,
+/// Align); the rest are the placement group.
+const SELECTION_TRIGGERS: usize = 5;
+
+/// The selection filter's categories, in the order of its dropdown chips.
+const FILTER_KINDS: [SymbolFilterKind; 7] = [
+    SymbolFilterKind::Pins,
+    SymbolFilterKind::Drawings,
+    SymbolFilterKind::Texts,
+    SymbolFilterKind::Designators,
+    SymbolFilterKind::Values,
+    SymbolFilterKind::Parameters,
+    SymbolFilterKind::Other,
+];
+
+/// Tooltip of the selection-filter trigger: the categories it filters.
+fn filter_tooltip() -> String {
+    let kinds: Vec<&str> = FILTER_KINDS.iter().map(|kind| kind.label()).collect();
+    format!(
+        "Selection Filter: {} (left or right click for menu)",
+        kinds.join(", ")
+    )
 }
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
@@ -151,7 +178,7 @@ fn dropdown_trigger_items(
 
     vec![
         dual(
-            "Selection Filter (left or right click for menu)",
+            &filter_tooltip(),
             ActiveBarIcon::Svg(ic::icon_filter(tid)),
             SymActiveBarMenu::Filter,
             None,
@@ -195,16 +222,16 @@ fn dropdown_trigger_items(
             Some(SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin)),
         ),
         dual(
-            "Text (left-click places String, right-click for menu)",
-            ActiveBarIcon::Svg(ic::icon_text(tid)),
-            SymActiveBarMenu::Text,
-            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceText)),
-        ),
-        dual(
             "Shapes (right-click for shape menu)",
             ActiveBarIcon::Svg(ic::icon_shapes(tid)),
             SymActiveBarMenu::Shapes,
             None,
+        ),
+        dual(
+            "Text (left-click places String, right-click for menu)",
+            ActiveBarIcon::Svg(ic::icon_text(tid)),
+            SymActiveBarMenu::Text,
+            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceText)),
         ),
     ]
 }
@@ -250,7 +277,7 @@ mod tests {
     fn move_trigger_left_click_arms_select_tool() {
         let editor = new_editor();
         let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight);
-        let place = &items[2]; // Filter, Snap, Place, Select, Align, Pin, Text, Shapes
+        let place = &items[2]; // Filter, Snap, Place, Select, Align, Pin, Shapes, Text
         assert!(matches!(
             left_click_symbol_msg(place),
             SymbolEditorMsg::SetTool(SymbolToolMsg::Select)
@@ -269,5 +296,53 @@ mod tests {
             left_click_symbol_msg(align),
             SymbolEditorMsg::AlignSelectedToGrid
         ));
+    }
+
+    /// m141: the bar has two groups split by one divider, selection
+    /// (five triggers and the Select tool) then placement (Pin, Shapes,
+    /// Text and the Place Pin tool); every trigger carries the dropdown
+    /// indicator and no tool button does.
+    #[test]
+    fn the_bar_has_a_selection_and_a_placement_group() {
+        let editor = new_editor();
+        let items = bar_items(&editor, ThemeId::GraphiteLight);
+        let divider = items
+            .iter()
+            .position(|i| matches!(i, ActiveBarItem::Separator))
+            .expect("one divider");
+        assert_eq!(divider, SELECTION_TRIGGERS + 1);
+        assert_eq!(
+            items
+                .iter()
+                .filter(|i| matches!(i, ActiveBarItem::Separator))
+                .count(),
+            1
+        );
+        let tooltip = |i: &ActiveBarItem<LibraryMessage>| match i {
+            ActiveBarItem::Button(b) => b.tooltip.clone(),
+            _ => String::new(),
+        };
+        assert_eq!(tooltip(&items[divider - 1]), "Select");
+        assert!(tooltip(&items[divider + 1]).starts_with("Pin"));
+        assert!(tooltip(&items[divider + 2]).starts_with("Shapes"));
+        assert!(tooltip(&items[divider + 3]).starts_with("Text"));
+        assert_eq!(tooltip(items.last().expect("items")), "Place Pin");
+        for (index, item) in items.iter().enumerate() {
+            let ActiveBarItem::Button(b) = item else {
+                continue;
+            };
+            let is_tool = index == divider - 1 || index == items.len() - 1;
+            assert_eq!(b.dropdown_indicator.is_none(), is_tool, "{}", b.tooltip);
+        }
+    }
+
+    /// The filter trigger's tooltip names the categories the filter has.
+    #[test]
+    fn the_filter_tooltip_lists_the_filter_categories() {
+        assert_eq!(
+            filter_tooltip(),
+            "Selection Filter: Pins, Drawings, Texts, Designators, Values, Parameters, Other \
+             (left or right click for menu)"
+        );
     }
 }
