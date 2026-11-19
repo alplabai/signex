@@ -619,6 +619,7 @@ impl Signex {
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
+        let part_panel = self.document_state.panel_ctx.part_panel.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
@@ -742,6 +743,7 @@ impl Signex {
             numeric_draft,
             title_block_sheet,
             collapsed_sections,
+            part_panel,
             pre_placement,
             erc_diagnostics,
             erc_waivers,

@@ -1108,6 +1108,9 @@ pub enum PanelMsg {
     /// Document Options view events: Parameters filter, zone counts and the
     /// illustration hover (#2531).
     DocumentOptions(super::DocumentOptionsMsg),
+    /// The placed part's ⋯ menu, its focused pin and its illustration
+    /// hover (#42, #50).
+    Part(super::PartPanelMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

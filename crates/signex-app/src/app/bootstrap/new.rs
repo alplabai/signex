@@ -666,6 +666,7 @@ impl Signex {
                     numeric_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),
+                    part_panel: Default::default(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
                     erc_waivers: Vec::new(),
