@@ -12,7 +12,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::ProjectTabMsg;
 use crate::app::new_project::{
-    NewProjectMsg, NewProjectState, ProfileStored, ProfileTarget, import_rule_file, store_profile,
+    NewProjectMsg, NewProjectState, ProfileStored, import_rule_file, store_profile,
 };
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::view::dialogs::new_project::{cards, customize};
@@ -99,7 +99,6 @@ impl SetupPart {
         Some(match msg {
             M::ProfilePicked(_)
             | M::CardLayersStepped(..)
-            | M::ProfileEditRequested(ProfileTarget::BuiltIn(_))
             | M::FabPicked(_)
             | M::RulesFileRead(_)
             | M::LayersStepped(_)
@@ -108,9 +107,7 @@ impl SetupPart {
                 Self::Sheet
             }
             M::DesignatorsPicked(_) => Self::Designators,
-            M::UserProfilePicked(_) | M::ProfileEditRequested(ProfileTarget::Saved(_)) => {
-                Self::Profile
-            }
+            M::UserProfilePicked(_) => Self::Profile,
             _ => return None,
         })
     }
@@ -164,24 +161,33 @@ impl Signex {
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
         let users = &mut self.ui_state.setup_profiles;
-        // A card pick, the Fab tier field that mirrors it, a card's layer
-        // stepper and a built-in's Edit profile... name the project's default
-        // profile.
+        // A card pick, the Fab tier field that mirrors it and a card's layer
+        // stepper name the project's default profile.
         let picked = matches!(
             msg,
             NewProjectMsg::ProfilePicked(_)
                 | NewProjectMsg::FabPicked(_)
                 | NewProjectMsg::CardLayersStepped(..)
-                | NewProjectMsg::ProfileEditRequested(ProfileTarget::BuiltIn(_))
+        );
+        // Edit profile... changes the profile only, never the project
+        // (`docs/PROJECT_SETUP.md`): while it is open the section's draft is
+        // the profile's, and Save or Cancel shows the project's values again.
+        let profile_edit =
+            draft.editing.is_some() || matches!(msg, NewProjectMsg::ProfileEditRequested(_));
+        let edit_closing = matches!(
+            msg,
+            NewProjectMsg::ProfileEditSaved | NewProjectMsg::ProfileEditCancelled
         );
         match store_profile(draft, users, &msg) {
             ProfileStored::NotAStore => {}
+            stored if edit_closing && draft.editing.is_none() => {
+                self.drop_setup_draft(project_id);
+                return self.after_profile_store(stored);
+            }
             ProfileStored::Removed { profile, at } if profile.edited => {
                 // Reset to default: the project keeps the values it copied, so
                 // the section shows them again, not the shipped ones.
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-                    tab.setup_draft = None;
-                }
+                self.drop_setup_draft(project_id);
                 return self.after_profile_store(ProfileStored::Removed { profile, at });
             }
             ProfileStored::Removed { profile, at } => {
@@ -191,6 +197,13 @@ impl Signex {
                 return self.after_profile_store(ProfileStored::Removed { profile, at });
             }
             stored => return self.after_profile_store(stored),
+        }
+        if profile_edit {
+            draft.apply_setup(msg, users);
+            if edit_closing && draft.editing.is_none() {
+                self.drop_setup_draft(project_id);
+            }
+            return iced::Task::none();
         }
         let before = draft.setup.clone();
         if !draft.apply_setup(msg, users) || (draft.setup == before && tier_rules.is_none()) {
@@ -255,6 +268,13 @@ impl Signex {
             self.invalidate_pending_profile_update();
         }
         iced::Task::none()
+    }
+
+    /// The section shows `project_id`'s stored values again.
+    fn drop_setup_draft(&mut self, project_id: ProjectId) {
+        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+            tab.setup_draft = None;
+        }
     }
 
     /// `project_id`'s stored rules, `None` when it stores none or is closed.

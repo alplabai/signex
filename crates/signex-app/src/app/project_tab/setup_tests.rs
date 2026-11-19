@@ -330,3 +330,86 @@ fn re_picking_the_same_tier_restores_an_edited_fab_rule() {
     edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Advanced));
     assert_eq!(rule_text(&app), seeded);
 }
+
+fn setup_draft_open(app: &Signex) -> bool {
+    let id = app.document_state.projects[0].id;
+    app.document_state
+        .project_tabs
+        .get(&id)
+        .is_some_and(|tab| tab.setup_draft.is_some())
+}
+
+/// #2536: Edit profile... in the Project tab edits the profile only. Opening
+/// it, typing in a field and Cancel leave the project as it was: same
+/// defaults, not dirty, and the section shows the project's values again.
+#[test]
+fn a_cancelled_profile_edit_leaves_the_project_unchanged() {
+    use crate::app::new_project::ProfileTarget;
+    let mut app = app();
+    let before = app.document_state.projects[0].data.project_defaults.clone();
+    for target in [
+        ProfileTarget::BuiltIn(SetupProfile::Advanced),
+        ProfileTarget::Saved(saved_profile(&mut app)),
+    ] {
+        edit(
+            &mut app,
+            NewProjectMsg::ProfileEditRequested(target.clone()),
+        );
+        edit(
+            &mut app,
+            NewProjectMsg::RuleEdited(PcbField::Clearance, "0.12".into()),
+        );
+        assert_eq!(
+            app.document_state.projects[0].data.project_defaults, before,
+            "{target:?}: opening and typing store nothing"
+        );
+        edit(&mut app, NewProjectMsg::ProfileEditCancelled);
+        assert_eq!(
+            app.document_state.projects[0].data.project_defaults, before,
+            "{target:?}"
+        );
+        assert!(!project_dirty(&app), "{target:?}: the project is not dirty");
+        assert!(
+            !setup_draft_open(&app),
+            "{target:?}: the project's values show"
+        );
+    }
+}
+
+/// #2536: Save of a profile edit changes the profile, not the project.
+#[test]
+fn a_saved_profile_edit_changes_the_profile_only() {
+    use crate::app::new_project::ProfileTarget;
+    let mut app = app();
+    let before = app.document_state.projects[0].data.project_defaults.clone();
+    edit(
+        &mut app,
+        NewProjectMsg::ProfileEditRequested(ProfileTarget::BuiltIn(SetupProfile::Advanced)),
+    );
+    edit(
+        &mut app,
+        NewProjectMsg::RuleEdited(PcbField::Clearance, "0.12".into()),
+    );
+    edit(&mut app, NewProjectMsg::ProfileEditSaved);
+    assert!(
+        app.ui_state
+            .setup_profiles
+            .iter()
+            .any(|p| p.edited && p.id == "advanced" && p.pcb.clearance_mm == 0.12),
+        "the built-in's override holds the edit"
+    );
+    assert_eq!(app.document_state.projects[0].data.project_defaults, before);
+    assert!(!project_dirty(&app), "the project is not dirty");
+    assert!(!setup_draft_open(&app), "the project's values show again");
+}
+
+fn saved_profile(app: &mut Signex) -> String {
+    let setup = signex_types::project::ProjectSetup::default();
+    signex_types::project::save_user_profile(
+        &mut app.ui_state.setup_profiles,
+        "Mine",
+        setup.pcb,
+        setup.sheet,
+        setup.designators,
+    )
+}
