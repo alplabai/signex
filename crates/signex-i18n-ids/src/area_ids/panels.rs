@@ -83,4 +83,8 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_LIBRARY_ROW_HEADING = "panels-library-row-heading";
+    PANELS_LIBRARY_ROW_VERSION = "panels-library-row-version";
+    PANELS_LIBRARY_ROW_SECTION_BINDINGS = "panels-library-row-section-bindings";
+    PANELS_LIBRARY_ROW_PICK = "panels-library-row-pick";
 }

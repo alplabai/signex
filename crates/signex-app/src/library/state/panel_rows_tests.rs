@@ -195,3 +195,40 @@ fn the_expanded_panel_lists_tables_with_their_components() {
         ]
     );
 }
+
+/// The Library panel's Parts rows as `(table, index)`.
+fn parts_shown(state: &LibraryState) -> Vec<(String, usize)> {
+    state
+        .library_panel
+        .rows
+        .visible_rows(Path::new(ROOT), usize::MAX)
+        .map(|(t, i)| (t.to_owned(), i))
+        .collect()
+}
+
+/// #119: the Library panel's filter matches part rows, not only library
+/// names, and is separate from the Components panel's filter.
+#[test]
+fn the_library_panel_filter_matches_part_rows() {
+    let mut s = state();
+    s.sync_view_caches();
+    assert_eq!(
+        parts_shown(&s),
+        vec![("cap".into(), 0), ("res".into(), 0)],
+        "an empty filter lists every row"
+    );
+    for (query, expect) in [("r-10", "res"), ("murata", "cap"), ("GRM", "cap")] {
+        s.panel_search = query.into();
+        s.sync_view_caches();
+        assert_eq!(parts_shown(&s), vec![(expect.into(), 0)], "query {query:?}");
+    }
+    assert_eq!(
+        shown(&s).len(),
+        2,
+        "the Components panel keeps its own filter"
+    );
+    s.panel_search = "zzz".into();
+    s.sync_view_caches();
+    assert!(parts_shown(&s).is_empty());
+    assert_eq!(s.library_panel.rows.visible_count(Path::new(ROOT)), 0);
+}

@@ -1,4 +1,4 @@
-//! Panel implementations — uses signex-widgets for proper Altium-style content.
+//! Panel implementations, built on signex-widgets.
 
 use iced::mouse;
 use iced::widget::canvas;
@@ -45,7 +45,7 @@ mod erc_waivers;
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
-mod library;
+mod library_row;
 mod messages;
 mod messages_row;
 mod multi_selection;
@@ -121,10 +121,8 @@ pub use footprint_context::{
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
-pub use library::{ComponentSheet, LibraryRowDetail};
-pub(super) use library::{
-    view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
-};
+pub use library_row::{ComponentSheet, LibraryRowDetail};
+pub(super) use library_row::{view_component_sheet, view_library_row_properties};
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
 pub use navigator::NavigatorModel;
@@ -192,7 +190,6 @@ pub enum PanelKind {
     NetClasses,
     Variants,
     OutputJobs,
-    // Additional Altium schematic panels
     SchFilter,
     SchList,
     BomStudio,
@@ -200,23 +197,16 @@ pub enum PanelKind {
     Snippets,
     Todo,
     Wiki,
-    /// v0.9 Library panel — open `*.snxlib/` libraries, drill into
-    /// their components, drag onto the canvas (Phase 2).
+    /// The one Library panel (#119): the symbols of the open `.snxsym`,
+    /// the footprints of the open `.snxfpt` or the parts of every open
+    /// library, picked with its kind chips.
     Library,
-    /// v0.9 phase 2.5 — Altium SCH Library panel. Lists symbols
-    /// inside the active `.snxsym` container; clicking switches the
-    /// editor's `active_idx`. Visible whenever a Symbol editor tab
-    /// is focused.
+    /// Panel-list alias of [`Self::Library`] in its Symbols kind (#120).
+    /// Opening it opens the Library panel; it is never docked itself.
     SchLibrary,
-    /// v0.14.2 — Altium PCB Library panel parity. Lists every
-    /// `.snxfpt` sibling inside the containing `.snxlib`'s
-    /// `footprints/` directory; clicking opens that footprint as a
-    /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
-    /// Footprint editor tab is focused.
+    /// Panel-list alias of [`Self::Library`] in its Footprints kind (#121).
+    /// Opening it opens the Library panel; it is never docked itself.
     FootprintLibrary,
-    /// Symbol editor pin table (number, name, type, part, visibility).
-    /// Visible whenever a Symbol editor tab is focused.
-    SymbolPins,
     /// PCB editor net table: nets with pad counts and routed length.
     PcbNets,
     /// VSCode-style per-file Git history. Right-dock surface that
@@ -254,7 +244,6 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Wiki,
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
-    PanelKind::SymbolPins,
     PanelKind::PcbNets,
     PanelKind::History,
     PanelKind::NetInspector,
@@ -285,6 +274,17 @@ impl PanelKind {
         matches!(self, PanelKind::Drc | PanelKind::LayerStack)
     }
 
+    /// The Library panel kind an alias row opens it in (XF-07): SCH
+    /// Library opens Symbols and Footprint Library opens Footprints.
+    pub fn library_alias(self) -> Option<crate::library::state::LibraryPanelKind> {
+        use crate::library::state::LibraryPanelKind;
+        match self {
+            PanelKind::SchLibrary => Some(LibraryPanelKind::Symbols),
+            PanelKind::FootprintLibrary => Some(LibraryPanelKind::Footprints),
+            _ => None,
+        }
+    }
+
     /// The catalog message of [`Self::label`] (dock tabs and titles).
     pub fn message(self) -> signex_i18n::MessageId {
         use signex_i18n::ids;
@@ -312,7 +312,6 @@ impl PanelKind {
             PanelKind::Library => ids::PANELS_KIND_LIBRARY,
             PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
             PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
-            PanelKind::SymbolPins => ids::PANELS_KIND_SYMBOL_PINS,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
@@ -344,7 +343,6 @@ impl PanelKind {
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
-            PanelKind::SymbolPins => "Pins",
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
@@ -405,10 +403,12 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Snippets => view_stub(ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS, ctx),
         PanelKind::Todo => view_stub(ids::PANELS_KIND_TODO, ids::PANELS_STUB_TODO, ctx),
         PanelKind::Wiki => view_stub(ids::PANELS_KIND_WIKI, ids::PANELS_STUB_WIKI, ctx),
-        PanelKind::Library => view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx),
-        PanelKind::SchLibrary => view_sch_library(ctx),
-        PanelKind::FootprintLibrary => view_footprint_library(ctx),
-        PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
+        // The dock draws the Library panel and its aliases with
+        // `library::panel::view`; this arm is only reached by a surface
+        // that does not route them there.
+        PanelKind::SchLibrary | PanelKind::FootprintLibrary | PanelKind::Library => {
+            view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx)
+        }
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),

@@ -520,6 +520,8 @@ pub struct LibraryState {
     /// The Library panel's last component click, for the double-click
     /// window that opens the component.
     pub panel_last_click: crate::double_click::DoubleClick<ComponentsPanelRowKey>,
+    /// The Library panel's kind pick and filtered Parts rows (#119).
+    pub library_panel: LibraryPanelState,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// `(label, reason)` of each Save-All row whose off-thread datasheet
@@ -959,6 +961,7 @@ mod methods;
 mod missing_queue;
 mod new_library_defaults;
 pub mod owed_cascades;
+mod panel_kind;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
@@ -983,6 +986,7 @@ mod under_folder;
 pub use crate::app::core::new_library_defaults::NewLibraryDefaults;
 pub use id_precedence::IdClashNotice;
 pub use methods::*;
+pub use panel_kind::{LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab};
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
