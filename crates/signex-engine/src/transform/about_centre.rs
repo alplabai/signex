@@ -397,6 +397,9 @@ impl Engine {
                     at(end);
                 }
                 SchDrawing::Polyline { points, .. } => points.iter_mut().for_each(at),
+                SchDrawing::Bezier(b) => b.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Dimension(dim) => dim.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Table(t) => t.map_points(|p| transform.point(centre, p)),
             }
         }
         for d in doc

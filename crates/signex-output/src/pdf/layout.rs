@@ -122,6 +122,11 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
                     extend(p.x + h, p.y + h);
                 }
             }
+            SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+                for p in crate::svg::annotation_extent(drawing) {
+                    extend(p.x, p.y);
+                }
+            }
         }
     }
 

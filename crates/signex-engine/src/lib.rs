@@ -44,6 +44,8 @@ mod graphics_import;
 pub(crate) mod test_support;
 
 #[cfg(test)]
+mod annotation_drawing_tests;
+#[cfg(test)]
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
