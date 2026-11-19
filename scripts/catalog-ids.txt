@@ -14,6 +14,10 @@ align_vertical_centers
 annotate_schematic
 annotate_schematic_quietly
 apply_edits
+apply_layout_board
+apply_layout_notebook
+apply_layout_review
+apply_layout_schematic
 apply_selection_filter_preset
 arrange_in_box
 assign_board_net_class
@@ -138,6 +142,7 @@ lasso_select
 leave_sheet
 list_documents
 lock_board_items
+manage_workspace_layouts
 measure_board
 measure_distance
 mirror_x
@@ -276,6 +281,7 @@ repour_all
 repour_selected
 reset_local_coordinates
 reset_schematic_designators
+reset_workspace_layout
 resolve
 revert
 rotate_clockwise
@@ -305,6 +311,7 @@ save_board_reuse_block
 save_document
 save_document_as
 save_layer_set
+save_workspace_layout
 select_all
 select_board_net
 select_connection

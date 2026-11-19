@@ -116,3 +116,4 @@ pub mod window_controls;
 pub mod window_geometry_events;
 pub mod window_placement;
 pub mod window_tiling;
+pub(crate) mod workspace_layouts;

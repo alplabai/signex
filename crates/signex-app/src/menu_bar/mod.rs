@@ -157,6 +157,9 @@ pub enum MenuMessage {
     NextDocumentTab,
     PreviousDocumentTab,
     PreviousSheet,
+    /// View ▸ Window ▸ Layouts ▸ `<your layout>` (#166): apply the user
+    /// layout with this stored id.
+    WorkspaceLayoutChosen(String),
 }
 
 impl MenuMessage {
@@ -226,6 +229,9 @@ pub struct MenuContext<'a> {
     /// What Design ▸ Update PCB Document names: the board a schematic in
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
+    /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
+    /// and the Reset row (#166).
+    pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
 }
 
 impl Default for MenuContext<'_> {
@@ -239,6 +245,7 @@ impl Default for MenuContext<'_> {
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
             pcb_sync: None,
+            layouts: Default::default(),
         }
     }
 }

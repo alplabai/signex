@@ -717,6 +717,9 @@ pub struct UiState {
     /// The Command Log (#2458): every command this session ran and what its
     /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
     pub command_log: Box<crate::panels::CommandLogState>,
+    /// Workspace layouts (#166): the list, its store, and the Save Layout
+    /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
+    pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }
 
 impl UiState {

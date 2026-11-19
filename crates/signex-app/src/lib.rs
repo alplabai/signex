@@ -94,3 +94,4 @@ pub(crate) mod text_trunc;
 pub mod toolbar;
 pub mod ui_scale;
 pub mod undo_depth;
+pub mod workspace_layouts;

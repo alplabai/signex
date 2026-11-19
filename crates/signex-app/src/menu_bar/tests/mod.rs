@@ -172,6 +172,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
         cross_select: app.interaction_state.cross_select.enabled,
         pcb_sync: app.pcb_sync_label(window),
+        layouts: app.layouts_menu(),
     }
 }
 
@@ -299,6 +300,11 @@ pub(super) struct Probe {
     pub find_similar: bool,
     /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
     pub active_bar_menu: bool,
+    /// View ▸ Window ▸ Layouts (#166): the two dialogs and the layout on
+    /// screen.
+    pub save_layout: bool,
+    pub manage_layouts: bool,
+    pub layout_active: Option<String>,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -381,6 +387,14 @@ pub(super) fn probe(app: &Signex) -> Probe {
         document_setup: app.ui_state.document_setup.is_some(),
         find_similar: app.ui_state.find_similar.is_some(),
         active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
+        save_layout: app.ui_state.workspace_layouts.save.is_some(),
+        manage_layouts: app.ui_state.workspace_layouts.manage.is_some(),
+        layout_active: app
+            .ui_state
+            .workspace_layouts
+            .layouts
+            .active()
+            .map(|id| id.key().to_string()),
     }
 }
 

@@ -11,6 +11,10 @@ define_ids! {
         MENU_TOOLS = "menu-tools";
         MENU_REPORTS = "menu-reports";
         MENU_WINDOW = "menu-window";
+        MENU_WINDOW_LAYOUTS = "menu-window-layouts";
+        MENU_WINDOW_LAYOUTS_BUILTIN = "menu-window-layouts-builtin";
+        MENU_WINDOW_LAYOUTS_YOURS = "menu-window-layouts-yours";
+        MENU_WINDOW_LAYOUTS_RESET = "menu-window-layouts-reset";
         MENU_HELP = "menu-help";
         MENU_FILE_NEW = "menu-file-new";
         MENU_FILE_OPEN_RECENT = "menu-file-open-recent";

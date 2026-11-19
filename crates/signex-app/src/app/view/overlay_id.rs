@@ -126,6 +126,10 @@ pub(crate) enum OverlayId {
     UpdatePcb,
     /// New PCB / New Schematic setup (#2232).
     DocumentSetup,
+    /// View ▸ Window ▸ Layouts ▸ Manage Layouts (#166).
+    ManageLayouts,
+    /// View ▸ Window ▸ Layouts ▸ Save Layout (#166).
+    SaveLayout,
 
     // Library modals.
     LibraryPicker,
@@ -159,7 +163,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 76] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -227,6 +231,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
     OverlayId::UpdatePcb,
     // Above Update PCB: its Create PCB opens this dialog on top.
     OverlayId::DocumentSetup,
+    OverlayId::ManageLayouts,
+    OverlayId::SaveLayout,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
@@ -358,6 +364,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::ErcDialog
         | OverlayId::UpdatePcb
         | OverlayId::DocumentSetup
+        | OverlayId::ManageLayouts
+        | OverlayId::SaveLayout
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
@@ -596,6 +604,8 @@ impl Signex {
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::UpdatePcb => layers.extend(self.update_pcb_overlay()),
             OverlayId::DocumentSetup => layers.extend(self.document_setup_overlay()),
+            OverlayId::ManageLayouts => layers.extend(self.manage_layouts_overlay()),
+            OverlayId::SaveLayout => layers.extend(self.save_layout_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),

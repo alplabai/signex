@@ -717,3 +717,7 @@ mod command_log;
 // #165 — the Annotations panel and its notebook scan.
 #[path = "regression/annotations_panel.rs"]
 mod annotations_panel;
+
+// #166 — workspace layouts: apply, Save Layout and Manage Layouts.
+#[path = "regression/workspace_layouts.rs"]
+mod workspace_layouts;

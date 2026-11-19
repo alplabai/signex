@@ -1,0 +1,65 @@
+//! Ids of `locales/en-US/workspace_layouts.ftl`: View ▸ Window ▸ Layouts,
+//! Save Layout and Manage Layouts (#166).
+
+define_ids! {
+    WORKSPACE_LAYOUTS;
+    WORKSPACE_LAYOUTS_SCHEMATIC = "workspace-layouts-schematic";
+    WORKSPACE_LAYOUTS_LAYOUT = "workspace-layouts-layout";
+    WORKSPACE_LAYOUTS_REVIEW = "workspace-layouts-review";
+    WORKSPACE_LAYOUTS_NOTEBOOK = "workspace-layouts-notebook";
+    WORKSPACE_LAYOUTS_NUMBERED = "workspace-layouts-numbered";
+    WORKSPACE_LAYOUTS_COPY_OF = "workspace-layouts-copy-of";
+    WORKSPACE_LAYOUTS_NTH = "workspace-layouts-nth";
+    WORKSPACE_LAYOUTS_SAVE_TITLE = "workspace-layouts-save-title";
+    WORKSPACE_LAYOUTS_NAME = "workspace-layouts-name";
+    WORKSPACE_LAYOUTS_REPLACES = "workspace-layouts-replaces";
+    WORKSPACE_LAYOUTS_BUILTIN_NAME = "workspace-layouts-builtin-name";
+    WORKSPACE_LAYOUTS_SHORTCUT = "workspace-layouts-shortcut";
+    WORKSPACE_LAYOUTS_SHORTCUT_NONE = "workspace-layouts-shortcut-none";
+    WORKSPACE_LAYOUTS_STORE = "workspace-layouts-store";
+    WORKSPACE_LAYOUTS_STORE_PANELS = "workspace-layouts-store-panels";
+    WORKSPACE_LAYOUTS_STORE_SPLIT = "workspace-layouts-store-split";
+    WORKSPACE_LAYOUTS_STORE_WINDOWS = "workspace-layouts-store-windows";
+    WORKSPACE_LAYOUTS_WINDOWS_COUNT = "workspace-layouts-windows-count";
+    WORKSPACE_LAYOUTS_DOCUMENTS_NOTE = "workspace-layouts-documents-note";
+    WORKSPACE_LAYOUTS_CANCEL = "workspace-layouts-cancel";
+    WORKSPACE_LAYOUTS_SAVE = "workspace-layouts-save";
+    WORKSPACE_LAYOUTS_REPLACE = "workspace-layouts-replace";
+    WORKSPACE_LAYOUTS_MANAGE_TITLE = "workspace-layouts-manage-title";
+    WORKSPACE_LAYOUTS_MANAGE_SUBTITLE = "workspace-layouts-manage-subtitle";
+    WORKSPACE_LAYOUTS_GROUP_BUILTIN = "workspace-layouts-group-builtin";
+    WORKSPACE_LAYOUTS_GROUP_YOURS = "workspace-layouts-group-yours";
+    WORKSPACE_LAYOUTS_NONE_YET = "workspace-layouts-none-yet";
+    WORKSPACE_LAYOUTS_CAPTION_BUILTIN = "workspace-layouts-caption-builtin";
+    WORKSPACE_LAYOUTS_CAPTION_EDITED = "workspace-layouts-caption-edited";
+    WORKSPACE_LAYOUTS_CAPTION_NO_SHORTCUT = "workspace-layouts-caption-no-shortcut";
+    WORKSPACE_LAYOUTS_PILL_YOURS = "workspace-layouts-pill-yours";
+    WORKSPACE_LAYOUTS_PILL_BUILTIN = "workspace-layouts-pill-builtin";
+    WORKSPACE_LAYOUTS_RENAME = "workspace-layouts-rename";
+    WORKSPACE_LAYOUTS_DUPLICATE = "workspace-layouts-duplicate";
+    WORKSPACE_LAYOUTS_DELETE = "workspace-layouts-delete";
+    WORKSPACE_LAYOUTS_RENAME_TOOLTIP = "workspace-layouts-rename-tooltip";
+    WORKSPACE_LAYOUTS_DELETE_TOOLTIP = "workspace-layouts-delete-tooltip";
+    WORKSPACE_LAYOUTS_RENAME_BUILTIN = "workspace-layouts-rename-builtin";
+    WORKSPACE_LAYOUTS_DELETE_BUILTIN = "workspace-layouts-delete-builtin";
+    WORKSPACE_LAYOUTS_NAME_TAKEN = "workspace-layouts-name-taken";
+    WORKSPACE_LAYOUTS_PANELS = "workspace-layouts-panels";
+    WORKSPACE_LAYOUTS_NO_PANELS = "workspace-layouts-no-panels";
+    WORKSPACE_LAYOUTS_WINDOWS = "workspace-layouts-windows";
+    WORKSPACE_LAYOUTS_WINDOWS_MAIN = "workspace-layouts-windows-main";
+    WORKSPACE_LAYOUTS_SAVED = "workspace-layouts-saved";
+    WORKSPACE_LAYOUTS_SAVED_FROM_CURRENT = "workspace-layouts-saved-from-current";
+    WORKSPACE_LAYOUTS_SAVED_AT = "workspace-layouts-saved-at";
+    WORKSPACE_LAYOUTS_SAVED_BUILTIN = "workspace-layouts-saved-builtin";
+    WORKSPACE_LAYOUTS_SAVED_BUILTIN_EDITED = "workspace-layouts-saved-builtin-edited";
+    WORKSPACE_LAYOUTS_UPDATE_FROM_CURRENT = "workspace-layouts-update-from-current";
+    WORKSPACE_LAYOUTS_APPLY = "workspace-layouts-apply";
+    WORKSPACE_LAYOUTS_IMPORT = "workspace-layouts-import";
+    WORKSPACE_LAYOUTS_EXPORT = "workspace-layouts-export";
+    WORKSPACE_LAYOUTS_CLOSE = "workspace-layouts-close";
+    WORKSPACE_LAYOUTS_DELETED = "workspace-layouts-deleted";
+    WORKSPACE_LAYOUTS_UNDO = "workspace-layouts-undo";
+    WORKSPACE_LAYOUTS_IMPORT_TITLE = "workspace-layouts-import-title";
+    WORKSPACE_LAYOUTS_EXPORT_TITLE = "workspace-layouts-export-title";
+    WORKSPACE_LAYOUTS_FILE_FILTER = "workspace-layouts-file-filter";
+}

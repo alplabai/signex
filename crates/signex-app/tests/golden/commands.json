@@ -65,6 +65,26 @@
     "category": "edit"
   },
   {
+    "id": "apply_layout_board",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_notebook",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_review",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_schematic",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "apply_selection_filter_preset",
     "group": "Schematic",
     "category": "select"
@@ -678,6 +698,11 @@
     "id": "lock_board_items",
     "group": "Pcb",
     "category": "modify"
+  },
+  {
+    "id": "manage_workspace_layouts",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "measure_board",
@@ -1365,6 +1390,11 @@
     "category": "design"
   },
   {
+    "id": "reset_workspace_layout",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "resolve",
     "group": "General",
     "category": "file"
@@ -1508,6 +1538,11 @@
     "id": "save_layer_set",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "save_workspace_layout",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "select_all",

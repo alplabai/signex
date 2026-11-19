@@ -32,6 +32,7 @@ mod sheet_numbering;
 mod sizes;
 mod title_bar;
 mod update_pcb;
+mod workspace_layouts;
 pub(crate) use header::DIALOG_HEADER_H;
 pub(crate) use rule_editor::{RuleEditor, rule_editor};
 pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
