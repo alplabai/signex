@@ -55,6 +55,7 @@ mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod object_list;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
@@ -136,6 +137,10 @@ pub use net_class_panel::{
     net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use net_inspector::{NetInspectorMsg, NetInspectorState, NetInspectorView};
+pub use object_list::{
+    KindChip, ObjectKind, ObjectListMsg, ObjectListState, ObjectListStatus, ObjectListView,
+    ObjectRef, ObjectRow, ObjectScope,
+};
 pub use palette::PanelPalette;
 pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
@@ -197,7 +202,9 @@ pub enum PanelKind {
     OutputJobs,
     // Additional Altium schematic panels
     SchFilter,
-    SchList,
+    /// Every object of the sheet or the project, listed and selectable
+    /// (#1259).
+    ObjectList,
     BomStudio,
     Favorites,
     Snippets,
@@ -241,7 +248,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
-    PanelKind::SchList,
+    PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
     PanelKind::Drc,
@@ -273,7 +280,7 @@ impl PanelKind {
                 | PanelKind::Properties
                 | PanelKind::Erc
                 | PanelKind::SchFilter
-                | PanelKind::SchList
+                | PanelKind::ObjectList
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -305,7 +312,7 @@ impl PanelKind {
             PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
             PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
             PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,
-            PanelKind::SchList => ids::PANELS_KIND_SCH_LIST,
+            PanelKind::ObjectList => ids::PANELS_KIND_OBJECT_LIST,
             PanelKind::BomStudio => ids::PANELS_KIND_BOM_STUDIO,
             PanelKind::Favorites => ids::PANELS_KIND_FAVORITES,
             PanelKind::Snippets => ids::PANELS_KIND_SNIPPETS,
@@ -337,7 +344,7 @@ impl PanelKind {
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
             PanelKind::SchFilter => "SCH Filter",
-            PanelKind::SchList => "SCH List",
+            PanelKind::ObjectList => "Object List",
             PanelKind::BomStudio => "BOM Studio",
             PanelKind::Favorites => "Favorites",
             PanelKind::Snippets => "Snippets",
@@ -393,7 +400,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ctx,
         ),
         PanelKind::SchFilter => selection_filter::sch_view(ctx),
-        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,
             ids::PANELS_STUB_BOM_STUDIO,

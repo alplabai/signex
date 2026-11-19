@@ -84,7 +84,6 @@ define_ids! {
     PANELS_COMPONENTS_DETAILS_NO_PARAMETERS = "panels-components-details-no-parameters";
     PANELS_STUB_VARIANTS = "panels-stub-variants";
     PANELS_STUB_OUTPUT_JOBS = "panels-stub-output-jobs";
-    PANELS_STUB_SCH_LIST = "panels-stub-sch-list";
     PANELS_STUB_BOM_STUDIO = "panels-stub-bom-studio";
     PANELS_STUB_FAVORITES = "panels-stub-favorites";
     PANELS_STUB_SNIPPETS = "panels-stub-snippets";

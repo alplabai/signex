@@ -115,7 +115,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::panels::PanelKind::SchFilter,
         )),
         "toggle_schematic_list_panel" => {
-            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::SchList))
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::ObjectList))
         }
         "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
         "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),

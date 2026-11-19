@@ -708,3 +708,6 @@ mod wire_tab_options;
 // #55: the Filter panel edits the filter a box select picks with.
 #[path = "regression/selection_filter_panels.rs"]
 mod selection_filter_panels;
+// #1259 - the Object List lists the sheet's objects; a row click selects.
+#[path = "regression/object_list.rs"]
+mod object_list;
