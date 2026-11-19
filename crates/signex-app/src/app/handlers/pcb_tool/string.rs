@@ -26,7 +26,7 @@ impl Signex {
     pub(super) fn string_clicked(&mut self, at: Point) {
         let Some(text) = self.string_at(Uuid::now_v7(), at) else {
             let note = t!(self.ui_state.i18n, ids::PCB_TOOL_STRING_NEEDS_TEXT_LAYER);
-            crate::diagnostics::log_warning(note.into_string());
+            self.note_board_tool(note.into_string());
             return;
         };
         let name = t!(self.ui_state.i18n, ids::PCB_TOOL_STRING).into_string();

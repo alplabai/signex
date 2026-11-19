@@ -283,6 +283,33 @@ impl SheetHierarchy {
             .collect()
     }
 
+    /// The keys (under `fold`) of the sheets above any placement of the sheet
+    /// at `path`: the sheets a new sheet symbol on it must not place, or the
+    /// hierarchy would loop.
+    pub fn sheets_above(&self, path: &Path, fold: CaseFold) -> HashSet<String> {
+        fn walk(
+            node: &SheetNode,
+            path: &Path,
+            fold: CaseFold,
+            chain: &mut Vec<String>,
+            out: &mut HashSet<String>,
+        ) {
+            if node.kind == SheetNodeKind::Present && node.is_at(path, fold) {
+                out.extend(chain.iter().cloned());
+            }
+            chain.push(normalised_key(&node.path, fold));
+            for child in &node.children {
+                walk(child, path, fold, chain, out);
+            }
+            chain.pop();
+        }
+        let mut out = HashSet::new();
+        for node in self.top_level() {
+            walk(node, path, fold, &mut Vec::new(), &mut out);
+        }
+        out
+    }
+
     /// The sheet file an occurrence path stands for. The root chain names the
     /// root sheet (loose pages share it and are not reachable this way).
     pub fn sheet_path_at(&self, occurrence: &InstancePath) -> Option<PathBuf> {

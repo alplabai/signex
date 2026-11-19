@@ -34,6 +34,7 @@ mod project;
 mod properties;
 mod requirements;
 mod rules;
+mod sheet_sync;
 mod update_pcb;
 
 pub use board_checks::*;
@@ -68,6 +69,7 @@ pub use project::*;
 pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
+pub use sheet_sync::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -106,6 +108,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         properties::PROPERTIES,
         requirements::REQUIREMENTS,
         rules::RULES,
+        sheet_sync::SHEET_SYNC,
         update_pcb::UPDATE_PCB,
     ]
     .concat()

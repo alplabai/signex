@@ -454,6 +454,10 @@ fn a_read_only_board_greys_its_editing_commands() {
         "delete_selection",
         "cut",
         "change_footprint",
+        // Layer colours are saved with the board.
+        "set_layer_color",
+        "edit_layer_color",
+        "reset_layer_colors",
     ] {
         assert!(!is_enabled(&command(id), &ctx), "{id} on a read-only board");
     }
@@ -462,6 +466,7 @@ fn a_read_only_board_greys_its_editing_commands() {
         "select_board_net",
         "measure_distance",
         "toggle_ratsnest",
+        "set_layer_visible",
     ] {
         assert!(is_enabled(&command(id), &ctx), "{id} only reads the board");
     }

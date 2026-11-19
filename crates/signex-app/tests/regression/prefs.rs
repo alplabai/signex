@@ -426,6 +426,32 @@ fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
 }
 
 #[test]
+fn prefs_symbol_body_fill_round_trips_and_missing_key_is_on_in_the_theme_tint() {
+    use signex_app::symbol_fill_prefs::SymbolBodyFill;
+    use signex_types::theme::Color;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        SymbolBodyFill::default(),
+        "no prefs file: on, theme tint"
+    );
+    let custom = SymbolBodyFill {
+        enabled: false,
+        color: Some(Color::new(0xAB, 0xCD, 0xEF, 0xFF)),
+    };
+    signex_app::fonts::write_symbol_body_fill_pref_at(&path, custom);
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        custom
+    );
+    signex_app::fonts::write_symbol_body_fill_pref_at(&path, SymbolBodyFill::default());
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        SymbolBodyFill::default()
+    );
+}
+
+#[test]
 fn prefs_enum_case_insensitive_decode() {
     // The legacy match arms accepted both lowercase and TitleCase tokens
     // (e.g. "altium" | "Altium"). The refactor uses

@@ -238,3 +238,73 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
         "the card still shows, in en-XA ({card:?}): {xa:#?}"
     );
 }
+
+/// #2546: a close by operand that a refused bake holds answers with the
+/// refusal and its reason, never `Ran`, and the tab stays open.
+#[test]
+fn a_close_by_operand_held_by_a_refused_bake_is_refused_with_the_reason() {
+    use crate::app::command::{CommandArgs, CommandOutcome};
+    use crate::keymap::AppCommandId;
+    use crate::library::editor::footprint::SketchTool;
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use crate::panels::{BoardSketchAttrMsg, PanelMsg};
+
+    let (mut app, _tmp) = sketching();
+    let path = app.active_tab_path().expect("the board tab");
+    let edit = |app: &mut Signex, msg| {
+        let path = path.clone();
+        send(
+            app,
+            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEdit::Footprint(msg),
+            }),
+        );
+    };
+    edit(
+        &mut app,
+        FootprintEditorMsg::SketchSetTool(SketchTool::Line),
+    );
+    for x_mm in [60.0, 70.0] {
+        edit(
+            &mut app,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm,
+                y_mm: 60.0,
+                snap_id: None,
+            },
+        );
+    }
+    edit(&mut app, FootprintEditorMsg::ToolEscape);
+    let line = {
+        let session = app.interaction_state.board_sketch.as_ref().expect("on");
+        session
+            .working_sketch()
+            .entities
+            .last()
+            .expect("the line")
+            .id
+    };
+    send(
+        &mut app,
+        Message::Dock(crate::dock::DockMessage::Panel(PanelMsg::BoardSketch(
+            BoardSketchAttrMsg::OutlineToggled { id: line, on: true },
+        ))),
+    );
+    let tabs = app.document_state.tabs.len();
+
+    let command = AppCommandId::new("close_active_document").expect("id");
+    let operand = format!("document={}", path.display());
+    let args = CommandArgs::parse_operands(&command, &[operand.as_str()]).expect("operands");
+    let (outcome, _task) = app.run_operands(&command, &args);
+
+    let CommandOutcome::Disabled { reason } = outcome else {
+        panic!("a held close reported {outcome:?}");
+    };
+    assert!(reason.contains("could not be applied"), "{reason}");
+    assert!(
+        reason.contains("The sketch was not applied to the board"),
+        "the reason carries the bake's refusal: {reason}"
+    );
+    assert_eq!(app.document_state.tabs.len(), tabs, "the tab stays open");
+}
