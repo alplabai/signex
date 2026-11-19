@@ -95,6 +95,11 @@ impl Catalog {
             ),
             section::view("Flow progress", tokens, crate::flow_progress::view(tokens)),
             section::view(
+                "Document-tab shell (toolbar, sub-tabs, body, footer)",
+                tokens,
+                crate::doc_tab_shell::view(tokens)
+            ),
+            section::view(
                 "Board palette and line-art inks",
                 tokens,
                 crate::board_palette::view(tokens)
