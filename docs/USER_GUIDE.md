@@ -216,6 +216,29 @@ zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
   Its title strip shows the panel and the document in view; **Dock back** (or
   closing the window) puts the panel back in its dock.
 
+### The Command Log
+
+**View ▸ Command Log** opens a panel at the bottom that lists every command
+you ran in this session, newest last: from a menu, a key, a tool, the command
+palette or a context menu, and every command `signex-cli` or an agent sent to
+this window. Each row shows the time, where it came from (GUI, CLI or Agent),
+the command, its arguments, the result and how long it took. A failed command
+is tinted red; an undone one is struck through.
+
+- Type in the search field to find a command by name, id or argument; the
+  GUI, CLI and Agent socket chips and the **All / Failed / Undone** switch
+  narrow the list.
+- Click a row to see its arguments, the full error of a failed command
+  (**Copy error** copies it), and the command as a `signex-cli run` line
+  (**Copy as CLI**). **Replay** runs it again with the same arguments;
+  **Jump to** shows the part, net or point it named.
+- Zoom, pan and selection commands are hidden until **More ▸ Show view
+  commands** is on.
+- **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
+  **More** are at the right end of the filter bar. The log is kept for this
+  session only; nothing is written to disk unless you save it. Details:
+  `docs/COMMAND_LOG.md`.
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come

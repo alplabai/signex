@@ -550,6 +550,16 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
 
+## View ▸ Command Log {#view-command-log}
+
+A panel row right after View ▸ Messages (#2458): it opens (or reveals) the
+Command Log panel, docked at the bottom by default, and carries a check mark
+while the panel is open, like the other panel rows. It runs
+`MenuMessage::OpenCommandLogPanel`, not a catalog command, so it has no key
+and is never greyed. The panel lists every catalog command the session ran,
+from the GUI, the CLI and the agent socket; see
+[COMMAND_LOG.md](COMMAND_LOG.md).
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
