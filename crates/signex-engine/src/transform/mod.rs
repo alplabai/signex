@@ -164,6 +164,18 @@ impl Engine {
     /// no longer holds for it. A user-placed dot (`Junction::minted == false`)
     /// is user data and is never considered for removal.
     pub(super) fn reconcile_wire_junctions(&mut self, items: &[SelectedItem]) -> bool {
+        self.reconcile_wire_junctions_frozen(items, None)
+    }
+
+    /// [`Self::reconcile_wire_junctions`] with the pin dots decided already:
+    /// `frozen` lists the only places a pin dot may be minted (a guarded move
+    /// takes them from its plain move, see `exec::place`), judged by geometry
+    /// alone and never by the candidate's own nets. `None` decides them here.
+    pub(super) fn reconcile_wire_junctions_frozen(
+        &mut self,
+        items: &[SelectedItem],
+        frozen: Option<&[signex_types::schematic::Point]>,
+    ) -> bool {
         // Each item's first wire of that id, found in one pass over the wires.
         let wanted: std::collections::HashSet<uuid::Uuid> = items
             .iter()
@@ -203,7 +215,10 @@ impl Engine {
         // before the index, so the wires near each new dot are in the index
         // that judges it: the local and the full-scan commit then agree.
         let before = self.taps_before.as_deref();
-        let mut pin_dots = pin_junctions::pin_dots_for(&self.document, items, before);
+        let mut pin_dots = match frozen {
+            Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen),
+            None => pin_junctions::pin_dots_for(&self.document, items, before),
+        };
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
@@ -676,7 +691,9 @@ use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
 pub(crate) use merge::{PreWires, TouchingPairs};
-pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs, pin_owners};
+pub use pin_junctions::{
+    bare_pin_taps, bare_tap_keys, new_pin_dots, pin_junction_repairs, pin_owners,
+};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------

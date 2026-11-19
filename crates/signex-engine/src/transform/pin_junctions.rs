@@ -260,6 +260,46 @@ pub(crate) fn pin_dots_for(
         .collect()
 }
 
+/// The pin dots of [`pin_dots_for`] when they were decided on another sheet:
+/// a dot at each place of `frozen` where a wire still passes strictly through
+/// and no dot stands yet. Geometry only; the no-short verdict is the one the
+/// list was made with.
+pub(crate) fn frozen_pin_dots(sheet: &SchematicSheet, frozen: &[Point]) -> Vec<Junction> {
+    if frozen.is_empty() {
+        return Vec::new();
+    }
+    let lines = WireLines::of(&sheet.wires);
+    let mut taken = dot_keys(sheet);
+    (frozen.iter())
+        .filter(|at| !lines.through(pt_key(at)).is_empty())
+        .filter(|at| taken.insert(pt_key(at)))
+        .map(|at| super::autoplace::junction_at(*at))
+        .collect()
+}
+
+/// The pin dots `after` gained over `before`: new dots at a pin end that lies
+/// strictly inside a wire. What a plain move decided, for its guarded pass to
+/// keep (see [`frozen_pin_dots`]).
+#[must_use]
+pub fn new_pin_dots(before: &SchematicSheet, after: &SchematicSheet) -> Vec<Point> {
+    let old: HashSet<uuid::Uuid> = before.junctions.iter().map(|j| j.uuid).collect();
+    let fresh: Vec<Point> = (after.junctions.iter())
+        .filter(|j| j.minted && !old.contains(&j.uuid))
+        .map(|j| j.position)
+        .collect();
+    if fresh.is_empty() {
+        return fresh;
+    }
+    let tips: HashSet<Key> = (after.symbols.iter())
+        .flat_map(|symbol| symbol_pin_tips(after, symbol))
+        .map(|tip| pt_key(&tip))
+        .collect();
+    let lines = WireLines::of(&after.wires);
+    (fresh.into_iter())
+        .filter(|at| tips.contains(&pt_key(at)) && !lines.through(pt_key(at)).is_empty())
+        .collect()
+}
+
 /// The pin tips of the parts of `sheet` named in `ids`.
 pub(crate) fn tip_keys_of(sheet: &SchematicSheet, ids: &HashSet<uuid::Uuid>) -> HashSet<Key> {
     (sheet.symbols.iter())
