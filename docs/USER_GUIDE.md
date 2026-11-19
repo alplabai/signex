@@ -197,6 +197,15 @@ Library…** creates one); Signex remembers the choice and opens the copy for
 editing under the stock name. The stock original is never changed. If no
 writable library is open, the dialog says so and offers **New Library…**.
 
+**Pick Symbol** (and Pick Footprint, Pick Sim Model) binds a primitive to a
+component row. The list is grouped: each open library, then each library that
+holds one of the project's symbol files but is not open ("In library …
+(not open)"), then "Not in a library". A click on a row picks it. A symbol of
+a library that is not open asks **Link without copying** (the library opens
+and the row points at its symbol, so the link breaks if that library is not
+open) or **Copy into** the row's library. A symbol in no library can only be
+copied; the original file stays as it is. **Cancel** goes back to the list.
+
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you
 type the number, pick the prefix (`k`, `µ`, ...) from a list, and the unit is
@@ -222,8 +231,12 @@ To place a part, open a schematic sheet, then either:
 - choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
-  **Place**; or
+  **Place**, or press `Enter` in the search field; or
 - press **Place** at the end of a part's row in the Components panel.
+
+The picker's header counts the open libraries and their parts. Its search
+field and **Add range filter…** share the top row, and the list shows each
+part's internal PN, lifecycle state, MPN and description.
 
 The part attaches to the cursor and follows it on the grid. While it is
 attached:

@@ -412,3 +412,78 @@ library-delete-row-intro-title = Delete { $pn }?
 library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
 # Caption under the intro text.
 library-delete-row-caption = Placed parts keep their embedded copy.
+
+## Place Component picker (#129)
+# Dialog title of the picker when it places a part.
+library-picker-title-place = Place Component
+# Dialog title of the picker when it swaps a placed part for another.
+library-picker-title-change = Change Component
+# Dialog title of the picker when it chooses a datasheet to open.
+library-picker-title-datasheet = Open Datasheet
+# Header note: how many open libraries the listed parts come from, and how many parts.
+library-picker-scope = { $libraries ->
+        [one] { $libraries } library
+       *[other] { $libraries } libraries
+    } · { $parts ->
+        [one] { $parts } part
+       *[other] { $parts } parts
+    }
+# Placeholder of the search field.
+library-picker-search = Search internal PN / MPN / description…
+# Column head: the library's own part number.
+library-picker-column-internal-pn = Internal PN
+# Column head: the part's lifecycle state (Draft, Released, …).
+library-picker-column-state = State
+# Column head: the manufacturer part number.
+library-picker-column-mpn = MPN
+# Column head: the part's description.
+library-picker-column-description = Description
+# Shown in place of the list when no part matches.
+library-picker-empty = No components match. Open a library or refine the filter.
+# Footer hint: Enter in the search field places the selected part.
+library-picker-hint-place = Enter to place
+# Footer hint, Change Component: Enter goes on to the change preview.
+library-picker-hint-next = Enter for Next
+
+## Primitive picker (#131)
+# Dialog titles, by the kind of primitive picked.
+library-primitive-picker-title-symbol = Pick Symbol
+library-primitive-picker-title-footprint = Pick Footprint
+library-primitive-picker-title-sim = Pick Sim Model
+library-primitive-picker-title-primitive = Pick Primitive
+# Header note: the component row the pick is for. $pn is its internal part number.
+library-primitive-picker-for = for { $pn }
+# Placeholder of the filter field.
+library-primitive-picker-filter = Filter…
+# One listed primitive: $file is the file that holds it, $name the primitive's name.
+library-primitive-picker-row = { $file } · { $name }
+# Group head: the footprints the component's own library part offers.
+library-primitive-picker-group-suggested = This component's footprints
+# Group head: symbols of a library that is not open. $library is its name.
+library-primitive-picker-group-not-open = In library { $library } (not open)
+# Group head: symbols of files that belong to no library.
+library-primitive-picker-group-no-library = Not in a library
+# Shown in place of the list when no library is open.
+library-primitive-picker-no-libraries = No libraries open. Use Browse filesystem… to pick a primitive directly.
+# Shown in place of the list when nothing matches the filter.
+library-primitive-picker-no-match = No primitives match. Only primitives saved inside an open `.snxlib` are listed: save the symbol into `<lib>.snxlib/symbols/`, or use Browse filesystem…
+# The library the row belongs to, when its name is not known.
+library-primitive-picker-this-library = this library
+# Title of the confirm shown before a symbol is copied or linked.
+library-primitive-picker-copy-title = Copy into library?
+# The symbol is in no library. $name is the symbol, $library the row's library.
+library-primitive-picker-copy-loose = Copy { $name } into library { $library }?
+# What the copy does. $library is the row's library.
+library-primitive-picker-copy-loose-detail = The original file stays as it is. The row then points at the copy inside { $library }.
+# The symbol belongs to a library that is not open. $name is the symbol, $library that library.
+library-primitive-picker-copy-held = { $name } is in library { $library }, which is not open.
+# Caption under the question. $library is the library that holds the symbol.
+library-primitive-picker-link-caption = A link breaks if { $library } is not open.
+# Button: open the other library and bind the row to its symbol, copying nothing.
+library-primitive-picker-link = Link without copying
+# Button: copy the symbol into the row's library. $library is that library.
+library-primitive-picker-copy-into = Copy into { $library }
+# The copy button while the copy runs.
+library-primitive-picker-copying = Copying…
+# Shown while the library that holds the symbol is being opened.
+library-primitive-picker-opening = Opening library…

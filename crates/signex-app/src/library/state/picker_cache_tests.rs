@@ -195,3 +195,28 @@ fn the_picker_filter_matches_a_row_description() {
     state.sync_view_caches();
     assert_eq!(visible_pns(&state), ["R-10K"]);
 }
+
+/// The header's scope note counts every listed part and the libraries they
+/// come from, whatever the query (#129).
+#[test]
+fn the_scope_counts_follow_the_component_set_not_the_query() {
+    let mut state = state_with_picker();
+    state.open_libraries.push(library(
+        "/tmp/b.snxlib",
+        vec![summary("L-1U", "LQ", "Inductor")],
+    ));
+    // An open library with no parts adds nothing to the scope.
+    state
+        .open_libraries
+        .push(library("/tmp/empty.snxlib", Vec::new()));
+    state.touch_data();
+    state.sync_view_caches();
+    let rows = &state.picker.as_ref().expect("picker").rows;
+    assert_eq!((rows.library_count(), rows.part_count()), (2, 3));
+
+    set_filter(&mut state, "inductor");
+    state.sync_view_caches();
+    let rows = &state.picker.as_ref().expect("picker").rows;
+    assert_eq!(visible_pns(&state), ["L-1U"]);
+    assert_eq!((rows.library_count(), rows.part_count()), (2, 3));
+}
