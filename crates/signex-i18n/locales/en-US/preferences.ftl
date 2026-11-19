@@ -45,21 +45,21 @@ preferences-subtitle = { $group } / { $page }
 # Footer pill while there are changes not applied yet.
 preferences-unsaved = Unsaved changes
 
-# Footer hint on the Theme page.
+# Footer hint on the Appearance page.
 preferences-theme-preview-hint = Theme changes preview live
 
 # Page names in the page list.
-preferences-page-theme = Theme
+preferences-page-theme = Appearance
 preferences-page-keyboard = Keyboard shortcuts
 # The page of graphical editing options (selection, dragging, paste).
-preferences-page-editing = Graphical editing
+preferences-page-editing = Editing
 preferences-page-annotation = Annotation
 # The library of named electrical rule check (ERC) rule sets.
 preferences-page-rule-profiles = Rule Profiles
 # API keys of part distributors.
 preferences-page-distributors = Distributor APIs
 # The component classes a new library starts with.
-preferences-page-component-classes = Default Component Classes
+preferences-page-component-classes = Component Classes
 
 # Page groups: the name in the subtitle, and the heading (in capitals) over
 # the group in the page list.
@@ -219,8 +219,9 @@ preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of ea
 
 ## Schematic ▸ Annotation
 preferences-annotate-undo = Annotate undo
-# $undo is the Undo shortcut, such as "Ctrl+Z".
-preferences-annotate-undo-help = How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet { $undo } is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.
+# $undo is the Undo shortcut, such as "Ctrl+Z". The two choices are named as
+# preferences-annotate-undo-project and preferences-annotate-undo-per-sheet read.
+preferences-annotate-undo-help = How many undo steps one annotate run is. One step for the whole project reverts every sheet the run touched together, from whichever sheet { $undo } is pressed on. Per sheet undoes each sheet on its own. Applies to the next annotate run.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
@@ -233,9 +234,9 @@ preferences-classes-add = + Add Class
 preferences-classes-reset = Reset to Defaults
 
 ## The banner for a preferences file that could not be loaded
-# $path is the file; $error says what is wrong with it, in English.
-preferences-file-broken = Your preferences file at { $path } { $error }.
-preferences-file-defaults = Appearance, ERC severities, component classes and panel layout are showing their defaults, and changes to them are not being saved. The file itself has not been altered — repair it by hand, or start a fresh one and keep the old file beside it.
+# Bold first line of the banner.
+preferences-file-broken = Your preferences file could not be read.
+preferences-file-defaults = Appearance, ERC severities, component classes and panel layout show their defaults and are not saved. The file itself has not been altered.
 preferences-file-start-fresh = Start a fresh preferences file
 
 ## Rule Profiles
@@ -280,3 +281,47 @@ preferences-paste-designators-next-free = Next free number
 ## Annotate undo: the choices
 preferences-annotate-undo-project = One step for the whole project
 preferences-annotate-undo-per-sheet = Per sheet
+
+## Preferences shell (#143), Language page (#144a), Annotation page (#146)
+
+# Page name of the interface-language page in the page list.
+preferences-page-language = Language
+
+# Footer note on the Language page: when a chosen language takes effect.
+preferences-language-footer-note = The language changes when you press Apply or OK; no restart
+
+# Second line of the preferences-file banner. $path is the file; $error says
+# what is wrong with it, in English.
+preferences-file-where = { $path }: { $error }
+# Banner button: shows the folder that holds the preferences file.
+preferences-file-open-folder = Open folder
+
+# Language page.
+preferences-language-heading = Language
+preferences-language-intro = The language of menus, panels, dialogs and messages. Your designs are not changed.
+# Section label, shown in capitals.
+preferences-language-section-interface = INTERFACE
+preferences-language-interface = Interface language
+preferences-language-interface-help = Applies to every open window at once. Text on the canvas (designators, values, net names) is your own and is never translated.
+# First row of the language list. $language is the language the system
+# setting resolves to, named in its own language.
+preferences-language-follow-system = Follow the system: { $language }
+# The pseudo-locale in the language list: a testing aid, not a language.
+# Keep "en-XA" as written.
+preferences-language-pseudo = Pseudo-locale (en-XA)
+# Label over the sample strings, shown in capitals.
+preferences-language-preview = PREVIEW
+preferences-language-preview-caption = A few strings from the menus and dialogs in the chosen language.
+# Info banner while the pseudo-locale is chosen.
+preferences-language-pseudo-note = The pseudo-locale wraps every string in brackets, swaps letters for accented ones and makes it about 30 % longer. A string that shows without brackets is not translatable yet; a label that is cut off needs more room.
+
+# Annotation page.
+preferences-annotation-heading = Annotation
+preferences-annotation-intro = How annotate runs behave on the schematic.
+# Section labels, shown in capitals.
+preferences-annotation-section-undo = UNDO
+preferences-annotation-section-related = RELATED
+# Help of the "Designators on paste" row that points to the Editing page.
+preferences-annotation-paste-help = Lives on Editing, because it applies to paste, not annotate.
+# Link to the Editing page.
+preferences-annotation-open-editing = Open Editing ›

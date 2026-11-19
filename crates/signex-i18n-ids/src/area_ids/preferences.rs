@@ -68,4 +68,25 @@ define_ids! {
     PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE = "preferences-paste-designators-next-free";
     PREFERENCES_ANNOTATE_UNDO_PROJECT = "preferences-annotate-undo-project";
     PREFERENCES_ANNOTATE_UNDO_PER_SHEET = "preferences-annotate-undo-per-sheet";
+    // Preferences shell (#143), Language page (#144a), Annotation page (#146).
+    PREFERENCES_PAGE_LANGUAGE = "preferences-page-language";
+    PREFERENCES_LANGUAGE_FOOTER_NOTE = "preferences-language-footer-note";
+    PREFERENCES_FILE_WHERE = "preferences-file-where";
+    PREFERENCES_FILE_OPEN_FOLDER = "preferences-file-open-folder";
+    PREFERENCES_LANGUAGE_HEADING = "preferences-language-heading";
+    PREFERENCES_LANGUAGE_INTRO = "preferences-language-intro";
+    PREFERENCES_LANGUAGE_SECTION_INTERFACE = "preferences-language-section-interface";
+    PREFERENCES_LANGUAGE_INTERFACE = "preferences-language-interface";
+    PREFERENCES_LANGUAGE_INTERFACE_HELP = "preferences-language-interface-help";
+    PREFERENCES_LANGUAGE_FOLLOW_SYSTEM = "preferences-language-follow-system";
+    PREFERENCES_LANGUAGE_PSEUDO = "preferences-language-pseudo";
+    PREFERENCES_LANGUAGE_PREVIEW = "preferences-language-preview";
+    PREFERENCES_LANGUAGE_PREVIEW_CAPTION = "preferences-language-preview-caption";
+    PREFERENCES_LANGUAGE_PSEUDO_NOTE = "preferences-language-pseudo-note";
+    PREFERENCES_ANNOTATION_HEADING = "preferences-annotation-heading";
+    PREFERENCES_ANNOTATION_INTRO = "preferences-annotation-intro";
+    PREFERENCES_ANNOTATION_SECTION_UNDO = "preferences-annotation-section-undo";
+    PREFERENCES_ANNOTATION_SECTION_RELATED = "preferences-annotation-section-related";
+    PREFERENCES_ANNOTATION_PASTE_HELP = "preferences-annotation-paste-help";
+    PREFERENCES_ANNOTATION_OPEN_EDITING = "preferences-annotation-open-editing";
 }
