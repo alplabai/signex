@@ -1136,6 +1136,9 @@ fn edit_symbol_on_a_stock_part_edits_a_copy_in_the_picked_library() {
     use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
     use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
+    // The copy remembers its library in the shared prefs.json, which the
+    // stock-copy tests read back across a restart (#2381).
+    let _serial = crate::shared_locks::global_list_file();
     let f = fixture();
     let stock_file = symbol_file(&f);
     let stock_before = std::fs::read(&stock_file).unwrap();
