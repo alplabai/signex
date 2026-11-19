@@ -6,8 +6,8 @@
 pub mod active_bar;
 pub mod chevron;
 pub mod chips;
-pub mod dimension_label;
 pub mod constraint_grid;
+pub mod dimension_label;
 pub mod dropdown_style;
 pub mod flow_progress;
 pub mod history_pane;

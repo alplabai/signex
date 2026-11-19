@@ -1,7 +1,7 @@
 //! The canvas program and the view function of the widget.
 
 use iced::widget::canvas::{self, Canvas, Event};
-use iced::{Element, Length, Rectangle, Renderer, Theme, mouse};
+use iced::{Element, Length, Rectangle, Renderer, Theme, Widget, mouse};
 use signex_types::theme::ThemeTokens;
 
 use super::draw::Painter;
@@ -93,9 +93,8 @@ pub fn property_illustration<'a>(
         palette: Palette::from_tokens(tokens),
         metrics,
     };
-    Element::new(
-        Canvas::new(program)
-            .width(Length::Fill)
-            .height(Length::Fixed(height)),
-    )
+    Canvas::new(program)
+        .width(Length::Fill)
+        .height(Length::Fixed(height))
+        .boxed()
 }

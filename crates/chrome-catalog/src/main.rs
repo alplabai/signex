@@ -1,12 +1,12 @@
 mod board_palette;
 mod bom_modal;
 mod catalog;
-mod graphite_tokens;
-mod enable_section;
 mod chips;
-mod dimension_label;
-mod flow_progress;
 mod constraint_grid;
+mod dimension_label;
+mod enable_section;
+mod flow_progress;
+mod graphite_tokens;
 mod icon;
 mod illustration;
 mod modal_card;

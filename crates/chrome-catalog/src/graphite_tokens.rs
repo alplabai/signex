@@ -2,6 +2,7 @@
 //! colours, the thin scrollbar and the disabled / read-only looks, so the
 //! tokens can be checked against the mockup `:root` blocks.
 
+use iced::Widget;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{Color as SxColor, ThemeId, ThemeTokens, canvas_colors, theme_tokens};
@@ -46,7 +47,7 @@ fn view(theme: ThemeId) -> Element<'static, Message> {
         row![scroll_sample(&tokens), states_sample(&tokens)].spacing(SP.xl),
     ]
     .spacing(SP.l)
-    .into()
+    .boxed()
 }
 
 fn base_swatches(t: &ThemeTokens) -> Vec<Swatch> {
@@ -109,7 +110,7 @@ fn grid(ink: Color, swatches: Vec<Swatch>) -> Element<'static, Message> {
         }
         rows = rows.push(line);
     }
-    rows.into()
+    rows.boxed()
 }
 
 fn swatch(ink: Color, name: &'static str, fill: Color) -> Element<'static, Message> {
@@ -127,7 +128,7 @@ fn swatch(ink: Color, name: &'static str, fill: Color) -> Element<'static, Messa
     );
     column![chip, text(raw(name)).size(TS.caption).color(ink)]
         .spacing(SP.xs)
-        .into()
+        .boxed()
 }
 
 fn line_strong_and_ink4(t: &ThemeTokens) -> (Color, Color) {
@@ -157,7 +158,7 @@ fn scroll_sample(t: &ThemeTokens) -> Element<'static, Message> {
         .style(theme_ext::thin_scrollbar_style(thumb, thumb_hot))
         .width(METRICS.row * 8.0)
         .height(METRICS.row * VISIBLE_ROWS)
-        .into()
+        .boxed()
 }
 
 /// An enabled and a disabled button, and a read-only field.
@@ -190,7 +191,7 @@ fn states_sample(t: &ThemeTokens) -> Element<'static, Message> {
             .height(METRICS.button)
             .padding([SP.s, SP.l])
             .style(move |_: &Theme, _: button::Status| style)
-            .into()
+            .boxed()
     };
     let read_only = container(text(raw("Read-only 10 mm")).size(TS.body).color(ink3))
         .height(METRICS.field)
@@ -211,5 +212,5 @@ fn states_sample(t: &ThemeTokens) -> Element<'static, Message> {
         text(raw("Disabled hint text")).size(TS.caption).color(ink4),
     ]
     .spacing(SP.m)
-    .into()
+    .boxed()
 }

@@ -2,6 +2,7 @@
 //! (#2523). Board colours are the same in both themes; the line-art inks
 //! follow the selected chrome theme.
 
+use iced::Widget;
 use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens, canvas_colors, theme_tokens};
@@ -20,7 +21,7 @@ const PAD: f32 = BODY * 12.0 / 11.0;
 pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     column![board_legend(), line_art(tokens)]
         .spacing(GAP)
-        .into()
+        .boxed()
 }
 
 /// The board legend on the board canvas ground; a sided pair shows its
@@ -51,7 +52,7 @@ fn board_legend<'a>() -> Element<'a, Message> {
         }
         column![pair, text(raw(name)).size(BODY).color(label)]
             .spacing(GAP / 2.0)
-            .into()
+            .boxed()
     });
     container(row(chips).spacing(PAD).wrap())
         .padding(PAD)
@@ -60,7 +61,7 @@ fn board_legend<'a>() -> Element<'a, Message> {
             background: Some(Background::Color(ground)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// The line-art inks of the selected chrome theme, strongest first.
@@ -81,9 +82,9 @@ fn line_art<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             text(raw(name)).size(BODY).color(label)
         ]
         .spacing(GAP / 2.0)
-        .into()
+        .boxed()
     });
-    row(chips).spacing(PAD).into()
+    row(chips).spacing(PAD).boxed()
 }
 
 fn chip<'a>(color: Color) -> Element<'a, Message> {
@@ -94,7 +95,7 @@ fn chip<'a>(color: Color) -> Element<'a, Message> {
             background: Some(Background::Color(color)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// A line-art sample: an outlined square in the ink, on no fill.
@@ -110,5 +111,5 @@ fn stroke<'a>(color: Color) -> Element<'a, Message> {
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }

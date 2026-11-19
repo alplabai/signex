@@ -4,9 +4,7 @@
 use iced::widget::column;
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::flow_progress::{
-    FlowProgress, FlowProgressStyle, FlowStage, StageCounts, StageState,
-};
+use signex_widgets::flow_progress::{FlowProgress, FlowProgressStyle, FlowStage, StageCounts};
 use signex_widgets::{Label, raw};
 
 use crate::catalog::Message;
@@ -77,6 +75,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_widgets::flow_progress::StageState;
 
     #[test]
     fn samples_cover_every_stage_state() {

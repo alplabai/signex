@@ -84,7 +84,7 @@ impl<'a, M: 'a> EnableSection<'a, M> {
                 dependents_veil(tokens, self.is_enabled),
                 body.into(),
             ))
-            .into()
+            .boxed()
     }
 }
 
@@ -144,7 +144,7 @@ fn header<'a, M: 'a>(
             left: SP.l,
         })
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// The form checkbox look with the header ink; a read-only header that is
@@ -198,10 +198,8 @@ mod tests {
         assert_eq!(veil.a, DEPENDENT_VEIL_ALPHA);
     }
 
-    #[test]
-    fn the_veil_greys_without_hiding() {
-        assert!(DEPENDENT_VEIL_ALPHA > 0.0 && DEPENDENT_VEIL_ALPHA < 1.0);
-    }
+    // The veil greys without hiding.
+    const _: () = assert!(DEPENDENT_VEIL_ALPHA > 0.0 && DEPENDENT_VEIL_ALPHA < 1.0);
 
     #[test]
     fn the_header_reads_in_the_secondary_ink() {
@@ -235,8 +233,8 @@ mod tests {
 #[cfg(all(test, debug_assertions))]
 mod input_tests {
     use super::*;
-    use iced::Widget as _;
     use iced::advanced::Layout;
+    use iced::advanced::Widget as _;
     use iced::advanced::layout::Limits;
     use iced::advanced::shell::{Bus, Shell, Waker};
     use iced::advanced::widget::Tree;
