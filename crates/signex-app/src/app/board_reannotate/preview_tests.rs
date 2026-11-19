@@ -76,7 +76,8 @@ fn the_toggle_lists_the_parts_already_in_order_last() {
         (2, "R3", 10.0, false),
         (3, "R2", 20.0, false),
     ]);
-    let shown = rows(&state(&b, true));
+    let st = state(&b, true);
+    let shown = rows(&st);
     assert_eq!(shown.last(), Some(&PreviewRow::InOrder("R1")));
     assert_eq!(shown.len(), 3);
 }

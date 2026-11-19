@@ -280,7 +280,10 @@ fn execute_applies_exactly_the_ticked_rows() {
     };
     list.set_on(&EcoKey::AddNet("N2".into()), false);
     assert_eq!(super::applied_count(&list), 1);
-    let commands = lower(&list, &signex_types::pcb::PcbBoard::default());
+    let commands = lower(
+        &list,
+        &crate::app::handlers::document_files::save_async_tests::empty_board(),
+    );
     let nets: Vec<String> = commands
         .iter()
         .filter_map(|c| match c {
