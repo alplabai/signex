@@ -186,10 +186,6 @@ pub(in crate::app::project_tab) fn info_line<'a>(
 
 /// A warning (`.warn-line`): warn_soft fill, warning ink, `action` at the
 /// right.
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn warn_line<'a>(
     glyph: Glyph,
     content: Element<'a, Message>,
@@ -206,10 +202,6 @@ pub(in crate::app::project_tab) fn warn_line<'a>(
 }
 
 /// An error (`.err-box`): err_soft fill, error ink, a warning glyph.
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn err_box<'a>(
     content: Element<'a, Message>,
     tokens: &ThemeTokens,
@@ -225,10 +217,6 @@ pub(in crate::app::project_tab) fn err_box<'a>(
 
 /// A key / value row (`.kv`): the caption in ink3 in a fixed column, then
 /// `value`.
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn kv_row<'a>(
     caption: Localized,
     value: Element<'a, Message>,
@@ -246,10 +234,6 @@ pub(in crate::app::project_tab) fn kv_row<'a>(
 
 /// An option row (`.optrow`): the title over its help, the control at the
 /// right.
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn option_row<'a>(
     title: Localized,
     help: Localized,
@@ -274,10 +258,6 @@ pub(in crate::app::project_tab) fn option_row<'a>(
 /// A field label (`.flabel`): caption size, ink3, weight 500. The words are
 /// shown as given: the catalog writes a field label in capitals, as it does
 /// for the library editor's section headers.
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn field_label<'a>(
     words: Localized,
     tokens: &ThemeTokens,
@@ -347,10 +327,6 @@ pub(in crate::app::project_tab) fn icon_button<'a>(
 }
 
 /// The kind of a [`text_button`] (`.btn` and its variants).
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections pick the other kinds"
-)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::app::project_tab) enum ButtonKind {
     /// The filled primary action.

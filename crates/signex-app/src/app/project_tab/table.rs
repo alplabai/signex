@@ -44,10 +44,6 @@ pub(super) fn section<'a>(
 
 /// [`section`] with `action` at the right of the title and help, aligned to
 /// their top (`.chead .row-flex`).
-#[allow(
-    dead_code,
-    reason = "the section kit of the Project tab pages (#30-#38); the other sections call it"
-)]
 pub(in crate::app::project_tab) fn section_with_action<'a>(
     title: MessageId,
     help: MessageId,
