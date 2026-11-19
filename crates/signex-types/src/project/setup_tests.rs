@@ -62,6 +62,25 @@ fn the_profiles_carry_the_approved_values() {
     assert_eq!(ProjectSetup::default().profile, SetupProfile::Standard);
 }
 
+/// #2537: a tier card's rules pass that tier's own fab floor, so a new
+/// board's default vias and tracks do not fail its `fab_*` rules.
+#[test]
+fn every_tier_card_passes_its_own_fab_limits() {
+    const EPS: f64 = 1e-9;
+    for tier in SetupProfile::TIERS {
+        let fab = tier.fab_template().expect("a tier is a fab class");
+        let c: FabCapabilities = fab.capabilities();
+        let d = tier.rules_on(tier.default_layers());
+        let annular = (d.via_diameter_mm - d.via_drill_mm) / 2.0;
+        assert!(d.clearance_mm + EPS >= c.clearance, "{tier:?} clearance");
+        assert!(d.track_width_mm + EPS >= c.track_width, "{tier:?} track");
+        assert!(d.via_diameter_mm + EPS >= c.via_diameter, "{tier:?} via");
+        assert!(d.via_drill_mm + EPS >= c.via_drill, "{tier:?} drill");
+        assert!(d.via_drill_mm + EPS >= c.hole, "{tier:?} hole");
+        assert!(annular + EPS >= c.annular_ring, "{tier:?} annular ring");
+    }
+}
+
 #[test]
 fn the_layer_count_is_its_own_choice_and_keeps_the_tier() {
     let mut setup = ProjectSetup::default();

@@ -976,8 +976,8 @@ More detail: [PCB_TOOLS.md](PCB_TOOLS.md).
 
 **Pick a fab tier**
 
-The rules start from a manufacturing tier, chosen in **Manufacturer rule
-template** in the New Project or **New PCB** dialog: **Standard fab**,
+The rules start from a manufacturing tier, chosen in **Fab tier** in the
+New Project or **New PCB** dialog: **Standard fab**,
 **Advanced fab** or **HDI fab**. The tier writes seven `fab_*` rules (the
 floor of what the board house can build) into the project's rules:
 
@@ -985,7 +985,7 @@ floor of what the board house can build) into the project's rules:
 |---|---|---|---|---|---|
 | Standard | 0.15 mm | 0.15 mm | 0.5 / 0.25 mm | 0.25 mm | 0.3 mm |
 | Advanced | 0.1 mm | 0.1 mm | 0.4 / 0.2 mm | 0.2 mm | 0.25 mm |
-| HDI | 0.075 mm | 0.075 mm | 0.3 / 0.15 mm | 0.1 mm | 0.2 mm |
+| HDI | 0.075 mm | 0.075 mm | 0.25 / 0.1 mm | 0.1 mm | 0.2 mm |
 
 These are generic process classes, not one maker's numbers. Check them
 against your board house's published limits.

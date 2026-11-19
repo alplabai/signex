@@ -79,13 +79,25 @@ impl SetupProfile {
         }
     }
 
-    /// `(clearance, track, via size, via drill)` in mm: the canonical tier
-    /// table. Custom starts from Standard's.
+    /// `(clearance, track, via size, via drill)` in mm. Clearance and via
+    /// are the fab tier's limits (`FabTemplate::capabilities`, the one tier
+    /// table); the track is the card's own, never under the tier's floor.
+    /// Custom starts from Standard's.
     pub const fn rule_values(self) -> (f64, f64, f64, f64) {
+        let fab = match self.fab_template() {
+            Some(fab) => fab,
+            None => FabTemplate::Standard,
+        };
+        let c = fab.capabilities();
+        (c.clearance, self.card_track_mm(), c.via_diameter, c.via_drill)
+    }
+
+    /// The track width a card starts on, in mm (#2537).
+    const fn card_track_mm(self) -> f64 {
         match self {
-            Self::Standard | Self::Custom => (0.15, 0.2, 0.5, 0.25),
-            Self::Advanced => (0.1, 0.125, 0.4, 0.2),
-            Self::Hdi => (0.075, 0.075, 0.25, 0.1),
+            Self::Standard | Self::Custom => 0.2,
+            Self::Advanced => 0.125,
+            Self::Hdi => 0.075,
         }
     }
 
