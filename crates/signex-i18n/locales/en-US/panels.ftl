@@ -280,6 +280,20 @@ start-pin-missing-warning = { $path } is no longer on disk; the pin is kept.
 # Messages panel warning when the start-up check of the pinned projects
 # could not run. $reason is the error text.
 start-pin-check-failed = Could not check the pinned projects on disk: { $reason }
+# Project tile of a project with no cached preview yet; the tile is small,
+# so keep it short.
+start-thumbnail-none = No preview yet
+# Tooltips of the project tile.
+start-thumbnail-board-hint = Board preview (cached on save)
+start-thumbnail-sheet-hint = Root sheet preview (no board yet)
+start-thumbnail-none-hint = Preview is written the next time the project is saved
+start-thumbnail-missing-hint = Project file not found
+# Messages panel warning when a project preview could not be saved. $project
+# is the project file's path, $reason the error text.
+start-thumbnail-write-failed = Could not save the preview of { $project }: { $reason }
+# Messages panel warning when the cached project previews could not be read
+# at start-up. $reason is the error text.
+start-thumbnail-read-failed = Could not read the cached project previews: { $reason }
 
 ## Projects panel
 

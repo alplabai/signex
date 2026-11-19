@@ -863,6 +863,13 @@ define_ids! {
     START_PROJECT_MISSING = "start-project-missing";
     START_PIN_MISSING_WARNING = "start-pin-missing-warning";
     START_PIN_CHECK_FAILED = "start-pin-check-failed";
+    START_THUMBNAIL_NONE = "start-thumbnail-none";
+    START_THUMBNAIL_BOARD_HINT = "start-thumbnail-board-hint";
+    START_THUMBNAIL_SHEET_HINT = "start-thumbnail-sheet-hint";
+    START_THUMBNAIL_NONE_HINT = "start-thumbnail-none-hint";
+    START_THUMBNAIL_MISSING_HINT = "start-thumbnail-missing-hint";
+    START_THUMBNAIL_WRITE_FAILED = "start-thumbnail-write-failed";
+    START_THUMBNAIL_READ_FAILED = "start-thumbnail-read-failed";
     PANELS_PROJECTS_SHEETS = "panels-projects-sheets";
     PANELS_PROJECTS_BOARDS = "panels-projects-boards";
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";

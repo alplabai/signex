@@ -340,6 +340,7 @@ impl Signex {
                 pinned_projects: crate::pinned_projects::PinnedProjects::from_paths(
                     crate::fonts::read_pinned_projects_from(prefs),
                 ),
+                project_thumbnails: crate::project_thumbnail::ProjectThumbnails::default(),
                 first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
@@ -870,6 +871,7 @@ impl Signex {
             mount_task,
             tour_boot,
             app.check_pinned_projects(),
+            app.load_project_thumbnails(),
         ]);
         // The panel context above was seeded with Signex tokens; point it at the
         // saved theme before the first frame, so a Graphite first launch does not

@@ -162,6 +162,9 @@ pub struct UiState {
     /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
     /// at boot and saved on every pin and unpin.
     pub pinned_projects: crate::pinned_projects::PinnedProjects,
+    /// The Start screen project thumbnails (review #1): read from the cache
+    /// at boot, rebuilt after a save.
+    pub project_thumbnails: crate::project_thumbnail::ProjectThumbnails,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first
