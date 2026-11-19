@@ -2,6 +2,7 @@ mod board_palette;
 mod bom_modal;
 mod catalog;
 mod graphite_tokens;
+mod enable_section;
 mod icon;
 mod illustration;
 mod modal_card;

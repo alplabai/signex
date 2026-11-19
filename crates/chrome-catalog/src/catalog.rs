@@ -78,6 +78,11 @@ impl Catalog {
             ),
             section::view("Modal card chrome", tokens, modal_card::view(tokens)),
             section::view(
+                "Enable-header subsections (on, off)",
+                tokens,
+                crate::enable_section::view(tokens)
+            ),
+            section::view(
                 "Project tree leaf indicators",
                 tokens,
                 project_tree::view(tokens),

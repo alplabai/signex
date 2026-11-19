@@ -34,6 +34,7 @@ mod drc;
 mod drc_results;
 pub use drafts::PanelDrafts;
 mod empty_state;
+pub(crate) mod enable_section;
 pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
