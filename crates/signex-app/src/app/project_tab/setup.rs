@@ -12,7 +12,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::ProjectTabMsg;
 use crate::app::new_project::{
-    NewProjectMsg, NewProjectState, ProfileStored, import_rule_file, store_profile,
+    NewProjectMsg, NewProjectState, ProfileStored, ProfileTarget, import_rule_file, store_profile,
 };
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::view::dialogs::new_project::{cards, customize};
@@ -61,7 +61,8 @@ pub(super) fn view<'a>(
     let body: Element<'a, NewProjectMsg> = column![
         cards::profiles(state, users, i18n, tokens),
         row![
-            container(customize::pcb_rules(state, i18n, tokens)).width(Length::FillPortion(1)),
+            container(customize::pcb_rules(state, true, i18n, tokens))
+                .width(Length::FillPortion(1)),
             container(customize::schematic(state, i18n, tokens)).width(Length::FillPortion(1)),
         ]
         .spacing(sp.xl),
@@ -97,6 +98,8 @@ impl SetupPart {
         use NewProjectMsg as M;
         Some(match msg {
             M::ProfilePicked(_)
+            | M::CardLayersStepped(..)
+            | M::ProfileEditRequested(ProfileTarget::BuiltIn(_))
             | M::FabPicked(_)
             | M::RulesFileRead(_)
             | M::LayersStepped(_)
@@ -105,7 +108,9 @@ impl SetupPart {
                 Self::Sheet
             }
             M::DesignatorsPicked(_) => Self::Designators,
-            M::UserProfilePicked(_) => Self::Profile,
+            M::UserProfilePicked(_) | M::ProfileEditRequested(ProfileTarget::Saved(_)) => {
+                Self::Profile
+            }
             _ => return None,
         })
     }
@@ -159,9 +164,26 @@ impl Signex {
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
         let users = &mut self.ui_state.setup_profiles;
-        let picked = matches!(msg, NewProjectMsg::ProfilePicked(_));
+        // A card pick, the Fab tier field that mirrors it, a card's layer
+        // stepper and a built-in's Edit profile... name the project's default
+        // profile.
+        let picked = matches!(
+            msg,
+            NewProjectMsg::ProfilePicked(_)
+                | NewProjectMsg::FabPicked(_)
+                | NewProjectMsg::CardLayersStepped(..)
+                | NewProjectMsg::ProfileEditRequested(ProfileTarget::BuiltIn(_))
+        );
         match store_profile(draft, users, &msg) {
             ProfileStored::NotAStore => {}
+            ProfileStored::Removed { profile, at } if profile.edited => {
+                // Reset to default: the project keeps the values it copied, so
+                // the section shows them again, not the shipped ones.
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.setup_draft = None;
+                }
+                return self.after_profile_store(ProfileStored::Removed { profile, at });
+            }
             ProfileStored::Removed { profile, at } => {
                 // The project's own default profile is gone: the project no
                 // longer names it, in the same edit.
