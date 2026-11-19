@@ -72,6 +72,22 @@ history, which the ERC dialog and the Rules tab share.
   repository, and a note says so when it cannot be turned on. "Commits in
   progress" shows only while commits run. The branch, the last commit, the
   commit author and remotes are not shown yet.
+- **Schematic defaults** (#2026, Graphite mockup m36) — two cards side by
+  side. **Lines**: Wire width, Bus width, Symbol line and pin width, Shape
+  stroke (mm), then Wire line style. **Text and markers**: Text size (pt),
+  Font, Junction diameter (mm), then New shape fill. A number box carries
+  its unit as a suffix and shows the built-in value in grey while empty.
+  An edited field has an accent border and a reset button, which clears the
+  override exactly as emptying the field does; a value that is not a usable
+  number, or one that was clamped into the field's range, gives the box an
+  error border, a tinted fill and a warning icon, and a clamped value says
+  under the field what is used instead. The two pickers show "Built-in (…)"
+  while unset. Under the cards a live preview draws a small schematic in
+  the canvas colours with the values in effect (power port, wires with a
+  junction, a resistor, a net label, a bus with entries, a shape) and writes
+  each value beside its item: grey italic while the field is empty, in the
+  warning colour with the typed number when it was clamped. The drawing is
+  not editable; values are edited in the fields.
 
 Each section shows its title and help line over its content in a column
 that scrolls inside the tab.

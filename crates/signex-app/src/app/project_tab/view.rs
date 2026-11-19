@@ -112,9 +112,13 @@ impl Signex {
                 let facts = self.version_control_facts(project);
                 version_control::view(project, &facts, i18n, tokens)
             }
-            ProjectSection::SchematicDefaults => {
-                schematic_defaults::view(project, tab.map(|tab| &tab.default_drafts), tokens)
-            }
+            ProjectSection::SchematicDefaults => schematic_defaults::view(
+                project,
+                tab.map(|tab| &tab.default_drafts),
+                &self.document_state.panel_ctx.canvas_colors,
+                i18n,
+                tokens,
+            ),
             ProjectSection::Setup => setup::view(
                 project,
                 setup_draft,
