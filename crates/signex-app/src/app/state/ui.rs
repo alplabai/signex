@@ -578,6 +578,9 @@ pub struct UiState {
     pub annotate_order: AnnotateOrder,
     /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
     pub erc_dialog_open: bool,
+    /// The ERC dialog's "Profile" menu is open (#2413). Cleared when the
+    /// dialog opens or closes and when a row is chosen.
+    pub erc_profile_menu_open: bool,
     /// Reset-and-renumber confirmation modal. When true, the Design →
     /// Reset menu item shows a confirm before discarding every number.
     pub annotate_reset_confirm: bool,

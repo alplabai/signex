@@ -484,6 +484,7 @@ impl Signex {
                 annotate_dialog_open: false,
                 annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
+                erc_profile_menu_open: false,
                 annotate_reset_confirm: false,
                 annotate_session: Box::default(),
                 modal_offsets: std::collections::HashMap::new(),

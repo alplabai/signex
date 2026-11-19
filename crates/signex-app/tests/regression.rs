@@ -700,6 +700,8 @@ mod navigator_async;
 
 #[path = "regression/annotate_graphite.rs"]
 mod annotate_graphite;
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]

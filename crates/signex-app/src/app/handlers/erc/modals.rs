@@ -10,6 +10,7 @@ use crate::library::messages::LibraryMessage;
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
+        self.ui_state.erc_profile_menu_open = false;
         self.interaction_state.context_menu = None;
         let drift = self.check_profile_drift_task();
         let detach = self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog);
@@ -18,6 +19,7 @@ impl Signex {
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
+        self.ui_state.erc_profile_menu_open = false;
         self.ui_state.pending_profile_update = None;
         self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
