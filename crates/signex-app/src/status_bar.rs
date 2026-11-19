@@ -1,5 +1,6 @@
 //! Bottom status bar: the cursor, grid and snap, the tool and its hint at the
-//! left; the selection, zoom and the Panels button at the right.
+//! left; the selection (on a board, the board counters), zoom and the Panels
+//! button at the right.
 
 use iced::{Color, Element};
 use signex_i18n::Localized;
@@ -10,9 +11,19 @@ use signex_types::theme::ThemeTokens;
 use crate::app::StatusBarRequest;
 use crate::styles;
 
+mod board;
 mod clusters;
 mod graphite;
 mod grid_popover;
+pub(crate) use board::{
+    AnchorBar, BoardPopoverModel, BoardReadout, ConnectionTally, DrcAge, DrcList, DrcTally,
+    GridChoice, LayerChoice, LayerList, NetRow, SelectedRow, SelectedWhat, SelectionList,
+    UnroutedList, board_grid_value, custom_pitch, popover_left as board_popover_left,
+    popover_view as board_popover_view,
+};
+pub use board::{
+    BoardCounter, BoardPopoverEvent, BoardPopoverKind, BoardStatusPopover, BoardStatusUi,
+};
 pub use graphite::{
     POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, grid_readout_x,
     panel_list_height, panels_button, popup, popup_caption_height, popup_caption_padding,
@@ -55,6 +66,10 @@ pub(crate) struct SurfaceReadout {
     /// Whether a right-click on the Grid read-out opens the Grid & Snap
     /// popover: on a schematic sheet only.
     pub opens_grid_popover: bool,
+    /// The board counters (#2460): on a board tab only. With them the layer
+    /// pill and the Grid read-out open popovers, and the Selected counter
+    /// stands in for the selection summary.
+    pub board: Option<BoardReadout>,
 }
 
 /// The board's active layer pill: a caption, the name and the colour the

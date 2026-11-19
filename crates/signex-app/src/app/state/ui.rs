@@ -146,6 +146,9 @@ pub struct UiState {
     /// opens (m6), with the window it belongs to; `None` while closed. Boxed
     /// to keep `UiState` under its size ceiling.
     pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
+    /// The board counters' open popover and the time their DRC age is read
+    /// against (#2460). Boxed to keep `UiState` under its size ceiling.
+    pub board_status: Box<crate::status_bar::BoardStatusUi>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu

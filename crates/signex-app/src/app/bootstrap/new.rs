@@ -331,6 +331,7 @@ impl Signex {
                 undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
                 grid_snap_popover: None,
+                board_status: Box::default(),
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,

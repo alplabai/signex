@@ -94,7 +94,7 @@ pub(super) fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Loc
     })
 }
 
-pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
+pub(crate) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
     let kind = t!(i18n, kind_label(row.kind));
     // An unnetted object's net cell is empty.
     let net = |name: &String| {

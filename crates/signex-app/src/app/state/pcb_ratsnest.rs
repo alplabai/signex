@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{RatLine, ZoneFills};
+use pcb_geom::{ConnectionCounts, RatLine, ZoneFills};
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::PcbBoard;
 
@@ -24,19 +24,37 @@ pub struct PcbRatsnest {
     fills: ZoneFills,
     /// Hidden net numbers per board: a net number means nothing off its board.
     hidden_nets: BTreeMap<PathBuf, BTreeSet<u32>>,
+    /// The status bar's Routed and Unrouted counts (#2460) of every board
+    /// the lines were computed for, with that board's revision: a board
+    /// shown in its own window keeps its counts while another is in view.
+    counts: BTreeMap<PathBuf, (u64, ConnectionCounts)>,
 }
 
 impl PcbRatsnest {
     /// Recompute the pour fills and the lines unless `key` is the board they
     /// were computed for. A `None` key (a board with no revision) always
-    /// recomputes. The one place a board's fills are refreshed.
+    /// recomputes. The one place a board's fills are refreshed, and with
+    /// them the board's connection counts.
     pub(crate) fn refresh(&mut self, key: Option<RatsnestKey>, board: &PcbBoard) {
         if key.is_some() && key == self.key {
             return;
         }
         self.fills = pcb_geom::zone_fills(board);
         self.lines = pcb_geom::ratsnest_with_fills(board, &self.fills);
+        if let Some((path, revision)) = &key {
+            let counts = pcb_geom::connection_counts(board, &self.lines);
+            self.counts.insert(path.clone(), (*revision, counts));
+        }
         self.key = key;
+    }
+
+    /// The connection counts of the board at `path`, if they were computed
+    /// for its `revision`; `None` before that.
+    pub(crate) fn counts_for(&self, path: &Path, revision: u64) -> Option<&ConnectionCounts> {
+        self.counts
+            .get(path)
+            .filter(|(at, _)| *at == revision)
+            .map(|(_, counts)| counts)
     }
 
     pub fn lines(&self) -> &[RatLine] {
@@ -217,6 +235,26 @@ mod tests {
         state.refresh(None, &board(&[0.0, 5.0]));
         state.refresh(None, &board(&[0.0, 5.0, 9.0, 12.0]));
         assert_eq!(state.lines().len(), 3);
+    }
+
+    /// #2460: the counts follow the lines, per board and revision, and a
+    /// board's counts outlive a refresh for another board.
+    #[test]
+    fn the_connection_counts_are_kept_per_board_and_revision() {
+        let mut state = PcbRatsnest::default();
+        let a = Path::new("a.snxpcb");
+        assert!(state.counts_for(a, 1).is_none());
+        state.refresh(key(1), &board(&[0.0, 5.0, 9.0]));
+        let counts = state.counts_for(a, 1).expect("counted");
+        assert_eq!((counts.total, counts.unrouted), (2, 2));
+        assert!(state.counts_for(a, 2).is_none(), "another revision");
+        state.refresh(Some((PathBuf::from("b.snxpcb"), 7)), &board(&[0.0]));
+        assert!(state.counts_for(a, 1).is_some(), "kept for its board");
+        let b = state.counts_for(Path::new("b.snxpcb"), 7).expect("b");
+        assert_eq!((b.total, b.unrouted), (0, 0));
+        // No revision: nothing to key the counts by.
+        state.refresh(None, &board(&[0.0, 5.0]));
+        assert!(state.counts_for(a, 1).is_some());
     }
 
     #[test]

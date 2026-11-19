@@ -168,6 +168,9 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #2460 — the board counters of the status bar and their popovers.
+#[path = "regression/pcb_status_counters.rs"]
+mod pcb_status_counters;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
