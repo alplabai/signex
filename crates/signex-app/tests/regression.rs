@@ -524,6 +524,9 @@ mod pin_text_on_sheet;
 // #1667 — Autoplace Fields, Copy Attributes, Place Design Block, Import Graphics.
 #[path = "regression/placement_extras.rs"]
 mod placement_extras;
+// #2532 — the Tab form places the next object at a typed Position.
+#[path = "regression/pre_placement_position.rs"]
+mod pre_placement_position;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

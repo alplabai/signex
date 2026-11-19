@@ -14,6 +14,7 @@ mod net_classes;
 mod panel_controls;
 mod panel_open;
 mod placed_edit;
+mod pre_placement_position;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;

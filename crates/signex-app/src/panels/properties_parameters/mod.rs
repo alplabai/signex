@@ -19,12 +19,10 @@ mod title_block;
 #[cfg(test)]
 pub(crate) use form_rows::check_state_color;
 pub(crate) use form_rows::form_choice_row;
-#[cfg(test)]
-pub(crate) use form_rows::rotation_choice;
 pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
     form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
-    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
+    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row,
     section_hdr, thin_sep, typed_mm,
 };
 #[cfg(test)]
@@ -33,6 +31,6 @@ pub(crate) use general::{chip_label, graphite_filter_chip};
 pub use general::{props_tab_btn, seg_btn, view_properties_general, view_properties_parameters};
 pub use net_params::{
     empty_section_row, justification_grid, net_numeric_row, net_params_add_bar, net_params_header,
-    net_params_tabs, preplacement_justification_grid,
+    net_params_tabs,
 };
 pub use title_block::{TitleBlockDraft, TitleBlockField, view_title_block_section};

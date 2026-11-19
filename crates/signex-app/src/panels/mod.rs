@@ -17,6 +17,7 @@ mod footprint_editor_properties;
 pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
+pub mod pre_placement;
 mod placed_edit;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
@@ -100,9 +101,9 @@ pub use properties_parameters::{
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_choice_row, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
-    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
+    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row,
     justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
-    preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn, thin_sep,
+    props_tab_btn, section_hdr, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -154,8 +155,7 @@ pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_t
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
-#[cfg(test)]
-pub(crate) use properties::pre_placement_readout;
+pub use pre_placement::{PlacementPosition, PositionField, PrePlacementPositionMsg};
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,

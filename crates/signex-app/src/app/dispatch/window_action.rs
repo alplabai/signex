@@ -122,6 +122,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::CancelWireColorPicker
                 | P::SetPrePlacementShapeFill(_)
                 | P::ConfirmPrePlacement
+                | P::PrePlacementPosition(_)
         ),
         _ => false,
     }

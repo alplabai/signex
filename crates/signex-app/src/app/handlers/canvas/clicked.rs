@@ -148,7 +148,20 @@ impl Signex {
         } else {
             self.snap_to_grid(world_x, world_y)
         };
+        // A click places where it lands: a position typed in the Tab form
+        // is not carried over to the object after it (#2532).
+        self.clear_typed_position();
+        self.click_with_tool((wx, wy), (world_x, world_y))
+    }
 
+    /// What a click of the armed tool does at `(wx, wy)`, already snapped
+    /// (or typed in the Tab form); `world` is the raw point a selection
+    /// click hit-tests.
+    pub(in crate::app::handlers) fn click_with_tool(
+        &mut self,
+        (wx, wy): (f64, f64),
+        (world_x, world_y): (f64, f64),
+    ) -> Task<Message> {
         // A part on the cursor: the click places it, whatever tool is shown.
         if self.interaction_state.placement.is_some() {
             return self.handle_placement_click(wx, wy);

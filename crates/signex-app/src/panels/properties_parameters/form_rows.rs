@@ -282,55 +282,6 @@ where
     .boxed()
 }
 
-/// The quarter turns a rotation pick list offers, in degrees.
-const ROTATION_STEPS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
-
-/// A rotation pick-list choice: `degrees`, named "{n} Degrees" with the
-/// number as `{:.0}` writes it.
-pub(crate) fn rotation_choice(
-    i18n: &signex_i18n::I18n,
-    degrees: f64,
-) -> crate::choice::Choice<f64> {
-    crate::choice::Choice {
-        value: degrees,
-        label: i18n.message_plain(
-            ids::PANELS_PLACED_DEGREES,
-            &[("degrees", format!("{degrees:.0}").into())],
-        ),
-    }
-}
-
-/// The step whose `{:.0}` name `current` shares (89.9999 is the 90 entry),
-/// as the string-matched list highlighted it; else `current` itself.
-fn shown_rotation_step(current: f64) -> f64 {
-    let shown = format!("{current:.0}");
-    ROTATION_STEPS
-        .into_iter()
-        .find(|step| format!("{step:.0}") == shown)
-        .unwrap_or(current)
-}
-
-/// Form row: the Rotation pick list over [`ROTATION_STEPS`], showing
-/// `current` even when it is not a quarter turn; picking reports degrees.
-pub fn form_rotation_row<'a>(
-    i18n: &signex_i18n::I18n,
-    current: f64,
-    on_change: impl Fn(f64) -> PanelMsg + 'a,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    let choices = ROTATION_STEPS
-        .iter()
-        .map(|&degrees| rotation_choice(i18n, degrees))
-        .collect();
-    form_choice_row(
-        t!(i18n, ids::PANELS_PLACED_ROTATION),
-        choices,
-        rotation_choice(i18n, shown_rotation_step(current)),
-        on_change,
-        label_c,
-    )
-}
-
 /// Checkbox form row: label, then the checkbox.
 pub fn form_check_row<'a>(
     label: impl Into<signex_widgets::Label<'a>>,

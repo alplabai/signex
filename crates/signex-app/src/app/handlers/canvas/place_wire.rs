@@ -59,6 +59,17 @@ impl Signex {
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }
 
+    /// Place one straight wire from `start` to `end` as typed in the Tab
+    /// form (#2532): one undo step. Whether the document changed; a wire
+    /// whose ends meet is not placed.
+    pub(crate) fn place_wire_segment(&mut self, start: Point, end: Point) -> bool {
+        if start == end {
+            return false;
+        }
+        let commands = wire_commands(&[(start, end)], self.wire_placement_style());
+        self.apply_engine_commands(commands, false, false)
+    }
+
     /// The width and colour the next wire is placed with: what the Tab form
     /// of the Wire tool holds, else the default width and no colour.
     pub(crate) fn wire_placement_style(&self) -> (f64, Option<signex_types::theme::Color>) {

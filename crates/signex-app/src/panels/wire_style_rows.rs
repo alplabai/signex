@@ -32,7 +32,7 @@ pub fn rgba_to_color(rgba: [u8; 4]) -> signex_types::theme::Color {
 }
 
 /// The catalog name of a wire width preset.
-fn preset_label(preset: WireWidthPreset) -> MessageId {
+pub(in crate::panels) fn preset_label(preset: WireWidthPreset) -> MessageId {
     match preset {
         WireWidthPreset::Smallest => ids::PROPERTIES_WIRE_WIDTH_SMALLEST,
         WireWidthPreset::Small => ids::PROPERTIES_WIRE_WIDTH_SMALL,

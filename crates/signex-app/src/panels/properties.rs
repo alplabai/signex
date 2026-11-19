@@ -36,8 +36,8 @@ pub struct PrePlacementData {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    /// Stored cursor position for the X/Y readout; shown through the sheet's
-    /// page origin by [`pre_placement_readout`].
+    /// The cursor, snapped as a click would place: untyped Location fields
+    /// follow it.
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
     /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
@@ -49,6 +49,9 @@ pub struct PrePlacementData {
     pub wire_width: signex_types::schematic::WireWidthPreset,
     /// Colour of those wires; `None` = the theme's wire colour.
     pub wire_color: Option<signex_types::theme::Color>,
+    /// Typed Position X / Y (a wire's Start and End): where OK places the
+    /// next object. Never carried over to the object after it.
+    pub position: super::pre_placement::PlacementPosition,
 }
 
 /// The look of the text a pre-placement form configures; what Repeat last
@@ -91,6 +94,7 @@ impl PrePlacementData {
             shape_fill: signex_types::schematic::FillType::None,
             wire_width: Default::default(),
             wire_color: None,
+            position: Default::default(),
         }
     }
 
@@ -199,8 +203,6 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         muted,
         primary,
         border: border_c,
-        input_bg,
-        input_bdr,
         ..
     } = palette;
 
@@ -285,12 +287,10 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed();
     }
 
-    // ── Pre-placement properties (TAB pressed during tool) ──
-    // TAB pauses placement and edits the properties the NEXT click will
-    // commit with. We render a full Altium-style Location + Properties
-    // form bound to the pre_placement data — not the live engine.
+    // Tab pauses placement; the form edits what the next object is placed
+    // with (#2532).
     if let Some(ref pp) = ctx.pre_placement {
-        return view_pre_placement(pp, ctx, muted, primary, border_c, input_bg, input_bdr);
+        return super::pre_placement::view(pp, ctx);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
@@ -378,272 +378,6 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .height(Length::Fill)
         .style(super::form_look::scrollbar_style)
         .boxed()
-}
-
-/// The pre-placement X/Y readout: Y from the active sheet's page origin
-/// (#2034), read when drawn so an origin change shows at once.
-pub(crate) fn pre_placement_readout(pp: &PrePlacementData, ctx: &PanelContext) -> String {
-    let y = ctx.shown_y(pp.cursor_y_mm);
-    format!("{:.2}, {y:.2}", pp.cursor_x_mm)
-}
-
-/// Pre-placement properties — shown when TAB pressed during a placement tool.
-fn view_pre_placement<'a>(
-    pp: &PrePlacementData,
-    ctx: &'a PanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
-    let label_text = pp.label_text.clone();
-    let designator = pp.designator.clone();
-    let rotation = pp.rotation;
-    let tool_name = pp.tool_name.clone();
-    let kind = pp.kind;
-    let pos_str = pre_placement_readout(pp, ctx);
-    let font = pp.font.clone();
-    let font_size_pt = pp.font_size_pt;
-    let justify_h = pp.justify_h;
-
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-
-    // Header — kind-labelled, Altium style.
-    col = col.push(
-        container(
-            row![
-                // raw: the tool name is worded by the placement dispatch, in
-                // English (#2061: handler-worded state text).
-                text(raw(tool_name.clone())).size(TS.label).color(primary),
-                Space::new().width(Length::Fill),
-                crate::styles::dialog_button(
-                    t!(ctx.i18n, signex_i18n::ids::DIALOG_BUTTON_OK),
-                    crate::styles::DialogButtonKind::Primary,
-                    Some(PanelMsg::ConfirmPrePlacement),
-                    &ctx.tokens,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([6.0, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-
-    col = col.push(
-        container(Space::new())
-            .height(1)
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            })
-            .boxed(),
-    );
-
-    // ── Location ──
-    col = col.push(
-        ctx.collapsible(
-            "preplace_location",
-            ids::PANELS_PLACED_LOCATION,
-            &ctx.collapsed_sections,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    t!(i18n, ids::PROPERTIES_XY),
-                    &pos_str,
-                    muted,
-                    input_bg,
-                ));
-                c = c.push(form_rotation_row(
-                    i18n,
-                    rotation,
-                    PanelMsg::SetPrePlacementRotation,
-                    muted,
-                ));
-                c
-            },
-        )
-        .boxed(),
-    );
-
-    // ── Properties (kind-specific) ──
-    let text_label_for_kind = match kind {
-        PrePlacementKind::NetLabel => Some(ids::PROPERTIES_NET_NAME),
-        PrePlacementKind::GlobalPort => Some(ids::PROPERTIES_PORT_NAME),
-        PrePlacementKind::HierPort => Some(ids::PROPERTIES_SHEET_NAME),
-        PrePlacementKind::PowerPort => Some(ids::PROPERTIES_NET_NAME),
-        PrePlacementKind::TextNote => Some(ids::PROPERTIES_TEXT),
-        PrePlacementKind::Component => Some(ids::PROPERTIES_VALUE),
-        _ => None,
-    };
-
-    let show_text_field = text_label_for_kind.is_some();
-    let show_designator = matches!(kind, PrePlacementKind::Component);
-    let show_text_styling = matches!(
-        kind,
-        PrePlacementKind::NetLabel
-            | PrePlacementKind::GlobalPort
-            | PrePlacementKind::HierPort
-            | PrePlacementKind::PowerPort
-            | PrePlacementKind::TextNote
-            | PrePlacementKind::Component
-    );
-
-    if show_text_field || show_text_styling {
-        col = col.push(
-            ctx.collapsible(
-                "preplace_props",
-                ids::PANELS_PLACED_PROPERTIES,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    if let Some(label) = text_label_for_kind {
-                        c = c.push(form_edit_row(
-                            t!(i18n, label),
-                            &label_text,
-                            muted,
-                            PanelMsg::SetPrePlacementText,
-                        ));
-                    }
-                    if show_designator {
-                        c = c.push(form_edit_row(
-                            t!(i18n, ids::PROPERTIES_DESIGNATOR),
-                            &designator,
-                            muted,
-                            PanelMsg::SetPrePlacementDesignator,
-                        ));
-                    }
-                    if show_text_styling {
-                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
-                        c = c.push(form_pick_row(
-                            t!(i18n, ids::PROPERTIES_FONT),
-                            font_opts,
-                            font.clone(),
-                            PanelMsg::SetPrePlacementFont,
-                            muted,
-                        ));
-                        let size_opts: Vec<String> =
-                            [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                                .iter()
-                                .map(|n| n.to_string())
-                                .collect();
-                        c = c.push(form_pick_row(
-                            t!(i18n, ids::PROPERTIES_FONT_SIZE),
-                            size_opts,
-                            font_size_pt.to_string(),
-                            |s| PanelMsg::SetPrePlacementFontSize(s.parse().unwrap_or(10)),
-                            muted,
-                        ));
-                        c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        c = c.push(form_label(signex_i18n::t!(
-                            i18n,
-                            signex_i18n::ids::PANELS_PROPERTIES_JUSTIFICATION
-                        )));
-                        c = c.push(
-                            container(preplacement_justification_grid(
-                                justify_h,
-                                input_bg,
-                                input_bdr,
-                                primary,
-                                ctx.theme_id,
-                            ))
-                            .padding([SP.s, SP.m])
-                            .boxed(),
-                        );
-                    }
-                    c
-                },
-            )
-            .boxed(),
-        );
-    } else if matches!(
-        kind,
-        PrePlacementKind::Line
-            | PrePlacementKind::Rectangle
-            | PrePlacementKind::Circle
-            | PrePlacementKind::Arc
-            | PrePlacementKind::Polygon
-    ) {
-        // Shape tools — Altium-style Width + Fill so users can
-        // preconfigure the next placement via TAB.
-        let width = pp.shape_width_mm;
-        let fill = pp.shape_fill;
-        let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
-        let numeric_draft = ctx.numeric_draft.as_ref();
-        col = col.push(
-            ctx.collapsible(
-                "preplace_shape",
-                ids::PANELS_PLACED_PROPERTIES,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row_f64(
-                        t!(i18n, ids::PROPERTIES_WIDTH_MM),
-                        width,
-                        crate::panels::NumericFieldKey::ShapeWidth,
-                        numeric_draft,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(shape_fill_row(fill, muted, border_c, i18n));
-                    }
-                    c
-                },
-            )
-            .boxed(),
-        );
-    } else if kind == PrePlacementKind::Wire {
-        let (width, color, picker) = (pp.wire_width, pp.wire_color, ctx.wire_color_picker);
-        col = col.push(
-            ctx.collapsible(
-                "preplace_wire",
-                ids::PANELS_PLACED_PROPERTIES,
-                &ctx.collapsed_sections,
-                move || {
-                    Column::new()
-                        .spacing(0)
-                        .width(Length::Fill)
-                        .push(super::wire_width_row(
-                            width,
-                            PanelMsg::SetPrePlacementWireWidth,
-                            muted,
-                            i18n,
-                        ))
-                        .push(super::wire_color_row(
-                            color,
-                            picker,
-                            std::rc::Rc::new(PanelMsg::SetPrePlacementWireColor),
-                            muted,
-                            border_c,
-                            i18n,
-                        ))
-                },
-            )
-            .boxed(),
-        );
-    } else {
-        col = col.push(
-            container(
-                text(t!(i18n, ids::PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS))
-                    .size(TS.caption)
-                    .color(muted),
-            )
-            .padding([8, PROPERTY_ROW_PAD_X])
-            .boxed(),
-        );
-    }
-
-    container(
-        scrollable(col)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(super::form_look::scrollbar_style),
-    )
-    .width(Length::Fill)
-    .boxed()
 }
 
 #[cfg(test)]
