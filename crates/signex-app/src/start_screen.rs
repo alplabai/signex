@@ -16,6 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use iced::Element;
 use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
@@ -124,14 +125,19 @@ pub struct StartScreenState {
     /// The bundled sample project's file, whose thumbnail the reference
     /// card shows; read once at boot, `None` without a config directory.
     pub sample_project: Option<PathBuf>,
+    /// The time the last-opened column is read against. `update` stamps it
+    /// when the screen shows and on [`StartScreenMsg::ClockTicked`]; it is
+    /// `None` while the screen is off, so `view` never reads the clock.
+    pub now: Option<DateTime<Utc>>,
 }
 
 impl StartScreenState {
     /// The state a launch starts in: Home, with the sample project's path.
-    pub fn at_boot() -> Self {
+    pub fn at_boot(now: DateTime<Utc>) -> Self {
         Self {
             sample_project: crate::sample_project::sample_root()
                 .map(|root| crate::sample_project::project_path(&root)),
+            now: Some(now),
             ..Self::default()
         }
     }
@@ -240,6 +246,23 @@ pub enum StartScreenMsg {
     LibraryFilterChanged(String),
     /// Clear filter was pressed on the current page's empty state.
     FilterCleared,
+    /// The minute tick fired while the screen shows; carries the time the
+    /// last-opened column is read against.
+    ClockTicked(DateTime<Utc>),
+}
+
+/// How often the last-opened column ("today 14:05", "yesterday") is
+/// re-read against the clock while the Start screen shows.
+pub const CLOCK_TICK: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The minute tick behind [`StartScreenMsg::ClockTicked`]; none while the
+/// screen is off, so an open document costs nothing.
+pub fn clock_subscription(shown: bool) -> iced::Subscription<Message> {
+    if shown {
+        iced::time::every(CLOCK_TICK).map(|_| message(StartScreenMsg::ClockTicked(Utc::now())))
+    } else {
+        iced::Subscription::none()
+    }
 }
 
 /// The open right-click menu of a Start screen project row.
@@ -268,8 +291,9 @@ pub struct StartScreenData<'a> {
     /// The cached project renders the row tiles show.
     pub thumbnails: &'a crate::project_thumbnail::ProjectThumbnails,
     pub state: &'a StartScreenState,
-    /// The clock the last-opened times are read against.
-    pub now: chrono::DateTime<chrono::Utc>,
+    /// The clock the last-opened times are read against
+    /// ([`StartScreenState::now`], stamped by `update`).
+    pub now: DateTime<Utc>,
 }
 
 pub fn view<'a>(

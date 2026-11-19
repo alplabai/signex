@@ -213,8 +213,9 @@ impl Signex {
         let icon = svg(crate::icons::icon_chrome_search(
             self.ui_state.effective_theme_id(),
         ))
-        .width(13)
-        .height(13)
+        // The glyph is as tall as title text (13 px at the default base).
+        .width(TS.title)
+        .height(TS.title)
         .style(move |_: &iced::Theme, _| svg::Style {
             color: Some(ink4),
             ..Default::default()
@@ -297,9 +298,10 @@ fn search_button(
     } else {
         t!(i18n, ids::MENU_BAR_SEARCH_BUTTON_KEY, "key" => hint)
     };
+    // The same glyph size as the field's search icon.
     let glyph = svg(crate::icons::icon_chrome_search(theme_id))
-        .width(13)
-        .height(13)
+        .width(TS.title)
+        .height(TS.title)
         .style(move |_: &iced::Theme, _| svg::Style {
             color: Some(ink),
             ..Default::default()

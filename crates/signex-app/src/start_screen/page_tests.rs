@@ -345,3 +345,35 @@ fn the_project_hint_says_when_the_project_is_empty_and_offers_its_commands() {
         );
     }
 }
+
+/// The time column reads the clock from the Model, never in `view`: boot
+/// stamps it, the minute tick moves it, it is dropped while a document is
+/// on screen and stamped again when the screen comes back.
+#[test]
+fn the_start_screen_clock_lives_in_the_model() {
+    let (mut app, _boot) = crate::app::Signex::new();
+    assert!(
+        app.ui_state.start_screen.now.is_some(),
+        "boot stamps the clock"
+    );
+    let tick = Utc.with_ymd_and_hms(2026, 11, 19, 15, 31, 0).unwrap();
+    let _ = app.update(message(StartScreenMsg::ClockTicked(tick)));
+    assert_eq!(app.ui_state.start_screen.now, Some(tick));
+
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a.snxsch".to_string(),
+        path: PathBuf::from("a.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.drop_start_row_menu_off_screen();
+    assert_eq!(app.ui_state.start_screen.now, None, "off screen: no clock");
+
+    app.document_state.tabs.clear();
+    app.drop_start_row_menu_off_screen();
+    assert!(
+        app.ui_state.start_screen.now.is_some(),
+        "back on screen: stamped again"
+    );
+}

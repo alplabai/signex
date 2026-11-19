@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use super::{LoadedThumbnails, Thumbnail, WrittenThumbnail};
+use super::{LoadedThumbnails, Thumbnail, ThumbnailWriteFailure, WrittenThumbnail};
 
 /// The format version this build writes and reads. A file with any other
 /// version is ignored (no preview) and is rewritten on the next save.
@@ -87,16 +87,28 @@ pub fn write(root: &Path, project: &Path, thumbnail: &Thumbnail) -> Result<(), S
 }
 
 /// Write the render of the open project at `project` under the spelling the
-/// recent and pinned lists use, into the per-user config root. Blocking.
-pub fn write_listed(project: &Path, thumbnail: &Thumbnail) -> Result<WrittenThumbnail, String> {
+/// recent and pinned lists use, into the per-user config root. Blocking. A
+/// failure still carries that spelling, so the render kept in memory moves
+/// to it either way.
+pub fn write_listed(
+    project: &Path,
+    thumbnail: &Thumbnail,
+) -> Result<WrittenThumbnail, ThumbnailWriteFailure> {
     let listed_as = crate::recent_projects::RecentProjects::spelling_of(project);
-    let root = crate::config_root::config_root()
-        .ok_or_else(|| "this system has no per-user configuration folder".to_string())?;
-    write(&root, &listed_as, thumbnail)?;
-    Ok(WrittenThumbnail {
-        project: project.to_path_buf(),
-        listed_as,
-    })
+    let written = crate::config_root::config_root()
+        .ok_or_else(|| "this system has no per-user configuration folder".to_string())
+        .and_then(|root| write(&root, &listed_as, thumbnail));
+    match written {
+        Ok(()) => Ok(WrittenThumbnail {
+            project: project.to_path_buf(),
+            listed_as,
+        }),
+        Err(reason) => Err(ThumbnailWriteFailure {
+            project: project.to_path_buf(),
+            listed_as,
+            reason,
+        }),
+    }
 }
 
 /// Read the cached renders of `projects` under `root`. A missing file, or

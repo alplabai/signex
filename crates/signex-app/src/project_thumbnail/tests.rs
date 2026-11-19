@@ -463,8 +463,32 @@ fn loaded_renders_are_kept_and_a_landed_write_moves_to_the_listed_spelling() {
     let _task = app.update(message(ProjectThumbnailMsg::Written(Err(
         ThumbnailWriteFailure {
             project: listed.clone(),
+            listed_as: listed.clone(),
             reason: "disk full".to_string(),
         },
     ))));
     assert_eq!(app.ui_state.project_thumbnails.get(&listed), Some(&cached));
+}
+
+/// A project opened under another spelling than its listed one: a failed
+/// cache write still moves the render to the listed spelling, so the Start
+/// screen row shows it this session instead of 'No preview yet'.
+#[test]
+fn a_failed_write_still_moves_the_render_to_the_listed_spelling() {
+    let (mut app, _boot) = crate::app::Signex::new();
+    let cached = Arc::new(snapshot::sheet(&small_sheet()));
+    let _task = app.update(message(ProjectThumbnailMsg::Loaded(Ok(LoadedThumbnails {
+        found: vec![(project_path(), Arc::clone(&cached))],
+        unreadable: Vec::new(),
+    }))));
+    let listed = PathBuf::from("/w/real/ProjectA.snxprj");
+    let _task = app.update(message(ProjectThumbnailMsg::Written(Err(
+        ThumbnailWriteFailure {
+            project: project_path(),
+            listed_as: listed.clone(),
+            reason: "disk full".to_string(),
+        },
+    ))));
+    assert_eq!(app.ui_state.project_thumbnails.get(&listed), Some(&cached));
+    assert_eq!(app.ui_state.project_thumbnails.get(&project_path()), None);
 }

@@ -80,6 +80,12 @@ impl Signex {
                 self.ui_state.start_screen.library_filter = filter;
                 iced::Task::none()
             }
+            StartScreenMsg::ClockTicked(now) => {
+                if self.start_screen_shown() {
+                    self.ui_state.start_screen.now = Some(now);
+                }
+                iced::Task::none()
+            }
             StartScreenMsg::FilterCleared => {
                 let state = &mut self.ui_state.start_screen;
                 match state.page {
@@ -142,11 +148,17 @@ impl Signex {
     /// Clear a row menu left open after the Start screen went away (a
     /// project or tab opened by any route), so it never comes back or takes
     /// an Esc, and send the screen back to Home, unfiltered, for the next
-    /// time it shows. Run from `finish_update`.
+    /// time it shows. Run from `finish_update`. It also stamps the
+    /// screen's clock when the screen comes back (and drops it while the
+    /// screen is off), so `view` reads the time from the Model.
     pub(crate) fn drop_start_row_menu_off_screen(&mut self) {
         if self.start_screen_shown() {
+            if self.ui_state.start_screen.now.is_none() {
+                self.ui_state.start_screen.now = Some(chrono::Utc::now());
+            }
             return;
         }
+        self.ui_state.start_screen.now = None;
         self.interaction_state.start_row_menu = None;
         if !self.ui_state.start_screen.is_home() {
             self.ui_state.start_screen.go_home();

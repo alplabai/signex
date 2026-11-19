@@ -614,7 +614,8 @@ impl Signex {
                         libraries: start_screen::loaded_libraries(&self.library),
                         thumbnails: &self.ui_state.project_thumbnails,
                         state: &self.ui_state.start_screen,
-                        now: chrono::Utc::now(),
+                        // `update` stamps it whenever the screen shows.
+                        now: self.ui_state.start_screen.now.unwrap_or_default(),
                     },
                 ),
             }

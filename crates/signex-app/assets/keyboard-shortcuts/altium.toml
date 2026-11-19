@@ -179,7 +179,7 @@ context = "global"
 "T C" = "cross_probe"
 "V N" = "open_net_inspector"
 
-# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+# #2249: View > Window > Tile Horizontally, Tile Vertically and Untile.
 [[keyboard_shortcuts.sections]]
 context = "global"
 

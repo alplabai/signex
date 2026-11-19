@@ -190,10 +190,12 @@ pub struct WrittenThumbnail {
     pub listed_as: PathBuf,
 }
 
-/// A cache write that failed, with the reason.
+/// A cache write that failed, with the reason and the spelling the recent
+/// and pinned lists use (the render kept this session moves to it).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThumbnailWriteFailure {
     pub project: PathBuf,
+    pub listed_as: PathBuf,
     pub reason: String,
 }
 
@@ -234,15 +236,22 @@ impl Signex {
                 .ui_state
                 .project_thumbnails
                 .rekey(&written.project, written.listed_as),
-            ProjectThumbnailMsg::Written(Err(failure)) => crate::diagnostics::log_warning(
-                t!(
-                    self.ui_state.i18n,
-                    ids::START_THUMBNAIL_WRITE_FAILED,
-                    "project" => failure.project.display().to_string(),
-                    "reason" => failure.reason
+            ProjectThumbnailMsg::Written(Err(failure)) => {
+                // The render still shows this session, under the listed
+                // spelling the Start screen rows look it up by.
+                self.ui_state
+                    .project_thumbnails
+                    .rekey(&failure.project, failure.listed_as);
+                crate::diagnostics::log_warning(
+                    t!(
+                        self.ui_state.i18n,
+                        ids::START_THUMBNAIL_WRITE_FAILED,
+                        "project" => failure.project.display().to_string(),
+                        "reason" => failure.reason
+                    )
+                    .into_string(),
                 )
-                .into_string(),
-            ),
+            }
         }
         Task::none()
     }
@@ -295,13 +304,15 @@ impl Signex {
                 cache::write_listed(&project, &thumbnail)
             }),
             move |result| {
-                let result =
-                    result
-                        .and_then(|written| written)
-                        .map_err(|reason| ThumbnailWriteFailure {
-                            project: failed,
-                            reason,
-                        });
+                // A worker that died never learnt the listed spelling: the
+                // render stays under the open path.
+                let result = result
+                    .map_err(|reason| ThumbnailWriteFailure {
+                        listed_as: failed.clone(),
+                        project: failed,
+                        reason,
+                    })
+                    .and_then(|written| written);
                 message(ProjectThumbnailMsg::Written(result))
             },
         )

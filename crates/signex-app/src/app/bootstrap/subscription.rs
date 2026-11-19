@@ -103,6 +103,8 @@ struct OpenOverlays {
     tab_context_menu_open: bool,
     project_tree_context_menu_open: bool,
     grid_picker_open: bool,
+    /// The status bar's Grid & Snap popover: Esc closes it, not the tool.
+    grid_snap_popover_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -250,6 +252,9 @@ impl OpenOverlays {
             OverlayId::GridPicker => self
                 .grid_picker_open
                 .then_some(Message::Ui(UiMsg::GridPickerClose)),
+            OverlayId::GridSnapPopover => self
+                .grid_snap_popover_open
+                .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -277,7 +282,6 @@ impl OpenOverlays {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::PanelList
-            | OverlayId::GridSnapPopover
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
             | OverlayId::FloatingPanels => None,
@@ -742,6 +746,7 @@ impl Signex {
                 .project_tree_context_menu
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
+            grid_snap_popover_open: self.ui_state.grid_snap_popover.is_some(),
         }
     }
 
@@ -992,6 +997,8 @@ impl Signex {
             window_subscriptions::quit_requests(),
             chord_cancel,
             chord_timeout,
+            // The Start screen's minute clock; none while it is off screen.
+            crate::start_screen::clock_subscription(self.start_screen_shown()),
             kbd,
             mouse_sub,
             window_close,
@@ -1801,6 +1808,7 @@ mod tests {
             tab_context_menu_open,
             project_tree_context_menu_open,
             grid_picker_open,
+            grid_snap_popover_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1908,6 +1916,9 @@ mod tests {
                 o.project_tree_context_menu_open = true
             }),
             ("grid_picker_open", |o| o.grid_picker_open = true),
+            ("grid_snap_popover_open", |o| {
+                o.grid_snap_popover_open = true
+            }),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

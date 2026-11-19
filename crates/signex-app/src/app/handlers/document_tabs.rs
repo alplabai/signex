@@ -485,18 +485,31 @@ impl Signex {
 
     /// The tree key of the Projects panel row whose file is `path`, or `None`
     /// when no open project lists it. Rows resolve to files the way opening
-    /// them does (`tree_path_to_file_path`).
+    /// them does (`tree_path_to_file_path`), and compare under the case rule
+    /// of the project's volume, as saving does.
     pub(crate) fn project_tree_key_of_file(
         &self,
         path: &std::path::Path,
     ) -> Option<signex_widgets::tree_view::TreeKey> {
+        use crate::app::state::scope::path_key_with;
         let tree = self.document_state.panel_ctx.project_tree.as_slice();
         let mut pending: Vec<Vec<usize>> = (0..tree.len()).map(|i| vec![i]).collect();
         while let Some(index_path) = pending.pop() {
             let node = signex_widgets::tree_view::get_node(tree, &index_path)?;
+            let same_file = |row: &std::path::Path| {
+                self.document_state
+                    .projects
+                    .get(index_path[0])
+                    .is_some_and(|p| {
+                        path_key_with(row, p.case_fold) == path_key_with(path, p.case_fold)
+                    })
+            };
             if index_path.len() > 1
                 && node.children.is_empty()
-                && self.tree_path_to_file_path(&index_path).as_deref() == Some(path)
+                && self
+                    .tree_path_to_file_path(&index_path)
+                    .as_deref()
+                    .is_some_and(same_file)
             {
                 return signex_widgets::tree_view::key_of(tree, &index_path);
             }

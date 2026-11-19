@@ -522,7 +522,9 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
-                start_screen: Box::new(crate::start_screen::StartScreenState::at_boot()),
+                start_screen: Box::new(crate::start_screen::StartScreenState::at_boot(
+                    chrono::Utc::now(),
+                )),
                 tab_overflow_menu_open: false,
             },
             document_state: DocumentState {
