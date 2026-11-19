@@ -92,7 +92,13 @@ impl Signex {
                 parameters::view(&self.ui_state.i18n, project, new_parameter_name, tokens)
             }
             ProjectSection::Sheets => sheets::view(project, setup_draft, users, i18n, tokens),
-            ProjectSection::Variants => variants::view(project, tab, i18n, tokens),
+            ProjectSection::Variants => variants::view(
+                project,
+                tab,
+                self.document_state.sheet_edit_epoch,
+                i18n,
+                tokens,
+            ),
             ProjectSection::Libraries => libraries::view(
                 project_id,
                 &self.project_library_rows(project),
@@ -122,9 +128,15 @@ impl Signex {
                 requirements::view(project, tab.map(|tab| &tab.requirements), i18n, tokens)
             }
         };
+        // The Variant Manager fills the tab; the other sections sit on top.
+        let body = if selected == ProjectSection::Variants {
+            content
+        } else {
+            column![content, Space::new().height(Length::Fill)].boxed()
+        };
         row![
             section_list(project_id, selected, i18n, tokens),
-            container(column![content, Space::new().height(Length::Fill)])
+            container(body)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(crate::styles::panel_region(tokens)),

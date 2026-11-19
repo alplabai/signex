@@ -159,6 +159,22 @@ pub struct ProjectTabState {
     pub variant_rename: Option<VariantRenameDraft>,
     /// Why the last variant edit was refused; cleared by the next edit.
     pub variant_problem: Option<signex_types::project::VariantProblem>,
+    /// The variant clicked in the Variants list (#1293), Base by its name;
+    /// `None` follows the active variant. Never the active variant itself.
+    pub variant_selected: Option<String>,
+    /// The parts filter as typed in the Variants top bar.
+    pub variant_filter: String,
+    /// Only rows that differ: the matrix hides parts every variant fits as
+    /// Base does.
+    pub variants_only_differ: bool,
+    /// The parts by variants matrix last read, or why it could not be read.
+    pub variant_parts: Option<std::sync::Arc<Result<signex_output::VariantMatrix, String>>>,
+    /// `DocumentState::sheet_edit_epoch` when `variant_parts` was read.
+    pub variant_parts_epoch: u64,
+    /// The newest parts read started; an older one's result is dropped.
+    pub variant_parts_generation: u64,
+    /// A parts read is running.
+    pub variant_parts_reading: bool,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
 }
@@ -248,7 +264,9 @@ pub enum ProjectTabMsg {
         filename: String,
         step: signex_types::project::ListMove,
     },
-    /// The new variant name as typed (#1690).
+    /// A new variant's name as typed (#1690). The Variants section adds
+    /// through `NewVariantRequested` and names in place; this typed add stays
+    /// for callers that name the variant up front.
     NewVariantNameEdited {
         project_id: ProjectId,
         text: String,
@@ -271,10 +289,48 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         name: String,
     },
-    /// The Active check of a row; `None` is Base.
+    /// The Active variant picked in the Variants top bar; `None` is Base.
     ActiveVariantPicked {
         project_id: ProjectId,
         name: Option<String>,
+    },
+    /// `+` or New variant from Base (#1293): the first free "Variant N" is
+    /// added and its name opens for typing.
+    NewVariantRequested {
+        project_id: ProjectId,
+    },
+    /// A variant clicked in the Variants list; `None` is Base. Selecting is
+    /// not picking the active variant.
+    VariantSelected {
+        project_id: ProjectId,
+        name: Option<String>,
+    },
+    /// Rename, or a double-click on a variant's name: the name opens for
+    /// typing in its row.
+    VariantRenameStarted {
+        project_id: ProjectId,
+        name: String,
+    },
+    /// The parts filter as typed.
+    VariantFilterEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// Only rows that differ, turned on or off.
+    VariantDifferingToggled {
+        project_id: ProjectId,
+    },
+    /// Read again: the parts matrix is read anew.
+    VariantPartsReadRequested {
+        project_id: ProjectId,
+    },
+    /// A parts read finished: read `generation`, started at the sheet edit
+    /// count `epoch`.
+    VariantPartsRead {
+        project_id: ProjectId,
+        generation: u64,
+        epoch: u64,
+        parts: std::sync::Arc<Result<signex_output::VariantMatrix, String>>,
     },
     /// A Move up / Move down button of the Libraries table (#1691), with the
     /// library's path as the project stores it.
