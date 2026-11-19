@@ -90,6 +90,20 @@ impl Signex {
                     self.close_general_run(project_id);
                 }
             }
+            ProjectTabMsg::ParameterFilterEdited { project_id, text } => {
+                self.edit_parameter_filter(project_id, text);
+            }
+            ProjectTabMsg::ParameterGroupToggled { project_id, group } => {
+                self.toggle_parameter_group(project_id, group);
+            }
+            ProjectTabMsg::ParameterRenameEdited {
+                project_id,
+                from,
+                text,
+            } => self.edit_parameter_rename(project_id, from, text),
+            ProjectTabMsg::ParameterRenameSubmitted { project_id } => {
+                self.submit_parameter_rename(project_id);
+            }
             ProjectTabMsg::SchematicDefaultEdited {
                 project_id,
                 field,
@@ -263,6 +277,8 @@ impl Signex {
             tab.journal_lines_draft = None;
             tab.variant_rename = None;
             tab.variant_problem = None;
+            tab.parameter_rename = None;
+            tab.parameter_rename_refused = false;
             tab.requirements.clear_drafts();
         }
     }
@@ -343,6 +359,8 @@ impl Signex {
         tab.journal_lines_draft = None;
         tab.variant_rename = None;
         tab.variant_problem = None;
+        tab.parameter_rename = None;
+        tab.parameter_rename_refused = false;
         tab.requirements.clear_drafts();
         if moved {
             // Dirty unless the step landed back on the saved state.

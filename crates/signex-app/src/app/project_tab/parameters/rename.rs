@@ -1,0 +1,118 @@
+//! Renaming a variable in place (Graphite mockup m30). The typed name is a
+//! draft until Enter; the name is checked here, before the engine sees it,
+//! and a refused one stays in its box with the reason under the row.
+
+use std::collections::BTreeMap;
+
+use signex_engine::ProjectGeneralCommand;
+use signex_i18n::{I18n, Localized, ids, t};
+
+use crate::app::Signex;
+use crate::app::state::ProjectId;
+
+/// Why a typed variable name is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ParameterNameProblem {
+    /// Nothing but blanks.
+    Empty,
+    /// A line break or another control character.
+    Invalid,
+    /// The key of a title-block field.
+    TitleBlock,
+    /// Another parameter has the name; names are case-sensitive.
+    Taken,
+}
+
+/// The name `from` is renamed to: `text` trimmed, `None` when that is `from`
+/// itself (nothing to do), or why it is refused.
+pub(super) fn checked_rename(
+    parameters: &BTreeMap<String, String>,
+    from: &str,
+    text: &str,
+) -> Result<Option<String>, ParameterNameProblem> {
+    let name = text.trim();
+    if name.is_empty() {
+        return Err(ParameterNameProblem::Empty);
+    }
+    if name.chars().any(char::is_control) {
+        return Err(ParameterNameProblem::Invalid);
+    }
+    if name == from {
+        return Ok(None);
+    }
+    if super::is_title_block_key(name) {
+        return Err(ParameterNameProblem::TitleBlock);
+    }
+    if parameters.contains_key(name) {
+        return Err(ParameterNameProblem::Taken);
+    }
+    Ok(Some(name.to_string()))
+}
+
+/// The words of a refused name; `typed` is the name as typed.
+pub(super) fn problem_words(problem: ParameterNameProblem, typed: &str, i18n: &I18n) -> Localized {
+    let name = typed.trim().to_string();
+    match problem {
+        ParameterNameProblem::Empty => t!(i18n, ids::PROJECT_PARAMETER_NAME_EMPTY),
+        ParameterNameProblem::Invalid => t!(i18n, ids::PROJECT_PARAMETER_NAME_INVALID),
+        ParameterNameProblem::TitleBlock => {
+            t!(i18n, ids::PROJECT_PARAMETER_NAME_TITLE_BLOCK, "name" => name)
+        }
+        ParameterNameProblem::Taken => t!(i18n, ids::PROJECT_PARAMETER_NAME_TAKEN, "name" => name),
+    }
+}
+
+impl Signex {
+    /// A variable's name as typed over: kept as the draft, and a shown
+    /// refusal goes with the next keystroke.
+    pub(in crate::app::project_tab) fn edit_parameter_rename(
+        &mut self,
+        project_id: ProjectId,
+        from: String,
+        text: String,
+    ) {
+        if let Some(tab) = self.loaded_project_tab(project_id) {
+            tab.parameter_rename = Some((from, text));
+            tab.parameter_rename_refused = false;
+        }
+    }
+
+    /// Enter in a name box: rename the variable to what was typed, as one
+    /// General undo step. A refused name changes nothing and stays in the
+    /// box with its reason.
+    pub(in crate::app::project_tab) fn submit_parameter_rename(&mut self, project_id: ProjectId) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        let Some((from, text)) = self
+            .document_state
+            .project_tabs
+            .get(&project_id)
+            .and_then(|tab| tab.parameter_rename.clone())
+        else {
+            return;
+        };
+        let outcome = checked_rename(&project.data.parameters, &from, &text);
+        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+            return;
+        };
+        let to = match outcome {
+            Err(_) => {
+                tab.parameter_rename_refused = true;
+                return;
+            }
+            Ok(to) => to,
+        };
+        tab.parameter_rename = None;
+        tab.parameter_rename_refused = false;
+        let Some(to) = to else {
+            return;
+        };
+        self.close_general_run(project_id);
+        self.apply_project_general(
+            project_id,
+            ProjectGeneralCommand::RenameParameter { from, to },
+        );
+        self.close_general_run(project_id);
+    }
+}

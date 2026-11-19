@@ -25,6 +25,34 @@ project-section-setup = Project setup
 project-move-up = Move up
 project-move-down = Move down
 
+# Parameters section (#30): the filter, the Title block and Variables groups,
+# and renaming a variable in place.
+project-parameters-help = Every sheet inherits these; a sheet's own Title Block value overrides one.
+project-parameters-filter = Filter parameters
+project-parameters-totals = { $title_block } title block · { $variables ->
+    [one] 1 variable
+   *[other] { $variables } variables
+}
+project-parameters-group-title-block = TITLE BLOCK
+project-parameters-group-variables = VARIABLES
+project-parameters-count = { $count }
+project-parameters-sheets-override = sheets override
+project-parameters-not-set = Not set
+project-parameters-remove = Remove
+project-parameters-add = Add
+project-parameters-field-title = Title
+project-parameters-field-document-number = Document No.
+project-parameters-field-rev = Revision
+project-parameters-field-date = Date
+project-parameters-field-company = Company
+project-parameters-field-drawn-by = Drawn By
+project-parameters-field-checked-by = Checked By
+project-parameters-field-approved-by = Approved By
+project-parameter-name-empty = Enter a parameter name.
+project-parameter-name-invalid = A parameter name cannot contain line breaks or control characters.
+project-parameter-name-title-block = { $name } is a title block field; choose another name.
+project-parameter-name-taken = The project already has a parameter named { $name }.
+
 # Sheets section (#1689).
 project-sheets-help = The project lists its sheets in this order: the Sheet N of M a sheet shows in its title block and the order of the project tree follow it. PDF export numbers its pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
 project-sheets-col-number = Page

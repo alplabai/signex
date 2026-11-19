@@ -83,14 +83,11 @@ impl Signex {
         };
         let tab = self.document_state.project_tabs.get(&project_id);
         let selected = tab.map(|tab| tab.section).unwrap_or_default();
-        let new_parameter_name = tab.map_or("", |tab| tab.new_parameter_name.as_str());
         let setup_draft = tab.and_then(|tab| tab.setup_draft.as_ref());
         let users = &self.ui_state.setup_profiles;
         let content = match selected {
             ProjectSection::General => general::view(&self.ui_state.i18n, project, tokens),
-            ProjectSection::Parameters => {
-                parameters::view(&self.ui_state.i18n, project, new_parameter_name, tokens)
-            }
+            ProjectSection::Parameters => parameters::view(project, tab, i18n, tokens),
             ProjectSection::Sheets => sheets::view(project, setup_draft, users, i18n, tokens),
             ProjectSection::Variants => variants::view(project, tab, i18n, tokens),
             ProjectSection::Libraries => libraries::view(
