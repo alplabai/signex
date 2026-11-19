@@ -5,9 +5,14 @@
 menu-file = File
 
 ## Graphite views (#2225)
-menu-bar-search-placeholder = Search commands, parts, nets
+menu-bar-search-placeholder = Search commands, parts, nets, sheets
 menu-bar-light-theme = Light theme
 menu-bar-dark-theme = Dark theme
+# Tooltip of the search button a narrow window shows instead of the search
+# field: it opens the command palette. The second form names its shortcut;
+# $key is the key chord as the keymap writes it, for example Ctrl+K.
+menu-bar-search-button = Search
+menu-bar-search-button-key = Search ({ $key })
 
 ## Menu bar root titles (#2057)
 # Titles of the other nine menus of the menu bar, in bar order after File.

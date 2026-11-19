@@ -176,6 +176,11 @@ pub enum CommandPaletteMsg {
             Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
         >,
     },
+    /// The title-bar search field was clicked while the palette is open in
+    /// the main window. The palette's backdrop leaves the field undimmed but
+    /// takes the click, so the field keeps the focus and the palette stays
+    /// open.
+    FieldClicked,
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under

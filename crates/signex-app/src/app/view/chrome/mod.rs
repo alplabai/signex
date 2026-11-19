@@ -15,6 +15,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 mod buttons;
 mod graphite;
 
+pub(in crate::app::view) use graphite::SearchSlot;
+
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
     /// title bar with a strip (`MENU_BAR_HEIGHT`; Graphite themes use
@@ -28,7 +30,7 @@ impl Signex {
     /// Which buttons sit where depends on the platform and the Window
     /// controls preference (`Signex::window_controls_layout`). The search
     /// bar is stacked on top of it, centred on the window
-    /// (see `chrome_search_bar_geometry`).
+    /// (see `chrome_search_slot`).
     ///
     /// The drag zones are the only mouse-area clickable regions — menu
     /// buttons, search, and window controls keep their own click
@@ -41,9 +43,10 @@ impl Signex {
         self.view_graphite_window_chrome(menu_row, tokens)
     }
 
-    /// `(x, width)` of the search bar for the current window width and
-    /// control layout; the palette dropdown anchors to the same `x`.
-    pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
+    /// Where the search sits (the field at `x`, `w` wide, or the search
+    /// button) for the current window width and control layout; the palette
+    /// card centres under the same slot.
+    pub(in crate::app::view) fn chrome_search_slot(&self) -> SearchSlot {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) =
             buttons::extents_for(&self.window_controls_layout(), fullscreen, true);
