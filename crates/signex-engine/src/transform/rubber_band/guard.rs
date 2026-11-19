@@ -919,6 +919,7 @@ impl<'a> Guard<'a> {
             terminal || pin || net.labels.iter().any(|l| labels.contains(l))
         };
         let live_wires = || (wire_nets.iter()).filter(|(k, _)| !policy.plain.contains(k));
+        #[cfg(test)]
         let before_wires = blamed.len();
         blamed.extend(
             live_wires()
@@ -929,8 +930,6 @@ impl<'a> Guard<'a> {
         if blamed.len() > before_wires {
             reasons::note("blamed: a carried point's net in the difference");
         }
-        #[cfg(not(test))]
-        let _ = before_wires;
         if blamed.is_empty() {
             #[cfg(test)]
             reasons::note("blamed: no member, the contacts that edited");
