@@ -1,7 +1,9 @@
 //! The Net Inspector panel (#1269): its list, kept in step with the cached
 //! project net index, and a member click, which goes to the member through
-//! the same path a net step uses and highlights its net.
+//! the same path a net step uses and highlights its net. The By Component
+//! rows are built in `parts.rs` from the same index.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use iced::Task;
@@ -11,18 +13,27 @@ use super::super::super::*;
 use super::highlight::bright_elements;
 use super::messages;
 use super::navigate::describe_member;
+use super::parts::{part_rows, pin_names};
 use crate::app::runtime::net_class_styles::plan_projects;
 use crate::app::state::ProjectId;
 use crate::app::state::net_nav::{NetHighlight, ProjectNetData};
 use crate::panels::net_inspector::{
-    NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
+    NetInspectorMode, NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
+    preview,
 };
 use crate::panels::{NetInspectorMsg, NetInspectorState, PanelKind};
 
 /// The rows for `data` under `state`: the nets the filter keeps, named nets
-/// first, then by name; an expanded net with its members.
+/// first, then by name; an expanded net with its first members, or all of
+/// them once shown in full.
 pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<NetRow> {
     let needle = state.filter.trim().to_lowercase();
+    // Pin names are read only when some net is open to show them.
+    let names = if state.expanded.is_empty() {
+        HashMap::new()
+    } else {
+        pin_names(&data.index)
+    };
     let mut rows: Vec<NetRow> = (0..data.index.net_count())
         .filter_map(|net| {
             let hover = data.index.hover(net, &data.classes)?;
@@ -36,10 +47,13 @@ pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<
                 return None;
             }
             let expanded = state.expanded.contains(&hover.name);
-            let members = if expanded {
-                members_of(data, net)
+            let (members, more) = if expanded {
+                preview(
+                    members_of(data, net, &names),
+                    state.full_nets.contains(&hover.name),
+                )
             } else {
-                Vec::new()
+                (Vec::new(), 0)
             };
             Some(NetRow {
                 name: hover.name,
@@ -47,6 +61,7 @@ pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<
                 pins: hover.pins.len(),
                 expanded,
                 members,
+                more,
             })
         })
         .collect();
@@ -61,8 +76,12 @@ pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<
 }
 
 /// The pins, labels, power ports and sheet entries of `net`, one per element
-/// and pin, in walk order.
-fn members_of(data: &ProjectNetData, net: usize) -> Vec<NetMemberRow> {
+/// and pin, in walk order; a pin with its name from `names`.
+fn members_of(
+    data: &ProjectNetData,
+    net: usize,
+    names: &HashMap<NetAnchor, String>,
+) -> Vec<NetMemberRow> {
     data.index
         .steps(net)
         .into_iter()
@@ -78,16 +97,18 @@ fn members_of(data: &ProjectNetData, net: usize) -> Vec<NetMemberRow> {
                 NetMemberKind::Pin { pin, .. } => Some(pin.clone()),
                 _ => None,
             };
+            let anchor = NetAnchor {
+                sheet: m.sheet.clone(),
+                id: m.id,
+                occurrence: m.occurrence.clone(),
+                pin,
+            };
             Some(NetMemberRow {
                 kind,
                 text: describe_member(m),
+                pin_name: names.get(&anchor).cloned().unwrap_or_default(),
                 sheet: data.sheet_label(&m.sheet),
-                anchor: NetAnchor {
-                    sheet: m.sheet.clone(),
-                    id: m.id,
-                    occurrence: m.occurrence.clone(),
-                    pin,
-                },
+                anchor,
             })
         })
         .collect()
@@ -95,29 +116,25 @@ fn members_of(data: &ProjectNetData, net: usize) -> Vec<NetMemberRow> {
 
 impl Signex {
     pub(crate) fn handle_net_inspector_message(&mut self, msg: NetInspectorMsg) -> Task<Message> {
+        let state = &mut self.ui_state.net_inspector;
         match msg {
-            NetInspectorMsg::FilterChanged(filter) => {
-                self.ui_state.net_inspector.filter = filter;
-                Task::none()
+            NetInspectorMsg::FilterChanged(filter) => state.filter = filter,
+            NetInspectorMsg::FilterCleared => state.filter.clear(),
+            NetInspectorMsg::ModePicked(mode) => state.mode = mode,
+            NetInspectorMsg::NetToggled(name) => state.toggle(NetInspectorMode::ByNet, name),
+            NetInspectorMsg::PartToggled(name) => state.toggle(NetInspectorMode::ByComponent, name),
+            NetInspectorMsg::MoreMembersShown(name) => state.show_all(name),
+            NetInspectorMsg::MemberClicked { net, anchor } => {
+                return self.inspect_member(&net, &anchor);
             }
-            NetInspectorMsg::NetToggled(name) => {
-                let expanded = &mut self.ui_state.net_inspector.expanded;
-                if !expanded.remove(&name) {
-                    expanded.insert(name);
-                }
-                Task::none()
+            NetInspectorMsg::OpenMessagesPressed => {
+                return Task::done(Message::Overlay(OverlayMsg::OpenPanel(PanelKind::Messages)));
             }
-            NetInspectorMsg::MemberClicked { net, anchor } => self.inspect_member(&net, &anchor),
             // A board's net rows (#2403).
-            NetInspectorMsg::BoardNetSelected(net) => {
-                self.select_board_net(Some(&net));
-                Task::none()
-            }
-            NetInspectorMsg::BoardNetHighlighted(net) => {
-                self.highlight_board_net(Some(&net));
-                Task::none()
-            }
+            NetInspectorMsg::BoardNetSelected(net) => self.select_board_net(Some(&net)),
+            NetInspectorMsg::BoardNetHighlighted(net) => self.highlight_board_net(Some(&net)),
         }
+        Task::none()
     }
 
     /// The project the panel lists: the active document's.
@@ -201,9 +218,9 @@ impl Signex {
             self.document_state.panel_ctx.net_inspector = NetInspectorView {
                 filter: self.ui_state.net_inspector.filter.clone(),
                 status: NetListStatus::Ready,
-                nets: Vec::new(),
                 total: rows.total,
                 board: Some(rows),
+                ..NetInspectorView::default()
             };
             return Task::none();
         }
@@ -219,15 +236,31 @@ impl Signex {
         if same_source && self.document_state.panel_ctx.net_inspector.status == status {
             return warm;
         }
-        let (nets, total) = match &data {
-            Some(data) => (net_rows(data, &state), data.index.net_count()),
-            None => (Vec::new(), 0),
+        // Each mode lists its own rows; the other's count still shows on its
+        // segment.
+        let (nets, total, parts, part_total) = match &data {
+            Some(data) => {
+                let (nets, parts) = match state.mode {
+                    NetInspectorMode::ByNet => (net_rows(data, &state), Vec::new()),
+                    NetInspectorMode::ByComponent => (Vec::new(), part_rows(data, &state)),
+                };
+                (
+                    nets,
+                    data.index.net_count(),
+                    parts,
+                    data.index.parts().len(),
+                )
+            }
+            None => (Vec::new(), 0, Vec::new(), 0),
         };
         self.document_state.panel_ctx.net_inspector = NetInspectorView {
+            mode: state.mode,
             filter: state.filter.clone(),
             status,
             nets,
             total,
+            parts,
+            part_total,
             board: None,
         };
         self.document_state.net_nav.inspector_source = data.map(|data| (data, state));

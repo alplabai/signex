@@ -101,6 +101,22 @@ panels-navigator-rejected = { $name } (rejected)
 panels-navigator-cycle = { $name } (cycle)
 # The hierarchy is too deep to show this sheet's children.
 panels-navigator-not-expanded = { $name } (not expanded)
+# Navigator panel (#54): the filter box, the no-project card and the hint.
+panels-navigator-filter = Filter sheets
+panels-navigator-no-project-body = Open a project to see its sheet hierarchy.
+panels-navigator-open-project = Open Project…
+panels-navigator-hint = Click highlights · double-click opens the sheet.
+# Shown when no sheet name or file name contains the filter text.
+panels-navigator-no-match = No sheet matches the filter.
+# $filter is the filter text, $total a whole number.
+panels-navigator-no-match-body = Nothing named { $filter } in { $total ->
+        [one] { $total } sheet
+       *[other] { $total } sheets
+    }.
+panels-navigator-clear-filter = Clear filter
+# The sheet count beside the Sheets heading, and a row's sheet number. Whole numbers.
+panels-navigator-sheet-count = { $count }
+panels-navigator-sheet-number = { $number }
 
 ## Components panel: the details of the selected row
 panels-components-details-select = Select a component to see its details.

@@ -687,3 +687,50 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+
+## Net Inspector panel (#58): the By Net / By Component modes, the part
+## list, the empty-state cards and the footer. Column headings are shown in
+## capitals, so they are written in capitals here.
+
+# Segments of the mode control; $count is how many rows each list has.
+panels-net-inspector-by-net = By Net { $count }
+panels-net-inspector-by-component = By Component { $count }
+# Placeholder of the filter box in By Component mode.
+panels-net-inspector-filter-parts = Filter parts
+panels-net-inspector-column-part = PART
+panels-net-inspector-column-value-footprint = VALUE · FOOTPRINT
+# Follows a part row's value in the same cell: the part's footprint.
+panels-net-inspector-footprint-suffix = · { $footprint }
+# Sub-header of an expanded part, muted, in sentence case.
+panels-net-inspector-column-pin = Pin
+panels-net-inspector-column-pin-net = Net
+panels-net-inspector-column-pin-name = Pin name
+# Net cell of a pin on no net.
+panels-net-inspector-unconnected = — unconnected
+# The row under a long expanded list; clicking it lists the rest. $count is a whole number.
+panels-net-inspector-more-pins = + { $count } more pins
+# Footer in By Component mode. Whole numbers.
+panels-net-inspector-parts-summary =
+    { $shown } of { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }
+panels-net-inspector-footer-hint = Click a row to go to it
+# Empty-state card titles.
+panels-net-inspector-no-project-title = No nets to show
+panels-net-inspector-reading-title = Reading nets
+panels-net-inspector-unavailable-title = Nets unavailable
+panels-net-inspector-open-messages = Open Messages
+# Under "No net matches the filter."; $filter is the filter text, $total a whole number.
+panels-net-inspector-empty-body = Nothing named { $filter } in { $total ->
+        [one] { $total } net
+       *[other] { $total } nets
+    }.
+panels-net-inspector-empty-parts = No part matches the filter.
+panels-net-inspector-empty-parts-body = Nothing named { $filter } in { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }.
+panels-net-inspector-clear-filter = Clear filter
+# Under a no-match title while the filter is empty: the project lists nothing.
+panels-net-inspector-empty-none = The project has nothing to list here yet.
