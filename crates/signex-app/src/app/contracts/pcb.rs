@@ -225,15 +225,22 @@ pub enum PcbBarMsg {
 /// arrives as the sketch editor's own messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardSketchMsg {
-    /// `board_sketch` ran: enter sketch mode, or leave it when on.
+    /// `board_sketch` ran: enter sketch mode, or leave it when on (as
+    /// Bake does).
     ModeToggled,
-    /// Leave (the bar's button or Esc): commit any change, then leave. A
-    /// refused commit keeps the mode on.
-    LeaveRequested,
-    /// Apply: commit the changes and stay in the mode.
-    ApplyRequested,
-    /// Discard: leave without committing; the board keeps what it had.
+    /// Bake (the mode bar's primary button): commit any change to the
+    /// board as one board command, then leave. A refused commit keeps the
+    /// mode on (#2518).
+    BakeRequested,
+    /// Bake preview, or Back to sketch: show or hide what a bake writes.
+    BakePreviewToggled,
+    /// Discard changes (or Esc): leave without committing, asking first
+    /// when the sketch has changes the board has not taken.
     DiscardRequested,
+    /// The discard was confirmed: leave; the board keeps what it had.
+    DiscardConfirmed,
+    /// The discard was cancelled: keep editing.
+    DiscardCancelled,
 }
 
 /// What the user changed about what a board view shows (#2223): never the

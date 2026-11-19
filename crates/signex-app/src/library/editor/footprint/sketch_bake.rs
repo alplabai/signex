@@ -64,7 +64,7 @@ pub(super) fn bake_solution_with(
     // intentional.
     // A board sketch bakes to the board with `bake_board` on commit, never
     // into the editor's working footprint (#2234).
-    let footprint_bake = state.board_backdrop.is_none();
+    let footprint_bake = state.sketch_host() == signex_types::sketch::SketchHost::Footprint;
     if footprint_bake && !sketch.entities.is_empty() {
         // Pads + array expansions.
         let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
