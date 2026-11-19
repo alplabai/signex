@@ -1,9 +1,8 @@
-//! Properties panel views — Custom Selection Filters section, the
-//! General + Page Options tab (`view_properties_general`), and the
-//! document-parameter table (`view_properties_parameters`) — plus the
-//! filter-tab / preset-chip / segmented-button chrome those views use.
-//! Moved verbatim from the former single-file `properties_parameters`
-//! module.
+//! Properties panel views — Custom Selection Filters section and the
+//! General + Page Options tab (`view_properties_general`) — plus the
+//! filter-tab / preset-chip / segmented-button chrome the Properties views
+//! use. The sheet's parameters live in the Parameters tab
+//! (`parameters_tab`).
 
 use super::super::*;
 use crate::choice::{Choice, chosen};
@@ -538,10 +537,6 @@ pub fn view_properties_general<'a>(
         );
     }
 
-    // Title Block (collapsible, #1080)
-    col = col.push(thin_sep(hairline));
-    col = col.push(super::view_title_block_section(ctx));
-
     col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx).boxed());
 
@@ -551,87 +546,6 @@ pub fn view_properties_general<'a>(
     col = col.push(selection_filters_section_for(ctx, palette).boxed());
 
     col
-}
-
-/// Standard document parameters the Parameters tab lists.
-pub(super) const DOCUMENT_PARAMETERS: &[(&str, &str)] = &[
-    ("CurrentTime", "*"),
-    ("CurrentDate", "*"),
-    ("Time", "*"),
-    ("Date", "*"),
-    ("DocumentFullPathAndName", "*"),
-    ("DocumentName", "*"),
-    ("ModifiedDate", "*"),
-    ("ApprovedBy", "*"),
-    ("CheckedBy", "*"),
-    ("Author", "*"),
-    ("CompanyName", "*"),
-    ("DrawnBy", "*"),
-    ("Engineer", "*"),
-    ("Organization", "*"),
-    ("Title", "*"),
-    ("Address1", "*"),
-    ("Address2", "*"),
-    ("Address3", "*"),
-    ("Address4", "*"),
-];
-
-pub fn view_properties_parameters<'a>(
-    tokens: &ThemeTokens,
-    muted: Color,
-    primary: Color,
-    input_bg: Color,
-    i18n: &I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-
-    col = col.push(form_look::section_label(
-        t!(i18n, ids::PROPERTIES_SECTION_PARAMETERS),
-        tokens,
-        i18n,
-    ));
-
-    // Sub-tabs: All | Parameters | Rules
-    col = col.push(
-        container(
-            row![
-                seg_btn(
-                    t!(i18n, ids::PROPERTIES_TAB_ALL),
-                    false,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                ),
-                seg_btn(
-                    t!(i18n, ids::PROPERTIES_TAB_PARAMETERS),
-                    true,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                ),
-                seg_btn(
-                    t!(i18n, ids::PROPERTIES_TAB_RULES),
-                    false,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                ),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([SP.s, SP.m])
-        .style(form_look::segmented_frame)
-        .boxed(),
-    );
-
-    col.push(super::graphite_table::parameter_table(
-        tokens,
-        DOCUMENT_PARAMETERS,
-    ))
 }
 
 /// Properties panel tab button (General / Parameters).

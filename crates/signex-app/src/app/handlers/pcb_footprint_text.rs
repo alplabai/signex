@@ -133,6 +133,10 @@ impl Signex {
             return;
         };
         let revision = engine.revision();
+        let text = match field {
+            FootprintTextField::Designator => self.document_state.stored_reference_for(board, text),
+            FootprintTextField::Value => text,
+        };
         let built = designators::text_edit_command(engine.board(), footprint, field, text);
         let command = match built {
             Ok(Some(command)) => command,

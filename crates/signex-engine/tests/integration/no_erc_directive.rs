@@ -5,14 +5,13 @@
 use signex_engine::{Command, DocumentPatch, Engine};
 use signex_erc::engine::run_all;
 use signex_erc::{ErcContext, RuleId, RuleKind};
-use signex_types::schematic::{NoConnect, Point, SchematicSheet, SelectedItem, SelectedKind, Wire};
+use signex_types::schematic::{
+    NoErcDirective, Point, SchematicSheet, SelectedItem, SelectedKind, Wire,
+};
 use uuid::Uuid;
 
-fn directive_at(x: f64, y: f64) -> NoConnect {
-    NoConnect {
-        uuid: Uuid::now_v7(),
-        position: Point::new(x, y),
-    }
+fn directive_at(x: f64, y: f64) -> NoErcDirective {
+    NoErcDirective::new(Uuid::now_v7(), Point::new(x, y))
 }
 
 fn empty_engine() -> Engine {
@@ -146,4 +145,45 @@ fn erc_clears_the_dangling_wire_row_under_a_placed_directive() {
     assert_eq!(dangling_at_origin(&engine), 0);
     engine.undo().expect("undo");
     assert_eq!(dangling_at_origin(&engine), 1);
+}
+
+#[test]
+fn a_rule_list_edit_is_one_undo_step() {
+    let mut engine = empty_engine();
+    let uuid = place(&mut engine, 0.0, 0.0);
+    let rules = vec![RuleId::builtin(RuleKind::DanglingWire).0];
+
+    let result = engine
+        .execute(Command::SetNoErcRules {
+            id: uuid,
+            rules: rules.clone(),
+        })
+        .expect("set rules");
+    assert!(result.changed);
+    let patch = result.patch_pair.expect("an edit changes the document");
+    assert!(patch.document.contains(DocumentPatch::NO_ERC_DIRECTIVES));
+    assert_eq!(engine.document().no_erc_directives[0].rules, rules);
+
+    let again = engine
+        .execute(Command::SetNoErcRules {
+            id: uuid,
+            rules: rules.clone(),
+        })
+        .expect("same rules");
+    assert!(!again.changed);
+
+    engine.undo().expect("undo");
+    assert!(engine.document().no_erc_directives[0].rules.is_empty());
+    engine.redo().expect("redo");
+    assert_eq!(engine.document().no_erc_directives[0].rules, rules);
+}
+
+#[test]
+fn setting_rules_on_a_missing_directive_is_refused() {
+    let mut engine = empty_engine();
+    let refused = engine.execute(Command::SetNoErcRules {
+        id: Uuid::now_v7(),
+        rules: Vec::new(),
+    });
+    assert!(refused.is_err());
 }

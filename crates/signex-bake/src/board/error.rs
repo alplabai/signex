@@ -1,8 +1,8 @@
 //! Why a board sketch did not bake.
 
+use signex_expr::ExprError;
 use signex_sketch::SolveError;
 use signex_sketch::baked_kinds::BakedKind;
-use signex_sketch::expr::ExprError;
 use signex_sketch::id::SketchEntityId;
 
 /// A board sketch that cannot become board geometry. Every tagged entity

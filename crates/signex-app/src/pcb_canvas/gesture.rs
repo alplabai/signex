@@ -16,6 +16,10 @@ use crate::app::{ContextMenuMsg, Message};
 const DRAG_THRESHOLD_PX: f32 = 4.0;
 /// How far from the pointer an item still counts as under it (px).
 const HIT_REACH_PX: f32 = 4.0;
+/// Most time between the clicks of a double-click (ms), and most travel
+/// between them (px), as on the schematic canvas.
+const DOUBLE_CLICK_MS: u128 = 300;
+const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
 
 #[derive(Debug, Default)]
 pub(super) struct Gesture {
@@ -29,6 +33,9 @@ pub(super) struct Gesture {
     /// A tool or a carry waited for clicks at the press: its release is a
     /// click wherever it lands (#2396).
     clicks_only: bool,
+    /// When and where the last plain click was: a second one soon after,
+    /// nearby, is a double-click.
+    last_click: Option<(std::time::Instant, iced::Point)>,
 }
 
 impl Gesture {
@@ -157,6 +164,11 @@ impl Gesture {
                         mode: box_mode(self.modifiers),
                         view_rotation_deg: f64::from(deg),
                     }
+                } else if self.modifiers.is_empty() && self.second_click(press) {
+                    PcbCanvasMsg::DoubleClicked {
+                        at: canvas.screen_to_world(press, bounds),
+                        tolerance_mm: hover_reach_mm(canvas.scale()),
+                    }
                 } else {
                     PcbCanvasMsg::Clicked {
                         at: canvas.screen_to_world(press, bounds),
@@ -181,6 +193,18 @@ impl Gesture {
             return Some(canvas::Action::publish(msg));
         }
         Some(canvas::Action::request_redraw())
+    }
+
+    /// A plain click at `pos` (canvas pixels): whether it is the second of
+    /// a double-click, as the schematic canvas reads one (300 ms, 5 px).
+    fn second_click(&mut self, pos: iced::Point) -> bool {
+        let now = std::time::Instant::now();
+        let double = self.last_click.is_some_and(|(when, at)| {
+            let dist = (pos.x - at.x).hypot(pos.y - at.y);
+            now.duration_since(when).as_millis() < DOUBLE_CLICK_MS && dist < DOUBLE_CLICK_MAX_PX
+        });
+        self.last_click = if double { None } else { Some((now, pos)) };
+        double
     }
 
     fn drop_press(&mut self, canvas: &PcbCanvas) {

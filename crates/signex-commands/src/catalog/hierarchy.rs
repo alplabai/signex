@@ -68,6 +68,30 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         operands: operands::SYNC_SHEET,
         ..CommandMetadata::DEFAULT
     },
+    // #1276: bottom-up hierarchy. In a window they pick a file or show a
+    // preview first; with operands they run at once.
+    CommandMetadata {
+        id: "create_sheet_symbol_from_sheet",
+        category: "design",
+        label: command_ids::CMD_CREATE_SHEET_SYMBOL_FROM_SHEET,
+        menu_label: Some(command_ids::CMD_MENU_CREATE_SHEET_SYMBOL_FROM_SHEET),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL_FROM_SHEET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "sync_sheet_entries",
+        category: "design",
+        label: command_ids::CMD_SYNC_SHEET_ENTRIES,
+        menu_label: Some(command_ids::CMD_MENU_SYNC_SHEET_ENTRIES),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYNC_SHEET_ENTRIES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "number_schematic_sheets",
         category: "design",

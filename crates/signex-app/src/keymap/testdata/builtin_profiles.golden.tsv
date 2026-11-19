@@ -94,6 +94,7 @@ altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
 altium	bind	Pcb	1	command:board_sketch
 altium	bind	Pcb	3	command:view_board_3d
+altium	bind	Pcb	E O S	command:set_board_origin
 altium	bind	Pcb	F	command:change_footprint
 altium	bind	Pcb	L	command:flip_selection
 altium	bind	Pcb	N	command:toggle_ratsnest
@@ -277,6 +278,7 @@ altium	hint	-	-	draw_polygon
 altium	hint	-	-	draw_bezier
 altium	hint	-	-	import_graphics
 altium	hint	-	-	edit_blanket
+altium	hint	-	-	edit_no_erc_rules
 altium	hint	-	-	place_board_arc
 altium	hint	-	-	place_board_string
 altium	hint	-	-	place_board_dimension
@@ -305,6 +307,8 @@ altium	hint	-	-	place_sheet_entry
 altium	hint	-	-	place_device_sheet_symbol
 altium	hint	-	-	create_sheet_from_sheet_symbol
 altium	hint	-	-	sync_sheet_pins
+altium	hint	-	-	create_sheet_symbol_from_sheet
+altium	hint	-	-	sync_sheet_entries
 altium	hint	-	-	number_schematic_sheets
 altium	hint	-	-	open_child_sheet
 altium	hint	-	-	leave_sheet
@@ -323,6 +327,7 @@ altium	hint	-	-	back_annotate_schematics
 altium	hint	-	F8	run_erc
 altium	hint	-	-	check_erc
 altium	hint	-	-	open_erc_dialog
+altium	hint	-	-	repair_pin_junctions
 altium	hint	-	T D	run_drc
 altium	hint	-	-	check_drc
 altium	hint	-	-	check_requirements
@@ -392,6 +397,8 @@ altium	hint	-	-	set_pad_shape
 altium	hint	-	-	set_layer_visible
 altium	hint	-	-	set_active_layer
 altium	hint	-	-	set_layer_color
+altium	hint	-	-	edit_layer_color
+altium	hint	-	-	reset_layer_colors
 altium	hint	-	-	show_used_layers_only
 altium	hint	-	-	set_object_visible
 altium	hint	-	-	set_object_transparency
@@ -455,6 +462,9 @@ altium	hint	-	-	view_rotate_ccw
 altium	hint	-	-	view_rotate_180
 altium	hint	-	-	view_rotate_reset
 altium	hint	-	-	toggle_origin_marker
+altium	hint	-	E O S	set_board_origin
+altium	hint	-	-	reset_board_origin
+altium	hint	-	-	snap_board_origin_to_corner
 altium	hint	-	Ctrl+M	measure_distance
 altium	hint	-	-	measure_board
 altium	hint	-	-	reset_local_coordinates
@@ -603,6 +613,7 @@ classic	bind	Pcb	K	command:place_board_keepout
 classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	Shift+*	command:next_signal_layer
 classic	bind	Pcb	Shift++	command:next_layer
+classic	bind	Pcb	Shift+O	command:set_board_origin
 classic	bind	Pcb	Shift+S	command:toggle_single_layer_mode
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
@@ -774,6 +785,7 @@ classic	hint	-	-	draw_polygon
 classic	hint	-	-	draw_bezier
 classic	hint	-	Ctrl+Shift+F	import_graphics
 classic	hint	-	-	edit_blanket
+classic	hint	-	-	edit_no_erc_rules
 classic	hint	-	-	place_board_arc
 classic	hint	-	-	place_board_string
 classic	hint	-	-	place_board_dimension
@@ -802,6 +814,8 @@ classic	hint	-	-	place_sheet_entry
 classic	hint	-	-	place_device_sheet_symbol
 classic	hint	-	-	create_sheet_from_sheet_symbol
 classic	hint	-	-	sync_sheet_pins
+classic	hint	-	-	create_sheet_symbol_from_sheet
+classic	hint	-	-	sync_sheet_entries
 classic	hint	-	-	number_schematic_sheets
 classic	hint	-	-	open_child_sheet
 classic	hint	-	Alt+BACKSPACE	leave_sheet
@@ -820,6 +834,7 @@ classic	hint	-	-	back_annotate_schematics
 classic	hint	-	F8	run_erc
 classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
+classic	hint	-	-	repair_pin_junctions
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
 classic	hint	-	-	check_requirements
@@ -889,6 +904,8 @@ classic	hint	-	-	set_pad_shape
 classic	hint	-	-	set_layer_visible
 classic	hint	-	-	set_active_layer
 classic	hint	-	-	set_layer_color
+classic	hint	-	-	edit_layer_color
+classic	hint	-	-	reset_layer_colors
 classic	hint	-	-	show_used_layers_only
 classic	hint	-	-	set_object_visible
 classic	hint	-	-	set_object_transparency
@@ -952,6 +969,9 @@ classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
 classic	hint	-	-	toggle_origin_marker
+classic	hint	-	Shift+O	set_board_origin
+classic	hint	-	-	reset_board_origin
+classic	hint	-	-	snap_board_origin_to_corner
 classic	hint	-	Ctrl+M	measure_distance
 classic	hint	-	-	measure_board
 classic	hint	-	SPACE	reset_local_coordinates

@@ -18,9 +18,7 @@ use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::MutationOutcome as Applied;
-use crate::app::sheet_hierarchy::{
-    CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
-};
+use crate::app::sheet_hierarchy::{CaseFold, normalised_key};
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -43,7 +41,7 @@ pub(super) fn sync_sheet_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// A point operand that must be a coordinate: a pin reference names a pin's
 /// tip, which is no corner or border point of a sheet symbol.
-fn refuse_pin_ref(args: &CommandArgs, name: &str) -> Result<(), String> {
+pub(super) fn refuse_pin_ref(args: &CommandArgs, name: &str) -> Result<(), String> {
     match args.operand(name) {
         Some(OperandValue::PinRef { .. }) => Err(format!(
             "`{name}` is a coordinate here, not a pin reference"
@@ -52,37 +50,12 @@ fn refuse_pin_ref(args: &CommandArgs, name: &str) -> Result<(), String> {
     }
 }
 
-fn applied(outcome: Applied, reason: Option<String>) -> Result<(), String> {
+pub(super) fn applied(outcome: Applied, reason: Option<String>) -> Result<(), String> {
     match outcome {
         Applied::Changed => Ok(()),
         Applied::Unchanged => Err("nothing was placed".to_string()),
         Applied::Failed => Err(reason.unwrap_or_else(|| "the engine refused the edit".into())),
     }
-}
-
-/// The keys of the sheets above any placement of the sheet at `path`.
-fn sheets_above(hierarchy: &SheetHierarchy, path: &Path, fold: CaseFold) -> HashSet<String> {
-    fn walk(
-        node: &SheetNode,
-        path: &Path,
-        fold: CaseFold,
-        chain: &mut Vec<String>,
-        out: &mut HashSet<String>,
-    ) {
-        if node.kind == SheetNodeKind::Present && node.is_at(path, fold) {
-            out.extend(chain.iter().cloned());
-        }
-        chain.push(normalised_key(&node.path, fold));
-        for child in &node.children {
-            walk(child, path, fold, chain, out);
-        }
-        chain.pop();
-    }
-    let mut out = HashSet::new();
-    for node in hierarchy.top_level() {
-        walk(node, path, fold, &mut Vec::new(), &mut out);
-    }
-    out
 }
 
 /// The entry `name` on `symbol` at `at`: a new name, on the border (away
@@ -138,7 +111,7 @@ fn names(list: &[String], keep: impl Fn(&String) -> bool) -> Vec<String> {
 
 impl Signex {
     /// The one sheet symbol named `name` on the sheet an edit acts on.
-    fn sheet_symbol_named(&self, name: &str) -> Result<&ChildSheet, String> {
+    pub(super) fn sheet_symbol_named(&self, name: &str) -> Result<&ChildSheet, String> {
         let engine = self
             .document_state
             .edit_engine()
@@ -184,7 +157,11 @@ impl Signex {
     /// ran), and neither this sheet, one above it nor one that places it. A
     /// file with a sheet that cannot be read has unknown names and an unknown
     /// subtree: refused unless `allow_merge`. Nothing is created or opened.
-    fn child_file_reference(&self, file: &str, allow_merge: bool) -> Result<String, String> {
+    pub(super) fn child_file_reference(
+        &self,
+        file: &str,
+        allow_merge: bool,
+    ) -> Result<String, String> {
         let (_, path, reference) = self.child_file_target(file)?;
         if self.prefetched_escape(&path)? {
             return Err(
@@ -227,10 +204,7 @@ impl Signex {
     /// before the edit ran, `edit_reads`), and in the hierarchy a window
     /// already holds for it (a sheet the project does not own yet).
     fn sheets_above_edited(&self, sheet: &Path, fold: CaseFold) -> Result<HashSet<String>, String> {
-        let mut above = self
-            .hierarchy_describing(sheet)
-            .map(|(h, _)| sheets_above(h, sheet, fold))
-            .unwrap_or_default();
+        let mut above = self.sheets_above_known(sheet, fold);
         if self.document_state.document_project(sheet).is_none() {
             return Ok(above);
         }
@@ -244,8 +218,18 @@ impl Signex {
             &set.pages_outside_the_hierarchy,
             set.fold,
         );
-        above.extend(sheets_above(&hierarchy, sheet, fold));
+        above.extend(hierarchy.sheets_above(sheet, fold));
         Ok(above)
+    }
+
+    /// The keys of the sheets above `sheet` in the hierarchy a window already
+    /// holds for it (the Navigator's, built off the UI thread): no read. The
+    /// Create Sheet Symbol From Sheet dialog's cycle check (#1276) and the
+    /// first half of [`Self::sheets_above_edited`].
+    pub(crate) fn sheets_above_known(&self, sheet: &Path, fold: CaseFold) -> HashSet<String> {
+        self.hierarchy_describing(sheet)
+            .map(|(h, _)| h.sheets_above(sheet, fold))
+            .unwrap_or_default()
     }
 
     /// The sheet symbol the operands describe, checked: corners, name and

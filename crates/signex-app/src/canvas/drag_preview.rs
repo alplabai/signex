@@ -296,6 +296,8 @@ struct GhostKey {
     revision: u64,
     selection: Vec<SelectedItem>,
     delta: (u64, u64),
+    /// The wire end a grip drag holds `(wire, is start)`; `None` for a move.
+    grip: Option<(uuid::Uuid, bool)>,
 }
 
 #[derive(Debug)]
@@ -344,6 +346,7 @@ fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostK
         revision,
         selection: selection.to_vec(),
         delta: (dx.to_bits(), dy.to_bits()),
+        grip: None,
     }
 }
 
@@ -544,6 +547,79 @@ impl GhostState {
         self.ghost = None;
         self.plain = None;
         self.reported_held.clear();
+    }
+
+    /// The grip-drag ghost already computed for this revision, selection,
+    /// held end `(wire, is start)` and delta.
+    pub(super) fn ready_grip_frame(
+        &self,
+        revision: u64,
+        selection: &[SelectedItem],
+        grip: (uuid::Uuid, bool),
+        dx: f64,
+        dy: f64,
+    ) -> Option<DragFrame> {
+        let key = GhostKey {
+            grip: Some(grip),
+            ..key_of(revision, selection, dx, dy)
+        };
+        (self.ghost.as_ref())
+            .filter(|ghost| ghost.key == key)
+            .map(|ghost| ghost.frame.clone())
+    }
+
+    /// Compute the ghost of a grip drag: the sheet `MoveWireEnd` commits for
+    /// the held end `(wire, is start)`, now at `end`, moved by `(dx, dy)`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn refresh_grip(
+        &mut self,
+        snap: &SchematicRenderSnapshot,
+        revision: u64,
+        selection: &[SelectedItem],
+        grip: (uuid::Uuid, bool),
+        end: signex_types::schematic::Point,
+        (dx, dy): (f64, f64),
+        keep_wires: bool,
+    ) {
+        let key = GhostKey {
+            grip: Some(grip),
+            ..key_of(revision, selection, dx, dy)
+        };
+        if self.ghost.as_ref().is_some_and(|ghost| ghost.key == key) {
+            return;
+        }
+        self.plain = None;
+        let Ok(mut engine) = signex_engine::Engine::new(snap.clone()) else {
+            return;
+        };
+        let command = signex_engine::Command::MoveWireEnd {
+            wire: grip.0,
+            start: grip.1,
+            to: signex_types::schematic::Point::new(end.x + dx, end.y + dy),
+            keep_wires,
+        };
+        let moved = match engine.execute(command) {
+            Ok(done) if done.changed => engine.document().clone(),
+            _ => snap.clone(),
+        };
+        let snapshot = Rc::new(moved);
+        let ids = match &self.base_ids {
+            Some((rev, ids)) if super::drag_layers::is_known(revision) && *rev == revision => {
+                ids.clone()
+            }
+            _ => {
+                let fresh = Rc::new(BaseIds::of(snap));
+                self.base_ids = Some((revision, fresh.clone()));
+                fresh
+            }
+        };
+        let frame = split_ghost_walk(snap, &snapshot, &moved_item_ids(snap, selection), &ids);
+        self.ghost = Some(DragGhost {
+            key,
+            snapshot,
+            frame,
+            held: Vec::new(),
+        });
     }
 }
 

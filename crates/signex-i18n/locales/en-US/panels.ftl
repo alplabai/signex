@@ -415,6 +415,26 @@ panels-net-inspector-summary =
         [one] { $total } net
        *[other] { $total } nets
     }
+# The two tabs (#1274): the project's nets, or its parts with the net on each pin.
+panels-net-inspector-tab-nets = By Net
+panels-net-inspector-tab-components = By Component
+# Placeholder of the box that filters the parts by designator, value or footprint.
+panels-net-inspector-filter-parts = Filter parts
+# Shown when no part matches the filter.
+panels-net-inspector-empty-parts = No part matches the filter.
+# The part's designator.
+panels-net-inspector-column-part = PART
+panels-net-inspector-column-value = VALUE
+panels-net-inspector-column-footprint = FOOTPRINT
+# A part's designator, value or footprint cell when it is blank.
+panels-net-inspector-blank = —
+# Footer of the By Component tab: how many parts the filter shows of the
+# project's total. Whole numbers.
+panels-net-inspector-parts-summary =
+    { $shown } of { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }
 
 ## Messages panel: short source names
 panels-messages-source-app = App
@@ -687,3 +707,8 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+# Section title: the ERC rules a selected No-ERC directive silences at its
+# point (#1699).
+panels-no-erc-rules = Suppressed Rules
+# Checkbox: the No-ERC directive silences every ERC rule at its point.
+panels-no-erc-all-rules = All Rules

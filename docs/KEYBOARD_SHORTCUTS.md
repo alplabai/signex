@@ -147,7 +147,9 @@ On a board (the `pcb` context, #2406) both profiles bind `1` Board Sketch,
 Footprint and `Q` the unit toggle; the chord profile adds `N` Toggle
 Ratsnest, `P K` Keepout and `T D` Run DRC, Classic `C` Toggle Ratsnest, `K`
 Keepout, `F7` Run DRC and `Ctrl+M` Measure Distance (the chord profile's
-global `Ctrl+M` already measures on a board). A board binding outranks a global one with the same keys, so
+global `Ctrl+M` already measures on a board). Edit ▸ Origin ▸ Set is `E O S`
+in the chord profile and `Shift+O` in Classic, whose `E` alone is taken
+(2026-11-18). A board binding outranks a global one with the same keys, so
 Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
 `pcb` section of its own before the global sections, so `cycle_unit` keeps
 `Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both

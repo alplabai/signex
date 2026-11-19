@@ -5,13 +5,18 @@
 //! the corner mode), as one undo step. Making another copper layer active
 //! mid-run puts a via at the run's end in the same step, and the run goes
 //! on there. A click on the run's end, Esc or a right-click ends the run.
+//! A run started on copper that does not reach the active layer (a surface
+//! pad on Top with an inner layer active) takes that copper's net and starts
+//! with a via (`start_on_copper`).
 
 use signex_engine::pcb::draw::{self, TrackStyle};
+use signex_engine::pcb::route::copper_under;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
+use super::route_end::end_via;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -53,8 +58,8 @@ impl Signex {
         let classes = self.track_tool_net_classes();
         let Some(anchor) = session.points.last().copied() else {
             let defaults = &self.interaction_state.pcb_tool_defaults;
-            let style = defaults
-                .track_style(board, at, layer)
+            let style = defaults.track_style(board, at, layer);
+            let style = start_on_copper(board, defaults, at, style)
                 .with_class_width(board, form_or_class_widths(defaults, classes));
             self.set_route(vec![at], Some(style));
             return;
@@ -65,11 +70,15 @@ impl Signex {
             return;
         }
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        let (mut style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        // A pad off the run's layer at its end is reached with a via there.
+        let end = end_via(board, defaults, at, &mut style);
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
-            self.run_placement("Track", Ok(vec![command]));
+            let mut commands = vec![command];
+            commands.extend(draw::place_route(Vec::new(), end));
+            self.run_placement("Track", Ok(commands));
         }
         let mut points = self
             .own_board_tool()
@@ -111,12 +120,15 @@ impl Signex {
         };
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let classes = self.track_tool_net_classes();
-        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let (mut style, via) =
+            next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let end = end_via(board, defaults, cursor, &mut style);
         let rule = self.interaction_state.corner_rule;
         preview
             .segments
             .extend(draw::track_run(anchor, cursor, rule, style, Uuid::nil));
         preview.vias.extend(via);
+        preview.vias.extend(end);
     }
 }
 
@@ -150,6 +162,30 @@ pub(super) fn next_leg_style(
     });
     style.layer = layer;
     (style, via)
+}
+
+/// `style`, started at `at`: with no net on its layer there and none set in
+/// Properties, it takes the layer and net of the netted copper under `at` on
+/// another copper layer (a surface pad off the active layer), so the first
+/// leg adds a via there and runs on the active layer (maintainer
+/// 2026-11-18). Over bare board it stays as it is, of no net.
+pub(super) fn start_on_copper(
+    board: &PcbBoard,
+    defaults: &BoardToolDefaults,
+    at: Point,
+    style: TrackStyle,
+) -> TrackStyle {
+    if style.net != 0 || defaults.track_net.is_some() {
+        return style;
+    }
+    match copper_under(board, at) {
+        Some((layer, net)) => TrackStyle {
+            layer,
+            net,
+            ..style
+        },
+        None => style,
+    }
 }
 
 /// The net classes that size a track: none once the tool's form set a width

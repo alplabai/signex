@@ -288,6 +288,13 @@ pub struct CanvasColors {
     pub junction: Color,
     pub body: Color,
     pub body_fill: Color,
+    /// Fill of the symbol body shapes a symbol leaves unfilled (closed
+    /// rectangles, polygons and circles, see
+    /// `schematic::default_body_fill_shapes`); `None` leaves them unfilled.
+    /// Both Graphite themes set a soft tint; the "Fill symbol bodies"
+    /// preference replaces or clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_tint: Option<Color>,
     pub pin: Color,
     pub reference: Color,
     pub value: Color,
@@ -516,6 +523,9 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     junction: c(0x2B, 0x2D, 0x33),
     body: c(0x2B, 0x2D, 0x33),
     body_fill: c(0xFF, 0xFF, 0xFF),
+    // About 8% of the body ink mixed into the background, stored opaque so
+    // the PDF and SVG paint the same colour; pin and field text stay readable.
+    body_tint: s(0xEC, 0xEB, 0xEA),
     pin: c(0x2B, 0x2D, 0x33),
     reference: c(0x15, 0x17, 0x1A),
     value: c(0x5B, 0x5E, 0x66),
@@ -591,6 +601,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     junction: c(0xC9, 0xCB, 0xD1),
     body: c(0xC9, 0xCB, 0xD1),
     body_fill: c(0x1B, 0x1D, 0x21),
+    // About 8% of the body ink mixed into the background, as in Light.
+    body_tint: s(0x22, 0x24, 0x27),
     pin: c(0xC9, 0xCB, 0xD1),
     reference: c(0xEC, 0xEA, 0xE5),
     value: c(0xA3, 0xA5, 0xAB),
@@ -644,21 +656,46 @@ const GRAPHITE_BOARD_LAYERS: BoardLayerColors = BoardLayerColors {
     multi_layer: c(0xC0, 0xC0, 0xC0),
 };
 
-const fn sided(top: Color, bottom: Color) -> SidedColors {
-    SidedColors { top, bottom }
+/// The share of the top colour's channels the bottom layer of a pair keeps,
+/// in fifths: 4/5, the same hue at 80 % of its lightness.
+const PAIR_BOTTOM_FIFTHS: u16 = 4;
+
+/// The colour of the bottom layer of a Top/Bottom pair (silkscreen, solder,
+/// paste, keep-out and the component layers): `top` with every channel
+/// scaled by [`PAIR_BOTTOM_FIFTHS`], so the hue stays and the bottom reads
+/// darker (decided 2026-11-18). Copper is not a pair: Bottom Layer keeps
+/// its own blue.
+#[must_use]
+pub const fn pair_bottom(top: Color) -> Color {
+    const fn dim(v: u8) -> u8 {
+        (v as u16 * PAIR_BOTTOM_FIFTHS / 5) as u8
+    }
+    Color {
+        r: dim(top.r),
+        g: dim(top.g),
+        b: dim(top.b),
+        a: top.a,
+    }
+}
+
+const fn sided(top: Color) -> SidedColors {
+    SidedColors {
+        top,
+        bottom: pair_bottom(top),
+    }
 }
 
 /// Each kind its own hue, apart from copper, overlay, solder, paste, the
 /// outline and keep-out; every colour is at least 3:1 against the board
-/// area and the workspace.
+/// area and the workspace. A bottom layer is its top's [`pair_bottom`].
 const GRAPHITE_TECHNICAL_LAYERS: TechnicalLayerColors = TechnicalLayerColors {
-    adhesive: sided(c(0xF2, 0xA6, 0x49), c(0xC7, 0x84, 0x32)),
-    fab: sided(c(0x6D, 0xD1, 0xF2), c(0x50, 0xA9, 0xC7)),
-    assembly: sided(c(0xA5, 0xF2, 0x6D), c(0x81, 0xC7, 0x50)),
-    courtyard: sided(c(0x6D, 0xF2, 0xC6), c(0x50, 0xC7, 0x9F)),
-    body_3d: sided(c(0x83, 0x6D, 0xF2), c(0x63, 0x50, 0xC7)),
-    fiducial: sided(c(0xF2, 0x91, 0x91), c(0xCC, 0x76, 0x76)),
-    designator: sided(c(0xF7, 0xF1, 0xAD), c(0xC7, 0xC1, 0x81)),
+    adhesive: sided(c(0xF2, 0xA6, 0x49)),
+    fab: sided(c(0x6D, 0xD1, 0xF2)),
+    assembly: sided(c(0xA5, 0xF2, 0x6D)),
+    courtyard: sided(c(0x6D, 0xF2, 0xC6)),
+    body_3d: sided(c(0x83, 0x6D, 0xF2)),
+    fiducial: sided(c(0xF2, 0x91, 0x91)),
+    designator: sided(c(0xF7, 0xF1, 0xAD)),
     dimensions: c(0x9D, 0xB3, 0xF2),
     notes: c(0xDA, 0xA1, 0xE6),
     drill_drawing: c(0x77, 0xD9, 0x87),
@@ -808,6 +845,36 @@ mod tests {
             let canvas = canvas_colors(id);
             assert_eq!(canvas.background, canvas.paper, "{id:?}");
             assert!(!theme_tokens(id).extended.is_empty(), "{id:?}");
+        }
+    }
+
+    /// The symbol body tint sits between the paper and the body ink, much
+    /// nearer the paper, so pin names and field text stay readable on it.
+    #[test]
+    fn every_builtin_sets_a_body_tint_near_its_paper() {
+        fn luma(c: Color) -> f64 {
+            0.299 * f64::from(c.r) + 0.587 * f64::from(c.g) + 0.114 * f64::from(c.b)
+        }
+        for &id in ThemeId::BUILTINS {
+            let canvas = canvas_colors(id);
+            let tint = canvas
+                .body_tint
+                .expect("every built-in theme sets a body tint");
+            let (paper, ink) = (luma(canvas.paper), luma(canvas.body));
+            let tint = luma(tint);
+            assert!(
+                (tint - paper).abs() > 0.0,
+                "{id:?}: the tint must differ from the paper"
+            );
+            assert!(
+                (tint - paper).abs() < (ink - paper).abs() * 0.15,
+                "{id:?}: the tint must stay near the paper"
+            );
+            assert_eq!(
+                (tint - paper).signum(),
+                (ink - paper).signum(),
+                "{id:?}: the tint leans toward the body ink"
+            );
         }
     }
 
