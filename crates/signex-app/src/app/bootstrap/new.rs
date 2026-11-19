@@ -374,13 +374,9 @@ impl Signex {
                 i18n: std::sync::Arc::clone(&i18n),
                 // #144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.
-                preferences_draft_language: i18n.pref().clone(),
-                preferences_language_preview: None,
-                preferences_system_language_name: String::new(),
-                preferences_dirty_pages: Vec::new(),
-                preferences_pages_view: Default::default(),
-                preferences_keymap_view: Default::default(),
-                preferences_classes_view: Default::default(),
+                preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
+                    i18n.pref().clone(),
+                )),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,

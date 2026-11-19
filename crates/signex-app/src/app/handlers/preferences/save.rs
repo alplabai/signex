@@ -75,7 +75,7 @@ impl Signex {
         // #144a — the drafted language: every window redraws in it from the
         // next frame, no restart. Its write is one more background task.
         // Before the keymap below, which compiles its labels in it.
-        writes.push(self.set_language(self.ui_state.preferences_draft_language.clone()));
+        writes.push(self.set_language(self.ui_state.preferences_pages.draft_language.clone()));
         if !self.commit_keymap_draft() {
             // The prefs writes above are already started, so this early
             // return still has to report a file that broke since the dialog
@@ -94,7 +94,7 @@ impl Signex {
         // logged and shown in the Messages panel when it completes, and a
         // file broken beyond use raises the banner through the probe.
         self.ui_state.preferences_dirty = false;
-        self.ui_state.preferences_dirty_pages.clear();
+        self.ui_state.preferences_pages.dirty_pages.clear();
         self.save_follow_up(writes, ui_scale_changed)
     }
 

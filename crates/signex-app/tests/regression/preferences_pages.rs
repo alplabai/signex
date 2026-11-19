@@ -88,7 +88,10 @@ fn a_pitch_typed_on_the_snap_preview_fills_its_field() {
 
     let _ = app.update(pitch(Label::LabelPressed(0)));
     assert_eq!(
-        app.ui_state.preferences_pages_view.snap_label_editing(),
+        app.ui_state
+            .preferences_pages
+            .pages_view
+            .snap_label_editing(),
         Some(0)
     );
     let _ = app.update(pitch(Label::DraftEdited("0.635".to_string())));
@@ -96,7 +99,10 @@ fn a_pitch_typed_on_the_snap_preview_fills_its_field() {
 
     assert_eq!(app.ui_state.preferences_draft_fast_grids[0], "0.635");
     assert_eq!(
-        app.ui_state.preferences_pages_view.snap_label_editing(),
+        app.ui_state
+            .preferences_pages
+            .pages_view
+            .snap_label_editing(),
         None
     );
     assert!(
@@ -119,7 +125,10 @@ fn tab_commits_a_pitch_and_opens_the_other_and_esc_cancels() {
 
     assert_eq!(app.ui_state.preferences_draft_fast_grids[0], "0.5");
     assert_eq!(
-        app.ui_state.preferences_pages_view.snap_label_editing(),
+        app.ui_state
+            .preferences_pages
+            .pages_view
+            .snap_label_editing(),
         Some(1)
     );
 
@@ -128,7 +137,10 @@ fn tab_commits_a_pitch_and_opens_the_other_and_esc_cancels() {
 
     assert_eq!(app.ui_state.preferences_draft_fast_grids[1], "2.54");
     assert_eq!(
-        app.ui_state.preferences_pages_view.snap_label_editing(),
+        app.ui_state
+            .preferences_pages
+            .pages_view
+            .snap_label_editing(),
         None
     );
 }

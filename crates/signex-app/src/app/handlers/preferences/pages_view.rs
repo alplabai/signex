@@ -14,11 +14,17 @@ impl Signex {
     pub(crate) fn handle_preferences_pages_view(&mut self, msg: PagesViewMsg) -> Task<Message> {
         match msg {
             PagesViewMsg::HelpExpandToggled(topic) => {
-                self.ui_state.preferences_pages_view.toggle_help(topic);
+                self.ui_state
+                    .preferences_pages
+                    .pages_view
+                    .toggle_help(topic);
                 Task::none()
             }
             PagesViewMsg::PreviewExpandToggled(kind) => {
-                self.ui_state.preferences_pages_view.toggle_preview(kind);
+                self.ui_state
+                    .preferences_pages
+                    .pages_view
+                    .toggle_preview(kind);
                 Task::none()
             }
             PagesViewMsg::IncrementStepNudged(delta) => {
@@ -39,7 +45,8 @@ impl Signex {
         let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
         let step = self
             .ui_state
-            .preferences_pages_view
+            .preferences_pages
+            .pages_view
             .snap_label_event(message, &drafts, &i18n);
         let committed = match step.committed {
             Some((index, text)) => {

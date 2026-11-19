@@ -92,18 +92,19 @@ impl Signex {
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
             draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
             i18n: &ui.i18n,
-            draft_language: &ui.preferences_draft_language,
+            draft_language: &ui.preferences_pages.draft_language,
             // The preview is built when the dialog opens; until then the
             // live catalog stands in.
             language_preview: ui
-                .preferences_language_preview
+                .preferences_pages
+                .language_preview
                 .as_deref()
                 .unwrap_or(ui.i18n.as_ref()),
-            system_language_name: &ui.preferences_system_language_name,
-            dirty_pages: &ui.preferences_dirty_pages,
-            pages_view: &ui.preferences_pages_view,
-            keymap_view: &ui.preferences_keymap_view,
-            classes_view: &ui.preferences_classes_view,
+            system_language_name: &ui.preferences_pages.system_language_name,
+            dirty_pages: &ui.preferences_pages.dirty_pages,
+            pages_view: &ui.preferences_pages.pages_view,
+            keymap_view: &ui.preferences_pages.keymap_view,
+            classes_view: &ui.preferences_pages.classes_view,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
             draft_fast_grids: &ui.preferences_draft_fast_grids,
             fast_grid_status: &ui.preferences_fast_grid_status,

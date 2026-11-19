@@ -111,7 +111,7 @@ mod view_state {
 
         let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
 
-        assert!(app.ui_state.preferences_keymap_view.shows_conflicts());
+        assert!(app.ui_state.preferences_pages.keymap_view.shows_conflicts());
         assert!(!app.ui_state.preferences_dirty);
         assert!(app.ui_state.preferences_keymap_status.is_empty());
     }
@@ -125,13 +125,13 @@ mod view_state {
         let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
         let mut expected = KeymapViewState::default();
         expected.apply(KeymapViewMsg::ConflictsShown);
-        assert_eq!(app.ui_state.preferences_keymap_view, expected);
+        assert_eq!(app.ui_state.preferences_pages.keymap_view, expected);
 
         let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ContextFilterPicked(
             KeymapViewState::default().context_filter,
         ));
         assert_eq!(
-            app.ui_state.preferences_keymap_view,
+            app.ui_state.preferences_pages.keymap_view,
             KeymapViewState::default()
         );
         assert_eq!(app.ui_state.preferences_keymap_editor, before);

@@ -38,10 +38,11 @@ impl Signex {
         // A Preferences draft that still stood for the language in force
         // follows the switch, so a palette or menu change made while the
         // dialog is open does not read as an unsaved Language change.
-        let draft_followed = self.ui_state.preferences_draft_language == *self.ui_state.i18n.pref();
+        let draft_followed =
+            self.ui_state.preferences_pages.draft_language == *self.ui_state.i18n.pref();
         self.ui_state.i18n = next;
         if draft_followed {
-            self.ui_state.preferences_draft_language = pref.clone();
+            self.ui_state.preferences_pages.draft_language = pref.clone();
         }
         if self.ui_state.preferences_open {
             self.refresh_language_preview();
@@ -61,21 +62,22 @@ impl Signex {
     /// the live one while the draft is the language in force, else a new
     /// one. Built here, never in `view`.
     pub(crate) fn refresh_language_preview(&mut self) {
-        let draft = &self.ui_state.preferences_draft_language;
+        let draft = &self.ui_state.preferences_pages.draft_language;
         let preview = if draft == self.ui_state.i18n.pref() {
             Arc::clone(&self.ui_state.i18n)
         } else {
             Arc::new(I18n::new(draft))
         };
-        self.ui_state.preferences_language_preview = Some(preview);
+        self.ui_state.preferences_pages.language_preview = Some(preview);
     }
 
     /// Seed the Language page from the language in force (dialog open and
     /// Discard): the draft, its preview, and the name of the language
     /// "Follow the system" resolves to.
     pub(crate) fn seed_language_draft(&mut self) {
-        self.ui_state.preferences_draft_language = self.ui_state.i18n.pref().clone();
-        self.ui_state.preferences_system_language_name = system_language_name(&self.ui_state.i18n);
+        self.ui_state.preferences_pages.draft_language = self.ui_state.i18n.pref().clone();
+        self.ui_state.preferences_pages.system_language_name =
+            system_language_name(&self.ui_state.i18n);
         self.refresh_language_preview();
     }
 }

@@ -43,14 +43,15 @@ fn a_drafted_language_is_not_applied_before_save() {
 
     // Assert
     assert_eq!(app.ui_state.i18n.pref(), &before, "not applied before Save");
-    assert_eq!(app.ui_state.preferences_draft_language, pseudo());
+    assert_eq!(app.ui_state.preferences_pages.draft_language, pseudo());
     assert!(
         app.ui_state.preferences_dirty,
         "a drafted language is unsaved"
     );
     let preview = app
         .ui_state
-        .preferences_language_preview
+        .preferences_pages
+        .language_preview
         .as_ref()
         .expect("the preview catalog is built in update");
     assert_eq!(preview.locale(), "en-XA", "the preview reads the draft");
@@ -75,7 +76,7 @@ fn save_switches_the_language_without_a_restart() {
         "the live catalog switched"
     );
     assert!(!app.ui_state.preferences_dirty);
-    assert!(app.ui_state.preferences_dirty_pages.is_empty());
+    assert!(app.ui_state.preferences_pages.dirty_pages.is_empty());
     assert!(app.ui_state.preferences_open, "Apply keeps the dialog open");
 }
 
@@ -91,9 +92,9 @@ fn cancel_drops_the_drafted_language() {
 
     // Assert
     assert_eq!(app.ui_state.i18n.pref(), &before);
-    assert_eq!(app.ui_state.preferences_draft_language, before);
+    assert_eq!(app.ui_state.preferences_pages.draft_language, before);
     assert!(!app.ui_state.preferences_dirty);
-    assert!(app.ui_state.preferences_dirty_pages.is_empty());
+    assert!(app.ui_state.preferences_pages.dirty_pages.is_empty());
 }
 
 #[test]
@@ -105,7 +106,10 @@ fn a_drafted_language_marks_only_the_language_page() {
     let _ = app.update(inner(PrefMsg::DraftLanguage(pseudo())));
 
     // Assert
-    assert_eq!(app.ui_state.preferences_dirty_pages, [PrefNav::Language]);
+    assert_eq!(
+        app.ui_state.preferences_pages.dirty_pages,
+        [PrefNav::Language]
+    );
 }
 
 #[test]
@@ -120,7 +124,7 @@ fn drafting_the_language_in_force_again_is_clean() {
 
     // Assert
     assert!(!app.ui_state.preferences_dirty);
-    assert!(app.ui_state.preferences_dirty_pages.is_empty());
+    assert!(app.ui_state.preferences_pages.dirty_pages.is_empty());
 }
 
 /// A language switched from the palette or the menu while Preferences is
@@ -134,13 +138,14 @@ fn a_palette_switch_while_open_keeps_the_language_page_clean() {
     let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pseudo())));
 
     // Assert
-    assert_eq!(app.ui_state.preferences_draft_language, pseudo());
+    assert_eq!(app.ui_state.preferences_pages.draft_language, pseudo());
     assert!(
         !app.ui_state
-            .preferences_dirty_pages
+            .preferences_pages
+            .dirty_pages
             .contains(&PrefNav::Language),
         "{:?}",
-        app.ui_state.preferences_dirty_pages
+        app.ui_state.preferences_pages.dirty_pages
     );
 }
 
@@ -149,7 +154,10 @@ fn a_palette_switch_while_open_keeps_the_language_page_clean() {
 fn opening_preferences_reads_the_system_language_name() {
     let app = open();
     assert!(
-        !app.ui_state.preferences_system_language_name.is_empty(),
+        !app.ui_state
+            .preferences_pages
+            .system_language_name
+            .is_empty(),
         "the Follow the system row needs a language name"
     );
 }

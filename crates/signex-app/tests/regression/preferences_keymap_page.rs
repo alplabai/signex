@@ -20,7 +20,7 @@ fn opened() -> Signex {
 fn show_in_the_conflict_banner_turns_on_the_conflicts_chip() {
     let mut app = opened();
     assert_eq!(
-        app.ui_state.preferences_keymap_view,
+        app.ui_state.preferences_pages.keymap_view,
         KeymapViewState::default(),
         "fixture precondition: the page opens on All"
     );
@@ -28,7 +28,7 @@ fn show_in_the_conflict_banner_turns_on_the_conflicts_chip() {
 
     let _ = app.update(inner(PrefMsg::KeymapView(KeymapViewMsg::ConflictsShown)));
 
-    assert!(app.ui_state.preferences_keymap_view.shows_conflicts());
+    assert!(app.ui_state.preferences_pages.keymap_view.shows_conflicts());
     assert_eq!(app.ui_state.preferences_keymap_editor, editor_before);
     assert!(
         !app.ui_state.preferences_dirty,
@@ -47,7 +47,7 @@ fn picking_all_turns_the_conflicts_chip_off_again() {
     )));
 
     assert_eq!(
-        app.ui_state.preferences_keymap_view,
+        app.ui_state.preferences_pages.keymap_view,
         KeymapViewState::default()
     );
     assert!(!app.ui_state.preferences_dirty);
@@ -61,7 +61,7 @@ fn reopening_preferences_starts_the_page_on_all() {
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
 
     assert_eq!(
-        app.ui_state.preferences_keymap_view,
+        app.ui_state.preferences_pages.keymap_view,
         KeymapViewState::default()
     );
 }

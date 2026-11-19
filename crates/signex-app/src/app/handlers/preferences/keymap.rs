@@ -23,7 +23,7 @@ impl Signex {
         &mut self,
         msg: crate::preferences::KeymapViewMsg,
     ) -> Task<Message> {
-        self.ui_state.preferences_keymap_view.apply(msg);
+        self.ui_state.preferences_pages.keymap_view.apply(msg);
         Task::none()
     }
 

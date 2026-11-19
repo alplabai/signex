@@ -53,14 +53,14 @@ fn a_dropped_row_takes_the_place_it_was_dropped_on_and_marks_the_page_unsaved() 
 
     let _ = app.update(classes(ClassesViewMsg::DragStarted(0)));
     assert_eq!(
-        app.ui_state.preferences_classes_view.dragging,
+        app.ui_state.preferences_pages.classes_view.dragging,
         Some(0),
         "the grip starts a drag"
     );
     let _ = app.update(classes(ClassesViewMsg::RowMoved { from: 0, to: 2 }));
 
     assert_eq!(keys(&app), ["b", "c", "a", "d"]);
-    assert_eq!(app.ui_state.preferences_classes_view.dragging, None);
+    assert_eq!(app.ui_state.preferences_pages.classes_view.dragging, None);
     assert!(
         app.ui_state.preferences_dirty,
         "the order is the picker order"
@@ -69,7 +69,7 @@ fn a_dropped_row_takes_the_place_it_was_dropped_on_and_marks_the_page_unsaved() 
     // A release off the rows ends the drag and moves nothing.
     let _ = app.update(classes(ClassesViewMsg::DragStarted(3)));
     let _ = app.update(classes(ClassesViewMsg::DragEnded));
-    assert_eq!(app.ui_state.preferences_classes_view.dragging, None);
+    assert_eq!(app.ui_state.preferences_pages.classes_view.dragging, None);
     assert_eq!(keys(&app), ["b", "c", "a", "d"]);
 }
 
@@ -80,7 +80,7 @@ fn the_filter_narrows_the_view_and_never_the_stored_order() {
 
     let _ = app.update(classes(ClassesViewMsg::FilterChanged("C".into())));
 
-    assert_eq!(app.ui_state.preferences_classes_view.filter, "C");
+    assert_eq!(app.ui_state.preferences_pages.classes_view.filter, "C");
     assert_eq!(keys(&app), ["a", "b", "c", "d"]);
     assert!(
         !app.ui_state.preferences_dirty,
@@ -98,14 +98,14 @@ fn reset_to_defaults_replaces_the_list_only_after_it_is_confirmed() {
     assert_eq!(app.ui_state.preferences_draft_component_classes, edited);
 
     let _ = app.update(classes(ClassesViewMsg::ResetRequested));
-    assert!(app.ui_state.preferences_classes_view.reset_pending);
+    assert!(app.ui_state.preferences_pages.classes_view.reset_pending);
     assert_eq!(
         app.ui_state.preferences_draft_component_classes, edited,
         "asking replaces nothing"
     );
 
     let _ = app.update(classes(ClassesViewMsg::ResetCancelled));
-    assert!(!app.ui_state.preferences_classes_view.reset_pending);
+    assert!(!app.ui_state.preferences_pages.classes_view.reset_pending);
     assert_eq!(app.ui_state.preferences_draft_component_classes, edited);
 
     let _ = app.update(classes(ClassesViewMsg::ResetRequested));
@@ -114,7 +114,7 @@ fn reset_to_defaults_replaces_the_list_only_after_it_is_confirmed() {
         app.ui_state.preferences_draft_component_classes,
         signex_app::fonts::default_component_classes()
     );
-    assert!(!app.ui_state.preferences_classes_view.reset_pending);
+    assert!(!app.ui_state.preferences_pages.classes_view.reset_pending);
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn add_class_appends_a_new_row_clears_the_filter_and_asks_for_its_key_focus() {
         app.ui_state.preferences_draft_component_classes[4],
         class("", "")
     );
-    let view = &app.ui_state.preferences_classes_view;
+    let view = &app.ui_state.preferences_pages.classes_view;
     assert_eq!(view.new_row, Some(4), "the appended row is the new row");
     assert!(view.filter.is_empty(), "a filter would hide the new row");
     assert!(
@@ -142,19 +142,19 @@ fn add_class_appends_a_new_row_clears_the_filter_and_asks_for_its_key_focus() {
 fn the_new_row_marker_follows_its_row_through_a_move_and_a_remove() {
     let mut app = opened_with(abc());
     let _ = app.update(classes(ClassesViewMsg::AddRequested));
-    assert_eq!(app.ui_state.preferences_classes_view.new_row, Some(4));
+    assert_eq!(app.ui_state.preferences_pages.classes_view.new_row, Some(4));
 
     let _ = app.update(classes(ClassesViewMsg::DragStarted(4)));
     let _ = app.update(classes(ClassesViewMsg::RowMoved { from: 4, to: 1 }));
-    assert_eq!(app.ui_state.preferences_classes_view.new_row, Some(1));
+    assert_eq!(app.ui_state.preferences_pages.classes_view.new_row, Some(1));
 
     let _ = app.update(classes(ClassesViewMsg::RemoveRequested(0)));
     assert_eq!(keys(&app), ["", "b", "c", "d"]);
-    assert_eq!(app.ui_state.preferences_classes_view.new_row, Some(0));
+    assert_eq!(app.ui_state.preferences_pages.classes_view.new_row, Some(0));
 
     let _ = app.update(classes(ClassesViewMsg::RemoveRequested(0)));
     assert_eq!(keys(&app), ["b", "c", "d"]);
-    assert_eq!(app.ui_state.preferences_classes_view.new_row, None);
+    assert_eq!(app.ui_state.preferences_pages.classes_view.new_row, None);
 }
 
 /// The inline error does not change Save: a repeated key is still merged

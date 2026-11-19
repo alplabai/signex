@@ -40,7 +40,7 @@ impl UiState {
                     || self.preferences_draft_remember_window_geometry
                         != self.remember_window_geometry
             }
-            PrefNav::Language => self.preferences_draft_language != *self.i18n.pref(),
+            PrefNav::Language => self.preferences_pages.draft_language != *self.i18n.pref(),
             PrefNav::Keyboard => self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles),
@@ -98,8 +98,8 @@ impl Signex {
     /// exactly what let imperative edits be clobbered back to "clean"
     /// (review #308 finding 1).
     pub(crate) fn recompute_preferences_dirty(&mut self) {
-        self.ui_state.preferences_dirty_pages = self.ui_state.preferences_unsaved_pages();
-        self.ui_state.preferences_dirty = !self.ui_state.preferences_dirty_pages.is_empty();
+        self.ui_state.preferences_pages.dirty_pages = self.ui_state.preferences_unsaved_pages();
+        self.ui_state.preferences_dirty = !self.ui_state.preferences_pages.dirty_pages.is_empty();
     }
 
     /// Handle a `PrefMsg::Draft*` or component-class message.
@@ -216,7 +216,7 @@ impl Signex {
             PrefMsg::DraftLanguage(pref) => {
                 // A draft (#144a): only the preview catalog changes now; Save
                 // switches the UI through `set_language`.
-                self.ui_state.preferences_draft_language = pref;
+                self.ui_state.preferences_pages.draft_language = pref;
                 self.refresh_language_preview();
             }
             PrefMsg::ComponentClassEditKey { index, key } => {

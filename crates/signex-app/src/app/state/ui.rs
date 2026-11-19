@@ -204,24 +204,9 @@ pub struct UiState {
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
-    /// Draft of the interface language in Preferences (#144a); Save applies
-    /// it through `Signex::set_language`. Equals `i18n.pref()` when clean.
-    pub preferences_draft_language: signex_i18n::LanguagePref,
-    /// The drafted language's catalog for the Language page's preview,
-    /// built in `update` when the dialog opens and on each draft.
-    pub preferences_language_preview: Option<std::sync::Arc<signex_i18n::I18n>>,
-    /// Name of the language "Follow the system" resolves to, read when
-    /// Preferences opens.
-    pub preferences_system_language_name: String,
-    /// The Preferences pages with unsaved drafts, for the nav's dots; kept
-    /// with `preferences_dirty` by `recompute_preferences_dirty`.
-    pub preferences_dirty_pages: Vec<crate::preferences::PrefNav>,
-    /// View state of the Appearance and Editing pages. Reset on open.
-    pub preferences_pages_view: crate::preferences::PagesViewState,
-    /// View state of the Keyboard shortcuts page. Reset on open.
-    pub preferences_keymap_view: crate::preferences::KeymapViewState,
-    /// View state of the Component Classes page. Reset on open.
-    pub preferences_classes_view: crate::preferences::ClassesViewState,
+    /// The Preferences language draft, dirty pages and page view state.
+    /// Boxed: a pointer of the size budget (#2412).
+    pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,
     /// Saved "Remember window size and position" preference. Off by default.
     pub remember_window_geometry: bool,
     /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.

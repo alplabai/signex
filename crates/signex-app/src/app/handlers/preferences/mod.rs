@@ -71,9 +71,9 @@ impl Signex {
         self.ui_state.preferences_keymap_search.clear();
         self.ui_state.preferences_nav_search.clear();
         // The pages' view state (search, open sections, ...) is per session.
-        self.ui_state.preferences_pages_view = Default::default();
-        self.ui_state.preferences_keymap_view = Default::default();
-        self.ui_state.preferences_classes_view = Default::default();
+        self.ui_state.preferences_pages.pages_view = Default::default();
+        self.ui_state.preferences_pages.keymap_view = Default::default();
+        self.ui_state.preferences_pages.classes_view = Default::default();
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
         // Open Preferences as a separate OS window so the user can move
@@ -170,7 +170,7 @@ impl Signex {
         // can appear or be removed between two openings of this dialog.
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
-        self.ui_state.preferences_dirty_pages.clear();
+        self.ui_state.preferences_pages.dirty_pages.clear();
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).

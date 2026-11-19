@@ -36,7 +36,7 @@ fn the_dirty_dots_name_the_pages_with_unsaved_drafts() {
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     assert!(
-        app.ui_state.preferences_dirty_pages.is_empty(),
+        app.ui_state.preferences_pages.dirty_pages.is_empty(),
         "opened clean"
     );
     let other_scope = match app.ui_state.annotate_undo {
@@ -51,7 +51,7 @@ fn the_dirty_dots_name_the_pages_with_unsaved_drafts() {
 
     // Assert
     assert_eq!(
-        app.ui_state.preferences_dirty_pages,
+        app.ui_state.preferences_pages.dirty_pages,
         [PrefNav::Annotation, PrefNav::Editing]
     );
     assert!(app.ui_state.preferences_dirty);
@@ -60,7 +60,10 @@ fn the_dirty_dots_name_the_pages_with_unsaved_drafts() {
     let _ = app.update(inner(PrefMsg::DraftMoveKeepsWires(keeps_wires)));
 
     // Assert
-    assert_eq!(app.ui_state.preferences_dirty_pages, [PrefNav::Annotation]);
+    assert_eq!(
+        app.ui_state.preferences_pages.dirty_pages,
+        [PrefNav::Annotation]
+    );
 }
 
 /// The broken-file banner's Open folder hands the launch to a task; it is
