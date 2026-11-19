@@ -1431,8 +1431,11 @@ pub(crate) struct RunCounts {
     co_selected: Share,
     /// Cases that edited wires.
     rerouted: usize,
-    /// Cases whose plain move minted a pin dot (skipped by the strict check).
+    /// Moved pins the plain move joined to a wire through a new pin dot: left
+    /// out of the strict net check, which holds every other pin.
     pin_joined: usize,
+    /// Moved pins of the cases held to the strict net check.
+    strict_pins: usize,
 }
 
 impl RunCounts {
@@ -1446,6 +1449,7 @@ impl RunCounts {
         }
         self.rerouted += other.rerouted;
         self.pin_joined += other.pin_joined;
+        self.strict_pins += other.strict_pins;
     }
 }
 
@@ -1465,12 +1469,18 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     );
     let exercised = total.symbols_only.cases + total.co_selected.cases;
     assert!(exercised > 4000, "only {exercised} cases");
-    // The strict net check skips a case whose plain move minted a pin dot;
-    // a bound keeps that skip from growing into a blind spot.
+    // The strict net check leaves out a moved pin the plain move joined to a
+    // wire through a new pin dot; a bound keeps those few from growing into
+    // a blind spot.
+    eprintln!(
+        "pin-dot pins left out of the strict check: {} of {} moved pins",
+        total.pin_joined, total.strict_pins
+    );
     assert!(
-        total.pin_joined * 10 < exercised,
-        "{} of {exercised} cases skipped the strict check for a pin dot",
-        total.pin_joined
+        total.pin_joined * 100 < total.strict_pins * 15,
+        "{} of {} moved pins left out of the strict check for a pin dot",
+        total.pin_joined,
+        total.strict_pins
     );
     assert!(
         total.rerouted * 3 > exercised,
@@ -1528,16 +1538,38 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Whether the plain move minted a pin dot: a new dot at a moved pin end's
-/// new tip (decision 2026-11-18), not a T where wires meet.
-fn plain_pin_dots(before: &SchematicSheet, plain: &SchematicSheet, items: &[SelectedItem]) -> bool {
-    let tips: std::collections::HashSet<_> = (crate::moved_pin_tips(plain, items).iter())
-        .map(crate::PinTip::old_key)
+/// The moved pins the plain move joined to a wire through a new pin dot at
+/// their new tip (decision 2026-11-18), not a T where wires meet: their
+/// terminals and child-sheet pins.
+fn plain_pin_dot_pins(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    items: &[SelectedItem],
+) -> (
+    std::collections::BTreeSet<(Uuid, String)>,
+    std::collections::BTreeSet<Uuid>,
+) {
+    let dots: std::collections::HashSet<_> = (plain.junctions.iter())
+        .filter(|dot| !before.junctions.iter().any(|old| old.uuid == dot.uuid))
+        .map(|dot| signex_net::pt_key(&dot.position))
         .collect();
-    plain.junctions.iter().any(|dot| {
-        !before.junctions.iter().any(|old| old.uuid == dot.uuid)
-            && tips.contains(&signex_net::pt_key(&dot.position))
-    })
+    let mut terminals = std::collections::BTreeSet::new();
+    let mut pins = std::collections::BTreeSet::new();
+    // Read on the plain sheet, a tip's "old" place is where the move put it.
+    for tip in crate::moved_pin_tips(plain, items) {
+        if !dots.contains(&tip.old_key()) {
+            continue;
+        }
+        match tip.ident() {
+            crate::PinIdent::Terminal(symbol, pin) => {
+                terminals.insert((*symbol, pin.clone()));
+            }
+            crate::PinIdent::SheetPin(uuid) => {
+                pins.insert(*uuid);
+            }
+        }
+    }
+    (terminals, pins)
 }
 
 /// One case of [`property_run`]: case `index` of `seed`.
@@ -1616,10 +1648,9 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     );
     // A pin end the plain move put inside a wire joins it through a new pin
     // dot (2026-11-18): the user's placement, which may join two nets. The
-    // closure oracle reads the plain nets, so it still holds such a case; only
-    // the strict net equality below skips it (counted, and bounded).
-    let pin_joined = plain_pin_dots(&sheet, plain.document(), &items);
-    counts.pin_joined += usize::from(pin_joined);
+    // closure oracle reads the plain nets, so it still holds such a pin; the
+    // strict net equality below leaves out just that pin (counted, bounded).
+    let (dot_terminals, dot_pins) = plain_pin_dot_pins(&sheet, plain.document(), &items);
     let oracle = check_closure_oracle(
         &sheet,
         plain.document(),
@@ -1649,16 +1680,21 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
         .symbols
         .iter()
         .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
-    if selects_wire || moves_power || pin_joined {
+    if selects_wire || moves_power {
         // Co-selected items move plainly, wherever the user puts them, and
         // a power port landing on a net merges it by name: the closure
-        // oracle above is the check for these cases, as for a pin join.
+        // oracle above is the check for these cases.
         return;
     }
-    // A warned pin keeps the old plain behaviour; every other net stays.
+    // A warned pin keeps the old plain behaviour, a pin the plain move dotted
+    // onto a wire is the user's placement; every other net stays.
     let (warned_terminals, warned_pins) = warned_skips(&sheet, &unkept);
     skip_terminals.extend(warned_terminals);
     skip_pins.extend(warned_pins);
+    counts.strict_pins += tips.len();
+    counts.pin_joined += dot_terminals.len() + dot_pins.len();
+    skip_terminals.extend(dot_terminals);
+    skip_pins.extend(dot_pins);
     let want: std::collections::BTreeSet<_> =
         signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
             .iter()
