@@ -83,4 +83,13 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_PROJECTS_OPTIONS = "panels-projects-options";
+    PANELS_PROJECTS_PILL_MISSING = "panels-projects-pill-missing";
+    PANELS_PROJECTS_PILL_UNREADABLE = "panels-projects-pill-unreadable";
+    PANELS_PROJECTS_CLEAR_FILTER = "panels-projects-clear-filter";
+    PANELS_PROJECTS_NO_MATCH_TITLE = "panels-projects-no-match-title";
+    PANELS_PROJECTS_NO_MATCH_BODY = "panels-projects-no-match-body";
+    PANELS_PROJECTS_NEW_PROJECT = "panels-projects-new-project";
+    PANELS_PROJECTS_OPEN = "panels-projects-open";
+    PANELS_PROJECTS_RECENT = "panels-projects-recent";
 }

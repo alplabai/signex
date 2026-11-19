@@ -439,7 +439,8 @@ annotate (section 5).
 
 By default a placed part takes its reference letters from the library symbol
 (`U?`, `R?`). A project can instead follow a designator standard: right-click
-the project in the Projects panel, choose **Project Options...** and pick a
+the project in the Projects panel and choose **Project Options...** (or press
+the gear on the project's card at the top of the panel), then pick a
 **Designator standard** (IEEE 315, DIN 40719-2 or EN IEC 81346-2). New parts
 then get the standard's letters for their component class, for example a diode
 is `D` under IEEE 315 and `V` under DIN 40719-2. Power ports and flags keep
