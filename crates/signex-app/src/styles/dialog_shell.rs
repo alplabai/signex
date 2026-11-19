@@ -43,6 +43,11 @@ impl DialogIcon {
         }
     }
 
+    /// The glyph without its tile, for a callout that draws it inline.
+    pub fn glyph_handle(self) -> svg::Handle {
+        GLYPHS[self.index()].clone()
+    }
+
     /// The 24 x 24 stroke glyph, drawn in the tile's ink.
     fn index(self) -> usize {
         match self {

@@ -62,43 +62,66 @@ dialog-quit-unsaved-title = Quit { -brand-name } — Unsaved Edits
 dialog-exit-unsaved-title = Exit { -brand-name } — Unsaved Edits
 dialog-quit-question = Save changes before quitting?
 dialog-exit-question = Save changes before exiting?
-dialog-quit-detail =
+# The fact line under the question. $unsaved, $projects and $libraries are
+# the three messages below, already worded; $scope says which of them the
+# list holds: "both", "projects", "libraries" or "none" (files outside any
+# project only).
+dialog-quit-summary =
+    { $scope ->
+        [both] { $unsaved } in { $projects } and { $libraries }.
+        [projects] { $unsaved } in { $projects }.
+        [libraries] { $unsaved } in { $libraries }.
+       *[none] { $unsaved }.
+    }
+dialog-quit-unsaved-count =
     { $kind ->
         [items]
             { $count ->
-                [one] You have { $count } unsaved item. Save before quitting?
-               *[other] You have { $count } unsaved items. Save before quitting?
+                [one] { $count } unsaved item
+               *[other] { $count } unsaved items
             }
        *[documents]
             { $count ->
-                [one] You have { $count } unsaved document. Save before quitting?
-               *[other] You have { $count } unsaved documents. Save before quitting?
+                [one] { $count } unsaved document
+               *[other] { $count } unsaved documents
             }
     }
-dialog-exit-detail =
-    { $kind ->
-        [items]
-            { $count ->
-                [one] You have { $count } unsaved item. Save before exiting?
-               *[other] You have { $count } unsaved items. Save before exiting?
-            }
-       *[documents]
-            { $count ->
-                [one] You have { $count } unsaved document. Save before exiting?
-               *[other] You have { $count } unsaved documents. Save before exiting?
-            }
+# $count is how many projects hold unsaved documents (a whole number).
+dialog-quit-project-count =
+    { $count ->
+        [one] { $count } project
+       *[other] { $count } projects
     }
+# $count is how many libraries hold unsaved drafts or rows (a whole number).
+dialog-quit-library-count =
+    { $count ->
+        [one] { $count } library
+       *[other] { $count } libraries
+    }
+# Group headings of the unsaved list: files outside every open project, and
+# the library drafts and Component Preview rows.
+dialog-quit-group-other = Other files
+dialog-quit-group-libraries = Libraries
 dialog-quit-list-changed = The unsaved list changed; review and confirm again.
 
 ## Autosave recovery prompt
 
-# $name is the document's file name or part number; $age is an
-# already-worded age, such as "5 minutes ago", in English.
-dialog-recovery-found = { -brand-name } found a recovery copy of { $name } written { $age } that differs from the saved file.
+# $name is the document's file name or part number.
+dialog-recovery-found = { -brand-name } found a recovery copy of { $name } that differs from the saved file.
 # $name is the document's file name or part number.
 dialog-recovery-older = { $name } was saved after this copy was written. Restore replaces that newer saved work in the editor with the older copy.
 # $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-recovery-hint = Restore loads the copy as unsaved edits; nothing is written to the file until you save. Restoring replaces the open document and cannot be undone with { $undo }. Discard deletes the copy. Decide later keeps it for the next time this file is opened, and pauses autosave for this document for the rest of the session.
+dialog-recovery-restore-hint = Restore loads the copy as unsaved edits; nothing is written to the file until you save. Restoring replaces the open document and cannot be undone with { $undo }.
+dialog-recovery-later-hint = Discard deletes the copy. Decide later keeps it for the next time this file is opened, and pauses autosave for this document for the rest of the session.
+# The two versions the prompt lists, and the mark on the newer one.
+dialog-recovery-copy = Recovery copy
+dialog-recovery-saved = Saved file
+dialog-recovery-newer = newer
+# $path is the saved file's path; $time is when it was last written, such
+# as "13:58" or "Nov 16 17:40".
+dialog-recovery-saved-time = { $path } · { $time }
+# Tooltip of the header's close button, which keeps the copy.
+dialog-recovery-close-tooltip = Decide later (Esc)
 
 ## Reset All Annotations confirm
 dialog-annotate-reset-question = Reset every designator?

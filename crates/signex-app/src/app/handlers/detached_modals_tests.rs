@@ -105,6 +105,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                     path: "p.snxsch".into(),
                     age_secs: 90,
                     older_than_file: false,
+                    saved_age_secs: Some(600),
+                    checked_at: std::time::SystemTime::UNIX_EPOCH,
                 })
         }
         ModalId::ProjectCloseConfirm => {
@@ -691,9 +693,13 @@ fn a_list_dialog_is_sized_to_its_rows_and_caps_at_a_scrolling_list() {
         let (app, id) = quit_with_rows(rows);
         let size = window_size(&app, id, ModalId::AppQuitConfirm);
         let texts = lay_out_texts(app.view(id), size);
+        // A list row's texts (its name, kind cap and folder) may sit in the
+        // scrolled-off part of the list.
+        let folder = std::path::Path::new("/p").display().to_string();
+        let in_a_row = |t: &str| t.starts_with("sheet") || t == "SCH" || t == folder;
         let visible_bottom = texts
             .iter()
-            .filter(|t| !t.text.starts_with("sheet"))
+            .filter(|t| !in_a_row(&t.text))
             .map(|t| t.bounds.y + t.bounds.height)
             .fold(0.0_f32, f32::max);
         assert!(
@@ -933,6 +939,8 @@ fn recovery_dialog_text_has_no_indentation_gaps() {
             path: "p.snxsch".into(),
             age_secs: 90,
             older_than_file: true,
+            saved_age_secs: Some(30),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         });
     open(&mut app, ModalId::AutosaveRecovery);
     let _ = app.sync_detached_modals();
