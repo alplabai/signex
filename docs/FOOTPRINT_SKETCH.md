@@ -92,6 +92,25 @@ is unchanged.
 `FullSolveOutput.redundant_constraints` names consistent constraints whose
 every Jacobian row is implied by the EARLIER constraints (and the arc
 closures), so the verdict depends on constraint order and names the later
-duplicate. They are listed under "Redundant" in the footprint editor's
-DOF / Last solve section. Conflicts are reported separately as
-over-constrained.
+duplicate. They are listed under "Redundant" in the Sketch solve section
+of the footprint editor's Properties panel. Conflicts are reported
+separately as over-constrained.
+
+## The sketch in the Properties panel
+
+With nothing selected, the footprint Properties panel has three pages: Footprint,
+Snap & Grid and Sketch. The Sketch page holds the solve state and the sketch
+parameters:
+
+- **Sketch solve**: a pill in the header names the state (DOF 0 in green when
+  fully constrained, Under-constrained in blue, Over-constrained in red, or
+  No sketch / Sketch not solved), then the entity and constraint counts and
+  the last solve's iterations, residual, time and over-constrained count,
+  the redundant constraints and the conflicting ones. A conflict or redundant
+  row selects its entity.
+- **Parameters**: one editable expression per sketch parameter.
+- **Solve warnings**: the notes of the last solve.
+
+In Sketch mode the same sections also follow a selected sketch entity, under
+its Entity section (kind, Role, position, construction, attached constraints
+and a banner with the entity's constraint state) and Snap Options.
