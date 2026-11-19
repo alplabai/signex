@@ -2,11 +2,11 @@
 //! of the Properties panel (#125): the sections live one per file.
 //!
 //! Cross-module surface:
-//! - `PadEditTarget` / `PadFormValues` are exported so the pad table and
-//!   the role sub-forms share the same form snapshot and edit routing.
+//! - `PadEditTarget` / `PadFormValues` are shared with the pad table so
+//!   both read the same form snapshot and edit routing.
 //! - The `pad_msg_fns!` macro stamps out the message-builder helpers.
-//! - `pad_input_row` / `pad_pick_row` / `pad_check_row` are the row
-//!   chrome the sub-forms import.
+//! - `pad_input_row_w` / `pad_pick_row_w` are the row chrome of the
+//!   per-side stack rows.
 
 use iced::widget::{Column, Widget as _, container, pick_list, row};
 use iced::{Color, Element, Length};
@@ -269,24 +269,6 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
     .boxed()
 }
 
-/// Legacy-width [`pad_input_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
-    label: impl Into<Label<'a>>,
-    placeholder: &'a str,
-    value: String,
-    on_input: impl Fn(String) -> PanelMsg + 'a,
-    muted: Color,
-) -> iced::Element<'a, PanelMsg> {
-    pad_input_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        placeholder,
-        value,
-        on_input,
-        muted,
-    )
-}
-
 /// v0.20 — pick_list row for a Pad Properties field.
 pub(in crate::panels::footprint_editor_properties) fn pad_pick_row_w<'a, T>(
     fw: (Length, Length),
@@ -307,75 +289,6 @@ where
                 .on_select(on_change)
                 .padding([3.0, SP.m])
                 .width(fw.1),
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.xs, SP.m])
-    .width(Length::Fill)
-    .boxed()
-}
-
-/// Legacy-width [`pad_pick_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
-    label: impl Into<Label<'a>>,
-    options: &'a [T],
-    selected: T,
-    on_change: impl Fn(T) -> PanelMsg + 'a + Clone,
-    muted: Color,
-) -> iced::Element<'a, PanelMsg>
-where
-    T: Clone + Eq + std::fmt::Display + 'static,
-{
-    pad_pick_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        options,
-        selected,
-        on_change,
-        muted,
-    )
-}
-
-/// v0.20 — checkbox row for a Pad Properties field. Label on left,
-/// flat checkbox on right.
-/// Legacy-width [`pad_check_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
-    label: impl Into<Label<'a>>,
-    on: bool,
-    on_toggle: impl Fn(bool) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-) -> iced::Element<'a, PanelMsg> {
-    pad_check_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        on,
-        on_toggle,
-        muted,
-        primary,
-    )
-}
-
-pub(in crate::panels::footprint_editor_properties) fn pad_check_row_w<'a>(
-    fw: (Length, Length),
-    label: impl Into<Label<'a>>,
-    on: bool,
-    on_toggle: impl Fn(bool) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-) -> iced::Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label)
-                .size(TS.caption)
-                .color(if on { primary } else { muted })
-                .width(fw.0),
-            signex_widgets::checkbox(on)
-                .on_toggle(on_toggle)
-                .size(TS.label)
-                .spacing(0)
-                .style(crate::panels::form_look::checkbox_style),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
