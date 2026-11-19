@@ -704,3 +704,8 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2523 (m93) - the board Properties panel: Edit board shape, the materials
+// link, the bounding-box size row and the tile-callout hover.
+#[path = "regression/board_options_panel.rs"]
+mod board_options_panel;
