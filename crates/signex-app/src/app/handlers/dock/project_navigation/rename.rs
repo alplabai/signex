@@ -53,7 +53,7 @@ impl Signex {
             return iced::Task::none();
         }
         use iced::widget::operation;
-        let id = &crate::app::contracts::RENAME_INPUT_ID;
+        let id: &iced::widget::Id = &crate::app::contracts::RENAME_INPUT_ID;
         iced::Task::batch([
             operation::focus(id.clone()),
             operation::text_input::select_all(id.clone()),

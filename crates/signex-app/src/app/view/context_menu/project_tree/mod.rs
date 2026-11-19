@@ -214,7 +214,7 @@ impl Signex {
 
         let rows = match tree_node_role(&node.icon, path.len(), !node.children.is_empty()) {
             TreeNodeRole::Root => self.project_root_rows(ctx, key, &path),
-            TreeNodeRole::Library => self.library_rows(key, &path, node.expanded),
+            TreeNodeRole::Library => self.library_node_rows(key, &path, node.expanded),
             TreeNodeRole::OpenableLeaf => {
                 self.document_leaf_rows(key, &path, panel_ctx.has_schematic)
             }

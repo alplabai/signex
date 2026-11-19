@@ -105,10 +105,13 @@ impl Signex {
                 .on_input(move |s| vc(EnableVersionControlMsg::CommitMessageChanged(s)))
                 .on_submit(vc(EnableVersionControlMsg::Confirm));
         }
-        body = body.push(column![
-            dialog_field_label(t!(i18n, ids::DIALOG_VERSION_CONTROL_COMMIT_MESSAGE), tokens),
-            message,
-        ]);
+        body = body.push(
+            column![
+                dialog_field_label(t!(i18n, ids::DIALOG_VERSION_CONTROL_COMMIT_MESSAGE), tokens),
+                message,
+            ]
+            .boxed(),
+        );
         let lfs = checkbox(st.use_lfs)
             .style(crate::panels::form_look::checkbox_style)
             .size(ROW_CHECKBOX)

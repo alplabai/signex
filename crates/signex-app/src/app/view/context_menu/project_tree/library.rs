@@ -48,7 +48,7 @@ pub(in crate::app::view::context_menu) fn library_add_new_entries(
 impl Signex {
     /// The menu of the library at `key` / `path`; `expanded` picks Collapse
     /// or Expand.
-    pub(super) fn library_rows(
+    pub(super) fn library_node_rows(
         &self,
         key: &TreeKey,
         path: &[usize],

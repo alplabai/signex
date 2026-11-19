@@ -9,17 +9,16 @@ use std::sync::LazyLock;
 
 use iced::alignment::Vertical;
 use iced::widget::{Column, Row, Space, container, row, scrollable, svg};
-use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme};
+use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::Localized;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tree_view::TreeIcon;
 use signex_widgets::{Label, text};
 
 use super::tokens::{relative_luminance, resolve};
-use super::{Radii, Spacing, TypeScale, scrollbar_style, thin_vertical, ti};
+use super::{Radii, TypeScale, scrollbar_style, thin_vertical, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 /// Side of the glyph at the start of a callout.
 const CALLOUT_GLYPH: f32 = 14.0;
@@ -92,7 +91,11 @@ fn glyph<'a, M: 'a>(handle: &svg::Handle, size: f32, ink: Color) -> Element<'a, 
 
 /// The glyph and the body of a callout, the glyph nudged down to the first
 /// text line.
-fn glyph_line<'a, M: 'a>(handle: &svg::Handle, ink: Color, body: Element<'a, M>) -> Row<'a, M> {
+fn glyph_line<'a, M: 'a>(
+    handle: &svg::Handle,
+    ink: Color,
+    body: Element<'a, M>,
+) -> Row<Element<'a, M>> {
     let glyph = container(glyph(handle, CALLOUT_GLYPH, ink)).padding(Padding {
         top: 1.0,
         ..Padding::ZERO
@@ -191,7 +194,7 @@ pub fn dialog_rows<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let rule = resolve(tokens).line_soft;
-    let mut list: Column<'a, M> = Column::new().width(Length::Fill);
+    let mut list: Column<Element<'a, M>> = Column::new().width(Length::Fill);
     for (i, r) in rows.into_iter().enumerate() {
         if i > 0 {
             list = list.push(hairline(rule));
@@ -210,7 +213,7 @@ pub fn dialog_rows<'a, M: 'a>(
         .boxed(),
         None => list.boxed(),
     };
-    let mut outer: Column<'a, M> = Column::new().width(Length::Fill);
+    let mut outer: Column<Element<'a, M>> = Column::new().width(Length::Fill);
     if let Some(head) = head {
         outer = outer.push(head).push(hairline(rule));
     }
