@@ -1,5 +1,6 @@
 mod bom_modal;
 mod catalog;
+mod constraint_grid;
 mod icon;
 mod modal_card;
 mod project_tree;
