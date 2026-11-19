@@ -139,6 +139,9 @@ pub struct Captured {
     pub saved_at: String,
 }
 
+/// Makes a name unique from a base name and a number ("Bench (2)").
+pub type NthName = Box<dyn Fn(&str, usize) -> String>;
+
 /// The names a person sees, from the catalog of the app's language.
 pub struct Naming {
     /// The four built-in names, in [`BuiltinLayout::ALL`] order.
@@ -148,7 +151,7 @@ pub struct Naming {
     /// "Bench copy": the name of a duplicate.
     pub copy_of: Box<dyn Fn(&str) -> String>,
     /// "Bench (2)": a name made unique.
-    pub nth: Box<dyn Fn(&str, usize) -> String>,
+    pub nth: NthName,
 }
 
 impl Naming {
