@@ -1,0 +1,67 @@
+//! Ids of `locales/en-US/passive_calculator.ftl`: Tools ▸ Passive Network
+//! Calculator, the network calculator and the RKM encoder (#872).
+
+define_ids! {
+    PASSIVE_CALCULATOR;
+    PASSIVE_CALCULATOR_RESISTOR = "passive-calculator-resistor";
+    PASSIVE_CALCULATOR_CAPACITOR = "passive-calculator-capacitor";
+    PASSIVE_CALCULATOR_INDUCTOR = "passive-calculator-inductor";
+    PASSIVE_CALCULATOR_TAB_RKM = "passive-calculator-tab-rkm";
+    PASSIVE_CALCULATOR_NETWORK_CAPTION = "passive-calculator-network-caption";
+    PASSIVE_CALCULATOR_TARGET = "passive-calculator-target";
+    PASSIVE_CALCULATOR_SERIES = "passive-calculator-series";
+    PASSIVE_CALCULATOR_MAX_PARTS = "passive-calculator-max-parts";
+    PASSIVE_CALCULATOR_CALCULATE = "passive-calculator-calculate";
+    PASSIVE_CALCULATOR_ERROR_NOT_A_NUMBER = "passive-calculator-error-not-a-number";
+    PASSIVE_CALCULATOR_ERROR_NEGATIVE = "passive-calculator-error-negative";
+    PASSIVE_CALCULATOR_ERROR_NO_RESULT = "passive-calculator-error-no-result";
+    PASSIVE_CALCULATOR_EMPTY = "passive-calculator-empty";
+    PASSIVE_CALCULATOR_RESULT = "passive-calculator-result";
+    PASSIVE_CALCULATOR_OFF_TARGET = "passive-calculator-off-target";
+    PASSIVE_CALCULATOR_NOMINAL = "passive-calculator-nominal";
+    PASSIVE_CALCULATOR_MINIMUM = "passive-calculator-minimum";
+    PASSIVE_CALCULATOR_MAXIMUM = "passive-calculator-maximum";
+    PASSIVE_CALCULATOR_DELTA = "passive-calculator-delta";
+    PASSIVE_CALCULATOR_DELTA_UNBOUNDED = "passive-calculator-delta-unbounded";
+    PASSIVE_CALCULATOR_NO_PARTS = "passive-calculator-no-parts";
+    PASSIVE_CALCULATOR_WIRE_BRIDGE = "passive-calculator-wire-bridge";
+    PASSIVE_CALCULATOR_OPEN_CIRCUIT = "passive-calculator-open-circuit";
+    PASSIVE_CALCULATOR_PART = "passive-calculator-part";
+    PASSIVE_CALCULATOR_VALUE = "passive-calculator-value";
+    PASSIVE_CALCULATOR_RKM_CODE = "passive-calculator-rkm-code";
+    PASSIVE_CALCULATOR_TOLERANCE = "passive-calculator-tolerance";
+    PASSIVE_CALCULATOR_COLOR_CODE = "passive-calculator-color-code";
+    PASSIVE_CALCULATOR_COLOR_CODE_ALTERNATIVES = "passive-calculator-color-code-alternatives";
+    PASSIVE_CALCULATOR_NO_BANDS_RESISTOR = "passive-calculator-no-bands-resistor";
+    PASSIVE_CALCULATOR_NO_BANDS_CAPACITOR = "passive-calculator-no-bands-capacitor";
+    PASSIVE_CALCULATOR_NO_BANDS_INDUCTOR = "passive-calculator-no-bands-inductor";
+    PASSIVE_CALCULATOR_RKM_CAPTION = "passive-calculator-rkm-caption";
+    PASSIVE_CALCULATOR_COMPONENT = "passive-calculator-component";
+    PASSIVE_CALCULATOR_OPTIONAL = "passive-calculator-optional";
+    PASSIVE_CALCULATOR_CLEAR_OPTIONAL = "passive-calculator-clear-optional";
+    PASSIVE_CALCULATOR_TEMPERATURE_COEFFICIENT = "passive-calculator-temperature-coefficient";
+    PASSIVE_CALCULATOR_RATED_POWER = "passive-calculator-rated-power";
+    PASSIVE_CALCULATOR_NOT_SPECIFIED = "passive-calculator-not-specified";
+    PASSIVE_CALCULATOR_PRODUCTION_DATE = "passive-calculator-production-date";
+    PASSIVE_CALCULATOR_CYCLE = "passive-calculator-cycle";
+    PASSIVE_CALCULATOR_YEAR = "passive-calculator-year";
+    PASSIVE_CALCULATOR_MONTH = "passive-calculator-month";
+    PASSIVE_CALCULATOR_CYCLE_TWENTY = "passive-calculator-cycle-twenty";
+    PASSIVE_CALCULATOR_CYCLE_TEN = "passive-calculator-cycle-ten";
+    PASSIVE_CALCULATOR_CYCLE_FOUR = "passive-calculator-cycle-four";
+    PASSIVE_CALCULATOR_MONTH_JANUARY = "passive-calculator-month-january";
+    PASSIVE_CALCULATOR_MONTH_FEBRUARY = "passive-calculator-month-february";
+    PASSIVE_CALCULATOR_MONTH_MARCH = "passive-calculator-month-march";
+    PASSIVE_CALCULATOR_MONTH_APRIL = "passive-calculator-month-april";
+    PASSIVE_CALCULATOR_MONTH_MAY = "passive-calculator-month-may";
+    PASSIVE_CALCULATOR_MONTH_JUNE = "passive-calculator-month-june";
+    PASSIVE_CALCULATOR_MONTH_JULY = "passive-calculator-month-july";
+    PASSIVE_CALCULATOR_MONTH_AUGUST = "passive-calculator-month-august";
+    PASSIVE_CALCULATOR_MONTH_SEPTEMBER = "passive-calculator-month-september";
+    PASSIVE_CALCULATOR_MONTH_OCTOBER = "passive-calculator-month-october";
+    PASSIVE_CALCULATOR_MONTH_NOVEMBER = "passive-calculator-month-november";
+    PASSIVE_CALCULATOR_MONTH_DECEMBER = "passive-calculator-month-december";
+    PASSIVE_CALCULATOR_SPECIFICATION = "passive-calculator-specification";
+    PASSIVE_CALCULATOR_DATE_OFF = "passive-calculator-date-off";
+    PASSIVE_CALCULATOR_DATE_INCOMPLETE = "passive-calculator-date-incomplete";
+}
