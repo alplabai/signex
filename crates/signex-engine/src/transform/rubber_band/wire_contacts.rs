@@ -249,12 +249,13 @@ pub fn wire_axis(a: Point, b: Point) -> Option<bool> {
 /// a grip drag took from `old` to where it is now in `document`. A free wire
 /// square to the dragged one there moves sideways with the end, carrying what
 /// joins it as a dragged wire does; the other wires attached there follow the
-/// end itself.
+/// end itself. Without `squares` every attached wire follows the end.
 pub fn follow_wire_grip(
     document: &mut SchematicSheet,
     wire: Uuid,
     start: bool,
     old: Point,
+    squares: bool,
 ) -> Follow {
     let Some(dragged) = document.wires.iter().find(|w| w.uuid == wire) else {
         return Follow::default();
@@ -268,7 +269,7 @@ pub fn follow_wire_grip(
     if pt_key(&new) == k {
         return Follow::default();
     }
-    let square: Vec<SelectedItem> = match wire_axis(old, other) {
+    let square: Vec<SelectedItem> = match wire_axis(old, other).filter(|_| squares) {
         Some(horizontal) => (document.wires.iter())
             .filter(|w| w.uuid != wire && !w.locked)
             .filter(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
