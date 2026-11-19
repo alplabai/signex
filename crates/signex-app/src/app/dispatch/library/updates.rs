@@ -13,6 +13,7 @@ use crate::library::part_sync::PartSync;
 use signex_types::schematic::{LibSymbol, LinkStamp};
 
 mod scan;
+mod selection;
 use scan::{
     Instance, InstanceRow, PersonalUpdates, PlacedLibrarySymbol, blocker, bound_instances,
     modal_entry, personal_link,
@@ -23,30 +24,6 @@ use scan::{
 // ─────────────────────────────────────────────────────────────────────
 
 impl Signex {
-    /// Toggle one row's checkbox in the Library Updates modal.
-    pub(super) fn handle_library_updates_toggle_selection(
-        &mut self,
-        symbol_uuid: uuid::Uuid,
-    ) -> Task<Message> {
-        if let Some(state) = self.library.library_updates.as_mut() {
-            state.toggle(symbol_uuid);
-        }
-        Task::none()
-    }
-
-    /// The user answered one conflict of a part in the Library Updates modal.
-    pub(super) fn handle_library_updates_conflict_answered(
-        &mut self,
-        symbol_uuid: uuid::Uuid,
-        field: signex_types::schematic::StampField,
-        choice: crate::library::part_sync::Choice,
-    ) -> Task<Message> {
-        if let Some(state) = self.library.library_updates.as_mut() {
-            state.answer_conflict(symbol_uuid, field, choice);
-        }
-        Task::none()
-    }
-
     /// User clicked Skip All — close the modal and record the path on
     /// `skipped_updates_for` (nothing renders that set yet).
     pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {

@@ -1015,6 +1015,7 @@ mod tests {
         let entry = |s: &Symbol, selected: bool| LibraryUpdateEntry {
             symbol_uuid: s.uuid,
             ref_des: s.reference.clone(),
+            internal_pn: String::new(),
             lib_id: "L:S".into(),
             library_id: library,
             library_name: "Lib".into(),

@@ -500,7 +500,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
         ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
         ModalId::LibraryStockCopy => iced::Size::new(520.0, 380.0),
-        ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
+        ModalId::LibraryUpdates => iced::Size::new(800.0, 500.0),
         ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),

@@ -526,6 +526,9 @@ impl Signex {
                 self.show_next_queued_updates();
                 Task::none()
             }
+            LibraryMessage::LibraryUpdatesSelectAllToggled => {
+                self.handle_library_updates_select_all_toggled()
+            }
 
             // ── Components Panel (Stage 9) ────────────────────────────
             LibraryMessage::ComponentsPanelToggleLibrary(root) => {

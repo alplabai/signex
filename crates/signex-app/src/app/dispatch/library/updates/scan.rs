@@ -123,6 +123,8 @@ pub(super) fn modal_entry(
     LibraryUpdateEntry {
         symbol_uuid: symbol.uuid,
         ref_des: symbol.reference,
+        // From the row the version came from, so the two always agree.
+        internal_pn: row.row.internal_pn.as_str().to_string(),
         lib_id: symbol.lib_id,
         library_id: symbol.library_id,
         library_name: row.library_name.clone(),
