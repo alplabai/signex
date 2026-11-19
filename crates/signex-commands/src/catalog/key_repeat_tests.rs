@@ -69,6 +69,8 @@ fn a_repeating_command_keeps_the_default() {
         "next_layer",
         "rotate_selection",
         "rotate_selection_cw",
+        "mirror_x",
+        "mirror_y",
     ] {
         let meta = metadata_for_str(id).unwrap_or_else(|| panic!("{id} is in the catalog"));
         assert_eq!(meta.key_repeat, KeyRepeat::Runs, "{id}");

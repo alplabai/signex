@@ -252,9 +252,9 @@ position edits, rotate and mirror always use Auto (#1669).
 A held key runs a cycle, toggle or flip command once: `cycle_wiring_mode`, the
 corner mode and posture keys, the grid, unit and selection-mode cycles, every
 show/hide toggle and the selection flips step one state per press, however long
-the key is down. Other commands, such as zoom, undo, rotate and nudges, repeat
-while the key is held. The
-catalog marks which is which (`KeyRepeat` in `docs/DECISIONS.md`, 2026-11-19).
+the key is down. Other commands, such as zoom, undo, rotate, mirror and nudges,
+repeat while the key is held. The catalog marks which is which (`KeyRepeat` in
+`docs/DECISIONS.md`, 2026-11-19).
 
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
