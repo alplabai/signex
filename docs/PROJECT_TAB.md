@@ -25,8 +25,9 @@ Manager, Design Notebook) join them. Two rules hold for every page tab, in
   owner's path is the tab's path, so a page kind never adds a second dirty
   source (#661).
 
-The page body sits in the shared shell, `signex_widgets::doc_tab_shell`:
-from the top a toolbar row (items from the left, wrapping when the tab is
+A shared page shell, `signex_widgets::doc_tab_shell`, is ready for page
+bodies; the Project and Rules tabs do not use it yet. It draws, from the top,
+a toolbar row (items from the left, wrapping when the tab is
 narrow, and an end group of totals or pills at the right), a strip of
 sub-tabs (the active one in the ink colour with an accent underline; a
 sub-tab may carry a tag such as "proposal" or a count), the body, and a
