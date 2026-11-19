@@ -186,6 +186,8 @@ fn the_autosave_recovery_card_fits_a_window_just_wider_than_its_design() {
         path: "a.snxsch".into(),
         age_secs: 30,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     };
     assert_card_inside(
         &mut app,

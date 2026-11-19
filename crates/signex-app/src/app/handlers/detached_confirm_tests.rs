@@ -339,6 +339,8 @@ fn a_recovery_prompt_whose_window_vanishes_twice_stays_in_the_window() {
             path: "p.snxsch".into(),
             age_secs: 90,
             older_than_file: false,
+            saved_age_secs: Some(600),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         });
     for expected_windows in [1usize, 1] {
         let _ = app.sync_detached_modals();
