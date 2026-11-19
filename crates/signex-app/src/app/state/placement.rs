@@ -128,6 +128,6 @@ pub enum PlacementPause {
     /// A pad placement in the footprint editor at `path`.
     Footprint {
         path: PathBuf,
-        pad_defaults: crate::library::editor::footprint::state::NextPadDefaults,
+        pad_defaults: crate::library::editor::footprint::NextPadDefaults,
     },
 }

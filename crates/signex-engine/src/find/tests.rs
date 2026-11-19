@@ -225,9 +225,11 @@ fn whole_word_is_the_default_and_a_symbol_next_to_the_word_is_a_boundary() {
     assert!(query.is_match("+5V"));
     assert!(query.is_match("rail +5V, filtered"));
     assert!(!query.is_match("+5V0"));
+    // The one match, bytes 2..6 ("VOUT").
+    let vout = 2..6;
     assert_eq!(
         with("vout", MatchOptions::WHOLE_WORD).ranges("a VOUT b"),
-        [2..6]
+        [vout]
     );
 }
 

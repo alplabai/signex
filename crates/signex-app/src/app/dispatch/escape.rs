@@ -1019,7 +1019,7 @@ mod tests {
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
         let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
-        editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::PlacePad;
+        editor.state.pads_tool = crate::library::editor::footprint::PadsTool::PlacePad;
         app.document_state
             .footprint_editors
             .insert(path.clone(), editor);
@@ -1036,7 +1036,7 @@ mod tests {
 
     #[test]
     fn esc_in_a_paused_footprint_editor_resumes_with_the_pad_values_it_paused_with() {
-        use crate::library::editor::footprint::state::PadsTool;
+        use crate::library::editor::footprint::PadsTool;
         let (mut app, path) = app_with_footprint_editor();
         let size_before = app.document_state.footprint_editors[&path]
             .state

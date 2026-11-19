@@ -6,7 +6,7 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use crate::library::editor::footprint::state::SelectionFilterKind;
+use crate::library::editor::footprint::SelectionFilterKind;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length};
 use signex_i18n::{Localized, MessageId, ids, t};
