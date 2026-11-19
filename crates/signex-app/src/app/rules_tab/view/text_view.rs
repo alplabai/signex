@@ -422,7 +422,7 @@ mod tests {
         assert_eq!(of(Token::Number), ["0.8mm"]);
         assert_eq!(of(Token::Quoted), ["\"HV\""]);
         let at = line.find("0.8mm").expect("the value");
-        let marked = tokens(line, &[at..at + 5]);
+        let marked = tokens(line, std::slice::from_ref(&(at..at + 5)));
         assert!(marked.contains(&(at..at + 5, Token::Problem)));
         assert!(!marked.iter().any(|(_, t)| *t == Token::Number));
     }
