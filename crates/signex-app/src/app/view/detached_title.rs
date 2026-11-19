@@ -22,11 +22,11 @@ impl Signex {
             ModalId::LibraryPicker => library
                 .picker
                 .as_ref()
-                .map(|p| crate::library::picker::title(&p.mode).to_owned()),
+                .map(|p| crate::library::picker::title(&p.mode, &self.ui_state.i18n)),
             ModalId::LibraryPrimitivePicker => library
                 .primitive_picker
                 .as_ref()
-                .map(|p| crate::library::primitive_picker::title(p.kind).to_owned()),
+                .map(|p| crate::library::primitive_picker::title(p.kind, &self.ui_state.i18n)),
             ModalId::LibraryRecovery => library
                 .recovery
                 .as_ref()
