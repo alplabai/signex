@@ -241,7 +241,7 @@ pub(crate) fn tab_is_dirty(
     tab: &TabInfo,
     dirty: &std::collections::HashSet<std::path::PathBuf>,
 ) -> bool {
-    page_tab::is_dirty(tab, dirty)
+    dirty.contains(&tab.path)
 }
 
 /// The owner paths of `tabs` whose document has unsaved work, asked of each
@@ -256,12 +256,9 @@ pub(crate) fn dirty_tab_paths(
         .filter(|tab| {
             DocumentKey::of(tab)
                 .and_then(|key| app.document(&key).map(|doc| doc.has_unsaved_input()))
-                .unwrap_or_else(|| {
-                    app.document_state
-                        .is_document_dirty(page_tab::owner_path(tab))
-                })
+                .unwrap_or_else(|| app.document_state.is_document_dirty(&tab.path))
         })
-        .map(|tab| page_tab::owner_path(tab).to_path_buf())
+        .map(|tab| tab.path.clone())
         .collect()
 }
 

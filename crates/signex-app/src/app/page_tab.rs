@@ -6,18 +6,16 @@
 //!   Stack"), read in the current language;
 //! - the tab is dirty exactly when the file it saves into, its owner, has
 //!   unsaved work (#661). Project and Rules save into the `.snxprj` on
-//!   `TabInfo.path`.
+//!   `TabInfo.path`. A page tab carries its owner's path as `TabInfo.path`
+//!   and never a path of its own, so the dirty check is that path's
+//!   (`tab_bar::tab_is_dirty`).
 //!
-//! The body sits in `signex_widgets::doc_tab_shell`; see docs/PROJECT_TAB.md,
-//! "Page tabs".
-
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+//! Each page kind draws its own body. See docs/PROJECT_TAB.md, "Page tabs".
 
 use signex_i18n::{Arg, I18n, MessageId, ids, t};
 
 use crate::app::state::ProjectId;
-use crate::app::{LoadedProject, Signex, TabInfo, TabKind};
+use crate::app::{LoadedProject, Signex, TabKind};
 
 /// The page name of a page tab; `None` for a drawing, an editor or a
 /// library tab. A new page kind adds its arm here.
@@ -74,20 +72,6 @@ pub(crate) fn tab_title(kind: &TabKind, projects: &[LoadedProject], i18n: &I18n)
     let id = page_project(kind)?;
     let project = projects.iter().find(|p| p.id == id)?;
     Some(page_title(i18n, &project_display_name(project), page))
-}
-
-/// The file `tab` saves into. A page tab carries its owner's path as
-/// `TabInfo.path` (Project and Rules: the `.snxprj`; a Layer Stack tab: its
-/// board), so for every tab this is that path. A page kind never gets a
-/// path of its own: a second path would be a second dirty source.
-pub(crate) fn owner_path(tab: &TabInfo) -> &Path {
-    &tab.path
-}
-
-/// Whether `tab` shows unsaved work: its owner file is in `dirty`, the set
-/// of dirty document paths.
-pub(crate) fn is_dirty(tab: &TabInfo, dirty: &HashSet<PathBuf>) -> bool {
-    dirty.contains(owner_path(tab))
 }
 
 impl Signex {

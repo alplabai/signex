@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::*;
+use crate::app::TabInfo;
 use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::tab_bar::tab_is_dirty as is_dirty;
 
 fn tab(kind: TabKind, path: &str) -> TabInfo {
     TabInfo {
