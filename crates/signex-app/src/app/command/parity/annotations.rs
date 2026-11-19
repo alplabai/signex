@@ -472,13 +472,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     (&["unselect_all"], Bridge, &[Selection]),
     // The placement handlers: a point must be where a click lands (grid,
-    // and for a wire the electrical grid on the sheet in view); what the
-    // operands leave out comes from the pre-placement form.
-    (
-        &["place_wire", "draw_wire"],
-        Operand,
-        &[ToolState, RenderCache],
-    ),
+    // and for a wire the electrical grid of the edited sheet's engine, #2542);
+    // what the operands leave out comes from the pre-placement form.
+    (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
     (
         &[

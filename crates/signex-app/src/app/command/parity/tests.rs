@@ -206,7 +206,6 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 const KILL_LIST: &[(&str, &str)] = &[
     ("assign_net_class", "operand_handler"),
     ("close_active_document", "operand_handler"),
-    ("draw_wire", "operand_handler"),
     ("flip_selected_x", "active_bar"),
     ("flip_selected_x", "refusal_needs"),
     ("flip_selected_x", "disabled_still_runs_refusal"),
@@ -221,7 +220,6 @@ const KILL_LIST: &[(&str, &str)] = &[
     ("mirror_y", "disabled_still_runs_refusal"),
     ("paste_special", "bridge"),
     ("paste_special", "disabled_still_runs_refusal"),
-    ("place_wire", "operand_handler"),
     ("project_add_requirement", "operand_handler"),
     ("project_remove_requirement", "operand_handler"),
     ("redo", "operand_handler"),
