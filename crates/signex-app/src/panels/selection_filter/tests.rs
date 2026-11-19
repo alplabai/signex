@@ -339,7 +339,8 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
     app.document_state.panel_ctx.custom_filter_presets =
         app.interaction_state.custom_filter_presets.clone();
     let shown = texts(PanelKind::SchFilter, &app.document_state.panel_ctx);
-    for label in ["Presets", "Save current", "Name", "Delete", "Wiring"] {
+    // The section title is upper-cased like every collapsible section.
+    for label in ["PRESETS", "Save current", "Name", "Delete", "Wiring"] {
         assert!(shown.iter().any(|t| t == label), "{label} in {shown:?}");
     }
     assert!(

@@ -539,19 +539,24 @@ fn net_label_row_arms_the_net_ghost_and_ends_a_pending_port() {
 
 #[test]
 fn power_port_rows_arm_what_the_active_bar_arms() {
+    // A power row shows the short port name, the full name as its tooltip (#62).
     let cases = [
-        ("GND Power Port", A::PlacePowerGND),
-        ("VCC Power Port", A::PlacePowerVCC),
-        ("+5 Power Port", A::PlacePowerPlus5),
-        ("+12 Power Port", A::PlacePowerPlus12),
+        ("GND", "GND Power Port", A::PlacePowerGND),
+        ("VCC", "VCC Power Port", A::PlacePowerVCC),
+        ("+5", "+5 Power Port", A::PlacePowerPlus5),
+        ("+12", "+12 Power Port", A::PlacePowerPlus12),
     ];
-    for (label, action) in cases {
+    for (short, label, action) in cases {
         let mut app = one_symbol();
         open_menu(&mut app);
         let message = place_rows(&app)
             .iter()
             .find_map(|entry| match entry {
-                DropdownEntry::Item(item) if item.label == label => item.on_press.clone(),
+                DropdownEntry::Item(item)
+                    if item.label == short && item.tooltip.as_deref() == Some(label) =>
+                {
+                    item.on_press.clone()
+                }
                 _ => None,
             })
             .unwrap_or_else(|| panic!("no live row {label}"));
@@ -662,6 +667,8 @@ fn canvas_project_options_row_opens_the_active_projects_tab() {
     let id = app.document_state.projects[idx].id;
     app.document_state.active_project = Some(id);
     app.document_state.tabs[0].project_id = Some(id);
+    // Project Options is a row of the empty-spot menu (#62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_project_options");
     assert!(
         app.document_state
