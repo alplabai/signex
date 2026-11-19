@@ -22,6 +22,7 @@ mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
 pub(crate) mod transaction;
+mod unions;
 mod wire_end;
 
 #[cfg(test)]
@@ -52,3 +53,5 @@ mod sheet_page_tests;
 mod sheet_variable_tests;
 #[cfg(test)]
 mod symbol_body_tests;
+#[cfg(test)]
+mod unions_tests;

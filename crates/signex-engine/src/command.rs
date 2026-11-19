@@ -135,6 +135,10 @@ pub enum CommandKind {
     UpdateDirective,
     SetNoErcRules,
     AutoplaceFields,
+    CreateUnion,
+    UpdateUnion,
+    SetUnionMembers,
+    BreakUnion,
 }
 
 #[derive(Debug, Clone)]
@@ -616,6 +620,31 @@ pub enum Command {
     AutoplaceFields {
         symbol_ids: Vec<Uuid>,
     },
+    /// Group objects of this sheet under a name and tags (#158). Refused
+    /// with a [`crate::UnionRefusal`] when the name is blank, a member is not
+    /// on the sheet or already in another union, or nothing is left. One
+    /// undo step.
+    CreateUnion {
+        union: signex_types::schematic::SchUnion,
+    },
+    /// Rename, retag, lock or unlock the union `uuid`. Renames and tag edits
+    /// of one union are one typing run; a lock change is a step of its own.
+    UpdateUnion {
+        uuid: Uuid,
+        name: String,
+        tags: Vec<String>,
+        locked: bool,
+    },
+    /// Replace the members of the union `uuid` (Add / Remove selection). An
+    /// empty list breaks it; refused on a locked union.
+    SetUnionMembers {
+        uuid: Uuid,
+        members: Vec<Uuid>,
+    },
+    /// Remove the union `uuid`; its objects stay. Refused when locked.
+    BreakUnion {
+        uuid: Uuid,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -757,6 +786,10 @@ impl Command {
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
             Command::SetNoErcRules { .. } => CommandKind::SetNoErcRules,
             Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
+            Command::CreateUnion { .. } => CommandKind::CreateUnion,
+            Command::UpdateUnion { .. } => CommandKind::UpdateUnion,
+            Command::SetUnionMembers { .. } => CommandKind::SetUnionMembers,
+            Command::BreakUnion { .. } => CommandKind::BreakUnion,
         }
     }
 }

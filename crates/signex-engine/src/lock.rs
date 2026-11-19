@@ -86,6 +86,8 @@ impl Engine {
         for d in doc.drawings.iter().filter(|d| d.is_locked()) {
             out.insert(d.uuid(), drawing_name(d));
         }
+        // A locked union freezes its members the same way (#158).
+        crate::unions::insert_locked_members(doc, &mut out);
         out
     }
 }
@@ -201,7 +203,13 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::UpdateDirective { .. }
         | Command::SetNoErcRules { .. }
         | Command::SetDocumentFontFamily { .. }
-        | Command::SetNetColors { .. } => return None,
+        | Command::SetNetColors { .. }
+        // A union command edits the union, not its objects; a locked union
+        // refuses its own changes in `exec/unions.rs`.
+        | Command::CreateUnion { .. }
+        | Command::UpdateUnion { .. }
+        | Command::SetUnionMembers { .. }
+        | Command::BreakUnion { .. } => return None,
     };
     Some(target)
 }

@@ -271,8 +271,19 @@ fn fixture() -> SchematicSheet {
         s.directives.push(blanket(n, "Power"));
     }
     connected_pins(&mut s);
+    // Deleting either member drops it from the union in the same step (#158).
+    s.unions.push(signex_types::schematic::SchUnion {
+        uuid: uid(UNION, 1),
+        name: "Input filter".into(),
+        tags: vec!["emc".into()],
+        members: vec![uid(TEXT_NOTE, 1), uid(LABEL, 1)],
+        locked: false,
+    });
     s
 }
+
+/// Id group of the fixture's union.
+const UNION: u128 = 14;
 
 /// The patch bits for the collections that differ between `a` and `b`.
 /// Destructuring every field forces a decision when `SchematicSheet` grows.
@@ -313,6 +324,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         drawings,
         no_erc_directives,
         directives,
+        unions,
         title_block,
         variables,
         lib_symbols,
@@ -352,6 +364,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::NO_ERC_DIRECTIVES,
     );
     flag(differ(directives, &b.directives), DocumentPatch::DIRECTIVES);
+    flag(differ(unions, &b.unions), DocumentPatch::UNIONS);
     flag(
         differ(&sorted(lib_symbols), &sorted(&b.lib_symbols)),
         DocumentPatch::LIB_SYMBOLS,
@@ -389,7 +402,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 66] = [
+const ALL_KINDS: [CommandKind; 70] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -456,6 +469,10 @@ const ALL_KINDS: [CommandKind; 66] = [
     CommandKind::SetNoErcRules,
     CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
+    CommandKind::CreateUnion,
+    CommandKind::UpdateUnion,
+    CommandKind::SetUnionMembers,
+    CommandKind::BreakUnion,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -528,7 +545,11 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateDirective
         | CommandKind::SetNoErcRules
         | CommandKind::AutoplaceFields
-        | CommandKind::MoveEach => {}
+        | CommandKind::MoveEach
+        | CommandKind::CreateUnion
+        | CommandKind::UpdateUnion
+        | CommandKind::SetUnionMembers
+        | CommandKind::BreakUnion => {}
     }
 }
 
@@ -1183,6 +1204,40 @@ fn samples() -> Vec<(String, Command)> {
             )]
             .into_iter()
             .collect(),
+        },
+    );
+    add(
+        "CreateUnion",
+        Command::CreateUnion {
+            union: signex_types::schematic::SchUnion {
+                uuid: uid(NEW, 30),
+                name: "Divider".into(),
+                tags: Vec::new(),
+                members: vec![uid(LABEL, 2), uid(TEXT_NOTE, 2)],
+                locked: false,
+            },
+        },
+    );
+    add(
+        "UpdateUnion",
+        Command::UpdateUnion {
+            uuid: uid(UNION, 1),
+            name: "Input filter".into(),
+            tags: vec!["emc".into()],
+            locked: true,
+        },
+    );
+    add(
+        "SetUnionMembers",
+        Command::SetUnionMembers {
+            uuid: uid(UNION, 1),
+            members: vec![uid(TEXT_NOTE, 1)],
+        },
+    );
+    add(
+        "BreakUnion",
+        Command::BreakUnion {
+            uuid: uid(UNION, 1),
         },
     );
     out

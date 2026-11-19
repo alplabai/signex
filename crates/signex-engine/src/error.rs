@@ -106,6 +106,9 @@ pub enum EngineError {
     DirectiveNotFound { kind: &'static str, id: uuid::Uuid },
     #[error("a directive region needs two different corners with finite coordinates")]
     InvalidDirectiveRegion,
+    /// A named-union command refused (#158).
+    #[error(transparent)]
+    Union(#[from] crate::unions::UnionRefusal),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {
