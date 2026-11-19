@@ -43,6 +43,8 @@ pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
 pub(crate) use empty_state::empty_state_card;
 mod erc_waivers;
 mod footprint_context;
+mod footprint_properties_msg;
+pub use footprint_properties_msg::FpPropertiesMsg;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;

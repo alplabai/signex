@@ -226,6 +226,12 @@ pub struct FootprintEditorPanelContext {
     /// renders one editable row per entry so the user can edit the
     /// shared sketch parameter without entering Sketch mode.
     pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
+    /// The page shown while nothing is selected (mirror of
+    /// `editor.state.properties_page`).
+    pub properties_page: crate::library::editor::footprint::state::FpPropertiesPage,
+    /// The field or callout under the pointer (mirror of
+    /// `editor.state.properties_hover`).
+    pub illustration_hover: signex_widgets::property_illustration::IllustrationHover,
 }
 
 /// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad

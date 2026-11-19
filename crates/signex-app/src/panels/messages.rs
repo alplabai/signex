@@ -1094,6 +1094,9 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// View state of the footprint Properties panel: the illustration hover
+    /// link and the page shown with nothing selected. Never an edit.
+    FpProperties(super::FpPropertiesMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

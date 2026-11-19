@@ -663,5 +663,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_array,
         selected_pad_shape_params,
         numeric_buffers: editor.state.numeric_buffers.clone(),
+        properties_page: editor.state.properties_page,
+        illustration_hover: editor.state.properties_hover.clone(),
     })
 }

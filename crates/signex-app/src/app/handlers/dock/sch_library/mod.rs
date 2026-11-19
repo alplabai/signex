@@ -807,6 +807,7 @@ impl Signex {
                     Unit::Micrometer => Unit::Mm,
                 };
             }),
+            PanelMsg::FpProperties(msg) => self.fp_properties_view_changed(msg),
             _ => false,
         };
         if handled { Some(follow) } else { None }
