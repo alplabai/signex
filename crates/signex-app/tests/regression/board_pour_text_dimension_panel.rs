@@ -241,6 +241,25 @@ fn shelve_all_and_unshelve_all_are_one_step_each_and_close_the_menu() {
 }
 
 #[test]
+fn the_pour_menu_stays_with_the_pour_it_was_opened_on() {
+    let mut f = open_board();
+    picked_pour(&mut f);
+    send(&mut f, pour(PourMsg::MenuToggled));
+    assert!(area_panel(&f).menu_open);
+
+    click(&mut f, Point::new(75.0, 55.0));
+    let other = area_panel(&f);
+    assert!(
+        matches!(other.common.target.items.as_slice(), [ItemRef::Zone { zone, .. }] if *zone == POUR_B),
+        "{:?}",
+        other.common.target
+    );
+    assert!(!other.menu_open, "pour B opens with its menu closed");
+    picked_pour(&mut f);
+    assert!(!area_panel(&f).menu_open, "and pour A's menu stays closed");
+}
+
+#[test]
 fn a_quick_rotation_step_is_one_undo_step() {
     let mut f = open_board();
     click(&mut f, Point::new(5.0, 30.0));

@@ -14,8 +14,9 @@ use super::{PcbPrimitiveMsg, PrimitiveCommon, SP, TS};
 use crate::panels::PanelMsg;
 use crate::styles::{ti, tokens::resolve};
 
-/// The collapse key of a Net Information section open by default.
-const OPEN_KEY: &str = "pcb_prim.net_info.open";
+/// The collapse key of a Net Information section open by default (the
+/// track's). Not `<CLOSED_KEY>.open`: that is the closed one's toggle key.
+const OPEN_KEY: &str = "pcb_prim.track_net_info";
 /// The collapse key of a Net Information section closed by default.
 const CLOSED_KEY: &str = "pcb_prim.net_info";
 

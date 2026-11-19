@@ -65,6 +65,7 @@ define_ids! {
     PCB_COMPONENT_SIDE_TOP = "pcb-component-side-top";
     PCB_COMPONENT_SIDE_BOTTOM = "pcb-component-side-bottom";
     PCB_COMPONENT_ONE_AT_A_TIME = "pcb-component-one-at-a-time";
+    PCB_COMPONENT_NO_DESCRIPTION = "pcb-component-no-description";
     PCB_COMPONENT_PARAMETERS_NONE = "pcb-component-parameters-none";
     PCB_COMPONENT_FOOTPRINT_PICK_TIP = "pcb-component-footprint-pick-tip";
     PCB_COMPONENT_READ_ONLY_TIP = "pcb-component-read-only-tip";
@@ -83,6 +84,7 @@ define_ids! {
     PCB_COMPONENT_TYPE_NET_TIE_IN_BOM = "pcb-component-type-net-tie-in-bom";
     PCB_COMPONENT_TYPE_JUMPER = "pcb-component-type-jumper";
     PCB_COMPONENT_HEIGHT_TIP = "pcb-component-height-tip";
+    PCB_COMPONENT_BODY_OPACITY_TIP = "pcb-component-body-opacity-tip";
     PCB_COMPONENT_LOCK_PRIMITIVES_TIP = "pcb-component-lock-primitives-tip";
     PCB_COMPONENT_LOCK_STRINGS_TIP = "pcb-component-lock-strings-tip";
     PCB_COMPONENT_COMMENT_ALL = "pcb-component-comment-all";

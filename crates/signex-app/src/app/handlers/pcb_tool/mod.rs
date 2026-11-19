@@ -36,7 +36,6 @@ mod string;
 
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
-pub(crate) use free::arc_mode_name;
 pub(crate) use free_form::precision_of;
 pub use router::RouterState;
 

@@ -1,5 +1,6 @@
 //! The Track panel (#2523, m95): the illustration, Net Information,
-//! Properties (net, layer, width, ends, the two ends, length, Tune Net To),
+//! Properties (net, layer, width, ends, position, the two ends, length,
+//! Tune Net To),
 //! then the paste and solder mask expansion sections. The lock is the
 //! header's icon. While placing, Net Information and the geometry rows are
 //! left out: the clicks set them.
@@ -115,6 +116,21 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             unit(look, ids::PCB_PRIM_UNIT_MM),
         )
     };
+    // The selection's corner: typing it moves every selected track, which
+    // Start and End cannot do once they read Mixed.
+    s.push(
+        common,
+        ids::PCB_PRIM_POSITION,
+        super::rows::labelled(
+            look,
+            ids::PCB_PRIM_POSITION,
+            point(
+                F::X,
+                F::Y,
+                (f.location.map(|l| l.0), f.location.map(|l| l.1)),
+            ),
+        ),
+    );
     s.push(
         common,
         ids::PCB_PRIM_POINT_START,

@@ -516,6 +516,19 @@ impl PcbPrimitiveFacts {
             Self::Graphic(f) => &f.common,
         }
     }
+
+    pub fn common_mut(&mut self) -> &mut PrimitiveCommon {
+        match self {
+            Self::Track(f) => &mut f.common,
+            Self::Via(f) => &mut f.common,
+            Self::Pad(f) => &mut f.common,
+            Self::Zone(f) => &mut f.common,
+            Self::Arc(f) => &mut f.common,
+            Self::Text(f) => &mut f.common,
+            Self::Dimension(f) => &mut f.common,
+            Self::Graphic(f) => &mut f.common,
+        }
+    }
 }
 
 /// The value `values` share, or `None` when they differ or there are none.

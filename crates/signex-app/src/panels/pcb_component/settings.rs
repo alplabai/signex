@@ -1,22 +1,20 @@
 //! The rows of the component settings (#2365, Graphite m94): the Type
-//! dropdown, Height, the 3D Opacity slider, the Lock row with its two
-//! checkboxes, and the swapping checkboxes. Each edit is one board undo step.
+//! dropdown, Height, the 3D Opacity slider and value box, the Lock row with
+//! its two checkboxes, the swapping checkboxes, and the typed Description
+//! and Channel Offset rows. Each edit is one board undo step.
 
-use iced::widget::{Row, slider};
+use iced::widget::{Row, container, slider};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_engine::pcb::component_edit::{ComponentSetting, TypedSetting};
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::ComponentType;
-use signex_widgets::text;
 
-use super::general::draft_input;
+use super::general::{draft_input, draft_input_with};
 use super::rows::{self, Form};
 use super::{ComponentField, PcbComponentFacts, PcbComponentMsg, Shared};
 use crate::panels::{PanelMsg, form_look};
-use crate::styles::tokens::resolve;
-use crate::styles::{HAIRLINE, Spacing, TypeScale};
+use crate::styles::{HAIRLINE, Spacing};
 
-const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// The slider's step: the two decimals its value is shown with.
@@ -68,6 +66,22 @@ pub(super) fn footprint_rows<'a>(
     .collect()
 }
 
+/// A typed setting's row: its draft, else `stored`; Enter applies it as one
+/// step (Description, Channel Offset).
+pub(super) fn typed_row<'a>(
+    form: &Form<'a>,
+    facts: &'a PcbComponentFacts,
+    label: MessageId,
+    setting: TypedSetting,
+    stored: Option<String>,
+) -> Option<Element<'a, PanelMsg>> {
+    let label = form.text(label);
+    form.shows(&label).then(|| {
+        let control = draft_input(facts, ComponentField::Setting(setting), stored);
+        rows::row(form, label, control)
+    })
+}
+
 /// The Type row: a dropdown of every type, blank when the components differ.
 fn type_row<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Element<'a, PanelMsg>> {
     use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -114,9 +128,10 @@ fn height_row<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Eleme
     ))
 }
 
-/// 3D Opacity: a slider from 0 (clear) to 1 (solid) and its value. Dragging
-/// keeps the value as the field's draft; letting go applies it as one step,
-/// the same edit the typed field made.
+/// 3D Opacity: a slider from 0 (clear) to 1 (solid) and a typed value box.
+/// Dragging keeps the value as the field's draft; letting go applies it as
+/// one step. The box shows the same draft and takes a typed value or a
+/// percentage ("40%") on Enter.
 fn opacity_row<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Element<'a, PanelMsg>> {
     let label = form.text(ids::PCB_COMPONENT_OPACITY);
     if !form.shows(&label) && !form.shows(&form.text(ids::PCB_COMPONENT_BODY_OPACITY)) {
@@ -150,22 +165,24 @@ fn opacity_row<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Elem
     };
     let bar = bar
         .step(OPACITY_STEP)
-        .width(Length::Fill)
+        .width(Length::FillPortion(3))
         .style(move |theme: &Theme, _| opacity_slider(theme, editable));
-    let shown: signex_widgets::Label<'a> = match value {
-        Some(v) => signex_i18n::UserText::new(format!("{v:.2}")).into(),
-        None => t!(form.ctx.i18n, ids::PCB_COMPONENT_MIXED).into(),
-    };
+    let stored = facts
+        .settings
+        .body_opacity
+        .same()
+        .map(|v| format!("{v:.2}"));
+    let typed = draft_input_with(
+        facts,
+        ComponentField::Setting(TypedSetting::BodyOpacity),
+        stored,
+        Some(t!(form.ctx.i18n, ids::PCB_COMPONENT_MIXED)),
+    );
+    let typed = container(form.with_tip(typed, ids::PCB_COMPONENT_BODY_OPACITY_TIP))
+        .width(Length::FillPortion(1));
     let control = Row::new()
         .push_boxed(bar)
-        .push_boxed(
-            text(shown)
-                .size(TS.caption)
-                .font(crate::fonts::iced_font_for_family(
-                    crate::fonts::CHROME_MONO_FONT,
-                ))
-                .color(resolve(&form.ctx.tokens).ink3),
-        )
+        .push_boxed(typed)
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .boxed();

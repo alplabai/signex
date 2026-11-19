@@ -66,10 +66,15 @@ pub struct PcbPrimitivePanel {
     pub via_view_layer: Option<CopperLayer>,
     /// The pour Copper card's menu of board-wide commands is open (#2523).
     pub pour_menu_open: bool,
+    /// The target the panel showed at the last sync: `hover`,
+    /// `via_view_layer` and `pour_menu_open` belong to it alone.
+    pub shown: Option<PrimitiveTarget>,
 }
 
 impl PcbPrimitivePanel {
-    /// Forget drafts and a pick that were not made for `shown` on `board`.
+    /// Forget drafts, a pick and Override that were not made for `shown` on
+    /// `board`; a new `shown` also drops the hover, the via view layer and
+    /// the pour menu.
     pub(crate) fn keep_only(&mut self, board: &Path, shown: Option<&PrimitiveTarget>) {
         let stale = |t: &PrimitiveTarget| t.board == board && Some(t) != shown;
         if self.draft_target.as_ref().is_some_and(stale) {
@@ -79,6 +84,22 @@ impl PcbPrimitivePanel {
         if self.net_pick.as_ref().is_some_and(stale) {
             self.net_pick = None;
         }
+        if self.via_override.as_ref().is_some_and(stale) {
+            self.via_override = None;
+        }
+        if self.shown.as_ref() != shown {
+            self.shown = shown.cloned();
+            self.hover = IllustrationHover::default();
+            self.via_view_layer = None;
+            self.pour_menu_open = false;
+        }
+    }
+
+    /// Whether the per-target state (hover, via view layer, pour menu) is
+    /// `target`'s: facts built before `keep_only` saw a new target must not
+    /// show the old one's.
+    pub(crate) fn is_showing(&self, target: &PrimitiveTarget) -> bool {
+        self.shown.as_ref() == Some(target)
     }
 
     /// Forget the drafts typed on `board` (its undo or redo moved them).
@@ -237,7 +258,17 @@ impl Signex {
                 };
                 self.apply_primitive_edit(target, PrimitiveEdit::Mode(*mode), what);
             }
-            M::IllustrationHovered(hover) => panel.hover.update(hover.clone()),
+            // Only the hover changes: patch the shown facts instead of
+            // rebuilding the board summary on every pointer crossing.
+            M::IllustrationHovered(hover) => {
+                panel.hover.update(hover.clone());
+                let hover = panel.hover.clone();
+                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                if let Some(facts) = shown.and_then(|b| b.primitive.as_mut()) {
+                    facts.common_mut().hover = hover;
+                }
+                return;
+            }
             M::UnstoredToggled => panel.unstored_open = !panel.unstored_open,
             M::ValuePicked {
                 target,

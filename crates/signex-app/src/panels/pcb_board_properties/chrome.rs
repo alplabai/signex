@@ -65,27 +65,12 @@ impl<'a> Head<'a> {
     }
 }
 
-/// A section closed by default is open while `"{key}{OPEN_SUFFIX}"` is in
-/// the collapsed set; `ToggleSection` flips that key like any other.
-const OPEN_SUFFIX: &str = ".open";
+// The key `ToggleSection` flips for the section or fold `key`.
+pub(super) use crate::panels::widgets::section_toggle_key as toggle_key;
 
-/// The key `ToggleSection` flips for the section or fold `key`.
-pub(super) fn toggle_key(key: &str, closed_by_default: bool) -> String {
-    if closed_by_default {
-        format!("{key}{OPEN_SUFFIX}")
-    } else {
-        key.to_owned()
-    }
-}
-
-/// Whether the section or fold `key` shows its body: a default-open one
-/// unless its key is in the collapsed set, a default-closed one only while
-/// its open key is.
+/// Whether the section or fold `key` shows its body.
 pub(super) fn is_open(ctx: &PanelContext, key: &str, closed_by_default: bool) -> bool {
-    let toggled = ctx
-        .collapsed_sections
-        .contains(&toggle_key(key, closed_by_default));
-    toggled == closed_by_default
+    crate::panels::widgets::is_section_open(key, closed_by_default, &ctx.collapsed_sections)
 }
 
 /// The panel context and the search text, for the section builders.

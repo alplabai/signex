@@ -3,7 +3,8 @@
 //! its illustration callout and a hovered callout its row; the Ends row
 //! keeps Round with Square and Flat greyed; the Arc form's Placement pick
 //! sets how the armed tool draws; a picked value is one undo step; a
-//! selection partly locked counts its locks for the header icon.
+//! selection partly locked counts its locks for the header icon; the
+//! Position row moves several tracks at once.
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
@@ -26,11 +27,12 @@ use uuid::Uuid;
 const ARC: Uuid = Uuid::from_u128(0x501);
 const LOCKED: Uuid = Uuid::from_u128(0x502);
 const FREE: Uuid = Uuid::from_u128(0x503);
+const FREE_LOW: Uuid = Uuid::from_u128(0x504);
 /// The key the Width row and its callout share.
 const WIDTH: FieldId = FieldId::new("w");
 
 /// A half circle of radius 5 round (20, 20) on top copper; on net 3 a
-/// locked track along y = 0 and a free one along y = 10.
+/// locked track along y = 0 and free ones along y = 10 and y = -10.
 fn board() -> PcbBoard {
     serde_json::from_value(serde_json::json!({
         "uuid": Uuid::from_u128(1),
@@ -40,6 +42,8 @@ fn board() -> PcbBoard {
             {"uuid": LOCKED, "start": {"x": 0.0, "y": 0.0}, "end": {"x": 10.0, "y": 0.0},
              "width": 0.25, "layer": "TopCopper", "net": 3, "locked": true},
             {"uuid": FREE, "start": {"x": 0.0, "y": 10.0}, "end": {"x": 10.0, "y": 10.0},
+             "width": 0.25, "layer": "TopCopper", "net": 3},
+            {"uuid": FREE_LOW, "start": {"x": 0.0, "y": -10.0}, "end": {"x": 10.0, "y": -10.0},
              "width": 0.25, "layer": "TopCopper", "net": 3}
         ],
         "free": {
@@ -235,4 +239,42 @@ fn a_partly_locked_selection_counts_its_locks_for_the_header() {
     assert_eq!(both.locked, None, "the lock is mixed");
     assert_eq!(both.common.locked_count, Some((1, 2)));
     assert_eq!(both.common.editability, Editability::ItemLocked);
+}
+
+#[test]
+fn the_position_row_moves_several_tracks_at_once() {
+    let mut f = open_board();
+    click(&mut f.app, Point::new(5.0, 10.0), ClickMode::Replace);
+    click(&mut f.app, Point::new(5.0, -10.0), ClickMode::Toggle);
+    let PcbPrimitiveFacts::Track(both) = facts(&f.app) else {
+        panic!("the track panel shows");
+    };
+    assert_eq!(both.common.target.items.len(), 2);
+    assert_eq!(both.start, (Some(0.0), None), "Start reads Mixed in Y");
+    let (x, _) = both.location.expect("the selection has a corner");
+    let start_x = |app: &Signex, id: Uuid| {
+        live(app)
+            .segments
+            .iter()
+            .find(|s| s.uuid == id)
+            .map(|s| s.start.x)
+            .expect("the track is on the board")
+    };
+    let before = [LOCKED, FREE, FREE_LOW].map(|id| start_x(&f.app, id));
+    send(
+        &mut f.app,
+        panel(PcbPrimitiveMsg::ValuePicked {
+            target: both.common.target.clone(),
+            field: PrimitiveField::X,
+            value: x + 3.0,
+        }),
+    );
+    for (id, was, moved) in [
+        (LOCKED, before[0], 0.0),
+        (FREE, before[1], 3.0),
+        (FREE_LOW, before[2], 3.0),
+    ] {
+        let now = start_x(&f.app, id);
+        assert!((now - (was + moved)).abs() < 1e-9, "{id} moved by {moved}");
+    }
 }

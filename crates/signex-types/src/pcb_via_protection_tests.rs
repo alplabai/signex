@@ -33,7 +33,9 @@ fn every_combination_names_its_ipc_4761_type() {
         // Plugged and covered: the cover must be over the plug.
         (p(Plugged, Top, false, true, false), C::IVA),
         (p(Plugged, Bottom, false, false, true), C::IVA),
-        (p(Plugged, Both, false, false, true), C::IVA),
+        // A plug from both sides covered on one is no numbered type.
+        (p(Plugged, Both, false, false, true), C::Custom),
+        (p(Plugged, Both, false, true, false), C::Custom),
         (p(Plugged, Both, false, true, true), C::IVB),
         (p(Plugged, Top, false, true, true), C::IVB),
         (p(Plugged, Top, false, false, true), C::Custom),

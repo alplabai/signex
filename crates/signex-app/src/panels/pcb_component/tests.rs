@@ -154,8 +154,9 @@ fn one_component_lists_every_section_and_its_rows() {
         "Designator",
         "Comment",
         "Description",
+        "This component has no Description parameter.",
         "Area",
-        "2.50 mm²",
+        "2.500 mm²",
         "Footprint Name",
         "R_0603",
         "Change…",
@@ -164,7 +165,6 @@ fn one_component_lists_every_section_and_its_rows() {
         "Type",
         "Height",
         "3D Opacity",
-        "1.00",
         "Lock",
         "Primitives",
         "Strings",
@@ -186,7 +186,7 @@ fn swapping_options_start_closed_and_say_off() {
     let opened = context(
         one_component("R7", "R_0603"),
         0,
-        &["pcb_component_swapping_open"],
+        &["pcb_component_swapping.open"],
     );
     let texts = texts_in(&opened);
     for wanted in ["Enable Pin Swapping", "Enable Part Swapping"] {
@@ -291,20 +291,26 @@ fn the_stored_settings_show_their_values() {
         "Chip resistor",
         "an input shows the stored value"
     );
+    // The opacity box shows the slider's draft while it is dragged.
+    let opacity = ComponentField::Setting(TypedSetting::BodyOpacity);
+    assert_eq!(
+        super::general::shown_value(&facts, &opacity, Some("0.40".into())),
+        "0.40"
+    );
+    facts.drafts.insert(opacity.clone(), "40%".into());
+    assert_eq!(
+        super::general::shown_value(&facts, &opacity, Some("0.40".into())),
+        "40%",
+        "a typed percentage stays in the box until Enter"
+    );
     let texts = texts_of(facts, 0);
-    for wanted in [
-        "Mechanical",
-        "Chip resistor",
-        "0.40",
-        "Primitives",
-        "Strings",
-    ] {
+    for wanted in ["Mechanical", "Primitives", "Strings"] {
         assert!(has(&texts, wanted), "{wanted} in {texts:?}");
     }
 }
 
 #[test]
-fn the_description_parameter_wins_over_the_footprint_description() {
+fn the_description_parameter_and_the_footprint_description_are_two_rows() {
     let mut facts = one_component("R7", "R_0603");
     facts.settings.description = Shared::Same("Chip resistor".into());
     facts.parameters.push(ParameterFacts {
@@ -312,8 +318,15 @@ fn the_description_parameter_wins_over_the_footprint_description() {
         value: Shared::Same("Thick film 10k".into()),
     });
     let texts = texts_of(facts, 0);
-    assert!(has(&texts, "Thick film 10k"), "{texts:?}");
-    assert!(!has(&texts, "Chip resistor"), "{texts:?}");
+    assert_eq!(
+        texts.iter().filter(|t| *t == "Description").count(),
+        2,
+        "Properties edits the parameter, Footprint the footprint's own: {texts:?}"
+    );
+    assert!(
+        !has(&texts, "This component has no Description parameter."),
+        "{texts:?}"
+    );
 }
 
 #[test]

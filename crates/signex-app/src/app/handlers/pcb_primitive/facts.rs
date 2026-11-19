@@ -78,7 +78,9 @@ impl Signex {
                 // Override and the shown layer are the panel's state (#96).
                 let panel = &self.interaction_state.pcb_primitive;
                 facts.override_open = panel.via_override.as_ref() == Some(&facts.common.target);
-                facts.view_layer = panel.via_view_layer;
+                facts.view_layer = panel
+                    .via_view_layer
+                    .filter(|_| panel.is_showing(&facts.common.target));
                 PcbPrimitiveFacts::Via(facts)
             }
             ItemRef::Pad { .. } => {
@@ -128,7 +130,8 @@ impl Signex {
                 let fills = self.current_pour_fills(&target.board);
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
                 let mut facts = super::zone::zone_facts(board, common, &zones, fills, i18n);
-                facts.menu_open = self.interaction_state.pcb_primitive.pour_menu_open;
+                let panel = &self.interaction_state.pcb_primitive;
+                facts.menu_open = panel.pour_menu_open && panel.is_showing(&facts.common.target);
                 PcbPrimitiveFacts::Zone(facts)
             }
             ItemRef::Text(_) | ItemRef::Arc(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_) => {
@@ -257,7 +260,11 @@ impl Signex {
             },
             picking_net: panel.net_pick.as_ref() == Some(&target),
             placement_paused: false,
-            hover: panel.hover.clone(),
+            hover: if panel.is_showing(&target) {
+                panel.hover.clone()
+            } else {
+                Default::default()
+            },
             unstored_open: panel.unstored_open,
             locked_count: None,
             show_more: panel.show_more,

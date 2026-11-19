@@ -5,14 +5,22 @@
 
 use iced::Element;
 use signex_engine::pcb::draw::ArcMode;
-use signex_i18n::ids;
+use signex_i18n::{MessageId, ids};
 
 use super::drawing::{self, keys};
 use super::linked::{self, Segment, linked_row, prefixed, segments, two_fields, unit};
 use super::rows::{Look, Section, any_layer_value, labelled, net_value, stack, with_tip};
 use super::{ArcFacts, PcbPrimitiveMsg, PrimitiveField as F, net_info};
-use crate::app::handlers::pcb_tool::arc_mode_name;
 use crate::panels::{PanelContext, PanelMsg};
+
+/// The short name of `mode` on the Placement control.
+fn arc_mode_name(mode: ArcMode) -> MessageId {
+    match mode {
+        ArcMode::Centre => ids::PCB_ARC_MODE_CENTRE_NAME,
+        ArcMode::Edge => ids::PCB_ARC_MODE_EDGE_NAME,
+        ArcMode::AnyAngle => ids::PCB_ARC_MODE_ANY_NAME,
+    }
+}
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ArcFacts) -> Element<'a, PanelMsg> {
     let look = Look::of(ctx);

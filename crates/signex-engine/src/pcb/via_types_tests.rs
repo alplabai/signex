@@ -271,3 +271,26 @@ fn the_finished_hole_is_the_drill_less_the_plating() {
     assert!((ViaTypeDef::finished_hole(0.3) - 0.25).abs() < 1e-12);
     assert_eq!(ViaTypeDef::finished_hole(0.01), 0.0);
 }
+
+/// The trap PCB_LAYER_STACK.md "Via types" names: a derived type takes the
+/// size most of its vias share, so overriding most of them moves the type
+/// itself, and the vias left alone then read as overridden. Pinned until
+/// via types are stored (#105).
+#[test]
+fn overriding_most_vias_of_a_derived_type_moves_the_type() {
+    let mut b = board();
+    b.vias = (1..=5).map(|n| through(n, (0.6, 0.3))).collect();
+    for v in b.vias.iter_mut().take(3) {
+        (v.diameter, v.drill) = (0.8, 0.4);
+    }
+    let types = via_types(&b);
+    assert_eq!(types.len(), 1, "{types:?}");
+    assert_eq!((types[0].diameter, types[0].drill), (0.8, 0.4));
+    assert!(!is_overridden(&types[0], &b.vias[0]), "an edited via");
+    assert!(is_overridden(&types[0], &b.vias[4]), "an untouched via");
+
+    // A type of one via is that via's size: it never reads as overridden.
+    b.vias = vec![through(1, (0.7, 0.35))];
+    let types = via_types(&b);
+    assert!(!is_overridden(&types[0], &b.vias[0]));
+}

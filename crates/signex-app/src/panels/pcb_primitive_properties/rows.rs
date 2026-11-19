@@ -61,21 +61,18 @@ struct Collapse<'a> {
 }
 
 impl Collapse<'_> {
-    /// The entry the panel's set holds for this section. A section open by
-    /// default records "closed" under its key; one closed by default records
-    /// "opened" under `<key>:opened`.
+    /// The entry the panel's set holds for this section
+    /// (`widgets::section_toggle_key`).
     fn set_key(&self) -> String {
-        if self.closed_by_default {
-            format!("{}:opened", self.key)
-        } else {
-            self.key.to_string()
-        }
+        crate::panels::widgets::section_toggle_key(self.key, self.closed_by_default)
     }
 
     fn is_closed(&self, ctx: &PanelContext) -> bool {
-        let recorded =
-            crate::panels::widgets::is_section_collapsed(&self.set_key(), &ctx.collapsed_sections);
-        recorded != self.closed_by_default
+        !crate::panels::widgets::is_section_open(
+            self.key,
+            self.closed_by_default,
+            &ctx.collapsed_sections,
+        )
     }
 }
 

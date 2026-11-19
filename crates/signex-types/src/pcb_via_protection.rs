@@ -199,8 +199,10 @@ impl ViaProtection {
                         Ipc4761::IIIA
                     };
                 }
+                // IV-a covers its one plugged side; a plug from both sides
+                // is covered only when both sides are.
                 let plug_covered = match self.plug_from {
-                    PlugSide::Both => true,
+                    PlugSide::Both => tents == 2,
                     PlugSide::Top => self.tented_top,
                     PlugSide::Bottom => self.tented_bottom,
                 };

@@ -91,6 +91,9 @@ impl Signex {
         command: impl FnOnce(&PcbBoard) -> Result<Option<BoardCommand>, PrimitiveEditRefusal>,
     ) {
         let Some(engine) = self.document_state.board_engine(path) else {
+            let name = t!(self.ui_state.i18n, what).into_string();
+            let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
+            crate::diagnostics::log_warning(line.into_string());
             return;
         };
         if engine.board().unknown.newer_minor_source.is_some() {

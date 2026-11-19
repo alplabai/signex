@@ -99,6 +99,7 @@ pcb-component-side-bottom = Bottom Layer · mirrored
 
 # Tooltips of rows that cannot be edited yet.
 pcb-component-one-at-a-time = Edit this on one component at a time.
+pcb-component-no-description = This component has no Description parameter.
 pcb-component-read-only-tip = This board opened read-only; it cannot be edited.
 
 # Parameters tab.
@@ -134,6 +135,7 @@ pcb-component-type-jumper = Jumper
 
 # Tooltips of the component settings.
 pcb-component-height-tip = The component's height above the board, in millimetres.
+pcb-component-body-opacity-tip = 0 draws the 3D body clear, 1 solid; a percentage works too.
 pcb-component-lock-primitives-tip = The pads and graphics of the component cannot be edited on their own.
 pcb-component-lock-strings-tip = The texts of the component cannot be moved.
 

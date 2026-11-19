@@ -132,13 +132,13 @@ pub(super) fn section_with<'a>(
     if rows.is_empty() && !spec.keep_empty {
         return None;
     }
-    // A section that starts closed is open while its key is toggled.
-    let toggled = form.ctx.collapsed_sections.contains(spec.key);
-    let open = if spec.starts_closed {
-        toggled || form.is_searching()
-    } else {
-        !toggled
-    };
+    // A search opens a section that starts closed.
+    let open = (spec.starts_closed && form.is_searching())
+        || super::super::widgets::is_section_open(
+            spec.key,
+            spec.starts_closed,
+            &form.ctx.collapsed_sections,
+        );
     let mut col = Column::new()
         .spacing(0)
         .width(Length::Fill)
@@ -170,7 +170,9 @@ fn section_header<'a>(form: &Form<'a>, spec: SectionSpec<'a>, open: bool) -> Ele
     let toggle = button(label)
         .padding([SP.s, SP.xs])
         .width(Length::Fill)
-        .on_press(PanelMsg::ToggleSection(spec.key.to_string()))
+        .on_press(PanelMsg::ToggleSection(
+            super::super::widgets::section_toggle_key(spec.key, spec.starts_closed),
+        ))
         .style(|_: &Theme, _| iced::widget::button::Style::default());
     let mut header = Row::new()
         .push_boxed(toggle)

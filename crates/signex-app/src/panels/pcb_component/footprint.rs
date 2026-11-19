@@ -4,6 +4,7 @@
 
 use iced::widget::{Column, Row};
 use iced::{Element, Length, Widget as _};
+use signex_engine::pcb::component_edit::TypedSetting;
 use signex_i18n::{MessageId, ids, t};
 use signex_widgets::text;
 
@@ -16,9 +17,9 @@ use crate::styles::{Spacing, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// The toggle key of Swapping Options. It starts closed, so the key is in
-/// the toggled set while the section is open.
-const SWAPPING_KEY: &str = "pcb_component_swapping_open";
+/// The section key of Swapping Options. It starts closed, so its open key
+/// (`widgets::section_toggle_key`) is in the set while it is open.
+const SWAPPING_KEY: &str = "pcb_component_swapping";
 
 /// Push the three sections onto `col`.
 pub(super) fn push_sections<'a>(
@@ -99,6 +100,13 @@ fn footprint<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'
         rows.push(rows::row(form, label, rows::read_only(form, library)));
     }
     rows.extend(super::settings::footprint_rows(form, facts));
+    rows.extend(super::settings::typed_row(
+        form,
+        facts,
+        ids::PCB_COMPONENT_DESCRIPTION,
+        TypedSetting::Description,
+        facts.settings.description.same().cloned(),
+    ));
     rows
 }
 
@@ -138,7 +146,7 @@ fn footprint_name<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<
 }
 
 /// The mismatch note with its Update PCB button, then Designator, Hier.
-/// Path, Channel Offset, Design Item ID and Source, all read-only.
+/// Path, the editable Channel Offset, Design Item ID and Source.
 fn schematic<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'a, PanelMsg>> {
     let mut rows = super::identity::designator_rows(form, facts);
     let label = form.text(ids::PCB_COMPONENT_SCH_PATH);
@@ -151,16 +159,18 @@ fn schematic<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'
             rows::read_only(form, path),
         ));
     }
-    let label = form.text(ids::PCB_COMPONENT_CHANNEL_OFFSET);
-    if form.shows(&label) {
-        let offset = facts
-            .settings
-            .channel_offset
-            .same()
-            .map(ToString::to_string)
-            .unwrap_or_default();
-        rows.push(rows::row(form, label, rows::read_only(form, offset)));
-    }
+    let offset = facts
+        .settings
+        .channel_offset
+        .same()
+        .map(ToString::to_string);
+    rows.extend(super::settings::typed_row(
+        form,
+        facts,
+        ids::PCB_COMPONENT_CHANNEL_OFFSET,
+        TypedSetting::ChannelOffset,
+        offset,
+    ));
     rows.extend(super::identity::library_rows(form, facts));
     rows
 }

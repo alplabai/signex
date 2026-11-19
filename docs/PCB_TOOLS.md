@@ -81,11 +81,12 @@ Total table of Length and Delay (greyed: the board records no dielectric),
 and Show More, which adds the net's track, via and pad counts on one line.
 Properties holds Net (with the pick button), Layer, Width, Ends (Round;
 Square and Flat greyed until square and flat ends are decided for copper,
-for DRC and Gerber; the board stores no cap), Start and End as one X / Y row
-each, Length (read-only) and Tune Net To (read-only "select one track to
-tune" while several are selected). The paste and solder mask sections
-follow. There is no Location section: X and Y were the selection's corner,
-and Lock is the header icon. While placing, Net Information and the
+for DRC and Gerber; the board stores no cap), Position (the selection's
+corner as one X / Y row: typing it moves every selected track), Start and
+End as one X / Y row each, Length (read-only) and Tune Net To (read-only
+"select one track to tune" while several are selected). The paste and
+solder mask sections follow. Lock is the header icon. While placing, Net
+Information and the
 geometry rows are left out. A value the selected tracks do not share reads
 "Mixed".
 

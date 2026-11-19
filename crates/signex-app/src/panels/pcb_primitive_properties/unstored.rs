@@ -16,10 +16,6 @@ use crate::styles::tokens::resolve;
 
 /// The dashed box holding `rows` under a header that counts them; closed
 /// unless the panel opened it. `None` when there is no row.
-#[allow(
-    dead_code,
-    reason = "the via, pad and area panels of #2523 gather their unstored rows here"
-)]
 pub(super) fn group<'a>(
     look: Look<'a>,
     common: &'a PrimitiveCommon,

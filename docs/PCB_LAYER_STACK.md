@@ -97,6 +97,15 @@ the type's in one step. The finished hole is the drill less twice
 `VIA_PLATING_MM` (0.025 mm); a drill below `PcbSetup::via_min_drill` shows a
 warning.
 
+A known trap of derived types: the type's size is the one most of its vias
+share, so an override on most vias of a type moves the type's size with it.
+Five vias at 0.6/0.3 with three of them overridden to 0.8/0.4 make a 0.8/0.4
+type; the two untouched vias then read as overridden, and turning Override
+off on them sizes them to 0.8/0.4. A type with a single via never reads as
+overridden. Stored via types (#105) end this; until then
+`via_types_tests::overriding_most_vias_of_a_derived_type_moves_the_type`
+pins it.
+
 The Protection section names the IPC-4761 type the via's fill, plug side, cap
 and per-side tenting make (`signex_types::pcb_via_protection`). A via stores
 only its tenting, so fill and cap read as none and the Type, Fill, Plug From

@@ -1,7 +1,8 @@
 //! The Location and Properties sections of the General tab (Graphite m94):
 //! Location carries the lock in its header, then Position (X and Y on one
 //! row) and Rotation; Properties holds the side as a Top / Bottom segmented
-//! control, Designator, Comment, and the read-only Description and Area.
+//! control, Designator, Comment, Description (the Description parameter)
+//! and the read-only Area.
 
 use iced::widget::{Column, Row, Space, container, svg};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
@@ -23,7 +24,7 @@ use crate::styles::{PillTone, Spacing, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// The key of the parameter the Description row shows.
+/// The key of the parameter the Description row edits.
 const DESCRIPTION_KEY: &str = "Description";
 
 /// The lock glyph of the Location header (the mockup's `i-lock`).
@@ -272,20 +273,13 @@ fn properties<'a>(
         rows.extend(super::text::text_row(form, facts, single, field));
     }
     rows.extend(super::text::comment_note(form, facts, single));
-    let label = form.text(ids::PCB_COMPONENT_DESCRIPTION);
-    if form.shows(&label) {
-        rows.push(rows::row(
-            form,
-            label,
-            rows::read_only(form, description(facts)),
-        ));
-    }
+    rows.extend(description(form, facts));
     let label = form.text(ids::PCB_COMPONENT_AREA);
     if form.shows(&label) {
         let area = match facts.area_mm2 {
             Shared::Same(Some(mm2)) => t!(
                 form.ctx.i18n, ids::PCB_COMPONENT_AREA_VALUE,
-                "mm2" => format!("{mm2:.2}")
+                "mm2" => format!("{mm2:.3}")
             )
             .into_string(),
             Shared::Same(None) | Shared::Mixed => String::new(),
@@ -295,15 +289,23 @@ fn properties<'a>(
     rows
 }
 
-/// The Description the components share: their Description parameter (its
-/// edit is on the Parameters tab), else the footprint's own description;
-/// blank when they differ.
-fn description(facts: &PcbComponentFacts) -> String {
-    let shared = match facts.parameter(DESCRIPTION_KEY) {
-        Some(parameter) => parameter,
-        None => &facts.settings.description,
+/// The Description row edits the components' Description parameter; without
+/// one there is nothing to edit and the row says so. The footprint's own
+/// description is its own row in the Footprint section.
+fn description<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Element<'a, PanelMsg>> {
+    let label = form.text(ids::PCB_COMPONENT_DESCRIPTION);
+    if !form.shows(&label) {
+        return None;
+    }
+    let control = match facts.parameter(DESCRIPTION_KEY) {
+        Some(value) => draft_input(
+            facts,
+            ComponentField::Parameter(DESCRIPTION_KEY.to_string()),
+            value.same().cloned(),
+        ),
+        None => rows::read_only_caption(form, t!(form.ctx.i18n, ids::PCB_COMPONENT_NO_DESCRIPTION)),
     };
-    shared.same().cloned().unwrap_or_default()
+    Some(rows::row(form, label, control))
 }
 
 /// Top Layer and Bottom Layer as a segmented control; the side the
