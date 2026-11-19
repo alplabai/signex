@@ -834,6 +834,12 @@ mounting holes (tick **Mounting hole** on a circle, then set **Drill**,
 cannot be turned into a board shape, for example an open loop, the reason is
 shown and the board stays as it was.
 
+A keepout or cutout selected in a sketch (on a board or in the footprint
+editor) shows its own form in Properties, with a drawing at the top. A
+keepout's **Layer** picks **Top Layer** or **Bottom Layer**, and its
+**Keepout kinds** say what it blocks; the drawing names each blocked kind.
+A cutout goes through the board unless **Limit depth (pocket)** is ticked.
+
 Two other ways to get an outline:
 
 - **File ▸ Import ▸ DXF as Board Outline…** reads the outline from a DXF
