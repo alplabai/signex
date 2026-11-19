@@ -12,10 +12,11 @@
 use super::*;
 
 use super::items::{
-    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned, dd_ruled,
-    tag_command, text,
+    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned,
+    dd_planned_because, dd_ruled, tag_command, text,
 };
 use super::menus::CanvasSelection;
+use crate::active_bar::ActiveBarAction as A;
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
 use signex_i18n::{I18n, MessageId, menu_ids};
@@ -65,86 +66,195 @@ fn active_bar_row(
     }
 }
 
-/// Place submenu — wires, buses, ports, power, directives, harness, sheet
-/// symbols, component, and text. Rows for planned tools are greyed with a
-/// tooltip; every other row is always enabled. `hint` resolves a command id
-/// to its keymap shortcut.
+/// One row of the Place flyout's table.
+enum PlaceRow {
+    /// A subhead over the rows that follow.
+    Head(MessageId),
+    /// A tool, labelled by its command (or `MessageId` when it has none).
+    Tool(
+        fn(ThemeId) -> iced::widget::svg::Handle,
+        crate::active_bar::ActiveBarAction,
+    ),
+    /// A power port: its port glyph in the power colour, a short label, and
+    /// the full name as its tooltip.
+    Power(
+        fn(ThemeId) -> iced::widget::svg::Handle,
+        MessageId,
+        MessageId,
+        crate::active_bar::ActiveBarAction,
+    ),
+}
+
+/// The Place flyout (#62), under the Wiring / Ports and power / Parts and
+/// sheets / Directives and text subheads. A planned tool is not listed in
+/// its group: the planned ones are gathered in one greyed row at the end.
+const PLACE_ROWS: &[PlaceRow] = &[
+    PlaceRow::Head(menu_ids::CTX_PLACE_GROUP_WIRING),
+    PlaceRow::Tool(ic::icon_dd_wire, A::DrawWire),
+    PlaceRow::Tool(ic::icon_dd_bus, A::DrawBus),
+    PlaceRow::Tool(ic::icon_dd_bus_entry, A::PlaceBusEntry),
+    PlaceRow::Tool(ic::icon_dd_net_label, A::PlaceNetLabel),
+    PlaceRow::Tool(ic::icon_dd_junction, A::PlaceJunction),
+    PlaceRow::Head(menu_ids::CTX_PLACE_GROUP_PORTS_POWER),
+    PlaceRow::Tool(ic::icon_dd_port, A::PlacePort),
+    PlaceRow::Tool(ic::icon_dd_off_sheet, A::PlaceOffSheetConnector),
+    PlaceRow::Power(
+        ic::icon_dd_gnd,
+        menu_ids::CTX_POWER_GND,
+        menu_ids::CTX_PLACE_POWER_GND,
+        A::PlacePowerGND,
+    ),
+    PlaceRow::Power(
+        ic::icon_dd_vcc,
+        menu_ids::CTX_POWER_VCC,
+        menu_ids::CTX_PLACE_POWER_VCC,
+        A::PlacePowerVCC,
+    ),
+    PlaceRow::Power(
+        ic::icon_dd_pwr_plus5,
+        menu_ids::CTX_POWER_PLUS5,
+        menu_ids::CTX_PLACE_POWER_PLUS5,
+        A::PlacePowerPlus5,
+    ),
+    PlaceRow::Power(
+        ic::icon_dd_pwr_plus12,
+        menu_ids::CTX_POWER_PLUS12,
+        menu_ids::CTX_PLACE_POWER_PLUS12,
+        A::PlacePowerPlus12,
+    ),
+    PlaceRow::Tool(ic::icon_dd_harness, A::PlaceSignalHarness),
+    PlaceRow::Tool(ic::icon_dd_harness_conn, A::PlaceHarnessConnector),
+    PlaceRow::Tool(ic::icon_dd_harness_entry, A::PlaceHarnessEntry),
+    PlaceRow::Head(menu_ids::CTX_PLACE_GROUP_PARTS_SHEETS),
+    PlaceRow::Tool(ic::icon_component, A::PlaceComponent),
+    PlaceRow::Tool(ic::icon_dd_sheet_symbol, A::PlaceSheetSymbol),
+    PlaceRow::Tool(ic::icon_dd_sheet_entry, A::PlaceSheetEntry),
+    PlaceRow::Tool(ic::icon_dd_device_sheet, A::PlaceDeviceSheetSymbol),
+    PlaceRow::Head(menu_ids::CTX_PLACE_GROUP_DIRECTIVES_TEXT),
+    PlaceRow::Tool(ic::icon_dd_param_set, A::PlaceParameterSet),
+    PlaceRow::Tool(ic::icon_dd_no_erc, A::PlaceNoERC),
+    PlaceRow::Tool(ic::icon_dd_diff_pair, A::PlaceDiffPair),
+    PlaceRow::Tool(ic::icon_dd_blanket, A::PlaceBlanket),
+    PlaceRow::Tool(ic::icon_dd_blanket, A::PlaceCompileMask),
+    PlaceRow::Tool(ic::icon_dd_text_string, A::PlaceTextString),
+    PlaceRow::Tool(ic::icon_dd_text_frame, A::PlaceTextFrame),
+    PlaceRow::Tool(ic::icon_dd_note, A::PlaceNote),
+];
+
+/// Place submenu (#62): wiring, ports and power, parts and sheets,
+/// directives and text, each under its subhead; then one greyed "N planned
+/// tools…" row naming the planned ones in its tooltip. `hint` resolves a
+/// command id to its keymap shortcut.
 pub(super) fn place_entries(
     i18n: &I18n,
     tid: ThemeId,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
-    use crate::active_bar::ActiveBarAction as A;
-    let ab = |icon, label: Option<MessageId>, action: A| {
-        let planned = crate::active_bar::is_planned(&action);
-        active_bar_row(i18n, icon, label, action, true, planned, hint)
-    };
+    let ink = signex_widgets::theme_ext::power_port(&signex_types::theme::canvas_colors(tid));
+    let mut planned: Vec<&'static str> = Vec::new();
+    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(PLACE_ROWS.len() + 2);
+    for row in PLACE_ROWS {
+        match row {
+            PlaceRow::Head(id) => v.push(DropdownEntry::Header(text(i18n, *id))),
+            PlaceRow::Tool(icon, action) => match crate::active_bar::planned_name(action) {
+                Some(name) => planned.push(name),
+                None => v.push(active_bar_row(
+                    i18n,
+                    icon(tid),
+                    None,
+                    action.clone(),
+                    true,
+                    false,
+                    hint,
+                )),
+            },
+            PlaceRow::Power(icon, short, full, action) => {
+                let row = active_bar_row(
+                    i18n,
+                    icon(tid),
+                    Some(*full),
+                    action.clone(),
+                    true,
+                    false,
+                    hint,
+                );
+                v.push(match row {
+                    DropdownEntry::Item(mut item) => {
+                        item.label = text(i18n, *short);
+                        DropdownEntry::Item(item.icon_tint(ink).tooltip(text(i18n, *full)))
+                    }
+                    other => other,
+                });
+            }
+        }
+    }
+    if !planned.is_empty() {
+        v.push(DropdownEntry::Separator);
+        v.push(planned_tools_row(i18n, &planned));
+    }
+    v
+}
+
+/// The greyed "N planned tools…" row; its tooltip names them.
+fn planned_tools_row(i18n: &I18n, names: &[&str]) -> DropdownEntry<Message> {
+    let label = i18n.message_plain(
+        menu_ids::CTX_PLACE_PLANNED_TOOLS,
+        &[("count", (names.len() as i64).into())],
+    );
+    let why = i18n.message_plain(
+        menu_ids::CTX_PLACE_PLANNED_TOOLS_TOOLTIP,
+        &[("names", i18n.list(names, signex_i18n::ListKind::And).into())],
+    );
+    match dd_disabled(None, &label, None) {
+        DropdownEntry::Item(item) => DropdownEntry::Item(item.tooltip(why)),
+        other => other,
+    }
+}
+
+/// The "Planned (N)" flyout of the sheet menu (#62): the features not built
+/// yet, greyed, each with what it will do as its tooltip.
+pub(super) fn planned_entries(i18n: &I18n, tid: ThemeId) -> Vec<DropdownEntry<Message>> {
     vec![
-        // Wires + buses + entries
-        ab(ic::icon_dd_wire(tid), None, A::DrawWire),
-        ab(ic::icon_dd_bus(tid), None, A::DrawBus),
-        ab(ic::icon_dd_bus_entry(tid), None, A::PlaceBusEntry),
-        ab(ic::icon_dd_net_label(tid), None, A::PlaceNetLabel),
-        ab(ic::icon_dd_junction(tid), None, A::PlaceJunction),
-        DropdownEntry::Separator,
-        // Ports
-        ab(ic::icon_dd_port(tid), None, A::PlacePort),
-        ab(ic::icon_dd_off_sheet(tid), None, A::PlaceOffSheetConnector),
-        DropdownEntry::Separator,
-        // Power ports (the four most common)
-        ab(
-            ic::icon_dd_gnd(tid),
-            Some(menu_ids::CTX_PLACE_POWER_GND),
-            A::PlacePowerGND,
+        dd_planned_because(
+            i18n,
+            Some(ic::icon_dd_references(tid)),
+            menu_ids::CTX_REFERENCES,
+            menu_ids::CTX_REFERENCES_PLANNED,
+            false,
         ),
-        ab(
-            ic::icon_dd_vcc(tid),
-            Some(menu_ids::CTX_PLACE_POWER_VCC),
-            A::PlacePowerVCC,
+        dd_planned_because(
+            i18n,
+            Some(ic::icon_dd_unions(tid)),
+            menu_ids::CTX_UNIONS,
+            menu_ids::CTX_UNIONS_PLANNED,
+            false,
         ),
-        ab(
-            ic::icon_dd_pwr_plus5(tid),
-            Some(menu_ids::CTX_PLACE_POWER_PLUS5),
-            A::PlacePowerPlus5,
-        ),
-        ab(
-            ic::icon_dd_pwr_plus12(tid),
-            Some(menu_ids::CTX_PLACE_POWER_PLUS12),
-            A::PlacePowerPlus12,
-        ),
-        DropdownEntry::Separator,
-        // Directives
-        ab(ic::icon_dd_param_set(tid), None, A::PlaceParameterSet),
-        ab(ic::icon_dd_no_erc(tid), None, A::PlaceNoERC),
-        ab(ic::icon_dd_diff_pair(tid), None, A::PlaceDiffPair),
-        ab(ic::icon_dd_blanket(tid), None, A::PlaceBlanket),
-        ab(ic::icon_dd_blanket(tid), None, A::PlaceCompileMask),
-        DropdownEntry::Separator,
-        // Harness
-        ab(ic::icon_dd_harness(tid), None, A::PlaceSignalHarness),
-        ab(
-            ic::icon_dd_harness_conn(tid),
+        dd_planned(
+            i18n,
+            Some(ic::icon_dd_snippets(tid)),
+            &text(i18n, menu_ids::CTX_SNIPPETS),
             None,
-            A::PlaceHarnessConnector,
         ),
-        ab(ic::icon_dd_harness_entry(tid), None, A::PlaceHarnessEntry),
-        DropdownEntry::Separator,
-        // Sheet symbols
-        ab(ic::icon_dd_sheet_symbol(tid), None, A::PlaceSheetSymbol),
-        ab(ic::icon_dd_sheet_entry(tid), None, A::PlaceSheetEntry),
-        ab(
-            ic::icon_dd_device_sheet(tid),
+        dd_planned(
+            i18n,
+            Some(ic::icon_dd_comment(tid)),
+            &text(i18n, menu_ids::CTX_COMMENT),
             None,
-            A::PlaceDeviceSheetSymbol,
         ),
-        DropdownEntry::Separator,
-        // Component
-        ab(ic::icon_component(tid), None, A::PlaceComponent),
-        DropdownEntry::Separator,
-        // Text
-        ab(ic::icon_dd_text_string(tid), None, A::PlaceTextString),
-        ab(ic::icon_dd_text_frame(tid), None, A::PlaceTextFrame),
-        ab(ic::icon_dd_note(tid), None, A::PlaceNote),
+        dd_planned_because(
+            i18n,
+            Some(ic::icon_dd_pin_mapping(tid)),
+            menu_ids::CTX_PIN_MAPPING,
+            menu_ids::CTX_PIN_MAPPING_PLANNED,
+            false,
+        ),
+        dd_planned_because(
+            i18n,
+            Some(ic::icon_dd_supplier_links(tid)),
+            menu_ids::CTX_SUPPLIER_LINKS,
+            menu_ids::CTX_SUPPLIER_LINKS_PLANNED,
+            false,
+        ),
     ]
 }
 
@@ -448,6 +558,7 @@ impl Signex {
                     .unwrap_or_default();
                 add_new_entries(i18n, tid, target)
             }
+            ContextSubmenu::Planned => planned_entries(i18n, tid),
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
             .element

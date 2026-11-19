@@ -626,17 +626,33 @@ documents or windows were arranged.
 
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, `app/view/context_menu/menus.rs`) shows rows
-by what was right-clicked and makes each command row live by the command's own
-enablement rule (`app/command/needs.rs`), the rule the menu bar greys the same
-row by and a keystroke is dropped by. Rows, top to bottom: Find Similar
-Objects, Find, Clear Filter (`clear_net_highlighting`); the Place, Part Actions
-and Sheet Actions submenus; with a selection, References, Align, Arrange (a
-drawing selected), Unions and Snippets; Cross Probe; Undo, Redo; Cut, Copy,
-Paste, Paste Special, Duplicate, Select All; with a selection, Rotate, Mirror
-X, Mirror Y, Delete; Highlight Net (`highlight_net_under_cursor`), Net Color...
-(`open_net_color_palette`), Assign Net Class...; Comment, Pin Mapping, Project
-Options, Preferences; with a selection, Supplier Links and Properties.
+The schematic canvas menu (#2419, #62, `app/view/context_menu/menus.rs`) shows
+rows by what was right-clicked and makes each command row live by the
+command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
+greys the same row by and a keystroke is dropped by. A muted first line names
+what the menu stands on: `schematic sheet · <file>`, or the selection
+(`R3 · 100k · 1 item selected`). Rows that need a selection are hidden, not
+greyed, on an empty spot.
+
+With nothing selected, top to bottom: Find; Find Similar Objects only when the
+right-click hit an object; the Place and Sheet Actions submenus; Undo, Redo;
+Paste, Paste Special, Select All; Highlight Net (`highlight_net_under_cursor`)
+only when the right-click hit an object; Net Color... (`open_net_color_palette`);
+Clear Filter (`clear_net_highlighting`) only while a net highlight is on;
+Project Options, Preferences.
+
+With a selection: Properties (bold, the default row), Find Similar Objects,
+Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
+Align submenu and Arrange (a drawing selected); the Part Actions, Sheet Actions
+and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
+Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
+that opens on hover and lists the planned rows below.
+
+The Place submenu groups its rows under Wiring, Ports and power, Parts and
+sheets, and Directives and text. Its power rows show the short port name in
+the power colour, with the full name as the tooltip. The planned tools of
+`active_bar::PLANNED_TOOLS` it would list are gathered in one greyed "N planned
+tools…" row whose tooltip names them.
 
 Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
@@ -647,8 +663,9 @@ Number Schematic Sheets.
 
 Assign Net Class... is greyed: `assign_net_class` takes the net and the class
 as operands, which the menu cannot supply yet; its tooltip points at the Net
-Class row of Properties. Planned rows, greyed with a tooltip saying what each
-will do:
+Class row of Properties. The "Planned (N)" submenu holds Snippets and Comment
+with the shared planned tooltip, and these rows, greyed with a tooltip saying
+what each will do:
 
 - **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
 - **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
