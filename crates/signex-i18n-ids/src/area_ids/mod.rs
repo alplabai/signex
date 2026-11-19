@@ -35,6 +35,7 @@ mod properties;
 mod requirements;
 mod rules;
 mod update_pcb;
+mod workspace_layouts;
 
 pub use board_checks::*;
 pub use board_output::*;
@@ -69,6 +70,7 @@ pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
 pub use update_pcb::*;
+pub use workspace_layouts::*;
 
 /// Every id of every area list.
 #[cfg(any(test, feature = "test-support"))]
@@ -107,6 +109,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         requirements::REQUIREMENTS,
         rules::RULES,
         update_pcb::UPDATE_PCB,
+        workspace_layouts::WORKSPACE_LAYOUTS,
     ]
     .concat()
 }

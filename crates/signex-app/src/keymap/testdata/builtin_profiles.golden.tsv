@@ -494,6 +494,13 @@ altium	hint	-	F4	toggle_floating_panels
 altium	hint	-	F11	toggle_properties_panel
 altium	hint	-	F12	toggle_schematic_filter_panel
 altium	hint	-	Shift+F12	toggle_schematic_list_panel
+altium	hint	-	-	apply_layout_schematic
+altium	hint	-	-	apply_layout_board
+altium	hint	-	-	apply_layout_review
+altium	hint	-	-	apply_layout_notebook
+altium	hint	-	-	save_workspace_layout
+altium	hint	-	-	manage_workspace_layouts
+altium	hint	-	-	reset_workspace_layout
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -991,3 +998,10 @@ classic	hint	-	-	toggle_floating_panels
 classic	hint	-	-	toggle_properties_panel
 classic	hint	-	-	toggle_schematic_filter_panel
 classic	hint	-	-	toggle_schematic_list_panel
+classic	hint	-	-	apply_layout_schematic
+classic	hint	-	-	apply_layout_board
+classic	hint	-	-	apply_layout_review
+classic	hint	-	-	apply_layout_notebook
+classic	hint	-	-	save_workspace_layout
+classic	hint	-	-	manage_workspace_layouts
+classic	hint	-	-	reset_workspace_layout

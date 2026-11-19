@@ -703,6 +703,9 @@ pub struct UiState {
     /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
     /// the main window's strip has no room for.
     pub tab_overflow_menu_open: bool,
+    /// Workspace layouts (#166): the list, its store, and the Save Layout
+    /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
+    pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }
 
 impl UiState {

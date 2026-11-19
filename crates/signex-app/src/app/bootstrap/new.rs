@@ -135,6 +135,17 @@ impl Signex {
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
+        // Workspace layouts (#166): a skipped entry is said in Messages.
+        let (workspace_layouts, layout_problems) =
+            crate::workspace_layouts::WorkspaceLayoutsState::boot(
+                prefs,
+                std::sync::Arc::new(
+                    crate::workspace_layouts::PrefsWorkspaceLayoutsStore::user_prefs(),
+                ),
+            );
+        for problem in layout_problems {
+            crate::diagnostics::log_warning(problem);
+        }
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -526,6 +537,7 @@ impl Signex {
                     chrono::Utc::now(),
                 )),
                 tab_overflow_menu_open: false,
+                workspace_layouts: Box::new(workspace_layouts),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),

@@ -600,8 +600,56 @@ fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
+        // #166: docs/MENU_BAR.md#window-layouts
+        submenu(ctx, menu_ids::MENU_WINDOW_LAYOUTS, layouts(ctx)),
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]
+}
+
+/// View ▸ Window ▸ Layouts (#166): the built-ins (the active one checked),
+/// your layouts, then Save Layout…, Manage Layouts… and, while the active
+/// built-in carries your edit, its Reset row.
+fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
+    use crate::workspace_layouts::BuiltinLayout;
+    let menu = &ctx.layouts;
+    let mut rows = vec![unavailable(ctx, menu_ids::MENU_WINDOW_LAYOUTS_BUILTIN)];
+    for (row, builtin) in [
+        (cmd("apply_layout_schematic", ""), BuiltinLayout::Schematic),
+        (cmd("apply_layout_board", ""), BuiltinLayout::Layout),
+        (cmd("apply_layout_review", ""), BuiltinLayout::Review),
+        (cmd("apply_layout_notebook", ""), BuiltinLayout::Notebook),
+    ] {
+        rows.push(cmd_toggle(ctx, row, menu.active_builtin == Some(builtin)));
+    }
+    if !menu.user.is_empty() {
+        rows.push(unavailable(ctx, menu_ids::MENU_WINDOW_LAYOUTS_YOURS));
+        for layout in &menu.user {
+            rows.push(MenuEntry::Item(super::MenuItem {
+                label: layout.name.clone(),
+                shortcut: None,
+                state: super::ItemState::Live {
+                    action: MenuMessage::WorkspaceLayoutChosen(layout.id.clone()),
+                    is_enabled: true,
+                },
+                checked: Some(layout.active),
+            }));
+        }
+    }
+    rows.push(SEP);
+    rows.push(cmd_item(ctx, cmd("save_workspace_layout", "")));
+    rows.push(cmd_item(ctx, cmd("manage_workspace_layouts", "")));
+    if let Some(name) = &menu.resettable {
+        let label = ctx.i18n.message_plain(
+            menu_ids::MENU_WINDOW_LAYOUTS_RESET,
+            &[("name", signex_i18n::Arg::from(name.as_str()))],
+        );
+        rows.push(cmd_item_gated_as(
+            ctx,
+            cmd("reset_workspace_layout", ""),
+            label,
+        ));
+    }
+    rows
 }
 
 pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {

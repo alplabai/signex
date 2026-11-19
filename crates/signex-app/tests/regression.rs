@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #166 — workspace layouts: apply, Save Layout and Manage Layouts.
+#[path = "regression/workspace_layouts.rs"]
+mod workspace_layouts;

@@ -381,6 +381,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("tile_windows_vertically", "TileVertically"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
+    // #166: View ▸ Window ▸ Layouts, fixture names only.
+    ("apply_layout_schematic", "ApplyLayoutSchematic"),
+    ("apply_layout_board", "ApplyLayoutBoard"),
+    ("apply_layout_review", "ApplyLayoutReview"),
+    ("apply_layout_notebook", "ApplyLayoutNotebook"),
+    ("save_workspace_layout", "SaveWorkspaceLayout"),
+    ("manage_workspace_layouts", "ManageWorkspaceLayouts"),
+    ("reset_workspace_layout", "ResetWorkspaceLayout"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
@@ -758,7 +766,25 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
             "Tile Vertically",
             "Untile",
             "---",
+            // #166: the Layouts submenu joins the old Window rows.
+            "Layouts>",
             "Close All Documents",
+        ]
+    );
+    // #166: View ▸ Window ▸ Layouts with no layouts of your own and no
+    // edited built-in.
+    let window = submenu(root("View"), "Window");
+    assert_eq!(
+        entry_titles(&submenu(&window, "Layouts")),
+        [
+            "BUILT-IN",
+            "Schematic",
+            "Layout",
+            "Review",
+            "Notebook",
+            "---",
+            "Save Layout…",
+            "Manage Layouts…",
         ]
     );
 }

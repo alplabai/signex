@@ -64,6 +64,11 @@ struct OpenOverlays {
     fab_outputs_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
+    /// Workspace layouts (#166): Save Layout, Manage Layouts, and Manage's
+    /// inline Rename field, which Esc closes before the dialog.
+    save_layout_open: bool,
+    manage_layouts_open: bool,
+    manage_layouts_renaming: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -396,6 +401,18 @@ impl OpenOverlays {
             OverlayId::DocumentSetup => self
                 .document_setup_open
                 .then(|| Message::from(crate::app::DocumentSetupMsg::CancelRequested)),
+            // An open Rename field closes first and keeps the dialog.
+            OverlayId::ManageLayouts => self.manage_layouts_open.then(|| {
+                use crate::workspace_layouts::ManageLayoutsMsg;
+                if self.manage_layouts_renaming {
+                    Message::from(ManageLayoutsMsg::RenameCancelled)
+                } else {
+                    Message::from(ManageLayoutsMsg::Closed)
+                }
+            }),
+            OverlayId::SaveLayout => self
+                .save_layout_open
+                .then(|| Message::from(crate::workspace_layouts::SaveLayoutMsg::Cancelled)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -674,6 +691,14 @@ impl Signex {
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
+            save_layout_open: self.ui_state.workspace_layouts.save.is_some(),
+            manage_layouts_open: self.ui_state.workspace_layouts.manage.is_some(),
+            manage_layouts_renaming: self
+                .ui_state
+                .workspace_layouts
+                .manage
+                .as_ref()
+                .is_some_and(|dialog| dialog.rename.is_some()),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -1359,6 +1384,31 @@ mod tests {
             only(|o| o.net_color_custom_open = true),
             Some(Message::NetColor(NetColorMsg::CustomShow(false)))
         ));
+        // #166: Save Layout cancels; Manage Layouts closes its Rename field
+        // first, then itself.
+        use crate::dock::DockLayoutMsg;
+        use crate::workspace_layouts::{ManageLayoutsMsg, SaveLayoutMsg, WorkspaceLayoutMsg};
+        assert!(matches!(
+            only(|o| o.save_layout_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Save(SaveLayoutMsg::Cancelled)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.manage_layouts_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::Closed)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true;
+            }),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::RenameCancelled)
+            )))
+        ));
     }
 
     /// Order is load-bearing — the deepest (topmost-painted) modal wins.
@@ -1789,6 +1839,9 @@ mod tests {
             fab_outputs_open,
             board_output_open,
             back_annotate_open,
+            save_layout_open,
+            manage_layouts_open,
+            manage_layouts_renaming,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1865,6 +1918,12 @@ mod tests {
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
+            ("save_layout_open", |o| o.save_layout_open = true),
+            ("manage_layouts_open", |o| o.manage_layouts_open = true),
+            ("manage_layouts_renaming", |o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true
+            }),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),

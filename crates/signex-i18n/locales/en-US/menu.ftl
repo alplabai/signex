@@ -24,6 +24,12 @@ menu-design = Design
 menu-tools = Tools
 menu-reports = Reports
 menu-window = Window
+# View ▸ Window ▸ Layouts (#166): the submenu, its two caption rows, and the
+# Reset row of an edited built-in; { $name } is the built-in's name.
+menu-window-layouts = Layouts
+menu-window-layouts-builtin = BUILT-IN
+menu-window-layouts-yours = YOUR LAYOUTS
+menu-window-layouts-reset = Reset “{ $name }”
 menu-help = Help
 
 ## File menu (#2057)

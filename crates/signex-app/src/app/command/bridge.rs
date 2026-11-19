@@ -282,6 +282,22 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Layouts (#166).
+        "apply_layout_schematic"
+        | "apply_layout_board"
+        | "apply_layout_review"
+        | "apply_layout_notebook" => {
+            use crate::workspace_layouts::{BuiltinLayout, LayoutId, WorkspaceLayoutMsg};
+            let builtin = BuiltinLayout::ALL
+                .into_iter()
+                .find(|b| b.command_id() == command.as_str())?;
+            WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(builtin)).into()
+        }
+        "save_workspace_layout" => crate::workspace_layouts::SaveLayoutMsg::Requested.into(),
+        "manage_workspace_layouts" => crate::workspace_layouts::ManageLayoutsMsg::Requested.into(),
+        "reset_workspace_layout" => {
+            crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
+        }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),

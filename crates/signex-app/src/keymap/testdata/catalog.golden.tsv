@@ -383,3 +383,10 @@ toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_on
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-
+apply_layout_schematic	window	Workspace layout: Schematic	Schematic	General	-	-	Always	gui_only	-
+apply_layout_board	window	Workspace layout: Layout	Layout	General	-	-	Always	gui_only	-
+apply_layout_review	window	Workspace layout: Review	Review	General	-	-	Always	gui_only	-
+apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Always	gui_only	-
+save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
+manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
+reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-
