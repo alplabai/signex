@@ -16,12 +16,14 @@ use crate::fonts::ComponentClassEntry;
 use crate::preferences::PrefMsg;
 use crate::styles::{ChromeMetrics, PillTone, Radii, ti, tokens::resolve};
 
+/// One mockup px at the type scale's body (the mockup is drawn at 12 px).
+const EM: f32 = TS.body / 12.0;
 /// Height the table's frame never grows past; the rows scroll inside it.
-const TABLE_MAX_H: f32 = 470.0;
+const TABLE_MAX_H: f32 = 470.0 * EM;
 /// Width of the grip column.
-const GRIP_W: f32 = 30.0;
+const GRIP_W: f32 = 30.0 * EM;
 /// Width of the × column.
-const REMOVE_W: f32 = 40.0;
+const REMOVE_W: f32 = 40.0 * EM;
 /// Shares of the key and label columns in what the fixed columns leave.
 const KEY_SHARE: u16 = 42;
 const LABEL_SHARE: u16 = 58;
@@ -314,6 +316,11 @@ fn issue_line<'a>(
 ) -> Element<'a, PrefMsg> {
     let message = match issue {
         ClassKeyIssue::Missing => t!(i18n, ids::PREFERENCES_CLASSES_KEY_MISSING),
+        ClassKeyIssue::Malformed => t!(
+            i18n,
+            ids::PREFERENCES_CLASSES_KEY_MALFORMED,
+            "key" => entry.key.trim()
+        ),
         ClassKeyIssue::Duplicate { first } => {
             let owner = classes.get(first).map_or("", |c| {
                 if c.label.trim().is_empty() {

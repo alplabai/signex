@@ -7,8 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use iced::clipboard::Error as ClipboardError;
 use iced::{Rectangle, Task};
-use signex_i18n::{ids, t};
+use signex_i18n::{I18n, ids, t};
 
 use super::board_3d::board_3d_message;
 use crate::app::{Board3dMsg, Board3dShot, Message, Signex};
@@ -88,7 +89,7 @@ impl Signex {
                 rgba: shot.rgba.clone().into(),
                 size: iced::Size::new(shot.size[0], shot.size[1]),
             })
-            .map(|written| board_3d_message(Board3dMsg::ScreenshotCopied(written.is_ok()))),
+            .map(|written| board_3d_message(Board3dMsg::ScreenshotCopied(written))),
             Some(path) => Task::perform(
                 async move {
                     let to = path.clone();
@@ -103,13 +104,19 @@ impl Signex {
         }
     }
 
-    /// Messages says whether the clipboard took the screenshot.
-    pub(super) fn report_board_3d_copy(&self, copied: bool) {
+    /// Messages says whether the clipboard took the screenshot, or why not.
+    pub(super) fn report_board_3d_copy(&self, copied: Result<&(), &ClipboardError>) {
         let i18n = &self.ui_state.i18n;
-        if copied {
-            crate::diagnostics::log_info(t!(i18n, ids::PCB_3D_SHOT_COPIED).into_string());
-        } else {
-            crate::diagnostics::log_warning(t!(i18n, ids::PCB_3D_SHOT_COPY_FAILED).into_string());
+        match copied {
+            Ok(()) => {
+                crate::diagnostics::log_info(t!(i18n, ids::PCB_3D_SHOT_COPIED).into_string());
+            }
+            Err(error) => {
+                let why = clipboard_reason(i18n, error);
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::PCB_3D_SHOT_COPY_FAILED, "why" => why).into_string(),
+                );
+            }
         }
     }
 
@@ -131,6 +138,19 @@ impl Signex {
         let line = t!(self.ui_state.i18n, ids::PCB_3D_SHOT_EMPTY);
         crate::diagnostics::log_warning(line.into_string());
     }
+}
+
+/// Why the clipboard refused a screenshot, in words for Messages. An
+/// unknown failure keeps the platform's own description.
+fn clipboard_reason(i18n: &I18n, error: &ClipboardError) -> String {
+    let id = match error {
+        ClipboardError::ClipboardUnavailable => ids::PCB_3D_SHOT_CLIPBOARD_UNAVAILABLE,
+        ClipboardError::ClipboardOccupied => ids::PCB_3D_SHOT_CLIPBOARD_OCCUPIED,
+        ClipboardError::ContentNotAvailable => ids::PCB_3D_SHOT_CLIPBOARD_FORMAT,
+        ClipboardError::ConversionFailure => ids::PCB_3D_SHOT_CLIPBOARD_CONVERSION,
+        ClipboardError::Unknown { description } => return description.as_str().to_owned(),
+    };
+    t!(i18n, id).into_string()
 }
 
 /// The view's part of a window screenshot: the view at `origin`, `viewport`
@@ -245,6 +265,17 @@ mod tests {
             crop_region([0.0, 0.0], [10.0, 10.0], f32::NAN, [120, 80]),
             None
         );
+    }
+
+    #[test]
+    fn a_clipboard_failure_names_its_reason() {
+        let i18n = I18n::en_us_ref();
+        let busy = clipboard_reason(i18n, &ClipboardError::ClipboardOccupied);
+        assert!(busy.contains("another program"), "{busy}");
+        let unknown = ClipboardError::Unknown {
+            description: Arc::new("no display".to_owned()),
+        };
+        assert_eq!(clipboard_reason(i18n, &unknown), "no display");
     }
 
     #[test]

@@ -393,6 +393,8 @@ pcb-place-part-board-gone = The board { $board } is no longer active; { $part } 
 
 ## The board 3D view (#2390) and its toolbar (mockup m175).
 
+# The toolbar's title.
+pcb-3d-title = 3D View
 # The quiet caption at the view's bottom right: how to move it.
 pcb-3d-hint = Drag to turn, right-drag to slide, wheel to zoom, click to select
 # The toolbar's 2D | 3D switch: back to the flat board, or the 3D view.
@@ -400,7 +402,8 @@ pcb-3d-flat = 2D
 pcb-3d-solid = 3D
 # Fit icon button tooltip.
 pcb-3d-fit = Fit
-# Viewpoints. Bottom, Left and Right also name the view in the status pill.
+# Viewpoints; each also names the view in the status pill. Bottom is
+# reached by Flip.
 pcb-3d-top = Top
 pcb-3d-bottom = Bottom
 pcb-3d-front = Front
@@ -409,9 +412,6 @@ pcb-3d-right = Right
 pcb-3d-back = Back
 # From above a front corner.
 pcb-3d-iso = Iso
-# One button for the right side; Shift+click shows the left side.
-pcb-3d-side = Side
-pcb-3d-side-tooltip = Right side. Shift+click for the left side.
 pcb-3d-reset = Reset camera
 # Flip button: its label while the top shows, and while the bottom shows.
 pcb-3d-flip = Flip
@@ -443,7 +443,12 @@ pcb-3d-shot-save-title = Save a Screenshot of the 3D View
 pcb-3d-shot-filter = PNG image
 # Messages lines about a screenshot.
 pcb-3d-shot-copied = A screenshot of the 3D view was copied to the clipboard.
-pcb-3d-shot-copy-failed = The screenshot of the 3D view could not be copied to the clipboard.
+pcb-3d-shot-copy-failed = The screenshot of the 3D view could not be copied to the clipboard: { $why }
+# Why the clipboard refused the screenshot ($why above).
+pcb-3d-shot-clipboard-unavailable = no clipboard is available
+pcb-3d-shot-clipboard-occupied = another program holds the clipboard
+pcb-3d-shot-clipboard-format = the clipboard does not take images
+pcb-3d-shot-clipboard-conversion = the image could not be converted for the clipboard
 pcb-3d-shot-saved = A screenshot of the 3D view was saved to { $path }.
 pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved to { $path }: { $why }
 pcb-3d-shot-empty = The 3D view could not be captured: the window had nothing to show.

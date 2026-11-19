@@ -100,25 +100,11 @@ impl Signex {
 
     /// Component classes: keep entries with non-empty keys and labels, and
     /// dedupe by key (last write wins), so the dropdown never shows blanks
-    /// or duplicates; then commit them.
+    /// or duplicates; then commit them. The rule is the table's own
+    /// (`preferences::saved_classes`).
     fn commit_component_class_drafts(&mut self) {
-        let mut sanitised: Vec<crate::fonts::ComponentClassEntry> = Vec::new();
-        for entry in &self.ui_state.preferences_draft_component_classes {
-            let key = entry.key.trim();
-            let label = entry.label.trim();
-            if key.is_empty() || label.is_empty() {
-                continue;
-            }
-            if let Some(existing) = sanitised.iter_mut().find(|e| e.key == key) {
-                existing.label = label.to_string();
-            } else {
-                sanitised.push(crate::fonts::ComponentClassEntry {
-                    key: key.to_string(),
-                    label: label.to_string(),
-                });
-            }
-        }
-        self.ui_state.component_classes = sanitised;
+        self.ui_state.component_classes =
+            crate::preferences::saved_classes(&self.ui_state.preferences_draft_component_classes);
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.document_state.panel_ctx.component_classes = self.ui_state.component_classes.clone();
     }

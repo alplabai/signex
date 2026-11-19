@@ -15,7 +15,7 @@ use signex_widgets::text;
 /// Height of one cap: 18 px at the 12 px body.
 const KEY_H: f32 = TS.body * 1.5;
 /// Corner radius of a cap, as `styles::key_cap`.
-const KEY_RADIUS: f32 = 4.0;
+const KEY_RADIUS: f32 = crate::styles::Radii::GRAPHITE.key;
 /// Gap between the caps of one stroke: 3 px at the 12 px body.
 const KEY_GAP: f32 = TS.body / 4.0;
 

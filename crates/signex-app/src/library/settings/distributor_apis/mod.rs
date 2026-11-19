@@ -26,8 +26,9 @@ use super::super::state::DistributorSettings;
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Width of the order-of-preference column beside the cards.
-const ORDER_COLUMN_W: f32 = 280.0;
+/// Width of the order-of-preference column beside the cards: 280 px at the
+/// 12 px body.
+const ORDER_COLUMN_W: f32 = TS.body * 280.0 / 12.0;
 
 /// Render the Distributor APIs page body: the cards beside the order list.
 pub fn view<'a>(

@@ -7,15 +7,48 @@ use std::collections::hash_map::Entry;
 
 use crate::fonts::ComponentClassEntry;
 
-/// What is wrong with a row's key. Keys are compared as Save stores them,
-/// trimmed.
+/// What is wrong with a row's key. Keys are compared as Save stores them
+/// ([`saved_row`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ClassKeyIssue {
     /// The row has a label but no key: Save leaves such a row out.
     Missing,
-    /// An earlier row has the same key; `first` is that row's index. Save
-    /// keeps one class per key, so the two rows would become one.
+    /// The key is not lower snake case (`a-z`, `0-9`, `_`), the shape of
+    /// the seed keys. Save still stores it as typed.
+    Malformed,
+    /// An earlier row Save keeps has the same key; `first` is that row's
+    /// index. Save keeps one class per key, so the two rows would become one.
     Duplicate { first: usize },
+}
+
+/// A row as Save stores it: key and label trimmed; `None` when either is
+/// empty, as Save leaves such a row out. The one rule for both the table's
+/// errors and Save.
+fn saved_row(entry: &ComponentClassEntry) -> Option<(&str, &str)> {
+    let (key, label) = (entry.key.trim(), entry.label.trim());
+    (!key.is_empty() && !label.is_empty()).then_some((key, label))
+}
+
+/// Whether a trimmed, non-empty `key` is lower snake case.
+fn is_well_formed_key(key: &str) -> bool {
+    key.bytes()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/// The classes Save stores from the table's rows, in row order: each
+/// [`saved_row`], one class per key, a repeated key taking the later label.
+pub(crate) fn saved_classes(rows: &[ComponentClassEntry]) -> Vec<ComponentClassEntry> {
+    let mut saved: Vec<ComponentClassEntry> = Vec::new();
+    for (key, label) in rows.iter().filter_map(saved_row) {
+        match saved.iter_mut().find(|e| e.key == key) {
+            Some(existing) => existing.label = label.to_string(),
+            None => saved.push(ComponentClassEntry {
+                key: key.to_string(),
+                label: label.to_string(),
+            }),
+        }
+    }
+    saved
 }
 
 /// The issue of each row's key, in row order. A row with neither key nor
@@ -30,15 +63,19 @@ pub(crate) fn class_key_issues(classes: &[ComponentClassEntry]) -> Vec<Option<Cl
             if key.is_empty() {
                 return (!entry.label.trim().is_empty()).then_some(ClassKeyIssue::Missing);
             }
-            match first_of.entry(key) {
+            let issue = match first_of.entry(key) {
                 Entry::Occupied(first) => Some(ClassKeyIssue::Duplicate {
                     first: *first.get(),
                 }),
                 Entry::Vacant(slot) => {
-                    slot.insert(index);
+                    // Only a row Save keeps can be the one a later row repeats.
+                    if saved_row(entry).is_some() {
+                        slot.insert(index);
+                    }
                     None
                 }
-            }
+            };
+            issue.or_else(|| (!is_well_formed_key(key)).then_some(ClassKeyIssue::Malformed))
         })
         .collect()
 }
@@ -110,6 +147,53 @@ mod tests {
         assert_eq!(
             class_key_issues(&classes),
             vec![Some(ClassKeyIssue::Missing), None, None]
+        );
+    }
+
+    #[test]
+    fn a_key_that_is_not_lower_snake_case_is_malformed() {
+        let classes = [
+            class("transistor_bjt2", "BJT"),
+            class("Hall Sensor", "Hall sensor"),
+            class("ferrite-bead", "Ferrite bead"),
+        ];
+        assert_eq!(
+            class_key_issues(&classes),
+            vec![
+                None,
+                Some(ClassKeyIssue::Malformed),
+                Some(ClassKeyIssue::Malformed)
+            ]
+        );
+        assert!(is_well_formed_key("led"));
+        assert!(!is_well_formed_key("LED"));
+    }
+
+    /// Save and the table read rows the same way: a row Save leaves out
+    /// (no label yet) is not the "first" a later row repeats.
+    #[test]
+    fn save_and_the_table_agree_on_which_rows_count() {
+        let classes = [
+            class("sensor", ""),
+            class(" sensor ", "Hall sensor"),
+            class("diode", "Diode"),
+            class("diode", "Zener"),
+            class("", "No key"),
+        ];
+        assert_eq!(
+            class_key_issues(&classes),
+            vec![
+                None,
+                None,
+                None,
+                Some(ClassKeyIssue::Duplicate { first: 2 }),
+                Some(ClassKeyIssue::Missing)
+            ]
+        );
+        assert_eq!(
+            saved_classes(&classes),
+            vec![class("sensor", "Hall sensor"), class("diode", "Zener")],
+            "trimmed, rows without key or label left out, the later label wins"
         );
     }
 

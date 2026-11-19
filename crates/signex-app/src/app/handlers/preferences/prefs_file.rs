@@ -92,19 +92,30 @@ impl Signex {
             .parent()
             .map_or_else(|| file.clone(), |dir| dir.to_path_buf());
         let opener = self.ui_state.io.opener;
+        let i18n = self.ui_state.i18n.clone();
         Task::future(async move {
             let shown = folder.clone();
             let outcome = tokio::task::spawn_blocking(move || opener.reveal(&shown)).await;
             let failure = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(error.to_string()),
-                Err(error) => Some(format!("the file manager launch did not finish ({error})")),
+                Err(error) => Some(
+                    signex_i18n::t!(
+                        i18n,
+                        signex_i18n::ids::PREFERENCES_FILE_OPEN_FOLDER_UNFINISHED,
+                        "error" => error.to_string()
+                    )
+                    .into_string(),
+                ),
             };
             if let Some(reason) = failure {
-                crate::diagnostics::log_warning(format!(
-                    "Preferences: could not open the folder {}: {reason}",
-                    folder.display()
-                ));
+                let line = signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::PREFERENCES_FILE_OPEN_FOLDER_FAILED,
+                    "path" => folder.display().to_string(),
+                    "why" => reason
+                );
+                crate::diagnostics::log_warning(line.into_string());
             }
         })
         .discard()

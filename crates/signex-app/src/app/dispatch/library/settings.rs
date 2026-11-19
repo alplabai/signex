@@ -332,7 +332,12 @@ impl Signex {
                 );
             }
             Err(reason) => {
-                crate::diagnostics::log_warning(digikey_disconnect_failure_message(&reason));
+                let line = signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::LIBRARY_DIGIKEY_DISCONNECT_FAILED_LOG,
+                    "why" => reason.as_str()
+                );
+                crate::diagnostics::log_warning(line.into_string());
                 settings.digikey_disconnect_error = Some(reason);
             }
         }
@@ -442,11 +447,6 @@ mod tests {
 /// Messages-panel text for a failed DigiKey connect.
 fn digikey_failure_message(reason: &str) -> String {
     format!("DigiKey: connecting the account failed: {reason}")
-}
-
-/// Messages-panel text for a Disconnect that could not remove the token.
-fn digikey_disconnect_failure_message(reason: &str) -> String {
-    format!("DigiKey: disconnecting the account failed, so its token is still stored: {reason}")
 }
 
 /// Messages-panel text for a failed Mouser key test.

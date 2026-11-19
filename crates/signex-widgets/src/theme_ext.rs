@@ -273,6 +273,8 @@ impl Default for Spacing {
 /// Corner radii of the Graphite design, in px, smallest to largest.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Radii {
+    /// Keyboard key caps.
+    pub key: f32,
     /// Rows, menu roots and chips inside a control.
     pub small: f32,
     /// Fields, icon buttons and the Active Bar buttons.
@@ -290,6 +292,7 @@ pub struct Radii {
 
 impl Radii {
     pub const GRAPHITE: Self = Self {
+        key: 4.0,
         small: 6.0,
         control: 7.0,
         button: 8.0,

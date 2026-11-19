@@ -1,13 +1,12 @@
 //! The board 3D view in the main window (#2390, m175): the board's 3D scene
 //! on its lighting preset's backdrop, with a floating toolbar at the top
-//! centre (2D | 3D, the viewpoints, Reset and Fit, Flip and Explode, the
+//! centre (its title, 2D | 3D, the viewpoints, Reset and Fit, Flip and Explode, the
 //! lighting preset, the screenshot button), its popovers and toasts, the
 //! view cube, the status pill and the interaction hint. Undocked board
 //! windows stay flat. Layout follows mockups m109 and m175.
 
 mod icons;
 mod overlays;
-mod side_button;
 mod toolbar;
 mod view_cube;
 
@@ -319,19 +318,10 @@ impl Signex {
             .padding(M.cube_inset);
 
         let bar = toolbar::toolbar(i18n, session, &look);
-        // A popover hangs under the toolbar's right end; the lighting toast
-        // is centred under it.
-        let top: Element<'_, Message> = if session.explode_open {
-            column![bar, overlays::explode_popover(i18n, session, &look)]
-                .spacing(M.popover_gap)
-                .align_x(Alignment::End)
-                .boxed()
-        } else if session.shot_menu_open {
-            column![bar, overlays::shot_menu(i18n, &look)]
-                .spacing(M.popover_gap)
-                .align_x(Alignment::End)
-                .boxed()
-        } else if session.lighting_toast.is_some() {
+        // The popovers hang under their own buttons (the toolbar draws
+        // them); with neither open, the lighting toast is centred under it.
+        let popover_open = session.explode_open || session.shot_menu_open;
+        let top: Element<'_, Message> = if !popover_open && session.lighting_toast.is_some() {
             column![bar, overlays::lighting_toast(i18n, session.lighting, &look)]
                 .spacing(M.toast_gap)
                 .align_x(Alignment::Center)

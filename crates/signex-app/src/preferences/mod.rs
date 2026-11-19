@@ -35,6 +35,7 @@ mod widgets;
 use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
+pub(crate) use component_classes::saved_classes;
 pub use component_classes::{ClassesViewMsg, ClassesViewState};
 use distributors::content_library_distributors;
 use editing::content_editing;

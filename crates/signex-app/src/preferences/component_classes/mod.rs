@@ -6,6 +6,8 @@
 mod rules;
 mod table;
 
+pub(crate) use rules::saved_classes;
+
 use iced::widget::{Space, container, mouse_area, row};
 use iced::{Background, Border, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
@@ -21,8 +23,8 @@ use crate::styles::{
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Width of the filter field in the toolbar.
-const FILTER_W: f32 = 240.0;
+/// Width of the filter field in the toolbar: 240 px at the 12 px body.
+const FILTER_W: f32 = TS.body * 20.0;
 
 /// View state of the Component Classes page. Reset to its default whenever
 /// Preferences opens; never saved.

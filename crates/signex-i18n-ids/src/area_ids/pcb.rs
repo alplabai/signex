@@ -63,6 +63,7 @@ define_ids! {
     PCB_POUR_NONE_SELECTED = "pcb-pour-none-selected";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
+    PCB_3D_TITLE = "pcb-3d-title";
     PCB_3D_HINT = "pcb-3d-hint";
     PCB_3D_FLAT = "pcb-3d-flat";
     PCB_3D_SOLID = "pcb-3d-solid";
@@ -74,8 +75,6 @@ define_ids! {
     PCB_3D_RIGHT = "pcb-3d-right";
     PCB_3D_BACK = "pcb-3d-back";
     PCB_3D_ISO = "pcb-3d-iso";
-    PCB_3D_SIDE = "pcb-3d-side";
-    PCB_3D_SIDE_TOOLTIP = "pcb-3d-side-tooltip";
     PCB_3D_RESET = "pcb-3d-reset";
     PCB_3D_FLIP = "pcb-3d-flip";
     PCB_3D_FLIPPED = "pcb-3d-flipped";
@@ -102,6 +101,10 @@ define_ids! {
     PCB_3D_SHOT_FILTER = "pcb-3d-shot-filter";
     PCB_3D_SHOT_COPIED = "pcb-3d-shot-copied";
     PCB_3D_SHOT_COPY_FAILED = "pcb-3d-shot-copy-failed";
+    PCB_3D_SHOT_CLIPBOARD_UNAVAILABLE = "pcb-3d-shot-clipboard-unavailable";
+    PCB_3D_SHOT_CLIPBOARD_OCCUPIED = "pcb-3d-shot-clipboard-occupied";
+    PCB_3D_SHOT_CLIPBOARD_FORMAT = "pcb-3d-shot-clipboard-format";
+    PCB_3D_SHOT_CLIPBOARD_CONVERSION = "pcb-3d-shot-clipboard-conversion";
     PCB_3D_SHOT_SAVED = "pcb-3d-shot-saved";
     PCB_3D_SHOT_SAVE_FAILED = "pcb-3d-shot-save-failed";
     PCB_3D_SHOT_EMPTY = "pcb-3d-shot-empty";

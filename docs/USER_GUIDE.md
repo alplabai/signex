@@ -900,7 +900,7 @@ Mode** (`Shift+S`), **View ▸ Flip Board View** to look from below, and
 In 3D, drag to turn the board, right-drag to slide it, use the wheel to
 zoom and click a part to select it. The toolbar at the top of the view
 switches back with **2D**, looks from **Top**, **Iso**, **Front**,
-**Side** (Shift+click for the left side) or **Back**, resets the camera
+**Left**, **Right** or **Back**, resets the camera
 and fits the board. **Flip** turns the board over to show its bottom side;
 **Explode** opens a slider that moves the copper, mask and parts apart. The
 lighting button steps through four lighting presets (Studio, Workshop,

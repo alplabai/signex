@@ -1,8 +1,9 @@
 //! The 3D view's floating toolbar (m109, m175), at the top centre of the
-//! view: 2D | 3D; Top, Iso, Front, Side, Back, Reset and Fit; Flip and
-//! Explode; the lighting preset; the screenshot button and its menu
-//! chevron. A tinted button is the active viewpoint, a flipped board, an
-//! explode in use or an open popover.
+//! view: the "3D View" title; 2D | 3D; Top, Iso, Front, Left, Right, Back,
+//! Reset and Fit; Flip and Explode; the lighting preset; the screenshot
+//! button and its menu chevron. A tinted button is the active viewpoint, a
+//! flipped board, an explode in use or an open popover. The Explode popover
+//! and the screenshot menu hang under their own buttons.
 
 use iced::alignment::Vertical;
 use iced::font::Weight;
@@ -17,8 +18,11 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_widgets::active_bar_dropdown::tooltip_style;
 use signex_widgets::{Label, SegmentedStyle, button, segmented, text, theme_ext, tooltip};
 
+use iced_aw::DropDown;
+use iced_aw::drop_down::Alignment as DropAlignment;
+
 use super::icons::{Icon, icon};
-use super::side_button::{side_button, side_preset};
+use super::overlays::{explode_popover, shot_menu};
 use super::{Look, M, TS, backdrop_fill, card_style, event, lighting_name, preset_name, shadow};
 use crate::app::state::Board3dSession;
 use crate::app::{Board3dMsg, Message};
@@ -42,14 +46,6 @@ pub(super) fn toolbar<'a>(
             look,
         )
     };
-    let side_on = matches!(active, Some(ViewPreset::Right | ViewPreset::Left));
-    let side = tool_button(
-        label(t!(i18n, ids::PCB_3D_SIDE), side_on, look),
-        side_on,
-        Board3dMsg::PresetPicked(side_preset(false)),
-        look,
-    );
-    let side = side_button(side, event(Board3dMsg::PresetPicked(side_preset(true)))).boxed();
     let reset = tool_button(
         icon(Icon::Reset, M.icon, look.ink2).boxed(),
         false,
@@ -62,13 +58,25 @@ pub(super) fn toolbar<'a>(
         Board3dMsg::FitRequested,
         look,
     );
+    // The title stays until the maintainer settles m109's open title item.
+    let title = container(
+        text(t!(i18n, ids::PCB_3D_TITLE))
+            .size(TS.body)
+            .color(look.text)
+            .wrapping(Wrapping::None),
+    )
+    .padding(Padding::from([0.0, M.button_pad]));
     let bar = row![
+        title,
+        separator(look),
         mode_switch(i18n, look),
         separator(look),
         preset(ViewPreset::Top),
         preset(ViewPreset::Iso),
         preset(ViewPreset::Front),
-        with_tip(side, t!(i18n, ids::PCB_3D_SIDE_TOOLTIP), look),
+        // Separate Left and Right until m175's open Side item is settled.
+        preset(ViewPreset::Left),
+        preset(ViewPreset::Right),
         preset(ViewPreset::Back),
         with_tip(reset, t!(i18n, ids::PCB_3D_RESET), look),
         with_tip(fit, t!(i18n, ids::PCB_3D_FIT), look),
@@ -145,7 +153,23 @@ fn explode_button<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> Ele
     };
     let content = icon_label(Icon::Explode, name, on, look);
     let button = tool_button(content, on, Board3dMsg::ExplodePopoverToggled, look);
-    with_tip(button, t!(i18n, tip), look)
+    let button = with_tip(button, t!(i18n, tip), look);
+    let popover = explode_popover(i18n, session, look);
+    anchored(button, popover, session.explode_open)
+}
+
+/// `popover` hanging under `button` while `open`, centred on it. Esc
+/// closes it through the app's Esc rung (`board_3d_popover_escape`).
+fn anchored<'a>(
+    button: Element<'a, Message>,
+    popover: Element<'a, Message>,
+    open: bool,
+) -> Element<'a, Message> {
+    DropDown::new(button, popover, open)
+        .width(Length::Shrink)
+        .alignment(DropAlignment::Bottom)
+        .offset(M.popover_gap + M.bar_pad)
+        .boxed()
 }
 
 /// The explode amount in whole percent.
@@ -198,6 +222,7 @@ fn screenshot_buttons<'a>(
         Board3dMsg::ScreenshotMenuToggled,
         look,
     );
+    let menu = anchored(menu, shot_menu(i18n, look), open);
     row![
         with_tip(copy, t!(i18n, ids::PCB_3D_SHOT_TOOLTIP), look),
         menu

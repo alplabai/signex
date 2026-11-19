@@ -76,6 +76,10 @@ impl Signex {
                 session.shot_menu_open = !session.shot_menu_open;
                 session.explode_open = false;
             }),
+            Board3dMsg::PopoverDismissed => self.edit_board_3d(|session| {
+                session.explode_open = false;
+                session.shot_menu_open = false;
+            }),
             Board3dMsg::ScreenshotCopyRequested => {
                 self.edit_board_3d(|session| session.begin_capture(None));
             }
@@ -88,7 +92,7 @@ impl Signex {
             Board3dMsg::ScreenshotTaken { save_to, shot } => {
                 return self.take_board_3d_shot(save_to, shot);
             }
-            Board3dMsg::ScreenshotCopied(copied) => self.report_board_3d_copy(copied),
+            Board3dMsg::ScreenshotCopied(copied) => self.report_board_3d_copy(copied.as_ref()),
             Board3dMsg::ScreenshotSaved { path, error } => {
                 self.report_board_3d_save(&path, error.as_deref());
             }
@@ -120,6 +124,14 @@ impl Signex {
         } else {
             Subscription::none()
         }
+    }
+
+    /// Esc closes the 3D view's open Explode popover or screenshot menu
+    /// before it reaches the tool reset behind the view.
+    pub(crate) fn board_3d_popover_escape(&self) -> Option<Message> {
+        self.board_3d_in_view()
+            .is_some_and(|session| session.explode_open || session.shot_menu_open)
+            .then(|| board_3d_message(Board3dMsg::PopoverDismissed))
     }
 
     /// Change the 3D view in view with `edit`.

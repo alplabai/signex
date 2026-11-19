@@ -515,21 +515,21 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   The component's body opacity scales its alpha.
 
 **Toolbar** (mockups m109 and m175): one floating toolbar at the top
-centre of the view, always shown: 2D | 3D; Top, Iso, Front, Side, Back,
-Reset and Fit; Flip and Explode; the lighting preset; the screenshot button
-and its menu chevron. The interaction hint is a quiet caption at the bottom
-right, the status pill sits at the bottom left, the view cube at the top
-right. The toolbar has no title: the 2D | 3D switch says which view this is.
+centre of the view, always shown: the "3D View" title; 2D | 3D; Top, Iso,
+Front, Left, Right, Back, Reset and Fit; Flip and Explode; the lighting
+preset; the screenshot button and its menu chevron. The interaction hint is
+a quiet caption at the bottom right, the status pill sits at the bottom
+left, the view cube at the top right. The title and the separate Left and
+Right buttons stay until the maintainer settles the open m109 title item and
+the m175 Side item.
 
 **Camera** (`signex_gfx::camera3d::OrbitCamera`): perspective, orbiting a
 target. Left drag turns it, right or middle drag or Shift left drag slides
 it, the wheel zooms. A viewpoint looks from there on the side shown
 (`OrbitCamera::set_preset_on`) and frames the board: Top, Iso (above a front
-corner), Front, Back (the high-y edge) and Side, which is the right side,
-or the left side on Shift+click (the Side button keeps the Shift state from
-the keyboard's modifier changes, as mouse events carry none). The active
-viewpoint is tinted; a turn by hand clears it. Bottom and Left are still
-viewpoints (`PresetPicked`), reached by Flip and by Shift+Side. Reset looks
+corner), Front, Left, Right and Back (the high-y edge). The active
+viewpoint is tinted; a turn by hand clears it. Bottom is still a viewpoint
+(`PresetPicked`), reached by Flip. Reset looks
 from Iso on the side shown, framed; flip, explode and lighting stay. Fit and
 View ▸ Fit All frame the board from where it is seen. Entering the view looks
 from the top, framed for an assumed shape; the view's first redraw reports
@@ -546,7 +546,11 @@ ends it at its target first. While flipped the button reads Bottom and is
 tinted, the view cube reads BOTTOM, RIGHT, FRONT, and the status pill names
 the bottom side's parts and the parts with through-hole pins.
 
-**Explode** opens a popover under the toolbar: a slider from Assembled
+**Popovers**: the Explode popover and the screenshot menu hang centred under
+their own buttons. Esc closes an open one first (`board_3d_popover_escape`
+in the Esc ladder), so it never reaches the tool reset behind the view.
+
+**Explode** opens a popover under its button: a slider from Assembled
 (0 %) to Layers apart (100 %) and two tick boxes, Separate copper and mask
 and Lift components. The scene the view draws and picks with is
 `BoardScene3d::exploded` of the assembled one (only heights move), cached by
@@ -572,12 +576,14 @@ captured from the main window (`iced::window::screenshot`) and cropped to
 the view in physical pixels, and the chrome shows again. Save PNG… asks for
 the file first (the file-picker port) and writes the PNG atomically
 (temporary file renamed over it) off the update thread. Messages says
-whether the copy or the save worked.
+whether the copy or the save worked, and why one failed (the clipboard's
+reason, or the write error).
 
 **Model-unread toast**: a part whose model could not be read adds its
 `pcb-3d-model-unread` line to Messages and also shows it as a dismissible
 warn toast at the bottom left, above the status pill (with how many more
-could not be read); dismissing it leaves the Messages lines.
+could not be read), as wide as its text up to 420 px at the default body
+size; dismissing it leaves the Messages lines.
 
 **Selection** is the flat view's: a click casts a ray and selects the
 footprint of the nearest part it meets before the board (on the board or on
@@ -593,7 +599,6 @@ when its generation changes.
 Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gfx::camera3d::tests`,
 `signex_renderer::board3d::tests`, regression `pcb_board_3d` and
 `pcb_board_3d_toolbar`, `styles::board_palette::tests`,
-`app::view::board_3d::side_button::tests`,
 `app::handlers::board_3d_screenshot::tests`.
 
 ## What this document is *not*

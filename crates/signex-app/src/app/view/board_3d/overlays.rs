@@ -1,5 +1,6 @@
 //! What floats over the 3D view besides its toolbar (m109, m175): the
-//! Explode popover and the screenshot menu under the toolbar, the lighting
+//! Explode popover and the screenshot menu (hung under their buttons by
+//! the toolbar), the lighting
 //! toast, the model-unread warn toast and the status pill at the bottom
 //! left, and the interaction hint at the bottom right.
 
@@ -152,7 +153,7 @@ fn menu_item<'a>(
     .boxed()
 }
 
-/// A popover card under the toolbar: raised, card radius, the floating
+/// A popover card under its button: raised, card radius, the floating
 /// shadow, [`Metrics::popover`] wide.
 fn popover<'a>(body: Element<'a, Message>, pad: f32, look: &Look) -> Element<'a, Message> {
     let card = container(body)
@@ -280,19 +281,14 @@ pub(super) fn unread_toast<'a>(
         )),
         signex_widgets::tooltip::Position::Top,
     );
-    let content = row![
-        icon(Icon::Warn, M.icon, warn),
-        lines.width(Length::Fill),
-        close
-    ]
-    .spacing(M.button_gap)
-    .align_y(Alignment::Start);
+    let content = row![icon(Icon::Warn, M.icon, warn), lines, close]
+        .spacing(M.button_gap)
+        .align_y(Alignment::Start);
     let fill = look.r.warn_soft;
     let toast_shadow = shadow(look, M.bar_shadow);
     let card = container(content)
-        // The message is always long: the toast takes the mockup's widest
-        // width and the text wraps inside it.
-        .width(M.toast_max)
+        // As wide as its text, up to the mockup's widest; longer text wraps.
+        .width(Length::Fit.max(M.toast_max))
         .padding(Padding::from([M.warn_pad_v, M.warn_pad_h]))
         .style(move |_| container::Style {
             background: Some(Background::Color(fill)),

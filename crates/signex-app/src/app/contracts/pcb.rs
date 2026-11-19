@@ -346,7 +346,7 @@ pub enum Board3dMsg {
     /// The toolbar's 2D segment: the board shows flat again.
     LeaveRequested,
     /// A viewpoint button was picked: the view looks from there on the side
-    /// shown, framed. Side picks Right, or Left with Shift held.
+    /// shown, framed.
     PresetPicked(signex_gfx::camera3d::ViewPreset),
     /// The Fit button: the board is framed from where it is seen now.
     FitRequested,
@@ -372,6 +372,8 @@ pub enum Board3dMsg {
     LightingToastExpired(u64),
     /// The screenshot button's chevron: its menu opens, or closes.
     ScreenshotMenuToggled,
+    /// Esc closed the open Explode popover or screenshot menu.
+    PopoverDismissed,
     /// The screenshot button, or Copy to clipboard in its menu.
     ScreenshotCopyRequested,
     /// Save PNG… in the screenshot menu: ask where.
@@ -385,8 +387,8 @@ pub enum Board3dMsg {
         save_to: Option<std::path::PathBuf>,
         shot: Option<Arc<Board3dShot>>,
     },
-    /// The clipboard took the screenshot, or refused it.
-    ScreenshotCopied(bool),
+    /// The clipboard took the screenshot, or refused it and why.
+    ScreenshotCopied(Result<(), iced::clipboard::Error>),
     /// The PNG at `path` was written, or why it was not.
     ScreenshotSaved {
         path: std::path::PathBuf,

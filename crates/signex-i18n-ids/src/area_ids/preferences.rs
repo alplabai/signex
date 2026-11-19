@@ -2,17 +2,7 @@
 
 define_ids! {
     PREFERENCES;
-    PREFERENCES_SECTION_FONT = "preferences-section-font";
-    PREFERENCES_SECTION_WINDOW_CONTROLS = "preferences-section-window-controls";
-    PREFERENCES_SECTION_SCHEMATIC_EDITOR = "preferences-section-schematic-editor";
-    PREFERENCES_SECTION_PCB_EDITOR = "preferences-section-pcb-editor";
-    PREFERENCES_SECTION_RENDERING = "preferences-section-rendering";
-    PREFERENCES_SECTION_SYMBOL_EDITOR = "preferences-section-symbol-editor";
-    PREFERENCES_SECTION_INTERFACE_SCALE = "preferences-section-interface-scale";
-    PREFERENCES_SECTION_NAVIGATION = "preferences-section-navigation";
-    PREFERENCES_SECTION_WINDOW = "preferences-section-window";
     PREFERENCES_SECTION_ANNOTATION = "preferences-section-annotation";
-    PREFERENCES_SECTION_EDITING = "preferences-section-editing";
     PREFERENCES_SECTION_DISTRIBUTORS = "preferences-section-distributors";
     PREFERENCES_RESTORE_DEFAULTS = "preferences-restore-defaults";
     PREFERENCES_MOVE_KEEPS_WIRES = "preferences-move-keeps-wires";
@@ -73,6 +63,8 @@ define_ids! {
     PREFERENCES_LANGUAGE_FOOTER_NOTE = "preferences-language-footer-note";
     PREFERENCES_FILE_WHERE = "preferences-file-where";
     PREFERENCES_FILE_OPEN_FOLDER = "preferences-file-open-folder";
+    PREFERENCES_FILE_OPEN_FOLDER_FAILED = "preferences-file-open-folder-failed";
+    PREFERENCES_FILE_OPEN_FOLDER_UNFINISHED = "preferences-file-open-folder-unfinished";
     PREFERENCES_LANGUAGE_HEADING = "preferences-language-heading";
     PREFERENCES_LANGUAGE_INTRO = "preferences-language-intro";
     PREFERENCES_LANGUAGE_SECTION_INTERFACE = "preferences-language-section-interface";
@@ -180,6 +172,7 @@ define_ids! {
     PREFERENCES_CLASSES_NO_MATCH = "preferences-classes-no-match";
     PREFERENCES_CLASSES_KEY_DUPLICATE = "preferences-classes-key-duplicate";
     PREFERENCES_CLASSES_KEY_MISSING = "preferences-classes-key-missing";
+    PREFERENCES_CLASSES_KEY_MALFORMED = "preferences-classes-key-malformed";
     PREFERENCES_CLASSES_RESET_CONFIRM = "preferences-classes-reset-confirm";
     PREFERENCES_CLASSES_RESET_CONFIRM_YES = "preferences-classes-reset-confirm-yes";
 }

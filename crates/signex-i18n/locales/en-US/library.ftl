@@ -237,6 +237,8 @@ library-digikey-help = OAuth2: opens your browser, then stores the refresh token
 library-digikey-disconnect = Disconnect
 # $error is the system's reason, in English.
 library-digikey-disconnect-failed = Could not disconnect: { $error }. The token is still stored.
+# The Messages line for the same failure; $why is the system's reason, in English.
+library-digikey-disconnect-failed-log = DigiKey: disconnecting the account failed, so its token is still stored: { $why }
 # Status pill when no DigiKey client id was set when Signex started.
 library-digikey-not-configured = Not configured
 # Keep the two environment variable names exactly as written.

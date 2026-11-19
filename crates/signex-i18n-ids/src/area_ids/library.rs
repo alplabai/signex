@@ -45,6 +45,7 @@ define_ids! {
     LIBRARY_DIGIKEY_HELP = "library-digikey-help";
     LIBRARY_DIGIKEY_DISCONNECT = "library-digikey-disconnect";
     LIBRARY_DIGIKEY_DISCONNECT_FAILED = "library-digikey-disconnect-failed";
+    LIBRARY_DIGIKEY_DISCONNECT_FAILED_LOG = "library-digikey-disconnect-failed-log";
     LIBRARY_DIGIKEY_NOT_CONFIGURED = "library-digikey-not-configured";
     LIBRARY_DIGIKEY_NOT_CONFIGURED_HELP = "library-digikey-not-configured-help";
     LIBRARY_MOUSER_API_KEY = "library-mouser-api-key";

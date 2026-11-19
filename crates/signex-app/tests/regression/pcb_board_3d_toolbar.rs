@@ -1,8 +1,8 @@
 //! Mockup m175 — the board 3D view's toolbar, driven through the messages it
-//! sends: Side with Shift, the active viewpoint, Reset, Flip and its
-//! animation, Explode, the lighting presets and their toast, screenshots
-//! to the clipboard and to a PNG, the model-unread toast, and where the
-//! view sits in the window. Every action is view state: no undo step, no
+//! sends: Left and Right, the active viewpoint, Reset, Flip and its
+//! animation, Explode, Esc on an open popover, the lighting presets and
+//! their toast, screenshots to the clipboard and to a PNG (and why a copy
+//! failed), the model-unread toast, and where the view sits in the window. Every action is view state: no undo step, no
 //! dirty mark.
 
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use signex_gfx::camera3d::{FLIP_DURATION_MS, LightingPreset, OrbitCamera, ViewPr
 use signex_renderer::board3d::BoardScene3d;
 use signex_renderer::pcb::PcbLayerView;
 
-use crate::pcb_board_3d::{BOUNDS, Fixture, U1, open_board, sized};
+use crate::pcb_board_3d::{BOUNDS, Fixture, PART_TOP_MM, U1, open_board, sized};
 
 fn msg(event: Board3dMsg) -> Message {
     Message::Pcb(PcbMsg::Board3d(event))
@@ -85,10 +85,10 @@ fn drag(f: &mut Fixture) {
     );
 }
 
-/// Side looks from the right; with Shift held its widget sends Left, which
-/// looks from the left side of the side shown.
+/// Right and Left are separate buttons; each looks from its side of the
+/// side shown.
 #[test]
-fn side_with_shift_picks_the_left_side() {
+fn left_and_right_look_from_their_sides() {
     let mut f = in_3d();
     f.view_3d(Board3dMsg::PresetPicked(ViewPreset::Right));
     let right = f.camera();
@@ -237,6 +237,49 @@ fn explode_moves_the_drawn_scene_and_a_click_selects_a_lifted_part() {
         part_top(&assembled.scene, U1),
         "assembled again"
     );
+}
+
+/// Esc closes an open Explode popover or screenshot menu and stops there:
+/// the selection behind the view stays. With nothing open, Esc goes on to
+/// the board's usual reset, which clears it.
+#[test]
+fn esc_closes_an_open_popover_before_the_tool_reset() {
+    let mut f = in_3d();
+    let esc = || Message::Input(signex_app::app::InputMsg::EscapePressed { window: None });
+    let part = f.screen(12.7, 12.7, PART_TOP_MM);
+    f.click(part);
+    assert_eq!(f.selected(), vec![ItemRef::Footprint(U1)]);
+
+    f.view_3d(Board3dMsg::ExplodePopoverToggled);
+    f.send(esc());
+    assert!(!session!(f).explode_open, "Esc closes the Explode popover");
+    assert_eq!(f.selected(), vec![ItemRef::Footprint(U1)], "and stops");
+
+    f.view_3d(Board3dMsg::ScreenshotMenuToggled);
+    f.send(esc());
+    assert!(
+        !session!(f).shot_menu_open,
+        "Esc closes the screenshot menu"
+    );
+    assert_eq!(f.selected(), vec![ItemRef::Footprint(U1)], "and stops");
+    assert!(f.in_3d());
+
+    f.send(esc());
+    assert!(f.selected().is_empty(), "with nothing open Esc goes on");
+}
+
+/// A refused clipboard write says why in Messages.
+#[test]
+fn a_failed_copy_names_the_clipboard_reason() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut f = in_3d();
+    f.view_3d(Board3dMsg::ScreenshotCopied(Err(
+        iced::clipboard::Error::ClipboardOccupied,
+    )));
+    let logged = signex_app::diagnostics::recent_entries().iter().any(|e| {
+        e.message.contains("could not be copied") && e.message.contains("another program")
+    });
+    assert!(logged, "Messages names the reason");
 }
 
 /// Lighting cycles through four presets and back; each step shows a toast

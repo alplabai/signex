@@ -189,17 +189,7 @@ pref-keymap-claimed = { $display } is claimed by { $action } and will never reac
 preferences-appearance-zoom-step-value = { $percent }% per notch
 
 ## Section titles of the pages
-preferences-section-font = Font
-preferences-section-window-controls = Window controls
-preferences-section-schematic-editor = Schematic Editor
-preferences-section-pcb-editor = PCB Editor
-preferences-section-rendering = Rendering
-preferences-section-symbol-editor = Symbol Editor
-preferences-section-interface-scale = Interface scale
-preferences-section-navigation = Navigation
-preferences-section-window = Window
 preferences-section-annotation = Schematic — Annotation
-preferences-section-editing = Schematic — Editing
 preferences-section-distributors = Library — Distributor APIs
 preferences-restore-defaults = Restore defaults
 
@@ -296,6 +286,11 @@ preferences-language-footer-note = The language changes when you press Apply or 
 preferences-file-where = { $path }: { $error }
 # Banner button: shows the folder that holds the preferences file.
 preferences-file-open-folder = Open folder
+# Messages line when Open folder fails. $path is the folder; $why is the
+# system's reason, in English.
+preferences-file-open-folder-failed = Preferences: could not open the folder { $path }: { $why }
+# $why above when the file manager launch never reported back.
+preferences-file-open-folder-unfinished = the file manager launch did not finish ({ $error })
 
 # Language page.
 preferences-language-heading = Language
@@ -485,6 +480,8 @@ preferences-classes-no-match = No class matches "{ $filter }".
 # $key is the repeated key; $label the class that already has it.
 preferences-classes-key-duplicate = The key "{ $key }" is already used by { $label }. Keys must be unique.
 preferences-classes-key-missing = This class has no key. Give it one, or Save leaves the class out.
+# $key is the key as typed.
+preferences-classes-key-malformed = The key "{ $key }" should use only lowercase letters, digits and underscores, like the built-in keys.
 # Asked by Reset to Defaults…; $count is how many classes the list holds and
 # $defaults how many default classes replace them.
 preferences-classes-reset-confirm = { $count ->
