@@ -699,39 +699,62 @@ View menu rows. See `docs/COMMANDS.md`.
 
 ## Board view configuration
 
-The Layers panel configures the board view (#2363). It has a search field,
-which keeps the rows whose name holds the text, and two tabs.
+The Layers panel configures the board view (#2363, #103). The dock's title
+bar names it; its body starts with two tabs.
 
 **Layers & Colors**, top to bottom:
 
-- Layer Sets: the set dropdown (the built-in sets, then the saved ones), a
-  name field with Save, and Delete for the saved set in view. They do what
-  the layer set button does.
-- Active Layer: the same choice as the layer tabs.
-- View From Bottom Side: the flip of the layer tab menu.
-- Import... and Export...: greyed until a view can be saved to a file.
+- The search row: the search field, which keeps the rows whose name holds
+  the text; Used On, a toggle chip that lists only the layers the board has
+  objects on; and the more button. When the search lists no row, the panel
+  says "No layers match" with the text, and Clear empties the field.
+- The more menu, opened in place under the more button; a click outside it
+  closes it. Layer Sets: Save current as set... (a name row with Save and a
+  close button opens under the search row; Enter saves too) and Delete
+  current set... (live while the view shows a saved set). Import... and
+  Export... are greyed until a view can be saved to a file. View From
+  Bottom Side, ticked while the board is seen from below, is the flip of
+  the layer tab menu. Layer Stack... runs the Layer Stack command and opens
+  the Layer Stack panel; it is greyed when that command cannot run.
+- The Active | Set row: the active layer's dot and name, a dropdown with
+  the same choice as the layer tabs; and the set the view shows ("Set:
+  All"), a dropdown of the built-in sets, then the saved ones. This is the
+  one place a set is picked in the panel.
 - All Layers: its eye hides every layer, or shows them all while one is
-  hidden. Used On lists only the layers the board has objects on.
+  hidden.
+- The sections. Each header has a chevron that opens or closes it and a
+  count of the rows it lists. The four layer sections also have an eye: it
+  is shut while every layer of the section is hidden, and a click shows
+  them all while one is hidden, else hides them all.
 - Signal and Plane Layers: the copper layers, each with its number in the
-  stack and its type.
-- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
-  side. The rows map onto the named technical layers: 3D Body, Assembly,
-  Component Outline (the fabrication layers), Courtyard, Designator,
-  Overlay (silkscreen), Paste, Solder (solder mask), Adhesive, Fiducial and
-  Keep-Out. Coating, Component Center, Tenting and Value have no layer and
-  are greyed.
+  stack and its type. The active layer's row has an accent bar, a soft
+  accent fill and an Active pill.
+- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour dot per
+  side, the bottom side mirrored. The rows map onto the named technical
+  layers: 3D Body, Assembly, Component Outline (the fabrication layers),
+  Courtyard, Designator, Silkscreen, Paste, Solder (solder mask), Adhesive,
+  Fiducial and Keep-Out. Coating, Component Center, Tenting and Value have
+  no layer yet and are not listed; they show once the board has a layer for
+  them.
 - Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
-  and ECO 2. Other Layers: Drill Drawing, Drill Guide (no layer yet,
-  greyed) and Multi-Layer (vias and through-hole pads).
-- System Colors: the eyes of Connection Lines (the ratsnest) and the Origin
-  Marker work; the other rows and the system colours are greyed.
+  and ECO 2. Other Layers: Drill Drawing and Multi-Layer (vias and
+  through-hole pads); its eye shows and hides the Multi-Layer row too.
+  Drill Guide has no layer yet and is not listed.
+- System Colors, closed until opened: the eyes of Connection Lines (the
+  ratsnest) and the Origin Marker work; the other rows and the system
+  colours are greyed.
 
-A click on a layer's name makes it the active layer. A click on a chip opens
-the colours under the row: twelve presets, Custom... and the palette colour
-again. The colour is an override on top of the one board palette for this
-board view only; the canvas (the Board Outline colour draws the board edge
-too), the chip and the board texts draw it. The Keep-Out chips are greyed:
-the board's keepout regions keep the palette colour.
+A click on a layer's name makes it the active layer. A click on a colour
+dot opens the colour card under the row, and the open dot gets an accent
+ring: the 24 colours of the board palette (the open layer's colour is
+ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
+as a colour, and, while the layer has its own colour, Palette colour, which
+gives it the palette's again. A swatch or Palette colour closes the card, as
+does the card's close button or a second click on the dot. The colour is an
+override on top of the one board palette for this board view only; the
+canvas (the Board Outline colour draws the board edge too), the dot and the
+board texts draw it. The Keep-Out dots are greyed: the board's keepout
+regions keep the palette colour.
 
 **View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
 Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All

@@ -6,6 +6,14 @@ define_ids! {
     PCB_LAYERS_TAB_LAYERS = "pcb-layers-tab-layers";
     PCB_LAYERS_TAB_VIEW_OPTIONS = "pcb-layers-tab-view-options";
     PCB_LAYERS_SEARCH = "pcb-layers-search";
+    PCB_LAYERS_NO_MATCH = "pcb-layers-no-match";
+    PCB_LAYERS_CLEAR_SEARCH = "pcb-layers-clear-search";
+    PCB_LAYERS_MORE_TIP = "pcb-layers-more-tip";
+    PCB_LAYERS_SET_DELETE_CURRENT = "pcb-layers-set-delete-current";
+    PCB_LAYERS_LAYER_STACK = "pcb-layers-layer-stack";
+    PCB_LAYERS_ACTIVE = "pcb-layers-active";
+    PCB_LAYERS_NO_ACTIVE = "pcb-layers-no-active";
+    PCB_LAYERS_SET_CURRENT = "pcb-layers-set-current";
     PCB_LAYERS_ALL_LAYERS = "pcb-layers-all-layers";
     PCB_LAYERS_USED_ON = "pcb-layers-used-on";
     PCB_LAYERS_USED_ON_TIP = "pcb-layers-used-on-tip";
@@ -14,6 +22,9 @@ define_ids! {
     PCB_LAYERS_TECHNICAL = "pcb-layers-technical";
     PCB_LAYERS_OTHER = "pcb-layers-other";
     PCB_LAYERS_SYSTEM_COLORS = "pcb-layers-system-colors";
+    PCB_LAYERS_SECTION_COUNT = "pcb-layers-section-count";
+    PCB_LAYERS_SECTION_SHOW = "pcb-layers-section-show";
+    PCB_LAYERS_SECTION_HIDE = "pcb-layers-section-hide";
     PCB_LAYERS_TYPE_SIGNAL = "pcb-layers-type-signal";
     PCB_LAYERS_TYPE_PLANE = "pcb-layers-type-plane";
     PCB_LAYERS_COPPER_NUMBER = "pcb-layers-copper-number";
@@ -21,10 +32,10 @@ define_ids! {
     PCB_LAYERS_PAIR_LAYER = "pcb-layers-pair-layer";
     PCB_LAYERS_PAIR_BOTTOM = "pcb-layers-pair-bottom";
     PCB_LAYERS_PAIR = "pcb-layers-pair";
-    PCB_LAYERS_NO_LAYER = "pcb-layers-no-layer";
-    PCB_LAYERS_DRILL_GUIDE = "pcb-layers-drill-guide";
     PCB_LAYERS_COLOUR_TIP = "pcb-layers-colour-tip";
+    PCB_LAYERS_PALETTE = "pcb-layers-palette";
     PCB_LAYERS_COLOUR = "pcb-layers-colour";
+    PCB_LAYERS_HEX = "pcb-layers-hex";
     PCB_LAYERS_COLOUR_PALETTE = "pcb-layers-colour-palette";
     PCB_LAYERS_SETS = "pcb-layers-sets";
     PCB_LAYERS_ACTIVE_LAYER = "pcb-layers-active-layer";

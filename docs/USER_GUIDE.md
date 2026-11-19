@@ -867,10 +867,14 @@ on a tab hides, highlights or shows layers, and its **Layer stack...** row
 opens the Layer Stack panel.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
-has an eye per layer to show or hide it and a colour chip to change its
-colour in this view. **Used On** lists only the layers the board uses, and
-**Layer Sets** switches between sets of layers. The **View Options** tab
-shows or hides each kind of object and switches 3D and **Single Layer Mode**.
+has an eye per layer to show or hide it, and an eye per section for all its
+layers. Click a layer's colour dot to pick a colour from the board palette
+or type a hex value such as `#C8A02C`. **Used On**, beside the search field,
+lists only the layers the board uses. The **Active** row shows the active
+layer, and its **Set** dropdown switches between sets of layers. The **⋯**
+button beside the search field saves and deletes sets, flips the view to
+the bottom side and opens the layer stack. The **View Options** tab shows
+or hides each kind of object and switches 3D and **Single Layer Mode**.
 These are view settings; they never change the board file.
 
 <!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
