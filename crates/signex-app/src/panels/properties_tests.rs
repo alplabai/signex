@@ -2,7 +2,7 @@
 //! the English the code wrote before, and its pick lists hand back values.
 
 use super::*;
-use crate::layout_probe::{LaidOutText, lay_out_texts, messages_for_events};
+use crate::layout_probe::{LaidOutText, lay_out_texts, messages_for_events, messages_on_click};
 use signex_i18n::{Arg, I18n, MessageId, ids};
 
 const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
@@ -608,8 +608,9 @@ fn each_pick_list_shows_the_stored_entry() {
     };
     let shown = texts(&ctx);
     check("Sheet Color", beside(&shown, "Sheet Color"), "Cream");
-    check("Orientation", beside(&shown, "Orientation"), "Portrait");
-    check("Origin", beside(&shown, "Origin"), "Lower Left");
+    // #2531: Paper names its size at the sheet's orientation; Orientation
+    // and Origin are segmented switches (see the test below).
+    check("Paper", beside(&shown, "Paper"), "A4 · 210 × 297 mm");
     check("Line", beside(&shown, "Line"), "Dashed");
 
     // Width is no pick list since #2523: a 2 x 2 grid of the four presets
@@ -704,27 +705,33 @@ fn document_parameters() -> PanelContext {
     ctx
 }
 
-/// A title-block field the sheet leaves empty names the project's value; one
-/// the sheet fills says it overrides it. The fields are rows of the
-/// Parameters tab (maintainer decision 2026-11-18).
+/// #2531: a title-block row the sheet leaves empty, while the project has a
+/// value, carries a "project" pill on its own line; once the sheet has its
+/// own value the pill is gone. The row keeps its plain field name.
 #[test]
-fn a_title_block_label_says_where_its_value_comes_from() {
+fn a_row_inherited_from_the_project_carries_a_project_pill() {
     let mut ctx = document_parameters();
     ctx.project_parameters
         .insert("drawn_by".into(), "Ann".into());
     let shown = texts(&ctx);
+    let middle = |t: &LaidOutText| t.bounds.y + t.bounds.height / 2.0;
+    let name = shown
+        .iter()
+        .find(|t| t.text == "Drawn By")
+        .unwrap_or_else(|| panic!("Drawn By missing from {shown:#?}"));
+    let pill = shown
+        .iter()
+        .find(|t| t.text == "project")
+        .unwrap_or_else(|| panic!("no project pill in {shown:#?}"));
     assert!(
-        shown.iter().any(|t| t.text == "Drawn By (project)"),
-        "{shown:#?}"
+        (middle(pill) - middle(name)).abs() < 4.0,
+        "{pill:?} {name:?}"
     );
+    assert!(pill.bounds.x > name.bounds.x);
     ctx.title_block.insert("drawn_by".into(), "Bob".into());
     let shown = texts(&ctx);
-    assert!(
-        shown
-            .iter()
-            .any(|t| t.text == "Drawn By (overrides project)"),
-        "{shown:#?}"
-    );
+    assert!(!shown.iter().any(|t| t.text == "project"), "{shown:#?}");
+    assert!(shown.iter().any(|t| t.text == "Drawn By"), "{shown:#?}");
 }
 
 /// Maintainer decision 2026-11-18: the General tab has no title-block
@@ -745,7 +752,13 @@ fn the_general_tab_has_no_title_block_field() {
         assert!(!found, "{name:?} in {shown:#?}");
     }
     let shown = texts(&document_parameters());
-    for name in ["Title", "Document No.", "Revision", "Sheet Variables"] {
+    for name in [
+        "Title block",
+        "Title",
+        "Document No.",
+        "Revision",
+        "Sheet variables",
+    ] {
         let found = shown.iter().any(|t| t.text == name);
         assert!(found, "{name:?} missing: {shown:#?}");
     }
@@ -763,6 +776,76 @@ fn an_empty_date_row_says_it_shows_today() {
     let shown = texts(&ctx);
     let today = shown.iter().any(|t| t.text == "Date (today)");
     assert!(!today, "{shown:#?}");
+}
+
+fn shows(shown: &[LaidOutText], text: &str) -> bool {
+    shown.iter().any(|t| t.text == text)
+}
+
+/// #2531: Format = Custom swaps the Paper and Orientation rows for one Size
+/// row of typed W / H; Standard brings them back.
+#[test]
+fn a_custom_format_swaps_paper_and_orientation_for_typed_w_and_h() {
+    let mut ctx = document_options();
+    ctx.paper_size = "A4".into();
+    ctx.page_format_mode = PageFormatMode::Standard;
+    let shown = texts(&ctx);
+    assert!(
+        shows(&shown, "Paper") && shows(&shown, "Orientation"),
+        "{shown:#?}"
+    );
+    assert!(!shows(&shown, "Size") && !shows(&shown, "W"), "{shown:#?}");
+    ctx.page_format_mode = PageFormatMode::Custom;
+    let shown = texts(&ctx);
+    assert!(
+        !shows(&shown, "Paper") && !shows(&shown, "Orientation"),
+        "{shown:#?}"
+    );
+    assert!(shows(&shown, "Size") && shows(&shown, "W"), "{shown:#?}");
+}
+
+/// #2531: Format, Orientation and Origin are segmented switches; a press on
+/// a segment reports its value.
+#[test]
+fn the_page_switches_report_the_pressed_segment() {
+    let mut ctx = document_options();
+    ctx.paper_size = "A4".into();
+    let pressed = |label: &str| {
+        messages_on_click(view_panel(PanelKind::Properties, &ctx), WINDOW, label)
+            .into_iter()
+            .filter(|m| !matches!(m, PanelMsg::DocumentOptions(_)))
+            .map(|m| format!("{m:?}"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(pressed("Portrait"), ["SetSheetOrientation(Portrait)"]);
+    assert_eq!(pressed("Lower Left"), ["SetPageOrigin(LowerLeft)"]);
+    assert_eq!(pressed("Custom"), ["SetPageFormatMode(Custom)"]);
+}
+
+/// #2531: the Rules chip shows the empty card, since a sheet has no rules;
+/// the chips carry their counts.
+#[test]
+fn the_rules_chip_shows_the_empty_card() {
+    let mut ctx = document_parameters();
+    let shown = texts(&ctx);
+    assert!(shows(&shown, "Title block"), "{shown:#?}");
+    assert!(!shows(&shown, "No rules"), "{shown:#?}");
+    let picked: Vec<PanelMsg> =
+        messages_on_click(view_panel(PanelKind::Properties, &ctx), WINDOW, "Rules");
+    assert!(
+        picked.iter().any(|m| matches!(
+            m,
+            PanelMsg::DocumentOptions(crate::panels::DocumentOptionsMsg::ParametersFilterPicked(
+                crate::panels::properties_parameters::ParametersFilter::Rules
+            ))
+        )),
+        "{picked:?}"
+    );
+    ctx.document_options.parameters_filter =
+        crate::panels::properties_parameters::ParametersFilter::Rules;
+    let shown = texts(&ctx);
+    assert!(shows(&shown, "No rules"), "{shown:#?}");
+    assert!(!shows(&shown, "Title block"), "{shown:#?}");
 }
 
 /// Maintainer decision 2026-11-18: a Parameters row shows its real value,
@@ -787,11 +870,7 @@ fn the_parameters_tab_shows_real_values_and_names_clear_of_them() {
         .iter()
         .find(|t| t.text == "power.snxsch")
         .expect("the document name");
-    for name in [
-        "Approved By (overrides project)",
-        "DocumentFullPathAndName",
-        "Project Name",
-    ] {
+    for name in ["Approved By", "DocumentFullPathAndName", "Project Name"] {
         let at = shown
             .iter()
             .find(|t| t.text == name)

@@ -1102,6 +1102,9 @@ pub enum PanelMsg {
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
     Illustration(signex_widgets::property_illustration::IllustrationMsg),
+    /// Document Options view events: Parameters filter, zone counts and the
+    /// illustration hover (#2531).
+    DocumentOptions(super::DocumentOptionsMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

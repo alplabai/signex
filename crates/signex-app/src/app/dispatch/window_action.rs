@@ -80,6 +80,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::TitleBlockTyping(..)
                 | P::CommitTitleBlockField(..)
                 | P::SheetVariables(_)
+                | P::DocumentOptions(_)
                 | P::NumericFieldTyped(..)
                 | P::NumericFieldSubmitted(..)
                 | P::UpdateDrawingEdit(..)

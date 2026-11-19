@@ -308,3 +308,45 @@ properties-style-strike-glyph = T
 properties-header-more = More
 # The glyph of the header's more-actions button.
 properties-header-more-glyph = ⋯
+
+## Document Options (#2531)
+
+properties-format = Format
+properties-zones = Zones
+# Short axis name of the zones counted down the sides (A, B, C...).
+properties-zones-v-short = V
+# Short axis name of the zones counted along the top (1, 2, 3...).
+properties-zones-h-short = H
+# Short name of the paper width field.
+properties-paper-w-short = W
+# Short name of the paper height field.
+properties-paper-h-short = H
+# A paper size in the Paper list. $name is the size (A4), $width and
+# $height its millimetres at the sheet's orientation.
+properties-paper-choice = { $name } · { $width } × { $height } mm
+# Callouts of the Grid and snap drawing. $pitch is the grid pitch with its
+# unit, such as 2.54 mm.
+properties-illustration-visible-grid = Visible Grid { $pitch }
+properties-illustration-snap-grid = Snap Grid { $pitch }
+properties-illustration-hotspot = Hotspot
+properties-illustration-origin = Origin
+# Callouts of the Sheet drawing. $size is the paper edge in millimetres.
+properties-illustration-paper-width = W { $size } mm
+properties-illustration-paper-height = H { $size } mm
+properties-parameters-filter = Filter parameters
+properties-parameters-group-title-block = Title block
+properties-parameters-group-sheet-variables = Sheet variables
+properties-parameters-group-built-in = Built-in
+properties-parameters-read-only = read-only
+properties-parameters-read-only-tip = Read-only: set by Signex
+# Pill on a title-block row whose value comes from the project.
+properties-parameters-from-project = project
+properties-parameters-from-project-tip = Inherited from the project; type to override
+properties-parameters-not-set = Not set
+properties-parameters-no-rules = No rules
+properties-parameters-no-rules-body = This sheet has no rules.
+properties-parameters-no-match = No parameter matches the filter.
+properties-parameters-footer = A sheet variable replaces the project variable of the same name. A value starting with = is an expression.
+properties-sheet-variable-add-row = Add variable
+# Result pill of a sheet variable whose expression does not evaluate.
+properties-sheet-variable-unresolved = ?
