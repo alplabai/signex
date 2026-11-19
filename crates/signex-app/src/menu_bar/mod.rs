@@ -112,6 +112,8 @@ pub enum MenuMessage {
     OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
+    /// View ▸ Command Log: show the Command Log panel (#2458).
+    OpenCommandLogPanel,
     /// View ▸ Layers: show the Layers panel (#2223).
     OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
@@ -186,6 +188,7 @@ impl MenuMessage {
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
+                | Self::OpenCommandLogPanel
                 | Self::OpenLayersPanel
         )
     }

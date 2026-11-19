@@ -1,6 +1,6 @@
 //! Graphite command-palette rows and footer: a source glyph, the label with
 //! the typed characters highlighted, key caps for the binding, and a hint
-//! footer. The legacy rows stay in `overlays/mod.rs`.
+//! footer. The card itself and where it sits are in `dropdown.rs`.
 
 use iced::widget::{Row, Space, column, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
@@ -14,6 +14,8 @@ use crate::styles::{self, Radii, Spacing, TypeScale, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+mod dropdown;
 
 fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
@@ -67,35 +69,20 @@ pub(super) fn group_header<'a, M: 'a>(
     .boxed()
 }
 
-/// The card's own search row. The main window types into the chrome strip,
-/// so this echoes the live query (read only); a window palette passes its
-/// real input as `input`.
+/// The card's own search row, for a palette with no title-bar field to type
+/// in: one opened in its own window, or the main window's while the title
+/// bar shows the search button. `input` is the real text input. A palette
+/// typed into the title-bar field has no such row: the field is the input.
 pub(super) fn search_row<'a, M: 'a>(
     i18n: &I18n,
     theme_tokens: &ThemeTokens,
-    query: &str,
-    input: Option<Element<'a, M>>,
+    input: Element<'a, M>,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    let ink = ti(theme_tokens.text);
-    let body: Element<'a, M> = match input {
-        Some(input) => input,
-        None if query.is_empty() => text(t!(i18n, ids::MENU_BAR_SEARCH_PLACEHOLDER))
-            .size(TS.body)
-            .color(r.ink4)
-            .width(Length::Fill)
-            .boxed(),
-        // What the user typed.
-        None => text(signex_i18n::UserText::new(query))
-            .size(TS.body)
-            .color(ink)
-            .width(Length::Fill)
-            .boxed(),
-    };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
     // raw: a search glyph, not language.
     line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
-    line = line.push(body);
+    line = line.push(input);
     line = line.push(cap(theme_tokens, t!(i18n, shortcut_ids::PALETTE_KEY_ESC)));
     let rule = r.line_soft;
     container(line)

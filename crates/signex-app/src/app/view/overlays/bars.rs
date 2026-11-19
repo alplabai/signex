@@ -1,7 +1,7 @@
 //! Editor-surface overlay builders — the blocking-modal gate, the
 //! export/preview/net-colour top-of-stack overlays, the schematic /
-//! footprint / symbol active bars, the in-canvas text-edit input, and
-//! the status-bar panel list.
+//! footprint / symbol active bars and the in-canvas text-edit input. The
+//! status-bar panel list lives in `panel_list.rs`.
 //!
 //! Extracted from the former 1223-line `collect_overlays` god-function
 //! in `view/mod.rs` (behaviour-preserving decomposition). Each builder
@@ -604,86 +604,6 @@ impl Signex {
                 .boxed(),
             ]
             .boxed(),
-        )
-    }
-
-    /// v0.18.10 status-bar panel list popup. Anchored above the "Panels"
-    /// button in the bottom-right of the status bar; each row shows a ✓
-    /// when the panel is open somewhere (docked, floating, or detached).
-    /// Pushes the dismiss layer then the popup.
-    pub(in crate::app::view) fn panel_list_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        if !ui.panel_list_open {
-            return Vec::new();
-        }
-        let tokens = &document.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let has_sch = document.panel_ctx.has_schematic;
-        let has_pcb = document.panel_ctx.has_pcb;
-        // A panel counts as "open" if it lives in any dock region,
-        // floats on top, or owns a detached OS window.
-        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
-        let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
-            .map(|&kind| {
-                // Altium parity: a leading ✓ column marks open panels
-                // so the user can see at a glance which ones are
-                // already somewhere on screen. Clicking an open panel
-                // still fires OpenPanel — the dock brings it forward.
-                let check = if is_open(kind) { "\u{2713}" } else { "" };
-                let check_c = crate::status_bar::check_ink(tokens);
-                let row_btn = signex_widgets::button(
-                    iced::widget::row![
-                        iced::widget::container(
-                            signex_widgets::text(signex_widgets::raw(check.to_string()))
-                                .size(TS.body)
-                                .color(check_c),
-                        )
-                        .width(Length::Fixed(16.0)),
-                        signex_widgets::text(signex_i18n::t!(ui.i18n, kind.message()))
-                            .size(TS.body)
-                            .color(text_c),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .width(Length::Fill)
-                .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)));
-                row_btn
-                    .padding([0.0, SP.m])
-                    .height(crate::status_bar::popup_row_height())
-                    .style(crate::status_bar::popup_row(tokens))
-                    .boxed()
-            })
-            .collect();
-
-        // Drop the scrollable wrapper — the list fits the window at
-        // full height (15-ish panels × 21 px each = ~315 px) and a
-        // menu-style popup reads cleaner without a scrollbar.
-        let (ww, wh) = ui.window_size;
-        let visible_rows = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
-            .count();
-        // Anchor the popup directly above the "Panels" button in the
-        // bottom-right of the status bar, its bottom edge just above the bar.
-        let popup = container(
-            column(panel_items)
-                .spacing(0)
-                .width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
-        )
-        .padding(crate::status_bar::POPUP_PADDING)
-        .style(crate::status_bar::popup(tokens));
-        let popup_w = crate::status_bar::POPUP_WIDTH;
-        let popup_h = crate::status_bar::popup_height(visible_rows);
-        let status_h = crate::status_bar::status_bar_height(tokens);
-        let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
-        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
-        Self::dismiss_and_place(
-            Message::Overlay(OverlayMsg::TogglePanelList),
-            popup.boxed(),
-            (left, top),
         )
     }
 }

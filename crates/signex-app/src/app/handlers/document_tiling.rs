@@ -1,4 +1,4 @@
-//! Window ▸ Tile in the main window (#2249): the docked documents in panes,
+//! View ▸ Window ▸ Tile in the main window (#2249): the docked documents in panes,
 //! side by side (Tile Vertically) or stacked (Tile Horizontally), the
 //! direction the undocked windows are arranged in (#2247). The focused pane
 //! is the active tab and draws on the main canvases; every other pane draws
@@ -44,7 +44,7 @@ impl Signex {
             .then_some((layout, panes))
     }
 
-    /// Window ▸ Tile: the docked documents into panes, and the main window
+    /// View ▸ Window ▸ Tile: the docked documents into panes, and the main window
     /// with the undocked document windows over its screen. Either alone is
     /// done when the other has nothing to arrange.
     pub(crate) fn tile(&mut self, layout: TileLayout) -> Task<Message> {
@@ -82,7 +82,7 @@ impl Signex {
         true
     }
 
-    /// Window ▸ Untile: the active document fills the main window again.
+    /// View ▸ Window ▸ Untile: the active document fills the main window again.
     pub(crate) fn untile_documents(&mut self) -> Task<Message> {
         if self.ui_state.document_tiling.is_none() {
             return Task::none();

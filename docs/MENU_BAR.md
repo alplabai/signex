@@ -46,13 +46,18 @@ the id back to that name.
 
 ## Root menus {#root-menus}
 
-Ten roots, left to right, as in the Graphite mock-up: File, Edit, View,
-Project, Place, Design, Tools, Reports, Window, Help (`ROOT_TITLES`). The model
-is shared, so every theme and the native macOS bar show all ten. Project and
-Reports were added on 2026-11-07 (maintainer decision, `DECISIONS.md`); they
-are built only from existing commands and messages, after the Altium
-convention (`UX_REFERENCE_ALTIUM.md`). Moved rows keep their shortcut hint and
-enablement; no command left the app.
+Eight roots, left to right: File, Edit, View, Project, Place, Design, Tools,
+Help (`ROOT_TITLES`). The model is shared, so every theme and the native macOS
+bar show the same eight. Project was added on 2026-11-07 (maintainer decision,
+`DECISIONS.md`), built only from existing commands and messages. On
+2026-11-19 the Reports root became the **Tools ▸ Reports** submenu, directly
+under Tools ▸ Annotation, and the Window root became the **View ▸ Window**
+submenu, the last entry of View after a separator (#2524). Both submenus keep
+the old root's rows, order, catalog ids, shortcut hints and enablement, and
+their titles are the old root titles (`menu-reports`, `menu-window`); no
+command left the app. A submenu row is never greyed itself: with no document
+open, Tools ▸ Reports and View ▸ Window still open, and every row in them is
+greyed.
 
 **Project** (project-wide actions):
 
@@ -60,17 +65,16 @@ enablement; no command left the app.
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
-**Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
-Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
+**Tools ▸ Annotation** (top of Tools, then Tools ▸ Reports, then a
+separator): Annotate Schematics..., Reset Schematic Designators...,
 Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
 Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [below](#back-annotate)), and Number Schematic Sheets... (see
 [below](#number-schematic-sheets)).
 
-**Reports** (outputs of the open schematic, all greyed without one):
+**Tools ▸ Reports** (outputs of the open schematic, all greyed without one):
 
-- Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
-  was a second row for the same message and is folded in)
+- Bill of Materials... (the one BOM dialog)
 - Netlist (Protel .NET)...
 - ERC Report...
 
@@ -82,6 +86,11 @@ opens the same dialog. Last, Assembly Drawings as SVG... (#2486) writes the
 board's top and bottom assembly drawings into a folder the person picks; the
 PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 `BOARD_OUTPUT.md`.
+
+**View ▸ Window** (the last entry of View, after the panel rows and a
+separator): Tile Horizontally, Tile Vertically, Untile (see
+[below](#window-tile)), a separator, and Close All Documents (see
+[below](#tools-library-editor)). Their built-in keys are unchanged.
 
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
@@ -381,7 +390,7 @@ nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
 (the catalog has no `save_all` command), and reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
-## Place ▸ Sheet Entry, Tools ▸ Library Editor, Window ▸ Close All Documents {#tools-library-editor}
+## Place ▸ Sheet Entry, Tools ▸ Library Editor, View ▸ Window ▸ Close All Documents {#tools-library-editor}
 
 These three rows were planned stubs until #2247; each now runs a catalog
 command, so the palette and a user key binding run the same id (none of the
@@ -403,7 +412,7 @@ three has a default key).
   of the Libraries panel); a library with no browser tab gets a new one. From
   there the user picks a symbol or footprint to edit. Greyed when no library
   is open.
-- **Window ▸ Close All Documents** runs `close_all_documents`, the project
+- **View ▸ Window ▸ Close All Documents** runs `close_all_documents`, the project
   tree's Close Project Documents: every tab closes, and an unsaved document is
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
@@ -541,6 +550,16 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
 
+## View ▸ Command Log {#view-command-log}
+
+A panel row right after View ▸ Messages (#2458): it opens (or reveals) the
+Command Log panel, docked at the bottom by default, and carries a check mark
+while the panel is open, like the other panel rows. It runs
+`MenuMessage::OpenCommandLogPanel`, not a catalog command, so it has no key
+and is never greyed. The panel lists every catalog command the session ran,
+from the GUI, the CLI and the agent socket; see
+[COMMAND_LOG.md](COMMAND_LOG.md).
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
@@ -598,7 +617,7 @@ with its file and its number.
   sheet changes; if a sheet still fails part-way, every sheet already changed
   is put back and the sheets it loaded are dropped.
 
-## Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
+## View ▸ Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
 
 Run `tile_windows_horizontally`, `tile_windows_vertically` (#2247, #2249) and
 `untile_documents` (#2249). Tile Horizontally stacks in equal rows, one above

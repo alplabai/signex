@@ -14,6 +14,7 @@ mod board_sketch;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
+mod detached_panel;
 mod library_tab;
 mod modals;
 mod overlays;
@@ -62,25 +63,7 @@ impl Signex {
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let ctx = &self.document_state.panel_ctx;
-                    let panel = if *kind == crate::panels::PanelKind::Components {
-                        crate::panels::components_panel::view(
-                            &self.library,
-                            ctx,
-                            &ctx.tokens,
-                            self.sheet_grid(),
-                        )
-                        .map(crate::dock::DockMessage::Library)
-                        .boxed()
-                    } else {
-                        crate::panels::view_panel(*kind, ctx)
-                            .map(crate::dock::DockMessage::Panel)
-                            .boxed()
-                    }
-                    .map(Message::Dock);
-                    iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(SP.m)
-                        .boxed()
+                    self.view_detached_panel_window(window_id, *kind)
                 }
                 // Detached Component Preview window — render the same
                 // editor surface as the inline tab. The editor state
@@ -344,15 +327,7 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
-                    &tab_bar::TabMarks {
-                        dirty_paths: &dirty_paths,
-                        read_only_paths: &read_only_paths,
-                        tooltips_enabled: interaction.tab_context_menu.is_none(),
-                        project_name: document
-                            .active_document_project()
-                            .map(|p| p.data.name.as_str()),
-                        i18n: &ui.i18n,
-                    },
+                    &self.tab_strip_marks(window_id, &dirty_paths, &read_only_paths),
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg })
@@ -618,35 +593,31 @@ impl Signex {
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
             // loaded, no document picked" keeps its own quieter hint.
-            use crate::start_screen::{self, Surface};
+            use crate::start_screen::{self, HintFacts, StartScreenData, Surface};
             let tokens = &self.document_state.panel_ctx.tokens;
+            let i18n = &self.ui_state.i18n;
             match Surface::select(self.document_state.active_project.is_some()) {
-                Surface::ProjectHint => start_screen::hint_view(tokens),
-                Surface::Start => {
-                    let open_shortcut = self.keymap_shortcut_label("open_document");
-                    let libraries: Vec<start_screen::LoadedLibrary> = self
-                        .library
-                        .open_libraries
-                        .iter()
-                        .map(|lib| {
-                            (
-                                lib.root
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().into_owned())
-                                    .unwrap_or_default(),
-                                lib.cached_components.len(),
-                            )
-                        })
-                        .collect();
-                    start_screen::view(
-                        tokens,
-                        &self.ui_state.i18n,
-                        &open_shortcut,
-                        self.ui_state.recent_projects.entries(),
-                        &self.ui_state.pinned_projects,
-                        &libraries,
-                    )
-                }
+                Surface::ProjectHint => start_screen::hint_view(
+                    tokens,
+                    i18n,
+                    HintFacts::of(self.document_state.active_loaded_project()),
+                ),
+                Surface::Start => start_screen::view(
+                    tokens,
+                    i18n,
+                    StartScreenData {
+                        open_shortcut: self.keymap_shortcut_label("open_document"),
+                        shortcuts_shortcut: self
+                            .keymap_shortcut_label("show_current_command_hotkeys"),
+                        recent: &self.ui_state.recent_projects,
+                        pinned: &self.ui_state.pinned_projects,
+                        libraries: start_screen::loaded_libraries(&self.library),
+                        thumbnails: &self.ui_state.project_thumbnails,
+                        state: &self.ui_state.start_screen,
+                        // `update` stamps it whenever the screen shows.
+                        now: self.ui_state.start_screen.now.unwrap_or_default(),
+                    },
+                ),
             }
         }
     }

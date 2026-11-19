@@ -209,6 +209,9 @@ canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
 canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
+// The status bar's Panels button and the open mark in its panel list.
+canonical_icon!(icon_chrome_check, "chrome/check.svg");
+canonical_icon!(icon_chrome_panels, "chrome/panels.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 
@@ -318,6 +321,13 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
+// Document and dock tab menus (m5): Close, Undock / Float, Reveal in Projects.
+canonical_icon!(icon_dd_close, "dropdown/close.svg");
+canonical_icon!(icon_dd_undock, "undock.svg");
+canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
+// Tab strip overflow button and the detached panel window's Dock back (m5, m8).
+canonical_icon!(icon_chrome_chevron_down, "chrome/chevron_down.svg");
+canonical_icon!(icon_chrome_dock_back, "chrome/dock_back.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //
@@ -390,6 +400,32 @@ canonical_icon!(icon_justify_r, "justify/r.svg");
 canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
+
+// ─── Start screen (navigation rows, project rows and their menu) ───
+
+canonical_icon!(icon_start_book, "start/book.svg");
+canonical_icon!(icon_start_folder, "start/folder.svg");
+canonical_icon!(icon_start_home, "start/home.svg");
+canonical_icon!(icon_start_key, "start/key.svg");
+canonical_icon!(icon_start_pin, "start/pin.svg");
+canonical_icon!(icon_start_remove, "start/remove.svg");
+
+// ─── Command Log (actions, sources, results; #2458) ────────────────
+
+canonical_icon!(icon_log_check, "command_log/check.svg");
+canonical_icon!(icon_log_copy, "command_log/copy.svg");
+canonical_icon!(icon_log_error, "command_log/error.svg");
+canonical_icon!(icon_log_jump, "command_log/jump.svg");
+canonical_icon!(icon_log_more, "command_log/more.svg");
+canonical_icon!(icon_log_mouse, "command_log/mouse.svg");
+canonical_icon!(icon_log_ok, "command_log/ok.svg");
+canonical_icon!(icon_log_pause, "command_log/pause.svg");
+canonical_icon!(icon_log_play, "command_log/play.svg");
+canonical_icon!(icon_log_plug, "command_log/plug.svg");
+canonical_icon!(icon_log_save, "command_log/save.svg");
+canonical_icon!(icon_log_terminal, "command_log/terminal.svg");
+canonical_icon!(icon_log_trash, "command_log/trash.svg");
+canonical_icon!(icon_log_warn, "command_log/warn.svg");
 
 #[cfg(test)]
 mod tests {

@@ -91,9 +91,17 @@ View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
 View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
+View/Command Log	item	Command Log	-	-	OpenCommandLogPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
+View/---	separator	-	-	-	-	-	-
+View/Window	submenu	Window	-	-	-	-	-
+View/Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
+View/Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
+View/Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
+View/Window/---	separator	-	-	-	-	-	-
+View/Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-
@@ -169,6 +177,17 @@ Tools/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematic
 Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Back Annotate Schematics...	item	Back Annotate Schematics...	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
+Tools/Reports	submenu	Reports	-	-	-	-	-
+Tools/Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
+Tools/Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
+Tools/Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
+Tools/Reports/---	separator	-	-	-	-	-	-
+Tools/Reports/Board Bill of Materials…	item	Board Bill of Materials…	-	-	BoardReportBom	01100000	cmd:board_report_bom
+Tools/Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	cmd:board_report_netlist
+Tools/Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
+Tools/Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
+Tools/Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
+Tools/Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
@@ -203,23 +222,6 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/Passive Network Calculator...	item	Passive Network Calculator...	-	-	OpenPassiveCalculator	11111111	always
 Tools/---	separator	-	-	-	-	-	-
 Tools/Preferences...	item	Preferences...	open_preferences	Mod+,	OpenPreferences	11111111	always
-Reports	menu	Reports	-	-	-	-	-
-Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
-Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
-Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
-Reports/---	separator	-	-	-	-	-	-
-Reports/Board Bill of Materials…	item	Board Bill of Materials…	-	-	BoardReportBom	01100000	cmd:board_report_bom
-Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	cmd:board_report_netlist
-Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
-Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
-Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
-Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
-Window	menu	Window	-	-	-	-	-
-Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
-Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
-Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
-Window/---	separator	-	-	-	-	-	-
-Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Help	menu	Help	-	-	-	-	-
 Help/About Signex	item	About Signex	-	-	OpenAbout	11111111	always
 Help/Documentation	item	Documentation	-	-	OpenDocumentation	11111111	always

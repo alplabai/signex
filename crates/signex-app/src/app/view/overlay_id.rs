@@ -59,7 +59,10 @@ pub(crate) enum OverlayId {
     SymbolContextMenu,
     TextEdit,
 
-    // Right-click menus, pickers, dock drag zones, floating panels.
+    // Dock drag zones and floating panels, then right-click menus and
+    // pickers: a menu opened from a floating panel paints over it (#2376).
+    DockDragZone,
+    FloatingPanels,
     ActiveBarMenu,
     ContextMenu,
     TabContextMenu,
@@ -71,9 +74,9 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
-    DockDragZone,
+    /// The status bar's Grid & Snap popover (m6).
+    GridSnapPopover,
     ComponentsRowDragLabel,
-    FloatingPanels,
 
     // Dialogs.
     Preferences,
@@ -148,7 +151,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -164,6 +167,10 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::SymbolEditorActiveBar,
     OverlayId::SymbolContextMenu,
     OverlayId::TextEdit,
+    // Below every menu, so a menu opened from a floating panel is whole and
+    // clickable (#2376).
+    OverlayId::DockDragZone,
+    OverlayId::FloatingPanels,
     OverlayId::ActiveBarMenu,
     OverlayId::ContextMenu,
     OverlayId::TabContextMenu,
@@ -173,9 +180,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
-    OverlayId::DockDragZone,
+    OverlayId::GridSnapPopover,
     OverlayId::ComponentsRowDragLabel,
-    OverlayId::FloatingPanels,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
@@ -302,6 +308,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
+        | OverlayId::GridSnapPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -519,6 +526,7 @@ impl Signex {
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
+            OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
@@ -591,6 +599,33 @@ mod tests {
             PAINT_ORDER.len(),
             "PAINT_ORDER lists an overlay more than once"
         );
+    }
+
+    /// #2376: a right-click menu opened from a floating panel drew under the
+    /// panel. Every menu and picker now paints after the floating panels and
+    /// the dock drop zones, which stay just under the panels they preview.
+    #[test]
+    fn every_menu_paints_above_the_floating_panels() {
+        let slot = |id| PAINT_ORDER.iter().position(|o| *o == id).expect("listed");
+        let panels = slot(OverlayId::FloatingPanels);
+        assert_eq!(slot(OverlayId::DockDragZone) + 1, panels);
+        for menu in [
+            OverlayId::ActiveBarMenu,
+            OverlayId::ContextMenu,
+            OverlayId::TabContextMenu,
+            OverlayId::ProjectTreeContextMenu,
+            OverlayId::ComponentsRowContextMenu,
+            OverlayId::StartRowContextMenu,
+            OverlayId::LayerTabContextMenu,
+            OverlayId::GridPicker,
+            OverlayId::PanelList,
+            OverlayId::GridSnapPopover,
+        ] {
+            assert!(
+                slot(menu) > panels,
+                "{menu:?} paints under the floating panels"
+            );
+        }
     }
 
     #[test]

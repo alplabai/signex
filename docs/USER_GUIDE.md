@@ -54,13 +54,34 @@ candidate such as `v1.0.0-rc.1` (or `v26.11.0-rc.1`) is a GitHub pre-release: ge
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with four
-buttons:
+Start Signex. With no document open you see the start screen. Its left
+column has:
 
-- **New Project**
-- **Open Project…** (with its keyboard shortcut shown next to it)
-- **Open Sample Project**
-- **Keyboard Shortcuts (F1)**
+- **New project**
+- **Open…** (with its keyboard shortcut shown next to it)
+- **Home**, **Projects** and **Libraries**, the three pages of the start
+  screen. **Projects** and **Libraries** show how many there are.
+- **Parts search**, greyed: it is not available yet.
+- **Keyboard Shortcuts**, with its key (`F1`) at the right.
+- A **Libraries** card at the bottom, which opens the Libraries page.
+
+**Home** has the **Sample project** card (press it or its **Open** button to
+open the bundled example), your pinned projects and up to five recent
+projects. When there are more, **Show all** opens the Projects page. Each
+project row shows a small preview of the project, its path and when you last
+opened it ("today 09:12", "yesterday" or a date; "—" when it is not known).
+Hover a row for **Pin** or **Unpin**; right-click it for the same actions.
+
+**Projects** lists every pinned and recent project. Type in **Filter by name
+or folder** to narrow the list, and use **All**, **Pinned** or **Missing** to
+pick which projects show. **Libraries** lists the libraries loaded for every
+project, with their scope and number of components; **Open** opens a library
+in the Library Browser (the Stock library opens read-only), **Add library…**
+adds a global library, and **Open Library Browser** opens the browser.
+
+When a project is open but no document is shown, the centre says so and
+offers **New sheet**, **New PCB** and **Project Options…**. A project with no
+documents yet says that instead.
 
 ![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
@@ -80,7 +101,7 @@ the active shortcut profile.
 
 ## 3. Create a project
 
-Choose **File ▸ New Project** (or press **New Project** on the start screen).
+Choose **File ▸ New Project** (or press **New project** on the start screen).
 
 The **New Project** dialog opens. Nothing is written until you press
 **Create project**.
@@ -139,8 +160,8 @@ project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** **Help ▸ Open Sample Project** (or the button on the
-> start screen) opens a small bundled design, a linear regulator. Signex copies
+> **Sample project.** **Help ▸ Open Sample Project** (or the **Sample project**
+> card on the start screen's Home page) opens a small bundled design, a linear regulator. Signex copies
 > it into your per-user configuration folder the first time, so your edits to it
 > are kept. A copy that is already there is never overwritten, so one opened
 > before an update keeps its old layout until you delete its folder under the
@@ -153,11 +174,24 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   middle of drawing a wire, where it cancels the wire.
 - **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer.
 - **Fit the sheet:** **View ▸ Fit All**.
-- **Grid:** the status bar at the bottom shows the grid size and whether
-  snapping is on (**Snap**) or off (**Free**). Click the grid value to show or
-  hide the grid, and click **Snap/Free** to switch snapping. **View ▸ Toggle
-  Grid** does the same as the grid click. Placed objects snap to the grid
-  while snapping is on.
+- **Grid:** the status bar at the bottom shows the grid size with its unit
+  (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
+  (**Snap off**). Click the grid value to show or hide the grid, and click the
+  Snap pill to switch snapping. **View ▸ Toggle Grid** does the same as the
+  grid click. Placed objects snap to the grid while snapping is on.
+  Right-click the grid value on a schematic to open **Grid & Snap**: Visible
+  Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
+  the two grids. These are the settings of **Properties ▸ Document Options ▸
+  General**, so a change in one place shows in the other. The small drawing at
+  the top shows what the settings do and redraws as you change them.
+- **Status bar:** at the left, the cursor's X and Y followed by the unit
+  (click the unit to step through mm, mil, in and um), then the grid and snap,
+  then the active tool and what it is doing. At the right, the selection
+  (click it to open Properties), the zoom and the **Panels** button. The
+  Panels list groups the panels under Project, Inspect, Verify, Library and
+  PCB; an open panel has a check and says where it is (left, right, bottom,
+  floating or window). Click a panel to open it, or to bring an open one
+  forward.
 
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
@@ -166,6 +200,44 @@ cycle it on a schematic. The menu item runs `next_grid`, so it works on a
 schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
+
+### Tabs and panels
+
+- **Document tabs:** right-click a tab for Close, Close All Other Documents,
+  Close Tabs to the Right, Close All Documents, Open In New Window, Copy Path
+  (the file's path on the clipboard) and Reveal in Projects (selects the file
+  in the Projects panel). When the tabs no longer fit, the strip ends in a
+  **+N** button; it lists the hidden tabs, and picking one brings it to the
+  front.
+- **Panel tabs:** right-click a panel's tab to float it (**Undock / Float**),
+  move it to another dock, or close it. While you drag a floating panel, the
+  docks it can go into are outlined and the one it would land in is filled.
+- **A panel in its own window:** drag a floating panel out of the main window.
+  Its title strip shows the panel and the document in view; **Dock back** (or
+  closing the window) puts the panel back in its dock.
+
+### The Command Log
+
+**View ▸ Command Log** opens a panel at the bottom that lists every command
+you ran in this session, newest last: from a menu, a key, a tool, the command
+palette or a context menu, and every command `signex-cli` or an agent sent to
+this window. Each row shows the time, where it came from (GUI, CLI or Agent),
+the command, its arguments, the result and how long it took. A failed command
+is tinted red; an undone one is struck through.
+
+- Type in the search field to find a command by name, id or argument; the
+  GUI, CLI and Agent socket chips and the **All / Failed / Undone** switch
+  narrow the list.
+- Click a row to see its arguments, the full error of a failed command
+  (**Copy error** copies it), and the command as a `signex-cli run` line
+  (**Copy as CLI**). **Replay** runs it again with the same arguments;
+  **Jump to** shows the part, net or point it named.
+- Zoom, pan and selection commands are hidden until **More ▸ Show view
+  commands** is on.
+- **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
+  **More** are at the right end of the filter bar. The log is kept for this
+  session only; nothing is written to disk unless you save it. Details:
+  `docs/COMMAND_LOG.md`.
 
 ## 5. Place a symbol
 
@@ -543,6 +615,14 @@ could not be opened and nothing else is opened in its place; if the symbol is
 gone but the sheet is still there, the sheet opens and the Messages panel says
 the item is no longer on it.
 
+The palette opens in the title bar's search field: you type in the field
+itself, its key cap reads `Esc` while the palette is open, and the results hang
+just under it. A typed query lists the group with the best match first (a net
+name puts **NETS** first); with nothing typed, commands come first. The footer
+says how many rows matched. On a narrow window the field becomes a square
+search button beside the theme toggle; click it, or press the palette's
+shortcut, and type in the box at the top of the results.
+
 ## 9. Run ERC
 
 ERC (electrical rules check) scans the design for wiring mistakes, such as
@@ -626,7 +706,7 @@ is nothing to lose at save time. Messages says once per opened sheet which file
 was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
-The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Reports**. Both need a schematic open.
+The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Tools ▸ Reports**. Both need a schematic open.
 Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
@@ -643,7 +723,7 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 **BOM (bill of materials)**
 
-1. Choose **Reports ▸ Bill of Materials…**.
+1. Choose **Tools ▸ Reports ▸ Bill of Materials…**.
 2. A preview of the table opens. Adjust the options and press **Export…**.
 3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
    (`.xlsx`) or HTML (`.html`).
@@ -655,7 +735,7 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+**Tools ▸ Reports** also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
@@ -1063,7 +1143,7 @@ whole panel.
 
 **Assembly drawings**
 
-- **Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
+- **Tools ▸ Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
   `<board>-assembly-top.svg` and `<board>-assembly-bottom.svg`.
 - For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
   / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
@@ -1078,7 +1158,7 @@ its holes and cutouts; each part is the body the 3D view shows.
 
 **Board reports**
 
-**Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
+**Tools ▸ Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
 and **Component Report…** show the board's tables; **Export Report as CSV…**
 saves the one in view.
 

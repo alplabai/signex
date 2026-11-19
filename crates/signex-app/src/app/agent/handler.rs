@@ -49,8 +49,23 @@ fn printable(text: &str) -> String {
 }
 
 impl Signex {
-    /// Route one agent message.
+    /// Route one agent message. The Command Log's footer follows the
+    /// listener's endpoint (#2458).
     pub(crate) fn dispatch_agent_message(&mut self, message: AgentMsg) -> Task<Message> {
+        let task = self.route_agent_message(message);
+        self.sync_command_log_endpoint();
+        task
+    }
+
+    /// Where the agent socket listens, while it does.
+    pub(crate) fn agent_listening_endpoint(&self) -> Option<String> {
+        self.agent
+            .endpoint
+            .clone()
+            .filter(|_| self.ui_state.agent_connections_enabled)
+    }
+
+    fn route_agent_message(&mut self, message: AgentMsg) -> Task<Message> {
         match message {
             AgentMsg::Request(call) => self.handle_agent_request(call),
             AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
@@ -449,6 +464,8 @@ impl Signex {
     }
 
     fn handle_agent_request(&mut self, call: AgentCall) -> Task<Message> {
+        // One Command Log row per request, whatever it runs inside (#2458).
+        let ticket = self.command_log_enter();
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
         let origin = super::Origin::agent(call.pid);
@@ -469,6 +486,16 @@ impl Signex {
         } else {
             Task::none()
         };
+        let waits = self.agent.deferred.is_some();
+        let input = &call.input;
+        self.log_agent_request(
+            ticket,
+            call.pid,
+            input,
+            id.as_deref(),
+            (status, reason),
+            waits,
+        );
         // A command waiting for its reads answers when they land (#2199), with
         // what its run then changed and logged.
         if let Some(ticket) = self.agent.deferred.take() {
@@ -482,7 +509,7 @@ impl Signex {
             self.agent.waiting.insert(ticket, waiting);
             return Task::batch([task, turned_away]);
         }
-        self.send_agent_reply(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
+        self.answer_agent(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
         Task::batch([task, turned_away])
     }
 
@@ -507,8 +534,25 @@ impl Signex {
         })
     }
 
-    /// Log one request and answer it on its connection with what it did.
+    /// Answer a request that waited for its reads; its Command Log row takes
+    /// the outcome now.
     pub(super) fn send_agent_reply(
+        &mut self,
+        id: Option<&str>,
+        pid: Option<u32>,
+        mark: Option<u64>,
+        before: &super::ChangeSnapshot,
+        verdict: Verdict,
+        reply: &super::AgentReply,
+    ) {
+        if let Some(id) = id {
+            self.settle_agent_log_row(pid, id, verdict.0, verdict.1.as_deref());
+        }
+        self.answer_agent(id, pid, mark, before, verdict, reply);
+    }
+
+    /// Log one request and answer it on its connection with what it did.
+    fn answer_agent(
         &self,
         id: Option<&str>,
         pid: Option<u32>,
@@ -733,5 +777,96 @@ fn status_text(status: Status) -> &'static str {
         Status::Answered => "answered",
         Status::Refused => "refused",
         Status::Failed => "failed",
+    }
+}
+
+#[cfg(test)]
+mod command_log_tests {
+    //! #2458: an agent request is one Command Log row, with its client.
+
+    use serde_json::{Value, json};
+
+    use super::super::Input;
+    use super::super::tests::{app_at_work, ask_raw_as};
+    use crate::app::Signex;
+    use crate::panels::command_log::{LogOutcome, LogRow, LogSource};
+
+    fn request(app: &Signex, id: &str, args: Value, client: Option<&str>) -> String {
+        let token = app.agent.token().expect("a token").as_str().to_string();
+        let mut line = json!({"token": token, "id": id, "args": args});
+        if let Some(client) = client {
+            line["client"] = json!(client);
+        }
+        line.to_string()
+    }
+
+    fn rows(app: &Signex) -> Vec<LogRow> {
+        app.ui_state.command_log.log.rows().cloned().collect()
+    }
+
+    #[test]
+    fn an_agent_request_is_one_row_naming_its_client_and_pid() {
+        let mut app = app_at_work();
+        let before = rows(&app).len();
+        let line = request(&app, "list_documents", json!({}), Some("bringup-script"));
+        let reply = ask_raw_as(&mut app, 4242, Input::Line(line));
+        assert_eq!(reply["status"], "answered", "{reply}");
+        let rows = rows(&app);
+        assert_eq!(rows.len(), before + 1, "{rows:?}");
+        let row = rows.last().unwrap();
+        assert_eq!(row.command, "list_documents");
+        assert_eq!(
+            row.source,
+            LogSource::Agent {
+                client: Some("bringup-script".to_string()),
+                pid: Some(4242)
+            }
+        );
+        assert_eq!(row.outcome, LogOutcome::Ok(None));
+    }
+
+    #[test]
+    fn the_cli_client_is_logged_as_the_cli() {
+        let mut app = app_at_work();
+        let line = request(&app, "list_documents", json!({}), Some("signex-cli"));
+        let _reply = ask_raw_as(&mut app, 4243, Input::Line(line));
+        let row = rows(&app).pop().expect("a row");
+        assert_eq!(row.source, LogSource::Cli { pid: Some(4243) });
+    }
+
+    #[test]
+    fn a_refused_request_is_a_failed_row_with_the_reason_and_its_arguments() {
+        let mut app = app_at_work();
+        let line = request(&app, "undo", json!({"at": [1, 2]}), None);
+        let reply = ask_raw_as(&mut app, 4244, Input::Line(line));
+        assert_eq!(reply["status"], "refused", "{reply}");
+        let row = rows(&app).pop().expect("a row");
+        assert_eq!(row.command, "undo");
+        assert_eq!(row.operands.get("at"), Some(&json!([1, 2])));
+        assert_eq!(
+            row.outcome,
+            LogOutcome::Failed(reply["reason"].as_str().unwrap_or_default().to_string())
+        );
+        assert_eq!(
+            row.source,
+            LogSource::Agent {
+                client: None,
+                pid: Some(4244)
+            }
+        );
+    }
+
+    #[test]
+    fn a_request_with_a_wrong_token_is_not_logged_and_no_token_reaches_the_log() {
+        let mut app = app_at_work();
+        let before = rows(&app).len();
+        let wrong = json!({"token": "not-the-token", "id": "list_documents", "args": {}});
+        let _reply = ask_raw_as(&mut app, 4245, Input::Line(wrong.to_string()));
+        assert_eq!(rows(&app).len(), before, "no command was let in");
+
+        let line = request(&app, "list_documents", json!({}), None);
+        let _reply = ask_raw_as(&mut app, 4245, Input::Line(line));
+        let token = app.agent.token().expect("a token").as_str().to_string();
+        assert!(!app.ui_state.command_log.log.to_jsonl().contains(&token));
     }
 }

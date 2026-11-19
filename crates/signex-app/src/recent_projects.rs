@@ -3,8 +3,12 @@
 //!
 //! Pure list logic only. Persistence lives next to the other preference
 //! readers/writers (`crate::fonts::read_recent_projects` /
-//! `write_recent_projects`), and the menu reads [`RecentProjects::entries`].
+//! `write_recent_projects_and_times`), and the menu reads
+//! [`RecentProjects::entries`]. Each entry also carries when it was last
+//! opened, which the Start screen shows; an entry saved before the times
+//! were kept has none.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// How many projects File ▸ Open Recent remembers.
@@ -14,6 +18,9 @@ pub const MAX_RECENT_PROJECTS: usize = 10;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecentProjects {
     entries: Vec<PathBuf>,
+    /// When each entry was last opened, in Unix seconds, keyed by the
+    /// entry's spelling. Holds listed entries only.
+    opened: BTreeMap<PathBuf, i64>,
 }
 
 /// Canonical spelling of `path`, used both to store and to compare.
@@ -49,7 +56,22 @@ impl RecentProjects {
             }
         }
         entries.truncate(MAX_RECENT_PROJECTS);
-        Self { entries }
+        Self {
+            entries,
+            opened: BTreeMap::new(),
+        }
+    }
+
+    /// Give the listed entries the persisted last-opened times (Unix
+    /// seconds), keyed by path as `prefs.json` spells them. A key that is
+    /// not listed is dropped; an entry without one keeps no time.
+    pub fn restore_opened(&mut self, opened: impl IntoIterator<Item = (PathBuf, i64)>) {
+        for (path, at) in opened {
+            let path = canonical(&path);
+            if self.entries.contains(&path) {
+                self.opened.insert(path, at);
+            }
+        }
     }
 
     /// Paths, most recent first.
@@ -57,21 +79,46 @@ impl RecentProjects {
         &self.entries
     }
 
-    /// Remember `path` as the most recent project. A path already listed
-    /// (under any spelling that canonicalises the same) moves to the front
-    /// instead of appearing twice; the oldest entry falls off past the cap.
+    /// When `path` (as spelled in the list) was last opened, in Unix
+    /// seconds; `None` when it is not listed or the time is not known.
+    pub fn opened_at(&self, path: &Path) -> Option<i64> {
+        self.opened.get(path).copied()
+    }
+
+    /// Every known last-opened time, for persisting beside the list.
+    pub fn opened_times(&self) -> &BTreeMap<PathBuf, i64> {
+        &self.opened
+    }
+
+    /// Remember `path` as the most recent project, opened now. A path
+    /// already listed (under any spelling that canonicalises the same)
+    /// moves to the front instead of appearing twice; the oldest entry
+    /// falls off past the cap.
     pub fn record(&mut self, path: &Path) {
+        self.record_at(path, chrono::Utc::now().timestamp());
+    }
+
+    /// [`Self::record`] with the time it was opened, in Unix seconds.
+    pub fn record_at(&mut self, path: &Path, opened_at: i64) {
         let path = canonical(path);
         self.entries.retain(|entry| *entry != path);
-        self.entries.insert(0, path);
+        self.entries.insert(0, path.clone());
         self.entries.truncate(MAX_RECENT_PROJECTS);
+        self.opened.insert(path, opened_at);
+        self.forget_unlisted_times();
     }
 
     /// Drop `path` (as spelled in the list). Returns whether it was there.
     pub fn remove(&mut self, path: &Path) -> bool {
         let before = self.entries.len();
         self.entries.retain(|entry| entry != path);
+        self.opened.remove(path);
         self.entries.len() != before
+    }
+
+    fn forget_unlisted_times(&mut self) {
+        let entries = &self.entries;
+        self.opened.retain(|path, _| entries.contains(path));
     }
 
     /// How the list spells `path` today. Read it before the file moves:
@@ -94,9 +141,13 @@ impl RecentProjects {
         if self.entries[at] == new {
             return false;
         }
+        let time = self.opened.remove(old);
         if self.entries.contains(&new) {
             self.entries.remove(at);
         } else {
+            if let Some(time) = time {
+                self.opened.insert(new.clone(), time);
+            }
             self.entries[at] = new;
         }
         true
@@ -105,6 +156,7 @@ impl RecentProjects {
     /// Forget every entry.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.opened.clear();
     }
 }
 
@@ -213,6 +265,54 @@ mod tests {
         recent.record(&b);
         assert!(recent.replace(&canonical(&a), &b));
         assert_eq!(recent.entries(), [canonical(&b)]);
+    }
+
+    /// The Start screen's time column: recording stamps the entry, the
+    /// stamp follows a rename and goes with the entry when it is removed,
+    /// falls off past the cap or the list is cleared.
+    #[test]
+    fn the_last_opened_time_follows_its_entry() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::default();
+        recent.record_at(&a, 100);
+        recent.record_at(&b, 200);
+        recent.record_at(&a, 300);
+        assert_eq!(recent.opened_at(&canonical(&a)), Some(300));
+        assert_eq!(recent.opened_at(&canonical(&b)), Some(200));
+
+        let key = RecentProjects::spelling_of(&b);
+        let renamed = dir.path().join("c.snxprj");
+        std::fs::rename(&b, &renamed).expect("rename");
+        assert!(recent.replace(&key, &renamed));
+        assert_eq!(recent.opened_at(&key), None);
+        assert_eq!(recent.opened_at(&canonical(&renamed)), Some(200));
+
+        assert!(recent.remove(&canonical(&a)));
+        assert_eq!(recent.opened_at(&canonical(&a)), None);
+        for i in 0..MAX_RECENT_PROJECTS {
+            recent.record_at(&project_in(dir.path(), &format!("p{i}.snxprj")), 400);
+        }
+        assert_eq!(recent.opened_at(&canonical(&renamed)), None, "fell off");
+        assert_eq!(recent.opened_times().len(), MAX_RECENT_PROJECTS);
+        recent.clear();
+        assert!(recent.opened_times().is_empty());
+    }
+
+    /// A settings file written before the times were kept reads with no
+    /// times; restored times attach to listed entries only.
+    #[test]
+    fn restored_times_attach_to_listed_entries_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let a = project_in(dir.path(), "a.snxprj");
+        let b = project_in(dir.path(), "b.snxprj");
+        let mut recent = RecentProjects::from_paths([a.clone(), b.clone()]);
+        assert_eq!(recent.opened_at(&canonical(&a)), None);
+        recent.restore_opened([(a.clone(), 42), (dir.path().join("gone.snxprj"), 7)]);
+        assert_eq!(recent.opened_at(&canonical(&a)), Some(42));
+        assert_eq!(recent.opened_at(&canonical(&b)), None);
+        assert_eq!(recent.opened_times().len(), 1);
     }
 
     #[test]

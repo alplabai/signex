@@ -231,6 +231,16 @@ impl Signex {
                 self.handle_altium_import_cancel();
                 Task::none()
             }
+            // `status_bar_message` names the window; a bare one is the main
+            // window's.
+            UiMsg::StatusBar(StatusBarRequest::GridReadoutRightClicked) => {
+                match self.ui_state.main_window_id {
+                    Some(main) => {
+                        self.dispatch_overlay_message(OverlayMsg::GridSnapPopoverToggled(main))
+                    }
+                    None => Task::none(),
+                }
+            }
             // On a board the same key steps the Snapping mode (#2353).
             UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {
                 self.cycle_pcb_snapping();
@@ -507,6 +517,10 @@ impl Signex {
             }
             (StatusBarRequest::ViewAngleSubmitted, _) => {
                 view_angle(window, ViewRotationMsg::AngleEntrySubmitted)
+            }
+            // The Grid & Snap popover opens over the window that asked.
+            (StatusBarRequest::GridReadoutRightClicked, _) => {
+                Message::Overlay(OverlayMsg::GridSnapPopoverToggled(window))
             }
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)

@@ -124,15 +124,18 @@ pub enum WindowMsg {
     /// The monitor size was read after a resize; together with the mode it
     /// tells a real fullscreen window from winit's stale flag mid-exit.
     MainWindowMonitorSizeRead(Option<iced::Size>),
-    /// Window ▸ Tile Horizontally / Tile Vertically (#2247, #2249): show the
+    /// View ▸ Window ▸ Tile Horizontally / Tile Vertically (#2247, #2249): show the
     /// main window's documents in tile panes and arrange the main window
     /// with the undocked document windows.
     TileRequested(crate::app::TileLayout),
-    /// Window ▸ Untile (#2249): back to one document in the main window.
+    /// View ▸ Window ▸ Untile (#2249): back to one document in the main window.
     UntileRequested,
     /// A press on an unfocused tile pane, carrying the index of the tab it
     /// shows: that document becomes the active one (#2249).
     TilePanePressed(usize),
+    /// Dock back was pressed in the title strip of the detached panel
+    /// window: the window closes, which re-docks the panel (m8).
+    DetachedPanelDockBackPressed(iced::window::Id),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under
@@ -176,6 +179,11 @@ pub enum CommandPaletteMsg {
             Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
         >,
     },
+    /// The title-bar search field was clicked while the palette is open in
+    /// the main window. The palette's backdrop leaves the field undimmed but
+    /// takes the click, so the field keeps the focus and the palette stays
+    /// open.
+    FieldClicked,
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -278,6 +286,13 @@ pub enum OverlayMsg {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// The Grid read-out of `window`'s status bar was right-clicked: the
+    /// Grid & Snap popover opens there, or closes when it is open there.
+    GridSnapPopoverToggled(iced::window::Id),
+    /// A press outside the Grid & Snap popover closed it.
+    GridSnapPopoverDismissed,
+    /// The pointer moved over the popover's drawing or a Pitch row.
+    GridSnapPreviewHovered(signex_widgets::property_illustration::IllustrationMsg),
 }
 
 /// What a finished `Mod` move of a custom shortcut profile hands back.

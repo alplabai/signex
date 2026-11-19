@@ -1,6 +1,7 @@
-//! Right-click menu of a Start screen project row (#2305): open the
-//! project, and pin or unpin it; a pinned project missing on disk offers
-//! Remove instead.
+//! Right-click menu of a Start screen project row (#2305, mock m3): open
+//! the project, and pin or unpin it; a pinned project missing on disk
+//! offers Remove instead. Every row has its glyph in the icon column (Open
+//! a folder, Pin and Unpin a pin, Remove a cross in the neutral ink).
 
 use super::*;
 
@@ -10,45 +11,53 @@ use super::items::dd_msg;
 use crate::pinned_projects::PinnedProjects;
 use crate::start_screen::{StartScreenMsg, message};
 use signex_i18n::{I18n, ids};
+use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
-/// Menu rows for `path`: pure data, so the labels and messages are tested
-/// without a renderer.
+/// Menu rows for `path`: pure data, so the labels, glyphs and messages are
+/// tested without a renderer.
 pub(super) fn start_row_menu_entries(
     i18n: &I18n,
+    tid: ThemeId,
     path: &Path,
     pinned: &PinnedProjects,
 ) -> Vec<DropdownEntry<Message>> {
     let label = |id| i18n.message(id, &[]).into_string();
     let owned = path.to_path_buf();
-    if !pinned.contains(path) {
-        return vec![
-            dd_msg(
-                None,
-                &label(ids::START_OPEN_PROJECT),
-                "",
-                message(StartScreenMsg::RecentProjectClicked(owned.clone())),
-            ),
-            dd_msg(
-                None,
-                &label(ids::START_PIN),
-                "",
-                message(StartScreenMsg::ProjectPinned(owned)),
-            ),
-        ];
-    }
-    let unpin = message(StartScreenMsg::ProjectUnpinned(owned.clone()));
-    if pinned.is_missing(path) {
-        return vec![dd_msg(None, &label(ids::START_REMOVE), "", unpin)];
-    }
-    vec![
+    let open = |event| {
         dd_msg(
-            None,
+            Some(crate::icons::icon_start_folder(tid)),
             &label(ids::START_OPEN_PROJECT),
             "",
-            message(StartScreenMsg::PinnedProjectClicked(owned)),
-        ),
-        dd_msg(None, &label(ids::START_UNPIN), "", unpin),
+            message(event),
+        )
+    };
+    let pin_row = |id, event| {
+        dd_msg(
+            Some(crate::icons::icon_start_pin(tid)),
+            &label(id),
+            "",
+            message(event),
+        )
+    };
+    if !pinned.contains(path) {
+        return vec![
+            open(StartScreenMsg::RecentProjectClicked(owned.clone())),
+            pin_row(ids::START_PIN, StartScreenMsg::ProjectPinned(owned)),
+        ];
+    }
+    let unpin = StartScreenMsg::ProjectUnpinned(owned.clone());
+    if pinned.is_missing(path) {
+        return vec![dd_msg(
+            Some(crate::icons::icon_start_remove(tid)),
+            &label(ids::START_REMOVE),
+            "",
+            message(unpin),
+        )];
+    }
+    vec![
+        open(StartScreenMsg::PinnedProjectClicked(owned)),
+        pin_row(ids::START_UNPIN, unpin),
     ]
 }
 
@@ -74,6 +83,7 @@ impl Signex {
         let menu = super::placement::menu_card(
             start_row_menu_entries(
                 &self.ui_state.i18n,
+                self.ui_state.effective_theme_id(),
                 &menu_ctx.path,
                 &self.ui_state.pinned_projects,
             ),
@@ -93,32 +103,48 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn rows(path: &Path, pinned: &PinnedProjects) -> Vec<(String, Message)> {
-        start_row_menu_entries(&I18n::en_us(), path, pinned)
+    const TID: ThemeId = ThemeId::GraphiteLight;
+
+    fn items(path: &Path, pinned: &PinnedProjects) -> Vec<DropdownItemFacts> {
+        start_row_menu_entries(&I18n::en_us(), TID, path, pinned)
             .into_iter()
             .filter_map(|e| match e {
-                DropdownEntry::Item(item) => Some((item.label, item.on_press?)),
+                DropdownEntry::Item(item) => Some(DropdownItemFacts {
+                    label: item.label,
+                    icon: item.icon,
+                    message: item.on_press?,
+                }),
                 _ => None,
             })
             .collect()
     }
 
-    fn labels(rows: &[(String, Message)]) -> Vec<&str> {
-        rows.iter().map(|(label, _)| label.as_str()).collect()
+    struct DropdownItemFacts {
+        label: String,
+        icon: Option<iced::widget::svg::Handle>,
+        message: Message,
+    }
+
+    fn labels(rows: &[DropdownItemFacts]) -> Vec<&str> {
+        rows.iter().map(|row| row.label.as_str()).collect()
+    }
+
+    fn icons(rows: &[DropdownItemFacts]) -> Vec<Option<iced::widget::svg::Handle>> {
+        rows.iter().map(|row| row.icon.clone()).collect()
     }
 
     #[test]
     fn a_recent_row_offers_open_and_pin() {
         let path = PathBuf::from("a.snxprj");
-        let rows = rows(&path, &PinnedProjects::default());
+        let rows = items(&path, &PinnedProjects::default());
         assert_eq!(labels(&rows), ["Open", "Pin"]);
         // Open goes through the Start screen so the menu closes first.
         assert!(matches!(
-            &rows[0].1,
+            &rows[0].message,
             Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::RecentProjectClicked(p))) if *p == path
         ));
         assert!(matches!(
-            &rows[1].1,
+            &rows[1].message,
             Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::ProjectPinned(p))) if *p == path
         ));
     }
@@ -128,19 +154,37 @@ mod tests {
         let path = PathBuf::from("a.snxprj");
         let mut pinned = PinnedProjects::default();
         pinned.pin(&path);
-        let present = rows(&path, &pinned);
+        let present = items(&path, &pinned);
         assert_eq!(labels(&present), ["Open", "Unpin"]);
         assert!(matches!(
-            &present[0].1,
+            &present[0].message,
             Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::PinnedProjectClicked(p))) if *p == path
         ));
 
         pinned.set_missing(&path, true);
-        let missing = rows(&path, &pinned);
+        let missing = items(&path, &pinned);
         assert_eq!(labels(&missing), ["Remove"]);
         assert!(matches!(
-            &missing[0].1,
+            &missing[0].message,
             Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::ProjectUnpinned(p))) if *p == path
         ));
+    }
+
+    /// m3: every row has its glyph in the icon column, so the labels line
+    /// up: Open a folder, Pin and Unpin a pin, Remove a cross.
+    #[test]
+    fn every_menu_row_has_its_glyph() {
+        let path = PathBuf::from("a.snxprj");
+        let folder = Some(crate::icons::icon_start_folder(TID));
+        let pin = Some(crate::icons::icon_start_pin(TID));
+        let mut pinned = PinnedProjects::default();
+        assert_eq!(icons(&items(&path, &pinned)), [folder.clone(), pin.clone()]);
+        pinned.pin(&path);
+        assert_eq!(icons(&items(&path, &pinned)), [folder, pin]);
+        pinned.set_missing(&path, true);
+        assert_eq!(
+            icons(&items(&path, &pinned)),
+            [Some(crate::icons::icon_start_remove(TID))]
+        );
     }
 }

@@ -66,6 +66,7 @@ impl Signex {
         self.ui_state.preferences_keymap_search.clear();
         self.ui_state.preferences_nav_search.clear();
         self.ui_state.panel_list_open = false;
+        self.ui_state.grid_snap_popover = None;
         self.interaction_state.context_menu = None;
         // Open Preferences as a separate OS window so the user can move
         // it around / drag it onto a second monitor. Same pattern as

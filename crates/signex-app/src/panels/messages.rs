@@ -717,6 +717,8 @@ pub enum PanelMsg {
     SwitchFootprintChoice(uuid::Uuid, String),
     /// The Net Inspector panel (#1269).
     NetInspector(super::NetInspectorMsg),
+    /// The Command Log panel (#2458).
+    CommandLog(super::CommandLogMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

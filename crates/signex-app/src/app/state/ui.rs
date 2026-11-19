@@ -142,6 +142,10 @@ pub struct UiState {
     /// menu are placed inside it, not inside the main window (#1910).
     pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
+    /// The Grid & Snap popover a right-click on a sheet's Grid read-out
+    /// opens (m6), with the window it belongs to; `None` while closed. Boxed
+    /// to keep `UiState` under its size ceiling.
+    pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu
@@ -162,6 +166,9 @@ pub struct UiState {
     /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
     /// at boot and saved on every pin and unpin.
     pub pinned_projects: crate::pinned_projects::PinnedProjects,
+    /// The Start screen project thumbnails (review #1): read from the cache
+    /// at boot, rebuilt after a save.
+    pub project_thumbnails: crate::project_thumbnail::ProjectThumbnails,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first
@@ -678,7 +685,7 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
-    /// Window ▸ Tile: the main window shows its documents in panes in this
+    /// View ▸ Window ▸ Tile: the main window shows its documents in panes in this
     /// layout (#2249); `None` shows the active document alone.
     pub document_tiling: Option<crate::app::TileLayout>,
     /// Calculator state, owned here so the modal view stays a pure
@@ -690,6 +697,15 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// The Start screen's page and its filters, back to Home once the
+    /// screen goes away. Boxed: a pointer of the size budget (#2412).
+    pub start_screen: Box<crate::start_screen::StartScreenState>,
+    /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
+    /// the main window's strip has no room for.
+    pub tab_overflow_menu_open: bool,
+    /// The Command Log (#2458): every command this session ran and what its
+    /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
+    pub command_log: Box<crate::panels::CommandLogState>,
 }
 
 impl UiState {

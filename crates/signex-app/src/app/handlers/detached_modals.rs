@@ -321,6 +321,7 @@ impl Signex {
     fn close_transient_ui_for_lock(&mut self) {
         self.ui_state.command_palette.open = false;
         self.ui_state.panel_list_open = false;
+        self.ui_state.grid_snap_popover = None;
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
