@@ -135,7 +135,7 @@ pub(super) fn results<'a>(
         for (n, group) in groups.into_iter().enumerate() {
             list = list.push(group_header(&group, n == 0, theme_tokens, i18n));
             for row in group.rows {
-                list = list.push(result_row(state, row, query.as_ref(), theme_tokens));
+                list = list.push(result_row(state, row, query.as_ref(), theme_tokens, i18n));
             }
         }
         scrollable(list)
@@ -208,6 +208,7 @@ fn result_row<'a>(
     row_data: ResultRow,
     query: Option<&FindQuery>,
     theme_tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, FindReplaceMsg> {
     let r = tokens::resolve(theme_tokens);
     let index = row_data.index;
@@ -254,8 +255,10 @@ fn result_row<'a>(
         let after = query.replace_all(&row_data.text, &state.replacement);
         if after != row_data.text {
             line = line.push(
-                // raw: an arrow glyph, not language.
-                text(raw(" \u{2192} ")).size(TS.body).color(r.ink4).boxed(),
+                text(t!(i18n, ids::FIND_REPLACE_ARROW))
+                    .size(TS.body)
+                    .color(r.ink4)
+                    .boxed(),
             );
             line = line.push(
                 text(UserText::new(after))
@@ -332,11 +335,13 @@ fn result_row<'a>(
 pub(super) fn skipped_line<'a>(
     note: &'a str,
     theme_tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, FindReplaceMsg> {
     let warn = ti(theme_tokens.warning);
     row![
-        // raw: a warning glyph, not language.
-        text(raw("\u{26A0}")).size(TS.caption).color(warn),
+        text(t!(i18n, ids::FIND_SKIPPED_GLYPH))
+            .size(TS.caption)
+            .color(warn),
         // raw: the skipped-sheets note is worded by the project scan (#2061).
         text(raw(note.to_string())).size(TS.caption).color(warn),
     ]

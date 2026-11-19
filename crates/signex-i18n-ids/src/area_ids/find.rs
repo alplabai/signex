@@ -26,6 +26,11 @@ define_ids! {
     FIND_MATCH_POSITION = "find-match-position";
     FIND_REPLACE_INCLUDED = "find-replace-included";
     FIND_ONE_UNDO_STEP = "find-one-undo-step";
+    FIND_MATCH_CASE_FACE = "find-match-case-face";
+    FIND_WHOLE_WORD_FACE = "find-whole-word-face";
+    FIND_REGEX_FACE = "find-regex-face";
+    FIND_REPLACE_ARROW = "find-replace-arrow";
+    FIND_SKIPPED_GLYPH = "find-skipped-glyph";
     FIND_SIMILAR_TITLE = "find-similar-title";
     FIND_SIMILAR_COL_PROPERTY = "find-similar-col-property";
     FIND_SIMILAR_COL_SEED = "find-similar-col-seed";

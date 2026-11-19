@@ -5,7 +5,7 @@ use iced::widget::{Row, column, container, row, text_input as iced_text_input};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, button, raw, segmented, text, text_input};
+use signex_widgets::{Label, button, segmented, text, text_input};
 
 use super::{LABEL_W, SP, TS, segmented_style};
 use crate::find_replace::{FindReplaceMsg, FindReplaceState, FindScope};
@@ -144,7 +144,7 @@ fn find_field<'a>(
         line = line.push(
             row![
                 toggle(
-                    "Aa",
+                    ids::FIND_MATCH_CASE_FACE,
                     ids::FIND_MATCH_CASE,
                     options.match_case,
                     FindReplaceMsg::MatchCaseToggled,
@@ -152,7 +152,7 @@ fn find_field<'a>(
                     i18n,
                 ),
                 toggle(
-                    "ab",
+                    ids::FIND_WHOLE_WORD_FACE,
                     ids::FIND_WHOLE_WORD,
                     options.whole_word,
                     FindReplaceMsg::WholeWordToggled,
@@ -160,7 +160,7 @@ fn find_field<'a>(
                     i18n,
                 ),
                 toggle(
-                    ".*",
+                    ids::FIND_REGEX_FACE,
                     ids::FIND_REGEX,
                     options.regex,
                     FindReplaceMsg::RegexToggled,
@@ -198,11 +198,10 @@ pub(super) fn pill_text(state: &FindReplaceState, i18n: &I18n) -> Option<(Locali
     ))
 }
 
-/// One match toggle: a short glyph label, the accent-soft fill when on, its
-/// name as the tooltip. The glyph ("Aa", "ab", ".*") is a symbol, not
-/// language.
+/// One match toggle: a short face ("Aa", "ab", ".*"), the accent-soft fill
+/// when on, its name as the tooltip.
 fn toggle<'a>(
-    glyph: &'static str,
+    face: MessageId,
     name: MessageId,
     on: bool,
     message: FindReplaceMsg,
@@ -217,8 +216,7 @@ fn toggle<'a>(
     };
     let hover = tokens::hover_overlay(theme_tokens);
     let side = TS.body * 1.75;
-    // raw: a symbol, not language.
-    let face = text(raw(glyph))
+    let face = text(t!(i18n, face))
         .size(TS.caption)
         .color(ink)
         .font(super::results::mono())

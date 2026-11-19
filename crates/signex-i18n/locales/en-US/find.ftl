@@ -39,6 +39,15 @@ find-match-position = Match { $current } of { $total }
 find-replace-included = Replace { $included } of { $total }
 # Footer note under the match position, in Replace mode.
 find-one-undo-step = Replace All is one undo step
+# Faces of the three match toggles beside the Find field; their names are
+# the tooltips (find-match-case, find-whole-word, find-regex).
+find-match-case-face = Aa
+find-whole-word-face = ab
+find-regex-face = .*
+# Between a result's text and its text after the replace.
+find-replace-arrow = {" "}→{" "}
+# Before the note naming the sheets a project search skipped.
+find-skipped-glyph = ⚠
 
 ## Find Similar Objects
 find-similar-title = Find Similar Objects

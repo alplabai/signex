@@ -103,7 +103,7 @@ fn build<'a>(
     let list = results::results(state, theme_tokens, i18n);
     let mut body = column![list].spacing(SP.s).height(Length::Fill);
     if let Some(note) = &state.skipped_note {
-        body = body.push(results::skipped_line(note, theme_tokens));
+        body = body.push(results::skipped_line(note, theme_tokens, i18n));
     }
 
     let header: Element<'a, FindReplaceMsg> = if windowed {
