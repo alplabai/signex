@@ -11,6 +11,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
+pub mod annotations;
 pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
@@ -110,6 +111,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
+pub use annotations::{AnnotationsMsg, AnnotationsState, AnnotationsView};
 pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
@@ -228,6 +230,9 @@ pub enum PanelKind {
     /// netlist, filterable, each expandable to its pins, labels, ports and
     /// sheets; a click goes to the member (#1269).
     NetInspector,
+    /// Every annotation block of the project's Design Notebook files,
+    /// filterable; a reference chip goes to its part or net (#165).
+    Annotations,
 }
 
 /// All available panel kinds for the panel list button.
@@ -236,6 +241,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Components,
     PanelKind::Library,
     PanelKind::Navigator,
+    PanelKind::Annotations,
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
@@ -317,6 +323,7 @@ impl PanelKind {
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
+            PanelKind::Annotations => ids::PANELS_KIND_ANNOTATIONS,
         }
     }
 
@@ -349,6 +356,7 @@ impl PanelKind {
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
+            PanelKind::Annotations => "Annotations",
         }
     }
 }
@@ -413,6 +421,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
+        PanelKind::Annotations => return annotations::view(ctx),
     };
 
     panel_scrollable(content).boxed()

@@ -164,6 +164,9 @@ impl Signex {
         // An Update PCB waiting for its board starts reading once it opened.
         tasks.push(self.sync_update_pcb());
         tasks.push(self.sync_back_annotate());
+        // The Annotations panel reads the notebook when shown or when the
+        // project in view changes (#165).
+        tasks.push(self.sync_annotations_panel());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

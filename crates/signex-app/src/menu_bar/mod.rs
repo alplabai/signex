@@ -107,6 +107,8 @@ pub enum MenuMessage {
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
+    /// View ▸ Annotations: show the Annotations panel (#165).
+    OpenAnnotationsPanel,
     OpenPropertiesPanel,
     /// Open the active project's options tab.
     OpenProjectOptions,
@@ -183,6 +185,7 @@ impl MenuMessage {
             Self::OpenProjectsPanel
                 | Self::OpenComponentsPanel
                 | Self::OpenNavigatorPanel
+                | Self::OpenAnnotationsPanel
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel

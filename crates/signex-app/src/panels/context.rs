@@ -110,6 +110,9 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Annotations panel's rows (#165); built in `update` whenever its
+    /// scan or filters change.
+    pub annotations: std::sync::Arc<super::AnnotationsView>,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).

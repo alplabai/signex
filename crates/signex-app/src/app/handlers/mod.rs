@@ -1,4 +1,5 @@
 pub mod active_bar;
+pub(crate) mod annotations;
 pub mod autosave;
 pub mod autosave_pcb;
 pub mod autosave_primitives;

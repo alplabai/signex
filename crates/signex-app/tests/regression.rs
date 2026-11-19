@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #165 — the Annotations panel and its notebook scan.
+#[path = "regression/annotations_panel.rs"]
+mod annotations_panel;

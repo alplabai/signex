@@ -684,6 +684,8 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            // Kept in step with the scan and filters by `handlers/annotations.rs`.
+            annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,
