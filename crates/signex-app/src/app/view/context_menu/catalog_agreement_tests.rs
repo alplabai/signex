@@ -28,8 +28,11 @@ use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
+use super::project_tree::library::library_add_new_entries;
+use super::project_tree::planned::planned_entries;
 use super::submenu::{
-    align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
+    add_new_entries, align_entries, arrange_entries, part_actions_entries, place_entries,
+    sheet_actions_entries,
 };
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -88,13 +91,20 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Project Releaser...", "planned, tree-addressed"),
     ("Share...", "planned, tree-addressed"),
     ("Enable Version Control...", "tree-addressed"),
-    ("Add New ▸ Component", "library-node action"),
-    ("Add New ▸ Symbol Library", "library-node action"),
-    ("Add New ▸ Footprint Library", "library-node action"),
+    // The library node's Add New flyout (#20).
+    ("Component", "library-node action"),
+    ("Symbol Library", "library-node or project action"),
+    ("Footprint Library", "library-node action"),
     ("Refresh All Pricing", "library-node action"),
     ("Remove from Project...", "tree-addressed"),
-    ("Remove from Project", "tree-addressed"),
     ("Open", "tree-addressed"),
+    // The project root's Add New to Project flyout.
+    ("Schematic", "tree-addressed"),
+    ("PCB", "tree-addressed"),
+    ("Component Library", "project action"),
+    ("PCB Library", "tree-addressed"),
+    ("Design Notebook", "planned, tree-addressed"),
+    ("Output Job", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),
@@ -367,6 +377,19 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             &flyout_ctx,
             &mut walk,
         );
+        // The project tree's flyouts (#20).
+        let i18n = signex_i18n::I18n::en_us_ref();
+        let tree_flyouts = [
+            (
+                "add new to project flyout",
+                add_new_entries(i18n, TID, vec!["proj".to_string()]),
+            ),
+            ("planned flyout", planned_entries(i18n, TID)),
+            ("library add new flyout", library_add_new_entries(i18n, TID)),
+        ];
+        for (name, rows) in tree_flyouts {
+            check_rows(name, &rows, &app, &app.command_context(None), &mut walk);
+        }
 
         for has_schematic in [false, true] {
             let mut app = app_with_keymap(profile);

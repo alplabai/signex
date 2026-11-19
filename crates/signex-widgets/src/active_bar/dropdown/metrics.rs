@@ -59,6 +59,12 @@ pub struct MenuMetrics {
     pub min_width: f32,
     /// Widest fitted card.
     pub max_width: f32,
+    /// Text size of a row badge pill.
+    pub badge_size: f32,
+    /// Horizontal padding inside a badge pill.
+    pub badge_pad_x: f32,
+    /// Height of a badge pill.
+    pub badge_height: f32,
 }
 
 impl MenuMetrics {
@@ -86,6 +92,9 @@ impl MenuMetrics {
         separator_margin: 4.0,
         min_width: 200.0,
         max_width: 320.0,
+        badge_size: MENU_SHORTCUT_SIZE,
+        badge_pad_x: 6.0,
+        badge_height: 15.0,
     };
 
     /// Height of one item row; `has_icons` is whether the menu has an icon
@@ -155,8 +164,8 @@ impl MenuMetrics {
     /// Width a card of `entries` needs, clamped to this look's fitted range
     /// and to `max_w`. It mirrors the row layout: panel padding, row
     /// padding, the icon column when a row has an icon, the label, the gap
-    /// before the shortcut column, the shortcut, the check and the chevron
-    /// column. Labels are measured in `ui_family`, the face the menu draws
+    /// before the shortcut column, the badge pill, the shortcut, the check
+    /// and the chevron column. Labels are measured in `ui_family`, the face the menu draws
     /// in, and shortcuts in the face their column draws in. `Custom` rows
     /// are not measured; a caller with custom rows sizes for them itself.
     pub fn fitted_width<M: Clone>(
@@ -185,6 +194,12 @@ impl MenuMetrics {
                     w += self.row_spacing + self.cluster_gap;
                     if let Some(s) = &item.shortcut {
                         w += self.row_spacing + advance(s, self.shortcut_size, shortcut_family);
+                    }
+                    if let Some(badge) = &item.badge {
+                        // The pill's text, its padding and its 1 px outline.
+                        w += self.row_spacing
+                            + advance(badge.as_str(), self.badge_size, family)
+                            + 2.0 * (self.badge_pad_x + 1.0);
                     }
                     if item.checked {
                         w += self.row_spacing + self.check_size;
