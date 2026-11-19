@@ -164,7 +164,7 @@ pub fn compare_with_board(
         };
         objects::compare_layer(&input, &mut differences);
     }
-    differences.sort_by(|a, b| (a.layer, a.kind, a.at).cmp(&(b.layer, b.kind, b.at)));
+    differences.sort_by_key(|d| (d.layer, d.kind, d.at));
     overlay.copper = reference::copper_shapes(&reference);
     Comparison {
         matching,

@@ -159,8 +159,11 @@ fn rotation(args: &[f64], index: usize) -> f64 {
     args.get(index).copied().unwrap_or(0.0)
 }
 
+/// Draws one macro primitive from its arguments.
+type PrimitiveBuilder = fn(&[f64], Scale, &mut Vec<Shape>) -> Result<(), Fault>;
+
 fn primitive(code: u32, args: &[f64], scale: Scale, out: &mut Vec<Shape>) -> Result<(), Fault> {
-    let builder: fn(&[f64], Scale, &mut Vec<Shape>) -> Result<(), Fault> = match code {
+    let builder: PrimitiveBuilder = match code {
         1 => circle,
         2 | 20 => vector_line,
         21 => centre_line,

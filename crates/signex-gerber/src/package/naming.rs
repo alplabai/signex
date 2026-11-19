@@ -144,7 +144,7 @@ fn copper_count(layers: &[PackageLayer], guesses: &[Guess], job: Option<u32>) ->
         _ => None,
     });
     let highest = known.chain(guessed).max().unwrap_or(1);
-    let bottom_unnumbered = guesses.iter().any(|g| *g == Guess::BottomCopper);
+    let bottom_unnumbered = guesses.contains(&Guess::BottomCopper);
     if bottom_unnumbered && !has_bottom_copper(layers) {
         highest.saturating_add(1)
     } else {
