@@ -410,13 +410,40 @@ fn a_held_insert_mid_wire_adds_one_vertex() {
 #[test]
 fn a_held_option_i_on_macos_adds_one_vertex() {
     let mut app = app_with_tool(Tool::Wire);
-    let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-in profiles");
-    let altium = set.profile("altium").expect("the Altium profile");
-    app.ui_state.active_keymap =
-        std::sync::Arc::new(CompiledKeymap::compile_for(altium, Platform::MacOs));
+    app.ui_state.active_keymap = altium_on_macos();
     assert_held_key_adds_one_vertex(app, |repeat| {
         press(Key::Character("i".into()), Code::KeyI, Held::ALT, repeat)
     });
+}
+
+/// The built-in Altium profile as macOS compiles it.
+fn altium_on_macos() -> std::sync::Arc<CompiledKeymap> {
+    let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-in profiles");
+    let altium = set.profile("altium").expect("the Altium profile");
+    std::sync::Arc::new(CompiledKeymap::compile_for(altium, Platform::MacOs))
+}
+
+/// The Altium profile on macOS also cycles the drag wiring mode on ⇧Tab
+/// (macOS may take ⌃Space); held, it steps the mode once.
+#[test]
+fn a_held_shift_tab_on_macos_steps_the_wiring_mode_once() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.active_keymap = altium_on_macos();
+    let shift_tab = |repeat| press(Key::Named(Named::Tab), Code::Tab, Held::SHIFT, repeat);
+    send(&mut app, shift_tab(false));
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        DragWiringMode::HorizontalFirst
+    );
+    for _ in 0..REPEATS {
+        send(&mut app, shift_tab(true));
+        assert_eq!(
+            app.interaction_state.drag_wiring,
+            DragWiringMode::HorizontalFirst,
+            "held: once"
+        );
+    }
 }
 
 fn wire_count(app: &Signex) -> usize {
