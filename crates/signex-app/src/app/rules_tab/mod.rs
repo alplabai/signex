@@ -266,6 +266,14 @@ pub struct RulesTabState {
     pub matrix_open: Option<(String, String)>,
     pub set_form: SetForm,
     pub preview: Option<PresetPreview>,
+    /// The class matrix widget's view state: the classes in order, the
+    /// pinned cell and the cell being typed in.
+    pub matrix: signex_widgets::constraint_grid::ClassMatrix,
+    /// The matrix cell or object pair under the pointer, for the preview.
+    pub matrix_hover: Option<CellKey>,
+    /// The matrix cell or object pair the preview stays on; a value typed
+    /// on the drawing writes it.
+    pub matrix_pin: Option<CellKey>,
 }
 
 /// Messages of a Rules tab, under `ProjectMsg::Rules`. Each names its
@@ -413,5 +421,28 @@ pub enum RulesTabMsg {
     },
     PresetDismissed {
         project_id: ProjectId,
+    },
+    /// The class matrix widget spoke: a cell pressed, typed in, submitted,
+    /// cancelled or cleared.
+    MatrixActed {
+        project_id: ProjectId,
+        msg: signex_widgets::constraint_grid::MatrixMessage,
+    },
+    /// The pointer moved onto a matrix cell or an object-pair row; `None`
+    /// once it left them.
+    MatrixHovered {
+        project_id: ProjectId,
+        key: Option<CellKey>,
+    },
+    /// An object-pair row was clicked: the preview stays on it.
+    MatrixPairPinned {
+        project_id: ProjectId,
+        key: CellKey,
+    },
+    /// Text was typed in an object-pair row of the open cell.
+    MatrixPairTyped {
+        project_id: ProjectId,
+        key: CellKey,
+        text: String,
     },
 }

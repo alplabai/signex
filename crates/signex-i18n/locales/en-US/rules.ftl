@@ -236,3 +236,39 @@ rules-preview-note-mask = Dashed: the mask opening around each pad
 rules-preview-note-mask-merged = Openings merge: no mask between the pads
 rules-preview-note-paste = A negative expansion shrinks the aperture
 rules-preview-note-courtyard = Dashed: courtyards. Parts are not to scale; the gap is.
+# Clearance matrix (#2530): the caption, the legend, the object-pair card
+# and the preview row.
+rules-matrix-caption = One clearance per pair of net classes. A grey value is what the pair needs without a cell of its own. Type in a cell to set it; click it to open its object pairs.
+rules-matrix-clear-cell = Clear: use the fallback
+rules-matrix-clear-pair = Clear: use the All objects value
+rules-matrix-fallback-tip = No value of its own: what the pair needs without a cell
+rules-matrix-legend-written = written
+rules-matrix-legend-fallback = fallback
+rules-matrix-legend-mirror = mirror half
+rules-matrix-col-pair = Pair
+rules-matrix-col-clearance = Clearance
+rules-matrix-pair = { $a } – { $b }
+rules-object-track = Track
+rules-object-pad = Pad
+rules-object-via = Via
+rules-object-pour = Pour
+rules-object-any = Any
+rules-matrix-preview = PREVIEW
+rules-matrix-preview-none = Hover a cell or an object pair to draw it.
+rules-matrix-preview-bare = { $a } ↔ { $b }
+rules-matrix-preview-classes = Class pair { $a } ↔ { $b } · { $value } mm
+rules-matrix-preview-objects-written = { $a } ↔ { $b } · { $pair } · { $value } mm (written)
+rules-matrix-preview-objects-fallback = { $a } ↔ { $b } · { $pair } · { $value } mm (from All objects)
+rules-matrix-preview-about = The preview draws the hovered cell with its value and the dashed clearance zone. A class pair is drawn as two tracks. An object pair draws those two objects (track, pad, via, pour). It redraws as you type a value, and the values on the drawing are editable too.
+
+# Presets panel (#2530): tier cards and the preview pills.
+rules-presets-close = Close presets
+rules-preset-spec = clearance { $clearance } · width { $width } · drill { $drill } · annular { $annular } mm
+rules-preset-pill-added = Added
+rules-preset-pill-changed = Changed
+rules-preset-pill-removed = Removed
+rules-preset-from-to = { $from } → { $to }
+
+# Text view (#2530): the problem banner and the undo note.
+rules-text-problem-at = Line { $line }, column { $column }:
+rules-text-undo-note = Edits apply as one undo step.

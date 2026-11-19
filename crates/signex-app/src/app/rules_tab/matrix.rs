@@ -7,11 +7,14 @@
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
-use signex_drc::{CopperObject, DrcRules, WrittenRuleEdit};
+use signex_drc::{CopperObject, DrcRules, LimitKind, WrittenRuleEdit};
 use signex_drc_dsl::table::matrix::{self, CellChange, CellKey, MatrixCell, OBJECT_PAIRS};
+use signex_drc_dsl::table::{RuleRow, RuleTable};
 use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::PcbBoard;
+use signex_widgets::constraint_grid::{ClassPair, PairClearance, PairValues};
 
+use super::RulesTabState;
 use super::commands::{Ran, answered, project_text, refused, text};
 use super::json::mm;
 use crate::app::Signex;
@@ -111,6 +114,130 @@ pub(crate) fn class_defaults(classes: &[NetClass]) -> MatrixDefaults {
     out
 }
 
+/// What a value typed in a cell writes: a bare number is in mm, a length
+/// with its unit (`8mil`) is kept as typed.
+pub(crate) fn typed_value(text: &str) -> String {
+    let trimmed = text.trim();
+    match trimmed.parse::<f64>() {
+        Ok(number) if number.is_finite() => format!("{trimmed}mm"),
+        _ => trimmed.to_string(),
+    }
+}
+
+/// `value_mm` as the rule text writes a length (`0.8mm`).
+pub(crate) fn mm_text(value_mm: f64) -> String {
+    let fixed = format!("{value_mm:.4}");
+    let trimmed = fixed.trim_end_matches('0').trim_end_matches('.');
+    format!("{trimmed}mm")
+}
+
+/// The clearance a written cell holds, in mm.
+fn written_mm(row: &RuleRow) -> Option<f64> {
+    row.compiled
+        .as_ref()?
+        .limit(LimitKind::MinClearance)
+        .map(mm)
+}
+
+/// The clearance a cell shows, in mm.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Shown {
+    /// Its own rule's value.
+    Written(f64),
+    /// What it falls back to without a rule.
+    Fallback(f64),
+}
+
+impl Shown {
+    pub fn mm(self) -> f64 {
+        match self {
+            Shown::Written(mm) | Shown::Fallback(mm) => mm,
+        }
+    }
+}
+
+/// What the cell at `key` shows. An object pair with no rule of its own
+/// shows its cell's All objects value; a whole cell with none shows its
+/// fallback. `None` when nothing gives the pair a value.
+pub(crate) fn shown(table: &RuleTable, defaults: &MatrixDefaults, key: &CellKey) -> Option<Shown> {
+    if let Some(value) = matrix::cell(table, key).and_then(written_mm) {
+        return Some(Shown::Written(value));
+    }
+    if key.pair.is_some() {
+        let whole = CellKey {
+            pair: None,
+            ..key.clone()
+        };
+        return shown(table, defaults, &whole).map(|all| Shown::Fallback(all.mm()));
+    }
+    defaults
+        .get(&default_key(key))
+        .map(|nm| Shown::Fallback(mm(*nm)))
+}
+
+/// The matrix widget's read of the clearances: the project's classes by
+/// index, the rule rows and the fallbacks.
+pub(crate) struct ClassClearances<'a> {
+    pub classes: &'a [String],
+    pub table: &'a RuleTable,
+    pub defaults: &'a MatrixDefaults,
+}
+
+impl ClassClearances<'_> {
+    /// The cell of `pair`: the row class first, as a new rule is named.
+    pub fn key(&self, pair: ClassPair) -> Option<CellKey> {
+        let a = self.classes.get(pair.row)?;
+        let b = self.classes.get(pair.col)?;
+        Some(CellKey::new(a.clone(), b.clone()))
+    }
+
+    /// The pair of the cell of classes `a` and `b`, either order.
+    pub fn pair_of(&self, a: &str, b: &str) -> Option<ClassPair> {
+        let at = |name: &str| self.classes.iter().position(|c| c == name);
+        Some(ClassPair::new(at(a)?, at(b)?))
+    }
+}
+
+impl PairValues for ClassClearances<'_> {
+    fn resolve(&self, pair: ClassPair) -> Option<PairClearance> {
+        let key = self.key(pair)?;
+        // A pair nothing gives a value keeps a live cell, so it can be set.
+        Some(match shown(self.table, self.defaults, &key) {
+            Some(Shown::Written(value)) => PairClearance::Written(value),
+            Some(Shown::Fallback(value)) => PairClearance::Fallback(value),
+            None => PairClearance::Fallback(0.0),
+        })
+    }
+
+    fn fallback(&self, pair: ClassPair) -> Option<f64> {
+        let key = self.key(pair)?;
+        self.defaults.get(&default_key(&key)).map(|nm| mm(*nm))
+    }
+}
+
+/// What the matrix preview draws: a class pair, or one object pair of it,
+/// at the value it shows.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MatrixPreview {
+    pub key: CellKey,
+    pub shown: Option<Shown>,
+}
+
+/// The preview of the hovered cell or row, else of the pinned one.
+pub(crate) fn matrix_preview(
+    state: &RulesTabState,
+    table: &RuleTable,
+    defaults: &MatrixDefaults,
+) -> Option<MatrixPreview> {
+    let key = state
+        .matrix_hover
+        .as_ref()
+        .or(state.matrix_pin.as_ref())?
+        .clone();
+    let shown = shown(table, defaults, &key);
+    Some(MatrixPreview { key, shown })
+}
+
 impl Signex {
     /// The net classes of `id`, in table order.
     pub(crate) fn rules_classes(&self, id: ProjectId) -> Vec<NetClass> {
@@ -118,6 +245,26 @@ impl Signex {
             .project_by_id(id)
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default()
+    }
+
+    /// Keep the matrix widget's classes the project's, in table order. A
+    /// change of classes drops the widget's pin and edit.
+    pub(crate) fn sync_rules_matrix(&mut self, id: ProjectId) {
+        let names: Vec<String> = self.rules_classes(id).into_iter().map(|c| c.name).collect();
+        let tab = self.rules_tab_mut(id);
+        let same = tab
+            .matrix
+            .classes()
+            .iter()
+            .map(|c| c.name.as_str())
+            .eq(names.iter().map(String::as_str));
+        if !same {
+            let classes = names
+                .into_iter()
+                .map(|name| signex_widgets::constraint_grid::MatrixClass { name })
+                .collect();
+            tab.matrix = signex_widgets::constraint_grid::ClassMatrix::new(classes);
+        }
     }
 
     /// The fallback of every cell: resolved on the open board, else from

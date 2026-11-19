@@ -144,7 +144,11 @@ impl Signex {
             | RulesTabMsg::SetApplied { .. }
             | RulesTabMsg::PresetPicked { .. }
             | RulesTabMsg::PresetApplied { .. }
-            | RulesTabMsg::PresetDismissed { .. }) => self.apply_rules_panel_message(msg),
+            | RulesTabMsg::PresetDismissed { .. }
+            | RulesTabMsg::MatrixActed { .. }
+            | RulesTabMsg::MatrixHovered { .. }
+            | RulesTabMsg::MatrixPairPinned { .. }
+            | RulesTabMsg::MatrixPairTyped { .. }) => self.apply_rules_panel_message(msg),
             RulesTabMsg::OpenRequested { .. }
             | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
