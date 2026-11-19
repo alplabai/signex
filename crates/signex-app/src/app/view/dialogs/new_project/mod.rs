@@ -16,10 +16,12 @@ use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
+mod card_parts;
 pub(crate) mod cards;
 pub(crate) mod customize;
 mod document_setup;
 pub(crate) mod preview;
+mod summary;
 #[cfg(test)]
 mod tests;
 pub(crate) mod user_cards;

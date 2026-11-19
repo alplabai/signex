@@ -7,7 +7,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::text;
 
-use super::{SP, TS, cards, customize, preview, s, user_cards};
+use super::{SP, TS, cards, customize, preview, s, summary, user_cards};
 use crate::app::new_project::NewProjectMsg;
 use crate::app::{DocumentSetupMsg, DocumentSetupState, Message, SetupKind, Signex};
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti, tokens};
@@ -78,29 +78,41 @@ impl Signex {
             tokens,
         );
         // A sheet takes only the user's profiles: the built-ins differ in
-        // board rules alone.
-        let (profiles, fields) = match state.kind {
+        // board rules alone. A project with a saved setup folds the cards
+        // behind its summary row (#2538), and the Fab tier field leaves with
+        // them (F06).
+        let summary_shown = state.shows_project_summary();
+        let (choices, fields) = match state.kind {
             SetupKind::Pcb => (
-                cards::profiles(draft, users, i18n, tokens),
-                customize::pcb_rules(draft, i18n, tokens),
+                if summary_shown {
+                    cards::choices(draft, users, i18n, tokens)
+                } else {
+                    cards::profiles(draft, users, i18n, tokens)
+                },
+                customize::pcb_rules(draft, !summary_shown, i18n, tokens),
             ),
             SetupKind::Sheet => (
-                user_cards::section(draft, users, i18n, tokens),
+                user_cards::section(draft, users, user_cards::Caption::Sheet, i18n, tokens),
                 customize::schematic(draft, i18n, tokens),
             ),
         };
-        let left = scrollable(
-            container(
-                column![
-                    intro(state, i18n, tokens),
-                    profiles.map(edit),
-                    fields.map(edit),
-                ]
-                .spacing(SP.xl),
-            )
-            .padding([SP.xl + SP.s, SP.xl + SP.m]),
-        )
-        .width(Length::Fill);
+        let mut col = column![intro(state, i18n, tokens)].spacing(SP.xl);
+        if let Some(project_setup) = state.project_setup.as_ref() {
+            let open = state.other_profile_open;
+            let mut block = column![
+                summary::row_view(project_setup, state.kind, open, users, i18n, tokens).map(ds)
+            ]
+            .spacing(SP.m + SP.xs);
+            if open {
+                block = block.push(choices.map(edit));
+            }
+            col = col.push(block.boxed());
+        } else {
+            col = col.push(choices.map(edit));
+        }
+        col = col.push(fields.map(edit));
+        let left =
+            scrollable(container(col).padding([SP.xl + SP.s, SP.xl + SP.m])).width(Length::Fill);
         let body: Element<'a, Message> = match state.kind {
             SetupKind::Pcb => row![
                 left,
