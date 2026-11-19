@@ -217,7 +217,7 @@ fn a_wire_position_reads_start() {
 
 // ── #43 / #45 / #47 (g1): wire End, power-port State, note Text box ──
 
-const WIRE: u128 = 11;
+const G1_WIRE: u128 = 11;
 const PORT: u128 = 12;
 const NOTE: u128 = 13;
 
@@ -228,7 +228,7 @@ fn g1_sheet() -> SchematicSheet {
     SchematicSheet {
         paper_size: "A4".into(),
         wires: vec![Wire {
-            uuid: Uuid::from_u128(WIRE),
+            uuid: Uuid::from_u128(G1_WIRE),
             start: Point::new(10.0, 10.0),
             end: Point::new(20.0, 10.0),
             stroke_width: 0.0,
@@ -294,7 +294,7 @@ fn g1_undo(app: &mut Signex) {
 fn a_wires_end_is_editable_and_its_length_follows() {
     use crate::panels::{PanelMsg, PlacedEditMsg, PlacedField};
     let (_dir, mut app) = g1_app();
-    let wire = SelectedItem::new(Uuid::from_u128(WIRE), SelectedKind::Wire);
+    let wire = SelectedItem::new(Uuid::from_u128(G1_WIRE), SelectedKind::Wire);
     let before = shown(&mut app, wire, Unit::Mm);
     for label in ["Start X (mm)", "End X (mm)", "End Y (mm)", "Length"] {
         assert!(
@@ -422,7 +422,7 @@ fn leaving_a_typed_note_applies_its_text() {
             PanelMsg::PlacedEdit(PlacedEditMsg::NoteActed { item: note, action }),
         );
     }
-    let wire = SelectedItem::new(Uuid::from_u128(WIRE), SelectedKind::Wire);
+    let wire = SelectedItem::new(Uuid::from_u128(G1_WIRE), SelectedKind::Wire);
     g1_select(&mut app, wire);
     assert_eq!(g1_doc(&app).text_notes[0].text, "note!");
 }
