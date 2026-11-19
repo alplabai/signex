@@ -1085,4 +1085,3 @@ pub(super) fn empty_net() -> NetSignature {
         name: String::new(),
     }
 }
-

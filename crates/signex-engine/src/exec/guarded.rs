@@ -397,9 +397,8 @@ impl Engine {
             let (a, b) = (pt_key(&w.start), pt_key(&w.end));
             a != k && b != k && point_on_segment(k, a, b)
         };
-        let dot_at = |sheet: &SchematicSheet, k| {
-            (sheet.junctions.iter()).any(|j| pt_key(&j.position) == k)
-        };
+        let dot_at =
+            |sheet: &SchematicSheet, k| (sheet.junctions.iter()).any(|j| pt_key(&j.position) == k);
         (self.document.wires.iter())
             .filter(|w| ids.contains(&w.uuid))
             .flat_map(|w| at.pin_tips.iter().copied().filter(move |&k| inside(k, w)))
@@ -574,7 +573,11 @@ fn live_keys(
         .chain(contacts.wires.iter().map(crate::WirePoint::old_key))
         .filter(|k| !policy.plain.contains(k))
         .collect();
-    let mut keys: Vec<_> = live.iter().copied().filter(|k| edited.contains(k)).collect();
+    let mut keys: Vec<_> = live
+        .iter()
+        .copied()
+        .filter(|k| edited.contains(k))
+        .collect();
     if keys.is_empty() {
         keys = live;
     }

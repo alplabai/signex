@@ -349,5 +349,8 @@ fn a_dragged_segment_never_leaves_a_bare_touch_on_a_pin_end() {
     };
     let plain = crate::transform::bare_tap_keys(run(false).document());
     let kept = crate::transform::bare_tap_keys(run(true).document());
-    assert!(kept.is_subset(&plain), "new bare touches: {kept:?} over {plain:?}");
+    assert!(
+        kept.is_subset(&plain),
+        "new bare touches: {kept:?} over {plain:?}"
+    );
 }

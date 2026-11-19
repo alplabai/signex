@@ -657,7 +657,9 @@ fn time_keep_wires_preview_frames() {
         }
         let preview = MovePreview::new(&sheet);
         let mut rng = Lcg(sheet.wires.len() as u64 + 7);
-        let moves: Vec<Moves> = (0..FRAMES).map(|_| random_moves(&mut rng, &sheet)).collect();
+        let moves: Vec<Moves> = (0..FRAMES)
+            .map(|_| random_moves(&mut rng, &sheet))
+            .collect();
         let started = std::time::Instant::now();
         for frame in &moves {
             let _ = preview.moved_with(frame, true);

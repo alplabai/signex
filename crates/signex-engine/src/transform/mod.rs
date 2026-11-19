@@ -706,8 +706,8 @@ pub(crate) struct Frozen<'f> {
     /// Dotless T points the plain move leaves bare: no wire dot goes there.
     pub(crate) bare: &'f std::collections::HashSet<signex_net::uf::Key>,
 }
-pub(crate) use pin_junctions::{new_pin_dots, pin_owners};
 pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs};
+pub(crate) use pin_junctions::{new_pin_dots, pin_owners};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
