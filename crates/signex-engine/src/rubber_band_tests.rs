@@ -1205,25 +1205,12 @@ fn riding_items(
     out
 }
 
-/// Wires the plain move moved that sit where it put them in `after` too: the
-/// selected wires, which carry their joins along.
-fn carried_wires(
-    before: &SchematicSheet,
-    plain: &SchematicSheet,
-    after: &SchematicSheet,
-) -> Vec<Uuid> {
-    let geometry = |sheet: &SchematicSheet, id: Uuid| {
-        (sheet.wires.iter())
-            .find(|w| w.uuid == id)
-            .map(|w| (signex_net::pt_key(&w.start), signex_net::pt_key(&w.end)))
-    };
-    (plain.wires.iter())
-        .filter(|w| {
-            let now = geometry(plain, w.uuid);
-            let was = geometry(before, w.uuid);
-            was.is_some() && was != now && geometry(after, w.uuid) == now
-        })
-        .map(|w| w.uuid)
+/// The selected wires of a move: the wires that carry their joins along,
+/// known by id whatever a fold does to their geometry afterwards.
+pub(crate) fn selected_wire_ids(items: &[SelectedItem]) -> Vec<Uuid> {
+    (items.iter())
+        .filter(|item| item.kind == SelectedKind::Wire)
+        .map(|item| item.uuid)
         .collect()
 }
 
@@ -1306,14 +1293,14 @@ pub(crate) fn check_closure_oracle(
     after: &SchematicSheet,
     warned: &std::collections::BTreeSet<Item>,
     moved_pins: &std::collections::BTreeSet<Item>,
+    carried: &[Uuid],
 ) -> Result<(), String> {
     // Wires the plain move leaves alone bridge the before and plain nets; the
     // rubber-banded result is judged on identified items only.
     let mut stable = unedited_wires(&[before, plain]);
-    // A selected wire keeps its joins as it moves and makes new ones where it
-    // lands (`wire_contacts`): it bridges its net before the move and its net
-    // after the plain move.
-    let carried = carried_wires(before, plain, after);
+    // A selected wire (`carried`, by id) keeps its joins as it moves and
+    // makes new ones where it lands (`wire_contacts`): it bridges its net
+    // before the move and its net after the plain move.
     stable.extend(carried.iter().copied());
     let (b, p, r) = (
         items_per_net(before, &stable),
@@ -1359,7 +1346,7 @@ pub(crate) fn check_closure_oracle(
     // What rides on a carried wire goes where the wire's kept joins go: the
     // wire itself, and a label or sheet pin the move took along that lies on
     // it in the plain move. (Moved pins are left out of every check below.)
-    let riding = riding_items(before, plain, &carried);
+    let riding = riding_items(before, plain, carried);
     for net in &b {
         let live: Vec<&Item> = net
             .iter()
@@ -1435,7 +1422,7 @@ struct Share {
 /// back more often, and one shared cap would let them hide a regression in
 /// the symbol-only ones.
 #[derive(Debug, Default)]
-struct RunCounts {
+pub(crate) struct RunCounts {
     symbols_only: Share,
     co_selected: Share,
     /// Cases that edited wires.
@@ -1550,7 +1537,7 @@ fn plain_pin_dots(before: &SchematicSheet, plain: &SchematicSheet, items: &[Sele
 }
 
 /// One case of [`property_run`]: case `index` of `seed`.
-fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
+pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
     let Case {
         sheet,
         moves,
@@ -1588,7 +1575,10 @@ fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
         engine
     };
     let plain = run(false);
+    // A plain move keeps no contacts and leaves no record; drop a stale one.
+    let _ = crate::exec::guarded::take_record();
     let mut engine = run(true);
+    let record = crate::exec::guarded::take_record();
     let warnings = engine.take_warnings();
     let unkept = engine.take_unkept_pins();
     let share = if selects_wire {
@@ -1632,8 +1622,20 @@ fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
         after,
         &warned_items(&sheet, &unkept),
         &moved_pin_items(&tips),
+        &selected_wire_ids(&items),
     );
     if let Err(why) = oracle {
+        panic!(
+            "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+            describe(after)
+        );
+    }
+    // The written rule worked out apart from the guard (a differential
+    // check): the plain nets with every kept contact restored.
+    if let Some(record) = &record
+        && let Err(why) =
+            crate::carry_guard_tests::check_allowed(&sheet, plain.document(), after, &tips, record)
+    {
         panic!(
             "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
             describe(after)
@@ -2177,6 +2179,7 @@ fn a_pin_whose_wire_moves_with_it_stays_on_the_net_the_wire_lands_on() {
         e.document(),
         &warned,
         &moved_pin_items(&tips),
+        &[carried],
     )
     .unwrap();
 }
@@ -2205,6 +2208,7 @@ fn the_oracle_reports_a_kept_pin_shorted_to_its_plain_landing_net() {
         &shorted,
         &std::collections::BTreeSet::new(),
         &moved_pin_items(&tips),
+        &[],
     );
     assert!(
         matches!(&verdict, Err(why) if why.starts_with("SHORT")),
@@ -2267,9 +2271,9 @@ fn diagnose_case_from_env() {
     diagnose_case(seed, case as usize);
 }
 
-/// Rebuild case `wanted` of `seed` as `property_run` does, run the plain and
-/// the keep-wires move, and print the sheet and what each run changed.
-fn diagnose_case(seed: u64, wanted: usize) {
+/// Case `wanted` of `seed`, rebuilt as `property_run` draws it; `None` when
+/// the generator skips that index.
+pub(crate) fn case_at(seed: u64, wanted: usize) -> Option<Case> {
     let mut rng = Lcg(seed);
     let mut found = None;
     for index in 0..=wanted {
@@ -2278,7 +2282,13 @@ fn diagnose_case(seed: u64, wanted: usize) {
             found = case;
         }
     }
-    let Some(Case { sheet, moves, .. }) = found else {
+    found
+}
+
+/// Rebuild case `wanted` of `seed` as `property_run` does, run the plain and
+/// the keep-wires move, and print the sheet and what each run changed.
+fn diagnose_case(seed: u64, wanted: usize) {
+    let Some(Case { sheet, moves, .. }) = case_at(seed, wanted) else {
         eprintln!("case {wanted} is empty for this generator");
         return;
     };
