@@ -756,6 +756,7 @@ impl Signex {
                 context_menu: None,
                 project_tree_context_menu: None,
                 grid_picker: None,
+                zoom_presets_open: false,
                 tab_context_menu: None,
                 start_row_menu: None,
                 context_submenu: None,

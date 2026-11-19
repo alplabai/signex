@@ -35,6 +35,9 @@ mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+mod zoom_presets;
+#[cfg(test)]
+pub(super) use zoom_presets::presets_anchor as zoom_presets_anchor;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.

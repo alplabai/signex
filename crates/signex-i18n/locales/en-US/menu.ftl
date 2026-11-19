@@ -212,3 +212,13 @@ ctx-fp-silk-header = { $kind } (silk)
 ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
+# The canvas zoom pill (#64). { $percent } is the zoom as a whole number.
+zoom-pill-percent = { $percent }%
+zoom-pill-fit = Fit
+# Hover hint of a pill control: { $action } is the command's menu text,
+# { $shortcut } its key in the active shortcut profile.
+zoom-pill-hint = { $action } · { $shortcut }
+zoom-pill-presets = Zoom Presets
+# Rows of the menu the pill's percentage opens. { $percent } as above.
+zoom-presets-percent = { $percent }%
+zoom-presets-fit-selection = Fit Selection
