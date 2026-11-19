@@ -644,9 +644,25 @@ Both exports are under **File ▸ Export** and need a schematic open.
 **BOM (bill of materials)**
 
 1. Choose **Reports ▸ Bill of Materials…**.
-2. A preview of the table opens. Adjust the options and press **Export…**.
-3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
-   (`.xlsx`) or HTML (`.html`).
+2. The Bill of Materials dialog opens on the table. The toolbar holds the
+   **Filter lines** field, the **Variant** picker, the **Grouped** /
+   **Ungrouped** / **Flat** switch and, when validation finds something, a
+   chip such as **2 warnings** that opens the **Rules** tab. The filter only
+   hides lines on screen; the file always lists every line. Click a column
+   head to sort, drag it to move the column, or drag the line between two
+   heads to resize. Lines a validation rule flags are tinted, with a mark in
+   the line-number column.
+3. The Properties side bar has three tabs. **General**: **Include not-fitted
+   parts (DNP) for this variant** lists the parts the variant does not fit
+   (DNP parts, parts marked not fitted, and parts left out of the BOM or the
+   board) instead of leaving them out, and **Format** picks CSV, XLSX or
+   HTML. **Columns**: the ticked columns are exported, in the order shown;
+   drag a ticked column by its grip to move it. **Rules**: the validation
+   rules and the issues they found; click an issue to select its line.
+4. The footer shows how many lines are shown, how many parts the BOM lists
+   and, with a price column, the total. Press **Export CSV…** (or **Export
+   XLSX…** / **Export HTML…**) and name the file in the save dialog, or
+   **Cancel**. Issues never stop the export.
 
 A schematic without placed parts produces an empty BOM.
 
