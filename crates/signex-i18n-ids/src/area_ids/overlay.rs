@@ -11,4 +11,6 @@ define_ids! {
     OVERLAY_NET_CARD_MORE = "overlay-net-card-more";
     OVERLAY_READ_ONLY_BADGE = "overlay-read-only-badge";
     OVERLAY_LOCKED_WINDOW_HINT = "overlay-locked-window-hint";
+    OVERLAY_READ_ONLY_BADGE_TOOLTIP = "overlay-read-only-badge-tooltip";
+    OVERLAY_TEXT_EDIT_HINT = "overlay-text-edit-hint";
 }
