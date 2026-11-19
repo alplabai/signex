@@ -1,6 +1,7 @@
 mod bom_modal;
 mod catalog;
 mod icon;
+mod illustration;
 mod modal_card;
 mod project_tree;
 mod section;
