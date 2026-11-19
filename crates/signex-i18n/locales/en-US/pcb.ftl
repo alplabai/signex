@@ -130,6 +130,23 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 # Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
 # cannot run yet (#2352).
 pcb-bar-component-unavailable = Place Component: not available on boards yet
+# The badge on the Selection Filter button: how many object kinds are off
+# (#108). There is no badge while every kind is on.
+pcb-bar-filter-off-count = { $count }
+# Heading of a tool group's dropdown on the PCB Active Bar (#108), shown in
+# capitals. $group is the group's key.
+pcb-bar-group =
+    { $group ->
+        [components] Components
+        [route] Route
+        [tune] Tune
+        [via_pad] Via / Pad
+        [copper_areas] Copper Areas
+        [copper_drawing] Copper Drawing
+        [dimensions] Dimensions
+        [text] Text
+       *[graphics] Graphics
+    }
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component

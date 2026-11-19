@@ -6,6 +6,8 @@ define_ids! {
     PCB_BAR_FILTER_TOOLTIP = "pcb-bar-filter-tooltip";
     PCB_BAR_ALIGN_TOOLTIP = "pcb-bar-align-tooltip";
     PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
+    PCB_BAR_FILTER_OFF_COUNT = "pcb-bar-filter-off-count";
+    PCB_BAR_GROUP = "pcb-bar-group";
     PCB_TOOL_COMPONENT = "pcb-tool-component";
     PCB_TOOL_PAD = "pcb-tool-pad";
     PCB_TOOL_VIA = "pcb-tool-via";

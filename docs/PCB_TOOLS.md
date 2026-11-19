@@ -534,6 +534,13 @@ state. Kinds the board editor cannot pick yet are greyed with why, as their
 chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
 as well as footprint pads, and Other dimensions (`PickKind::of`).
 
+While any kind is off, the button carries a small accent badge at its
+top-right corner with the number of kinds that are off (#108); there is no
+badge while every kind is on. Only kinds the board editor can pick count, so
+turning off a greyed kind (Rooms, 3D Bodies) does not change it. The badge is
+a layer over the bar that takes no clicks
+(`app/view/pcb_active_bar/badge.rs`).
+
 ## Align
 
 The PCB Active Bar's Align button opens a dropdown of the Align rows (Align
@@ -573,10 +580,23 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row opens its
-  rows. A live row runs its command and is greyed by the same gate as its
-  menu row; a tool the board editor cannot run yet is greyed and its tooltip
-  is the reason Place gives ("Place Component: not available on boards
-  yet").
+  rows under a heading with the group's name in capitals (#108). The tools
+  come first; a group's commands (Repour Selected and Repour All, Change
+  Footprint) sit below a separator after them. The row the button shows is
+  drawn current, with the accent-soft fill. A live row runs its command and
+  is greyed by the same gate as its menu row; a tool the board editor cannot
+  run yet is greyed and its tooltip is the reason Place gives ("Place
+  Component: not available on boards yet"). A button with a dropdown has the
+  corner triangle; a group of one row (Dimensions, Text) has neither.
+- **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
+  Dimension and Keepout use the board tool glyphs of their dropdown rows
+  (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
+  rounded SMD pad with its centre (#108). The View button and the View
+  dropdown draw each turn with an arrow that turns the same way; the half
+  turn uses the clockwise arrow and Reset View Rotation has no icon.
+- **Separators.** Components stands alone; Route, Tune, Via / Pad, Copper
+  Areas and Copper Drawing form one run; Dimensions, Text and Graphics the
+  next (#108).
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
