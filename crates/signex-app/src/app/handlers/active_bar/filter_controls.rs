@@ -87,8 +87,9 @@ impl Signex {
         }
     }
 
-    /// SCH Filter's Save current: a new preset holding the kinds that are
-    /// on, made the edited one. Nothing at the preset limit.
+    /// Save current, from SCH Filter or the Active Bar's Filter dropdown: a
+    /// new preset holding the kinds that are on, made the edited one.
+    /// Nothing at the preset limit.
     pub(crate) fn handle_save_current_filter_preset(&mut self) -> Task<Message> {
         let state = &mut self.interaction_state;
         let active = &state.selection_filters;

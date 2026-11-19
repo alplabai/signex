@@ -120,3 +120,64 @@ fn the_open_launcher_top_counts_the_rows_and_separators_above_it() {
         Some(2.0 * m.panel_pad + 2.0 * m.item_height(false) + m.separator_height())
     );
 }
+
+/// A swatch row reserves the icon column, so a net-colour row's label lines
+/// up with the icon rows below it.
+#[test]
+fn a_swatch_row_reserves_the_icon_column() {
+    let swatch = vec![DropdownEntry::Item(
+        DropdownItem::new("Blue", ()).swatch(Color::from_rgb(0.2, 0.4, 0.9)),
+    )];
+    assert!(metrics::has_icons(&swatch));
+    assert!(!metrics::has_icons(&labelled("Blue")));
+}
+
+/// A caption is measured like a shortcut: the card widens for it.
+#[test]
+fn a_caption_widens_the_fitted_card() {
+    let long = "W".repeat(18);
+    let bare = fit(&labelled(&long), f32::MAX, "");
+    let captioned = fit(
+        &[DropdownEntry::Item(
+            DropdownItem::new(long.as_str(), ()).caption("0.0254 mm"),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert!(captioned > bare, "{captioned} {bare}");
+}
+
+/// The current choice reads in the accent-soft tokens of both themes.
+#[test]
+fn the_selected_row_uses_the_accent_soft_tokens() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let look = Look::of(&tokens);
+        let soft = tokens
+            .extended
+            .accent_soft
+            .as_ref()
+            .expect("graphite token");
+        let ink = tokens
+            .extended
+            .accent_soft_ink
+            .as_ref()
+            .expect("graphite token");
+        assert_eq!(look.selected_fill, theme_ext::to_color(soft), "{id:?}");
+        assert_eq!(look.selected_ink, theme_ext::to_color(ink), "{id:?}");
+    }
+}
+
+/// The builders set what the renderer reads.
+#[test]
+fn the_new_builders_set_their_fields() {
+    let red = Color::from_rgb(0.75, 0.22, 0.17);
+    let item = DropdownItem::new("GND", ())
+        .icon_tint(red)
+        .caption("1.27 mm")
+        .selected(true)
+        .strong();
+    assert_eq!(item.icon_tint, Some(red));
+    assert_eq!(item.caption.as_deref(), Some("1.27 mm"));
+    assert!(item.selected && item.strong);
+}

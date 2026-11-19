@@ -256,6 +256,8 @@ fn app_that_copied() -> (Signex, String) {
 #[test]
 fn paste_row_puts_the_copy_on_the_cursor() {
     let (mut app, text) = app_that_copied();
+    // Paste is a row of the empty-spot menu (#62).
+    select(&mut app, Vec::new());
     let task = press(&mut app, "paste");
     assert_menu_closed(&app, "paste");
     settle_answering_clipboard(&mut app, task, &text);
@@ -270,6 +272,7 @@ fn paste_row_puts_the_copy_on_the_cursor() {
 #[test]
 fn smart_paste_row_places_the_copy_at_once() {
     let (mut app, text) = app_that_copied();
+    select(&mut app, Vec::new());
     let task = press(&mut app, "smart_paste");
     assert_menu_closed(&app, "smart paste");
     settle_answering_clipboard(&mut app, task, &text);
@@ -873,6 +876,8 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
 #[test]
 fn find_row_opens_the_find_dialog() {
     let mut app = one_symbol();
+    // Find and Preferences are rows of the empty-spot menu (#62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "find");
     assert!(app.ui_state.find_replace.open);
     assert_menu_closed(&app, "find");
@@ -881,6 +886,7 @@ fn find_row_opens_the_find_dialog() {
 #[test]
 fn preferences_row_opens_preferences() {
     let mut app = one_symbol();
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_preferences");
     assert!(app.ui_state.preferences_open);
     assert_menu_closed(&app, "preferences");

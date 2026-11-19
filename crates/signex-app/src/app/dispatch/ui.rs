@@ -345,6 +345,9 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             GridPropertiesMsg::Open => {
+                // The grid picker's last row opens this dialog; the picker
+                // closes behind it.
+                self.interaction_state.grid_picker = None;
                 // Pre-populate from the active footprint editor's
                 // current step. No-op for non-footprint tabs (the
                 // modal would have nothing to drive).

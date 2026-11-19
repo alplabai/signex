@@ -131,7 +131,7 @@ panels-filters-delete = Delete
 panels-filters-unnamed = Filter { $number }
 
 # Object kinds a selection filter can include.
-panels-filter-components = Components
+panels-filter-components = Parts
 panels-filter-wires = Wires
 panels-filter-buses = Buses
 panels-filter-sheet-symbols = Sheet Symbols

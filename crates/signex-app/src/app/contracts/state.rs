@@ -51,6 +51,9 @@ pub enum ContextSubmenu {
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
+    /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
+    /// not built yet, each row with what it will do (#62).
+    Planned,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.
