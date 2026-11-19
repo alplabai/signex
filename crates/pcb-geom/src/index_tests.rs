@@ -588,3 +588,47 @@ fn a_box_never_takes_a_footprint_text_and_a_point_does() {
         assert!(!lassoed.contains(&text), "{lassoed:?}");
     }
 }
+
+/// #2457: a room is picked on its edges and its name, and inside it only
+/// when nothing else is there; the copper index never holds it.
+#[test]
+fn a_room_is_picked_on_its_edges_and_under_everything_inside() {
+    use signex_types::pcb::{Room, RoomOutline};
+    let mut b = sample();
+    b.rooms.push(Room::drawn(
+        id(900),
+        "dcdc".into(),
+        "#A058C8",
+        RoomOutline::Rect {
+            x_mm: -5.0,
+            y_mm: -5.0,
+            w_mm: 50.0,
+            h_mm: 30.0,
+        },
+    ));
+    let room = ItemRef::Room(id(900));
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    // On its left edge.
+    let edge = crate::selection::pick(&index, at(-5.0, 10.0), MM / 10).map(|i| i.item);
+    assert_eq!(edge, Some(room));
+    // On the box of its name.
+    let (lo, hi) = room_label_box(&b.rooms[0]).expect("a label box");
+    let label = at((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    assert_eq!(
+        crate::selection::pick(&index, label, 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, clear of everything else.
+    assert_eq!(
+        crate::selection::pick(&index, at(35.0, 15.0), 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, on the track: the track wins.
+    let on_track = crate::selection::pick(&index, at(5.0, 0.0), 0).map(|i| i.item);
+    assert!(matches!(on_track, Some(ItemRef::Track(_))), "{on_track:?}");
+    assert!(
+        !BoardIndex::build(&b).items().any(|i| i.item == room),
+        "connectivity holds no rooms"
+    );
+}

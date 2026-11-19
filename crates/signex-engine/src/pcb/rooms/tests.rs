@@ -239,12 +239,18 @@ fn sheets() -> Vec<SheetMembers> {
     ]
 }
 
-fn counter() -> impl FnMut() -> Uuid {
-    let mut n = 500_u128;
-    move || {
-        n += 1;
-        Uuid::from_u128(n)
+/// Room ids from 501 up, clear of the parts' ids.
+struct Counter(u128);
+
+impl signex_types::object_id::IdSource for Counter {
+    fn next_id(&mut self) -> Uuid {
+        self.0 += 1;
+        Uuid::from_u128(self.0)
     }
+}
+
+fn counter() -> Counter {
+    Counter(500)
 }
 
 #[test]

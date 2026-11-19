@@ -646,6 +646,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::FootprintText { footprint, field } => {
             format!("{} of footprint {footprint}", field.id())
         }
+        ItemRef::Room(id) => format!("room {id}"),
     }
 }
 

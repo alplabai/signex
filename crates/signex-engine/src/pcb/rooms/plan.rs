@@ -5,6 +5,7 @@
 //! as the dialog's preview. Rules: `docs/PCB_ROOMS.md`, "Create Rooms from
 //! Sheets".
 
+use signex_types::object_id::IdSource;
 use signex_types::pcb::room::palette_colour;
 use signex_types::pcb::{Footprint, PcbBoard, Point, Room, RoomLayer, RoomOutline, RoomSource};
 use signex_types::schematic::InstancePath;
@@ -114,12 +115,12 @@ impl RoomPlan {
     }
 }
 
-/// The rooms `sheets` get on `board` with `options`; `new_id` names each.
+/// The rooms `sheets` get on `board` with `options`; `ids` names each.
 pub fn plan_rooms_from_sheets(
     board: &PcbBoard,
     sheets: &[SheetMembers],
     options: &RoomOptions,
-    new_id: &mut dyn FnMut() -> Uuid,
+    ids: &mut dyn IdSource,
 ) -> RoomPlan {
     let region = board_region(board);
     let mut plan = RoomPlan::default();
@@ -200,7 +201,7 @@ pub fn plan_rooms_from_sheets(
             keep_parts_inside: options.keep_rule,
             margin_mm: options.margin_mm,
             ..Room::drawn(
-                new_id(),
+                ids.next_id(),
                 draft.name,
                 &draft.colour,
                 RoomOutline::rect_between(area.min, area.max),

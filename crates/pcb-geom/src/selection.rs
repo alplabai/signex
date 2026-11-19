@@ -103,7 +103,9 @@ impl Selection {
                 | ItemRef::Dimension(_)
                 | ItemRef::Graphic { .. }
                 // A text moves on its own (#2368).
-                | ItemRef::FootprintText { .. } => None,
+                | ItemRef::FootprintText { .. }
+                // A room moves its parts by its own command (#2457).
+                | ItemRef::Room(_) => None,
             })
             .collect()
     }
@@ -172,6 +174,8 @@ fn rank(item: ItemRef) -> u8 {
         ItemRef::Footprint(_) => 4,
         // A drawn area is under everything on it (#2383).
         ItemRef::Zone { .. } => 5,
+        // A room is under everything, drawn areas included (#2457).
+        ItemRef::Room(_) => 6,
     }
 }
 
