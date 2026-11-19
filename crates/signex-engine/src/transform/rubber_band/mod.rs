@@ -69,8 +69,8 @@ mod wire_contacts;
 
 pub use intent::pin_dots_to_keep;
 pub use wire_contacts::{
-    WireContact, bailing_wires, carried_points, carry_points, follow_moved_wires, follow_wire_grip,
-    held_at, moved_wire_contacts, wire_axis, wire_contact_points,
+    WireContact, bailing_wires, carried_points, carry_points, follow_wire_grip, held_at,
+    moved_wire_contacts, wire_axis, wire_contact_points,
 };
 
 pub use guard::{BeforeNets, Guard, Policy, before_nets};
