@@ -176,6 +176,7 @@ fn the_drag_preview_is_the_commit() {
         .execute(Command::MoveEach {
             moves,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let shape = |s: &SchematicSheet| {

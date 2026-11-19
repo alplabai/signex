@@ -204,7 +204,9 @@ impl SchematicCanvas<'_> {
                 .ghost
                 .ready_grip_frame(revision, &self.selected, held, gx, gy);
         }
-        if !self.keeps_wires(state) {
+        // A move ghost built in another wiring mode is stale (#1669); a grip
+        // drag above has no wiring mode.
+        if !self.keeps_wires(state) || !state.ghost.is_built_for(self.prefs.drag_wiring) {
             return None;
         }
         state.ghost.ready_frame(revision, &self.selected, gx, gy)

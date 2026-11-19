@@ -1,4 +1,5 @@
 use crate::exec::change_component::ComponentReplacement;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
     NoErcDirective, SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
@@ -146,10 +147,13 @@ pub enum Command {
         dx: f64,
         dy: f64,
         /// Rubber-band: wire endpoints sitting on a moved symbol's (or child
-        /// sheet's) pins follow them, bending to stay orthogonal, inside
+        /// sheet's) pins follow them, bending as `wiring` says, inside
         /// the same history step. `false` is a plain translate that leaves
         /// wires where they are (see `transform::rubber_band`).
         keep_wires: bool,
+        /// How a rubber-banded wire bends; `Auto` unless the user picked a
+        /// mode during a drag.
+        wiring: DragWiringMode,
     },
     /// Move each item by its own delta in one history step (align and
     /// distribute). Rubber-bands like [`Command::MoveSelection`]. A
@@ -158,6 +162,7 @@ pub enum Command {
     MoveEach {
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
+        wiring: DragWiringMode,
     },
     /// With `keep_wires` the wires on the turned pins follow, as for
     /// [`Command::MoveSelection`], inside the same history step.

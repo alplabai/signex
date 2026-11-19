@@ -186,6 +186,12 @@ fn copy_invalidated(
     invalidation: RenderInvalidation,
 ) {
     use RenderInvalidation as R;
+    // The sheet default font is a scalar, not one of the collections below.
+    // A font-family change invalidates the four text collections, so refresh
+    // it with them; otherwise the cache keeps drawing the old family (#2444).
+    if invalidation.intersects(R::SYMBOLS | R::LABELS | R::TEXT_NOTES | R::CHILD_SHEETS) {
+        dst.font_family.clone_from(&src.font_family);
+    }
     if invalidation.intersects(R::SYMBOLS) {
         dst.symbols.clone_from(&src.symbols);
     }

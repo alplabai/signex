@@ -1,6 +1,7 @@
 //! `Engine::exec_place` — see `exec/mod.rs`.
 
 use crate::*;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{SelectedItem, SelectedKind, canonical_no_erc_rules};
 
 use super::ownership::Ownership;
@@ -190,6 +191,7 @@ impl Engine {
         before: SchematicSheet,
         moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
+        wiring: DragWiringMode,
     ) -> Result<CommandResult, EngineError> {
         let mut moves = fold_port_text_moves(&self.document, moves);
         drop_fields_of_moved_symbols(&mut moves);
@@ -225,10 +227,13 @@ impl Engine {
         let unfollowed =
             (keep_wires && !followers.entries.is_empty()).then(|| self.document.clone());
         let followed = self.follow_bus_entry_ends(&followers, &items);
-        let contacts = match (ownership, wire_contacts) {
+        let mut contacts = match (ownership, wire_contacts) {
             (Some(owners), Some(wires)) => self.contacts_of(owners, &wires, &items),
             _ => super::guarded::Contacts::default(),
         };
+        // The drag's wiring mode bends the followed and carried wires in every
+        // guarded round, under the guard's Policy; the guard still checks them.
+        contacts.wiring = wiring;
         let fold = |engine: &mut Self| -> DocumentPatch {
             #[cfg(test)]
             if let Some(adjacent) = &adjacent {
@@ -272,8 +277,10 @@ impl Engine {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
+        // A turn is no drag: its wires bend by the automatic rule.
         let contacts = super::guarded::Contacts {
             tips: tips.unwrap_or_default(),
+            wiring: DragWiringMode::Auto,
             ..Default::default()
         };
         let fold = |engine: &mut Self| engine.merge_after_edit(adjacent);
@@ -346,11 +353,16 @@ impl Engine {
                 dx,
                 dy,
                 keep_wires,
+                wiring,
             } => {
                 let moves = items.into_iter().map(|item| (item, dx, dy)).collect();
-                self.exec_moves(before, moves, keep_wires)
+                self.exec_moves(before, moves, keep_wires, wiring)
             }
-            Command::MoveEach { moves, keep_wires } => self.exec_moves(before, moves, keep_wires),
+            Command::MoveEach {
+                moves,
+                keep_wires,
+                wiring,
+            } => self.exec_moves(before, moves, keep_wires, wiring),
             Command::RotateSelection {
                 items,
                 angle_degrees,

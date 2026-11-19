@@ -256,6 +256,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
     }
@@ -329,6 +330,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
 
@@ -351,6 +353,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
         assert_eq!(

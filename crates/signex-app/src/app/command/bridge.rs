@@ -133,6 +133,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
         "switch_segment_posture" => Message::Tool(ToolMessage::CornerFlipRequested),
+        "cycle_wiring_mode" => Message::Tool(ToolMessage::DragWiringCycleRequested),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
         "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
@@ -708,10 +709,7 @@ mod tests {
     ///   coordinate origin, and the app has none (no relative origin, no
     ///   delta readout). The document's `PageOrigin`
     ///   (`PanelMsg::SetPageOrigin`) is a different thing, a saved sheet
-    ///   setting, so this id must not be wired to it. `cycle_wiring_mode`
-    ///   cycles how dragged wires bend, but a drag stretches its wires one
-    ///   fixed way; the corner rule only steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
-    ///   half of `copy_attributes_or_add_vertex` does not exist (#1669).
+    ///   setting, so this id must not be wired to it.
     /// - **not addressable from a bare id** — the operation exists but
     ///   only in a form this entry point cannot name. `DockMessage` does
     ///   have `ClosePanel` and `ToggleCollapse`, but both are addressed
@@ -724,7 +722,6 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "cycle_wiring_mode",
         "reset_local_coordinates",
     ];
 
@@ -1296,6 +1293,34 @@ mod tests {
             resolve_id("zoom_to_selection_area"),
             Some(Message::CanvasEvent(CanvasEvent::FitSelection))
         ));
+    }
+
+    /// #1669 - `cycle_wiring_mode` resolves to its tool message and steps the
+    /// drag wiring mode through all four and back to auto.
+    #[test]
+    fn cycle_wiring_mode_resolves_and_cycles_the_drag_wiring_mode() {
+        use signex_types::corner::DragWiringMode;
+        let cmd = AppCommandId::new("cycle_wiring_mode").unwrap();
+        assert!(matches!(
+            resolve(&cmd, &CommandArgs::none()),
+            Some(Message::Tool(ToolMessage::DragWiringCycleRequested))
+        ));
+        let (mut app, _task) = Signex::new();
+        assert_eq!(app.interaction_state.drag_wiring, DragWiringMode::Auto);
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            let _ = app.dispatch_command(&cmd, CommandArgs::none(), None);
+            seen.push(app.interaction_state.drag_wiring);
+        }
+        assert_eq!(
+            seen,
+            [
+                DragWiringMode::HorizontalFirst,
+                DragWiringMode::VerticalFirst,
+                DragWiringMode::Straight,
+                DragWiringMode::Auto
+            ]
+        );
     }
 
     /// #103 - pressing an unmapped command's key says "<label> is not

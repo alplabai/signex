@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem};
 use uuid::Uuid;
 
@@ -30,6 +31,9 @@ pub(super) struct Contacts {
     /// Points of a dragged wire that cannot be carried whole: plain from the
     /// start, and named when they held something.
     pub(super) bailed: Vec<crate::WirePoint>,
+    /// How the wires the rounds follow or carry bend (the drag's wiring mode,
+    /// #1669): the seed of every round's Policy, never changed by the guard.
+    pub(super) wiring: DragWiringMode,
 }
 
 impl Contacts {
@@ -144,6 +148,7 @@ impl Engine {
             tips: owners.pin_tips(&bailing),
             wires: live,
             bailed,
+            wiring: DragWiringMode::Auto,
         }
     }
 
@@ -214,6 +219,7 @@ impl Engine {
             tips: contacts.tips.clone(),
             wires: Vec::new(),
             bailed: contacts.bailed.clone(),
+            wiring: contacts.wiring,
         };
         if contacts.wires.is_empty() {
             return needed;
@@ -269,7 +275,12 @@ impl Engine {
         } else {
             guard
         };
-        let mut policy = crate::Policy::default();
+        // The drag's wiring mode shapes every follow and carry; the guard only
+        // moves contacts down the ladder, never the mode.
+        let mut policy = crate::Policy {
+            wiring: contacts.wiring,
+            ..crate::Policy::default()
+        };
         #[cfg(test)]
         if ALL_PLAIN.with(std::cell::Cell::get) {
             policy

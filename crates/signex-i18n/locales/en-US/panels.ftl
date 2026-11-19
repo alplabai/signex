@@ -495,6 +495,11 @@ panels-status-bar-selected-other = { $count } other
 # A drag in progress that carries the wires along. $key is the modifier key
 # that flips it (Alt).
 panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
+# The same, once the drag wiring mode (cycle_wiring_mode) is not automatic:
+# how a corner inserted in a following wire leaves its fixed end.
+panels-status-bar-drag-wires-horizontal-first = Dragging with wires, horizontal first ({ $key }: plain move)
+panels-status-bar-drag-wires-vertical-first = Dragging with wires, vertical first ({ $key }: plain move)
+panels-status-bar-drag-wires-straight = Dragging with wires, straight ({ $key }: plain move)
 # A drag in progress that leaves the wires. $key is the modifier key.
 panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
 # Measure tool prompts.

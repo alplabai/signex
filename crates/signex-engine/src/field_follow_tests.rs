@@ -77,6 +77,7 @@ fn fields_selected_with_their_symbol_move_once() {
                 dx: 2.54,
                 dy: 5.08,
                 keep_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
         assert_texts(
@@ -116,6 +117,7 @@ fn a_field_moved_on_its_own_still_moves() {
             dx: 1.27,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     assert_texts(
@@ -214,6 +216,7 @@ fn a_box_selection_of_several_parts_moves_each_text_once() {
             dx: 1.0,
             dy: 0.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     for (symbol, x) in engine.document().symbols.iter().zip([10.0, 30.0]) {
@@ -277,6 +280,7 @@ fn a_user_placed_text_moves_once_with_its_part() {
             dx: 2.54,
             dy: 5.08,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     assert_texts(

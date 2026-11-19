@@ -1,6 +1,7 @@
 //! Following: a wire end goes with its pin, sliding an elbow or bending.
 
 use signex_net::uf::Key;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
@@ -125,6 +126,9 @@ impl Env {
             segs,
             joins: vec![kf],
         };
+        if let Some(plans) = self.mode_plans(fixed, new, straight) {
+            return (plans, Vec::new());
+        }
         if !(horizontal || vertical) {
             return (vec![straight(vec![(fixed, new)])], Vec::new());
         }
@@ -150,6 +154,25 @@ impl Env {
             plans.push(straight(vec![(fixed, corner), (corner, new)]));
         }
         (plans, far_keys)
+    }
+
+    /// The routes a chosen drag wiring mode gives from `fixed` to `new`, in
+    /// place of the slide and the wire-direction rule; `None` for Auto. A
+    /// zero-length leg of an aligned L is dropped by the caller.
+    fn mode_plans(
+        &self,
+        fixed: Point,
+        new: Point,
+        plan: impl Fn(Vec<(Point, Point)>) -> Plan,
+    ) -> Option<Vec<Plan>> {
+        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
+        let corners = match self.policy.wiring {
+            DragWiringMode::Auto => return None,
+            DragWiringMode::Straight => return Some(vec![plan(vec![(fixed, new)])]),
+            DragWiringMode::HorizontalFirst => [across, down],
+            DragWiringMode::VerticalFirst => [down, across],
+        };
+        Some(corners.map(|c| plan(vec![(fixed, c), (c, new)])).into())
     }
 
     /// A wire that shrank to nothing goes when something else still holds its

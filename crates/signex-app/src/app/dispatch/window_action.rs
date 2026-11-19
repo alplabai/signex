@@ -184,6 +184,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | ToolMessage::ResumePlacement
                 | ToolMessage::CycleDrawMode
                 | ToolMessage::CornerFlipRequested
+                | ToolMessage::DragWiringCycleRequested
                 | ToolMessage::CancelDrawing
                 | ToolMessage::RemoveLastVertex
                 | ToolMessage::LastSegmentUndoRequested

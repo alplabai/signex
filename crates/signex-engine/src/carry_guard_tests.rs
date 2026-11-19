@@ -281,6 +281,7 @@ fn every_contact_plain_commits_the_plain_move() {
                 let command = Command::MoveEach {
                     moves: case.moves.clone(),
                     keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 };
                 engine.execute(command).expect("move");
                 engine
@@ -343,6 +344,7 @@ fn a_dragged_segment_never_leaves_a_bare_touch_on_a_pin_end() {
         let command = Command::MoveEach {
             moves: vec![(item, 0.0, 10.0)],
             keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         };
         engine.execute(command).expect("move");
         engine

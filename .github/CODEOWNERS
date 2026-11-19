@@ -21,3 +21,8 @@
 # The accepted command ids (#2447): removing a line removes a command, so
 # both maintainers own it, whatever overrides are added above.
 /scripts/catalog-ids.txt                         @hkngln @alpCaner
+
+# The UI-free state ratchet (ADR-0006, #2494): listing a module as UI-free or
+# raising the baseline needs a maintainer's approval.
+/scripts/uifree-state.txt                        @hkngln @alpCaner
+/scripts/uifree-state-baseline.txt               @hkngln @alpCaner

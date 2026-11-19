@@ -65,6 +65,9 @@ define_ids! {
     PANELS_STATUS_BAR_SELECTED_SHAPES = "panels-status-bar-selected-shapes";
     PANELS_STATUS_BAR_SELECTED_OTHER = "panels-status-bar-selected-other";
     PANELS_STATUS_BAR_DRAG_WITH_WIRES = "panels-status-bar-drag-with-wires";
+    PANELS_STATUS_BAR_DRAG_WIRES_HORIZONTAL_FIRST = "panels-status-bar-drag-wires-horizontal-first";
+    PANELS_STATUS_BAR_DRAG_WIRES_VERTICAL_FIRST = "panels-status-bar-drag-wires-vertical-first";
+    PANELS_STATUS_BAR_DRAG_WIRES_STRAIGHT = "panels-status-bar-drag-wires-straight";
     PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES = "panels-status-bar-move-without-wires";
     PANELS_STATUS_BAR_MEASURE_FIRST = "panels-status-bar-measure-first";
     PANELS_STATUS_BAR_MEASURE_SECOND = "panels-status-bar-measure-second";

@@ -300,6 +300,7 @@ fn commit_both_ways(rig: &Rig, moves: &Moves, keep_wires: bool, what: &str) -> b
         let result = engine.execute(Command::MoveEach {
             moves: moves.clone(),
             keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         });
         let result = result.map_err(|e| e.to_string());
         (
@@ -606,6 +607,7 @@ fn diagnose_corpus_folds() {
                 let command = Command::MoveEach {
                     moves: moves.clone(),
                     keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 };
                 engine.execute(command).expect("move");
                 (engine, tally::take())

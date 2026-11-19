@@ -440,6 +440,7 @@ impl Signex {
                 dx,
                 dy,
                 keep_wires: self.ui_state.move_keeps_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
             true,
             true,

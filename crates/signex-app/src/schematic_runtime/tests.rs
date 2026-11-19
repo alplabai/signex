@@ -288,6 +288,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
             dx: 10.0,
             dy: 5.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let moved = engine.document();
@@ -649,6 +650,35 @@ fn document_edit_refreshes_only_the_edited_collection() {
     cache.update_from_sheet(&doc, RenderInvalidation::PAPER, 2, 3);
     assert_eq!(cache.snapshot().paper_size, "A3");
     assert_eq!(cache.snapshot().frame.vertical_zones, 2);
+}
+
+/// #2444 — the sheet default font is a scalar in the snapshot; a font-family
+/// change invalidates the four text collections, so the partial copy has to
+/// refresh the font with them instead of keeping the old family.
+#[test]
+fn font_family_change_refreshes_the_cached_sheet_default_font() {
+    let mut doc = empty_snapshot();
+    doc.font_family = Some("Iosevka".into());
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+
+    let invalidation = RenderInvalidation::from(signex_engine::DocumentPatch::FONT_FAMILY);
+
+    doc.font_family = Some("Roboto".into());
+    cache.update_from_sheet(&doc, invalidation, 1, 2);
+    assert_eq!(
+        cache.snapshot().font_family.as_deref(),
+        Some("Roboto"),
+        "the cache must follow the engine's sheet default font"
+    );
+
+    // Undo and redo are the same FONT_FAMILY patch, so the cache follows them too.
+    doc.font_family = Some("Iosevka".into());
+    cache.update_from_sheet(&doc, invalidation, 2, 3);
+    assert_eq!(cache.snapshot().font_family.as_deref(), Some("Iosevka"));
+
+    doc.font_family = Some("Roboto".into());
+    cache.update_from_sheet(&doc, invalidation, 3, 4);
+    assert_eq!(cache.snapshot().font_family.as_deref(), Some("Roboto"));
 }
 
 #[test]

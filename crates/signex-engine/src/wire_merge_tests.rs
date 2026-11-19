@@ -410,6 +410,7 @@ fn wires_with_different_own_colours_never_fold_and_equal_ones_do() {
                 .execute(Command::MoveEach {
                     moves: vec![(wire_item(second), -5.0, 0.0)],
                     keep_wires: false,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 })
                 .expect("move");
             let folded = engine.document().wires.len() == 1;
@@ -447,6 +448,7 @@ fn moving_a_wire_into_line_folds_it_in_one_undo_step() {
             dx: 0.0,
             dy: -10.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     assert_eq!(spans(&engine), [((35.0, 50.0), (55.0, 50.0))]);
@@ -479,6 +481,7 @@ fn moving_both_halves_of_a_broken_wire_does_not_fold_them_again() {
             dx: 3.0,
             dy: 5.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     assert_eq!(engine.document().wires.len(), 2);
@@ -504,6 +507,7 @@ fn a_move_that_folds_never_changes_the_nets() {
             dx: 0.0,
             dy: -10.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     assert!(engine.document().wires.len() < 3, "it folded");

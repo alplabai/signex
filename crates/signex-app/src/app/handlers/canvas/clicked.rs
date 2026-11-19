@@ -4,7 +4,11 @@ use super::super::super::*;
 use super::shape_tool::ClickKind;
 
 impl Signex {
-    pub(super) fn handle_canvas_clicked(&mut self, world_x: f64, world_y: f64) -> Task<Message> {
+    pub(in crate::app::handlers) fn handle_canvas_clicked(
+        &mut self,
+        world_x: f64,
+        world_y: f64,
+    ) -> Task<Message> {
         // Altium-style lasso: first click anchors the start,
         // the cursor path auto-samples vertices, a second
         // click closes the polygon and commits. Escape /

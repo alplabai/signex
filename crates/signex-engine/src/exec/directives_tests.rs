@@ -134,6 +134,7 @@ fn a_directive_moves_turns_and_deletes_with_the_selection() {
             dx: 2.0,
             dy: 3.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let moved = engine.document().directives[0].region().unwrap();

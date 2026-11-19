@@ -6,6 +6,7 @@
 use super::drag_layers::{DragFrame, moved_item_ids};
 use super::ghost_split::{BaseIds, split_ghost_walk};
 use crate::schematic_runtime::SchematicRenderSnapshot;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::SelectedItem;
 
 /// The drag delta after grid snapping: the PRIMARY selected item's
@@ -327,6 +328,8 @@ pub struct GhostState {
     /// What the lock holds back from a plain-shift drag (keep-wires off, or a
     /// selection too large for the engine pass), found once per drag (#1918).
     plain: Option<PlainHold>,
+    /// The drag wiring mode `ghost` was built with (#1669).
+    wiring: DragWiringMode,
 }
 
 /// The selection a plain shift moves once the lock's holds are taken out.
@@ -386,12 +389,14 @@ impl GhostState {
             .map(|ghost| ghost.frame.clone())
     }
 
-    /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`:
-    /// the very sheet the engine would commit at that delta (see
-    /// [`signex_engine::MovePreview`]). Callers pass [`ghost_delta`].
-    /// The sheet's own net colours keep the fold the ghost shows the fold the
-    /// commit makes. The fold pass runs once per ghost delta step (O(wires)
-    /// per step on top of the rubber band).
+    /// Whether the ghost, if any, was built with `wiring`; a stale one is
+    /// neither drawn nor reused.
+    pub(super) fn is_built_for(&self, wiring: DragWiringMode) -> bool {
+        self.wiring == wiring
+    }
+
+    /// [`Self::refresh_wired`] in the default wiring mode.
+    #[cfg(test)]
     pub(super) fn refresh_with(
         &mut self,
         snap: &SchematicRenderSnapshot,
@@ -400,6 +405,27 @@ impl GhostState {
         dx: f64,
         dy: f64,
     ) -> Rc<SchematicRenderSnapshot> {
+        self.refresh_wired(snap, revision, selection, (dx, dy), DragWiringMode::Auto)
+    }
+
+    /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`
+    /// with its wires bent as `wiring` says: the very sheet the engine would
+    /// commit at that delta (see [`signex_engine::MovePreview`]). Callers
+    /// pass [`ghost_delta`]. The sheet's own net colours keep the fold the
+    /// ghost shows the fold the commit makes. The fold pass runs once per
+    /// ghost delta step (O(wires) per step on top of the rubber band).
+    pub(super) fn refresh_wired(
+        &mut self,
+        snap: &SchematicRenderSnapshot,
+        revision: u64,
+        selection: &[SelectedItem],
+        (dx, dy): (f64, f64),
+        wiring: DragWiringMode,
+    ) -> Rc<SchematicRenderSnapshot> {
+        if self.wiring != wiring {
+            self.ghost = None;
+            self.wiring = wiring;
+        }
         if let Some(ready) = self.ready_ghost(revision, selection, dx, dy) {
             return ready.snapshot.clone();
         }
@@ -416,7 +442,7 @@ impl GhostState {
         self.plain = None;
         let key = key_of(revision, selection, dx, dy);
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
-        let (moved, held) = session.moved_with(&moves, true);
+        let (moved, held) = session.moved_with_wiring(&moves, true, wiring);
         let snapshot = Rc::new(moved);
         let ids = match &self.base_ids {
             Some((rev, ids)) if super::drag_layers::is_known(revision) && *rev == revision => {
@@ -468,8 +494,11 @@ impl GhostState {
         let (kept, held) = match signex_engine::Engine::new(snap.clone()) {
             Ok(engine) => {
                 let moves = selection.iter().map(|item| (*item, 0.0, 0.0)).collect();
-                let (command, held) =
-                    engine.without_locked(signex_engine::Command::MoveEach { moves, keep_wires });
+                let (command, held) = engine.without_locked(signex_engine::Command::MoveEach {
+                    moves,
+                    keep_wires,
+                    wiring: DragWiringMode::Auto,
+                });
                 let kept = match command {
                     Some(signex_engine::Command::MoveEach { moves, .. }) => {
                         moves.into_iter().map(|(item, _, _)| item).collect()
@@ -695,6 +724,75 @@ mod tests {
         assert_eq!(sheet.wires.len(), 1, "the source snapshot is untouched");
     }
 
+    /// #1669 - a new wiring mode at the same delta is a new ghost, not the
+    /// cached one: pressing `cycle_wiring_mode` mid-drag changes the preview.
+    #[test]
+    fn a_changed_wiring_mode_rebuilds_the_ghost_at_the_same_delta() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut state = GhostState::default();
+        let auto = state.refresh_wired(&sheet, 1, &[item], (0.0, 10.0), DragWiringMode::Auto);
+        assert_eq!(auto.wires.len(), 2);
+        assert!(!state.is_built_for(DragWiringMode::Straight));
+        let straight =
+            state.refresh_wired(&sheet, 1, &[item], (0.0, 10.0), DragWiringMode::Straight);
+        assert!(state.is_built_for(DragWiringMode::Straight));
+        assert_eq!(straight.wires.len(), 1, "{:?}", straight.wires);
+        let w = &straight.wires[0];
+        let ends = [w.start, w.end];
+        assert!(ends.contains(&Point::new(30.0, 50.0)) && ends.contains(&Point::new(45.0, 60.0)));
+    }
+
+    /// #1669 - through the canvas: a drag's ghost is built in Auto, the mode
+    /// changes, and the next event (the redraw after the key, at the same
+    /// delta) rebuilds the ready ghost in the new mode.
+    #[test]
+    fn the_next_canvas_event_rebuilds_the_ghost_in_a_changed_mode() {
+        use crate::canvas::{CanvasSlot, CanvasState, SchematicCanvas};
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut slot = CanvasSlot::new();
+        slot.set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet_at(&sheet, 1),
+        ));
+        slot.selected = vec![item];
+        let (overrides, filters) = (Default::default(), Default::default());
+        let mut prefs = super::super::tests::test_prefs(&overrides, &filters);
+        prefs.snap_enabled = false;
+        prefs.snap_hotspots = false;
+        let mut state = CanvasState {
+            move_dragging: true,
+            move_origin: Some((50.0, 50.0)),
+            move_current: Some((50.0, 60.0)),
+            ..Default::default()
+        };
+        let ready = |canvas: &SchematicCanvas<'_>, state: &CanvasState| {
+            let (dx, dy) = canvas.drag_delta(state).expect("a drag");
+            let (gx, gy) = canvas.ghost_delta(dx, dy);
+            state.ghost.ready(1, &[item], gx, gy)
+        };
+
+        let auto = SchematicCanvas::new(&slot, prefs);
+        auto.refresh_drag_ghost(&mut state);
+        let before = ready(&auto, &state).expect("the Auto ghost");
+        assert_eq!(before.wires.len(), 2, "{:?}", before.wires);
+
+        prefs.drag_wiring = DragWiringMode::Straight;
+        let straight = SchematicCanvas::new(&slot, prefs);
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        let action = iced::widget::canvas::Program::update(
+            &straight,
+            &mut state,
+            &redraw,
+            bounds,
+            iced::mouse::Cursor::Unavailable,
+        );
+        assert!(action.is_some(), "the rebuilt ghost asks for a redraw");
+        let after = ready(&straight, &state).expect("the Straight ghost");
+        assert_eq!(after.wires.len(), 1, "no corner: {:?}", after.wires);
+    }
+
     #[test]
     fn the_ghost_is_exactly_what_the_commit_leaves() {
         let (sheet, item) = sheet_with_wired_resistor();
@@ -707,6 +805,7 @@ mod tests {
                 dx: 2.5,
                 dy: 10.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
         let committed: Vec<_> = engine
@@ -808,6 +907,7 @@ mod tests {
                 dx: 0.0,
                 dy: 10.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("commit");
         cache.update_from_sheet(
@@ -876,6 +976,7 @@ mod tests {
                 dx: 10.0,
                 dy: 0.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
         assert_eq!(engine.document().wires, ghost.wires, "same fold as commit");

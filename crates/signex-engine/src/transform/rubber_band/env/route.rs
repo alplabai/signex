@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use signex_net::uf::Key;
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
 use uuid::Uuid;
 
@@ -288,10 +289,13 @@ impl Env {
     ) -> bool {
         let across = Point::new(new.x, old.y);
         let down = Point::new(old.x, new.y);
-        let corners = if horizontal_first == Some(false) {
-            [down, across]
-        } else {
-            [across, down]
+        let corners = match self.policy.wiring {
+            // A corner on the new tip leaves one straight leg.
+            DragWiringMode::Straight => vec![new],
+            DragWiringMode::HorizontalFirst => vec![across, down],
+            DragWiringMode::VerticalFirst => vec![down, across],
+            DragWiringMode::Auto if horizontal_first == Some(false) => vec![down, across],
+            DragWiringMode::Auto => vec![across, down],
         };
         let allowed = [key(&old), key(&new)];
         for corner in corners {

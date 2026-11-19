@@ -2,8 +2,8 @@
 //! cursor with its look. A part arms another of the same part (body, value,
 //! footprint, fields) with the next free designator; a net label or port
 //! arms the label tool with its text, shape and text style; a
-//! text note arms the text tool with its text and style. The add-vertex half
-//! of the same key, while a wire or a shape is being drawn, is not here.
+//! text note arms the text tool with its text and style. While a wire, bus,
+//! line or polyline is being drawn the same key adds a vertex instead.
 
 use std::path::Path;
 
@@ -51,13 +51,25 @@ fn font_name(family: Option<&String>, sheet_default: &str) -> String {
 
 impl Signex {
     pub(super) fn copy_attributes_at(&mut self, at: Option<(f64, f64)>) -> Task<Message> {
-        if self.interaction_state.wire_drawing
+        // A wire or bus run, or a draw tool's shape mid-draw. Other tools that
+        // set a shape anchor (Measure, Sheet, Blanket) still copy attributes.
+        let is_draw_tool = matches!(
+            self.interaction_state.current_tool,
+            Tool::Wire
+                | Tool::Bus
+                | Tool::Line
+                | Tool::Polyline
+                | Tool::Rectangle
+                | Tool::Circle
+                | Tool::Arc
+        );
+        let is_drawing = self.interaction_state.wire_drawing
             || self.interaction_state.active_canvas().drawing_mode
-        {
-            crate::diagnostics::log_info(
-                "Copy attributes: finish or cancel the drawing first; adding a vertex while drawing is not available yet.",
-            );
-            return Task::none();
+            || (is_draw_tool
+                && (self.document_state.active_path.as_deref())
+                    .is_some_and(|p| self.is_drawing_on(p)));
+        if is_drawing {
+            return self.add_vertex_while_drawing(at);
         }
         let Some(target) = self.fragment_target("Copy attributes") else {
             return Task::none();
@@ -84,6 +96,28 @@ impl Signex {
                 Task::none()
             }
         }
+    }
+
+    /// The add-vertex half (#1669): fix a corner of the run being drawn at
+    /// the point `at`, else the cursor, exactly as a canvas click there
+    /// does, so the run goes on from it. The inverse of `undo_last_segment`.
+    fn add_vertex_while_drawing(&mut self, at: Option<(f64, f64)>) -> Task<Message> {
+        if !matches!(
+            self.interaction_state.current_tool,
+            Tool::Wire | Tool::Bus | Tool::Line | Tool::Polyline
+        ) {
+            crate::diagnostics::log_info(
+                "Add vertex: works while drawing a wire, a bus, a line or a polyline; finish or cancel this shape first.",
+            );
+            return Task::none();
+        }
+        let Some((x, y)) = at.or_else(|| self.cursor_world_now()) else {
+            crate::diagnostics::log_info(
+                "Add vertex: the cursor is not on the sheet being drawn, so no vertex was added.",
+            );
+            return Task::none();
+        };
+        self.handle_canvas_clicked(x, y)
     }
 
     /// The object under the point `at`, else under the cursor, else the

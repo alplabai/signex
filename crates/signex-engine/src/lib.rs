@@ -52,6 +52,8 @@ mod carry_guard_tests;
 #[cfg(test)]
 mod commit_local_tests;
 #[cfg(test)]
+mod drag_wiring_tests;
+#[cfg(test)]
 mod field_follow_tests;
 #[cfg(test)]
 mod lock_tests;
@@ -159,6 +161,7 @@ pub use sheet_sync::{
     unused_sheet_symbol_name,
 };
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
+use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub use transform::bare_pin_taps;
 pub use transform::pin_junction_repairs;
@@ -382,7 +385,19 @@ impl MovePreview {
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
     ) -> (SchematicSheet, Vec<String>) {
-        let Some((mut engine, held, result)) = self.moved_engine(moves, keep_wires) else {
+        self.moved_with_wiring(moves, keep_wires, DragWiringMode::Auto)
+    }
+
+    /// [`Self::moved_with`] with the drag's wiring mode, as the commit's
+    /// [`Command::MoveSelection`] carries it.
+    #[must_use]
+    pub fn moved_with_wiring(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+        wiring: DragWiringMode,
+    ) -> (SchematicSheet, Vec<String>) {
+        let Some((mut engine, held, result)) = self.moved_engine(moves, keep_wires, wiring) else {
             return (SchematicSheet::clone(&self.sheet), Vec::new());
         };
         if !matches!(result, Some(Ok(_))) {
@@ -399,6 +414,7 @@ impl MovePreview {
         &self,
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
+        wiring: DragWiringMode,
     ) -> Option<MovedEngine> {
         let mut engine = Engine::new(SchematicSheet::clone(&self.sheet)).ok()?;
         engine.preset_before = Some(self.before.clone());
@@ -420,6 +436,7 @@ impl MovePreview {
             Command::MoveEach {
                 moves: moves.to_vec(),
                 keep_wires,
+                wiring,
             },
             &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
         );
@@ -434,7 +451,7 @@ impl MovePreview {
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
     ) -> Option<MovedEngine> {
-        self.moved_engine(moves, keep_wires)
+        self.moved_engine(moves, keep_wires, DragWiringMode::Auto)
     }
 }
 
@@ -1238,6 +1255,7 @@ mod tests {
                 dx: 35.0,
                 dy: -100.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .unwrap();
 
@@ -1733,6 +1751,7 @@ mod tests {
                 dx: 0.0,
                 dy: -3.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("drag stub");
 
@@ -1771,6 +1790,7 @@ mod tests {
                 dx: 0.0,
                 dy: -8.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("drag stub");
 
@@ -1837,6 +1857,7 @@ mod tests {
                 dx: 0.0,
                 dy: -3.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("drag stub onto trunk");
         assert_eq!(engine.document().junctions.len(), 1);
@@ -1854,6 +1875,7 @@ mod tests {
                 dx: 0.0,
                 dy: 20.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("drag stub away");
 
@@ -1907,6 +1929,7 @@ mod tests {
                 dx: 1.0,
                 dy: 1.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move trunk");
 
