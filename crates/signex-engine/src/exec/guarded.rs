@@ -206,8 +206,9 @@ impl Engine {
                 .plain
                 .extend(contacts.wires.iter().map(crate::WirePoint::old_key));
         }
-        let tips_now: Vec<Option<Point>> =
-            (contacts.tips.iter()).map(|tip| tip.now(at.moved)).collect();
+        let tips_now: Vec<Option<Point>> = (contacts.tips.iter())
+            .map(|tip| tip.now(at.moved))
+            .collect();
         for round in 0.. {
             self.document = at.moved.clone();
             let carried = crate::carry_points(&mut self.document, &contacts.wires, items, &policy);
@@ -239,11 +240,7 @@ impl Engine {
                         .map(|w| (w.old(), w.new_point()))
                         .collect();
                     let tips = contacts.tips.iter().map(|t| t.ident().clone()).collect();
-                    *last.borrow_mut() = Some(Record {
-                        plain,
-                        wires,
-                        tips,
-                    });
+                    *last.borrow_mut() = Some(Record { plain, wires, tips });
                 });
                 return patch;
             };

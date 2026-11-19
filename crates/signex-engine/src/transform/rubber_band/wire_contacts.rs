@@ -214,8 +214,8 @@ pub fn held_at(before: &SchematicSheet, at: Point, moving: &HashSet<Uuid>) -> Op
     if let Some((child, pin)) = sheet_pin {
         return Some(format!("{} pin {}", child.name, pin.name));
     }
-    let label = (before.labels.iter())
-        .find(|l| !moving.contains(&l.uuid) && pt_key(&l.position) == k);
+    let label =
+        (before.labels.iter()).find(|l| !moving.contains(&l.uuid) && pt_key(&l.position) == k);
     if let Some(label) = label {
         return Some(format!("label {}", label.text));
     }

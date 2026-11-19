@@ -177,7 +177,9 @@ pub(crate) fn check_allowed(
     }
     let missing: Vec<_> = want.difference(&got).collect();
     let extra: Vec<_> = got.difference(&want).collect();
-    Err(format!("NOT ALLOWED: the rule asks for {missing:?}, the move made {extra:?}"))
+    Err(format!(
+        "NOT ALLOWED: the rule asks for {missing:?}, the move made {extra:?}"
+    ))
 }
 
 /// The cases the property run once collected as failures (silent splits, a
@@ -210,9 +212,17 @@ fn the_collected_property_cases_hold() {
 }
 
 /// What a sheet holds that a move can change, ids of fresh dots aside.
-fn shape(sheet: &SchematicSheet) -> (BTreeSet<(Uuid, String)>, BTreeSet<(String, bool)>) {
+/// Wires (id, geometry) and dots (place, minted) of a sheet.
+type Shape = (BTreeSet<(Uuid, String)>, BTreeSet<(String, bool)>);
+
+fn shape(sheet: &SchematicSheet) -> Shape {
     let wires = (sheet.wires.iter())
-        .map(|w| (w.uuid, format!("{:?}-{:?}", pt_key(&w.start), pt_key(&w.end))))
+        .map(|w| {
+            (
+                w.uuid,
+                format!("{:?}-{:?}", pt_key(&w.start), pt_key(&w.end)),
+            )
+        })
         .collect();
     let dots = (sheet.junctions.iter())
         .map(|j| (format!("{:?}", pt_key(&j.position)), j.minted))

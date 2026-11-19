@@ -751,8 +751,7 @@ impl<'a> Guard<'a> {
         let moved: Vec<&PinIdent> = tips.iter().map(PinTip::ident).collect();
         let named = |net: &NetSignature| {
             let terminal = (net.terminals.iter()).any(|(s, p)| {
-                terminals.contains(&(*s, p.clone()))
-                    && !holds_any_terminal(&moved, *s, p.as_str())
+                terminals.contains(&(*s, p.clone())) && !holds_any_terminal(&moved, *s, p.as_str())
             });
             let pin = (net.sheet_pins.iter())
                 .any(|u| pins.contains(u) && !moved.contains(&&PinIdent::SheetPin(*u)));
