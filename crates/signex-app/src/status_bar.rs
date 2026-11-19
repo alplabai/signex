@@ -1,6 +1,7 @@
-//! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
+//! Bottom status bar: the cursor, grid and snap, the tool and its hint at the
+//! left; the selection, zoom and the Panels button at the right.
 
-use iced::Element;
+use iced::{Color, Element};
 use signex_i18n::Localized;
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
@@ -9,11 +10,16 @@ use signex_types::theme::ThemeTokens;
 use crate::app::StatusBarRequest;
 use crate::styles;
 
+mod clusters;
 mod graphite;
+mod grid_popover;
 pub use graphite::{
-    POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, panels_button, popup,
-    popup_height, popup_row, popup_row_height,
+    POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, grid_readout_x,
+    panel_list_height, panels_button, popup, popup_caption_height, popup_caption_padding,
+    popup_row, popup_row_height,
 };
+pub use grid_popover::{GridPopoverEvent, GridSnapPopover, GridSnapSettings};
+pub(crate) use grid_popover::{HOTSPOTS_COMMAND, view as grid_popover_view};
 
 /// Height of the status bar: a fixed band from [`styles::ChromeMetrics`].
 /// A layout probe in `canvas_region` ties it to the laid-out bar.
@@ -35,16 +41,29 @@ pub(crate) struct Readout<'r> {
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
-    pub board: BoardReadout,
+    pub surface: SurfaceReadout,
 }
 
-/// What the status bar shows of the board in view; empty without one.
+/// What the status bar shows of the surface in view beyond the cursor and
+/// grid; empty for a surface without a board or a sheet.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct BoardReadout {
-    /// The active copper layer: a caption and the name.
-    pub active_layer: Option<(Localized, Localized)>,
+pub(crate) struct SurfaceReadout {
+    /// The active copper layer of a board in view.
+    pub active_layer: Option<LayerReadout>,
     /// The view's turn on screen (#2316).
     pub view_angle: Option<ViewAngleReadout>,
+    /// Whether a right-click on the Grid read-out opens the Grid & Snap
+    /// popover: on a schematic sheet only.
+    pub opens_grid_popover: bool,
+}
+
+/// The board's active layer pill: a caption, the name and the colour the
+/// board view draws the layer in.
+#[derive(Debug, Clone)]
+pub(crate) struct LayerReadout {
+    pub caption: Localized,
+    pub name: Localized,
+    pub colour: Color,
 }
 
 /// The board view's angle readout (#2316): a click opens a value field.
@@ -139,10 +158,10 @@ pub(crate) fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&Activity>,
-    board: BoardReadout,
+    surface: SurfaceReadout,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
-    graphite::view(
+    clusters::view(
         &Readout {
             x,
             y,
@@ -156,7 +175,7 @@ pub(crate) fn view<'a>(
             pending_git_commits,
             altium_import,
             activity,
-            board,
+            surface,
         },
         tokens,
         i18n,

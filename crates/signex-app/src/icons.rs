@@ -209,6 +209,9 @@ canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
 canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
+// The status bar's Panels button and the open mark in its panel list.
+canonical_icon!(icon_chrome_check, "chrome/check.svg");
+canonical_icon!(icon_chrome_panels, "chrome/panels.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 

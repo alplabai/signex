@@ -503,12 +503,13 @@ panels-status-bar-grid = Grid { $grid }
 panels-status-bar-grid-off = Grid OFF
 panels-status-bar-snap-on = Snap on
 panels-status-bar-snap-off = Snap off
-panels-status-bar-tool = Tool: { $tool }
+# The active tool's name alone; the live hint follows it.
+panels-status-bar-tool = { $tool }
 panels-status-bar-importing = Importing { $name }… ✕
-# The cursor position. $value is the coordinate as a number; $unit is the
-# unit symbol (mm, mil, in, µm).
-panels-status-bar-x = X { $value } { $unit }
-panels-status-bar-y = Y { $value } { $unit }
+# The cursor position. $value is the coordinate as a number; the unit is
+# written once after Y.
+panels-status-bar-x = X { $value }
+panels-status-bar-y = Y { $value }
 # The zoom level; $percent is a whole number, already written out.
 panels-status-bar-zoom = { $percent }%
 # Shown while saved documents are being committed to the project history;
@@ -554,6 +555,26 @@ panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with
 # Measure tool prompts.
 panels-status-bar-measure-first = Click the first point
 panels-status-bar-measure-second = Click the second point
+# The Grid & Snap popover a right-click on the Grid read-out opens.
+panels-grid-snap-title = Grid & Snap
+# The label of a grid's spacing field.
+panels-grid-snap-pitch = Pitch
+# A pitch callout on the drawing; $pitch is the spacing with its unit symbol.
+panels-grid-snap-pitch-value = { $pitch }
+panels-grid-snap-foot = The same settings as Properties ▸ Document Options ▸ General; a change here shows there.
+# Group captions of the status bar's panel list.
+panels-list-group-project = Project
+panels-list-group-inspect = Inspect
+panels-list-group-verify = Verify
+panels-list-group-library = Library
+panels-list-group-pcb = PCB
+# Where an open panel is, at the right of its row in the panel list.
+panels-list-region-left = left
+panels-list-region-right = right
+panels-list-region-bottom = bottom
+panels-list-region-floating = floating
+# A panel detached into a window of its own.
+panels-list-region-window = window
 panels-erc-run = Run ERC (F8)
 panels-erc-clear = Clear
 panels-erc-running = Running…

@@ -174,11 +174,24 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   middle of drawing a wire, where it cancels the wire.
 - **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer.
 - **Fit the sheet:** **View ▸ Fit All**.
-- **Grid:** the status bar at the bottom shows the grid size and whether
-  snapping is on (**Snap**) or off (**Free**). Click the grid value to show or
-  hide the grid, and click **Snap/Free** to switch snapping. **View ▸ Toggle
-  Grid** does the same as the grid click. Placed objects snap to the grid
-  while snapping is on.
+- **Grid:** the status bar at the bottom shows the grid size with its unit
+  (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
+  (**Snap off**). Click the grid value to show or hide the grid, and click the
+  Snap pill to switch snapping. **View ▸ Toggle Grid** does the same as the
+  grid click. Placed objects snap to the grid while snapping is on.
+  Right-click the grid value on a schematic to open **Grid & Snap**: Visible
+  Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
+  the two grids. These are the settings of **Properties ▸ Document Options ▸
+  General**, so a change in one place shows in the other. The small drawing at
+  the top shows what the settings do and redraws as you change them.
+- **Status bar:** at the left, the cursor's X and Y followed by the unit
+  (click the unit to step through mm, mil, in and um), then the grid and snap,
+  then the active tool and what it is doing. At the right, the selection
+  (click it to open Properties), the zoom and the **Panels** button. The
+  Panels list groups the panels under Project, Inspect, Verify, Library and
+  PCB; an open panel has a check and says where it is (left, right, bottom,
+  floating or window). Click a panel to open it, or to bring an open one
+  forward.
 
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps

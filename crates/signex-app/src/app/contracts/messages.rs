@@ -283,6 +283,13 @@ pub enum OverlayMsg {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// The Grid read-out of `window`'s status bar was right-clicked: the
+    /// Grid & Snap popover opens there, or closes when it is open there.
+    GridSnapPopoverToggled(iced::window::Id),
+    /// A press outside the Grid & Snap popover closed it.
+    GridSnapPopoverDismissed,
+    /// The pointer moved over the popover's drawing or a Pitch row.
+    GridSnapPreviewHovered(signex_widgets::property_illustration::IllustrationMsg),
 }
 
 /// What a finished `Mod` move of a custom shortcut profile hands back.

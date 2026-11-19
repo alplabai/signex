@@ -330,6 +330,7 @@ impl Signex {
                 window_os_scales: std::collections::HashMap::new(),
                 undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
+                grid_snap_popover: None,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
