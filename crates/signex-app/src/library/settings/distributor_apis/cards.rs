@@ -231,7 +231,9 @@ fn head<'a>(
         .spacing(SP.m)
         .align_y(Alignment::Center);
     if let Some(action) = action {
-        head = head.push(Space::new().width(Length::Fill)).push(action);
+        head = head
+            .push(Space::new().width(Length::Fill).boxed())
+            .push(action);
     }
     head.boxed()
 }

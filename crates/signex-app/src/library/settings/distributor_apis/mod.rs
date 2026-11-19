@@ -12,7 +12,7 @@ mod order;
 pub(crate) use order::grip_handle;
 
 use iced::widget::{column, container, mouse_area, row};
-use iced::{Background, Border, Element, Font, Length, Theme, Widget as _};
+use iced::{Background, Border, Element, Font, Length, Theme, Widget};
 use signex_i18n::I18n;
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
@@ -122,11 +122,11 @@ fn error_caption<'a>(
 
 /// A distributor card: the panel fill, a hairline border and the card radius.
 fn card<'a>(
-    content: impl Into<Element<'a, LibraryMessage>>,
+    content: impl Widget<LibraryMessage, Theme, iced::Renderer> + 'a,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let (fill, line) = (ti(tokens.panel_bg), ti(tokens.border));
-    container(content)
+    container(content.boxed())
         .padding([SP.l, SP.l + SP.xs])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {

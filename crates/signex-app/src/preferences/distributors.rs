@@ -4,7 +4,7 @@
 
 use super::setting_row;
 use super::{PrefMsg, PrefsView};
-use iced::Element;
+use iced::{Element, Widget as _};
 use signex_i18n::{ids, t};
 
 /// The Distributor APIs page: heading, intro, then the cards beside the
@@ -24,7 +24,8 @@ pub(super) fn content_library_distributors<'a>(v: PrefsView<'a>) -> Element<'a, 
     );
     let pane =
         crate::library::settings::distributor_apis::view(v.distributor_settings, tokens, i18n)
-            .map(wrap_library_message);
+            .map(wrap_library_message)
+            .boxed();
     setting_row::page(vec![heading, pane])
 }
 

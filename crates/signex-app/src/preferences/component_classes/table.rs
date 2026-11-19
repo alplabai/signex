@@ -227,7 +227,8 @@ fn class_row<'a>(
         label_cell = label_cell.push(
             container(text(t!(i18n, ids::PREFERENCES_CLASSES_NEW)).size(TS.caption))
                 .padding([SP.xs / 2.0, SP.s + SP.xs])
-                .style(crate::styles::pill(tokens, PillTone::Accent)),
+                .style(crate::styles::pill(tokens, PillTone::Accent))
+                .boxed(),
         );
     }
 

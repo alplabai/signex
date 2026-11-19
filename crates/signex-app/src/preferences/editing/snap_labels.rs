@@ -245,7 +245,7 @@ fn tag_view<'a>(tag: LabelTag, c: &PreviewColours) -> Element<'a, PrefMsg> {
         .padding(0.0)
         .style(|_: &Theme, _| button::Style::default())
         .on_press(label_msg(DimensionLabelMessage::LabelPressed(tag.index)));
-    Element::new(Translate::new(pressable, (bounds.x, bounds.y)))
+    Translate::new(pressable.boxed(), (bounds.x, bounds.y)).boxed()
 }
 
 /// The open label: a field holding the typed pitch.
@@ -281,7 +281,7 @@ fn field<'a>(tag: LabelTag, draft: &'a str, c: &PreviewColours) -> Element<'a, P
                 ..selection
             },
         });
-    Element::new(Translate::new(input, (x, bounds.y)))
+    Translate::new(input.boxed(), (x, bounds.y)).boxed()
 }
 
 /// The ● handle that drags a pitch along the arrow.
@@ -308,10 +308,11 @@ fn handle<'a>(index: usize, at: Point, c: &PreviewColours) -> Element<'a, PrefMs
     let grip = mouse_area(target)
         .on_press(label_msg(DimensionLabelMessage::HandlePressed(index)))
         .interaction(mouse::Interaction::ResizingHorizontally);
-    Element::new(Translate::new(
-        grip,
+    Translate::new(
+        grip.boxed(),
         (at.x - HANDLE_HIT / 2.0, at.y - HANDLE_HIT / 2.0),
-    ))
+    )
+    .boxed()
 }
 
 #[cfg(test)]

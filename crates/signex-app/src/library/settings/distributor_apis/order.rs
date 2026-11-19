@@ -41,7 +41,8 @@ pub(super) fn order_column<'a>(
             text(UserText::new(path))
                 .size(TS.caption)
                 .font(mono())
-                .color(resolve(tokens).ink3),
+                .color(resolve(tokens).ink3)
+                .boxed(),
         );
     }
     // A failed save must be visible here and now — otherwise the reorder

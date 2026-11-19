@@ -16,10 +16,11 @@ pub(in crate::preferences) fn catch_keys<'a, Message: 'a>(
     content: Element<'a, Message>,
     on_key: impl Fn(&Key, Modifiers) -> Option<Message> + 'a,
 ) -> Element<'a, Message> {
-    Element::new(KeyCatcher {
+    KeyCatcher {
         content,
         on_key: Box::new(on_key),
-    })
+    }
+    ._boxed()
 }
 
 struct KeyCatcher<'a, Message> {
