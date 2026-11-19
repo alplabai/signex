@@ -119,6 +119,10 @@ fn complete_rkm_properties_are_isolated_in_the_encoder_tab() {
     control.update(CalculatorMessage::RkmEncoder(
         RkmEncoderMessage::RatedPowerChanged(RatedPower::Watts0_63),
     ));
+    // The production date is enable-first (m17): switch it on, then pick.
+    control.update(CalculatorMessage::RkmEncoder(
+        RkmEncoderMessage::ProductionDateToggled(true),
+    ));
     control.update(CalculatorMessage::RkmEncoder(
         RkmEncoderMessage::ProductionDateCycleChanged(ProductionDateCycle::TwentyYear),
     ));
