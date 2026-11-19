@@ -704,6 +704,61 @@ impl<'a> Guard<'a> {
         .map_or_else(String::new, |(_, name)| name)
     }
 
+    /// Whether [`Self::reference`] is the pre-move nets: a kept power port
+    /// and nothing but symbols moved.
+    fn before_is_reference(&self, tips: &[PinTip], policy: &Policy) -> bool {
+        let power_stays = tips
+            .iter()
+            .any(|t| t.is_power() && self.was_connected(t) && !policy.plain.contains(&t.old_key()));
+        power_stays && self.only_symbols_moved()
+    }
+
+    /// The pre-move reference leaves the warned pins out of both sides, yet
+    /// provisional decision (b) puts each on exactly the net the plain move
+    /// gives it. Where a warned pin's net in `candidate` differs from its net
+    /// in the plain move (the moved pins left out of both), the plain one
+    /// goes to `want` and the candidate's to `got`, so the comparison fails
+    /// and blames what joined it.
+    fn restate_warned(
+        &self,
+        candidate: &SchematicSheet,
+        tips: &[PinTip],
+        policy: &Policy,
+        want: &mut Projected,
+        got: &mut Projected,
+    ) {
+        let warned = warned_idents(tips, policy, |tip| self.was_connected(tip));
+        if warned.is_empty() {
+            return;
+        }
+        let mut terminals: Terminals = BTreeSet::new();
+        let mut sheet_pins: BTreeSet<Uuid> = BTreeSet::new();
+        for tip in tips {
+            match tip.ident() {
+                PinIdent::Terminal(s, p) => {
+                    terminals.insert((*s, p.clone()));
+                }
+                PinIdent::SheetPin(u) => {
+                    sheet_pins.insert(*u);
+                }
+            }
+        }
+        let plain = &self.plain_view(tips).nets;
+        let now = self.nets_of(candidate);
+        for ident in warned {
+            let on = |nets: &[NetSignature]| {
+                (nets.iter())
+                    .find(|net| holds(net, ident))
+                    .and_then(|net| net.without(&terminals, &sheet_pins))
+            };
+            let (was, is) = (on(plain), on(&now));
+            if was != is {
+                want.extend(was);
+                got.extend(is);
+            }
+        }
+    }
+
     /// The reference to compare with: the user's intent. A kept power port
     /// also merges nets by name, which the intent cannot restate once the
     /// user's own co-selected edits (a wire, label or dot that left its place)
@@ -714,10 +769,7 @@ impl<'a> Guard<'a> {
         skip: &Exclusions,
         policy: &Policy,
     ) -> (Projected, Exclusions) {
-        let power_stays = tips
-            .iter()
-            .any(|t| t.is_power() && self.was_connected(t) && !policy.plain.contains(&t.old_key()));
-        if !(power_stays && self.only_symbols_moved()) {
+        if !self.before_is_reference(tips, policy) {
             return self.intent(tips, skip, policy);
         }
         let sigs = if skip.power_out.is_empty() {
@@ -797,7 +849,7 @@ impl<'a> Guard<'a> {
         edited: &[Key],
     ) -> (bool, Option<Vec<Key>>) {
         let skip = self.exclusions(tips, policy);
-        let (want, extra) = self.reference(tips, &skip, policy);
+        let (mut want, extra) = self.reference(tips, &skip, policy);
         // Pins with an undefined plain connection stay out of both sides;
         // skipped pins are compared against where the plain move left them.
         let sigs = if skip.power_out.is_empty() {
@@ -805,7 +857,10 @@ impl<'a> Guard<'a> {
         } else {
             self.nets_of(&Self::strip(candidate, &skip.power_out))
         };
-        let got = Self::project(&sigs, &extra);
+        let mut got = Self::project(&sigs, &extra);
+        if self.before_is_reference(tips, policy) {
+            self.restate_warned(candidate, tips, policy, &mut want, &mut got);
+        }
         if want == got {
             return (true, None);
         }
