@@ -44,4 +44,24 @@ define_ids! {
     PASTE_ARRAY_STEP = "paste-array-step";
     PASTE_ARRAY_DESIGNATORS = "paste-array-designators";
     PASTE_ARRAY_HINT = "paste-array-hint";
+    FIND_SIMILAR_COUNT_SHEET = "find-similar-count-sheet";
+    FIND_SIMILAR_COUNT_BOARD = "find-similar-count-board";
+    FIND_SIMILAR_COUNT_ELSEWHERE = "find-similar-count-elsewhere";
+    FIND_SIMILAR_SELECT = "find-similar-select";
+    PASTE_ARRAY_SUBTITLE = "paste-array-subtitle";
+    PASTE_ARRAY_GROUP_LAYOUT = "paste-array-group-layout";
+    PASTE_ARRAY_GROUP_NUMBERING = "paste-array-group-numbering";
+    PASTE_ARRAY_SPACING = "paste-array-spacing";
+    PASTE_ARRAY_AXIS_X = "paste-array-axis-x";
+    PASTE_ARRAY_AXIS_Y = "paste-array-axis-y";
+    PASTE_ARRAY_COUNT_UP = "paste-array-count-up";
+    PASTE_ARRAY_PREVIEW_CAPTION = "paste-array-preview-caption";
+    PASTE_ARRAY_PREVIEW_MORE = "paste-array-preview-more";
+    PASTE_ARRAY_PREVIEW_X = "paste-array-preview-x";
+    PASTE_ARRAY_PREVIEW_Y = "paste-array-preview-y";
+    PASTE_ARRAY_HINT_EXAMPLE = "paste-array-hint-example";
+    PASTE_ARRAY_HINT_SAME = "paste-array-hint-same";
+    PASTE_ARRAY_ITEMS = "paste-array-items";
+    PASTE_ARRAY_PASTE = "paste-array-paste";
+    PASTE_ARRAY_PASTE_NONE = "paste-array-paste-none";
 }

@@ -52,7 +52,7 @@ find-similar-any = Any
 find-similar-scope-sheet = Current sheet
 find-similar-scope-project = Whole project
 find-similar-footer = Selects every match. Matches on other sheets are only counted.
-# $seed names the object the search starts from, such as "Symbol R1", in
+# $seed names the object the search starts from, such as "Part R1", in
 # English.
 find-similar-seed = Seed: { $seed }
 
@@ -66,3 +66,51 @@ paste-array-y-spacing = Y spacing ({ $unit })
 paste-array-step = Text increment step
 paste-array-designators = Designators
 paste-array-hint = Copy k sits k spacings from the original; label numbers count up by k steps.
+
+## Find Similar Objects: counts and the Select button (#2526)
+# $count is how many objects match on the dialog's sheet.
+find-similar-count-sheet = { $count } on this sheet
+# $count is how many objects match on the dialog's board.
+find-similar-count-board = { $count } on this board
+# $count is how many objects match on the project's other sheets.
+find-similar-count-elsewhere = { $count } more on other sheets
+# The primary button; $count is how many objects it selects.
+find-similar-select = Select { $count }
+
+## Paste Array: groups, preview and footer (#2527)
+# Header subtitle; $count is how many items one copy holds.
+paste-array-subtitle = { $count ->
+    [one] 1 item per copy
+   *[other] { $count } items per copy
+}
+paste-array-group-layout = Layout
+paste-array-group-numbering = Numbering
+paste-array-spacing = Spacing
+# Prefix inside the X spacing field.
+paste-array-axis-x = X
+# Prefix inside the Y spacing field.
+paste-array-axis-y = Y
+paste-array-count-up = Count up label numbers
+paste-array-preview-caption = Preview · copy 1 is the original
+# Beside the last drawn copy; $count is how many copies are not drawn.
+paste-array-preview-more = +{ $count } more
+# Spacing callout on the preview; $value is the length with its unit.
+paste-array-preview-x = X { $value }
+# Spacing callout on the preview; $value is the length with its unit.
+paste-array-preview-y = Y { $value }
+# Worked example; $from is a copied label and $to its texts in the first
+# copies, such as "D1, D2, D3".
+paste-array-hint-example = Copy k sits k spacings from the original; label numbers count up by k steps ({ $from } → { $to }).
+paste-array-hint-same = Label numbers are not counted up: every copy keeps its label text, so the labels of all copies join one net.
+# Footer; $count is how many items the paste places.
+paste-array-items = { $count ->
+    [one] 1 item will be placed
+   *[other] { $count } items will be placed
+}
+# The primary button; $count is how many copies it places.
+paste-array-paste = { $count ->
+    [one] Paste 1 copy
+   *[other] Paste { $count } copies
+}
+# The primary button while the Copies field does not parse.
+paste-array-paste-none = Paste
