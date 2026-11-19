@@ -96,7 +96,8 @@ separator): Tile Horizontally, Tile Vertically, Untile (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
-[Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
+[Design ▸ Layer Stack Manager](#design-layer-stack)), the Rooms submenu (see
+[Design ▸ Rooms](#design-rooms)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
 greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
@@ -337,6 +338,15 @@ command is a palette row and the layer tab menu's "Layer stack..." row; no
 keymap preset binds it. The table and its rules:
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md#stack).
 
+## Design ▸ Rooms {#design-rooms}
+
+Design ▸ Rooms (#2457) holds Create Rooms from Sheets..., which runs
+`create_rooms_from_sheets`: it reads the sheets of the board's project off
+the update thread and opens its dialog. It is greyed unless a board that is
+not read-only is in view and belongs to an open project (`Needs::PcbInProject`).
+No keymap preset binds it. Rooms, the dialog and its plan:
+[PCB_ROOMS.md](PCB_ROOMS.md#create-rooms-from-sheets).
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active
@@ -466,7 +476,8 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 Place follows the document in view (#2360). While the window shows a board
 (`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
-String, Dimension and Keepout, the Graphics submenu (Line, Arc, Full Circle,
+String, Dimension, Keepout and Room (`place_board_room`, #2457), the
+Graphics submenu (Line, Arc, Full Circle,
 Rectangle and Text Frame on non-copper layers, #2424, the PCB Active Bar's
 Graphics group), then Board Sketch (`board_sketch`, the same command as
 Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps

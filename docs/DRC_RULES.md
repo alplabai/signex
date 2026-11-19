@@ -150,6 +150,14 @@ written rule (`user::<name>`), with the kind's built-in id
 `builtin::paste_expansion`, `builtin::courtyard_overlap`) for its severity
 and waiver key.
 
+**Part outside its room** (`builtin::part_outside_room`, #2457) is a
+built-in kind with no rule text: error by default, its severity set like any
+built-in's. It checks only rooms with Keep parts inside: a member part whose
+body is not inside the room's outline shrunk by the room's margin is a
+finding naming the part, the room and the distance ("R2 is 1.2 mm outside
+room dcdc"). A board without such rooms gets the report it got before. Rooms:
+[PCB_ROOMS.md](PCB_ROOMS.md#design-rule).
+
 ## Which rule applies
 
 For each net, the most specific rule wins, even when it is looser:

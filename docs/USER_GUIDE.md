@@ -971,6 +971,20 @@ board is greyed with the reason "not available on boards yet".
 board. Run **Design ▸ Update Schematics** afterwards to carry the new names
 to the schematic; otherwise the next Update PCB renames them back.
 
+**Rooms** group the parts of each sheet:
+
+- **Design ▸ Rooms ▸ Create Rooms from Sheets…** makes one room per sheet
+  (`name_CH1`, `name_CH2`, … for a sheet placed several times), shows them
+  on a preview, and on **Create** draws them and moves the parts that Update
+  PCB left beside the board into their rooms. One undo takes it all back.
+- **Place ▸ Room** draws a room by two corners.
+- Select a room to edit it in **Properties**: name, sheet, side, position and
+  size. Moving a room moves its parts. **Keep parts inside** makes a part
+  outside the room, or inside its margin, a DRC error; **Pull parts into
+  room** moves them back in.
+
+More: [PCB_ROOMS.md](PCB_ROOMS.md).
+
 ## Board 4. Route and pour copper
 
 **Route a connection**
