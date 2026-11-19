@@ -78,6 +78,11 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     for cs in &sch.child_sheets {
         extend(cs.position.x, cs.position.y);
         extend(cs.position.x + cs.size.0, cs.position.y + cs.size.1);
+        // The stack behind a repeated sheet symbol (#1279) is part of it.
+        if let Some(stack) = signex_types::schematic::RepeatStack::of(cs) {
+            let [_, _, x1, y1] = stack.layers[0].rect;
+            extend(x1, y1);
+        }
     }
 
     for drawing in &sch.drawings {

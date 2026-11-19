@@ -22,6 +22,7 @@ mod geometry;
 mod glyph_height_tests;
 mod labels;
 mod markers;
+mod repeat_stack;
 mod symbols;
 mod text;
 mod wire_style;

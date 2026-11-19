@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use signex_types::project::{
-    AnnotateUndo, ListMove, ProjectData, RequirementEntry, VariantProblem,
+    AnnotateUndo, ChannelNaming, ListMove, ProjectData, RequirementEntry, VariantProblem,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -47,6 +47,11 @@ pub enum ProjectSectionCommand {
     SetVersionControl {
         on: bool,
     },
+    /// How channels of a repeated sheet name designators and local nets
+    /// (#1279).
+    SetChannelNaming {
+        naming: ChannelNaming,
+    },
 }
 
 impl ProjectSectionCommand {
@@ -70,6 +75,9 @@ impl ProjectSectionCommand {
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,
+            Self::SetChannelNaming { naming } => {
+                data.schematic_design.channel_naming = naming.clone();
+            }
         }
         Ok(())
     }
@@ -87,6 +95,7 @@ pub(super) struct SectionsSnapshot {
     enable_git: bool,
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
+    channel_naming: ChannelNaming,
 }
 
 impl SectionsSnapshot {
@@ -98,6 +107,7 @@ impl SectionsSnapshot {
             active_variant: data.active_variant.clone(),
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
+            channel_naming: data.schematic_design.channel_naming.clone(),
         }
     }
 
@@ -108,5 +118,6 @@ impl SectionsSnapshot {
         data.active_variant = self.active_variant;
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
+        data.schematic_design.channel_naming = self.channel_naming;
     }
 }

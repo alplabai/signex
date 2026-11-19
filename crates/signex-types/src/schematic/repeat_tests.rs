@@ -1,5 +1,5 @@
 use super::{
-    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, channel_alpha,
+    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, channel_alpha,
     check_format, repeated_entry_name,
 };
 use crate::project::ChannelNaming;
@@ -178,5 +178,47 @@ fn custom_formats_are_checked() {
     assert_eq!(
         check_format("${Index}"),
         Err(ChannelFormatError::NoBaseToken)
+    );
+}
+
+#[test]
+fn a_repeated_symbol_stacks_behind_itself_with_a_count_pill() {
+    let stack = RepeatStack::new((10.0, 20.0), (40.0, 30.0), 4);
+    assert_eq!(stack.layers[0].rect, [12.54, 22.54, 52.54, 52.54]);
+    assert_eq!(stack.layers[1].rect, [11.27, 21.27, 51.27, 51.27]);
+    assert!(
+        stack.layers[0].alpha < stack.layers[1].alpha,
+        "back is fainter"
+    );
+    let [x0, y0, x1, y1] = stack.badge;
+    assert!(
+        x0 > 10.0 && x1 < 50.0 && y0 > 20.0 && y1 < 50.0,
+        "inside the symbol"
+    );
+    assert!(x1 > 45.0 && y0 < 22.0, "at its top-right corner");
+    assert_eq!(stack.badge_text, "×4");
+}
+
+#[test]
+fn only_a_repeat_designator_has_a_stack() {
+    let mut sheet = crate::schematic::ChildSheet {
+        uuid: uuid::Uuid::nil(),
+        name: "buck".into(),
+        filename: "buck.snxsch".into(),
+        position: crate::schematic::Point::new(0.0, 0.0),
+        size: (20.0, 20.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    };
+    assert_eq!(RepeatStack::of(&sheet), None);
+    sheet.name = "Repeat(CH, 2, 3)".into();
+    assert_eq!(
+        RepeatStack::of(&sheet).map(|s| s.badge_text),
+        Some("×2".into())
     );
 }

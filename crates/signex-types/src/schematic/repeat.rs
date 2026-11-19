@@ -151,6 +151,63 @@ pub fn channel_alpha(index: u32) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
+/// One outline drawn behind a repeated sheet symbol: `[x0, y0, x1, y1]` in
+/// mm, and the alpha its stroke is drawn at.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StackLayer {
+    pub rect: [f64; 4],
+    pub alpha: f32,
+}
+
+/// How a repeated sheet symbol is drawn on the canvas and in PDF and SVG
+/// output: two outlines behind it and a ×N pill at its top-right corner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RepeatStack {
+    /// Back to front.
+    pub layers: [StackLayer; 2],
+    /// The pill, `[x0, y0, x1, y1]` in mm.
+    pub badge: [f64; 4],
+    /// `×4`.
+    pub badge_text: String,
+    pub badge_text_mm: f64,
+}
+
+/// Offsets of the outlines behind the symbol (one and two half-grid steps)
+/// and their alphas, back to front.
+const STACK: [(f64, f32); 2] = [(2.54, 0.45), (1.27, 0.7)];
+/// The pill's size and its inset from the symbol's top-right corner, mm.
+const BADGE_W: f64 = 5.08;
+const BADGE_H: f64 = 2.286;
+const BADGE_INSET: f64 = 0.762;
+const BADGE_TEXT_MM: f64 = 1.27;
+
+impl RepeatStack {
+    /// The stack of a sheet symbol at `position` of `size`, repeated
+    /// `count` times.
+    pub fn new(position: (f64, f64), size: (f64, f64), count: u32) -> Self {
+        let (x0, y0) = position;
+        let (x1, y1) = (x0 + size.0, y0 + size.1);
+        let layer = |(d, alpha): (f64, f32)| StackLayer {
+            rect: [x0 + d, y0 + d, x1 + d, y1 + d],
+            alpha,
+        };
+        let (bx1, by0) = (x1.max(x0) - BADGE_INSET, y0.min(y1) + BADGE_INSET);
+        Self {
+            layers: [layer(STACK[0]), layer(STACK[1])],
+            badge: [bx1 - BADGE_W, by0, bx1, by0 + BADGE_H],
+            badge_text: format!("×{count}"),
+            badge_text_mm: BADGE_TEXT_MM,
+        }
+    }
+
+    /// The stack of `sheet`, or `None` when its designator is not a repeat.
+    pub fn of(sheet: &super::ChildSheet) -> Option<Self> {
+        let repeat = ChannelRepeat::parse(&sheet.name)?;
+        let position = (sheet.position.x, sheet.position.y);
+        Some(Self::new(position, sheet.size, repeat.count()))
+    }
+}
+
 /// Token names a naming format may use.
 const CHANNEL_TOKENS: [&str; 3] = ["Channel", "Index", "ChannelAlpha"];
 const BASE_TOKENS: [&str; 2] = ["Designator", "Net"];
