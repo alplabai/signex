@@ -20,8 +20,34 @@ impl Signex {
     /// Whether a track run is being drawn on the board this window shows:
     /// Space and Shift+Space bend it.
     pub(crate) fn is_routing_board_track(&self) -> bool {
-        self.own_board_tool()
-            .is_some_and(BoardToolSession::is_routing)
+        let path = self.active_tab_path();
+        self.is_routing_on(path.as_deref(), self.interaction_state.acting_window)
+    }
+
+    /// [`Self::is_routing_board_track`] for `window` (`None`: the main
+    /// window) before that window's board is swapped in, as a key from it
+    /// is judged: an undocked window's own tab, else the main window's.
+    pub(crate) fn is_routing_board_track_in(&self, window: Option<iced::window::Id>) -> bool {
+        let undocked = window.filter(|id| self.ui_state.main_window_id != Some(*id));
+        let path = match undocked {
+            Some(id) => match self.ui_state.windows.get(&id) {
+                Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+                _ => None,
+            },
+            None => self.active_tab_path(),
+        };
+        self.is_routing_on(path.as_deref(), undocked)
+    }
+
+    /// The one rule both read: the armed tool is for the board at `path`
+    /// shown in `window`, and a run is open on it.
+    fn is_routing_on(
+        &self,
+        path: Option<&std::path::Path>,
+        window: Option<iced::window::Id>,
+    ) -> bool {
+        (self.interaction_state.pcb_tool.as_ref())
+            .is_some_and(|session| session.is_for(path, window) && session.is_routing())
     }
 
     /// Space (flip the bend) or Shift+Space (next corner mode) mid-run.
