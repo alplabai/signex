@@ -4,7 +4,7 @@
 //! panels reach the shared illustration, hover link and "Not stored yet"
 //! group of the panel shell.
 
-use iced::widget::{column, container, row};
+use iced::widget::{Row, column, container, row};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, MessageId, UserText, ids};
 use signex_types::pcb_stack::StackMode;
@@ -135,13 +135,15 @@ pub(super) fn warn_callout<'a>(
     action: Option<(Localized, PcbPrimitiveMsg)>,
 ) -> Element<'a, PanelMsg> {
     let (fill, ink) = pill_colors(look.tokens(), PillTone::Warn);
-    let mut line = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+    let mut line: Row<Element<'a, PanelMsg>> =
+        Row::new().spacing(SP.s).align_y(iced::Alignment::Center);
     if let Some((label, msg)) = action {
         line = line.push(
             button(text(label).size(TS.dense))
                 .padding([SP.xs, SP.s])
                 .style(form_look::ghost_button)
-                .on_press(PanelMsg::PcbPrimitive(msg)),
+                .on_press(PanelMsg::PcbPrimitive(msg))
+                .boxed(),
         );
     }
     line = line.push(
@@ -149,7 +151,8 @@ pub(super) fn warn_callout<'a>(
             .size(TS.dense)
             .color(ink)
             .wrapping(iced::widget::text::Wrapping::Word)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     container(
         container(line)

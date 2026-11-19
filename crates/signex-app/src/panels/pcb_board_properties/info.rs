@@ -233,7 +233,7 @@ fn tile_grid<'a>(form: &Form<'a>, tiles: Vec<Tile<'a>>, width: f32) -> Element<'
         for slot in 0..columns {
             line = match tiles.next() {
                 Some(tile) => line.push(stat_tile(form, tile)),
-                None if slot > 0 => line.push(Space::new().width(Length::FillPortion(1))),
+                None if slot > 0 => line.push(Space::new().width(Length::FillPortion(1)).boxed()),
                 None => line,
             };
         }
@@ -371,7 +371,8 @@ fn more<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
     .width(Length::Fill)
     .on_press(PanelMsg::ToggleSection(toggle_key(MORE_KEY, true)))
     .style(|_: &Theme, _| button::Style::default());
-    let mut body = Column::new().width(Length::Fill).push(header);
+    let mut body: Column<Element<'a, PanelMsg>> =
+        Column::new().width(Length::Fill).push(header.boxed());
     let mut grid = Column::new()
         .spacing(SP.xs)
         .padding([0.0, SP.m])
@@ -384,15 +385,19 @@ fn more<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
             line = line.push(key_value(form, label, count(form, n)));
         }
         if chunk.len() == 1 {
-            line = line.push(Space::new().width(Length::FillPortion(1)));
+            line = line.push(Space::new().width(Length::FillPortion(1)).boxed());
         }
         grid = grid.push(line);
     }
     if open {
-        body = body.push(container(grid).padding(iced::Padding {
-            bottom: SP.s,
-            ..iced::Padding::ZERO
-        }));
+        body = body.push(
+            container(grid)
+                .padding(iced::Padding {
+                    bottom: SP.s,
+                    ..iced::Padding::ZERO
+                })
+                .boxed(),
+        );
     }
     let edge = resolve(form.tokens()).line_strong;
     let fold = container(body)

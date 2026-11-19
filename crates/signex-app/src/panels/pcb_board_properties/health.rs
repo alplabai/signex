@@ -75,7 +75,7 @@ fn design_rules<'a>(form: &Form<'a>) -> Element<'a, PanelMsg> {
             form.t(ids::PCB_BOARD_HEALTH_DRC),
             value,
         ))
-        .push(actions);
+        .push(actions.boxed());
     form.card(body.boxed())
 }
 
@@ -106,7 +106,7 @@ fn electrical_rules<'a>(form: &Form<'a>) -> Element<'a, PanelMsg> {
             form.t(ids::PCB_BOARD_HEALTH_ERC),
             value,
         ))
-        .push(source);
+        .push(source.boxed());
     form.card(body.boxed())
 }
 

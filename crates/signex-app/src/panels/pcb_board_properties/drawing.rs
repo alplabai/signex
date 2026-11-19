@@ -72,7 +72,8 @@ pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'
         let drawing = illustration(form, board, extent);
         let hover = &board.view.illustration_hover;
         let canvas = property_illustration(drawing, hover, form.tokens(), TS.caption)
-            .map(|m| PanelMsg::PcbBoard(PcbBoardMsg::IllustrationHovered(m)));
+            .map(|m| PanelMsg::PcbBoard(PcbBoardMsg::IllustrationHovered(m)))
+            .boxed();
         col = col.push(canvas);
     }
     col = col.push(size_row(form, board));
@@ -99,7 +100,8 @@ fn size_row<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMs
             text(form.t(ids::PCB_BOARD_SIZE_SOURCE))
                 .size(TS.caption)
                 .color(form.faint())
-                .wrapping(Wrapping::None),
+                .wrapping(Wrapping::None)
+                .boxed(),
         );
     }
     let (press, tip) = if board.read_only {

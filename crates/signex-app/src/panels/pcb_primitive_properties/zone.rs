@@ -386,7 +386,8 @@ fn copper_card<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
                 .font(mono)
                 .color(if shelved { r.ink4 } else { look.ink })
                 .wrapping(iced::widget::text::Wrapping::None)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
     }
     let headline = with_tip(look, headline.boxed(), ids::PCB_PRIM_POUR_COPPER_TIP);

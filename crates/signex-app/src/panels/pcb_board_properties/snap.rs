@@ -152,7 +152,7 @@ fn object_grid<'a>(form: &Form<'a>, board: &PcbBoardSummary, width: f32) -> Elem
         for slot in 0..columns {
             line = match cells.next() {
                 Some(cell) => line.push(cell),
-                None if slot > 0 => line.push(Space::new().width(Length::FillPortion(1))),
+                None if slot > 0 => line.push(Space::new().width(Length::FillPortion(1)).boxed()),
                 None => line,
             };
         }

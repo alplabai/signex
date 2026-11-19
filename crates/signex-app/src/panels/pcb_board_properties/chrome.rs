@@ -201,7 +201,8 @@ impl<'a> Form<'a> {
             col = col.push(
                 Column::with_children(kept)
                     .spacing(SP.xs)
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
             );
         }
         Some(col.boxed())

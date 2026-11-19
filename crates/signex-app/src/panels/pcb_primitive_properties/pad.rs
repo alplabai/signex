@@ -233,7 +233,7 @@ fn table_row<'a>(
     let mut cells: Row<Element<'a, PanelMsg>> =
         Row::new().spacing(SP.s).align_y(iced::Alignment::Center);
     for (cell, portion) in [layer, x, y, shape].into_iter().zip(TABLE_PORTIONS) {
-        cells = cells.push(container(cell).width(Length::FillPortion(portion)));
+        cells = cells.push(container(cell).width(Length::FillPortion(portion)).boxed());
     }
     cells.width(Length::Fill).boxed()
 }

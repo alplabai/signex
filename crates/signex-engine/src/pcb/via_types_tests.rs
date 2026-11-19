@@ -8,10 +8,9 @@ use uuid::Uuid;
 use super::*;
 use crate::pcb::tests::board;
 
-const INNER1: CopperLayer = CopperLayer::Inner(match InnerCopper::new(1) {
-    Some(l) => l,
-    None => panic!("inner 1"),
-});
+fn inner1() -> CopperLayer {
+    CopperLayer::Inner(InnerCopper::new(1).expect("inner 1"))
+}
 
 fn via(n: u128, kind: ViaType, layers: &[&str], size: (f64, f64)) -> Via {
     Via {
@@ -119,7 +118,7 @@ fn a_blind_pair_is_a_type_after_the_through_ones() {
     let pair = &types[1];
     assert_eq!(
         (pair.kind, pair.top, pair.bottom),
-        (ViaType::Blind, CopperLayer::Top, INNER1)
+        (ViaType::Blind, CopperLayer::Top, inner1())
     );
     assert_eq!(pair.span, (1, 2));
     assert_eq!((pair.diameter, pair.drill), (0.3, 0.15));
@@ -197,10 +196,9 @@ fn a_micro_type_makes_a_through_via_micro() {
         .find(|t| t.kind == ViaType::Micro)
         .unwrap()
         .clone();
-    run(
-        &mut b,
-        apply_type_commands(&b, &[ItemRef::Via(Uuid::from_u128(1))], &t).unwrap(),
-    );
+    let items = [ItemRef::Via(Uuid::from_u128(1))];
+    let commands = apply_type_commands(&b, &items, &t).unwrap();
+    run(&mut b, commands);
     assert_eq!(b.vias[0].via_type, ViaType::Micro);
     assert_eq!((b.vias[0].diameter, b.vias[0].drill), (0.25, 0.1));
 }
@@ -215,10 +213,8 @@ fn resetting_an_override_restores_only_diameter_and_drill() {
     b.vias[2].net = 7;
     let types = via_types(&b);
     let items = [ItemRef::Via(Uuid::from_u128(3))];
-    run(
-        &mut b,
-        reset_override_commands(&b, &items, &types[0]).unwrap(),
-    );
+    let commands = reset_override_commands(&b, &items, &types[0]).unwrap();
+    run(&mut b, commands);
     let v = &b.vias[2];
     assert_eq!((v.diameter, v.drill), (0.6, 0.3));
     assert_eq!((v.via_type, v.net), (ViaType::Through, 7));
