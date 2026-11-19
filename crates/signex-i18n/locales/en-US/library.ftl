@@ -225,20 +225,36 @@ library-change-part-confirm = Change
 library-change-part-confirm-anyway = Change anyway
 
 ## Preferences ▸ Library ▸ Distributor APIs
+# Line under the page heading.
+library-distributors-intro = Accounts used to fetch prices, stock and part data. Keys and tokens are stored in the OS keyring.
+# Status pill of the DigiKey card while the browser sign-in runs.
 library-digikey-connecting = Connecting…
 # $account is the signed-in DigiKey account.
 library-digikey-connected-as = Connected as { $account }
 library-digikey-not-connected = Not connected
-library-digikey-help = OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first.
+library-digikey-help = OAuth2: opens your browser, then stores the refresh token in the OS keyring.
+# Button of a connected DigiKey card: forgets the account and its stored token.
+library-digikey-disconnect = Disconnect
+# $error is the system's reason, in English.
+library-digikey-disconnect-failed = Could not disconnect: { $error }. The token is still stored.
+# Status pill when no DigiKey client id was set when Signex started.
+library-digikey-not-configured = Not configured
+# Keep the two environment variable names exactly as written.
+library-digikey-not-configured-help = The DigiKey client id is not configured, so Connect cannot start. Set SIGNEX_DIGIKEY_CLIENT_ID and SIGNEX_DIGIKEY_CLIENT_SECRET, then start { -brand-name } again.
 library-mouser-api-key = API Key
+library-mouser-key-placeholder = Paste API key…
+# Status pills of the Mouser card.
 library-mouser-not-tested = Not tested
-library-no-key-required = (no key required)
+library-mouser-testing = Testing…
+library-mouser-verified = Key verified
+library-mouser-test-failed = Test failed
+library-no-key-required = No key required
+library-no-key-help = Public catalogue lookups. Nothing to set up.
 library-order-of-preference = Order of Preference
-# One row of the preference list: $rank is its place (1, 2, …) and $name the
-# distributor.
-library-order-row = { $rank }.  { $name }
+# The place of a distributor in the preference list (1, 2, …).
+library-order-rank = { $rank }
 # A distributor that is none of the named ones.
 library-distributor-other = Other
-library-order-help = Saved to <config_dir>/signex/distributors.toml. The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
+library-order-help = The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }

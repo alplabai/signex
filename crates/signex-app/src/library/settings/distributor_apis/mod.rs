@@ -1,233 +1,64 @@
-//! Settings → Library → Distributor APIs panel.
+//! Preferences ▸ Library ▸ Distributor APIs.
 //!
-//! - DigiKey: OAuth2 PKCE via the Connect button (see `digikey_oauth`);
-//!   client id/secret come from `SIGNEX_DIGIKEY_CLIENT_ID` /
-//!   `SIGNEX_DIGIKEY_CLIENT_SECRET`, tokens are kept in the keyring.
-//! - Mouser: API key field + a Test button; a verified key is saved to the keyring.
-//! - LCSC, JLCPCB: no key required.
-//! - Order-of-preference list — persisted to `distributors.toml`
-//!   (see `persistence`).
+//! Two columns: one card per distributor account (`cards`) and the order of
+//! preference with drag handles (`order`). DigiKey connects through OAuth2
+//! PKCE (`digikey_oauth`), Mouser takes an API key and a Test, LCSC and
+//! JLCPCB need nothing. Tokens and keys live in the OS keyring; the order is
+//! saved to `distributors.toml` (`persistence`).
 
-use iced::widget::{Space, column, container, row};
-use iced::{Border, Element, Length, Theme, Widget};
-use signex_i18n::{ids, t};
+mod cards;
+mod order;
+
+pub(crate) use order::grip_handle;
+
+use iced::widget::{column, container, mouse_area, row};
+use iced::{Background, Border, Element, Font, Length, Theme, Widget as _};
+use signex_i18n::I18n;
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text, text_input};
+use signex_widgets::{Label, text, text_input};
 
-use crate::styles::{HAIRLINE, Spacing, TypeScale};
-use signex_widgets::theme_ext;
+use crate::styles::{PillTone, Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 use super::super::messages::{LibraryMessage, SettingsMsg};
-use super::super::modal_chrome::{primary_btn, secondary_btn};
 use super::super::state::DistributorSettings;
 
-/// Render the Distributor APIs panel. Mounts inside the existing
-/// Preferences modal under a Library section.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// Width of the order-of-preference column beside the cards.
+const ORDER_COLUMN_W: f32 = 280.0;
+
+/// Render the Distributor APIs page body: the cards beside the order list.
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
-    i18n: &signex_i18n::I18n,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-    let hover_bg = crate::styles::tokens::hover_overlay(tokens);
-
-    // raw: distributor names are product names, the same in every language.
-    let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
-        text(raw(title)).size(ts.body).color(muted).boxed()
-    };
-
-    // ── DigiKey ──────────────────────────────────────────────
-    let digikey_status: signex_widgets::Label<'static> = match (
-        settings.digikey_in_flight,
-        settings.digikey_status.clone(),
-        settings.digikey_account_email.as_deref(),
-    ) {
-        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
-        (true, Some(s), _) => raw(s),
-        // In-flight with no status set yet — never let "Not connected"
-        // render while the Cancel button is also visible.
-        (true, None, _) => t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTING).into(),
-        (false, _, Some(label)) => {
-            t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTED_AS, "account" => label).into()
-        }
-        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
-        (false, Some(s), _) => raw(s),
-        _ => t!(i18n, ids::LIBRARY_DIGIKEY_NOT_CONNECTED).into(),
-    };
-    let mut digikey_actions =
-        row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
-    digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
-    if settings.digikey_in_flight {
-        digikey_actions = digikey_actions.push(secondary_btn(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
-            tokens,
-        ));
-    } else {
-        digikey_actions = digikey_actions.push(primary_btn(
-            t!(i18n, ids::LIBRARY_DISTRIBUTOR_CONNECT_OAUTH),
-            LibraryMessage::Settings(SettingsMsg::DigiKeyConnect),
-            tokens,
-        ));
+    let cards = column![
+        cards::digikey(settings, tokens, i18n),
+        cards::mouser(settings, tokens, i18n),
+        cards::no_key(tokens, i18n),
+    ]
+    .spacing(SP.m + SP.xs)
+    .width(Length::Fill);
+    let side = container(order::order_column(settings, tokens, i18n)).width(ORDER_COLUMN_W);
+    let body = row![cards, side]
+        .spacing(SP.xl)
+        .align_y(iced::Alignment::Start)
+        .width(Length::Fill);
+    // A release anywhere on the page ends a drag of the order list; one
+    // over a row has already dropped it there. Always a mouse area, so the
+    // tree keeps its shape (and the key field its focus) when a drag starts.
+    let mut area = mouse_area(body);
+    if settings.preferred_order_drag.is_some() {
+        area = area.on_release(settings_msg(SettingsMsg::PreferenceDragEnded));
     }
-    let digikey_section = column![
-        section_title("DigiKey"),
-        Space::new().height(sp.s),
-        digikey_actions,
-        Space::new().height(sp.s),
-        text(t!(i18n, ids::LIBRARY_DIGIKEY_HELP))
-            .size(ts.caption)
-            .color(muted),
-    ]
-    .spacing(sp.xs);
+    area.boxed()
+}
 
-    // ── Mouser ──────────────────────────────────────────────
-    // The text_input must be bound to the real `mouser_api_key_buf` —
-    // the previous version bound it to a `•`-only `masked` string,
-    // which meant the first keystroke fired `MouserApiKeyChanged`
-    // with the bullet string and permanently overwrote the real key.
-    // `secure(true)` is the iced-supplied mask — the buffer stays
-    // cleartext, only the rendered glyphs are bullets.
-    let mouser_test_status: signex_widgets::Label<'static> = match settings.mouser_status.clone() {
-        // raw: the key-test status is set by its handler (#2061: handler-worded state text).
-        Some(status) => raw(status),
-        None => t!(i18n, ids::LIBRARY_MOUSER_NOT_TESTED).into(),
-    };
-    let mouser_section = column![
-        section_title("Mouser"),
-        Space::new().height(sp.s),
-        row![
-            text(t!(i18n, ids::LIBRARY_MOUSER_API_KEY))
-                .size(ts.body)
-                .color(text_c)
-                .width(Length::Fixed(96.0)),
-            // raw: placeholders move with #2060.
-            text_input(raw("Paste API key…"), &settings.mouser_api_key_buf)
-                .secure(true)
-                .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
-                .padding([sp.s, sp.m])
-                .size(ts.label),
-            Space::new().width(sp.m),
-            primary_btn(
-                t!(i18n, ids::LIBRARY_DISTRIBUTOR_TEST),
-                LibraryMessage::Settings(SettingsMsg::MouserTest),
-                tokens
-            ),
-        ]
-        .align_y(iced::Alignment::Center),
-        Space::new().height(sp.s),
-        text(mouser_test_status).size(ts.caption).color(muted),
-    ]
-    .spacing(sp.xs);
-
-    // ── LCSC + JLCPCB ──────────────────────────────────────
-    let no_key_section = column![
-        section_title("LCSC, JLCPCB"),
-        Space::new().height(sp.s),
-        text(t!(i18n, ids::LIBRARY_NO_KEY_REQUIRED))
-            .size(ts.body)
-            .color(text_c),
-    ]
-    .spacing(sp.xs);
-
-    // ── Preference order ───────────────────────────────────
-    let mut order_col = column![
-        text(t!(i18n, ids::LIBRARY_ORDER_OF_PREFERENCE))
-            .size(ts.body)
-            .color(muted),
-        Space::new().height(sp.s)
-    ]
-    .spacing(sp.xs);
-    let len = settings.preferred_order.len();
-    for (i, src) in settings.preferred_order.iter().enumerate() {
-        let label = match distributor_label(*src) {
-            Some(name) => name.to_owned(),
-            None => t!(i18n, ids::LIBRARY_DISTRIBUTOR_OTHER).into_string(),
-        };
-        let up_enabled = i > 0;
-        let down_enabled = i + 1 < len;
-        // raw: the arrows are glyphs, not language.
-        let mut up_btn =
-            button(container(text(raw("▲")).size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
-                .padding(0)
-                .style(crate::styles::outline_button(tokens));
-        if up_enabled {
-            up_btn = up_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceUp(*src)));
-        }
-        let mut down_btn =
-            button(container(text(raw("▼")).size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
-                .padding(0)
-                .style(crate::styles::outline_button(tokens));
-        if down_enabled {
-            down_btn =
-                down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
-        }
-        let row_widget = row![
-            text(t!(
-                i18n,
-                ids::LIBRARY_ORDER_ROW,
-                "rank" => (i + 1).to_string(),
-                "name" => label
-            ))
-            .size(ts.body)
-            .color(text_c)
-            .width(Length::Fill),
-            up_btn,
-            Space::new().width(sp.s),
-            down_btn,
-        ]
-        .padding([sp.xs, sp.s])
-        .align_y(iced::Alignment::Center);
-        let bg_row = container(row_widget).style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(hover_bg)),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..Default::default()
-        });
-        order_col = order_col.push(bg_row.boxed());
-    }
-    order_col = order_col.push(
-        text(t!(i18n, ids::LIBRARY_ORDER_HELP))
-            .size(ts.caption)
-            .color(muted)
-            .boxed(),
-    );
-    // A failed save must be visible here and now — otherwise the reorder
-    // looks applied and silently reverts on next launch.
-    if let Some(error) = settings.preferred_order_error.as_deref() {
-        order_col = order_col.push(
-            text(t!(i18n, ids::LIBRARY_ORDER_SAVE_FAILED, "error" => error))
-                .size(ts.caption)
-                .color(crate::styles::tokens::danger(tokens))
-                .boxed(),
-        );
-    }
-
-    container(
-        column![
-            digikey_section,
-            divider(border),
-            mouser_section,
-            divider(border),
-            no_key_section,
-            divider(border),
-            order_col,
-        ]
-        .spacing(sp.l)
-        .width(Length::Fill),
-    )
-    .padding(sp.l)
-    .style(crate::styles::modal_card(tokens))
-    .boxed()
+fn settings_msg(msg: SettingsMsg) -> LibraryMessage {
+    LibraryMessage::Settings(msg)
 }
 
 /// The distributor's product name; `None` for "Other", which is a word.
@@ -243,11 +74,97 @@ fn distributor_label(src: DistributorSource) -> Option<&'static str> {
     }
 }
 
-fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
-    container(Space::new().height(HAIRLINE).width(Length::Fill))
-        .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(color)),
-            ..Default::default()
+/// The semibold face of a card's name.
+fn semibold() -> Font {
+    Font {
+        weight: iced::font::Weight::Semibold,
+        ..Font::DEFAULT
+    }
+}
+
+/// The chrome mono face (API key, rank, config path).
+fn mono() -> Font {
+    crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
+}
+
+/// A rounded status chip: soft fill, toned ink.
+fn status_pill<'a>(
+    label: impl Into<Label<'a>>,
+    tone: PillTone,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    container(
+        text(label)
+            .size(TS.caption)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .padding([SP.xs / 2.0, SP.s + SP.xs])
+    .style(crate::styles::pill(tokens, tone))
+    .boxed()
+}
+
+/// A muted caption line.
+fn caption<'a>(label: impl Into<Label<'a>>, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+    text(label)
+        .size(TS.caption)
+        .color(resolve(tokens).ink3)
+        .boxed()
+}
+
+/// A caption line in the error colour.
+fn error_caption<'a>(
+    label: impl Into<Label<'a>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    text(label).size(TS.caption).color(ti(tokens.error)).boxed()
+}
+
+/// A distributor card: the panel fill, a hairline border and the card radius.
+fn card<'a>(
+    content: impl Into<Element<'a, LibraryMessage>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let (fill, line) = (ti(tokens.panel_bg), ti(tokens.border));
+    container(content)
+        .padding([SP.l, SP.l + SP.xs])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                width: 1.0,
+                color: line,
+                radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
         })
         .boxed()
+}
+
+/// A Graphite text field: field fill, hairline, accent border when focused.
+fn field_style(tokens: &ThemeTokens) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    let r = resolve(tokens);
+    let (fill, line, focus, ink, hint) = (
+        r.field,
+        ti(tokens.border),
+        ti(tokens.accent),
+        ti(tokens.text),
+        r.ink4,
+    );
+    move |_: &Theme, status: text_input::Status| text_input::Style {
+        background: Background::Color(fill),
+        border: Border {
+            width: 1.0,
+            color: if matches!(status, text_input::Status::Focused { .. }) {
+                focus
+            } else {
+                line
+            },
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        placeholder: hint,
+        value: ink,
+        selection: iced::Color { a: 0.3, ..focus },
+    }
 }
