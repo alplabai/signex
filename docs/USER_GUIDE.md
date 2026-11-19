@@ -863,6 +863,23 @@ the next update. To carry board changes to the schematic instead, use
 **Design ▸ Update Schematics** (or **Tools ▸ Annotation ▸ Back Annotate
 Schematics…**).
 
+### Compare the board with the schematic
+
+To see every difference both ways and pick a side per row, use **Project ▸
+Compare Board with Schematic…** (or **Compare with Schematic** in the
+board's right-click menu). The report groups the differences: Missing on
+board, Extra on board, Net differences, Footprint mismatches and Value
+changes. Click a chip to show one kind. Each row has **Update PCB** (the
+schematic wins), **Update schematic** (the board wins) or **Skip**; a choice
+that is greyed says why in its tooltip. Extra parts on the board and
+footprint mismatches start skipped, since they are often deliberate board
+edits. **Set shown rows** sets every shown row at once.
+
+The **Schematic** and **Board** links show the object in that editor and
+keep the report open. **Apply** asks first when it would remove something
+from the board, then makes one undo step on the board and one on the
+schematic. **Export report…** saves the report as text.
+
 More detail: [UPDATE_PCB.md](UPDATE_PCB.md).
 
 ## Board 2. Outline, layer stack and the Layers panel

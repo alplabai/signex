@@ -62,6 +62,8 @@ greyed.
 **Project** (project-wide actions):
 
 - Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Compare Board with Schematic… (`compare_board_with_schematic`, see
+  [below](#project-compare-board))
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -260,6 +262,23 @@ The dialog has the Update PCB dialog's look with the board as the source:
   until Refresh; so is a closed sheet whose file changed on disk.
 - Opening the board for the read brings its tab to the front, as Update
   PCB does.
+
+## Project ▸ Compare Board with Schematic {#project-compare-board}
+
+Project ▸ Compare Board with Schematic… (right after Electrical Rules
+Check) and the board right-click menu's Compare with Schematic run
+`compare_board_with_schematic` (#2462). Both are gated like Update PCB:
+greyed unless a schematic or a board of an open project is in view. The
+command is also in the palette; no keymap preset binds it. It opens a modal
+report of every difference between the project's schematic and its board,
+opening the board first when it is not open; Esc closes it (or, while it is
+open, the confirmation before Apply).
+
+Each row picks Update PCB, Update schematic or Skip; Extra on board and
+Footprint mismatches start skipped (REL-01). Apply asks first when a chosen
+row deletes from the board, then runs the PCB side as one board undo step
+and the schematic side as one undo group. Rows, defaults and Apply:
+[UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
 
 ## Board Properties: designator and value {#board-properties}
 
@@ -736,7 +755,9 @@ Paste, Paste Special, Duplicate and Select All; Move Selection; Rotate,
 Rotate Clockwise, Flip Selection, Mirror X, Mirror Y and Change Footprint;
 Delete; Board Sketch; Select Net (`select_board_net`) and Highlight Net
 (`highlight_board_net`), which act on the net of the selection or of what is
-under the cursor; Cross Probe and Properties; then Toggle Ratsnest. Each row
+under the cursor; Cross Probe, Properties and Compare with Schematic
+(`compare_board_with_schematic` under a shorter name, see
+[above](#project-compare-board)); then Toggle Ratsnest. Each row
 runs its catalog command and is live exactly when that command is enabled in
 the window's `CommandContext`, so the menu greys what the keys and the menu
 bar grey. A board written by a newer Signex is read-only

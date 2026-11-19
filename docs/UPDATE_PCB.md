@@ -132,3 +132,76 @@ makes the board directly, from `profile=` or else the project's own setup.
   else from the Standard profile;
 - it opens as an unsaved tab and the project names it, so both are unsaved:
   nothing is written until the user saves.
+
+## Compare Board with Schematic
+
+Compare Board with Schematic (#2462, `compare_board_with_schematic`) lists
+every difference between the project's schematic and its board, both ways,
+and lets each row choose its direction. It reads the Update PCB change list
+and the Back Annotate change list (`signex_engine::pcb::eco::compare`) in
+one worker task at one board revision. Code:
+`crates/signex-app/src/app/compare_board/` and
+`crates/signex-app/src/app/view/dialogs/compare_board/`.
+
+Entry points: Project ▸ Compare Board with Schematic…, the board right-click
+menu's Compare with Schematic, and the command palette. It is gated like
+Update PCB: an open project with a schematic or a board in view. A project
+with no board or no root sheet is refused with a notice.
+
+### Rows
+
+| Kind | From | Update PCB does | Update schematic does |
+|---|---|---|---|
+| Missing on board | Add footprints, Links | Add to board, Link footprint | not available yet |
+| Extra on board | Remove footprints | Remove from board | not available yet |
+| Net differences | Nets, Pad nets | Add, remove or rename a net; move, connect or disconnect a pin | not available yet |
+| Footprint mismatches | Change footprints (+ Back Annotate's footprint row) | Swap footprint | blocked until #2248 |
+| Value changes | Values, Designators (+ Back Annotate's rows) | Set value, Set designator | Take board value, Take board designator |
+
+An Update PCB row and the Back Annotate row that change the same field of
+the same footprint are one row with two possible directions. A side that is
+blocked keeps its reason, shown as the tooltip of its greyed choice, and is
+never chosen. The notes of both lists are listed under the rows.
+
+### Directions (REL-01)
+
+Each row has a three-way choice: Update PCB (the schematic wins), Update
+schematic (the board wins) or Skip. The defaults:
+
+- Extra on board and Footprint mismatches start skipped: they are likely
+  intended board edits, and one is a deletion.
+- A row Update PCB starts unticked (a locked footprint, another library
+  version) starts skipped.
+- Any other row takes Update PCB when it can, else Update schematic, else
+  Skip.
+
+"Set shown rows" sets every row the kind chip shows; a row that does not
+allow the direction keeps its own. A footprint row's direction changes the
+board the net rows are computed for, so the net rows are recomputed on the
+worker, keeping every direction that still means the same change. Compare
+again reads both lists anew and keeps the directions the same way.
+
+### Apply
+
+When a chosen row deletes from the board (a footprint or a net), a
+confirmation lists every deletion first ("Removes TP3 from the board");
+Cancel applies nothing. Apply then runs:
+
+1. the PCB side: the Update PCB rows of the rows set to Update PCB, through
+   Update PCB's Execute path, as one labelled board undo step at the read's
+   revision. A board that moved since the read refuses it, and nothing is
+   applied;
+2. the schematic side: the Back Annotate rows of the rows set to Update
+   schematic, as one Back Annotate undo group across the changed sheets. A
+   closed sheet is stated again off the update thread first; one that
+   changed on disk refuses Apply before anything is applied.
+
+On success the dialog closes and Messages says how many changes went each
+way. Export report… writes the report, directions included, as plain text
+through the file port.
+
+### Not yet
+
+Update schematic is not available for Missing on board, Extra on board and
+net rows: placing a board-only part on a sheet and carrying a board net to
+the schematic need their own design. Footprint mismatches wait for #2248.
