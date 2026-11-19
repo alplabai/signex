@@ -639,6 +639,19 @@ pub enum LibraryMessage {
     },
     /// The Copy to Library dialog, or the copy it started (#813).
     StockCopy(crate::library::stock_copy::StockCopyMsg),
+    /// The off-thread read behind a Library Browser preview pane finished
+    /// (#2260). A result for a row that is no longer selected, or from an
+    /// older read, is dropped.
+    BrowserPreviewLoaded {
+        key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
+        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    },
+    /// The preview pane's ⋯ button was pressed: its menu opened or closed.
+    BrowserMoreMenuToggled {
+        library_path: PathBuf,
+    },
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

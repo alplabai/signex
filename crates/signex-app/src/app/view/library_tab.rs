@@ -98,15 +98,25 @@ impl Signex {
         }
         let path = tab.kind.as_library_browser()?;
         Some(match self.library.library_browsers.get(path) {
-            Some(browser) => crate::library::browser::view(
-                path,
-                &self.library,
-                browser,
-                tokens,
-                &self.ui_state.i18n,
-            )
-            .map(Message::Library)
-            .boxed(),
+            Some(browser) => {
+                let look = crate::library::browser::PreviewLook {
+                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    grid: self.sheet_grid(),
+                    device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window_id),
+                };
+                let (library, i18n) = (&self.library, &self.ui_state.i18n);
+                // A narrow window scrolls the tab sideways inside its frame,
+                // so the header, grid and preview stay whole (#118).
+                crate::library::editor::kit::sideways_frame(
+                    crate::library::browser::MIN_BROWSER_W,
+                    tokens,
+                    move || {
+                        crate::library::browser::view(path, library, browser, tokens, i18n, look)
+                    },
+                )
+                .map(Message::Library)
+                .boxed()
+            }
             // The browser-state map out of step with the tabs: keep the tab
             // renderable rather than crashing.
             None => container(

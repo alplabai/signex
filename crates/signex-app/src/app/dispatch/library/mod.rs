@@ -136,7 +136,11 @@ impl Signex {
                 }
         );
         let task = self.route_library_message(msg);
-        let task = Task::batch([task, self.refresh_components_details_if_stale()]);
+        let task = Task::batch([
+            task,
+            self.refresh_components_details_if_stale(),
+            self.refresh_browser_previews(),
+        ]);
         if per_event {
             self.sync_diagnostics_panel_ctx();
             // A part-number keystroke in the preview retitles its tab.
@@ -622,6 +626,14 @@ impl Signex {
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
             LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
+            LibraryMessage::BrowserPreviewLoaded {
+                key,
+                generation,
+                result,
+            } => self.handle_browser_preview_loaded(key, generation, result),
+            LibraryMessage::BrowserMoreMenuToggled { library_path } => {
+                self.handle_browser_more_menu_toggled(library_path)
+            }
         }
     }
 }

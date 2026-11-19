@@ -242,3 +242,39 @@ library-distributor-other = Other
 library-order-help = Saved to <config_dir>/signex/distributors.toml. The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }
+
+## Library Browser tab, Graphite (#118, #2260)
+
+# Shown in place of the tab when its library is not mounted. $path is the
+# library folder.
+library-browser-not-mounted = Library not mounted: { $path }
+# Hint under that line.
+library-browser-reopen-hint = Re-open the library through File ▸ Library ▸ Open Library… or via the project tree.
+# Header of the narrow column that marks a row without a bound symbol.
+library-browser-column-sym = Sym
+# Tooltip of that column header.
+library-browser-column-sym-tip = Symbol bound
+# Header of the narrow column that marks a row without a bound footprint.
+library-browser-column-fpt = Fpt
+# Tooltip of that column header.
+library-browser-column-fpt-tip = Footprint bound
+# Tooltip of the red mark of a row whose bound symbol cannot be found.
+library-browser-symbol-missing = The bound symbol is missing
+# Tooltip of the red mark of a row whose bound footprint cannot be found.
+library-browser-footprint-missing = The bound footprint is missing
+# Preview pane button: edit the selected row's fields.
+library-browser-edit-details = Edit Details
+# Preview pane button: bind a symbol to the selected row.
+library-browser-pick-symbol = Pick Symbol…
+# Preview pane button: bind a footprint to the selected row.
+library-browser-pick-footprint = Pick Footprint…
+# Tooltip of the preview pane's ⋯ button.
+library-browser-more-actions = More actions
+# Item of the ⋯ menu: delete the selected row (asks first).
+library-browser-delete-selected = Delete Selected
+# Note in the preview pane of a library that cannot be edited.
+library-browser-read-only-note = This library ships with Signex and is not editable.
+# A preview tile while its drawing is read.
+library-browser-preview-loading = Loading…
+# A preview tile whose drawing could not be read.
+library-browser-preview-unreadable = Could not be read

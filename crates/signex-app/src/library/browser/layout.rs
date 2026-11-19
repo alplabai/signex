@@ -32,39 +32,50 @@ impl Slot<'_> {
     }
 }
 
-/// Position of a column in the Graphite order (Internal PN, Description,
-/// Value, Footprint, Manufacturer, MPN, Rev, Symbol, ..., Lifecycle, Updated).
+/// Position of a column in the Graphite order (#118): Internal PN, the Sym
+/// and Fpt status columns, Value, MPN, Manufacturer, Description, Lifecycle,
+/// Price, Updated, then the other parameters and Tags.
 fn graphite_rank(kind: &ColumnKind) -> u8 {
     match kind {
         ColumnKind::InternalPn => 0,
-        ColumnKind::Description => 1,
-        ColumnKind::Parameter(k) if k == "value" => 2,
-        ColumnKind::Footprint => 3,
-        ColumnKind::Manufacturer => 4,
-        ColumnKind::Mpn => 5,
-        ColumnKind::Rev => 6,
-        ColumnKind::Symbol => 7,
-        ColumnKind::Price => 8,
+        ColumnKind::Symbol => 1,
+        ColumnKind::Footprint => 2,
+        ColumnKind::Parameter(k) if k == "value" => 3,
+        ColumnKind::Mpn => 4,
+        ColumnKind::Manufacturer => 5,
+        ColumnKind::Description => 6,
+        ColumnKind::Rev => 7,
+        ColumnKind::Price => 9,
+        ColumnKind::Updated => 10,
         // Other parametric columns and tags follow Updated: the pill and the
         // date stay in view.
-        ColumnKind::Parameter(_) => 13,
-        ColumnKind::Tags => 14,
-        ColumnKind::Updated => 12,
+        ColumnKind::Parameter(_) => 11,
+        ColumnKind::Tags => 12,
     }
 }
 
-/// The mock's column set and widths: Rev and Symbol are shown in the preview
-/// pane instead, and the rest are compact so the pill and Updated are in view.
+/// Width of the narrow Sym and Fpt status columns: room for the header and
+/// the amber dot.
+pub(super) const STATUS_COL_W: f32 = 40.0;
+
+/// Widest the Description column gets; a longer text ends in an ellipsis
+/// and shows whole in its tooltip.
+pub(super) const DESCRIPTION_MAX_W: f32 = 200.0;
+
+/// The mock's column set and widths: Rev shows in the preview pane instead
+/// (as before #118; hiding Rev and Tags by default is an open decision),
+/// Symbol and Footprint are narrow status columns, and the rest are compact
+/// so the pill and Updated are in view.
 pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
     columns
         .iter()
-        .filter(|c| !matches!(c.kind, ColumnKind::Rev | ColumnKind::Symbol))
+        .filter(|c| !matches!(c.kind, ColumnKind::Rev))
         .map(|c| {
             let width = match &c.kind {
                 ColumnKind::InternalPn => 140.0,
-                ColumnKind::Description => 150.0,
+                ColumnKind::Symbol | ColumnKind::Footprint => STATUS_COL_W,
+                ColumnKind::Description => DESCRIPTION_MAX_W,
                 ColumnKind::Parameter(k) if k == "value" => 64.0,
-                ColumnKind::Footprint => 124.0,
                 ColumnKind::Manufacturer | ColumnKind::Mpn => 96.0,
                 ColumnKind::Updated => 84.0,
                 _ => c.width.min(96.0),
@@ -74,8 +85,8 @@ pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
         .collect()
 }
 
-/// Rank of the Lifecycle pill: just before Updated.
-const LIFECYCLE_RANK: u8 = 11;
+/// Rank of the Lifecycle pill: after Description, before Price.
+const LIFECYCLE_RANK: u8 = 8;
 
 /// The slots to draw. Legacy themes keep the derived order and no pill
 /// column; Graphite reorders to the mock and adds the Lifecycle pill.
@@ -178,8 +189,48 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(order, sorted);
         assert_eq!(order.first(), Some(&0));
-        assert_eq!(order.last(), Some(&12));
+        assert_eq!(order.last(), Some(&graphite_rank(&ColumnKind::Updated)));
         assert!(order.contains(&LIFECYCLE_RANK));
+        assert!(LIFECYCLE_RANK < graphite_rank(&ColumnKind::Updated));
+    }
+
+    /// #118: Internal PN, then the narrow Sym and Fpt status columns, then
+    /// Value, MPN, Manufacturer, Description, Lifecycle and Updated; Rev
+    /// stays out of the Graphite grid (the preview pane shows it).
+    #[test]
+    fn the_status_columns_follow_the_internal_pn() {
+        let compact = graphite_columns(&sample());
+        let names: Vec<String> = slots(&compact, true)
+            .iter()
+            .map(|s| match s {
+                Slot::Column(c) => match &c.kind {
+                    ColumnKind::Parameter(k) => k.clone(),
+                    other => format!("{other:?}"),
+                },
+                Slot::Lifecycle => "Lifecycle".into(),
+            })
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "InternalPn",
+                "Symbol",
+                "Footprint",
+                "value",
+                "Mpn",
+                "Manufacturer",
+                "Description",
+                "Lifecycle",
+                "Updated",
+            ]
+        );
+        for c in &compact {
+            match c.kind {
+                ColumnKind::Symbol | ColumnKind::Footprint => assert_eq!(c.width, STATUS_COL_W),
+                ColumnKind::Description => assert_eq!(c.width, DESCRIPTION_MAX_W),
+                _ => {}
+            }
+        }
     }
 
     #[test]

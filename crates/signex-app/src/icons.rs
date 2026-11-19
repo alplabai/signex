@@ -209,6 +209,12 @@ canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
 canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
+// Library Browser header, uncommitted banner, ⋯ menu; component editor
+// footer (#118, #128). Monochrome; the view tints them with an ink token.
+canonical_icon!(icon_chrome_git, "chrome/git.svg");
+canonical_icon!(icon_chrome_library, "chrome/library.svg");
+canonical_icon!(icon_chrome_more, "chrome/more.svg");
+canonical_icon!(icon_chrome_refresh, "chrome/refresh.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 

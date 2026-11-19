@@ -124,11 +124,6 @@ pub(super) fn plain_cell_input(
     }
 }
 
-/// Corner radius of a small bordered control.
-pub(super) fn control_radius() -> f32 {
-    crate::styles::Radii::GRAPHITE.button
-}
-
 /// Height of the column-header row.
 pub(super) fn header_height() -> f32 {
     30.0
