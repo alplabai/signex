@@ -241,7 +241,8 @@ fn read_block(
         }
         parsed
     });
-    let body_text = &walk.text[text_range];
+    // The walk copies whole characters, so the range is on boundaries.
+    let body_text = walk.text.get(text_range).unwrap_or_default();
     let title = title
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())

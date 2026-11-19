@@ -11,6 +11,13 @@ pub struct IsoDate {
 }
 
 impl IsoDate {
+    /// 1970-01-01, day 0 of [`Self::days_since_epoch`].
+    pub const EPOCH: IsoDate = IsoDate {
+        year: 1970,
+        month: 1,
+        day: 1,
+    };
+
     /// The date `year`-`month`-`day`, if it exists.
     pub fn new(year: i32, month: u8, day: u8) -> Option<Self> {
         let valid = (1..=12).contains(&month) && (1..=days_in_month(year, month)).contains(&day);
