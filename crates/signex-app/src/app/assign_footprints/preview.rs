@@ -11,7 +11,7 @@ use signex_library::primitive::{Footprint, PrimitiveRef};
 
 use super::AssignFootprintsMsg;
 use crate::app::{Message, Signex};
-use crate::library::editor::footprint::canvas::PreviewFootprint;
+use crate::library::editor::footprint::PreviewFootprint;
 
 /// The size of pad 1, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]

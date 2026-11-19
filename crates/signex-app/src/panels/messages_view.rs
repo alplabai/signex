@@ -6,9 +6,9 @@
 
 use iced::widget::pick_list;
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_widgets::Label;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, FilterSet, filter_chips};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::Label;
 
 use super::messages_row::{MessageSource, clock_time};
 use super::*;
