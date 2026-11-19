@@ -227,13 +227,12 @@ impl Signex {
             crate::panels::PanelMsg::RunDrc => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
             }
-            // A Messages link runs its command as a menu row does.
-            crate::panels::PanelMsg::MessageLinkPressed(command) => {
-                if let Ok(id) = crate::keymap::AppCommandId::new(*command) {
-                    let run = crate::menu_bar::MenuMessage::Command(id);
-                    follow = self.update(Message::Menu(run));
+            // A Messages link acts on the document its row names.
+            crate::panels::PanelMsg::MessageLinkPressed(link) => match link {
+                crate::diagnostics::MessageLink::RepairPinJunctions(path) => {
+                    self.repair_pin_junctions_at(path);
                 }
-            }
+            },
             crate::panels::PanelMsg::OpenRules => {
                 follow = self.update(Message::Project(ProjectMsg::Rules(
                     crate::app::RulesTabMsg::OpenRequested { project: None },

@@ -282,9 +282,145 @@ fn a_kept_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
     let sheet = engine.document();
     assert!(!one_net(sheet, &[j1, j2]), "J1 and J2 stay apart");
     assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j2]));
+    // Every notice, in order: no path to the pin end can avoid the two-net
+    // place, so the guard leaves TP1 as a plain move and says so, then the
+    // commit names the dot it refused.
+    let warnings = engine.take_warnings();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert_eq!(
+        warnings[0], "could not keep TP1 pin 1 connected without crossing another net",
+        "{warnings:?}"
+    );
+    assert!(
+        warnings[1]
+            .starts_with("could not join TP1 pin 1 to the wires it ends on: they carry two nets, "),
+        "{warnings:?}"
+    );
+}
+
+/// The reviewer's bare T (2026-11-19): J3's wire ends inside J1-J2's wire
+/// with no dot, so the two are separate nets. TP1 moved so its pin end lands
+/// on that point gets no dot, which would merge them, and one notice.
+#[test]
+fn a_pin_moved_onto_a_bare_t_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 40.0));
+    let j2 = add_pin(&mut sheet, "J2", (100.0, 40.0));
+    add_wire(&mut sheet, (0.0, 40.0), (100.0, 40.0));
+    let j3 = add_pin(&mut sheet, "J3", (50.0, 80.0));
+    add_wire(&mut sheet, (50.0, 80.0), (50.0, 40.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(one_net(engine.document(), &[j1, j2]));
+    assert!(
+        !one_net(engine.document(), &[j1, j3]),
+        "a bare T joins nothing"
+    );
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], 0.0, 30.0, false);
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the T stays bare");
+    assert!(!one_net(sheet, &[tp1, j1]), "TP1 does not join J1-J2");
+    let warnings = engine.take_warnings();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0]
+            .starts_with("could not join TP1 pin 1 to the wires it ends on: they carry two nets, "),
+        "{warnings:?}"
+    );
+}
+
+/// Two wires of different nets crossing at right angles, with no dot: a pin
+/// end moved onto the crossing gets no dot and one notice.
+#[test]
+fn a_pin_moved_onto_a_crossing_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 40.0));
+    add_wire(&mut sheet, (0.0, 40.0), (100.0, 40.0));
+    let j3 = add_pin(&mut sheet, "J3", (50.0, 80.0));
+    add_wire(&mut sheet, (50.0, 80.0), (50.0, 0.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (70.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], -20.0, 30.0, false);
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the crossing stays a crossing");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j3]));
+    assert_eq!(crossed_notices(&mut engine).len(), 1);
+}
+
+/// The wire side: two wires of different nets moved so they cross on a pin
+/// end that touched nothing before. No dot joins the three, one notice.
+#[test]
+fn wires_moved_to_cross_on_a_pin_end_get_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 30.0));
+    let row = add_wire(&mut sheet, (0.0, 30.0), (100.0, 30.0));
+    let j3 = add_pin(&mut sheet, "J3", (60.0, 80.0));
+    let column = add_wire(&mut sheet, (60.0, 80.0), (60.0, 0.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 40.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(
+        bare_pin_taps(engine.document()).is_empty(),
+        "TP1 touches nothing"
+    );
+
+    // The row down onto TP1's row and the column left onto TP1's column, each
+    // with its part, so J1 and J3 keep their wires and their two nets.
+    engine
+        .execute(Command::MoveEach {
+            moves: vec![
+                (SelectedItem::new(row, SelectedKind::Wire), 0.0, 10.0),
+                (SelectedItem::new(j1, SelectedKind::Symbol), 0.0, 10.0),
+                (SelectedItem::new(column, SelectedKind::Wire), -10.0, 0.0),
+                (SelectedItem::new(j3, SelectedKind::Symbol), -10.0, 0.0),
+            ],
+            keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
+        })
+        .unwrap();
+    assert!(
+        !dots(&engine).contains(&Point::new(50.0, 40.0)),
+        "no dot: {:?}",
+        dots(&engine)
+    );
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the crossing joins nothing");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j3]));
     let notices = crossed_notices(&mut engine);
     assert_eq!(notices.len(), 1, "{notices:?}");
     assert!(notices[0].contains("TP1 pin 1"), "{notices:?}");
+}
+
+/// A drag preview's throwaway engine names nothing: the notice belongs to
+/// the commit, so the ghost pushes none frame by frame.
+#[test]
+fn a_drag_preview_pushes_no_notice_for_a_refused_dot() {
+    let mut sheet = test_sheet();
+    two_net_overlap(&mut sheet);
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let preview = crate::MovePreview::new(&sheet);
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    for keep_wires in [false, true] {
+        let (mut engine, _, result) = preview
+            .moved_report(&[(part, 0.0, 30.0)], keep_wires)
+            .expect("a preview engine");
+        assert!(matches!(result, Some(Ok(_))), "the move ran");
+        let tip = Point::new(50.0, 40.0);
+        assert!(
+            !dots(&engine).contains(&tip),
+            "the ghost shows no dot either"
+        );
+        let warnings = engine.take_warnings();
+        assert!(
+            !warnings.iter().any(|w| w.starts_with("could not join")),
+            "{warnings:?}"
+        );
+    }
 }
 
 /// A pin end already sitting where wires of two nets overlap is no bare touch

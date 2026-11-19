@@ -281,8 +281,8 @@ pub struct Engine {
     /// Where pin ends touched a wire bare before the command in flight: the
     /// reconcile leaves those contacts be (`transform::pin_junctions`).
     taps_before: Option<std::sync::Arc<PinKeys>>,
-    /// Pin ends the command in flight left without a dot because the wires
-    /// through them carry two nets; named in a notice once it commits.
+    /// Pin ends the command in flight left without a dot because
+    /// a dot there would merge two nets; named in a notice once it commits.
     crossed_taps: Vec<signex_types::schematic::Point>,
     /// The bare pin contacts and the pin ends of the pre-move sheet, so a drag
     /// preview does not scan the whole sheet for them on every frame.

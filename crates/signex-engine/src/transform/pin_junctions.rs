@@ -76,10 +76,21 @@ impl Nets<'_> {
         let (nets, _) = self.built();
         nets.root_of(&a.start) == nets.root_of(&b.start)
     }
+
+    /// Whether a dot at `at` would merge two nets: a wire through it, or a
+    /// wire end, dot or label anchored there (a bare T), is on another net
+    /// than `wire`, which passes through it.
+    fn merges_at(&mut self, at: &Point, wire: &Wire, through: &[&Wire]) -> bool {
+        if through.iter().any(|other| !self.same_net(wire, other)) {
+            return true;
+        }
+        let (nets, anchors) = self.built();
+        anchors.contains(&pt_key(at)) && nets.root_of(at) != nets.root_of(&wire.start)
+    }
 }
 
-/// The pin ends inside a wire that may join it, and those refused because the
-/// wires through them carry two nets.
+/// The pin ends inside a wire that may join it, and those refused because
+/// a dot there would merge two nets (`Nets::merges_at`).
 #[derive(Default)]
 struct Taps {
     safe: Vec<Point>,
@@ -91,8 +102,9 @@ struct Taps {
 /// may not join a wire that holds another pin end of the same part (a wire
 /// running along a resistor through both its pins), nor a wire whose net
 /// already has one, nor a net another pin end of the part joins here. Nor may
-/// a dot merge two nets: a pin end where overlapping wires of different nets
-/// pass gets none (`crossed`, maintainer decision 2026-11-19).
+/// a dot merge two nets: a pin end where wires of different nets pass or
+/// meet (overlapping, crossing, or a bare T whose end sits there) gets none
+/// (`crossed`, maintainer decision 2026-11-19).
 fn safe_taps(
     sheet: &SchematicSheet,
     lines: &WireLines<'_>,
@@ -110,7 +122,7 @@ fn safe_taps(
             let Some(&wire) = through.first() else {
                 continue;
             };
-            if through[1..].iter().any(|other| !nets.same_net(wire, other)) {
+            if nets.merges_at(tip, wire, &through[1..]) {
                 out.crossed.push(*tip);
                 continue;
             }
@@ -234,7 +246,7 @@ pub fn bare_tap_keys(sheet: &SchematicSheet) -> HashSet<Key> {
 pub(crate) struct PinDots {
     /// The dots to mint.
     pub(crate) dots: Vec<Junction>,
-    /// Pin ends left bare because the wires through them carry two nets.
+    /// Pin ends left bare because a dot there would merge two nets.
     pub(crate) crossed: Vec<Point>,
 }
 
@@ -304,21 +316,29 @@ pub(crate) fn crossed_taps_notice(sheet: &SchematicSheet, crossed: &[Point]) -> 
     let dots = dot_keys(sheet);
     let lines = WireLines::of(&sheet.wires);
     let mut nets = Nets { sheet, cache: None };
-    let mut pairs: Vec<(Key, uuid::Uuid, uuid::Uuid)> = Vec::new();
+    // Per bare place: the wire through it, and a wire of the other net there
+    // (through it, or ending on it in a bare T), when one is.
+    let mut pairs: Vec<(Key, uuid::Uuid, Option<uuid::Uuid>)> = Vec::new();
     let mut seen: HashSet<Key> = HashSet::new();
     for tip in crossed {
         let k = pt_key(tip);
-        if !seen.insert(k) {
+        if !seen.insert(k) || dots.contains(&k) {
             continue;
         }
         let through = lines.through(k);
         let Some(&first) = through.first() else {
             continue;
         };
-        let other = through[1..].iter().find(|w| !nets.same_net(first, w));
-        if let Some(other) = other.filter(|_| !dots.contains(&k)) {
-            pairs.push((k, first.uuid, other.uuid));
+        if !nets.merges_at(tip, first, &through[1..]) {
+            continue;
         }
+        let crossing = through[1..].iter().find(|w| !nets.same_net(first, w));
+        let other = crossing.map(|w| w.uuid).or_else(|| {
+            (sheet.wires.iter())
+                .find(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+                .map(|w| w.uuid)
+        });
+        pairs.push((k, first.uuid, other));
     }
     if pairs.is_empty() {
         return None;
@@ -329,9 +349,16 @@ pub(crate) fn crossed_taps_notice(sheet: &SchematicSheet, crossed: &[Point]) -> 
             .find(|net| net.wires.contains(&wire))
             .map_or_else(|| "an unnamed net".to_string(), |net| net.name.clone())
     };
+    // A label alone names the other net when no wire of it is there.
+    let label_at = |k: Key| {
+        (sheet.labels.iter())
+            .find(|label| pt_key(&label.position) == k)
+            .map_or_else(|| "another net".to_string(), |label| label.text.clone())
+    };
     let mut pins: Vec<(String, String, String)> = Vec::new();
     for (k, a, b) in &pairs {
-        let (a, b) = (net_of(*a), net_of(*b));
+        let a = net_of(*a);
+        let b = b.map_or_else(|| label_at(*k), net_of);
         for pin in pin_labels_at(sheet, *k) {
             pins.push((pin, a.clone(), b.clone()));
         }

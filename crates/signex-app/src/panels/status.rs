@@ -560,7 +560,7 @@ fn message_text<'a>(
         .size(TS.body)
         .color(ink)
         .wrapping(iced::widget::text::Wrapping::None);
-    let Some((command, label)) = super::messages_row::row_action(&entry.code) else {
+    let Some((link, label)) = super::messages_row::row_action(entry) else {
         return line.boxed();
     };
     row![
@@ -568,7 +568,7 @@ fn message_text<'a>(
         Space::new().width(6).height(Length::Shrink),
         signex_widgets::button(text(t!(i18n, label)).size(TS.body).color(ink))
             .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::MessageLinkPressed(command))
+            .on_press(PanelMsg::MessageLinkPressed(link))
             .style(crate::styles::menu_item(tokens)),
     ]
     .align_y(iced::Alignment::Center)

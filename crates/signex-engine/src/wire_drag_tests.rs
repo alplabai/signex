@@ -303,3 +303,31 @@ fn an_end_grip_leaves_a_square_neighbour_on_its_joins_when_it_cannot_carry_it() 
         "X's dotless T got a dot: {dots:?}"
     );
 }
+
+/// #1669 with a dragged wire: in Straight mode the neighbour on the dragged
+/// wire's end follows in one sloped leg, with no corner, and the guarded pass
+/// (bail check included) judges it with that mode: nets kept, no notice.
+#[test]
+fn a_dragged_wire_bends_its_neighbour_as_the_wiring_mode_says() {
+    let mut sheet = test_sheet();
+    let segment = add_wire(&mut sheet, (0.0, 40.0), (40.0, 40.0));
+    add_wire(&mut sheet, (40.0, 40.0), (40.0, 0.0));
+    add_pin(&mut sheet, "J2", (40.0, 0.0));
+    let before = net_shape(&sheet);
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute(Command::MoveSelection {
+            items: vec![wire_item(segment)],
+            dx: 10.0,
+            dy: 10.0,
+            keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Straight,
+        })
+        .unwrap();
+    let segs = segments(&engine);
+    assert_eq!(segs.len(), 2, "no corner inserted: {segs:?}");
+    assert!(has(&segs, (10.0, 50.0), (50.0, 50.0)), "{segs:?}");
+    assert!(has(&segs, (40.0, 0.0), (50.0, 50.0)), "{segs:?}");
+    assert!(engine.take_warnings().is_empty());
+    assert_eq!(net_shape(engine.document()), before, "netlist changed");
+}

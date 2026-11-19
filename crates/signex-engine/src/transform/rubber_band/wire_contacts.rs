@@ -145,18 +145,20 @@ pub fn carried_points(
 /// the move applied to `document`: a point whose carry would make the
 /// reconcile dot a contact that had no dot (`carried_point_bails`). Such a
 /// wire moves plainly at every point; carrying only its other points could
-/// reroute a wire both share and part a net the plain move keeps.
+/// reroute a wire both share and part a net the plain move keeps. Judged with
+/// the bends `policy` asks for (its drag wiring mode), as the carry makes them.
 #[must_use]
 pub fn bailing_wires(
     document: &SchematicSheet,
     points: &[WirePoint],
     items: &[SelectedItem],
+    policy: &Policy,
 ) -> Vec<Uuid> {
     if points.is_empty() {
         return Vec::new();
     }
     let moves: Vec<Move> = points.iter().map(WirePoint::as_move).collect();
-    let env = carry_env(document, &moves, selected_of(items), Policy::default());
+    let env = carry_env(document, &moves, selected_of(items), policy.clone());
     let mut out: Vec<Uuid> = bailing(&env, &moves).into_iter().collect();
     out.sort_unstable();
     out
@@ -184,11 +186,13 @@ pub fn follow_moved_wires(
     pin_owned: &HashSet<Key>,
 ) -> Follow {
     let points = carried_points(document, contacts, items, pin_owned);
-    let bailed = bailing_wires(document, &points, items);
+    // A grip drag has no wiring mode, by design: the automatic bends.
+    let policy = Policy::default();
+    let bailed = bailing_wires(document, &points, items, &policy);
     let live: Vec<WirePoint> = (points.into_iter())
         .filter(|point| !bailed.contains(&point.wire))
         .collect();
-    let mut out = carry_points(document, &live, items, &Policy::default());
+    let mut out = carry_points(document, &live, items, &policy);
     out.bailed = bailed;
     out
 }
@@ -324,6 +328,7 @@ pub fn follow_wire_grip(
         sheet_pin: false,
         wire: Some(WireJoin::Grip(wire)),
     }];
+    // A grip drag has no wiring mode, by design: the automatic bends.
     let grip = carry(document, &moves, selected, &Policy::default());
     out.touched.extend(grip.touched);
     out

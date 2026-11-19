@@ -133,22 +133,28 @@ impl Engine {
     /// The contacts of a move with "keep wires", read with the move applied:
     /// the points the dragged wires carry (a wire that cannot be carried
     /// whole bails at every point), and the moved pins that do not ride on a
-    /// carried wire.
+    /// carried wire. Which wires bail is judged with the bends of `wiring`,
+    /// the drag's mode, as the rounds will carry them.
     pub(super) fn contacts_of(
         &self,
         owners: Ownership,
         wires: &[crate::WireContact],
         items: &[SelectedItem],
+        wiring: DragWiringMode,
     ) -> Contacts {
         let points = crate::carried_points(&self.document, wires, items, &owners.pin_owned());
-        let bailing = crate::bailing_wires(&self.document, &points, items);
+        let policy = crate::Policy {
+            wiring,
+            ..crate::Policy::default()
+        };
+        let bailing = crate::bailing_wires(&self.document, &points, items, &policy);
         let (bailed, live): (Vec<_>, Vec<_>) =
             (points.into_iter()).partition(|point| bailing.contains(&point.wire()));
         Contacts {
             tips: owners.pin_tips(&bailing),
             wires: live,
             bailed,
-            wiring: DragWiringMode::Auto,
+            wiring,
         }
     }
 

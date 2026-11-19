@@ -228,7 +228,7 @@ impl Engine {
             (keep_wires && !followers.entries.is_empty()).then(|| self.document.clone());
         let followed = self.follow_bus_entry_ends(&followers, &items);
         let mut contacts = match (ownership, wire_contacts) {
-            (Some(owners), Some(wires)) => self.contacts_of(owners, &wires, &items),
+            (Some(owners), Some(wires)) => self.contacts_of(owners, &wires, &items, wiring),
             _ => super::guarded::Contacts::default(),
         };
         // The drag's wiring mode bends the followed and carried wires in every
