@@ -95,24 +95,38 @@ that scrolls inside the tab.
 ## Requirements (#2339)
 
 The project's requirements list (the `.snxprj` `requirements` key; kinds and
-fields in [CLI.md](CLI.md), "Requirement checks"), one card per entry: the
-Enabled check, the kind, the outcome of the last run, Remove, then the id,
-the severity and the kind's fields. Add requirement… picks a kind and adds
-an entry with starting values (`board_size` 100 × 100 mm, `net_class` all
-nets with 0.15 mm minimums, `bom_cost` 100 boards at 10 USD each) and the
-kind's name as its id, made unique. A field box commits on Enter; a value
-that is not valid (an id that is empty or taken, a length or cost that is no
-number above 0, a count below 1, an unknown lifecycle state, a `net_class`
-with neither a class nor a minimum) stays in its box with the reason and
-changes nothing. An empty box clears an optional field. An entry this build
-cannot read is shown with the reason and can only be removed; a
-`requirements` value that is not a list is not edited at all.
+fields in [CLI.md](CLI.md), "Requirement checks"), one card per entry. Run
+checks is the section header's primary button. Under the header, a summary
+row shows the last run's counts (Passed, Failed, and Not checked when there
+are any), when it finished, and Add requirement…, which picks a kind and
+adds an entry with starting values (`board_size` 100 × 100 mm, `net_class`
+all nets with 0.15 mm minimums, `bom_cost` 100 boards at 10 USD each) and
+the kind's name as its id, made unique.
+
+A card's header row holds the Enabled switch, the kind, its kind id, the
+requirement's id (read-only; `project_set_requirement` with `field=id`
+changes it), a one-line summary of its values, the outcome pill, Remove and
+an expand button. A passed card is closed to that row and every other
+card is open; a card holding a typed value or a refusal stays open. The
+expand button flips a card; the flip is forgotten when an add or a remove
+moves the list. An open card shows the severity, Allow warnings and the
+kind's fields three to a row with the caption above each, then each finding
+of the last run with its measured values. A field box commits on Enter; a
+value that is not valid (a length or cost that is no number above 0, a count
+below 1, an unknown lifecycle state, a `net_class` with neither a class nor a
+minimum) stays in its box, which turns to the error colours, with the reason
+under it, and changes nothing. An empty box clears an optional field. A
+requirement switched off is dimmed, its fields take no input, its pill reads
+Off and the counts leave it out. An entry this build cannot read is shown
+with the reason and can only be removed; a `requirements` value that is not
+a list is not edited at all.
 
 Run checks runs the same job as `check_requirements` over the project as it
 is in memory, off the UI thread, and shows each requirement as passed,
 failed (with each finding's message and measured values) or not checked,
-the run's notes, and when it finished. It writes nothing and says nothing in
-Messages. Edits are General undo steps; a run is not an edit.
+the run's notes under the summary row, and when it finished. It writes
+nothing and says nothing in Messages. Edits are General undo steps; a run is
+not an edit.
 
 ## Preferences and the project
 
