@@ -140,100 +140,9 @@ impl Engine {
         }
     }
 
-    /// Rubber-band the already moved `self.document` and reconcile junctions,
-    /// then check the result against the nets the move asks for (the user's intent): any difference
-    /// escalates the offending tips (new path, then plain move) and the pass
-    /// reruns from the plain-moved sheet, so what is committed always keeps
-    /// the nets (or is the old plain move for a warned pin).
-    fn rubber_band_guarded(
-        &mut self,
-        before: &SchematicSheet,
-        tips: &[crate::PinTip],
-        items: &[SelectedItem],
-        followed: &[SelectedItem],
-    ) -> DocumentPatch {
-        let plain_items = [items, followed].concat();
-        #[cfg(test)]
-        if self.full_scan_moves {
-            // The pass as it was: a copy of the moved sheet kept for every
-            // round, another for the plain reference.
-            let base = self.document.clone();
-            self.reconciled_patch(&plain_items);
-            let plain = std::mem::replace(&mut self.document, base.clone());
-            return self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
-                engine.document = base.clone();
-            });
-        }
-        // What a plain move leaves: the reference for the user's own edits.
-        // Reconciling changes only the junctions, so the sheet every round
-        // starts from is the reference with the junctions it had before: one
-        // copy of the sheet serves both, not two.
-        let junctions = self.document.junctions.clone();
-        self.reconciled_patch(&plain_items);
-        let plain = std::mem::take(&mut self.document);
-        self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
-            engine.document = plain.clone();
-            engine.document.junctions.clone_from(&junctions);
-        })
-    }
-
-    /// The escalation rounds of [`Self::rubber_band_guarded`]; `fresh` sets
-    /// `self.document` to the plain-moved sheet, junctions not yet reconciled,
-    /// that every round starts from.
-    fn guarded_rounds(
-        &mut self,
-        before: &SchematicSheet,
-        tips: &[crate::PinTip],
-        items: &[SelectedItem],
-        followed: &[SelectedItem],
-        plain_reference: &SchematicSheet,
-        fresh: impl Fn(&mut Self),
-    ) -> DocumentPatch {
-        const MAX_ROUNDS: usize = 6;
-        #[cfg(test)]
-        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
-        let guard = crate::Guard::with_base(
-            before,
-            plain_reference,
-            tips,
-            self.preset_before.clone(),
-            self.preset_base.clone(),
-        );
-        #[cfg(test)]
-        let guard = if self.full_scan_guard {
-            guard.without_local()
-        } else {
-            guard
-        };
-        let mut policy = crate::Policy::default();
-        for round in 0.. {
-            fresh(self);
-            let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
-            let mut touched = [items, followed].concat();
-            touched.extend(follow.touched);
-            let patch = self.reconciled_patch(&touched);
-            let Some(blamed) = guard.check(&self.document, tips, &policy, &follow.edited_tips)
-            else {
-                self.warn_plain_pins(&guard, tips, &policy);
-                return patch;
-            };
-            // Every blamed tip is still live, so each round takes at least one
-            // a step down: at most two rounds per tip, and after MAX_ROUNDS the
-            // blamed go straight to a plain move.
-            for key in blamed {
-                if round >= MAX_ROUNDS {
-                    policy.plain.insert(key);
-                } else {
-                    policy.escalate(key);
-                }
-            }
-        }
-        unreachable!("the escalation loop returns from inside")
-    }
-
     /// One notice for the connected pins the guard had to leave as a plain
     /// move: a count and the first few, not a line per pin.
-    fn warn_plain_pins(
+    pub(super) fn warn_plain_pins(
         &mut self,
         guard: &crate::Guard,
         tips: &[crate::PinTip],
@@ -268,8 +177,8 @@ impl Engine {
     }
 
     /// Move every item by its own delta; with `keep_wires` the wires on the
-    /// moved pins follow (see `transform::rubber_band`) inside the same
-    /// history entry.
+    /// moved pins follow and a dragged wire keeps what joins it (see
+    /// `exec::guarded`), inside the same history entry.
     fn exec_moves(
         &mut self,
         before: SchematicSheet,
@@ -288,7 +197,7 @@ impl Engine {
         // (`exec::ownership`).
         let ownership = keep_wires.then(|| Ownership::of(&self.document, &moves));
         // And what joins a selected wire, which it carries along.
-        let contacts = keep_wires.then(|| crate::moved_wire_contacts(&self.document, &items));
+        let wire_contacts = keep_wires.then(|| crate::moved_wire_contacts(&self.document, &items));
         // So must the wires, to tell the pairs already meeting end to end
         // (which a merge leaves) and where the move changed any.
         let pre_wires = self.pre_wires();
@@ -305,36 +214,22 @@ impl Engine {
         // Wires shifted at an entry far end only join the reconcile list: the
         // rubber band must not treat them as selected, or it would skip them
         // and leave their pin end behind.
-        let mut followed = self.follow_bus_entry_ends(&followers, &items);
-        // A dragged wire keeps its connections before any pin is rerouted, so
-        // the pins' pass and its guard start from the wire's result.
-        let mut bailed = Vec::new();
-        if let (Some(contacts), Some(owners)) = (contacts.filter(|c| !c.is_empty()), &ownership) {
-            let pin_owned = owners.pin_owned();
-            let carried =
-                crate::follow_moved_wires(&mut self.document, &contacts, &items, &pin_owned);
-            followed.extend(carried.touched);
-            bailed = carried.bailed;
-        }
-        let tips = ownership.map(|owners| owners.pin_tips(&bailed));
-
+        let followed = self.follow_bus_entry_ends(&followers, &items);
+        let contacts = match (ownership, wire_contacts) {
+            (Some(owners), Some(wires)) => self.contacts_of(owners, &wires, &items),
+            _ => super::guarded::Contacts::default(),
+        };
+        let fold = |engine: &mut Self| -> DocumentPatch {
+            #[cfg(test)]
+            if let Some(adjacent) = &adjacent {
+                return engine.merge_after_edit(adjacent);
+            }
+            engine.merge_after_move(&pre_wires)
+        };
         // A drag preview's pre-move sheet is the preview's own, shared.
         let preview_sheet = self.preset_sheet.clone();
         let pre_move = preview_sheet.as_deref().unwrap_or(&before);
-        let mut patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(pre_move, &tips, &items, &followed),
-            None => self.reconciled_patch(&[items, followed].concat()),
-        };
-        #[cfg(test)]
-        if let Some(adjacent) = &adjacent {
-            patch |= self.merge_after_edit(adjacent);
-        } else {
-            patch |= self.merge_after_move(&pre_wires);
-        }
-        #[cfg(not(test))]
-        {
-            patch |= self.merge_after_move(&pre_wires);
-        }
+        let patch = self.keep_contacts(pre_move, &contacts, &items, &followed, &fold);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
@@ -367,11 +262,12 @@ impl Engine {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
-        let mut patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(&before, &tips, items, &[]),
-            None => self.reconciled_patch(items),
+        let contacts = super::guarded::Contacts {
+            tips: tips.unwrap_or_default(),
+            ..Default::default()
         };
-        patch |= self.merge_after_edit(adjacent);
+        let fold = |engine: &mut Self| engine.merge_after_edit(adjacent);
+        let patch = self.keep_contacts(&before, &contacts, items, &[], &fold);
         let patch_pair = PatchPair {
             semantic,
             document: patch,
