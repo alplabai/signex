@@ -607,6 +607,10 @@ define_ids! {
         CMD_MENU_SAVE_BOARD_REUSE_BLOCK = "cmd-menu-save-board-reuse-block";
         CMD_PLACE_BOARD_REUSE_BLOCK = "cmd-place-board-reuse-block";
         CMD_MENU_PLACE_BOARD_REUSE_BLOCK = "cmd-menu-place-board-reuse-block";
+        CMD_PLACE_BOARD_ROOM = "cmd-place-board-room";
+        CMD_MENU_PLACE_BOARD_ROOM = "cmd-menu-place-board-room";
+        CMD_CREATE_ROOMS_FROM_SHEETS = "cmd-create-rooms-from-sheets";
+        CMD_MENU_CREATE_ROOMS_FROM_SHEETS = "cmd-menu-create-rooms-from-sheets";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

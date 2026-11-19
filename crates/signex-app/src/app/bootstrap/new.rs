@@ -444,6 +444,7 @@ impl Signex {
                 sheet_numbering_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
+                rooms: Default::default(),
                 fab_outputs: None,
                 fab_outputs_writes: 0,
                 board_output: Default::default(),

@@ -51,6 +51,7 @@ close_all_documents
 color_net
 copy
 copy_attributes_or_add_vertex
+create_rooms_from_sheets
 create_sheet_from_sheet_symbol
 cross_probe
 cut
@@ -197,6 +198,7 @@ place_board_quick_route
 place_board_rectangle
 place_board_region
 place_board_reuse_block
+place_board_room
 place_board_route
 place_board_slice_pour
 place_board_string

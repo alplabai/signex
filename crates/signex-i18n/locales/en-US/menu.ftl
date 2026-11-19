@@ -56,6 +56,8 @@ menu-place-no-connect = No Connect
 menu-place-ports = Ports & Connectors
 menu-place-directives = Directives
 menu-place-graphics = Graphics
+# Design ▸ Rooms on a board (#2457).
+menu-design-rooms = Rooms
 
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.

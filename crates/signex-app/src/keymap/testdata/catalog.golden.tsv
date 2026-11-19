@@ -257,6 +257,8 @@ panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB
 remove_board_panel	pcb	Remove the board's panel	Remove Panel	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 set_board_panel	pcb	Change a setting of the board's panel	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,field:text,value:text
 board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document
+place_board_room	place	Draw a room by two corners: an area for the parts of one sheet	Room	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+create_rooms_from_sheets	design	Make a room for each sheet of the project and move its parts into it	Create Rooms from Sheets...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 prev_layer	view	Make the previous layer of the board active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_signal_layer	view	Make the next signal layer active	Next Signal Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-

@@ -18,6 +18,7 @@ mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
 mod confirms;
 mod create_child_sheet;
+mod create_rooms;
 mod erc;
 mod fab_outputs;
 mod graphite;

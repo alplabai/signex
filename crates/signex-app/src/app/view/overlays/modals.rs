@@ -338,6 +338,15 @@ impl Signex {
             .then(|| self.view_board_reannotate_dialog())
     }
 
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    pub(in crate::app::view) fn create_rooms_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rooms
+            .create
+            .is_some()
+            .then(|| self.view_create_rooms_dialog())
+    }
+
     pub(in crate::app::view) fn fab_outputs_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .fab_outputs

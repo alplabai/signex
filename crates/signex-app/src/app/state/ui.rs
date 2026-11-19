@@ -485,6 +485,9 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Rooms (#2457): the Room Properties drafts and illustration hover, and
+    /// Create Rooms from Sheets while open.
+    pub rooms: crate::app::rooms::RoomsUi,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,

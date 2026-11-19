@@ -104,6 +104,8 @@ pub(crate) enum OverlayId {
     SheetNumbering,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    CreateRooms,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
     /// Board Reports and Board Print / PDF (#2404, #2402).
@@ -151,7 +153,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -204,6 +206,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
     OverlayId::BoardReannotate,
+    OverlayId::CreateRooms,
     OverlayId::FabOutputs,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
@@ -332,6 +335,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
         | OverlayId::BoardReannotate
+        | OverlayId::CreateRooms
         | OverlayId::FabOutputs
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
@@ -557,6 +561,7 @@ impl Signex {
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
+            OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),

@@ -516,8 +516,7 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
         ItemRef::Graphic { graphic, .. } => Some(BoardItemId::Graphic(graphic)),
         // A designator or comment is hidden with its eye, never deleted.
         ItemRef::Pad { .. } | ItemRef::Footprint(_) | ItemRef::FootprintText { .. } => None,
-        // A room is not a board item: Delete removes it with its own
-        // command (#2457, `Signex::delete_selected_rooms`).
+        // A room is not a board item; it has its own commands (#2457).
         ItemRef::Room(_) => None,
     }));
     items

@@ -61,6 +61,7 @@ pub mod pcb_board_properties;
 pub mod pcb_component;
 pub mod pcb_nets;
 pub mod pcb_primitive_properties;
+pub mod pcb_room_properties;
 mod projects;
 mod projects_graphite;
 mod properties;

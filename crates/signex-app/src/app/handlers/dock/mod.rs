@@ -99,6 +99,11 @@ impl Signex {
                 self.handle_pcb_primitive(msg);
                 return self.finish_update();
             }
+            // #2457: Room Properties.
+            if let crate::panels::PanelMsg::Room(msg) = panel_msg {
+                let task = self.handle_room(msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
                 self.handle_layer_stack(msg);
                 return self.finish_update();

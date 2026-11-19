@@ -627,6 +627,11 @@ cmd-save-board-reuse-block = Save the selected placed and routed parts as a reus
 cmd-menu-save-board-reuse-block = Save as Reuse Block
 cmd-place-board-reuse-block = Place a reuse block on the channel of the selected component
 cmd-menu-place-board-reuse-block = Place Reuse Block
+# Rooms (#2457).
+cmd-place-board-room = Draw a room by two corners: an area for the parts of one sheet
+cmd-menu-place-board-room = Room
+cmd-create-rooms-from-sheets = Make a room for each sheet of the project and move its parts into it
+cmd-menu-create-rooms-from-sheets = Create Rooms from Sheets...
 cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode

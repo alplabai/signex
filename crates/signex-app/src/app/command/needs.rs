@@ -87,6 +87,9 @@ pub(crate) enum Needs {
     PcbSync,
     /// New PCB: a project is open.
     OpenProject,
+    /// Create Rooms from Sheets (#2457): a board in view that is not
+    /// read-only, with a project open to read the sheets from.
+    PcbInProject,
     Library,
     ProjectSheet,
     TileableWindows,
@@ -185,6 +188,7 @@ impl Needs {
                         || ctx.pcb.shown)
             }
             Self::OpenProject => ctx.has_open_project,
+            Self::PcbInProject => ctx.has_pcb && !ctx.pcb.read_only && ctx.has_open_project,
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
@@ -249,6 +253,7 @@ impl Needs {
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
+            Self::PcbInProject => "No board of an open project is in view, or it is read-only",
             Self::Library => "No library is open",
             Self::ProjectSheet => "No sheet of a project is open",
             Self::TileableWindows => {
@@ -415,6 +420,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_quick_route"
         | "place_board_multi_route"
         | "place_board_route"
+        // #2457: a room by two corners.
+        | "place_board_room"
         // #2373: free pads, arcs, strings and dimensions.
         | "place_board_pad"
         | "place_board_arc"
@@ -455,6 +462,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #2457: the dialog reads the sheets of the board's project.
+        "create_rooms_from_sheets" => Needs::PcbInProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.

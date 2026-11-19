@@ -306,6 +306,26 @@ impl Signex {
             | BoardPlaceTool::FullCircle
             | BoardPlaceTool::Rectangle
             | BoardPlaceTool::TextFrame => self.graphic_clicked(tool, at),
+            // #2457: the first click is a corner; the second places the room
+            // and ends the tool, so Properties shows the new room.
+            BoardPlaceTool::Room => {
+                let first = self
+                    .own_board_tool()
+                    .and_then(|s| s.points.first().copied());
+                match first {
+                    None => {
+                        if let Some(session) = self.own_board_tool_mut() {
+                            session.points.push(at);
+                        }
+                    }
+                    Some(first) => {
+                        if self.place_drawn_room(first, at) {
+                            self.end_board_tool();
+                            return true;
+                        }
+                    }
+                }
+            }
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {

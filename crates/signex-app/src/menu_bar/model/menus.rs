@@ -362,6 +362,12 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_sketch", "")),
         // #2401: the layer stack manager of the board in view.
         cmd_item_gated(ctx, cmd("board_layer_stack", "")),
+        // #2457: rooms of the board in view; greyed without a project.
+        submenu(
+            ctx,
+            menu_ids::MENU_DESIGN_ROOMS,
+            vec![cmd_item_gated(ctx, cmd("create_rooms_from_sheets", ""))],
+        ),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.

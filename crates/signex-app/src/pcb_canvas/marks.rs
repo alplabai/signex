@@ -46,6 +46,8 @@ pub struct BoardMarks {
     pub origin: [f32; 2],
     /// The panel round the board (#2410); `None` without one.
     pub panel: Option<super::panel_preview::PanelPreview>,
+    /// The board's rooms (#2457, `rooms`).
+    pub rooms: Vec<super::rooms::RoomMark>,
 }
 
 impl BoardMarks {
@@ -87,6 +89,7 @@ impl BoardMarks {
             sheet,
             origin: [origin.x as f32, origin.y as f32],
             panel: super::panel_preview::PanelPreview::of(board),
+            rooms: super::rooms::RoomMark::of(board),
         }
     }
 }
