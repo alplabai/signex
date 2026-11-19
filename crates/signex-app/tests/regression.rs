@@ -704,3 +704,8 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #144 / #147 — Preferences Appearance and Editing pages: the fast grid row
+// error, the snap preview's pitch labels and the Increment step stepper.
+#[path = "regression/preferences_pages.rs"]
+mod preferences_pages;
