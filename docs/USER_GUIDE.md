@@ -600,6 +600,23 @@ greyed out when no schematic is open.
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y` or `Ctrl+Shift+Z`.
 
+**Closing a project with unsaved edits.** **Close Project** lists every
+unsaved document of the project with what it is (Schematic, PCB, Project
+settings, Library, Component). **Save All** (or `Enter`) saves them and closes
+the project; **Discard All**, alone at the left, drops the edits; **Cancel**
+(or `Esc`) keeps everything open. A document another open project may use
+stays open, and the dialog says so. While a sheet cannot be read, Discard All
+is not offered and the dialog says why.
+
+**Removing a file from the project.** Right-click a file in the Projects panel
+and choose **Remove from Project**. Pick a card, then press the button:
+**Exclude** keeps the file on disk (and in Git, when the project folder is a
+repository) and only takes it off the project's list; **Delete file** also
+deletes it from disk for good. Exclude is selected when the dialog opens, and
+`Enter` runs it; `Enter` never deletes. A choice that does not apply (the file
+is placed by another sheet, it is a shared library, or it is not a page of the
+project) is not shown, and a note says why.
+
 **Library saves are different.** A component library (`.snxlib`) is a git
 repository, and each library save writes the file and then commits it. If the
 write succeeds but git refuses the commit, the change is still saved. The
