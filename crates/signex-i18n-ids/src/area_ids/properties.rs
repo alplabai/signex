@@ -286,6 +286,10 @@ define_ids! {
     TABLE_TOC_WRITTEN = "properties-table-toc-written";
     TABLE_TOC_EXISTS = "properties-table-toc-exists";
     TABLE_TOC_FAILED = "properties-table-toc-failed";
+    TABLE_TOC_NOT_SERIALISED = "properties-table-toc-not-serialised";
+    TABLE_TOC_HEADING = "properties-table-toc-heading";
+    TABLE_REFRESH_FAILED = "properties-table-refresh-failed";
+    TABLE_CSV_TABLE_GONE = "properties-table-csv-table-gone";
     // c13 multi-channel-compiled
     PROPERTIES_SHEET_SYMBOL_DESIGNATOR = "properties-sheet-symbol-designator";
     PROPERTIES_SHEET_SYMBOL_TITLE = "properties-sheet-symbol-title";

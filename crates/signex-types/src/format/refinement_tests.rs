@@ -479,10 +479,12 @@ fn an_entry_type_for_a_missing_sheet_pin_is_dropped_with_a_repair() {
     assert!(!back.harness.entry_types.contains_key(&gone));
     assert_eq!(back.harness.entry_types[&id(0x41)], "SPI_BUS");
     assert!(
-        back.unknown.load_repairs.contains(&SheetLoadRepair::HarnessEntryTypeDropped {
-            pin: gone,
-            harness_type: "UART".into(),
-        }),
+        back.unknown
+            .load_repairs
+            .contains(&SheetLoadRepair::HarnessEntryTypeDropped {
+                pin: gone,
+                harness_type: "UART".into(),
+            }),
         "{:?}",
         back.unknown.load_repairs
     );

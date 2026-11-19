@@ -1,18 +1,8 @@
-//! Signal harness connectivity (#1280). A harness wire carries every entry of
-//! its type at once; this module turns that into ordinary nets.
-//!
-//! Per sheet, a **bundle** is a union-find over harness wires (end to end and
-//! T contacts, by [`pt_key`]), connector tips, harness-typed sheet-entry
-//! points and Hierarchical / Global labels lying on a harness wire (such a
-//! label is a harness *port*, named by its text). Within a bundle the nets
-//! wired to the entry named `E` on every connector are one net, named
-//! `<Type>.<E>` unless a net label names it. An entry whose point touches
-//! another bundle (a harness wire from a second connector's tip) nests that
-//! bundle: its entries join as `<Type>.<E>.<F>`. Across the hierarchy a
-//! harness-typed sheet entry `N` joins the parent bundle it touches with the
-//! child's bundle carrying the port `N`, entry by entry by path. A sheet with
-//! no harness takes none of these steps. Rules and rationale:
-//! `docs/SIGNAL_HARNESSES.md`.
+//! Signal harness connectivity (#1280): a harness wire carries every entry of
+//! its type at once; this module turns per-sheet bundles (a union-find by
+//! [`pt_key`]) into ordinary nets. A sheet with no harness takes none of these
+//! steps. Bundles, nesting and naming: `docs/SIGNAL_HARNESSES.md`,
+//! "Connectivity".
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 

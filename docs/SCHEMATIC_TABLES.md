@@ -29,8 +29,12 @@ Properties hides it on the sheet, checking it shows it again.
 
 Bound tables are rebuilt only after a successful compile
 (`Signex::refresh_bound_tables`), never on every edit, so a table does not
-change under the cursor. Every open sheet whose tables changed gets one undo
-step; a sheet whose tables are already current gets none. A table set to
+change under the cursor. Only the open sheets of the compiled project are
+refreshed, and a Project sheets table reads that project's own compile;
+another open project's sheets are never touched. Every sheet whose tables
+changed gets one undo step; a sheet whose tables are already current gets
+none. A title and revision come from the title block of the sheet file the
+compile read, matched by its path, never by file name alone. A table set to
 Refresh Off keeps its rows. A table whose part left the sheet keeps its rows,
 and Properties says the part is gone.
 
@@ -38,7 +42,9 @@ and Properties says the part is gone.
 
 A typed table's Import… reads a CSV file (comma separated, quoted fields may
 hold commas, quotes and line breaks; the first line is the column titles) and
-replaces its columns and rows in one undo step. Export… writes the shown
+replaces its columns and rows in one undo step, on the sheet Import… was
+pressed on even if another tab is active when the file is read; a table that
+left that sheet meanwhile is said in Messages. Export… writes the shown
 columns and every row. Both run their file dialog and file IO off the update
 loop; an export is an atomic write.
 
@@ -48,7 +54,8 @@ Project ▸ Add Table of Contents Sheet (`add_table_of_contents`) writes
 `contents.snxsch` next to the project's root sheet: a heading
 (`<project> · Contents`) and a Project sheets table, filled from the last
 compile when there is one. The write is atomic and refuses a file that is
-already there. The new sheet is then added to the project the way Add
+already there: the name is claimed with a create-new open first, so a file
+made there in the meantime is never overwritten. The new sheet is then added to the project the way Add
 Existing adds a file. Double-clicking a row of the contents table opens that
 row's sheet.
 

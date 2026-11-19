@@ -955,3 +955,23 @@ panels-unions-create-lock = Lock after creating
 panels-unions-create-confirm = Create
 # Removes a tag pill.
 panels-unions-tag-remove = ×
+
+## c13 review: Messages lines of the unions, harness and compile slices.
+
+panels-unions-msg-not-a-sheet = Create Union works on a schematic sheet.
+panels-unions-msg-no-selection = Create Union: select the objects to group first.
+panels-unions-msg-sheet-changed = Create Union closed: the active sheet changed.
+# $reason is the engine's sentence saying why the union command was refused.
+panels-unions-msg-refused = Unions: { $reason }.
+panels-unions-msg-add-no-union = Add Selection to Union: pick a union in the Unions panel first.
+panels-unions-msg-remove-no-members = Remove Selection from Union: select members of a union first.
+panels-unions-msg-break-no-union = Break Union: select a union first.
+panels-harness-msg-defs-no-project = Harness definitions not changed: the sheet is in no open project
+# $why says why the project refused the edit.
+panels-harness-msg-defs-refused = Harness definitions not changed: { $why }
+# $file is the sheet, $why the engine's reason.
+panels-harness-msg-rename-failed = Harness type not renamed on { $file }: { $why }
+panels-harness-msg-entry-off-connector = Harness entry not placed: click on a harness connector
+panels-compiled-design-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
+# $why says why the project refused the edit.
+panels-compiled-design-naming-refused = Channel naming not changed: { $why }

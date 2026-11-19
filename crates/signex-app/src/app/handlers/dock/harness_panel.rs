@@ -7,6 +7,7 @@
 //! per sheet.
 
 use iced::Task;
+use signex_i18n::{ids, t};
 
 use super::super::super::*;
 use crate::panels::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
@@ -247,7 +248,7 @@ impl Signex {
     fn edit_harness_definitions(&mut self, edit: impl FnOnce(&mut Vec<HarnessDefinition>)) {
         let Some(id) = self.project_in_view() else {
             crate::diagnostics::log_warning(
-                "Harness definitions not changed: the sheet is in no open project",
+                t!(self.ui_state.i18n, ids::HARNESS_MSG_DEFS_NO_PROJECT).into_string(),
             );
             return;
         };
@@ -255,9 +256,10 @@ impl Signex {
         edit(&mut definitions);
         let command = signex_engine::ProjectSectionCommand::SetHarnessDefinitions { definitions };
         if let Err(problem) = self.apply_project_section(id, &command) {
-            crate::diagnostics::log_warning(format!(
-                "Harness definitions not changed: {problem:?}"
-            ));
+            crate::diagnostics::log_warning(
+                t!(self.ui_state.i18n, ids::HARNESS_MSG_DEFS_REFUSED, "why" => problem.to_string())
+                    .into_string(),
+            );
         }
     }
 
@@ -306,10 +308,15 @@ impl Signex {
                 continue;
             }
             if let Err(error) = engine.execute_batch(commands) {
-                crate::diagnostics::log_warning(format!(
-                    "Harness type not renamed on {}: {error}",
-                    path.display()
-                ));
+                crate::diagnostics::log_warning(
+                    t!(
+                        self.ui_state.i18n,
+                        ids::HARNESS_MSG_RENAME_FAILED,
+                        "file" => path.display().to_string(),
+                        "why" => error.to_string()
+                    )
+                    .into_string(),
+                );
                 continue;
             }
             engine.end_field_edit_run();

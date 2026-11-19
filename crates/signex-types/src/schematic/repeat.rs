@@ -1,17 +1,8 @@
 //! Multi-channel sheets (#1279): a sheet symbol whose designator reads
-//! `Repeat(CH, 1, 4)` is placed once and compiles to four channels.
-//!
-//! The repeat lives in text the file already carries, so a sheet that uses it
-//! needs no new field and an older build reads a plain sheet symbol:
-//!
-//! * the sheet symbol's designator (`ChildSheet.name`) is `Repeat(<channel>,
-//!   <from>, <to>)`;
-//! * a sheet entry named `Repeat(<net>)` gives one net per channel and meets a
-//!   bus on the parent sheet; a plain entry is shared by every channel.
-//!
-//! How channel designators and channel-local net names are spelled is a
-//! project setting, [`ChannelNaming`]. The model and the stitching rules are
-//! in `docs/MULTI_CHANNEL.md`.
+//! `Repeat(CH, 1, 4)` compiles to four channels, and a sheet entry named
+//! `Repeat(<net>)` gives one net per channel; no new field, so an older build
+//! reads plain names. Channel spelling is the project's [`ChannelNaming`].
+//! Model and stitching: `docs/MULTI_CHANNEL.md`, "Model".
 
 use thiserror::Error;
 

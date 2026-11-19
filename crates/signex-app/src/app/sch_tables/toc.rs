@@ -24,10 +24,12 @@ const TABLE_AT: Point = Point::new(25.4, 35.56);
 /// The heading's text height (mm).
 const HEADING_MM: f64 = 3.81;
 
-/// The contents sheet of project `name`: its heading and a contents table
-/// with `rows` and `links` (empty until the next compile fills them).
+/// The contents sheet of project `name`: its heading (`<name> · <word>`,
+/// `word` the catalog's "Contents") and a contents table with `rows` and
+/// `links` (empty until the next compile fills them).
 pub(crate) fn contents_sheet(
     name: &str,
+    word: &str,
     rows: Vec<Vec<String>>,
     links: Vec<String>,
 ) -> SchematicSheet {
@@ -37,7 +39,7 @@ pub(crate) fn contents_sheet(
     };
     sheet.text_notes.push(TextNote {
         uuid: uuid::Uuid::now_v7(),
-        text: format!("{name} · Contents"),
+        text: format!("{name} · {word}"),
         position: HEADING_AT,
         rotation: 0.0,
         font_size: HEADING_MM,
@@ -55,12 +57,29 @@ pub(crate) fn contents_sheet(
     sheet
 }
 
-/// Write `text` to `path` unless a file is there already.
+/// Write `text` to `path` unless a file is there already. The name is
+/// claimed with `create_new` first, so a file made there after the check is
+/// never overwritten; the text then replaces only that empty claim, through
+/// the atomic write, and a failed write gives the name back.
 fn write_new(path: &std::path::Path, text: &str) -> Result<(), String> {
-    if std::fs::symlink_metadata(path).is_ok() {
-        return Err("exists".to_string());
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(claim) => drop(claim),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err("exists".to_string());
+        }
+        Err(e) => return Err(e.to_string()),
     }
-    signex_types::atomic_io::atomic_write(path, text.as_bytes()).map_err(|e| e.to_string())
+    signex_types::atomic_io::atomic_write(path, text.as_bytes()).map_err(|e| {
+        // Only the empty claim made above is removed; nothing else was there.
+        if let Err(cleanup) = std::fs::remove_file(path) {
+            tracing::warn!(path = %path.display(), error = %cleanup, "could not remove the empty contents file");
+        }
+        e.to_string()
+    })
 }
 
 impl Signex {
@@ -76,7 +95,7 @@ impl Signex {
             .and_then(|root| root.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| project.dir().to_path_buf());
         let path = dir.join(CONTENTS_FILE);
-        let (rows, links) = match self.contents_now() {
+        let (rows, links) = match self.contents_now(project_id) {
             Some(entries) => {
                 let columns =
                     SchTable::columns_for(&TableSource::ProjectSheets { per_channel: true });
@@ -84,12 +103,13 @@ impl Signex {
             }
             None => (Vec::new(), Vec::new()),
         };
-        let sheet = contents_sheet(&name, rows, links);
+        let word = t!(i18n, ids::TABLE_TOC_HEADING).into_string();
+        let sheet = contents_sheet(&name, &word, rows, links);
         let text = match signex_types::format::SnxSchematic::new(sheet).write_string() {
             Ok(text) => text,
             Err(error) => {
                 crate::diagnostics::log_error(
-                    "Table of contents: the sheet did not serialise",
+                    &t!(i18n, ids::TABLE_TOC_NOT_SERIALISED).into_string(),
                     &anyhow::Error::new(error),
                 );
                 return Task::none();
@@ -145,9 +165,13 @@ impl Signex {
         }
     }
 
-    /// The contents rows the last compile gives, one per channel.
-    fn contents_now(&self) -> Option<super::refresh::Contents> {
-        self.compiled_contents().map(|pages| pages.pages(true))
+    /// The contents rows `project`'s last compile gives, one per channel.
+    fn contents_now(
+        &self,
+        project: crate::app::state::ProjectId,
+    ) -> Option<super::refresh::Contents> {
+        self.compiled_contents_of(project)
+            .map(|pages| pages.pages(true))
     }
 }
 
@@ -157,7 +181,8 @@ mod tests {
 
     #[test]
     fn the_contents_sheet_has_a_heading_and_a_bound_contents_table() {
-        let sheet = contents_sheet("dcdc-buck", Vec::new(), Vec::new());
+        let word = t!(signex_i18n::I18n::en_us_ref(), ids::TABLE_TOC_HEADING).into_string();
+        let sheet = contents_sheet("dcdc-buck", &word, Vec::new(), Vec::new());
         assert_eq!(sheet.text_notes[0].text, "dcdc-buck · Contents");
         let [SchDrawing::Table(t)] = &sheet.drawings[..] else {
             panic!("one table");

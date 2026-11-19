@@ -338,7 +338,11 @@ impl Signex {
         }
         let Some(copied) = self.interaction_state.clipboard.as_ref() else {
             crate::diagnostics::log_info(
-                "Smart Paste: nothing to paste yet; copy a selection first.",
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_NOTHING_COPIED
+                )
+                .into_string(),
             );
             return;
         };
@@ -430,7 +434,13 @@ impl Signex {
         }
         if moved {
             self.ui_state.smart_paste = None;
-            crate::diagnostics::log_info("Smart Paste closed: the active sheet changed.");
+            crate::diagnostics::log_info(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_SHEET_CHANGED
+                )
+                .into_string(),
+            );
             return self.finish_update();
         }
         let Some(state) = self.ui_state.smart_paste.as_deref_mut() else {

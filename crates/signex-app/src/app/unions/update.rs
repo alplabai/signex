@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::Command;
+use signex_i18n::{ids, t};
 use signex_types::schematic::{SchUnion, SelectedItem};
 use uuid::Uuid;
 
@@ -82,7 +83,9 @@ impl Signex {
 
     fn open_create_union(&mut self) {
         let Some((sheet, selected)) = self.union_selection() else {
-            crate::diagnostics::log_info("Create Union works on a schematic sheet.");
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_NOT_A_SHEET).into_string(),
+            );
             return;
         };
         let mut members: Vec<Uuid> = Vec::new();
@@ -92,7 +95,9 @@ impl Signex {
             }
         }
         if members.is_empty() {
-            crate::diagnostics::log_info("Create Union: select the objects to group first.");
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_NO_SELECTION).into_string(),
+            );
             return;
         }
         let anchor = self.interaction_state.last_mouse_pos;
@@ -140,7 +145,9 @@ impl Signex {
         }
         if self.document_state.active_path.as_deref() != Some(popover.sheet.as_path()) {
             self.ui_state.unions.popover = None;
-            crate::diagnostics::log_info("Create Union closed: the active sheet changed.");
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_SHEET_CHANGED).into_string(),
+            );
             return;
         }
         let uuid = Uuid::now_v7();
@@ -168,7 +175,10 @@ impl Signex {
         match self.execute_on_sheet(sheet, command) {
             Ok(changed) => changed,
             Err(reason) => {
-                crate::diagnostics::log_warning(format!("Unions: {reason}."));
+                crate::diagnostics::log_warning(
+                    t!(self.ui_state.i18n, ids::UNIONS_MSG_REFUSED, "reason" => reason.to_string())
+                        .into_string(),
+                );
                 false
             }
         }
@@ -198,7 +208,7 @@ impl Signex {
     fn add_selection_to_union(&mut self) {
         let Some((path, union)) = self.current_union() else {
             crate::diagnostics::log_info(
-                "Add Selection to Union: pick a union in the Unions panel first.",
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_ADD_NO_UNION).into_string(),
             );
             return;
         };
@@ -222,7 +232,7 @@ impl Signex {
     fn remove_selection_from_union(&mut self) {
         let Some((path, union)) = self.current_union() else {
             crate::diagnostics::log_info(
-                "Remove Selection from Union: select members of a union first.",
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_REMOVE_NO_MEMBERS).into_string(),
             );
             return;
         };
@@ -252,7 +262,9 @@ impl Signex {
             .clone()
             .and_then(|(path, id)| self.union_on(&path, id).map(|u| (path, u)));
         let Some((path, union)) = picked.or_else(|| self.current_union()) else {
-            crate::diagnostics::log_info("Break Union: select a union first.");
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::UNIONS_MSG_BREAK_NO_UNION).into_string(),
+            );
             return;
         };
         if self.run_union_command(&path, Command::BreakUnion { uuid: union.uuid }) {

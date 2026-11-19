@@ -176,7 +176,9 @@ fn open_tab(
 ) {
     let engine =
         signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())).expect("engine");
-    app.document_state.engines.insert(path.to_path_buf(), engine);
+    app.document_state
+        .engines
+        .insert(path.to_path_buf(), engine);
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: title.to_string(),
         path: path.to_path_buf(),
@@ -296,8 +298,7 @@ fn a_compile_refreshes_only_its_own_projects_contents_tables() {
     let mut root = f.app.document_state.engines[&f.root].document().clone();
     root.drawings
         .extend(sheet_with_contents_table().drawings.into_iter());
-    let engine =
-        signex_engine::Engine::new_with_path(root, Some(f.root.clone())).expect("engine");
+    let engine = signex_engine::Engine::new_with_path(root, Some(f.root.clone())).expect("engine");
     f.app.document_state.engines.insert(f.root.clone(), engine);
     // Project B, open alongside, with its own contents sheet.
     let other = TempDir::new().expect("tempdir");
@@ -305,7 +306,13 @@ fn a_compile_refreshes_only_its_own_projects_contents_tables() {
     write_sheet(&b_path, sheet_with_contents_table());
     let (b_prj, b_data) = write_project_file(other.path(), "Other", &["contents.snxsch"]);
     let b = load_project(&mut f.app, b_prj, b_data);
-    open_tab(&mut f.app, b, "contents", &b_path, sheet_with_contents_table());
+    open_tab(
+        &mut f.app,
+        b,
+        "contents",
+        &b_path,
+        sheet_with_contents_table(),
+    );
 
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
 

@@ -7,6 +7,7 @@
 //! (`new_connector_type`, `seeded_entries`, `next_entry_name`). Model and
 //! rules: `docs/SIGNAL_HARNESSES.md`.
 
+use signex_i18n::{ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::schematic::{
     DEFAULT_HARNESS_ENTRY_PITCH_MM, HarnessConnector, HarnessDefinition, HarnessEntry, HarnessWire,
@@ -129,7 +130,7 @@ impl Signex {
             Some((c.uuid, entry, c.slot_at(at)))
         }) else {
             crate::diagnostics::log_warning(
-                "Harness entry not placed: click on a harness connector",
+                t!(self.ui_state.i18n, ids::HARNESS_MSG_ENTRY_OFF_CONNECTOR).into_string(),
             );
             return;
         };

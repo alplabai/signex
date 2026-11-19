@@ -1,16 +1,8 @@
-//! Signal harness rules (#1280).
-//!
-//! - `harness_entry_mismatch`: a connector entry its type's definition does
-//!   not list, a definition entry the connector lacks, or an entry the far
-//!   side of the harness (the child sheet behind a harness-typed sheet entry)
-//!   carries and this side lacks. Each finding names both sides, e.g.
-//!   `sensor expects entry CS_ADC; this harness has CS`, and sits on the
-//!   entry that stands in the expected one's place.
-//! - `harness_type_conflict`: connectors or typed sheet entries of two types
-//!   on one harness.
-//!
-//! Waivers and No-ERC directives work as for every rule. Rules and naming:
-//! `docs/SIGNAL_HARNESSES.md`.
+//! Signal harness rules (#1280): `harness_entry_mismatch` (an entry one side
+//! of a harness or its definition expects and the other lacks, named on both
+//! sides, on the entry that stands in its place) and `harness_type_conflict`
+//! (two types on one harness). Waivers and No-ERC directives work as for
+//! every rule. What each finding says: `docs/SIGNAL_HARNESSES.md`, "ERC".
 
 use signex_net::{HarnessMismatch, harness_mismatches};
 use signex_types::schematic::{

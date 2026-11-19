@@ -135,6 +135,9 @@ impl Signex {
         if self.typed_table(table).is_none() {
             return Task::none();
         }
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return Task::none();
+        };
         let i18n = &self.ui_state.i18n;
         let dialog = self
             .ui_state
@@ -153,12 +156,22 @@ impl Signex {
                     .and_then(std::convert::identity);
                 Some((path, result))
             },
-            move |picked| Message::from(TablesMsg::CsvImportRead { table, picked }),
+            move |picked| {
+                Message::from(TablesMsg::CsvImportRead {
+                    sheet,
+                    table,
+                    picked,
+                })
+            },
         )
     }
 
+    /// The picked file was read: import it into `table` on `sheet`, the
+    /// sheet Import… was pressed on, whichever tab is active now. A table
+    /// that left the sheet meanwhile is said in Messages.
     pub(super) fn csv_import_read(
         &mut self,
+        sheet: &std::path::Path,
         table: uuid::Uuid,
         picked: Option<CsvRead>,
     ) -> Task<Message> {
@@ -168,7 +181,16 @@ impl Signex {
         match result {
             Ok((titles, rows)) => {
                 let edit = super::AnnotationEdit::TableImported(titles, rows);
-                self.apply_annotation_edit_to(table, &edit);
+                if self.apply_annotation_edit_on(sheet, table, &edit).is_none() {
+                    crate::diagnostics::log_warning(
+                        signex_i18n::t!(
+                            self.ui_state.i18n,
+                            ids::TABLE_CSV_TABLE_GONE,
+                            "file" => sheet.display().to_string()
+                        )
+                        .into_string(),
+                    );
+                }
             }
             Err(why) => crate::diagnostics::log_warning(
                 signex_i18n::t!(

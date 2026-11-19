@@ -394,6 +394,15 @@ properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs
 properties-table-toc-written = Contents sheet written: { $file }
 properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
 properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
+properties-table-toc-not-serialised = Add Table of Contents Sheet: the contents sheet could not be written as text
+# The word after the project's name in the contents sheet's heading
+# ("dcdc-buck · Contents"). No placeable: the heading is sheet text, so it
+# must not carry the bidi isolation marks a placeable gets.
+properties-table-toc-heading = Contents
+# $file is the sheet the bound tables are on.
+properties-table-refresh-failed = Table refresh failed on { $file }
+# A CSV import or cell edit answered after its table left the sheet. $file is the sheet.
+properties-table-csv-table-gone = Table import: the table is no longer on { $file }; nothing was changed
 
 ## c13 multi-channel-compiled
 

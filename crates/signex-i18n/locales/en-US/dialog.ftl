@@ -375,3 +375,5 @@ dialog-smart-paste-drag-hint = Ghosts show where the copies land; drag the first
 dialog-smart-paste-footer = Paste places at the cursor; Esc cancels.
 dialog-smart-paste-paste = Paste
 dialog-smart-paste-paste-copies = Paste { $count } copies
+dialog-smart-paste-nothing-copied = Smart Paste: nothing to paste yet; copy a selection first.
+dialog-smart-paste-sheet-changed = Smart Paste closed: the active sheet changed.

@@ -30,15 +30,16 @@ fn app_with_a_copied_wire() -> Signex {
     // Keep reads no project numbers, so the clipboard answer comes next.
     app.ui_state.paste_designators = PasteDesignators::Keep;
     assert!(app.headless_answers().is_none(), "a windowed app");
-    assert!(app.interaction_state.clipboard.is_some(), "the wire is copied");
+    assert!(
+        app.interaction_state.clipboard.is_some(),
+        "the wire is copied"
+    );
     app
 }
 
 /// The system clipboard's answer to a Paste Special made under `origin`.
 fn paste_special_as(app: &mut Signex, origin: Origin) {
-    let request = app.with_origin(origin, |app| {
-        app.new_paste_request(PasteIntent::SmartPaste)
-    });
+    let request = app.with_origin(origin, |app| app.new_paste_request(PasteIntent::SmartPaste));
     let _ = app.update(Message::Edit(EditMsg::PasteTextRead {
         request,
         text: None,

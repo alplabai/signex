@@ -20,6 +20,8 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const GAP: f32 = TS.body * 10.0 / 12.0;
 /// Designators listed per card body.
 const BODY_ROWS: usize = 9;
+/// Gap between the designator lines of a card: 2 px at the 12 px body.
+const LINE_GAP: f32 = TS.body * 2.0 / 12.0;
 
 pub(super) fn view<'a>(
     ctx: &'a PanelContext,
@@ -76,7 +78,7 @@ fn card<'a>(
     ]
     .spacing(GAP)
     .align_y(Alignment::Center);
-    let mut body: Column<Element<'a, Message>> = column![].spacing(2.0);
+    let mut body: Column<Element<'a, Message>> = column![].spacing(LINE_GAP);
     for name in tab.designators.iter().take(BODY_ROWS) {
         body = body.push(
             text(UserText::new(name.as_str()))

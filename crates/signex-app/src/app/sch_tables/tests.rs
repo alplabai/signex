@@ -178,7 +178,9 @@ fn a_csv_import_replaces_columns_and_rows_in_one_step() {
         vec!["Addr".to_string(), "Register".into()],
         vec![vec!["0x00".to_string(), "Configuration".into()]],
     ));
+    let sheet = app.document_state.active_path.clone().expect("active");
     let _ = app.update(Message::from(TablesMsg::CsvImportRead {
+        sheet,
         table: id,
         picked: Some(("regs.csv".into(), read)),
     }));
@@ -192,6 +194,46 @@ fn a_csv_import_replaces_columns_and_rows_in_one_step() {
         panic!("a table");
     };
     assert_eq!(t.size(), (3, 3), "one undo restores the typed table");
+}
+
+/// The file dialog is async: an import answered after a tab switch lands on
+/// the sheet Import… was pressed on, not on the sheet in view.
+#[test]
+fn a_csv_import_lands_on_its_own_sheet_after_a_tab_switch() {
+    let mut app = app_with_tool(Tool::Table);
+    click(&mut app, (0.0, 0.0));
+    let id = table_id(&app);
+    let sheet = app.document_state.active_path.clone().expect("active");
+    let other = std::path::PathBuf::from("other.snxsch");
+    app.document_state.engines.insert(
+        other.clone(),
+        signex_engine::Engine::new(SchematicSheet::default()).expect("engine"),
+    );
+    app.document_state.active_path = Some(other.clone());
+    let read = Ok((vec!["Addr".to_string()], vec![vec!["0x10".to_string()]]));
+    let _ = app.update(Message::from(TablesMsg::CsvImportRead {
+        sheet: sheet.clone(),
+        table: id,
+        picked: Some(("regs.csv".into(), read)),
+    }));
+    let table = app.document_state.engines[&sheet]
+        .document()
+        .drawings
+        .iter()
+        .find_map(|d| match d {
+            SchDrawing::Table(t) if t.uuid == id => Some(t.clone()),
+            _ => None,
+        })
+        .expect("the table");
+    assert_eq!(table.size(), (1, 1));
+    assert_eq!(table.cell(0, 0), "0x10");
+    assert!(
+        app.document_state.engines[&other]
+            .document()
+            .drawings
+            .is_empty(),
+        "the sheet in view is untouched"
+    );
 }
 
 fn pin(number: &str, name: &str, direction: PinDirection) -> LibPin {

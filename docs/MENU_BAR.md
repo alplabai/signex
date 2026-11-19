@@ -582,6 +582,20 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
 
+## View ▸ Unions {#view-unions}
+
+Opens (or reveals) the Unions panel (`PanelKind::Unions`, named unions),
+docked on the right. The row sits after Layers, among the panel rows, and
+behaves like them; the panel is also in the status bar's Panels list
+(decisions.html XF-07: every dock panel is listed in both). No key is bound
+and there is no command id: the row sends `OpenUnionsPanel`, as the other
+panel rows do. Always available.
+
+- The panel lists the unions of the sheet in view (This sheet) or of every
+  open sheet of the project (Project), filters by name or `#tag`, and locks,
+  hides, renames, adds or removes members and breaks a union. Rules:
+  `docs/SCHEMATIC_UNIONS.md`.
+
 ## View ▸ Compiled Design {#view-compiled-design}
 
 Runs `open_compiled_design` (#1308), which opens (or reveals) the Compiled

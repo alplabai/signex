@@ -514,10 +514,10 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub directives: Vec<super::SchDirective>,
     /// Harness connectors, harness wires and harness-typed sheet entries
-    /// (#1279). Saved in `[extras.sheet]` only when not empty.
+    /// (#1280). Saved in `[extras.sheet]` only when not empty.
     #[serde(default, skip_serializing_if = "super::SheetHarness::is_empty")]
     pub harness: super::SheetHarness,
-    /// Unions of sheet objects (#1300). Saved in `[extras.sheet]` only when
+    /// Unions of sheet objects (#158). Saved in `[extras.sheet]` only when
     /// not empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unions: Vec<super::SchUnion>,

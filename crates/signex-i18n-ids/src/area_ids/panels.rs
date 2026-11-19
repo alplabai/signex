@@ -231,4 +231,18 @@ define_ids! {
     UNIONS_CREATE_LOCK = "panels-unions-create-lock";
     UNIONS_CREATE_CONFIRM = "panels-unions-create-confirm";
     UNIONS_TAG_REMOVE = "panels-unions-tag-remove";
+    // c13 review: Messages lines of the unions, harness and compile slices.
+    UNIONS_MSG_NOT_A_SHEET = "panels-unions-msg-not-a-sheet";
+    UNIONS_MSG_NO_SELECTION = "panels-unions-msg-no-selection";
+    UNIONS_MSG_SHEET_CHANGED = "panels-unions-msg-sheet-changed";
+    UNIONS_MSG_REFUSED = "panels-unions-msg-refused";
+    UNIONS_MSG_ADD_NO_UNION = "panels-unions-msg-add-no-union";
+    UNIONS_MSG_REMOVE_NO_MEMBERS = "panels-unions-msg-remove-no-members";
+    UNIONS_MSG_BREAK_NO_UNION = "panels-unions-msg-break-no-union";
+    HARNESS_MSG_DEFS_NO_PROJECT = "panels-harness-msg-defs-no-project";
+    HARNESS_MSG_DEFS_REFUSED = "panels-harness-msg-defs-refused";
+    HARNESS_MSG_RENAME_FAILED = "panels-harness-msg-rename-failed";
+    HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
+    PANELS_COMPILED_DESIGN_NO_PROJECT = "panels-compiled-design-no-project";
+    PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
 }

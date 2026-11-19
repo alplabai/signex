@@ -175,4 +175,6 @@ define_ids! {
     SMART_PASTE_FOOTER = "dialog-smart-paste-footer";
     SMART_PASTE_PASTE = "dialog-smart-paste-paste";
     SMART_PASTE_PASTE_COPIES = "dialog-smart-paste-paste-copies";
+    SMART_PASTE_NOTHING_COPIED = "dialog-smart-paste-nothing-copied";
+    SMART_PASTE_SHEET_CHANGED = "dialog-smart-paste-sheet-changed";
 }

@@ -74,7 +74,14 @@ impl Signex {
         }
         let command = signex_engine::ProjectSectionCommand::SetChannelNaming { naming };
         if let Err(problem) = self.apply_project_section(project, &command) {
-            crate::diagnostics::log_warning(format!("Channel naming not changed: {problem:?}"));
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::PANELS_COMPILED_DESIGN_NAMING_REFUSED,
+                    "why" => problem.to_string()
+                )
+                .into_string(),
+            );
         }
     }
 }

@@ -31,7 +31,8 @@ impl Signex {
     pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
         // The Smart Paste dialog offers Next free whatever the preference.
         let needs = request.intent == PasteIntent::ArraySeed
-            || (request.intent == PasteIntent::SmartPaste && self.smart_paste_opens_dialog(request))
+            || (request.intent == PasteIntent::SmartPaste
+                && self.smart_paste_opens_dialog(request))
             || self.ui_state.paste_designators.reads_project();
         if !needs {
             return None;

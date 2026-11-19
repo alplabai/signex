@@ -19,6 +19,9 @@ use uuid::Uuid;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+/// The harness colour swatch: 16 px at the 12 px body, rounded by a quarter.
+const SWATCH: f32 = TS.body * 16.0 / 12.0;
+const SWATCH_RADIUS: f32 = SWATCH / 4.0;
 
 /// A placement field of a connector typed in Properties.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -404,10 +407,10 @@ fn colour_row<'a>(
     let fill = Color::from_rgb8(swatch.r, swatch.g, swatch.b);
     row![
         property_label(label, muted),
-        container(Space::new().width(16.0).height(16.0)).style(move |_| container::Style {
+        container(Space::new().width(SWATCH).height(SWATCH)).style(move |_| container::Style {
             background: Some(iced::Background::Color(fill)),
             border: iced::Border {
-                radius: 4.0.into(),
+                radius: SWATCH_RADIUS.into(),
                 ..iced::Border::default()
             },
             ..container::Style::default()

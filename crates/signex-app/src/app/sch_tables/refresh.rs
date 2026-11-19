@@ -106,7 +106,12 @@ impl Signex {
                 }
                 Ok(_) => {}
                 Err(error) => crate::diagnostics::log_error(
-                    &format!("Table refresh failed on '{}'", path.display()),
+                    &signex_i18n::t!(
+                        self.ui_state.i18n,
+                        signex_i18n::ids::TABLE_REFRESH_FAILED,
+                        "file" => path.display().to_string()
+                    )
+                    .into_string(),
                     &anyhow::Error::new(error),
                 ),
             }
@@ -114,12 +119,6 @@ impl Signex {
         if changed_any {
             self.refresh_panel_ctx();
         }
-    }
-
-    /// The active project's pages as its last compile walked them; `None`
-    /// before a compile.
-    pub(super) fn compiled_contents(&self) -> Option<CompiledPages> {
-        self.compiled_contents_of(self.compile_target()?)
     }
 
     /// `project`'s pages as its last compile walked them, with the title

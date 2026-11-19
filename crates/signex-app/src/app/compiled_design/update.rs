@@ -113,8 +113,11 @@ impl Signex {
     fn start_compile(&mut self) -> Task<Message> {
         let Some(job) = self.plan_compile() else {
             crate::diagnostics::log_warning(
-                "Compile project: open a sheet of a project first; a sheet outside a project \
-                 has no compiled design.",
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::PANELS_COMPILED_DESIGN_NO_PROJECT
+                )
+                .into_string(),
             );
             return Task::none();
         };
@@ -189,9 +192,8 @@ impl Signex {
         let compiled = match &outcome.result {
             Ok(compiled) => compiled,
             Err(reason) => {
-                let i18n = signex_i18n::I18n::en_us_ref();
                 let line = signex_i18n::t!(
-                    i18n,
+                    self.ui_state.i18n,
                     signex_i18n::ids::PANELS_COMPILED_DESIGN_FAILED,
                     "reason" => reason.as_str()
                 );

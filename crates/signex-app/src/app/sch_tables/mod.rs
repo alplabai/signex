@@ -47,7 +47,10 @@ pub enum TablesMsg {
     /// Import… was pressed for a typed table.
     CsvImportRequested(uuid::Uuid),
     /// The picked CSV file was read (`None`: the dialog was cancelled).
+    /// `sheet` is the sheet the table was on when Import… was pressed: the
+    /// import lands there even if another tab is active by now.
     CsvImportRead {
+        sheet: PathBuf,
         table: uuid::Uuid,
         picked: Option<(PathBuf, CsvCells)>,
     },
@@ -74,7 +77,11 @@ impl Signex {
                 result,
             } => self.table_of_contents_written(project_id, path, result),
             TablesMsg::CsvImportRequested(table) => self.csv_import_dialog(table),
-            TablesMsg::CsvImportRead { table, picked } => self.csv_import_read(table, picked),
+            TablesMsg::CsvImportRead {
+                sheet,
+                table,
+                picked,
+            } => self.csv_import_read(&sheet, table, picked),
             TablesMsg::CsvExportRequested(table) => self.csv_export_dialog(table),
             TablesMsg::CsvExported(written) => {
                 self.csv_exported(written);
@@ -91,6 +98,29 @@ impl Signex {
             }
         };
         Task::batch([task, self.finish_update()])
+    }
+
+    /// Apply `edit` to drawing `id` of the open sheet at `sheet` as one undo
+    /// step (through the gateway when it is the sheet in view). `None` when
+    /// the sheet is not open or holds no such drawing; `Some(false)` when
+    /// the edit does not apply or changes nothing.
+    pub(crate) fn apply_annotation_edit_on(
+        &mut self,
+        sheet: &std::path::Path,
+        id: uuid::Uuid,
+        edit: &AnnotationEdit,
+    ) -> Option<bool> {
+        let engine = self.document_state.engines.get(sheet)?;
+        let drawing = engine.document().drawings.iter().find(|d| d.uuid() == id)?;
+        let Some(next) = apply_annotation_edit(drawing, edit) else {
+            return Some(false);
+        };
+        let command = signex_engine::Command::UpdateSchDrawing { drawing: next };
+        if self.document_state.active_path.as_deref() == Some(sheet) {
+            return Some(self.apply_engine_command(command, true, true));
+        }
+        // A refusal is said in Messages by `execute_on_sheet`.
+        Some(self.execute_on_sheet(sheet, command).unwrap_or(false))
     }
 
     /// Apply `edit` to drawing `id` of the active sheet as one undo step;
