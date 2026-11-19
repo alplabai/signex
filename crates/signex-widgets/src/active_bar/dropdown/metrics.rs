@@ -183,7 +183,7 @@ impl MenuMetrics {
                         w += self.icon_size + self.row_spacing;
                     }
                     w += self.row_spacing + self.cluster_gap;
-                    if let Some(s) = &item.shortcut {
+                    for s in [&item.caption, &item.shortcut].into_iter().flatten() {
                         w += self.row_spacing + advance(s, self.shortcut_size, shortcut_family);
                     }
                     if item.checked {
@@ -213,12 +213,12 @@ fn line_height(size: f32) -> f32 {
         .0
 }
 
-/// Whether any item row of `entries` carries an icon: the menu then has an
-/// icon column.
+/// Whether any item row of `entries` carries an icon or a swatch: the menu then
+/// has an icon column.
 pub(super) fn has_icons<M: Clone>(entries: &[DropdownEntry<M>]) -> bool {
     entries
         .iter()
-        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some()))
+        .any(|entry| matches!(entry, DropdownEntry::Item(item) if item.icon.is_some() || item.swatch.is_some()))
 }
 
 /// Whether any item row of `entries` opens a submenu: the menu then has a
