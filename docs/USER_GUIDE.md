@@ -54,13 +54,34 @@ candidate such as `v1.0.0-rc.1` (or `v26.11.0-rc.1`) is a GitHub pre-release: ge
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with four
-buttons:
+Start Signex. With no document open you see the start screen. Its left
+column has:
 
-- **New Project**
-- **Open Project…** (with its keyboard shortcut shown next to it)
-- **Open Sample Project**
-- **Keyboard Shortcuts (F1)**
+- **New project**
+- **Open…** (with its keyboard shortcut shown next to it)
+- **Home**, **Projects** and **Libraries**, the three pages of the start
+  screen. **Projects** and **Libraries** show how many there are.
+- **Parts search**, greyed: it is not available yet.
+- **Keyboard Shortcuts**, with its key (`F1`) at the right.
+- A **Libraries** card at the bottom, which opens the Libraries page.
+
+**Home** has the **Sample project** card (press it or its **Open** button to
+open the bundled example), your pinned projects and up to five recent
+projects. When there are more, **Show all** opens the Projects page. Each
+project row shows a small preview of the project, its path and when you last
+opened it ("today 09:12", "yesterday" or a date; "—" when it is not known).
+Hover a row for **Pin** or **Unpin**; right-click it for the same actions.
+
+**Projects** lists every pinned and recent project. Type in **Filter by name
+or folder** to narrow the list, and use **All**, **Pinned** or **Missing** to
+pick which projects show. **Libraries** lists the libraries loaded for every
+project, with their scope and number of components; **Open** opens a library
+in the Library Browser (the Stock library opens read-only), **Add library…**
+adds a global library, and **Open Library Browser** opens the browser.
+
+When a project is open but no document is shown, the centre says so and
+offers **New sheet**, **New PCB** and **Project Options…**. A project with no
+documents yet says that instead.
 
 ![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
@@ -80,7 +101,7 @@ the active shortcut profile.
 
 ## 3. Create a project
 
-Choose **File ▸ New Project** (or press **New Project** on the start screen).
+Choose **File ▸ New Project** (or press **New project** on the start screen).
 
 The **New Project** dialog opens. Nothing is written until you press
 **Create project**.
@@ -139,8 +160,8 @@ project that already lives in a shared folder still opens normally.
 
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** **Help ▸ Open Sample Project** (or the button on the
-> start screen) opens a small bundled design, a linear regulator. Signex copies
+> **Sample project.** **Help ▸ Open Sample Project** (or the **Sample project**
+> card on the start screen's Home page) opens a small bundled design, a linear regulator. Signex copies
 > it into your per-user configuration folder the first time, so your edits to it
 > are kept. A copy that is already there is never overwritten, so one opened
 > before an update keeps its old layout until you delete its folder under the
