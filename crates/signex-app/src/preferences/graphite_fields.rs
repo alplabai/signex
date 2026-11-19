@@ -1,14 +1,13 @@
 //! Graphite controls of the Preferences dialog: the nav search field, the
-//! mock's page names and the font pick-list.
+//! mock's page names and the pane scroller style.
 //! Legacy themes never reach these helpers.
 
 use super::{PrefMsg, PrefNav, SP, TS};
 use crate::styles::{self, ti, tokens};
-use iced::widget::{container, pick_list, scrollable};
+use iced::widget::{container, scrollable};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::text_input;
 
 /// The page name on Graphite: the mock's wording for the pages it names.
@@ -99,21 +98,6 @@ pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens, i18n: &I18n) -> El
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .style(styles::field(t, false))
-        .boxed()
-}
-
-/// The UI-font pick-list drawn as a Graphite field (field fill, hairline,
-/// control radius; the menu is a raised card).
-pub(super) fn font_pick_list<'a>(
-    current: String,
-    families: &'a [String],
-    _t: &ThemeTokens,
-) -> Element<'a, PrefMsg> {
-    pick_list(Some(current), families, |s: &String| s.clone())
-        .graphite()
-        .on_select(PrefMsg::DraftFont)
-        .padding([SP.s, SP.m])
-        .width(200)
         .boxed()
 }
 

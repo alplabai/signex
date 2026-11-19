@@ -23,9 +23,12 @@ pub(in crate::preferences) fn catch_keys<'a, Message: 'a>(
     ._boxed()
 }
 
+/// What a key press means on the wrapped content, if anything.
+type KeyHandler<'a, Message> = Box<dyn Fn(&Key, Modifiers) -> Option<Message> + 'a>;
+
 struct KeyCatcher<'a, Message> {
     content: Element<'a, Message>,
-    on_key: Box<dyn Fn(&Key, Modifiers) -> Option<Message> + 'a>,
+    on_key: KeyHandler<'a, Message>,
 }
 
 impl<Message> widget::Meta for KeyCatcher<'_, Message> {}
