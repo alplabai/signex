@@ -9,6 +9,7 @@ use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::button;
 
+pub mod board_palette;
 mod buttons;
 mod dialog_buttons;
 mod dialog_kit;

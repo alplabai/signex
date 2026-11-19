@@ -87,6 +87,11 @@ impl Catalog {
                 bom_modal::view(tokens),
             ),
             section::view(
+                "Board palette and line-art inks",
+                tokens,
+                crate::board_palette::view(tokens)
+            ),
+            section::view(
                 "Passive network calculator control",
                 tokens,
                 self.passive_calculator
