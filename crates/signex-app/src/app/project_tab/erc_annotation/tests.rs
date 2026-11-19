@@ -113,6 +113,31 @@ fn open_electrical_rules_check_opens_the_dialog_for_this_project() {
     );
 }
 
+/// With two projects loaded and the second one's tab in front, the dialog
+/// edits the second project, not the first.
+#[test]
+fn open_electrical_rules_check_from_a_second_project_edits_that_project() {
+    let (mut app, first) = app();
+    let mut second = app.document_state.projects[0].clone();
+    let dir = std::env::temp_dir().join(format!("signex-prj-erc-two-{}", uuid::Uuid::now_v7()));
+    second.id = app.document_state.mint_project_id();
+    second.path = dir.join("ProjectB.snxprj");
+    second.data.name = "ProjectB".to_string();
+    second.data.dir = dir.to_string_lossy().into_owned();
+    let second_id = second.id;
+    app.document_state.projects.push(second);
+    app.open_project_tab(1);
+    app.ui_state.erc_dialog_open = false;
+    let _ = app.update(open_erc_message());
+    assert!(app.ui_state.erc_dialog_open);
+    let edited = app
+        .document_state
+        .active_document_project()
+        .map(|project| project.id);
+    assert_eq!(edited, Some(second_id));
+    assert_ne!(edited, Some(first));
+}
+
 #[test]
 fn the_section_renders_for_every_rule_source() {
     let (mut app, id) = app();

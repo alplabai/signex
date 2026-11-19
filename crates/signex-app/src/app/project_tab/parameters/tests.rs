@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::rename::{ParameterNameProblem, checked_rename};
+use super::rename::{ParameterNameProblem, RenameNote, checked_rename, rename_note};
 use super::{ParameterGroup, visible_parameters};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -142,6 +142,33 @@ fn a_rename_is_checked_before_the_engine_sees_it() {
     assert_eq!(check("company"), Err(ParameterNameProblem::TitleBlock));
     assert_eq!(check("rev"), Err(ParameterNameProblem::TitleBlock));
     assert_eq!(check("VOUT"), Err(ParameterNameProblem::Taken));
+}
+
+/// Renaming moves only the project key, so `${VIN}` on a sheet and a sheet
+/// value named VIN stop resolving to it: a name that Enter would apply is
+/// warned about before Enter; a refusal shows only after Enter.
+#[test]
+fn an_accepted_rename_draft_warns_that_references_keep_the_old_name() {
+    let parameters = BTreeMap::from([
+        ("VIN".to_string(), "12V".to_string()),
+        ("VOUT".to_string(), "3V3".to_string()),
+    ]);
+    let note = |text: &str, refused: bool| rename_note(&parameters, "VIN", text, refused);
+    assert_eq!(
+        note("VSUPPLY", false),
+        Some(RenameNote::ReferencesKeepOldName)
+    );
+    assert_eq!(
+        note("VSUPPLY", true),
+        Some(RenameNote::ReferencesKeepOldName)
+    );
+    assert_eq!(note("VIN", false), None, "its own name renames nothing");
+    assert_eq!(note(" VIN ", false), None);
+    assert_eq!(note("VOUT", false), None, "not refused until Enter");
+    assert_eq!(
+        note("VOUT", true),
+        Some(RenameNote::Refused(ParameterNameProblem::Taken))
+    );
 }
 
 #[test]
@@ -313,6 +340,15 @@ fn the_section_renders_with_a_refused_rename_a_filter_and_a_folded_group() {
         ProjectTabMsg::SectionSelected {
             project_id: id,
             section: ProjectSection::Parameters,
+        },
+    );
+    let _ = app.view_project_tab(id);
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterRenameEdited {
+            project_id: id,
+            from: "VIN".into(),
+            text: "VSUPPLY".into(),
         },
     );
     let _ = app.view_project_tab(id);

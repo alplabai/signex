@@ -17,17 +17,15 @@ use signex_widgets::text;
 use super::super::look::{CardHeader, card, mono_font};
 use super::super::table::{SP, TS, section};
 use super::field::{WIDE_BOX_EMS, font_field, label_words, numeric_field};
-use super::preview::{Preview, PreviewInk, value_labels};
+use super::preview::{Preview, PreviewInk, VIEW_HEIGHT, value_labels};
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::project_tab::general::tab_message;
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::styles::{Radii, ti, tokens as ink};
+use crate::styles::{HAIRLINE, Radii, ti, tokens as ink};
 
 /// Width of a card's label column (about 156 px), in `body` units.
 const LABEL_COLUMN_EMS: f32 = 13.0;
-/// Height of the preview (about 210 px), in `body` units.
-const PREVIEW_HEIGHT_EMS: f32 = 17.5;
 
 /// The fields of the Lines card, before its line style picker.
 const LINE_FIELDS: [SchematicDefaultField; 4] = [
@@ -294,13 +292,13 @@ fn preview<'a>(
     let drawing = container(
         canvas(program)
             .width(Length::Fill)
-            .height(Length::Fixed(TS.body * PREVIEW_HEIGHT_EMS)),
+            .height(Length::Fixed(VIEW_HEIGHT)),
     )
     .width(Length::Fill)
     .clip(true)
     .style(move |_| container::Style {
         border: Border {
-            width: 1.0,
+            width: HAIRLINE,
             color: line,
             radius: Radii::GRAPHITE.button.into(),
             ..Border::default()

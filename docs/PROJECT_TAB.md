@@ -87,7 +87,9 @@ history, which the ERC dialog and the Rules tab share.
   junction, a resistor, a net label, a bus with entries, a shape) and writes
   each value beside its item: grey italic while the field is empty, in the
   warning colour with the typed number when it was clamped. The drawing is
-  not editable; values are edited in the fields.
+  not editable; values are edited in the fields. Not built yet: editing a
+  value on the drawing and the junction and bus drag handles (follow-up
+  issue "Project tab previews: edit values on the drawing", to be filed).
 
 Each section shows its title and help line over its content in a column
 that scrolls inside the tab.
@@ -126,7 +128,14 @@ is in memory, off the UI thread, and shows each requirement as passed,
 failed (with each finding's message and measured values) or not checked,
 the run's notes under the summary row, and when it finished. It writes
 nothing and says nothing in Messages. Edits are General undo steps; a run is
-not an edit.
+not an edit. An entry with no id takes its verdict from the run under its
+place in the list (`req::#1` for the first), the name the check gives it.
+
+Not built yet (follow-up issue "Requirements: variant and fitted parts for
+Part lifecycle, measured-from and a limit preview for Board size", to be
+filed): Part lifecycle's Variant and Fitted parts only fields, Board size's
+Measured from, its preview with limit handles and the measured size on a
+passed card, and the net class note that edits are not checked yet.
 
 ## Preferences and the project
 

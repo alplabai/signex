@@ -1,7 +1,7 @@
 //! The pieces the Project tab's table sections share (#1689-#1693): the
-//! section frame (title, help), a heading row, a table row, a muted note and
-//! the Move up / Move down pair, and the Graphite grid table of mockups
-//! m31-m38 with its icon move buttons. Pure view helpers in the Graphite look.
+//! section frame (title, help), the plain heading and table rows, a muted
+//! note, and the Graphite grid table of mockups m31-m38 with its icon move
+//! buttons. Pure view helpers in the Graphite look.
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Row, Space, column, container, hover, row, scrollable};
@@ -22,9 +22,6 @@ pub(super) const SP: Spacing = Spacing::DEFAULT;
 const SECTION_MAX_W: f32 = TS.body * 65.0;
 /// Widest a section's help line grows (about 72 characters).
 const HELP_MAX_W: f32 = TS.body * 36.0;
-
-/// Width of a [`labelled`] row's caption column, in `body`-size characters.
-const LABEL_EMS: f32 = 12.0;
 
 /// Height of a grid table's heading row (28 px).
 pub(in crate::app::project_tab) const HEAD_H: f32 = TS.body * 7.0 / 3.0;
@@ -110,14 +107,6 @@ fn frame<'a>(
         .boxed()
 }
 
-/// A sub-heading inside a section.
-pub(super) fn heading<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
-    text(words)
-        .size(TS.title)
-        .color(crate::styles::ti(tokens.text))
-        .boxed()
-}
-
 /// Secondary text: help, a state, a reason.
 pub(super) fn note<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
     text(words)
@@ -170,18 +159,6 @@ pub(super) fn table_row<'a>(cells: Vec<(Element<'a, Message>, Length)>) -> Eleme
     line.boxed()
 }
 
-/// A plain cell of user text (a name, a file, a path).
-#[allow(
-    dead_code,
-    reason = "the plain table of the sections not yet in the Graphite look (#30-#38)"
-)]
-pub(super) fn cell<'a>(value: impl Into<String>, tokens: &ThemeTokens) -> Element<'a, Message> {
-    text(UserText::new(value.into()))
-        .size(TS.body)
-        .color(crate::styles::ti(tokens.text))
-        .boxed()
-}
-
 /// A cell of user text in the mono face (`td.m`): a file, a path.
 pub(in crate::app::project_tab) fn mono_cell<'a>(
     value: impl Into<String>,
@@ -204,22 +181,6 @@ pub(super) fn word_cell<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'
         .boxed()
 }
 
-/// A labelled row outside a table: a caption column, then `field`.
-pub(super) fn labelled<'a>(
-    caption: Localized,
-    field: Element<'a, Message>,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    row![
-        container(text(caption).size(TS.body).color(ink::muted_text(tokens)))
-            .width(Length::Fixed(TS.body * LABEL_EMS)),
-        field,
-    ]
-    .spacing(SP.m)
-    .align_y(Alignment::Center)
-    .boxed()
-}
-
 /// A small outlined action button; `None` greys it.
 pub(super) fn action<'a>(
     words: Localized,
@@ -231,29 +192,6 @@ pub(super) fn action<'a>(
         .style(crate::styles::outline_button(tokens))
         .on_press_maybe(on_press)
         .boxed()
-}
-
-/// Move up / Move down for the row at `index` of `count`; the button at the
-/// list's end is greyed.
-#[allow(
-    dead_code,
-    reason = "the plain table of the sections not yet in the Graphite look (#30-#38)"
-)]
-pub(super) fn move_buttons<'a>(
-    index: usize,
-    count: usize,
-    moved: impl Fn(ListMove) -> Message,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let up = (index > 0).then(|| moved(ListMove::Up));
-    let down = (index + 1 < count).then(|| moved(ListMove::Down));
-    row![
-        action(t!(i18n, ids::PROJECT_MOVE_UP), up, tokens),
-        action(t!(i18n, ids::PROJECT_MOVE_DOWN), down, tokens),
-    ]
-    .spacing(SP.xs)
-    .boxed()
 }
 
 /// Move up / Move down as two icon buttons with their tooltips, for a grid
@@ -295,6 +233,39 @@ pub(in crate::app::project_tab) fn grid_table<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
+    let head = head_row(columns, actions_width, !rows.is_empty(), i18n, tokens);
+    let mut table: Column<Element<'a, Message>> = Column::new().width(Length::Fill).push(head);
+    let count = rows.len();
+    let widths: Vec<Length> = columns.iter().map(|(_, width)| *width).collect();
+    for (index, line) in rows.into_iter().enumerate() {
+        let is_last = index + 1 == count;
+        table = table.push(grid_row(line, &widths, actions_width, is_last, tokens));
+    }
+    let border = crate::styles::ti(tokens.border);
+    container(table)
+        .width(Length::Fill)
+        .padding(HAIRLINE)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: HAIRLINE,
+                color: border,
+                radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The heading row of a [`grid_table`] on the sunken fill: each column's
+/// caption in capitals, with a hairline under it when rows follow.
+fn head_row<'a>(
+    columns: &[(Option<MessageId>, Length)],
+    actions_width: Option<Length>,
+    has_rows: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let r = ink::resolve(tokens);
     let mut head: Row<Element<'a, Message>> = Row::new().align_y(Alignment::Center);
     for (caption, width) in columns {
@@ -315,7 +286,6 @@ pub(in crate::app::project_tab) fn grid_table<'a>(
     if let Some(width) = actions_width {
         head = head.push(Space::new().width(width).boxed());
     }
-    let has_rows = !rows.is_empty();
     let (sunken, line_soft) = (r.sunken, r.line_soft);
     let inner = Radii::GRAPHITE.card - HAIRLINE;
     let head_radius = if has_rows {
@@ -323,40 +293,18 @@ pub(in crate::app::project_tab) fn grid_table<'a>(
     } else {
         iced::border::radius(inner)
     };
-    let mut table: Column<Element<'a, Message>> = Column::new().width(Length::Fill).push(
-        container(head)
-            .width(Length::Fill)
-            .height(Length::Fixed(HEAD_H))
-            .align_y(Vertical::Center)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(sunken)),
-                border: Border {
-                    color: line_soft,
-                    radius: head_radius,
-                    ..Border::default()
-                }
-                .bottom(hairline_if(has_rows)),
-                ..container::Style::default()
-            })
-            .boxed(),
-    );
-    let count = rows.len();
-    let widths: Vec<Length> = columns.iter().map(|(_, width)| *width).collect();
-    for (index, line) in rows.into_iter().enumerate() {
-        let is_last = index + 1 == count;
-        table = table.push(grid_row(line, &widths, actions_width, is_last, tokens));
-    }
-    let border = crate::styles::ti(tokens.border);
-    container(table)
+    container(head)
         .width(Length::Fill)
-        .padding(HAIRLINE)
+        .height(Length::Fixed(HEAD_H))
+        .align_y(Vertical::Center)
         .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(sunken)),
             border: Border {
-                width: HAIRLINE,
-                color: border,
-                radius: Radii::GRAPHITE.card.into(),
+                color: line_soft,
+                radius: head_radius,
                 ..Border::default()
-            },
+            }
+            .bottom(hairline_if(has_rows)),
             ..container::Style::default()
         })
         .boxed()
@@ -430,8 +378,18 @@ fn grid_row<'a>(
             .bottom(hairline_if(!is_last)),
             ..container::Style::default()
         });
+    hover(base, hover_layer(overlay, radius, tokens)).boxed()
+}
+
+/// The layer a grid row shows while the pointer is over it: the hover fill
+/// under `overlay` (the row's buttons), with the row's corner `radius`.
+fn hover_layer<'a>(
+    overlay: Row<Element<'a, Message>>,
+    radius: iced::border::Radius,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let hovered = ink::hover_overlay(tokens);
-    let top = container(overlay)
+    container(overlay)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
@@ -441,6 +399,6 @@ fn grid_row<'a>(
                 ..Border::default()
             },
             ..container::Style::default()
-        });
-    hover(base, top).boxed()
+        })
+        .boxed()
 }

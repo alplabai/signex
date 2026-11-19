@@ -673,7 +673,11 @@ project's **Project** tab (project tree, **Project Options**) and choose
 date, company, drawn by, checked by and approved by) applies to every sheet, and
 the **Variables** group holds your own name/value pairs. Add one with the Name
 field and **Add** at the end of the list, remove one with × on its row, and
-rename one by typing over its name and pressing Enter. The filter above the
+rename one by typing over its name and pressing Enter. A rename changes only
+the project's name for the value: sheet text that uses the old name as a special
+string, and a sheet value with the old name, keep it and stop showing the
+project value until you change them, which the row warns about before you press
+Enter. The filter above the
 list finds a row by its name or value, and a group's header folds it shut.
 Edits there are undoable with `Ctrl+Z` and are saved to the `.snxprj` with
 `Ctrl+S`.

@@ -167,7 +167,7 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     }
     for (index, entry) in facts.requirements.iter().enumerate() {
         let label = entry_label(entry, index);
-        let rule = format!("req::{label}");
+        let rule = entry_rule(entry, index);
         let severity = entry
             .requirement()
             .map_or(Severity::Error, |requirement| requirement.severity);
@@ -286,6 +286,13 @@ fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
             },
         ),
     }
+}
+
+/// The rule a report files entry `index` under: `req::<id>`, or
+/// `req::#<place>` for an entry with no id. Readers of a report look an
+/// entry's verdict up by this name.
+pub fn entry_rule(entry: &RequirementEntry, index: usize) -> String {
+    format!("req::{}", entry_label(entry, index))
 }
 
 /// How a finding names an entry: its id, else its place in the list (`#3`).

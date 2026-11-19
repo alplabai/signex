@@ -17,7 +17,7 @@ use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::project_tab::general::tab_message;
 use crate::app::state::ProjectId;
-use crate::styles::{Radii, ti, tokens as ink};
+use crate::styles::{HAIRLINE, Radii, ti, tokens as ink};
 
 /// Width of a numeric box (120 px at the default size), in `body` units.
 const NUMBER_BOX_EMS: f32 = 10.0;
@@ -185,7 +185,7 @@ fn box_style(
         background: Some(Background::Color(fill)),
         text_color: Some(words),
         border: Border {
-            width: 1.0,
+            width: HAIRLINE,
             color: line,
             radius: Radii::GRAPHITE.control.into(),
             ..Border::default()

@@ -12,7 +12,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input};
 
-use super::rename::{checked_rename, problem_words};
+use super::rename::{RenameNote, problem_words, rename_note};
 use super::{ParameterGroup, VisibleParameters, field_words, variable_count, visible_parameters};
 use crate::app::Message;
 use crate::app::project_tab::general::tab_message;
@@ -50,6 +50,8 @@ struct Look {
     hover: Color,
     err: Color,
     err_soft: Color,
+    warn: Color,
+    warn_soft: Color,
 }
 
 impl Look {
@@ -67,6 +69,8 @@ impl Look {
             hover: hover_overlay(tokens),
             err: danger(tokens),
             err_soft: r.err_soft,
+            warn: ti(tokens.warning),
+            warn_soft: r.warn_soft,
         }
     }
 }
@@ -199,12 +203,11 @@ impl Rows<'_> {
                 let typed = draft
                     .filter(|(from, _)| from.as_str() == name)
                     .map(|(_, text)| text.as_str());
-                let problem = typed.filter(|_| refused).and_then(|text| {
-                    checked_rename(parameters, name, text)
-                        .err()
-                        .map(|problem| problem_words(problem, text, self.i18n))
+                let note = typed.and_then(|text| {
+                    rename_note(parameters, name, text, refused)
+                        .map(|note| self.note_words(note, name, text))
                 });
-                self.variable_row(name, typed, value, problem)
+                self.variable_row(name, typed, value, note)
             });
             list = push_separated(list, cells, look);
             list = list.push(hairline(look.line_soft));
@@ -313,14 +316,40 @@ impl Rows<'_> {
         hover(line, wash(self.look, None)).boxed()
     }
 
+    /// The words of a rename note and whether it is a refusal (error ink)
+    /// rather than the references warning (warning ink).
+    fn note_words(&self, note: RenameNote, from: &str, typed: &str) -> (Localized, bool) {
+        match note {
+            RenameNote::Refused(problem) => (problem_words(problem, typed, self.i18n), true),
+            RenameNote::ReferencesKeepOldName => (
+                t!(self.i18n, ids::PROJECT_PARAMETER_RENAME_REFERENCES, "name" => from.to_string()),
+                false,
+            ),
+        }
+    }
+
     /// A variable: its name box (Enter renames), its value box, the remove
-    /// button on hover and, when the typed name was refused, the reason.
+    /// button on hover and, while its name is typed over, the rename note.
     fn variable_row<'a>(
         &self,
         name: &str,
         typed: Option<&str>,
         value: &str,
-        problem: Option<Localized>,
+        note: Option<(Localized, bool)>,
+    ) -> Element<'a, Message> {
+        let hovered = self.variable_line(name, typed, value);
+        match note {
+            None => hovered,
+            Some((words, is_refusal)) => self.noted(hovered, words, is_refusal),
+        }
+    }
+
+    /// The name box, value box and hover remove button of a variable.
+    fn variable_line<'a>(
+        &self,
+        name: &str,
+        typed: Option<&str>,
+        value: &str,
     ) -> Element<'a, Message> {
         let (project_id, look) = (self.project_id, self.look);
         let from = name.to_string();
@@ -362,25 +391,38 @@ impl Rows<'_> {
             })),
             self.tokens,
         );
-        let hovered = hover(line, wash(look, Some(remove)));
-        let Some(words) = problem else {
-            return hovered.boxed();
+        hover(line, wash(look, Some(remove))).boxed()
+    }
+
+    /// `line` with `words` under it, over the soft fill with a bar at the
+    /// left: error colours for a refusal, warning colours otherwise.
+    fn noted<'a>(
+        &self,
+        line: Element<'a, Message>,
+        words: Localized,
+        is_refusal: bool,
+    ) -> Element<'a, Message> {
+        let look = self.look;
+        let (ink, soft) = if is_refusal {
+            (look.err, look.err_soft)
+        } else {
+            (look.warn, look.warn_soft)
         };
         let reason = row![
-            glyph(Glyph::Warn, TS.caption, look.err),
-            text(words).size(TS.caption).color(look.err),
+            glyph(Glyph::Warn, TS.caption, ink),
+            text(words).size(TS.caption).color(ink),
         ]
         .spacing(SP.xs)
         .align_y(Alignment::Center)
         .padding([0.0, SP.m]);
-        let refused = column![hovered, reason].padding(Padding::ZERO.bottom(SP.xs));
+        let noted = column![line, reason].padding(Padding::ZERO.bottom(SP.xs));
         let bar = container(Space::new())
             .width(HAIRLINE * ERROR_BAR_HAIRLINES)
             .height(Length::Fill)
-            .style(move |_: &Theme| filled(look.err));
-        container(row![bar, refused])
+            .style(move |_: &Theme| filled(ink));
+        container(row![bar, noted])
             .width(Length::Fill)
-            .style(move |_: &Theme| filled(look.err_soft))
+            .style(move |_: &Theme| filled(soft))
             .boxed()
     }
 

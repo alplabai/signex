@@ -426,6 +426,34 @@ fn the_counts_put_a_turned_off_entry_under_off_not_under_not_checked() {
     assert_eq!(super::view::verdict(None, &entries[0], 0), None);
 }
 
+/// An entry with no id is filed under its place in the list, `req::#1`
+/// for the first, as the check engine names it; a blank id counts as none.
+#[test]
+fn an_entry_with_no_id_reads_its_verdict_by_its_place() {
+    let entries: Vec<RequirementEntry> = [
+        json!({"kind": "erc_clean"}),
+        json!({"id": "  ", "kind": "erc_clean"}),
+        json!({"id": "c", "kind": "erc_clean"}),
+    ]
+    .into_iter()
+    .map(RequirementEntry::read)
+    .collect();
+    let report = report(&["req::#1"], &["req::#2", "req::c"]);
+    let verdict = |index: usize| super::view::verdict(Some(&report), &entries[index], index);
+    assert_eq!(verdict(0), Some(Verdict::Failed));
+    assert_eq!(verdict(1), Some(Verdict::Passed));
+    assert_eq!(verdict(2), Some(Verdict::Passed));
+    assert_eq!(
+        outcome_counts(&report, &entries),
+        OutcomeCounts {
+            passed: 2,
+            failed: 1,
+            not_checked: 0,
+            off: 0,
+        }
+    );
+}
+
 #[test]
 fn a_passed_card_is_closed_every_other_open_and_a_flip_inverts_it() {
     assert!(!is_open(Some(Verdict::Passed), false, false));

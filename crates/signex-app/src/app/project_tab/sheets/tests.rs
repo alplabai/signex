@@ -65,6 +65,20 @@ fn sheet_rows_mark_the_root_and_a_missing_file() {
     assert!(rows.iter().all(|row| !row.is_root));
 }
 
+/// The Sheets pill and the project tree's `(missing)` share one rule: an
+/// absent file held by an open tab or an unsaved document is not missing.
+#[test]
+fn an_absent_file_held_open_or_unsaved_is_not_missing() {
+    let mut facts = crate::app::state::project_fs::ProjectFsFacts::default();
+    let gone = std::path::PathBuf::from("/p/gone.snxsch");
+    facts.set_exists(gone.clone(), false);
+    assert!(facts.is_listed_file_missing(&gone, false, false));
+    assert!(!facts.is_listed_file_missing(&gone, true, false));
+    assert!(!facts.is_listed_file_missing(&gone, false, true));
+    let unprobed = std::path::Path::new("/p/new.snxsch");
+    assert!(!facts.is_listed_file_missing(unprobed, false, false));
+}
+
 /// Add New ▸ Schematic in the empty state opens the New Schematic setup for
 /// the project, as the project tree's Add New ▸ Schematic does.
 #[test]

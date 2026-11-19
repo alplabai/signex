@@ -80,7 +80,10 @@ struct Ink {
     shadow: Color,
     paper: Color,
     outline: Color,
-    frame: Color,
+    /// The frame's lines and its text, in the colours the schematic canvas
+    /// draws its sheet frame with.
+    frame_line: Color,
+    frame_text: Color,
     label: Color,
 }
 
@@ -158,7 +161,7 @@ impl SheetPreview {
             )
         };
         let stroke = canvas::Stroke::default()
-            .with_color(self.ink.frame)
+            .with_color(self.ink.frame_line)
             .with_width(HAIRLINE * 0.8);
         for primitive in &self.frame {
             match primitive {
@@ -202,13 +205,65 @@ impl SheetPreview {
             frame.fill_text(canvas::Text {
                 content: text.clone(),
                 position: at(*x, *y),
-                color: self.ink.frame,
+                color: self.ink.frame_text,
                 size: iced::Pixels(size_px),
                 font: mono_font(),
                 align_x: align_x.into(),
                 align_y,
                 ..canvas::Text::default()
             });
+        }
+    }
+}
+
+impl SheetPreview {
+    /// The drawing of a `width_mm` × `height_mm` sheet with `defaults`'
+    /// title block, labelled with its size in mm.
+    fn of(
+        defaults: &SheetDefaults,
+        (width_mm, height_mm): (f64, f64),
+        canvas_colors: &CanvasColors,
+        i18n: &I18n,
+        tokens: &ThemeTokens,
+    ) -> Self {
+        let r = resolve(tokens);
+        let label = t!(
+            i18n,
+            ids::PROJECT_SHEETS_PREVIEW_MM,
+            "width" => mm_text(width_mm),
+            "height" => mm_text(height_mm),
+        )
+        .into_string();
+        // A field the title block fills from the sheet (`${TITLE}`) has no
+        // value yet: it is left out.
+        let unresolved = |field: &str| {
+            if field.contains("${") {
+                String::new()
+            } else {
+                field.to_string()
+            }
+        };
+        let block = defaults.show_title_block.then(standard_title_block);
+        Self {
+            width_mm,
+            height_mm,
+            frame: lower_sheet_frame(
+                width_mm,
+                height_mm,
+                &Frame::default(),
+                block.as_ref(),
+                unresolved,
+            ),
+            label,
+            ink: Ink {
+                ground: r.sunken,
+                shadow: r.shadow,
+                paper: ti(canvas_colors.paper),
+                outline: r.line_strong,
+                frame_line: crate::canvas::GraphiteCanvasInk::from_tokens(tokens).line_strong,
+                frame_text: ti(canvas_colors.body),
+                label: ti(tokens.text_secondary),
+            },
         }
     }
 }
@@ -233,45 +288,7 @@ pub(super) fn view<'a>(
             t!(i18n, ids::PROJECT_SHEETS_PREVIEW_PORTRAIT, "size" => name)
         }
     };
-    let label = t!(
-        i18n,
-        ids::PROJECT_SHEETS_PREVIEW_MM,
-        "width" => mm_text(width_mm),
-        "height" => mm_text(height_mm),
-    )
-    .into_string();
-    // A field the title block fills from the sheet (`${TITLE}`) has no
-    // value yet: it is left out.
-    let unresolved = |field: &str| {
-        if field.contains("${") {
-            String::new()
-        } else {
-            field.to_string()
-        }
-    };
-    let program = SheetPreview {
-        width_mm,
-        height_mm,
-        frame: lower_sheet_frame(
-            width_mm,
-            height_mm,
-            &Frame::default(),
-            defaults
-                .show_title_block
-                .then(standard_title_block)
-                .as_ref(),
-            unresolved,
-        ),
-        label,
-        ink: Ink {
-            ground: r.sunken,
-            shadow: r.shadow,
-            paper: ti(canvas_colors.paper),
-            outline: r.line_strong,
-            frame: r.ink3,
-            label: ti(tokens.text_secondary),
-        },
-    };
+    let program = SheetPreview::of(defaults, (width_mm, height_mm), canvas_colors, i18n, tokens);
     let title = text(UserText::new(
         i18n.upper_for_display(&t!(i18n, ids::PROJECT_SHEETS_PREVIEW).into_string()),
     ))

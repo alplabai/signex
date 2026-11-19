@@ -39,6 +39,7 @@ define_ids! {
     PROJECT_PARAMETER_NAME_INVALID = "project-parameter-name-invalid";
     PROJECT_PARAMETER_NAME_TITLE_BLOCK = "project-parameter-name-title-block";
     PROJECT_PARAMETER_NAME_TAKEN = "project-parameter-name-taken";
+    PROJECT_PARAMETER_RENAME_REFERENCES = "project-parameter-rename-references";
     PROJECT_SHEETS_HELP = "project-sheets-help";
     PROJECT_SHEETS_COL_NUMBER = "project-sheets-col-number";
     PROJECT_SHEETS_PAGE = "project-sheets-page";

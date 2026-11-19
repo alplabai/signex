@@ -48,17 +48,6 @@ pub(in crate::app::project_tab::requirements) enum Verdict {
     Off,
 }
 
-/// The rule a run files entry `index` under, as `check_requirements`
-/// names it: `req::<id>`, or `req::#<place>` for an entry with no id.
-fn rule_of(entry: &RequirementEntry, index: usize) -> String {
-    let label = entry
-        .id()
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .map_or_else(|| format!("#{}", index + 1), str::to_string);
-    format!("req::{label}")
-}
-
 /// How entry `index` came out of `report` (`None`: no run yet). A
 /// requirement turned off is Off whether or not a run happened.
 pub(in crate::app::project_tab::requirements) fn verdict(
@@ -73,7 +62,7 @@ pub(in crate::app::project_tab::requirements) fn verdict(
         return Some(Verdict::Off);
     }
     let report = report?;
-    let rule = rule_of(entry, index);
+    let rule = signex_req::entry_rule(entry, index);
     Some(if report.findings.iter().any(|f| f.rule == rule) {
         Verdict::Failed
     } else if report.passed.contains(&rule) {
@@ -92,7 +81,7 @@ fn findings_of<'r>(
     let Some(report) = report else {
         return Vec::new();
     };
-    let rule = rule_of(entry, index);
+    let rule = signex_req::entry_rule(entry, index);
     report.findings.iter().filter(|f| f.rule == rule).collect()
 }
 

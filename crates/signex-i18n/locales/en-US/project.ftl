@@ -52,6 +52,7 @@ project-parameter-name-empty = Enter a parameter name.
 project-parameter-name-invalid = A parameter name cannot contain line breaks or control characters.
 project-parameter-name-title-block = { $name } is a title block field; choose another name.
 project-parameter-name-taken = The project already has a parameter named { $name }.
+project-parameter-rename-references = Sheet text that uses { $name } as a special string, and sheet values named { $name }, keep the old name: they stop showing this value. Press Enter to rename anyway.
 
 # Sheets section (#1689).
 project-sheets-help = The project lists its sheets in this order. The Sheet N of M in a title block and the order of the project tree follow it. PDF export numbers pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.

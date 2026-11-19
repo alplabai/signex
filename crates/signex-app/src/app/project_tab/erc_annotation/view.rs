@@ -23,7 +23,7 @@ use super::{ErcFacts, ErcSource};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{ErcMsg, Message};
 use crate::styles::tokens::resolve;
-use crate::styles::{PillTone, Radii, ti};
+use crate::styles::{HAIRLINE, PillTone, Radii, ti};
 
 /// The words and tone of the rule source pill in the ERC rules card header.
 pub(super) fn source_pill(source: ErcSource) -> (MessageId, PillTone) {
@@ -212,7 +212,7 @@ fn tile<'a>(
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
             border: Border {
-                width: 1.0,
+                width: HAIRLINE,
                 color: line,
                 radius: Radii::GRAPHITE.card.into(),
                 ..Border::default()

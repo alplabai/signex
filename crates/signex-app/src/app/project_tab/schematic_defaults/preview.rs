@@ -15,23 +15,28 @@ use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
 use signex_types::schematic::{FillType, SchematicDefaults};
 use signex_types::theme::{CanvasColors, ThemeTokens};
 
+use super::super::table::TS;
 use super::{clamp_note, shown_number};
-use crate::styles::{ti, tokens as ink};
+use crate::styles::{HAIRLINE, ti, tokens as ink};
 
-/// Height the drawing is laid out for; it scales with the canvas height.
-const VIEW_HEIGHT: f32 = 210.0;
-/// Pixels per millimetre of a drawn width at [`VIEW_HEIGHT`].
+/// Height of the preview (about 210 px), in `body` units.
+const PREVIEW_HEIGHT_EMS: f32 = 17.5;
+/// Height the drawing is laid out for: the preview's height on the type
+/// scale. The drawing scales with the canvas height, so the constants below
+/// are layout units of this height, not widget sizes.
+pub(super) const VIEW_HEIGHT: f32 = TS.body * PREVIEW_HEIGHT_EMS;
+/// Layout units per millimetre of a drawn width.
 const PX_PER_MM: f32 = 8.0;
 /// Thinnest drawn stroke, so a tiny width still shows.
 const MIN_STROKE_PX: f32 = 0.6;
-/// Pitch of the grid dots.
-const GRID_PX: f32 = 20.0;
+/// Pitch of the grid dots, in layout units.
+const GRID_PX: f32 = VIEW_HEIGHT / 10.5;
 /// Size of the value labels.
-const LABEL_PX: f32 = 10.0;
-/// Text size in px per pt of the text size default.
+const LABEL_PX: f32 = TS.caption;
+/// Layout units per pt of the text size default.
 const PX_PER_PT: f32 = 1.15;
 /// Stroke of the power and ground symbols.
-const PORT_STROKE_PX: f32 = 2.0;
+const PORT_STROKE_PX: f32 = HAIRLINE * 2.0;
 
 // Sample design names drawn on the preview: net and part names a sheet
 // would hold, not words of the interface.

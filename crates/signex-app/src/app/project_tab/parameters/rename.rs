@@ -49,6 +49,31 @@ pub(super) fn checked_rename(
     Ok(Some(name.to_string()))
 }
 
+/// What the row says under a name box being typed over: a refusal shown
+/// after Enter, or, while the typed name would be accepted, the warning that
+/// sheets referring to the old name stop resolving it (the rename moves only
+/// the project key; see `docs/USER_GUIDE.md`, "Parameters").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RenameNote {
+    Refused(ParameterNameProblem),
+    ReferencesKeepOldName,
+}
+
+/// The note under the name box of `from` with `typed` in it; `refused` is
+/// whether Enter was refused since the last keystroke.
+pub(super) fn rename_note(
+    parameters: &BTreeMap<String, String>,
+    from: &str,
+    typed: &str,
+    refused: bool,
+) -> Option<RenameNote> {
+    match checked_rename(parameters, from, typed) {
+        Err(problem) => refused.then_some(RenameNote::Refused(problem)),
+        Ok(Some(_)) => Some(RenameNote::ReferencesKeepOldName),
+        Ok(None) => None,
+    }
+}
+
 /// The words of a refused name; `typed` is the name as typed.
 pub(super) fn problem_words(problem: ParameterNameProblem, typed: &str, i18n: &I18n) -> Localized {
     let name = typed.trim().to_string();

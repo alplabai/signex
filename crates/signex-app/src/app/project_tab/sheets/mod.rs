@@ -42,6 +42,16 @@ impl Signex {
     pub(crate) fn project_sheet_rows(&self, project: &LoadedProject) -> Vec<SheetRow> {
         let root = ProjectGeneralFacts::of(project).schematic_root;
         let dir = project.dir();
+        let document = &self.document_state;
+        // The same open and unsaved sets the project tree marks rows from.
+        let dirty = document.dirty_document_paths();
+        let is_missing = |path: &Path| {
+            let is_open = document.tabs.iter().any(|tab| tab.path == path);
+            document
+                .project_fs
+                .facts
+                .is_listed_file_missing(path, is_open, dirty.contains(path))
+        };
         project
             .data
             .sheets
@@ -52,19 +62,9 @@ impl Signex {
                 is_root: root
                     .as_deref()
                     .is_some_and(|root| Path::new(root) == Path::new(&sheet.filename)),
-                is_missing: self.listed_file_missing(&dir.join(&sheet.filename)),
+                is_missing: is_missing(&dir.join(&sheet.filename)),
             })
             .collect()
-    }
-
-    /// A listed file is missing when the probe found it absent and no open
-    /// or unsaved document holds it: a sheet created this session is not on
-    /// disk until it is saved (the project tree reads it the same way).
-    fn listed_file_missing(&self, path: &Path) -> bool {
-        let document = &self.document_state;
-        document.project_fs.facts.is_missing(path)
-            && !document.tabs.iter().any(|tab| tab.path == path)
-            && !document.is_document_dirty(path)
     }
 
     /// Move up / Move down in the Sheets table: one step of its own.
