@@ -12,7 +12,7 @@ pub enum LayerNameStyle {
     Short,
     /// `Top`, `Bottom`, `Mid 1`.
     Medium,
-    /// The Layers panel's names: `Top Layer`, `Top Overlay`.
+    /// The Layers panel's names: `Top Layer`, `Top Silkscreen`.
     #[default]
     Long,
 }

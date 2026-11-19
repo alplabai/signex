@@ -1,14 +1,18 @@
-//! Layer tabs under the PCB canvas (#2357): the board's own layers as tabs
-//! with a colour swatch. A click on a tab makes that layer the active one,
-//! the same message a Layers panel row sends, so the tab, the panel row and
-//! the status bar pill always name one layer. A right-click opens the tab's
-//! menu (#2379, #2394). The layer set button at the left end shows the set
-//! the strip lists and opens the set menu (#2394); the tabs name their
-//! layers in the user's style.
+//! Layer tabs under the PCB canvas (#2357, #104): the board's visible layers
+//! as tabs with a colour swatch, in a 28 px strip that scrolls sideways
+//! when the tabs do not fit. A click on a tab makes that layer the active
+//! one, the same message a Layers panel row sends, so the tab, the panel row
+//! and the status bar pill always name one layer; the active tab has the
+//! accent bar along its top. A right-click opens the tab's menu (#2379,
+//! #2394). The layer set button at the left end shows the set the strip
+//! lists and opens the set menu (#2394); the tabs name their layers in the
+//! user's style.
 
+use iced::border::Side;
 use iced::widget::button::{Status, Style as ButtonStyle};
-use iced::widget::{Row, Space, container, mouse_area, row};
-use iced::{Background, Border, Element, Length, Theme, Widget as _};
+use iced::widget::scrollable::Direction;
+use iced::widget::{Row, Space, container, mouse_area, row, scrollable};
+use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_renderer::pcb::{LayerSetId, PcbLayerView, board_copper_layers};
 use signex_types::format::parse_pcb_layer;
@@ -21,10 +25,25 @@ use super::*;
 use crate::app::{LayerSetMenuMsg, LayerTabMenuMsg, PcbMsg, PcbViewMsg};
 use crate::layer_strip_prefs::LayerStripPrefs;
 use crate::pcb_canvas::layer_style;
-use crate::styles::{Radii, ti, tokens::resolve};
+use crate::styles::{HAIRLINE, chrome_px, ti, tokens::resolve};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Height of the strip.
+const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
+/// Side padding of the layer set button.
+const SET_PAD_X: f32 = chrome_px(8.0 * 11.0 / 12.0);
+/// Side padding of a tab.
+const TAB_PAD_X: f32 = chrome_px(10.0 * 11.0 / 12.0);
+/// Gap between a tab's swatch and its name.
+const TAB_GAP: f32 = chrome_px(6.0 * 11.0 / 12.0);
+/// Edge of a tab's colour swatch.
+const SWATCH: f32 = chrome_px(9.0 * 11.0 / 12.0);
+/// Corner radius of a tab's colour swatch.
+const SWATCH_RADIUS: f32 = 2.0;
+/// Thickness of the accent bar along the top of the active tab.
+const ACCENT_BAR: f32 = 2.0 * HAIRLINE;
 
 /// The number in front of a tab's name: a copper layer's place in the
 /// board's stack (1 is the top), a mechanical layer's index.
@@ -90,6 +109,9 @@ pub(super) struct StripBoard<'b> {
     pub window: Option<iced::window::Id>,
     /// The user's tab names (#2394).
     pub prefs: &'b LayerStripPrefs,
+    /// The layer set menu is open for this strip: its button is drawn
+    /// pressed (#104).
+    pub set_menu_open: bool,
 }
 
 /// What a click on the tab of `layer` sends.
@@ -116,6 +138,12 @@ struct TabMessages {
     menu: Option<Message>,
 }
 
+/// Whether `layer` gets a tab: the set lists it (#2394) and it is not
+/// hidden (#104). Show all layers brings a hidden layer's tab back.
+fn has_tab(view: &PcbLayerView, layer: PcbLayer) -> bool {
+    view.lists_in_strip(layer) && !view.is_hidden(layer)
+}
+
 /// The strip for the board; `None` when the board declares no layers.
 pub(super) fn layer_strip<'a>(
     strip: StripBoard<'_>,
@@ -127,42 +155,48 @@ pub(super) fn layer_strip<'a>(
         view,
         window,
         prefs,
+        set_menu_open,
     } = strip;
     if board.layers.is_empty() {
         return None;
     }
-    let line = resolve(tokens).line_soft;
+    let (panel, line) = (ti(tokens.panel_bg), ti(tokens.border));
     let active = view.shown_active();
     let copper = board_copper_layers(&board.layers);
-    let mut tabs: Row<Element<'a, Message>> = row![
-        layer_set_button(i18n, view, window, tokens),
-        Space::new().width(SP.s).boxed(),
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center);
+    let mut tabs: Row<Element<'a, Message>> = Row::new().height(Length::Fill);
     for def in &board.layers {
         let layer = parse_pcb_layer(&def.name);
-        // A set lists its own layers alone (#2394).
-        if layer.is_some_and(|l| !view.lists_in_strip(l)) {
+        // An unknown layer token keeps its tab.
+        if layer.is_some_and(|l| !has_tab(view, l)) {
             continue;
         }
         let selected = layer.is_some() && layer == active;
-        let hidden = layer.is_some_and(|l| view.is_hidden(l));
-        let look = TabLook { selected, hidden };
         let messages = TabMessages {
             press: layer.map(|l| picked(window, l)),
             menu: layer.map(|l| menu_opened(window, l)),
         };
         let (label, swatch) = describe(i18n, def, tokens, (prefs, copper.as_slice()));
-        tabs = tabs.push(layer_tab(label, swatch, tokens, look, messages));
+        tabs = tabs.push(layer_tab(label, swatch, tokens, selected, messages));
     }
+    // A long strip scrolls inside the window instead of widening it.
+    let tabs = scrollable(tabs)
+        .direction(Direction::Horizontal(crate::styles::thin_scrollbar()))
+        .style(crate::styles::scrollbar_style(tokens))
+        .width(Length::Fill)
+        .height(Length::Fill);
+    let content = row![
+        layer_set_button(i18n, view, window, set_menu_open, tokens),
+        tabs.boxed(),
+    ]
+    .height(Length::Fill);
     Some(
-        container(tabs)
-            .padding([SP.xs, SP.l])
+        container(content)
+            .height(STRIP_HEIGHT)
             .width(Length::Fill)
             .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(panel)),
                 border: Border {
-                    width: 1.0,
+                    width: HAIRLINE,
                     color: line,
                     ..Border::default()
                 },
@@ -184,38 +218,53 @@ fn layer_set_label(i18n: &I18n, view: &PcbLayerView) -> Label<'static> {
     }
 }
 
-/// The layer set button at the left end of the strip (#2394): the set's
-/// name and a chevron; a click opens the set menu.
+/// Fill and ink of the layer set button: muted ink at rest, the accent-soft
+/// pair while its menu is open.
+fn set_button_look(tokens: &ThemeTokens, open: bool) -> (Option<Color>, Color) {
+    let r = resolve(tokens);
+    if open {
+        (Some(r.accent_soft), r.accent_soft_ink)
+    } else {
+        (None, r.ink3)
+    }
+}
+
+/// The layer set button at the left end of the strip (#2394, #104): the
+/// set's name and a chevron, a line on its right; a click opens the set
+/// menu.
 fn layer_set_button<'a>(
     i18n: &I18n,
     view: &PcbLayerView,
     window: Option<iced::window::Id>,
+    open: bool,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = resolve(tokens);
-    let (ink, wash) = (
-        ti(tokens.text),
+    let (fill, ink) = set_button_look(tokens, open);
+    let (wash, line) = (
         crate::styles::tokens::hover_overlay(tokens),
+        ti(tokens.border),
     );
     let content = row![
         text(layer_set_label(i18n, view))
             .size(TS.body)
             .color(ink)
+            .wrapping(text::Wrapping::None)
             .boxed(),
-        signex_widgets::chevron::chevron(true, TS.caption, r.ink3).boxed(),
+        signex_widgets::chevron::chevron(true, TS.caption, ink).boxed(),
     ]
-    .spacing(SP.xs)
+    .spacing(SP.s)
     .align_y(iced::Alignment::Center);
     let opened = Message::Pcb(PcbMsg::LayerSetMenu(LayerSetMenuMsg::Opened { window }));
-    let set_button = button(content)
-        .padding([SP.xs, SP.s])
+    let set_button = button(container(content).center_y(Length::Fill))
+        .padding([0.0, SET_PAD_X])
+        .height(Length::Fill)
         .style(move |_: &Theme, status| ButtonStyle {
-            background: matches!(status, Status::Hovered | Status::Pressed)
-                .then_some(Background::Color(wash)),
+            background: fill
+                .or_else(|| matches!(status, Status::Hovered | Status::Pressed).then_some(wash))
+                .map(Background::Color),
             border: Border {
-                width: 1.0,
-                color: r.line_soft,
-                radius: Radii::GRAPHITE.small.into(),
+                right: Side::default().color(line).width(HAIRLINE),
                 ..Border::default()
             },
             ..ButtonStyle::default()
@@ -224,7 +273,7 @@ fn layer_set_button<'a>(
     let tip = container(
         text(t!(i18n, ids::PCB_LAYER_SET_TOOLTIP))
             .size(TS.caption)
-            .color(ink),
+            .color(ti(tokens.text)),
     )
     .padding([SP.xs, SP.s])
     .style(signex_widgets::active_bar_dropdown::tooltip_style(
@@ -234,62 +283,80 @@ fn layer_set_button<'a>(
     signex_widgets::tooltip(set_button, tip, signex_widgets::tooltip::Position::Top).boxed()
 }
 
-/// How a tab stands: the active layer, a hidden layer.
-#[derive(Clone, Copy)]
-struct TabLook {
-    selected: bool,
-    hidden: bool,
-}
-
-/// One tab: swatch and name, filled while it is the active layer, faint
-/// while the layer is hidden.
+/// One tab: swatch and name with a line on its right; the active layer's
+/// tab is filled accent-soft, in medium weight, with the accent bar along
+/// its top.
 fn layer_tab<'a>(
     label: Label<'static>,
     swatch: iced::Color,
     tokens: &ThemeTokens,
-    look: TabLook,
+    selected: bool,
     messages: TabMessages,
 ) -> Element<'a, Message> {
-    let TabLook { selected, hidden } = look;
     let r = resolve(tokens);
-    let ink = match (selected, hidden) {
-        (true, _) => r.accent_soft_ink,
-        (false, true) => r.ink4,
-        (false, false) => ti(tokens.text),
+    let ring = r.shadow;
+    let ink = if selected {
+        ti(tokens.text)
+    } else {
+        ti(tokens.text_secondary)
     };
+    let mut name = text(label)
+        .size(TS.body)
+        .color(ink)
+        .wrapping(text::Wrapping::None);
+    if selected {
+        name = name.font(Font {
+            weight: iced::font::Weight::Medium,
+            ..Font::DEFAULT
+        });
+    }
     let content = row![
         container(Space::new())
-            .width(TS.caption)
-            .height(TS.caption)
+            .width(SWATCH)
+            .height(SWATCH)
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(swatch)),
                 border: Border {
-                    radius: 2.0.into(),
+                    width: HAIRLINE,
+                    color: ring,
+                    radius: SWATCH_RADIUS.into(),
                     ..Border::default()
                 },
                 ..container::Style::default()
             })
             .boxed(),
-        text(label).size(TS.body).color(ink).boxed(),
+        name.boxed(),
     ]
-    .spacing(SP.s)
+    .spacing(TAB_GAP)
     .align_y(iced::Alignment::Center);
-    let (fill, wash) = (r.accent_soft, crate::styles::tokens::hover_overlay(tokens));
+    let (fill, wash, accent, line) = (
+        r.accent_soft,
+        crate::styles::tokens::hover_overlay(tokens),
+        ti(tokens.accent),
+        r.line_soft,
+    );
     let TabMessages { press, menu } = messages;
-    let tab = button(content)
-        .padding([SP.xs, SP.s])
-        .style(move |_: &Theme, status| ButtonStyle {
-            background: if selected {
-                Some(Background::Color(fill))
+    let tab = button(container(content).center_y(Length::Fill))
+        .padding([0.0, TAB_PAD_X])
+        .height(Length::Fill)
+        .style(move |_: &Theme, status| {
+            let background = if selected {
+                Some(fill)
             } else {
-                matches!(status, Status::Hovered | Status::Pressed)
-                    .then_some(Background::Color(wash))
-            },
-            border: Border {
-                radius: Radii::GRAPHITE.small.into(),
+                matches!(status, Status::Hovered | Status::Pressed).then_some(wash)
+            };
+            let mut border = Border {
+                right: Side::default().color(line).width(HAIRLINE),
                 ..Border::default()
-            },
-            ..ButtonStyle::default()
+            };
+            if selected {
+                border.top = Side::default().color(accent).width(ACCENT_BAR);
+            }
+            ButtonStyle {
+                background: background.map(Background::Color),
+                border,
+                ..ButtonStyle::default()
+            }
         })
         .on_press_maybe(press)
         .boxed();
@@ -307,5 +374,165 @@ pub(super) fn with_strip<'a>(
     match strip {
         Some(strip) => iced::widget::column![view, strip].boxed(),
         None => view,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::{draw_pixels, lay_out_texts, root_size};
+    use iced::Size;
+    use signex_types::pcb_layer::CopperLayer;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    const BOTTOM: PcbLayer = PcbLayer::Copper(CopperLayer::Bottom);
+
+    /// A board that declares the layer tokens `names`, nothing on them.
+    fn board(names: &[&str]) -> PcbBoard {
+        let layers = names
+            .iter()
+            .zip(0u8..)
+            .map(|(name, id)| LayerDef {
+                id,
+                name: (*name).to_owned(),
+                layer_type: String::new(),
+                display_name: String::new(),
+            })
+            .collect();
+        PcbBoard {
+            sketch: None,
+            stackup: None,
+            options: Default::default(),
+            unknown: Default::default(),
+            uuid: uuid::Uuid::now_v7(),
+            version: 1,
+            generator: "signex-test".into(),
+            thickness: 1.6,
+            outline: vec![],
+            layers,
+            setup: None,
+            nets: vec![],
+            footprints: vec![],
+            segments: vec![],
+            vias: vec![],
+            zones: vec![],
+            graphics: vec![],
+            texts: vec![],
+            free: Default::default(),
+        }
+    }
+
+    fn strip<'a>(
+        board: &PcbBoard,
+        view: &PcbLayerView,
+        set_menu_open: bool,
+        tokens: &ThemeTokens,
+    ) -> Element<'a, Message> {
+        let prefs = LayerStripPrefs::default();
+        let strip = StripBoard {
+            board,
+            view,
+            window: None,
+            prefs: &prefs,
+            set_menu_open,
+        };
+        layer_strip(strip, &I18n::en_us(), tokens).expect("the board declares layers")
+    }
+
+    fn names(element: Element<'_, Message>, window: Size) -> Vec<String> {
+        lay_out_texts(element, window)
+            .into_iter()
+            .map(|t| t.text)
+            .collect()
+    }
+
+    /// #104: more tabs than the window is wide scroll inside the strip; every
+    /// visible layer still has its tab, on one line, and the strip keeps to
+    /// the window and its 28 px.
+    #[test]
+    fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
+        let board = board(&[
+            "TopCopper",
+            "BottomCopper",
+            "TopSilkscreen",
+            "BottomSilkscreen",
+            "TopSolderMask",
+            "BottomSolderMask",
+            "TopPaste",
+            "BottomPaste",
+            "EdgeCuts",
+            "TopCourtyard",
+            "BottomCourtyard",
+            "Dimensions",
+            "Notes",
+        ]);
+        let view = PcbLayerView::default();
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let window = Size::new(400.0, 600.0);
+        let laid_out = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        for name in [
+            "Top Layer",
+            "Bottom Layer",
+            "Top Silkscreen",
+            "Bottom Silkscreen",
+            "Top Solder",
+            "Bottom Solder",
+            "Top Paste",
+            "Bottom Paste",
+            "Board Outline",
+            "Top Courtyard",
+            "Bottom Courtyard",
+            "Dimensions",
+            "Notes",
+        ] {
+            let tab = laid_out
+                .iter()
+                .find(|t| t.text == name)
+                .unwrap_or_else(|| panic!("no tab {name:?}: {laid_out:#?}"));
+            assert!(tab.bounds.height < 2.0 * TS.body, "{name} on one line");
+        }
+        let size = root_size(strip(&board, &view, false, &tokens), window);
+        assert!(size.width <= window.width, "the strip keeps to the window");
+        assert_eq!(size.height, STRIP_HEIGHT);
+    }
+
+    /// #104: a hidden layer has no tab; showing every layer brings it back.
+    /// A layer token this build does not know keeps its tab.
+    #[test]
+    fn a_hidden_layer_has_no_tab_until_it_is_shown() {
+        let board = board(&["TopCopper", "BottomCopper", "Nowhere"]);
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let window = Size::new(1200.0, 600.0);
+        let mut view = PcbLayerView::default();
+        view.hide(BOTTOM);
+        let shown = names(strip(&board, &view, false, &tokens), window);
+        assert!(!shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "Top Layer"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "Nowhere"), "{shown:?}");
+        view.show_all();
+        let shown = names(strip(&board, &view, false, &tokens), window);
+        assert!(shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
+    }
+
+    /// #104: the layer set button is filled accent-soft while its menu is
+    /// open, plain with muted ink otherwise, in both Graphite themes.
+    #[test]
+    fn the_set_button_draws_pressed_while_its_menu_is_open() {
+        let board = board(&["TopCopper", "BottomCopper"]);
+        let view = PcbLayerView::default();
+        for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(theme);
+            let r = resolve(&tokens);
+            assert_eq!(set_button_look(&tokens, false), (None, r.ink3), "{theme:?}");
+            assert_eq!(
+                set_button_look(&tokens, true),
+                (Some(r.accent_soft), r.accent_soft_ink),
+                "{theme:?}"
+            );
+            let window = Size::new(320.0, STRIP_HEIGHT);
+            let closed = draw_pixels(strip(&board, &view, false, &tokens), window);
+            let open = draw_pixels(strip(&board, &view, true, &tokens), window);
+            assert_ne!(closed, open, "{theme:?}: the open button looks pressed");
+        }
     }
 }

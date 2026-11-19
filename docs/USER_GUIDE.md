@@ -860,11 +860,15 @@ above them.
 
 **Layer tabs and the Layers panel**
 
-The tabs under the board list its layers. Click a tab to make that layer
-active; new tracks, pours and text go on the active layer. `+` and `-` step
-to the next and previous layer, `*` to the next signal layer. A right-click
-on a tab hides, highlights or shows layers, and its **Layer stack...** row
-opens the Layer Stack panel.
+The tabs under the board list its visible layers; a hidden layer gets its
+tab back when you show it again. When the tabs do not fit, scroll the strip
+sideways. Click a tab to make that layer active; new tracks, pours and text
+go on the active layer, and its tab has the accent bar along the top. `+`
+and `-` step to the next and previous layer, `*` to the next signal layer.
+A right-click on a tab hides, highlights or shows layers, sets the tab
+names (Short, Medium or Long) and the layer numbers, and its **Layer
+stack...** row opens the Layer Stack panel. The button at the left end of
+the tabs picks a layer set.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
 has an eye per layer to show or hide it, and an eye per section for all its
