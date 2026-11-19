@@ -3,6 +3,7 @@ mod bom_modal;
 mod catalog;
 mod graphite_tokens;
 mod enable_section;
+mod chips;
 mod icon;
 mod illustration;
 mod modal_card;

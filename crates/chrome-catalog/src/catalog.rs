@@ -87,6 +87,7 @@ impl Catalog {
                 tokens,
                 project_tree::view(tokens),
             ),
+            section::view("Chips and mode switch", tokens, crate::chips::view(tokens)),
             section::view(
                 "BOM modal — Altium-style layout (table + properties sidebar)",
                 tokens,
