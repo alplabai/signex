@@ -299,7 +299,7 @@ mod tests {
     use super::*;
     use signex_types::coord::Unit;
 
-    fn readout<'r>(activity: Option<&'r Activity>, surface: SurfaceReadout) -> Readout<'r> {
+    fn readout(activity: Option<&Activity>, surface: SurfaceReadout) -> Readout<'_> {
         Readout {
             x: 127.0,
             y: 45.72,

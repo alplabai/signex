@@ -172,7 +172,7 @@ fn the_board_outline_is_a_closed_ring_in_a_view_box_of_the_board_aspect() {
             assert!(closed);
             assert_eq!(
                 points,
-                &vec![[0.0, 0.0], [1000.0, 0.0], [1000.0, 750.0], [0.0, 750.0]]
+                &[[0.0, 0.0], [1000.0, 0.0], [1000.0, 750.0], [0.0, 750.0]]
             );
         }
         other => panic!("outline drawn as {other:?}"),
