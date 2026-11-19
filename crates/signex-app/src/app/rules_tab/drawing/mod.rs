@@ -141,8 +141,8 @@ pub(crate) fn update(
             let scene = scene_of(target, BoardInk::new());
             // Lengths read and show `.` in every locale (`LengthFormat`), so
             // the shared fallback bundle parses exactly what the view shows.
-            let shown =
-                labels::dimension_labels(&scene, Layout::new(state.expanded), I18n::en_us_ref());
+            let en = I18n::en_us();
+            let shown = labels::dimension_labels(&scene, Layout::new(state.expanded), &en);
             let outcome = state.labels.update(message, &shown);
             let commit = outcome.committed.and_then(|c| {
                 scene.labels.get(c.index).map(|label| PreviewCommit {
