@@ -10,10 +10,7 @@ use iced::Task;
 use iced::widget::operation;
 
 impl Signex {
-    pub(crate) fn handle_preferences_classes_view(
-        &mut self,
-        msg: ClassesViewMsg,
-    ) -> Task<Message> {
+    pub(crate) fn handle_preferences_classes_view(&mut self, msg: ClassesViewMsg) -> Task<Message> {
         match msg {
             ClassesViewMsg::FilterChanged(query) => {
                 self.ui_state.preferences_classes_view.filter = query;
