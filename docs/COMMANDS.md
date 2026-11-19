@@ -86,7 +86,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
-| `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
+| `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert`, `Alt+I` (macOS) | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
 | `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
@@ -95,7 +95,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
 | `cycle_unit` | Cycle display unit | view | `Q`, `Ctrl+Q` | `Q`, `Ctrl+Q` |
 | `cycle_wire_bus_graphic_mode` | Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle | interactive | — | `Shift+Space` |
-| `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
+| `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space`, `Shift+Tab` (macOS) | — |
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
 | `document_info` | Document info | file | — | — |
 | `drag_keep_connections` | Drag while keeping connections | modify | — | `G` |

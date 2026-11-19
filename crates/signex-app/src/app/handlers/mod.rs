@@ -55,6 +55,8 @@ mod pcb_drc_results_tests;
 pub(crate) mod pcb_dxf_import;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
+#[cfg(test)]
+mod held_rotate_window_tests;
 mod pcb_align;
 mod pcb_board_options;
 mod pcb_board_panel;
