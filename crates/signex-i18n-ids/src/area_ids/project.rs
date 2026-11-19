@@ -57,13 +57,10 @@ define_ids! {
     PROJECT_ERC_UNREADABLE = "project-erc-unreadable";
     PROJECT_ERC_STORE = "project-erc-store";
     PROJECT_ERC_EDIT_HINT = "project-erc-edit-hint";
-    PROJECT_ERC_COL_RULES = "project-erc-col-rules";
-    PROJECT_ERC_COL_SEVERITY = "project-erc-col-severity";
     PROJECT_ERC_RULE_COUNT = "project-erc-rule-count";
     PROJECT_ERC_SEVERITY_ERROR = "project-erc-severity-error";
     PROJECT_ERC_SEVERITY_WARNING = "project-erc-severity-warning";
     PROJECT_ERC_SEVERITY_INFO = "project-erc-severity-info";
-    PROJECT_ERC_SEVERITY_OFF = "project-erc-severity-off";
     PROJECT_ANNOTATE_TITLE = "project-annotate-title";
     PROJECT_ANNOTATE_UNDO = "project-annotate-undo";
     PROJECT_ANNOTATE_UNDO_HELP = "project-annotate-undo-help";
@@ -80,4 +77,20 @@ define_ids! {
     PROJECT_VCS_AUTO_COMMIT_HELP = "project-vcs-auto-commit-help";
     PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO = "project-vcs-auto-commit-needs-repo";
     PROJECT_VCS_PENDING = "project-vcs-pending";
+    // ERC, version control look (#34, #35).
+    PROJECT_ERC_SOURCE_MACHINE = "project-erc-source-machine";
+    PROJECT_ERC_SOURCE_PROJECT = "project-erc-source-project";
+    PROJECT_ERC_SOURCE_UNREADABLE = "project-erc-source-unreadable";
+    PROJECT_ERC_BY_SEVERITY = "project-erc-by-severity";
+    PROJECT_ERC_BY_SEVERITY_CAPTION = "project-erc-by-severity-caption";
+    PROJECT_ERC_TILE_ERROR = "project-erc-tile-error";
+    PROJECT_ERC_TILE_WARNING = "project-erc-tile-warning";
+    PROJECT_ERC_TILE_INFO = "project-erc-tile-info";
+    PROJECT_ERC_TILE_OFF = "project-erc-tile-off";
+    PROJECT_ERC_OPEN_DIALOG = "project-erc-open-dialog";
+    PROJECT_VCS_STATE_PRESENT = "project-vcs-state-present";
+    PROJECT_VCS_STATE_ABSENT = "project-vcs-state-absent";
+    PROJECT_VCS_STATE_CHECKING = "project-vcs-state-checking";
+    PROJECT_VCS_STATUS = "project-vcs-status";
+    PROJECT_VCS_OPEN_HISTORY = "project-vcs-open-history";
 }
