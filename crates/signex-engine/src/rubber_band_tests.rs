@@ -1510,7 +1510,10 @@ fn random_rubber_band_moves_never_change_the_netlist() {
         ("symbol-only", total.symbols_only),
         ("co-selected", total.co_selected),
     ] {
-        eprintln!("{kind}: {} of {} cases fell back", share.warned, share.cases);
+        eprintln!(
+            "{kind}: {} of {} cases fell back",
+            share.warned, share.cases
+        );
     }
     // Measured at 22.6 % and 26.9 % (#1177); the caps leave about two points.
     for (kind, share, cap) in [
@@ -1649,7 +1652,11 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     let reasons = crate::transform::rubber_band::reasons::take();
     let warnings = engine.take_warnings();
     let unkept = engine.take_unkept_pins();
-    let kind = if selects_wire { "co-selected" } else { "symbol-only" };
+    let kind = if selects_wire {
+        "co-selected"
+    } else {
+        "symbol-only"
+    };
     let share = if selects_wire {
         &mut counts.co_selected
     } else {
