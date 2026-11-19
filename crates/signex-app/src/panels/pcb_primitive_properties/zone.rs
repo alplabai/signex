@@ -15,13 +15,14 @@ use signex_widgets::{Label, button, text};
 
 use super::drawing::zone as dz;
 use super::linked::{
-    Segment, caption, illustration, linked, linked_row, prefixed, read_only, segments, two_fields,
-    unit, with_unit,
+    Segment, illustration, linked, linked_row, prefixed, read_only, segments, two_fields, unit,
+    with_unit,
 };
 use super::rows::{
     Look, PAD_X, Section, chip, dropdown, field, fixed_value, labelled, live_checkbox, mm_field,
     net_row, stack, with_tip,
 };
+use super::stack_rows::caption;
 use super::{
     PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField as F, PrimitiveTarget, SP, TS, ZoneFacts,
     ZoneKind, format_number, net_info,

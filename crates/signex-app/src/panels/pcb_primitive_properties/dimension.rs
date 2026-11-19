@@ -8,10 +8,10 @@ use signex_i18n::{UserText, ids, t};
 
 use super::drawing::dimension as dd;
 use super::linked::{
-    Segment, caption, illustration, linked, linked_row, prefixed, segments, two_fields, unit,
-    with_unit,
+    Segment, illustration, linked, linked_row, prefixed, segments, two_fields, unit, with_unit,
 };
 use super::rows::{Look, PAD_X, Section, any_layer_row, mm_field, stack};
+use super::stack_rows::caption;
 use super::{DimensionFacts, PcbPrimitiveMsg, PrimitiveField as F, SP, TS};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::tokens::resolve;
