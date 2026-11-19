@@ -524,6 +524,16 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
+## View ▸ Annotations {#view-annotations}
+
+A panel row (`MenuMessage::OpenAnnotationsPanel`, #165) right under
+Navigator: it opens (or reveals) the Annotations panel, docked on the right
+by default, and is checked while the panel is open anywhere. Always
+available, like the other panel rows; without a project in view the panel
+says so. It has no command id and no default key. The panel lists the
+annotation blocks of the project's `notebook/*.snxnbk` files; see
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
+
 ## View ▸ Net Inspector {#view-net-inspector}
 
 Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector

@@ -122,6 +122,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         PcbNets => "pcb_nets",
         History => "history",
         NetInspector => "net_inspector",
+        Annotations => "annotations",
     }
 }
 
@@ -158,6 +159,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "pcb_nets" => PcbNets,
         "history" => History,
         "net_inspector" => NetInspector,
+        "annotations" => Annotations,
         _ => return None,
     })
 }
@@ -321,6 +323,45 @@ mod tests {
         assert_eq!(
             dock.panel_kinds(PanelPosition::Bottom),
             [PanelKind::Messages, PanelKind::CommandLog]
+        );
+    }
+
+    /// #165: the Annotations panel is saved under the key `annotations` and
+    /// loads back from it; every panel kind's key reads back as that kind.
+    #[test]
+    fn the_annotations_panel_round_trips_under_its_key() {
+        assert_eq!(panel_kind_key(PanelKind::Annotations), "annotations");
+        for kind in crate::panels::ALL_PANELS {
+            assert_eq!(
+                parse_panel_kind(panel_kind_key(*kind)),
+                Some(*kind),
+                "{kind:?}"
+            );
+        }
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("prefs.json");
+        let layout = DockLayoutSnapshot {
+            left: region(&[PanelKind::Projects], false, None),
+            right: region(
+                &[PanelKind::Properties, PanelKind::Annotations],
+                false,
+                None,
+            ),
+            bottom: region(&[], false, None),
+        };
+        PrefsDockLayoutStore::at(path.clone())
+            .write(&layout)
+            .expect("save the dock layout");
+        let text = std::fs::read_to_string(path).expect("read prefs.json");
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+        assert_eq!(
+            json["dock"]["right"]["panels"],
+            serde_json::json!(["properties", "annotations"])
+        );
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::Annotations]
         );
     }
 }

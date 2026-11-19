@@ -248,6 +248,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Navigator,
             MenuMessage::OpenNavigatorPanel,
         ),
+        // #165: docs/MENU_BAR.md#view-annotations
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_ANNOTATIONS,
+            PanelKind::Annotations,
+            MenuMessage::OpenAnnotationsPanel,
+        ),
         panel_item(
             ctx,
             ids::PANELS_KIND_PROPERTIES,

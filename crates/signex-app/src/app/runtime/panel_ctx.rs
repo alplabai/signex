@@ -686,6 +686,8 @@ impl Signex {
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
             // Replaced by `sync_command_log_panel_ctx` after each change.
             command_log: std::sync::Arc::clone(&self.document_state.panel_ctx.command_log),
+            // Kept in step with the scan and filters by `handlers/annotations.rs`.
+            annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,

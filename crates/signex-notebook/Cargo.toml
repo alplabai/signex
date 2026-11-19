@@ -1,0 +1,15 @@
+[package]
+name = "signex-notebook"
+description = "Design Notebook annotations: the annotation blocks of a .snxnbk notebook, their kinds, statuses and part, net and pin references, with every read problem kept by line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free and IO-free, std only: the app reads the files and hands over the
+# text, so the panel, the tests and a later notebook tab read the same way
+# (docs/NOTEBOOK_ANNOTATIONS.md).
+[dependencies]
+
+[lints]
+workspace = true

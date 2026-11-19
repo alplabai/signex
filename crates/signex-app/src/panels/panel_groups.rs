@@ -49,6 +49,7 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         | PanelKind::Components
         | PanelKind::Library
         | PanelKind::Navigator
+        | PanelKind::Annotations
         | PanelKind::Favorites
         | PanelKind::Snippets
         | PanelKind::Variants
@@ -134,6 +135,7 @@ mod tests {
                 K::Components,
                 K::Library,
                 K::Navigator,
+                K::Annotations,
                 K::BomStudio,
                 K::Favorites,
                 K::Snippets,

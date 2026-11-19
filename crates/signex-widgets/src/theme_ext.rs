@@ -477,6 +477,58 @@ pub fn power_port(canvas: &CanvasColors) -> Color {
     to_color(&canvas.power)
 }
 
+/// The five kinds of a Design Notebook annotation (#165), named here for
+/// their colours: this crate does not depend on `signex-notebook`, whose
+/// `AnnotationKind` the app maps onto these one to one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnnotationTone {
+    Note,
+    Calculation,
+    Measurement,
+    Issue,
+    Decision,
+}
+
+/// The Decision colour in a light theme (the mock-up's `--k-dec`).
+const DECISION_LIGHT: Color = Color::from_rgb8(0x7A, 0x3E, 0xA8);
+/// The Decision colour in a dark theme.
+const DECISION_DARK: Color = Color::from_rgb8(0xD2, 0xA8, 0xF0);
+
+/// Whether `tokens` are a light theme: a light panel fill.
+fn is_light(tokens: &ThemeTokens) -> bool {
+    let panel = to_color(&tokens.panel_bg);
+    0.2126 * panel.r + 0.7152 * panel.g + 0.0722 * panel.b > 0.5
+}
+
+/// Colour of an annotation kind: its icon box, its chip dot and its
+/// canvas flag. Note is the secondary ink, Calculation the info blue,
+/// Measurement the success green, Issue the error red and Decision a purple
+/// (Light `#7A3EA8`, Dark `#D2A8F0`).
+pub fn annotation_kind_colour(kind: AnnotationTone, tokens: &ThemeTokens) -> Color {
+    match kind {
+        AnnotationTone::Note => text_secondary(tokens),
+        AnnotationTone::Calculation => tokens
+            .extended
+            .info
+            .as_ref()
+            .map_or_else(|| accent(tokens), to_color),
+        AnnotationTone::Measurement => success_color(tokens),
+        AnnotationTone::Issue => error_color(tokens),
+        AnnotationTone::Decision if is_light(tokens) => DECISION_LIGHT,
+        AnnotationTone::Decision => DECISION_DARK,
+    }
+}
+
+/// Colour of the glyph on an annotation kind's icon box: white in a light
+/// theme, the app background in a dark one (`#111214` in Graphite Dark).
+pub fn annotation_glyph_colour(tokens: &ThemeTokens) -> Color {
+    if is_light(tokens) {
+        Color::WHITE
+    } else {
+        to_color(&tokens.bg)
+    }
+}
+
 #[cfg(test)]
 mod scale_tests {
     use super::*;
@@ -619,5 +671,45 @@ mod scale_tests {
         let dark = power_port(&canvas_colors(ThemeId::GraphiteDark));
         assert_eq!(light, Color::from_rgb8(0xC0, 0x39, 0x2B));
         assert_eq!(dark, Color::from_rgb8(0xE0, 0x6C, 0x5C));
+    }
+
+    /// #165: the annotation kinds take the status tokens, Decision its own
+    /// purple, and the icon-box glyph is white in Light and the app
+    /// background in Dark.
+    #[test]
+    fn annotation_kinds_use_the_mockup_colours() {
+        use signex_types::theme::theme_tokens;
+        let light = theme_tokens(ThemeId::GraphiteLight);
+        let dark = theme_tokens(ThemeId::GraphiteDark);
+        let colour = annotation_kind_colour;
+        assert_eq!(
+            colour(AnnotationTone::Calculation, &light),
+            Color::from_rgb8(0x1F, 0x45, 0xAE)
+        );
+        assert_eq!(
+            colour(AnnotationTone::Calculation, &dark),
+            Color::from_rgb8(0xA9, 0xC2, 0xFF)
+        );
+        for tokens in [&light, &dark] {
+            assert_eq!(colour(AnnotationTone::Note, tokens), text_secondary(tokens));
+            assert_eq!(
+                colour(AnnotationTone::Measurement, tokens),
+                success_color(tokens)
+            );
+            assert_eq!(colour(AnnotationTone::Issue, tokens), error_color(tokens));
+        }
+        assert_eq!(
+            colour(AnnotationTone::Decision, &light),
+            Color::from_rgb8(0x7A, 0x3E, 0xA8)
+        );
+        assert_eq!(
+            colour(AnnotationTone::Decision, &dark),
+            Color::from_rgb8(0xD2, 0xA8, 0xF0)
+        );
+        assert_eq!(annotation_glyph_colour(&light), Color::WHITE);
+        assert_eq!(
+            annotation_glyph_colour(&dark),
+            Color::from_rgb8(0x11, 0x12, 0x14)
+        );
     }
 }

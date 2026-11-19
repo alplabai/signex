@@ -53,6 +53,9 @@ impl PanelContext {
         if self.net_inspector != main.net_inspector {
             self.net_inspector.clone_from(&main.net_inspector);
         }
+        if !std::sync::Arc::ptr_eq(&self.annotations, &main.annotations) {
+            self.annotations = std::sync::Arc::clone(&main.annotations);
+        }
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }

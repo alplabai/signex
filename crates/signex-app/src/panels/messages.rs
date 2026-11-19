@@ -719,6 +719,8 @@ pub enum PanelMsg {
     NetInspector(super::NetInspectorMsg),
     /// The Command Log panel (#2458).
     CommandLog(super::CommandLogMsg),
+    /// The Annotations panel and its scans (#165).
+    Annotations(super::AnnotationsMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

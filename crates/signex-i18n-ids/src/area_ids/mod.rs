@@ -2,6 +2,7 @@
 //! added after the list in `lib.rs` reached the file-size cap. `ids`
 //! re-exports them, so callers write `ids::NAME` either way.
 
+mod annotations;
 mod board_checks;
 mod board_output;
 mod board_panel;
@@ -37,6 +38,7 @@ mod requirements;
 mod rules;
 mod update_pcb;
 
+pub use annotations::*;
 pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
@@ -76,6 +78,7 @@ pub use update_pcb::*;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
+        annotations::ANNOTATIONS,
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,

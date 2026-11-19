@@ -239,6 +239,31 @@ is tinted red; an undone one is struck through.
   session only; nothing is written to disk unless you save it. Details:
   `docs/COMMAND_LOG.md`.
 
+### Annotations
+
+**View ▸ Annotations** opens a panel that lists the notes, calculations,
+measurements, issues and decisions written in the project's Design Notebook
+files (`.snxnbk` files in the project's `notebook/` folder). A block is
+written like this:
+
+```text
+#annotation(kind: "issue", status: "open", date: "2026-11-17")[
+  U3 runs warm at 300 mA; check the copper under #component("U3").
+]
+```
+
+- The rows are grouped by file, newest first. Filter them by kind (the
+  chips), by part, status and date, or type in the search field.
+- Click a row to see the block as written. Click a part chip such as **U3**
+  to open its sheet with the part selected; an amber chip names a part the
+  design no longer has. A net chip highlights that net.
+- The panel reads the files when it opens and when you open a project;
+  press the refresh button beside the search field after editing a file.
+  Anything it cannot read is listed in the Messages panel with the file and
+  the line.
+
+The full grammar is in [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
@@ -1175,6 +1200,7 @@ More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 | `.snxlib` | A component library. It is a folder, not a single file. |
 | `.snxsym` | A schematic symbol, edited in the symbol editor. |
 | `.snxfpt` | A PCB footprint, edited in the footprint editor. |
+| `.snxnbk` | A Design Notebook file in the project's `notebook/` folder; the Annotations panel lists its annotation blocks. |
 
 ## 13. Keyboard shortcuts
 

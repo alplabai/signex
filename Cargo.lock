@@ -5727,6 +5727,7 @@ dependencies = [
  "signex-i18n",
  "signex-library",
  "signex-net",
+ "signex-notebook",
  "signex-output",
  "signex-renderer",
  "signex-req",
@@ -5986,6 +5987,10 @@ dependencies = [
  "signex-types",
  "uuid",
 ]
+
+[[package]]
+name = "signex-notebook"
+version = "26.11.0"
 
 [[package]]
 name = "signex-output"

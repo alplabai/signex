@@ -18,6 +18,9 @@ impl Signex {
             MenuMessage::OpenNavigatorPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::Navigator))
             }
+            MenuMessage::OpenAnnotationsPanel => {
+                Some(self.show_panel(crate::panels::PanelKind::Annotations))
+            }
             MenuMessage::OpenPropertiesPanel => {
                 let task = self.show_panel(crate::panels::PanelKind::Properties);
                 self.interaction_state.context_menu = None;
