@@ -43,6 +43,9 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             .align_y(Alignment::Center)
             .boxed(),
     );
+    if let Some(source) = super::schematic_source::caption(frame, row) {
+        body = body.push(source);
+    }
     body = body.push(section(frame, ids::RULES_DETAIL_TEXT));
     body = body.push(
         text(user(row.text(&frame.src).to_string()))

@@ -160,4 +160,5 @@ define_ids! {
     RULES_PRESET_REMOVED = "rules-preset-removed";
     RULES_PRESET_APPLY = "rules-preset-apply";
     RULES_PRESET_CANCEL = "rules-preset-cancel";
+    RULES_FROM_SCHEMATIC = "rules-from-schematic";
 }

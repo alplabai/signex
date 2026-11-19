@@ -33,6 +33,8 @@ pub(crate) struct DesignSnapshot {
     /// Libraries whose adapter did not open, with why: their parts resolve
     /// to no footprint, and the update thread logs each to Messages.
     pub library_errors: Vec<(PathBuf, String)>,
+    /// The rules the schematic's Net Parameters directives ask for (#1281).
+    pub schematic_rules: Vec<super::rules_from_schematic::SchematicRule>,
 }
 
 impl DesignSnapshot {
@@ -78,6 +80,9 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         unreadable: design.unreadable.clone(),
         sheet_revisions: design.sheet_revisions(&open),
         library_errors: resolver.errors,
+        schematic_rules: super::rules_from_schematic::schematic_rules(
+            sheets.iter().map(|(_, sheet)| *sheet),
+        ),
     };
     let mut list = diff_board(&snapshot.input());
     if let Some(previous) = &request.previous {
