@@ -5722,6 +5722,7 @@ dependencies = [
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",
+ "signex-gerber",
  "signex-gfx",
  "signex-history",
  "signex-i18n",

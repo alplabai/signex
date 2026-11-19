@@ -32,6 +32,7 @@ pub mod document_read;
 mod documents;
 pub(crate) mod fab_outputs;
 pub(crate) mod file_extension;
+pub mod gerber_read;
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;

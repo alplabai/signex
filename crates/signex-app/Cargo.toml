@@ -42,6 +42,8 @@ signex-drc-dsl = { workspace = true }
 signex-req = { workspace = true }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
+# The Gerber Viewer's reader and compare (#2539), UI-free.
+signex-gerber = { workspace = true }
 signex-library = { workspace = true, features = [
     "local-git",
     "database",
