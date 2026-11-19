@@ -2,7 +2,9 @@
 //! profiles the user saves from a setup dialog. They live in the user's
 //! settings, not in a project, and are offered next to the built-ins in every
 //! project; a project stores only the id of its default profile
-//! (`project_defaults.profile`). Format: `docs/PROJECT_SETUP.md`.
+//! (`project_defaults.profile`). The same list holds the user's edits of a
+//! built-in tier (#2536, `profile_override.rs`). Format:
+//! `docs/PROJECT_SETUP.md`.
 
 use serde::{Deserialize, Serialize};
 
@@ -24,8 +26,13 @@ fn default_designators() -> DesignatorStandard {
     DEFAULT_DESIGNATORS
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 /// A named profile the user saved: board rules, sheet defaults and the
-/// designator standard.
+/// designator standard. With `edited` set it is the user's edit of the
+/// built-in tier whose token is its id.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UserProfile {
     pub id: String,
@@ -35,42 +42,70 @@ pub struct UserProfile {
     pub sheet: SheetDefaults,
     #[serde(default = "default_designators")]
     pub designators: DesignatorStandard,
+    /// An edited built-in: the override of the tier `id` names.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub edited: bool,
 }
 
 impl UserProfile {
-    /// Whether the profile can be offered: an id of the user form, a name,
-    /// and board rules the loader accepts.
+    /// Whether the profile can be offered: an id of the user form (or, for
+    /// an edited built-in, a tier token), a name, and board rules the
+    /// loader accepts.
     pub fn is_usable(&self) -> bool {
-        self.id.starts_with(USER_PROFILE_ID_PREFIX)
-            && !self.name.trim().is_empty()
-            && self.pcb.problems().is_empty()
+        let id_fits = if self.edited {
+            SetupProfile::from_token(&self.id).is_some_and(|p| p.fab_template().is_some())
+        } else {
+            self.id.starts_with(USER_PROFILE_ID_PREFIX)
+        };
+        id_fits && !self.name.trim().is_empty() && self.pcb.problems().is_empty()
+    }
+
+    /// A profile the user saved under a name, not an edited built-in.
+    pub fn is_user(&self) -> bool {
+        !self.edited && self.id.starts_with(USER_PROFILE_ID_PREFIX)
     }
 }
 
-/// A profile an id names: built in, or one of the user's.
+/// A profile an id names: built in (as shipped, or with the user's edits),
+/// or one of the user's.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProfileRef<'a> {
     BuiltIn(SetupProfile),
+    /// A built-in tier the user edited: `values` is the override.
+    Edited {
+        profile: SetupProfile,
+        values: &'a UserProfile,
+    },
     User(&'a UserProfile),
 }
 
-/// The profile `id` names among the built-ins and `users`, if any.
+/// The profile `id` names among the built-ins and `users`, if any. An
+/// edited built-in resolves to its override.
 pub fn resolve_profile<'a>(id: &str, users: &'a [UserProfile]) -> Option<ProfileRef<'a>> {
     if let Some(builtin) = SetupProfile::from_token(id) {
-        return Some(ProfileRef::BuiltIn(builtin));
+        return Some(match super::builtin_override(builtin, users) {
+            Some(values) => ProfileRef::Edited {
+                profile: builtin,
+                values,
+            },
+            None => ProfileRef::BuiltIn(builtin),
+        });
     }
-    users.iter().find(|p| p.id == id).map(ProfileRef::User)
+    users
+        .iter()
+        .find(|p| p.is_user() && p.id == id)
+        .map(ProfileRef::User)
 }
 
 /// The user profile a command names by id or, failing that, by name
-/// (case-insensitive).
+/// (case-insensitive). Edited built-ins are not user profiles.
 pub fn find_user_profile<'a>(key: &str, users: &'a [UserProfile]) -> Option<&'a UserProfile> {
     let key = key.trim();
-    users.iter().find(|p| p.id == key).or_else(|| {
-        users
-            .iter()
-            .find(|p| p.name.trim().eq_ignore_ascii_case(key))
-    })
+    let mut saved = users.iter().filter(|p| p.is_user());
+    saved
+        .clone()
+        .find(|p| p.id == key)
+        .or_else(|| saved.find(|p| p.name.trim().eq_ignore_ascii_case(key)))
 }
 
 /// Why a profile name is refused.
@@ -78,6 +113,8 @@ pub fn find_user_profile<'a>(key: &str, users: &'a [UserProfile]) -> Option<&'a 
 pub enum ProfileNameProblem {
     Empty,
     TooLong,
+    /// Another saved profile has this name (a rename).
+    Taken,
 }
 
 /// Check a profile name as typed; the trimmed name when usable.
@@ -118,9 +155,9 @@ pub fn new_profile_id(name: &str, users: &[UserProfile]) -> String {
         .unwrap_or(base)
 }
 
-/// Save `profile` into `users`: a profile with the same name (ignoring case)
-/// takes the new values and keeps its id; otherwise it is added at the end.
-/// Returns the id it is stored under.
+/// Save `profile` into `users`: a saved profile with the same name (ignoring
+/// case) takes the new values and keeps its id; otherwise it is added at the
+/// end. Returns the id it is stored under.
 pub fn save_user_profile(
     users: &mut Vec<UserProfile>,
     name: &str,
@@ -130,7 +167,7 @@ pub fn save_user_profile(
 ) -> String {
     if let Some(existing) = users
         .iter_mut()
-        .find(|p| p.name.trim().eq_ignore_ascii_case(name.trim()))
+        .find(|p| p.is_user() && p.name.trim().eq_ignore_ascii_case(name.trim()))
     {
         existing.name = name.trim().to_string();
         existing.pcb = pcb;
@@ -138,15 +175,28 @@ pub fn save_user_profile(
         existing.designators = designators;
         return existing.id.clone();
     }
-    let id = new_profile_id(name, users);
-    users.push(UserProfile {
-        id: id.clone(),
+    add_user_profile(users, name, pcb, sheet, designators).id
+}
+
+/// Add a new saved profile called `name` with a fresh id, whatever names
+/// the list holds; returns it.
+pub fn add_user_profile(
+    users: &mut Vec<UserProfile>,
+    name: &str,
+    pcb: PcbDefaults,
+    sheet: SheetDefaults,
+    designators: DesignatorStandard,
+) -> UserProfile {
+    let profile = UserProfile {
+        id: new_profile_id(name, users),
         name: name.trim().to_string(),
         pcb,
         sheet,
         designators,
-    });
-    id
+        edited: false,
+    };
+    users.push(profile.clone());
+    profile
 }
 
 /// Read the user profiles from their settings value: the usable entries, in
