@@ -288,11 +288,15 @@ fn an_out_of_range_default_is_clamped_and_reported() {
     assert_eq!(stored, Some(MAX_DEFAULT_WIDTH_MM));
     let draft = "12".to_string();
     let note =
-        super::schematic_defaults::clamp_note(SchematicDefaultField::WireWidth, Some(&draft));
-    assert!(
-        note.is_some_and(|n| n.contains("5")),
-        "the field reports the clamp"
+        super::schematic_defaults::clamp_note(SchematicDefaultField::WireWidth, Some(&draft))
+            .expect("the field reports the clamp");
+    let range = SchematicDefaultField::WireWidth.range();
+    assert_eq!(
+        note.used, MAX_DEFAULT_WIDTH_MM,
+        "the note names the value used"
     );
+    assert_eq!(stored, Some(note.used), "and that is the stored value");
+    assert_eq!((note.min, note.max), (*range.start(), *range.end()));
     edit(&mut app, SchematicDefaultField::WireWidth, "0.01");
     assert_eq!(
         app.document_state.projects[0]
@@ -361,11 +365,12 @@ fn unusable_input_keeps_the_default_and_only_empty_text_clears() {
 #[test]
 fn a_junction_default_below_the_floor_is_clamped_and_noted() {
     let draft = "0.3".to_string();
-    let note = super::schematic_defaults::clamp_note(
-        SchematicDefaultField::JunctionDiameter,
-        Some(&draft),
-    );
-    assert!(note.is_some_and(|n| n.contains("0.7")), "noted");
+    let field = SchematicDefaultField::JunctionDiameter;
+    let note = super::schematic_defaults::clamp_note(field, Some(&draft)).expect("noted");
+    assert_eq!(note.used, 0.7, "the floor is used");
+    let range = field.range();
+    assert_eq!((note.min, note.max), (*range.start(), *range.end()));
+    assert_eq!(note.min, 0.7, "the range starts at the floor");
     let (mut app, _sheet, _window) = app();
     edit(&mut app, SchematicDefaultField::JunctionDiameter, "0.3");
     assert_eq!(
@@ -415,4 +420,119 @@ fn a_rectangle_placed_on_a_project_sheet_stores_the_project_shape_stroke() {
         panic!("expected one rectangle, got {:?}", doc.drawings);
     };
     assert_eq!(*width, 0.4);
+}
+
+/// Mockup m36: a field box is built-in while empty, edited while it holds
+/// an override, and invalid when its typed text is not a usable number or
+/// was clamped.
+#[test]
+fn a_default_field_reads_built_in_edited_or_invalid() {
+    use super::schematic_defaults::{FieldState, field_state};
+    use signex_types::project::MAX_DEFAULT_WIDTH_MM;
+    let wire = SchematicDefaultField::WireWidth;
+    let typed = |text: &str| text.to_string();
+    assert_eq!(field_state(wire, None, None), FieldState::BuiltIn);
+    assert_eq!(
+        field_state(wire, Some(&typed("")), None),
+        FieldState::BuiltIn,
+        "an emptied field is built-in"
+    );
+    assert_eq!(
+        field_state(wire, None, Some(0.3)),
+        FieldState::Edited,
+        "an override read from the file"
+    );
+    assert_eq!(
+        field_state(wire, Some(&typed("0.3")), Some(0.3)),
+        FieldState::Edited,
+        "a typed override"
+    );
+    for text in ["x", "0,4", "-1", "0"] {
+        assert_eq!(
+            field_state(wire, Some(&typed(text)), Some(0.3)),
+            FieldState::Invalid,
+            "{text:?} over an override"
+        );
+        assert_eq!(
+            field_state(wire, Some(&typed(text)), None),
+            FieldState::Invalid,
+            "{text:?} over the built-in value"
+        );
+    }
+    assert_eq!(
+        field_state(wire, Some(&typed("12")), Some(MAX_DEFAULT_WIDTH_MM)),
+        FieldState::Invalid,
+        "a clamped number"
+    );
+}
+
+/// Mockup m36: the reset button sends the empty-field edit, so it clears
+/// the override and empties the box.
+#[test]
+fn the_reset_button_clears_the_override_like_an_empty_field() {
+    use super::schematic_defaults::{FieldState, clamp_note, field_state};
+    let (mut app, _sheet, _window) = app();
+    let bus = SchematicDefaultField::BusWidth;
+    edit(&mut app, bus, "50");
+    let project_id = app.document_state.projects[0].id;
+    let state = |app: &Signex| {
+        let draft = app.document_state.project_tabs[&project_id]
+            .default_drafts
+            .get(&bus);
+        let stored = app.document_state.projects[0]
+            .data
+            .schematic_defaults
+            .get(bus);
+        (
+            field_state(bus, draft, stored),
+            clamp_note(bus, draft),
+            stored,
+        )
+    };
+    let (look, note, stored) = state(&app);
+    assert_eq!(look, FieldState::Invalid, "50 mm was clamped");
+    assert!(note.is_some());
+    assert_eq!(stored, Some(signex_types::project::MAX_BUS_WIDTH_MM));
+    // What the reset button sends.
+    edit(&mut app, bus, "");
+    assert_eq!(state(&app), (FieldState::BuiltIn, None, None));
+}
+
+/// Mockup m36: the preview writes each value beside its item, grey while
+/// the field is empty and with the typed number when it was clamped.
+#[test]
+fn the_preview_labels_read_built_in_set_or_clamped() {
+    use super::schematic_defaults::{LabelLook, value_labels};
+    use signex_types::project::{MAX_DEFAULT_WIDTH_MM, SchematicDefaultOverrides};
+    let overrides = SchematicDefaultOverrides {
+        bus_width_mm: Some(0.5),
+        junction_diameter_mm: Some(MAX_DEFAULT_WIDTH_MM),
+        ..Default::default()
+    };
+    let drafts = std::collections::HashMap::from([(
+        SchematicDefaultField::JunctionDiameter,
+        "9".to_string(),
+    )]);
+    let i18n = signex_i18n::I18n::en_us();
+    let labels = value_labels(&overrides, Some(&drafts), &i18n);
+    assert_eq!(labels.len(), SchematicDefaultField::ALL.len());
+    let label = |field| {
+        labels
+            .iter()
+            .find(|label| label.field == field)
+            .expect("one label per field")
+    };
+    assert_eq!(
+        label(SchematicDefaultField::WireWidth).look,
+        LabelLook::BuiltIn
+    );
+    assert_eq!(label(SchematicDefaultField::BusWidth).look, LabelLook::Set);
+    assert!(label(SchematicDefaultField::BusWidth).words.contains("0.5"));
+    let junction = label(SchematicDefaultField::JunctionDiameter);
+    assert_eq!(junction.look, LabelLook::Clamped);
+    assert!(
+        junction.words.contains('5') && junction.words.contains('9'),
+        "{}",
+        junction.words
+    );
 }
