@@ -1,21 +1,27 @@
 //! One value cell: its shown value, inline editor, reset glyph and source
-//! tooltip. Pure: reads the grid, emits [`GridMessage`]s.
+//! tooltip. Pure: reads the grid and the caller's values, emits
+//! [`GridMessage`]s.
 
 use std::sync::OnceLock;
 
 use iced::alignment::Vertical;
 use iced::widget::{Row, Space, column, container, mouse_area, pick_list, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
-use signex_i18n::{I18n, LocalNumber, UserText};
+use signex_i18n::UserText;
 
-use super::model::{CellRef, CellValue, ColumnKind, ConstraintGrid, GridColumn, ValueSource};
+use super::model::{CellRef, CellValue, CellValues, ColumnKind, ConstraintGrid, GridColumn};
+use super::model::{Resolved, ValueSource};
 use super::style::{GridMetrics, GridStyle, GridText};
 use super::update::GridMessage;
-use crate::{Label, button, checkbox, text, text_input, tooltip};
+use crate::theme_ext::HAIRLINE;
+use crate::{Label, LengthFormat, button, checkbox, text, text_input, tooltip};
 
 /// Widget id of the inline length editor; focus it with
 /// `iced::widget::operation::focus(EDITOR_ID)` after a cell press.
 pub const EDITOR_ID: &str = "constraint-grid-cell-editor";
+
+/// Border width of the selected cell's accent ring.
+const SELECTED_RING: f32 = 1.5;
 
 const RESET_ICON: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5A3.6 3.6 0 1 1 2.6 7.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2.4 2.2V4.8H5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 
@@ -34,19 +40,17 @@ pub(super) fn strong_font() -> Font {
     }
 }
 
-/// A length as the locale writes it, rounded to 0.1 µm.
-pub(super) fn length_label(i18n: &I18n, mm: f64) -> Label<'static> {
-    let rounded = (mm * 1e4).round() / 1e4;
-    UserText::new(i18n.number(LocalNumber(rounded))).into()
-}
-
-fn value_label<'a>(column: &'a GridColumn, value: CellValue, i18n: &I18n) -> Label<'a> {
+fn value_label<'a>(
+    column: &'a GridColumn,
+    value: CellValue,
+    format: LengthFormat<'_>,
+) -> Label<'a> {
     match (&column.kind, value) {
         (ColumnKind::Choice(options), CellValue::Choice(i)) => options
             .get(i)
             .cloned()
             .unwrap_or_else(|| UserText::new(String::new()).into()),
-        (_, CellValue::Length(mm)) => length_label(i18n, mm),
+        (_, CellValue::Length(mm)) => format.label(mm),
         _ => UserText::new(String::new()).into(),
     }
 }
@@ -80,7 +84,7 @@ fn source_tip<'a>(
             text_color: Some(style.ink),
             border: Border {
                 color: style.line,
-                width: 1.0,
+                width: HAIRLINE,
                 radius: (style.text_size * 0.3).into(),
                 ..Border::default()
             },
@@ -98,7 +102,7 @@ pub(super) fn frame(is_selected: bool, style: GridStyle) -> impl Fn(&Theme) -> c
             } else {
                 style.line
             },
-            width: if is_selected { 1.5 } else { 0.5 },
+            width: if is_selected { SELECTED_RING } else { HAIRLINE },
             radius: 0.0.into(),
             ..Border::default()
         },
@@ -134,16 +138,17 @@ pub(super) fn reset_glyph<'a, M: Clone + 'a>(
 
 fn length_editor<'a>(
     grid: &'a ConstraintGrid,
+    values: &impl CellValues,
     cell: CellRef,
-    i18n: &I18n,
+    format: LengthFormat<'_>,
     style: GridStyle,
 ) -> Element<'a, GridMessage> {
     let edit = grid.edit();
     let typed = edit.map_or("", |e| e.text.as_str());
     let is_invalid = edit.is_some_and(|e| e.is_invalid);
     // The placeholder is what the row inherits once its own value is gone.
-    let placeholder: Label<'a> = match grid.inherited(cell).map(|r| r.value) {
-        Some(CellValue::Length(mm)) => length_label(i18n, mm),
+    let placeholder: Label<'a> = match values.inherited(cell).map(|r| r.value) {
+        Some(CellValue::Length(mm)) => format.label(mm),
         _ => UserText::new(String::new()).into(),
     };
     length_input(
@@ -183,7 +188,7 @@ pub(super) fn length_input<'a, M: Clone + 'a>(
                 } else {
                     style.accent
                 },
-                width: 1.0,
+                width: HAIRLINE,
                 radius: 0.0.into(),
                 ..Border::default()
             },
@@ -226,7 +231,7 @@ fn flag_box<'a>(cell: CellRef, on: bool, ink: Color, style: GridStyle) -> Elemen
             icon_color: style.field_fill,
             border: Border {
                 color: ink,
-                width: 1.0,
+                width: HAIRLINE,
                 radius: (style.text_size * 0.2).into(),
                 ..Border::default()
             },
@@ -235,38 +240,31 @@ fn flag_box<'a>(cell: CellRef, on: bool, ink: Color, style: GridStyle) -> Elemen
         .boxed()
 }
 
-/// One value cell of the grid.
-pub(super) fn view<'a>(
+/// The cell's content: its editor while it is being edited, else its
+/// value inked strong (own) or muted (inherited).
+fn content<'a>(
     grid: &'a ConstraintGrid,
+    values: &impl CellValues,
     column: &'a GridColumn,
     cell: CellRef,
-    i18n: &I18n,
-    words: &GridText<'a>,
+    resolved: Resolved,
+    format: LengthFormat<'_>,
     style: GridStyle,
 ) -> Element<'a, GridMessage> {
-    let m = style.metrics();
-    let Some(resolved) = grid.resolve(cell) else {
-        return Space::new()
-            .width(m.cell_width)
-            .height(m.row_height)
-            .boxed();
-    };
-    let is_selected = grid.selected() == Some(cell);
     let is_editing = grid.edit().is_some_and(|e| e.cell == cell);
     let ink = if resolved.is_own() {
         style.ink
     } else {
         style.muted_ink
     };
-
-    let content: Element<'a, GridMessage> = match (&column.kind, resolved.value) {
-        (ColumnKind::Length, _) if is_editing => length_editor(grid, cell, i18n, style),
+    match (&column.kind, resolved.value) {
+        (ColumnKind::Length, _) if is_editing => length_editor(grid, values, cell, format, style),
         (ColumnKind::Choice(_), CellValue::Choice(i)) if is_editing => {
             choice_editor(column, cell, Some(i), style)
         }
         (ColumnKind::Flag, CellValue::Flag(on)) => flag_box(cell, on, ink, style),
         (_, value) => {
-            let mut label = text(value_label(column, value, i18n))
+            let mut label = text(value_label(column, value, format))
                 .size(style.text_size)
                 .color(ink)
                 .wrapping(iced::widget::text::Wrapping::None);
@@ -283,13 +281,49 @@ pub(super) fn view<'a>(
             .interaction(iced::mouse::Interaction::Text)
             .boxed()
         }
+    }
+}
+
+/// What one cell is drawn from: the grid, the caller's values and format.
+pub(super) struct CellSource<'a, 'v, V: CellValues> {
+    pub grid: &'a ConstraintGrid,
+    pub values: &'v V,
+    pub format: LengthFormat<'v>,
+}
+
+/// One value cell of the grid.
+pub(super) fn view<'a, V: CellValues>(
+    source: &CellSource<'a, '_, V>,
+    column: &'a GridColumn,
+    cell: CellRef,
+    words: &GridText<'a>,
+    style: GridStyle,
+) -> Element<'a, GridMessage> {
+    let m = style.metrics();
+    let grid = source.grid;
+    let Some(resolved) = source.values.resolve(cell) else {
+        return Space::new()
+            .width(m.cell_width)
+            .height(m.row_height)
+            .boxed();
     };
+    let is_selected = grid.selected() == Some(cell);
+    let is_editing = grid.edit().is_some_and(|e| e.cell == cell);
+    let shown = content(
+        grid,
+        source.values,
+        column,
+        cell,
+        resolved,
+        source.format,
+        style,
+    );
 
     let mut line: Row<Element<'a, GridMessage>> = Row::new()
         .spacing(m.pad / 2.0)
         .align_y(Vertical::Center)
         .height(Length::Fill)
-        .push(content);
+        .push(shown);
     if resolved.is_own() && !is_editing {
         line = line.push(reset_glyph(
             GridMessage::CellReset(cell),

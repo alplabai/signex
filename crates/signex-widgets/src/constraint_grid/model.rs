@@ -1,8 +1,9 @@
-//! The grid's data: a row hierarchy, grouped typed columns, the values set
-//! on rows, and how a cell resolves down the hierarchy. Plain data; the
-//! view reads it and `update.rs` is the only place that changes it.
+//! The grid's layout and view state: a row hierarchy, grouped typed
+//! columns, what is collapsed, selected and being typed. The cell values
+//! are the caller's: the grid reads them through [`CellValues`] and never
+//! stores one. `update.rs` is the only place that changes the view state.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::Label;
 
@@ -74,8 +75,6 @@ pub struct GridColumn {
     pub id: ColumnId,
     pub title: Label<'static>,
     pub kind: ColumnKind,
-    /// The value a cell has when no row up its chain sets one.
-    pub default: CellValue,
 }
 
 impl GridColumn {
@@ -121,6 +120,26 @@ impl Resolved {
     }
 }
 
+/// The caller's read-only view of the cell values: what each cell holds
+/// and where that comes from. The grid reads it on every update and view
+/// and reports edits as [`GridChange`](super::GridChange)s for the caller
+/// to store, so the caller's rules stay the one source of truth.
+pub trait CellValues {
+    /// The cell's value and its source; `None` for a cell the caller does
+    /// not know.
+    fn resolve(&self, cell: CellRef) -> Option<Resolved>;
+
+    /// What the cell would hold without a value of its own: the parent
+    /// row's value, or the column default on a root row. The inline editor
+    /// shows it as its placeholder.
+    fn inherited(&self, cell: CellRef) -> Option<Resolved>;
+
+    /// The value set on the row itself, if any.
+    fn own_value(&self, cell: CellRef) -> Option<CellValue> {
+        self.resolve(cell).filter(Resolved::is_own).map(|r| r.value)
+    }
+}
+
 /// A row as the view lays it out: indented under its parent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VisibleRow {
@@ -137,28 +156,24 @@ pub enum GridError {
     DuplicateRow(RowId),
     /// The parent is not in the grid yet; add parents first.
     UnknownParent(RowId),
-    /// The cell's row or column is not in the grid.
-    UnknownCell(CellRef),
-    /// The value's type or range does not fit the column.
-    RejectedValue(CellRef),
 }
 
-/// An inline edit of a length cell; `text` is what the user typed.
+/// An inline edit of a cell; `text` is what the user typed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CellEdit {
     pub cell: CellRef,
     pub text: String,
-    /// The last submit did not parse as a length.
+    /// The last submit did not parse as a valid length.
     pub is_invalid: bool,
 }
 
-/// The constraint grid's state. Built by the caller, changed only through
+/// The constraint grid's layout and view state. Built by the caller,
+/// changed only through
 /// [`ConstraintGrid::update`](crate::constraint_grid::ConstraintGrid::update).
 #[derive(Debug, Clone, Default)]
 pub struct ConstraintGrid {
     pub(super) rows: Vec<GridRow>,
     pub(super) groups: Vec<ColumnGroup>,
-    pub(super) values: BTreeMap<CellRef, CellValue>,
     pub(super) collapsed_rows: BTreeSet<RowId>,
     pub(super) collapsed_groups: BTreeSet<GroupId>,
     pub(super) selected: Option<CellRef>,
@@ -191,19 +206,6 @@ impl ConstraintGrid {
         Ok(())
     }
 
-    /// Set a value on a row, as loaded from the caller's rules.
-    pub fn set_value(&mut self, cell: CellRef, value: CellValue) -> Result<(), GridError> {
-        let column = self.column(cell.column);
-        if self.row(cell.row).is_none() || column.is_none() {
-            return Err(GridError::UnknownCell(cell));
-        }
-        if !column.is_some_and(|c| c.accepts(value)) {
-            return Err(GridError::RejectedValue(cell));
-        }
-        self.values.insert(cell, value);
-        Ok(())
-    }
-
     /// Start a row collapsed (the hierarchy below it hidden).
     pub fn collapse_row(&mut self, row: RowId) {
         self.collapsed_rows.insert(row);
@@ -228,11 +230,6 @@ impl ConstraintGrid {
             .find(|c| c.id == id)
     }
 
-    /// The value set on the row itself, if any.
-    pub fn own_value(&self, cell: CellRef) -> Option<CellValue> {
-        self.values.get(&cell).copied()
-    }
-
     pub fn is_group_collapsed(&self, group: GroupId) -> bool {
         self.collapsed_groups.contains(&group)
     }
@@ -252,54 +249,6 @@ impl ConstraintGrid {
     /// The column the find box last landed on.
     pub fn found_column(&self) -> Option<ColumnId> {
         self.found
-    }
-
-    /// The cell's value: the nearest row up the chain that sets one, else
-    /// the column default. `None` for an unknown row or column.
-    pub fn resolve(&self, cell: CellRef) -> Option<Resolved> {
-        let column = self.column(cell.column)?;
-        let mut current = self.row(cell.row)?;
-        // The push order rules out cycles; the bound is a second guard.
-        for _ in 0..=self.rows.len() {
-            let here = CellRef::new(current.id, cell.column);
-            if let Some(value) = self.values.get(&here) {
-                let source = if current.id == cell.row {
-                    ValueSource::Own
-                } else {
-                    ValueSource::Inherited(current.id)
-                };
-                return Some(Resolved {
-                    value: *value,
-                    source,
-                });
-            }
-            match current.parent.and_then(|p| self.row(p)) {
-                Some(parent) => current = parent,
-                None => break,
-            }
-        }
-        Some(Resolved {
-            value: column.default,
-            source: ValueSource::Default,
-        })
-    }
-
-    /// What the cell would hold without its own value: the parent's
-    /// resolved value, or the column default on a root row.
-    pub fn inherited(&self, cell: CellRef) -> Option<Resolved> {
-        let row = self.row(cell.row)?;
-        let Some(parent) = row.parent else {
-            return Some(Resolved {
-                value: self.column(cell.column)?.default,
-                source: ValueSource::Default,
-            });
-        };
-        let resolved = self.resolve(CellRef::new(parent, cell.column))?;
-        let source = match resolved.source {
-            ValueSource::Own => ValueSource::Inherited(parent),
-            other => other,
-        };
-        Some(Resolved { source, ..resolved })
     }
 
     /// Rows in display order: depth-first, children in insertion order,

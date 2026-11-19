@@ -17,6 +17,7 @@ mod house_extra;
 pub mod icon_button;
 pub mod inert;
 mod label;
+pub mod length_format;
 pub mod passive_calculator;
 pub mod property_illustration;
 pub mod segmented;
@@ -39,6 +40,7 @@ pub use house_extra::{
     toggler,
 };
 pub use label::{Label, raw};
+pub use length_format::LengthFormat;
 pub use segmented::{SegmentedStyle, segmented};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};

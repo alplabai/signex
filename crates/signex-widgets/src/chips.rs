@@ -12,7 +12,9 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
 use iced::widget::{Row, container};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
+use signex_i18n::{I18n, UserText};
 
+use crate::theme_ext::DISABLED_OPACITY;
 use crate::{Label, button, text};
 
 // Graphite chip sizes at a 12 px body, kept as ratios of the body size.
@@ -34,10 +36,6 @@ const CAPTION_RATIO: f32 = 10.0 / 11.0;
 
 /// Opacity of a chip count next to its label.
 const COUNT_ALPHA: f32 = 0.85;
-/// Opacity of a dimmed tab (a domain marked for later).
-const DIMMED_ALPHA: f32 = 0.55;
-/// Opacity of a chip without a press message.
-const DISABLED_ALPHA: f32 = 0.5;
 /// Largest count shown in full; above it the badge reads "999+".
 pub const COUNT_CAP: u32 = 999;
 
@@ -151,12 +149,13 @@ impl CountBadge {
     }
 }
 
-/// The text of a count, capped at [`COUNT_CAP`].
-pub fn count_text(count: u32) -> String {
+/// The text of a count in the locale's digits and grouping, capped at
+/// [`COUNT_CAP`].
+pub fn count_text(i18n: &I18n, count: u32) -> String {
     if count > COUNT_CAP {
-        format!("{COUNT_CAP}+")
+        format!("{}+", i18n.count(i64::from(COUNT_CAP)))
     } else {
-        count.to_string()
+        i18n.count(i64::from(count))
     }
 }
 
@@ -242,7 +241,7 @@ fn label_text<'a, M: 'a>(label: Label<'a>, size: f32, ink: Color, is_on: bool) -
 }
 
 fn mono_text<'a, M: 'a>(value: String, size: f32, ink: Color) -> Element<'a, M> {
-    text(Label::from(signex_i18n::UserText::new(value)))
+    text(UserText::new(value))
         .size(size)
         .font(Font::MONOSPACE)
         .color(ink)
@@ -250,11 +249,26 @@ fn mono_text<'a, M: 'a>(value: String, size: f32, ink: Color) -> Element<'a, M> 
         .boxed()
 }
 
-/// One chip: a pill with a label and an optional count. A chip without a
-/// press message is drawn faded and inert.
+/// One chip: a pill with a label and an optional count, written in the
+/// locale of `i18n`. A chip without a press message is drawn faded and
+/// inert.
 pub fn chip<'a, M: Clone + 'a>(
     label: impl Into<Label<'a>>,
     count: Option<u32>,
+    is_on: bool,
+    style: ChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    let count = count.map(|n| count_text(i18n, n));
+    pill(label.into(), count, is_on, style, metrics, on_press)
+}
+
+/// A chip whose count, if any, is already written out.
+fn pill<'a, M: Clone + 'a>(
+    label: Label<'a>,
+    count: Option<String>,
     is_on: bool,
     style: ChipStyle,
     metrics: ChipMetrics,
@@ -263,17 +277,17 @@ pub fn chip<'a, M: Clone + 'a>(
     let alpha = if on_press.is_some() {
         1.0
     } else {
-        DISABLED_ALPHA
+        DISABLED_OPACITY
     };
     let ink = faded(if is_on { style.on_ink } else { style.ink }, alpha);
     let mut content: Row<Element<'a, M>> = Row::new()
         .spacing(metrics.gap)
         .height(Length::Fill)
         .align_y(Alignment::Center);
-    content = content.push(label_text(label.into(), metrics.text_size, ink, is_on));
-    if let Some(n) = count {
+    content = content.push(label_text(label, metrics.text_size, ink, is_on));
+    if let Some(count) = count {
         content = content.push(mono_text(
-            count_text(n),
+            count,
             metrics.caption_size,
             faded(ink, COUNT_ALPHA),
         ));
@@ -324,7 +338,7 @@ where
     let mut row: Row<Element<'a, M>> = Row::new().spacing(metrics.row_gap);
     for (value, label) in options {
         let on_press = Some(on_select(value));
-        row = row.push(chip(
+        row = row.push(pill(
             label,
             None,
             value == selected,
@@ -336,13 +350,15 @@ where
     row.wrap().vertical_spacing(metrics.row_gap).boxed()
 }
 
-/// A wrapping row of toggle chips, each with an optional count. A chip is
-/// on when `active` holds its key; `on_toggle` maps the key to a message.
+/// A wrapping row of toggle chips, each with an optional count written in
+/// the locale of `i18n`. A chip is on when `active` holds its key;
+/// `on_toggle` maps the key to a message.
 pub fn filter_chips<'a, K, M>(
     options: impl IntoIterator<Item = (K, Label<'a>, Option<u32>)>,
     active: &FilterSet<K>,
     style: ChipStyle,
     metrics: ChipMetrics,
+    i18n: &I18n,
     on_toggle: impl Fn(K) -> M + 'a,
 ) -> Element<'a, M>
 where
@@ -358,6 +374,7 @@ where
             active.is_on(key),
             style,
             metrics,
+            i18n,
             on_press,
         ));
     }
@@ -428,12 +445,13 @@ fn count_badge<'a, M: 'a>(
     style: TabChipStyle,
     metrics: ChipMetrics,
     alpha: f32,
+    i18n: &I18n,
 ) -> Option<Element<'a, M>> {
     let n = count?;
     match CountBadge::for_count(count) {
         CountBadge::Hidden => None,
         CountBadge::Zero => Some(mono_text(
-            count_text(n),
+            count_text(i18n, n),
             metrics.caption_size,
             faded(style.zero_ink, alpha),
         )),
@@ -442,7 +460,7 @@ fn count_badge<'a, M: 'a>(
             let radius = ChipMetrics::pill_radius(metrics.badge_height);
             Some(
                 container(mono_text(
-                    count_text(n),
+                    count_text(i18n, n),
                     metrics.badge_text,
                     faded(style.badge.ink, alpha),
                 ))
@@ -464,13 +482,15 @@ fn count_badge<'a, M: 'a>(
     }
 }
 
-/// A bar of tabs that carry counts, such as a constraint-domain bar.
-/// `on_select` maps the picked tab's value to the caller's message.
+/// A bar of tabs that carry counts, written in the locale of `i18n`, such
+/// as a constraint-domain bar. `on_select` maps the picked tab's value to
+/// the caller's message.
 pub fn tab_chips<'a, V, M>(
     tabs: impl IntoIterator<Item = TabChip<'a, V>>,
     selected: V,
     style: TabChipStyle,
     metrics: ChipMetrics,
+    i18n: &I18n,
     on_select: impl Fn(V) -> M + 'a,
 ) -> Element<'a, M>
 where
@@ -480,14 +500,14 @@ where
     let mut bar: Row<Element<'a, M>> = Row::new().spacing(metrics.tab_spacing);
     for tab in tabs {
         let is_on = tab.value == selected;
-        let alpha = if tab.is_dimmed { DIMMED_ALPHA } else { 1.0 };
+        let alpha = if tab.is_dimmed { DISABLED_OPACITY } else { 1.0 };
         let ink = faded(if is_on { style.on_ink } else { style.ink }, alpha);
         let mut content: Row<Element<'a, M>> = Row::new()
             .spacing(metrics.tab_gap)
             .height(Length::Fill)
             .align_y(Alignment::Center);
         content = content.push(label_text(tab.label, metrics.text_size, ink, is_on));
-        if let Some(badge) = count_badge(tab.count, style, metrics, alpha) {
+        if let Some(badge) = count_badge(tab.count, style, metrics, alpha, i18n) {
             content = content.push(badge);
         }
         let radius = metrics.tab_radius;
@@ -526,7 +546,7 @@ mod tests {
 
     /// Fixture text for the tests.
     fn sample(text: &str) -> Label<'static> {
-        signex_i18n::UserText::new(text).into()
+        crate::raw(text.to_owned())
     }
 
     #[test]
@@ -558,9 +578,9 @@ mod tests {
 
     #[test]
     fn count_text_caps_large_counts() {
-        assert_eq!(count_text(0), "0");
-        assert_eq!(count_text(COUNT_CAP), "999");
-        assert_eq!(count_text(COUNT_CAP + 1), "999+");
+        assert_eq!(count_text(I18n::en_us_ref(), 0), "0");
+        assert_eq!(count_text(I18n::en_us_ref(), COUNT_CAP), "999");
+        assert_eq!(count_text(I18n::en_us_ref(), COUNT_CAP + 1), "999+");
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -643,6 +663,7 @@ mod tests {
             &set,
             style(),
             m,
+            I18n::en_us_ref(),
             |k| k,
         );
         let tone = ChipTone {
@@ -650,7 +671,8 @@ mod tests {
             ink: Color::BLACK,
         };
         let _: Element<'_, Kind> = kind_chip(sample("panel"), tone, m);
-        let _: Element<'_, Kind> = chip(sample("Off"), Some(2), false, style(), m, None);
+        let i18n = I18n::en_us_ref();
+        let _: Element<'_, Kind> = chip(sample("Off"), Some(2), false, style(), m, i18n, None);
         let _: Element<'_, Kind> = tab_chips(
             [
                 TabChip::new(Kind::Errors, sample("Clearance")).count(4),
@@ -660,6 +682,7 @@ mod tests {
             Kind::Errors,
             tab_style(),
             m,
+            I18n::en_us_ref(),
             |k| k,
         );
     }

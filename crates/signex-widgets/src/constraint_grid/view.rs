@@ -1,18 +1,20 @@
 //! The grid view: find box, group headers, column headers and the row
-//! hierarchy. Pure: `&ConstraintGrid -> Element<GridMessage>`; the caller
-//! maps it into its own message (`.map(Message::Rules)`).
+//! hierarchy. Pure: the grid's view state and the caller's [`CellValues`]
+//! in, `Element<GridMessage>` out; the caller maps it into its own message
+//! (`.map(Message::Rules)`).
 
 use iced::alignment::Vertical;
 use iced::widget::{Column, Row, Space, container, mouse_area, scrollable};
 use iced::{Background, Border, Element, Length, Padding, Theme, Widget};
-use signex_i18n::{I18n, UserText};
+use signex_i18n::UserText;
 
 use super::cell;
-use super::model::{CellRef, ColumnGroup, ConstraintGrid, VisibleRow};
+use super::model::{CellRef, CellValues, ColumnGroup, ConstraintGrid, VisibleRow};
 use super::style::{GridMetrics, GridStyle, GridText};
 use super::update::GridMessage;
 use crate::chevron::chevron;
-use crate::{Label, button, text, text_input};
+use crate::theme_ext::HAIRLINE;
+use crate::{Label, LengthFormat, button, text, text_input};
 
 /// Width of one column group as laid out.
 fn group_width(grid: &ConstraintGrid, group: &ColumnGroup, m: GridMetrics) -> f32 {
@@ -60,7 +62,7 @@ fn header_cell<'a>(
         })),
         border: Border {
             color: style.line,
-            width: 0.5,
+            width: HAIRLINE,
             ..Border::default()
         },
         ..container::Style::default()
@@ -100,7 +102,7 @@ fn group_header<'a>(
             text_color: style.ink,
             border: Border {
                 color: style.line,
-                width: 0.5,
+                width: HAIRLINE,
                 ..Border::default()
             },
             ..button::Style::default()
@@ -188,7 +190,7 @@ fn name_cell<'a>(
         background: is_selected_row.then_some(Background::Color(style.accent_soft)),
         border: Border {
             color: style.line,
-            width: 0.5,
+            width: HAIRLINE,
             ..Border::default()
         },
         ..container::Style::default()
@@ -196,14 +198,14 @@ fn name_cell<'a>(
     .boxed()
 }
 
-fn body_row<'a>(
-    grid: &'a ConstraintGrid,
+fn body_row<'a, V: CellValues>(
+    source: &cell::CellSource<'a, '_, V>,
     visible: VisibleRow,
-    i18n: &I18n,
     words: &GridText<'a>,
     style: GridStyle,
 ) -> Element<'a, GridMessage> {
     let m = style.metrics();
+    let grid = source.grid;
     let mut line: Row<Element<'a, GridMessage>> = Row::new().push(name_cell(grid, visible, style));
     for group in grid.groups() {
         if grid.is_group_collapsed(group.id) {
@@ -217,7 +219,7 @@ fn body_row<'a>(
         }
         for column in &group.columns {
             let at = CellRef::new(visible.id, column.id);
-            line = line.push(cell::view(grid, column, at, i18n, words, style));
+            line = line.push(cell::view(source, column, at, words, style));
         }
     }
     line.boxed()
@@ -240,9 +242,12 @@ pub fn find_box<'a>(
 }
 
 /// The constraint grid: the find box over a both-ways scrollable table.
+/// `values` is the caller's view of the cells; `format` its locale and
+/// display unit.
 pub fn view<'a>(
     grid: &'a ConstraintGrid,
-    i18n: &I18n,
+    values: &impl CellValues,
+    format: LengthFormat<'_>,
     words: &GridText<'a>,
     style: GridStyle,
 ) -> Element<'a, GridMessage> {
@@ -250,8 +255,13 @@ pub fn view<'a>(
     let [group_row, column_row] = headers(grid, words, style);
     let mut table: Column<Element<'a, GridMessage>> =
         Column::new().push(group_row).push(column_row);
+    let source = cell::CellSource {
+        grid,
+        values,
+        format,
+    };
     for visible in grid.visible_rows() {
-        table = table.push(body_row(grid, visible, i18n, words, style));
+        table = table.push(body_row(&source, visible, words, style));
     }
     let table = table.width(Length::Fixed(grid_width(grid, m)));
     let body = scrollable(table)

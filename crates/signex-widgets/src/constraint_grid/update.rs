@@ -1,6 +1,10 @@
-//! The grid's messages and its one mutation site.
+//! The grid's messages and its one mutation site. The mutation is view
+//! state only; a value edit comes back as a [`GridChange`].
 
-use super::model::{CellEdit, CellRef, CellValue, ColumnKind, ConstraintGrid, GroupId, RowId};
+use super::model::{
+    CellEdit, CellRef, CellValue, CellValues, ColumnKind, ConstraintGrid, GroupId, RowId,
+};
+use crate::LengthFormat;
 
 /// What happened in the grid.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,8 +33,9 @@ pub enum GridMessage {
     ColumnQuerySubmitted,
 }
 
-/// A value change the caller stores in its rules. The grid has already
-/// applied it to itself.
+/// A value change for the caller to store in its rules. The grid holds no
+/// values: the next view reads the stored change back through
+/// [`CellValues`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GridChange {
     ValueSet { cell: CellRef, value: CellValue },
@@ -38,12 +43,14 @@ pub enum GridChange {
 }
 
 impl ConstraintGrid {
-    /// Apply `message`. `fold` is the locale's search fold (pass
-    /// `|s| i18n.fold_for_search(s)`). Returns the value change, if any.
+    /// Apply `message` to the view state. `values` is the caller's view of
+    /// the cells, `format` its locale and display unit (the find box folds
+    /// with the locale's search fold). Returns the value change, if any.
     pub fn update(
         &mut self,
         message: GridMessage,
-        fold: impl Fn(&str) -> String,
+        values: &impl CellValues,
+        format: LengthFormat<'_>,
     ) -> Option<GridChange> {
         match message {
             GridMessage::RowToggled(row) => {
@@ -55,7 +62,7 @@ impl ConstraintGrid {
                 None
             }
             GridMessage::CellPressed(cell) => {
-                self.press_cell(cell);
+                self.press_cell(cell, values, format);
                 None
             }
             GridMessage::EditTextChanged(text) => {
@@ -65,39 +72,39 @@ impl ConstraintGrid {
                 }
                 None
             }
-            GridMessage::EditSubmitted => self.submit_edit(),
+            GridMessage::EditSubmitted => self.submit_edit(values, format),
             GridMessage::EditCancelled => {
                 self.edit = None;
                 None
             }
             GridMessage::ChoicePicked(cell, index) => {
                 self.edit = None;
-                self.write(cell, CellValue::Choice(index))
+                self.write(cell, CellValue::Choice(index), values)
             }
             GridMessage::FlagToggled(cell, on) => {
                 self.selected = Some(cell);
-                self.write(cell, CellValue::Flag(on))
+                self.write(cell, CellValue::Flag(on), values)
             }
             GridMessage::CellReset(cell) => {
                 if self.edit.as_ref().is_some_and(|e| e.cell == cell) {
                     self.edit = None;
                 }
-                self.clear(cell)
+                clear(cell, values)
             }
             GridMessage::ColumnQueryChanged(query) => {
                 self.column_query = query;
                 self.found = None;
-                self.find_next(&fold);
+                self.find_next(format);
                 None
             }
             GridMessage::ColumnQuerySubmitted => {
-                self.find_next(&fold);
+                self.find_next(format);
                 None
             }
         }
     }
 
-    fn press_cell(&mut self, cell: CellRef) {
+    fn press_cell(&mut self, cell: CellRef, values: &impl CellValues, format: LengthFormat<'_>) {
         self.selected = Some(cell);
         let Some(column) = self.column(cell.column) else {
             return;
@@ -107,8 +114,8 @@ impl ConstraintGrid {
             // empty editor shows the inherited value as its placeholder.
             ColumnKind::Length => Some(CellEdit {
                 cell,
-                text: match self.own_value(cell) {
-                    Some(CellValue::Length(mm)) => format_mm(mm),
+                text: match values.own_value(cell) {
+                    Some(CellValue::Length(mm)) => format.field_text(mm),
                     _ => String::new(),
                 },
                 is_invalid: false,
@@ -123,19 +130,29 @@ impl ConstraintGrid {
         };
     }
 
-    fn submit_edit(&mut self) -> Option<GridChange> {
+    fn submit_edit(
+        &mut self,
+        values: &impl CellValues,
+        format: LengthFormat<'_>,
+    ) -> Option<GridChange> {
         let edit = self.edit.as_ref()?;
         let cell = edit.cell;
         let text = edit.text.trim();
         // An empty editor means "inherit": drop the row's own value.
         if text.is_empty() {
             self.edit = None;
-            return self.clear(cell);
+            return clear(cell, values);
         }
-        match parse_mm(text) {
-            Some(mm) => {
+        // A length the column refuses (a negative one) is as invalid as
+        // text that is not a number.
+        let value = format
+            .parse(text)
+            .map(CellValue::Length)
+            .filter(|v| self.column(cell.column).is_some_and(|c| c.accepts(*v)));
+        match value {
+            Some(value) => {
                 self.edit = None;
-                self.write(cell, CellValue::Length(mm))
+                self.write(cell, value, values)
             }
             None => {
                 if let Some(edit) = &mut self.edit {
@@ -146,25 +163,26 @@ impl ConstraintGrid {
         }
     }
 
-    fn write(&mut self, cell: CellRef, value: CellValue) -> Option<GridChange> {
+    /// The change that sets `value` on `cell`, unless the column refuses it
+    /// or the row already holds it.
+    fn write(
+        &self,
+        cell: CellRef,
+        value: CellValue,
+        values: &impl CellValues,
+    ) -> Option<GridChange> {
         if self.row(cell.row).is_none() || !self.column(cell.column)?.accepts(value) {
             return None;
         }
-        if self.values.get(&cell) == Some(&value) {
+        if values.own_value(cell) == Some(value) {
             return None;
         }
-        self.values.insert(cell, value);
         Some(GridChange::ValueSet { cell, value })
     }
 
-    fn clear(&mut self, cell: CellRef) -> Option<GridChange> {
-        self.values
-            .remove(&cell)
-            .map(|_| GridChange::ValueCleared { cell })
-    }
-
     /// Move `found` to the match after it (wrapping), opening its group.
-    fn find_next(&mut self, fold: &impl Fn(&str) -> String) {
+    fn find_next(&mut self, format: LengthFormat<'_>) {
+        let fold = |s: &str| format.i18n.fold_for_search(s);
         let matches = self.matching_columns(&self.column_query, fold);
         let next = match self
             .found
@@ -180,26 +198,15 @@ impl ConstraintGrid {
     }
 }
 
+/// The change that drops `cell`'s own value, if it has one.
+fn clear(cell: CellRef, values: &impl CellValues) -> Option<GridChange> {
+    values
+        .own_value(cell)
+        .map(|_| GridChange::ValueCleared { cell })
+}
+
 fn toggle<T: Ord>(set: &mut std::collections::BTreeSet<T>, item: T) {
     if !set.remove(&item) {
         set.insert(item);
-    }
-}
-
-/// Parse a typed length in mm. A decimal comma is read as a point; a
-/// negative, non-finite or non-numeric entry is refused.
-pub fn parse_mm(text: &str) -> Option<f64> {
-    let mm: f64 = text.trim().replace(',', ".").parse().ok()?;
-    (mm.is_finite() && mm >= 0.0).then_some(mm)
-}
-
-/// A length for the inline editor: up to four decimals, no trailing zeros.
-pub fn format_mm(mm: f64) -> String {
-    let fixed = format!("{mm:.4}");
-    let trimmed = fixed.trim_end_matches('0').trim_end_matches('.');
-    if trimmed.is_empty() || trimmed == "-" {
-        "0".to_string()
-    } else {
-        trimmed.to_string()
     }
 }

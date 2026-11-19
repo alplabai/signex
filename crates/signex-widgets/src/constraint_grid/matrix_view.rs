@@ -1,16 +1,18 @@
-//! The class-to-class matrix view. Pure: `&ClassMatrix ->
-//! Element<MatrixMessage>`. Written values are full ink, fallbacks muted,
-//! the mirror half inert, and the pinned cell carries the accent ring.
+//! The class-to-class matrix view. Pure: the matrix's view state and the
+//! caller's [`PairValues`] in, `Element<MatrixMessage>` out. Written values
+//! are full ink, fallbacks muted, the mirror half inert, and the pinned cell
+//! carries the accent ring.
 
 use iced::alignment::Vertical;
 use iced::widget::{Column, Row, Space, container, mouse_area};
 use iced::{Background, Border, Element, Length, Padding, Theme, Widget};
-use signex_i18n::{I18n, UserText};
+use signex_i18n::UserText;
 
-use super::cell::{frame, length_input, length_label, reset_glyph, strong_font};
-use super::matrix::{ClassMatrix, ClassPair, MatrixMessage, PairClearance};
+use super::cell::{frame, length_input, reset_glyph, strong_font};
+use super::matrix::{ClassMatrix, ClassPair, MatrixMessage, PairClearance, PairValues};
 use super::style::GridStyle;
-use crate::{Label, text, tooltip};
+use crate::theme_ext::HAIRLINE;
+use crate::{Label, LengthFormat, text, tooltip};
 
 /// Widget id of the matrix's inline editor.
 pub const MATRIX_EDITOR_ID: &str = "constraint-matrix-cell-editor";
@@ -42,7 +44,7 @@ fn name_cell<'a>(name: &'a str, width: f32, style: GridStyle) -> Element<'a, Mat
         background: Some(Background::Color(style.header_fill)),
         border: Border {
             color: style.line,
-            width: 0.5,
+            width: HAIRLINE,
             ..Border::default()
         },
         ..container::Style::default()
@@ -59,7 +61,7 @@ fn inert_cell<'a>(style: GridStyle) -> Element<'a, MatrixMessage> {
             background: Some(Background::Color(style.inert_fill)),
             border: Border {
                 color: style.line,
-                width: 0.5,
+                width: HAIRLINE,
                 ..Border::default()
             },
             ..container::Style::default()
@@ -69,13 +71,14 @@ fn inert_cell<'a>(style: GridStyle) -> Element<'a, MatrixMessage> {
 
 fn live_cell<'a>(
     matrix: &'a ClassMatrix,
+    values: &impl PairValues,
     pair: ClassPair,
-    i18n: &I18n,
+    format: LengthFormat<'_>,
     words: &MatrixText<'a>,
     style: GridStyle,
 ) -> Element<'a, MatrixMessage> {
     let m = style.metrics();
-    let Some(clearance) = matrix.clearance(pair) else {
+    let Some(clearance) = matrix.clearance(values, pair) else {
         return inert_cell(style);
     };
     let is_pinned = matrix.pinned() == Some(pair);
@@ -83,14 +86,9 @@ fn live_cell<'a>(
     let is_written = matches!(clearance, PairClearance::Written(_));
 
     let content: Element<'a, MatrixMessage> = if let Some(edit) = edit {
-        let fallback = matrix
-            .classes()
-            .get(pair.row)
-            .zip(matrix.classes().get(pair.col))
-            .map(|(a, b)| a.clearance_mm.max(b.clearance_mm));
-        let placeholder = fallback.map_or_else(
+        let placeholder: Label<'a> = matrix.fallback(values, pair).map_or_else(
             || UserText::new(String::new()).into(),
-            |mm| length_label(i18n, mm),
+            |mm| format.label(mm),
         );
         length_input(
             MATRIX_EDITOR_ID,
@@ -102,7 +100,7 @@ fn live_cell<'a>(
             style,
         )
     } else {
-        let mut value = text(length_label(i18n, clearance.mm()))
+        let mut value = text(format.label(clearance.mm()))
             .size(style.text_size)
             .color(if is_written {
                 style.ink
@@ -155,10 +153,12 @@ fn live_cell<'a>(
 }
 
 /// The class-to-class matrix: class names down and across, one clearance
-/// per pair in the lower triangle.
+/// per pair in the lower triangle. `values` is the caller's view of the
+/// clearances; `format` its locale and display unit.
 pub fn matrix_view<'a>(
     matrix: &'a ClassMatrix,
-    i18n: &I18n,
+    values: &impl PairValues,
+    format: LengthFormat<'_>,
     words: &MatrixText<'a>,
     style: GridStyle,
 ) -> Element<'a, MatrixMessage> {
@@ -176,7 +176,14 @@ pub fn matrix_view<'a>(
             Row::new().push(name_cell(&class.name, name_width, style));
         for col in 0..classes.len() {
             line = line.push(if ClassPair::is_live(row, col) {
-                live_cell(matrix, ClassPair::new(row, col), i18n, words, style)
+                live_cell(
+                    matrix,
+                    values,
+                    ClassPair::new(row, col),
+                    format,
+                    words,
+                    style,
+                )
             } else {
                 inert_cell(style)
             });

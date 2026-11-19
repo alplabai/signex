@@ -4,24 +4,26 @@
 
 use iced::widget::{Row, column};
 use iced::{Color, Element, Widget};
+use signex_i18n::I18n;
 use signex_types::theme::{Color as ThemeColor, ThemeTokens};
 use signex_widgets::chips::{
     ChipMetrics, ChipStyle, ChipTone, FilterSet, TabChip, TabChipStyle, choice_chips, filter_chips,
     kind_chip, tab_chips,
 };
-use signex_widgets::{Label, SegmentedStyle, segmented};
+use signex_widgets::theme_ext::TypeScale;
+use signex_widgets::{Label, SegmentedStyle, raw, segmented};
 
 use crate::catalog::Message;
 use crate::theme;
-use signex_i18n::UserText;
 
-/// Sample text for this page: fixture content, not UI copy.
+/// Sample text for this page: fixture content, not catalog copy. The one
+/// `raw` site of the page.
 fn sample_text(text: impl Into<String>) -> Label<'static> {
-    UserText::new(text).into()
+    raw(text.into())
 }
 
 /// Body size of the Graphite type scale.
-const BODY: f32 = 12.0;
+const BODY: f32 = TypeScale::DEFAULT.body;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Sample {
@@ -90,6 +92,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         &FilterSet::new([Sample::A, Sample::D]),
         chip_style(tokens),
         m,
+        I18n::en_us_ref(),
         ignore,
     );
     let neutral = ChipTone {
@@ -115,6 +118,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         Sample::B,
         tab_style(tokens),
         m,
+        I18n::en_us_ref(),
         ignore,
     );
     let seg_style = SegmentedStyle::new(

@@ -5,17 +5,27 @@ use std::sync::LazyLock;
 
 use iced::widget::{Row, Space, container, stack};
 use iced::{Background, Border, Element, Point, Theme, Vector, Widget};
+use signex_i18n::I18n;
+use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::LengthFormat;
 use signex_widgets::dimension_label::{
     DimensionLabel, DimensionLabelMessage, DimensionLabelStyle, DimensionLabels, DragHandle,
     LabelAnchor, ValueLimits,
 };
+use signex_widgets::theme_ext::TypeScale;
 
 use crate::catalog::Message;
 use crate::theme;
 
-/// Label text size; the drawing and every label metric derive from it.
-const TEXT_SIZE: f32 = 11.0;
+/// The samples show millimetres in the en-US locale.
+fn format() -> LengthFormat<'static> {
+    LengthFormat::new(I18n::en_us_ref(), Unit::Mm)
+}
+
+/// Label text size, the caption step of the type scale; the drawing and
+/// every label metric derive from it.
+const TEXT_SIZE: f32 = TypeScale::DEFAULT.caption;
 /// Drawing size, in ems.
 const DRAWING_EM: (f32, f32) = (34.0, 14.0);
 
@@ -30,14 +40,14 @@ static LABELS: LazyLock<Vec<DimensionLabel<'static>>> = LazyLock::new(|| {
         step: 0.005,
     };
     vec![
-        DimensionLabel::new(0.15, "mm", Point::new(em(17.0), em(2.5)))
+        DimensionLabel::new(0.15, format(), Point::new(em(17.0), em(2.5)))
             .handle(DragHandle {
                 at: Point::new(em(21.0), em(7.0)),
                 axis: Vector::new(1.0, 0.0),
                 value_per_px: 0.005,
             })
             .limits(limits),
-        DimensionLabel::new(0.2, "mm", Point::new(em(3.0), em(11.5)))
+        DimensionLabel::new(0.2, format(), Point::new(em(3.0), em(11.5)))
             .anchor(LabelAnchor::Start)
             .handle(DragHandle {
                 at: Point::new(em(8.0), em(5.0)),
@@ -45,7 +55,7 @@ static LABELS: LazyLock<Vec<DimensionLabel<'static>>> = LazyLock::new(|| {
                 value_per_px: 0.005,
             })
             .limits(limits),
-        DimensionLabel::new(1.0, "mm", Point::new(em(31.0), em(11.5))).anchor(LabelAnchor::End),
+        DimensionLabel::new(1.0, format(), Point::new(em(31.0), em(11.5))).anchor(LabelAnchor::End),
     ]
 });
 

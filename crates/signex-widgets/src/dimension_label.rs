@@ -3,7 +3,8 @@
 //! Each label shows one value of the rule. A press opens an inline field:
 //! Enter commits, Tab commits and opens the next label (Shift+Tab the
 //! previous one), Esc cancels. A label may carry a drag handle that changes
-//! the value along an axis. The caller owns the values; [`DimensionLabels`]
+//! the value along an axis. The caller owns the values, in millimetres, and
+//! passes its locale and display unit with each label; [`DimensionLabels`]
 //! holds only the interaction (which label is open, which handle is held)
 //! and reports a [`DimensionCommitted`] the caller writes to its rule.
 //!
@@ -26,7 +27,7 @@ use iced::{
 };
 use signex_i18n::UserText;
 
-use crate::{Label, Translate, button, text, text_input};
+use crate::{Label, LengthFormat, Translate, button, text, text_input};
 
 /// Average advance of a monospace glyph, in ems; sizes a label before layout.
 const GLYPH_EM: f32 = 0.62;
@@ -48,8 +49,6 @@ const HANDLE_EM: f32 = 1.0;
 const HANDLE_HIT_EM: f32 = 0.5;
 /// Ring width of a drag handle, in ems.
 const HANDLE_RING_EM: f32 = 0.2;
-/// Decimals the inline field opens with (trailing zeros dropped).
-const DRAFT_DECIMALS: usize = 3;
 /// Drag results keep nine decimals, which drops float noise.
 const NOISE_SCALE: f64 = 1e9;
 
@@ -133,16 +132,18 @@ impl DragHandle {
     }
 }
 
-/// One value shown on the drawing. The caller builds these from its rule
-/// every frame; `value` is in the units the caller displays.
+/// One length shown on the drawing. The caller builds these from its rule
+/// every frame; `value`, the limits and the handle's `value_per_px` are in
+/// millimetres, and `format` decides the unit the label shows and reads.
 #[derive(Debug, Clone)]
 pub struct DimensionLabel<'a> {
     /// Text before the value ("Width", "Gap", "≥").
     pub caption: Option<Label<'a>>,
+    /// The length in millimetres.
     pub value: f64,
-    /// Unit symbol after the value ("mm", "mil", "°"); empty for none.
-    pub unit: &'a str,
-    /// Decimals shown on the label.
+    /// The caller's locale and display unit.
+    pub format: LengthFormat<'a>,
+    /// Decimals shown on the label, in the display unit.
     pub decimals: usize,
     /// Anchor point, in drawing pixels.
     pub at: Point,
@@ -152,12 +153,13 @@ pub struct DimensionLabel<'a> {
 }
 
 impl<'a> DimensionLabel<'a> {
-    /// A label at `at` showing `value` with two decimals and no handle.
-    pub fn new(value: f64, unit: &'a str, at: Point) -> Self {
+    /// A label at `at` showing `value` (mm) in `format`, with two decimals
+    /// and no handle.
+    pub fn new(value: f64, format: LengthFormat<'a>, at: Point) -> Self {
         Self {
             caption: None,
             value,
-            unit,
+            format,
             decimals: 2,
             at,
             anchor: LabelAnchor::Middle,
@@ -191,14 +193,11 @@ impl<'a> DimensionLabel<'a> {
         self
     }
 
-    /// The value as shown on the label, unit included.
+    /// The value as shown on the label: the locale's number in the display
+    /// unit, then the unit symbol.
     pub fn value_text(&self) -> String {
-        let v = format_value(self.value, self.decimals);
-        if self.unit.is_empty() {
-            v
-        } else {
-            format!("{v} {}", self.unit)
-        }
+        let number = self.format.number_rounded(self.value, self.decimals);
+        format!("{number} {}", self.format.unit)
     }
 
     /// The label's box for `text_size`, in drawing pixels.
@@ -307,6 +306,11 @@ impl DimensionLabels {
         self.editing.as_ref().map(|e| e.index)
     }
 
+    /// The text in the open field.
+    pub fn draft(&self) -> Option<&str> {
+        self.editing.as_ref().map(|e| e.draft.as_str())
+    }
+
     /// Index of the label whose handle is held.
     pub fn dragging_index(&self) -> Option<usize> {
         self.drag.map(|d| d.index)
@@ -351,7 +355,7 @@ impl DimensionLabels {
                 DimensionLabelOutcome::default()
             }
             M::DraftSubmitted => DimensionLabelOutcome {
-                committed: self.take_draft(),
+                committed: self.take_draft(labels),
                 focus_input: false,
             },
             M::DraftBlurred(index) => {
@@ -384,7 +388,7 @@ impl DimensionLabels {
         self.drag = None;
         self.editing = Some(Editing {
             index,
-            draft: draft_text(label.value),
+            draft: label.format.field_text(label.value),
         });
         DimensionLabelOutcome {
             committed: None,
@@ -392,19 +396,25 @@ impl DimensionLabels {
         }
     }
 
-    fn take_draft(&mut self) -> Option<DimensionCommitted> {
+    /// Close the open field and read its text in its label's unit. Text
+    /// that is not a finite number commits nothing.
+    fn take_draft(&mut self, labels: &[DimensionLabel<'_>]) -> Option<DimensionCommitted> {
         let editing = self.editing.take()?;
-        parse_draft(&editing.draft).map(|value| DimensionCommitted {
-            index: editing.index,
-            value,
-        })
+        let label = labels.get(editing.index)?;
+        label
+            .format
+            .parse(&editing.draft)
+            .map(|value| DimensionCommitted {
+                index: editing.index,
+                value,
+            })
     }
 
     fn tab(&mut self, backward: bool, labels: &[DimensionLabel<'_>]) -> DimensionLabelOutcome {
         let Some(index) = self.editing_index() else {
             return DimensionLabelOutcome::default();
         };
-        let committed = self.take_draft();
+        let committed = self.take_draft(labels);
         let mut outcome = match next_index(index, labels.len(), backward) {
             Some(next) => self.open(next, labels),
             None => DimensionLabelOutcome::default(),
@@ -647,34 +657,6 @@ pub fn label_box(
     }
 }
 
-/// `value` with `decimals` decimals, `.` as the separator, never `-0`.
-pub fn format_value(value: f64, decimals: usize) -> String {
-    let text = format!("{value:.decimals$}");
-    if text.starts_with('-') && text[1..].chars().all(|c| c == '0' || c == '.') {
-        text[1..].to_owned()
-    } else {
-        text
-    }
-}
-
-/// The text an inline field opens with: up to three decimals, trailing
-/// zeros dropped.
-pub fn draft_text(value: f64) -> String {
-    let text = format_value(value, DRAFT_DECIMALS);
-    if text.contains('.') {
-        text.trim_end_matches('0').trim_end_matches('.').to_owned()
-    } else {
-        text
-    }
-}
-
-/// A typed value: `,` is read as `.` and `−` as `-`. `None` when it is not
-/// a finite number.
-pub fn parse_draft(draft: &str) -> Option<f64> {
-    let cleaned = draft.trim().replace(',', ".").replace('\u{2212}', "-");
-    cleaned.parse::<f64>().ok().filter(|v| v.is_finite())
-}
-
 /// The label Tab moves to from `index`, wrapping at both ends.
 pub fn next_index(index: usize, count: usize, backward: bool) -> Option<usize> {
     if count == 0 {
@@ -691,6 +673,17 @@ pub fn next_index(index: usize, count: usize, backward: bool) -> Option<usize> {
 mod tests {
     use super::*;
 
+    use signex_i18n::I18n;
+    use signex_types::coord::Unit;
+
+    fn mm() -> LengthFormat<'static> {
+        LengthFormat::new(I18n::en_us_ref(), Unit::Mm)
+    }
+
+    fn mil() -> LengthFormat<'static> {
+        LengthFormat::new(I18n::en_us_ref(), Unit::Mil)
+    }
+
     fn labels() -> Vec<DimensionLabel<'static>> {
         let handle = DragHandle {
             at: Point::new(100.0, 50.0),
@@ -703,12 +696,19 @@ mod tests {
             step: 0.005,
         };
         vec![
-            DimensionLabel::new(0.15, "mm", Point::new(40.0, 20.0))
+            DimensionLabel::new(0.15, mm(), Point::new(40.0, 20.0))
                 .handle(handle)
                 .limits(limits),
-            DimensionLabel::new(0.2, "mm", Point::new(80.0, 20.0)),
-            DimensionLabel::new(1.0, "mm", Point::new(120.0, 20.0)),
+            DimensionLabel::new(0.2, mm(), Point::new(80.0, 20.0)),
+            DimensionLabel::new(1.0, mm(), Point::new(120.0, 20.0)),
         ]
+    }
+
+    /// [`labels`] plus a fourth label shown in mil.
+    fn labels_with_mil() -> Vec<DimensionLabel<'static>> {
+        let mut items = labels();
+        items.push(DimensionLabel::new(0.254, mil(), Point::new(160.0, 20.0)));
+        items
     }
 
     fn committed(index: usize, value: f64) -> Option<DimensionCommitted> {
@@ -716,27 +716,42 @@ mod tests {
     }
 
     #[test]
-    fn draft_opens_with_three_decimals_and_no_trailing_zeros() {
-        assert_eq!(draft_text(0.15), "0.15");
-        assert_eq!(draft_text(1.0), "1");
-        assert_eq!(draft_text(0.12345), "0.123");
-        assert_eq!(draft_text(-0.0001), "0");
+    fn the_field_opens_with_the_value_in_its_display_unit() {
+        let items = labels_with_mil();
+        let mut s = DimensionLabels::default();
+        s.update(DimensionLabelMessage::LabelPressed(0), &items);
+        assert_eq!(s.draft(), Some("0.150"));
+        s.update(DimensionLabelMessage::LabelPressed(3), &items);
+        assert_eq!(s.draft(), Some("10.00"));
     }
 
     #[test]
-    fn parse_reads_comma_and_minus_sign_and_refuses_junk() {
-        assert_eq!(parse_draft(" 0,25 "), Some(0.25));
-        assert_eq!(parse_draft("\u{2212}0.1"), Some(-0.1));
-        assert_eq!(parse_draft("abc"), None);
-        assert_eq!(parse_draft("inf"), None);
-        assert_eq!(parse_draft(""), None);
+    fn a_typed_value_reads_in_the_display_unit_and_junk_commits_nothing() {
+        let items = labels_with_mil();
+        let typed = |index: usize, text: &str| {
+            let mut s = DimensionLabels::default();
+            s.update(DimensionLabelMessage::LabelPressed(index), &items);
+            s.update(DimensionLabelMessage::DraftEdited(text.into()), &items);
+            s.update(DimensionLabelMessage::DraftSubmitted, &items)
+                .committed
+                .map(|c| c.value)
+        };
+        assert_eq!(typed(1, " 0.25 "), Some(0.25));
+        assert_eq!(typed(1, "-0.1"), Some(-0.1), "validating is the rule's job");
+        let mils = typed(3, "20").expect("a number");
+        assert!((mils - 0.508).abs() < 1e-12);
+        assert_eq!(typed(1, "abc"), None);
+        assert_eq!(typed(1, "inf"), None);
+        assert_eq!(typed(1, ""), None);
     }
 
     #[test]
-    fn format_never_shows_negative_zero() {
-        assert_eq!(format_value(-0.001, 2), "0.00");
-        assert_eq!(format_value(-0.5, 2), "-0.50");
-        assert_eq!(format_value(0.2, 2), "0.20");
+    fn the_label_never_shows_negative_zero() {
+        let at = Point::new(0.0, 0.0);
+        assert_eq!(DimensionLabel::new(-0.001, mm(), at).value_text(), "0 mm");
+        assert_eq!(DimensionLabel::new(-0.5, mm(), at).value_text(), "-0.5 mm");
+        assert_eq!(DimensionLabel::new(0.2, mm(), at).value_text(), "0.2 mm");
+        assert_eq!(DimensionLabel::new(0.254, mil(), at).value_text(), "10 mil");
     }
 
     #[test]
