@@ -276,3 +276,134 @@ properties-title-block-today = { $field } (today)
 properties-value-shows = Shows { $value }
 # Why a part value's `=` expression does not evaluate. $error is the reason.
 properties-value-error = Error: { $error }
+# Sheet symbol Properties (#46). "Open Sheet" does what double-clicking the
+# symbol does.
+properties-sheet-open = Open Sheet
+properties-sheet-browse = Browse…
+# Title of the file dialog that picks the file a sheet symbol points at.
+properties-sheet-browse-title = Choose the sheet file
+properties-sheet-create = Create Sheet…
+properties-sheet-missing-title = No file for this sheet yet
+# $file is the file the sheet symbol points at, such as debug.snxsch.
+properties-sheet-missing-detail = { $file } is not in the project folder.
+properties-sheet-border = Border
+properties-sheet-fill = Fill
+properties-sheet-line-width = Line Width
+properties-section-entries = Entries
+properties-sheet-entries-note = Entries come from the child sheet
+properties-sheet-no-entries = No entries yet
+# Directions of a sheet entry.
+properties-entry-input = Input
+properties-entry-output = Output
+properties-entry-bidirectional = Bidirectional
+properties-entry-tri-state = Tri-state
+properties-entry-passive = Passive
+properties-entry-unspecified = Unspecified
+# Unit and axis marks inside a paired field (X 50.80 mm).
+properties-unit-mm = mm
+properties-unit-degrees = °
+properties-unit-pt = pt
+properties-axis-x = X
+properties-axis-y = Y
+properties-axis-w = W
+properties-axis-h = H
+properties-angle-start = Start
+properties-angle-end = End
+# Drawing shape Properties (#48).
+properties-drawing-position = Position
+properties-drawing-size = Size
+properties-drawing-center = Center
+properties-drawing-start = Start
+properties-drawing-end = End
+properties-drawing-radius = Radius
+properties-drawing-angles = Angles
+properties-drawing-width = Width
+properties-section-appearance = Appearance
+properties-fill-solid = Solid
+properties-fill-none-tip = No fill: only the border is drawn.
+properties-fill-outline-tip = Filled with the border colour.
+properties-fill-solid-tip = Filled with the sheet background, so it hides what is behind it.
+# Directive and No-ERC Properties (#49). Rule names come from the ERC
+# engine in English.
+properties-suppressed-rules = Suppressed rules
+# Header count of the rules a directive silences.
+properties-rules-off = { $count } off
+# $count is how many rules the ERC engine has.
+properties-all-rules = All rules · { $count } rules
+properties-rule-filter = Filter rules
+properties-all-rules-on = All rules is on: every rule is silenced here. Untick it to pick rules.
+# $query is the text typed in the rule filter.
+properties-rule-no-match = No rule matches “{ $query }”.
+# Multi-selection Properties (#51): the kind chips and sections.
+properties-kind-all = All
+properties-kind-parts = Parts
+properties-kind-labels = Labels
+properties-kind-wires = Wires
+properties-font-size = Font Size
+properties-degrees-short = { $degrees }°
+# $count is how many labels a click sets.
+properties-multi-mixed-both = Justify and Rotation are mixed; a click sets all { $count }.
+properties-multi-mixed-justify = Justify is mixed; a click sets all { $count }.
+properties-multi-mixed-rotation = Rotation is mixed; a click sets all { $count }.
+# Footer of a multi-selection. $kinds lists the counts, such as
+# "9 parts, 3 labels, 2 wires".
+properties-multi-footer = { $count } selected: { $kinds }
+properties-multi-footer-plain = { $count } selected
+properties-nothing-shared-title = Nothing to edit together
+properties-nothing-shared-body = Nothing in this selection has fields shared for editing. Selected: { $kinds }
+properties-count-parts = { $count ->
+    [one] 1 part
+   *[other] { $count } parts
+}
+properties-count-part-fields = { $count ->
+    [one] 1 part field
+   *[other] { $count } part fields
+}
+properties-count-labels = { $count ->
+    [one] 1 label
+   *[other] { $count } labels
+}
+properties-count-wires = { $count ->
+    [one] 1 wire
+   *[other] { $count } wires
+}
+properties-count-buses = { $count ->
+    [one] 1 bus
+   *[other] { $count } buses
+}
+properties-count-bus-entries = { $count ->
+    [one] 1 bus entry
+   *[other] { $count } bus entries
+}
+properties-count-junctions = { $count ->
+    [one] 1 junction
+   *[other] { $count } junctions
+}
+properties-count-no-connects = { $count ->
+    [one] 1 no-connect
+   *[other] { $count } no-connects
+}
+properties-count-no-erc = { $count ->
+    [one] 1 No-ERC directive
+   *[other] { $count } No-ERC directives
+}
+properties-count-sheet-entries = { $count ->
+    [one] 1 sheet entry
+   *[other] { $count } sheet entries
+}
+properties-count-text-notes = { $count ->
+    [one] 1 text note
+   *[other] { $count } text notes
+}
+properties-count-sheet-symbols = { $count ->
+    [one] 1 sheet symbol
+   *[other] { $count } sheet symbols
+}
+properties-count-drawings = { $count ->
+    [one] 1 drawing
+   *[other] { $count } drawings
+}
+properties-count-directives = { $count ->
+    [one] 1 directive
+   *[other] { $count } directives
+}
