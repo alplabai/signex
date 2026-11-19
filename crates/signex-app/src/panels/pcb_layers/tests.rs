@@ -302,12 +302,13 @@ fn a_tab_click_switches_to_view_options() {
     }
 }
 
-/// The On cell beside Single Layer Mode turns the mode on.
+/// The On cell beside Single Layer turns the mode on. m103: the caption is
+/// "Single Layer", the full name its tooltip.
 #[test]
 fn single_layer_mode_on_sends_the_toggle() {
     let ctx = context_with(&PcbLayerView::default(), options());
     let texts = texts(&ctx);
-    let row_y = find(&texts, "Single Layer Mode").bounds.center_y();
+    let row_y = find(&texts, "Single Layer").bounds.center_y();
     let on = texts
         .iter()
         .filter(|t| t.text == "On")
@@ -349,6 +350,142 @@ fn an_object_row_hides_and_fades_its_kind() {
     );
     // Rooms cannot be hidden yet: greyed, nothing sent.
     assert!(left_of(&ctx, "Rooms").is_empty());
+}
+
+/// m103: Configuration is one labelled field above the sections, greyed
+/// until presets exist; it sends nothing.
+#[test]
+fn the_configuration_field_is_greyed_and_sends_nothing() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    let texts = texts(&ctx);
+    let caption = find(&texts, "Configuration").bounds;
+    let field = find(&texts, "Default").bounds;
+    let general = find(&texts, "GENERAL SETTINGS").bounds;
+    assert!(caption.y < general.y, "above the sections");
+    assert!(
+        (field.center_y() - caption.center_y()).abs() < caption.height,
+        "the field beside its caption"
+    );
+    assert!(messages_on_click(panel(&ctx), WINDOW, "Default").is_empty());
+}
+
+/// m103: Show Grid is a switch beside its caption; it toggles the grid.
+#[test]
+fn the_show_grid_switch_toggles_the_grid() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    let label = find(&texts(&ctx), "Show Grid").bounds;
+    let sent = messages_along(&ctx, "Show Grid", label.x + label.width, WINDOW.width);
+    assert_eq!(shown(&sent), shown(&[PanelMsg::ToggleGrid]));
+}
+
+/// m103: All Objects reads Mixed in the Transparency column while the
+/// kinds differ, and its eye then shows every kind; with every kind shown
+/// there is no Mixed.
+#[test]
+fn all_objects_reads_mixed_while_the_kinds_differ() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    assert!(!listed(&ctx, "Mixed"));
+
+    let mut view = PcbLayerView::default();
+    view.set_object_visible(BoardObject::Tracks, false);
+    let ctx = context_with(&view, options());
+    let texts = texts(&ctx);
+    let all = find(&texts, "All Objects").bounds;
+    let mixed = find(&texts, "Mixed").bounds;
+    let column = find(&texts, "Transparency").bounds;
+    assert!(
+        (mixed.center_y() - all.center_y()).abs() < all.height,
+        "on the All Objects row"
+    );
+    assert!(
+        mixed.x >= column.x - 1.0,
+        "in the Transparency column: {mixed:?} {column:?}"
+    );
+    assert_eq!(
+        shown(&left_of(&ctx, "All Objects")),
+        shown(&[PanelMsg::PcbLayers(PcbViewMsg::ObjectVisibilitySet {
+            kind: None,
+            visible: true,
+        })])
+    );
+}
+
+/// The percent laid out on the row of `label`.
+fn percent_beside(ctx: &PanelContext, label: &str) -> LaidOutText {
+    let row = row_text(ctx, label);
+    texts(ctx)
+        .into_iter()
+        .find(|t| {
+            t.text.ends_with('%') && (t.bounds.center_y() - row.center_y()).abs() < row.height
+        })
+        .unwrap_or_else(|| panic!("no percent beside {label}"))
+}
+
+/// m103: Mask and Dim show what the view draws today, greyed (nothing
+/// sent), their percents lined up with the object rows'.
+#[test]
+fn mask_and_dim_show_todays_percentages() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    let dimmed = format!(
+        "{} %",
+        (signex_renderer::pcb::DIMMED_ALPHA * 100.0).round() as u32
+    );
+    for (label, value) in [
+        ("Dimmed Objects", dimmed.as_str()),
+        ("Highlighted Objects", "100 %"),
+        ("Masked Objects", dimmed.as_str()),
+    ] {
+        let percent = percent_beside(&ctx, label);
+        assert_eq!(percent.text, value, "{label}");
+        let right = percent.bounds.x + percent.bounds.width;
+        let tracks = percent_beside(&ctx, "Tracks").bounds;
+        assert!(
+            (right - (tracks.x + tracks.width)).abs() < 1.0,
+            "{label} lines up with the object rows"
+        );
+        assert!(
+            messages_along(&ctx, label, 0.0, WINDOW.width).is_empty(),
+            "{label} is greyed"
+        );
+    }
+}
+
+/// The eleven Additional Options, in their order.
+const ADDITIONAL_OPTIONS: [&str; 11] = [
+    "Test Points",
+    "Status Info",
+    "Pad Nets",
+    "Pad Numbers",
+    "Via Nets",
+    "Via Span",
+    "All Connections in Single Layer Mode",
+    "Net Color Override",
+    "Use Layer Colors for Connection Drawing",
+    "Repeated Net Names on Tracks",
+    "Special Strings",
+];
+
+/// m103: Additional Options is closed by default, its header counting the
+/// options that are on (none is honoured yet); opened, it lists the eleven
+/// options as greyed checkboxes that send nothing.
+#[test]
+fn additional_options_are_closed_with_a_count_and_list_greyed_checkboxes() {
+    let ctx = context_with(&PcbLayerView::default(), options());
+    assert!(listed(&ctx, "0/11"), "the header count");
+    for label in ADDITIONAL_OPTIONS {
+        assert!(!listed(&ctx, label), "{label} closed by default");
+    }
+
+    let mut open = context_with(&PcbLayerView::default(), options());
+    open.collapsed_sections
+        .insert("pcb_view_additional.open".to_string());
+    for label in ADDITIONAL_OPTIONS {
+        assert!(listed(&open, label), "{label} listed when open");
+        assert!(
+            messages_on_click(panel(&open), WINDOW, label).is_empty(),
+            "{label} is greyed"
+        );
+    }
 }
 
 #[test]

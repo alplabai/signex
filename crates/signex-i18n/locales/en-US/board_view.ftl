@@ -93,6 +93,8 @@ pcb-view-preset-default = Default
 # The 3D switch and the Single Layer Mode switch, and their states.
 pcb-view-3d = 3D
 pcb-view-single-layer = Single Layer Mode
+# The Single Layer Mode caption in View Options; the full name is its tooltip.
+pcb-view-single-layer-short = Single Layer
 pcb-view-off = Off
 pcb-view-on = On
 pcb-view-mono = Mono
@@ -115,6 +117,8 @@ pcb-view-object = { $kind ->
     [coordinates] Coordinates
    *[body_3d] 3D Body
 }
+# The Object column of Object Visibility, over the names of the kinds.
+pcb-view-object-column = Object
 # The Draft column (outline only) and the Transparency column.
 pcb-view-draft = Draft
 pcb-view-transparency = Transparency
@@ -126,7 +130,9 @@ pcb-view-percent = { $percent } %
 pcb-view-dimmed = Dimmed Objects
 pcb-view-highlighted = Highlighted Objects
 pcb-view-masked = Masked Objects
-# A toggle chip of Additional Options. $option is the chip's token.
+# The Additional Options header count: $on of the $total options are on.
+pcb-view-options-on = { $on }/{ $total }
+# A checkbox of Additional Options. $option is the option's token.
 pcb-view-option = { $option ->
     [test_points] Test Points
     [status_info] Status Info
