@@ -13,6 +13,7 @@ pub mod board_palette;
 mod buttons;
 mod dialog_buttons;
 mod dialog_kit;
+mod dialog_parts;
 mod dialog_shell;
 pub mod disabled;
 mod graphite;
@@ -41,8 +42,14 @@ pub use dialog_kit::{
     dialog_footer_height, dialog_footer_split, dialog_hint, dialog_list, dialog_message,
     dialog_section,
 };
+pub use dialog_parts::{
+    CalloutTone, dialog_callout, dialog_caption, dialog_field_label, dialog_head_row,
+    dialog_inline_error, dialog_row, dialog_rows, dialog_section_label, dirty_dot, file_kind_icon,
+    violet_pair,
+};
 pub use dialog_shell::{
     DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_icon_tile, dialog_intro,
+    dialog_intro_with,
 };
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 
