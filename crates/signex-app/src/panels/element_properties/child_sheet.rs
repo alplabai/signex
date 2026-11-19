@@ -11,8 +11,8 @@ use super::illustrations::sheet_symbol::{
     SHEET_NAME, entry_direction, sheet_symbol_illustration,
 };
 use super::placed_rows::{RowLook, push_location_section};
-use crate::panels::form_look;
 use crate::panels::SelectionFormMsg;
+use crate::panels::form_look;
 use crate::panels::multi_selection::{
     control_row, counted_section, hover_linked, illustration_view,
 };

@@ -24,8 +24,7 @@ use signex_widgets::property_illustration::{IllustrationHover, property_illustra
 use signex_widgets::text;
 
 use super::{
-    PanelContext, PanelMsg, PanelPalette, font_style_row, form_look, shape_fill_row,
-    wire_color_row,
+    PanelContext, PanelMsg, PanelPalette, font_style_row, form_look, shape_fill_row, wire_color_row,
 };
 use crate::styles::{Spacing, TypeScale};
 use rows::Look;

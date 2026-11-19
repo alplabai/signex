@@ -158,8 +158,8 @@ pub use placed_edit::{
     NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
 };
 pub use pre_placement::{
-    PlacementPosition, PositionField, PrePlacementData, PrePlacementKind,
-    PrePlacementPositionMsg, PrePlacementStyle,
+    PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
+    PrePlacementStyle,
 };
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
