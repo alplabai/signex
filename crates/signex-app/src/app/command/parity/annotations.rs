@@ -87,7 +87,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     (&["close_active_document"], Bridge, &[InProgressEdit]),
     (&["close_active_document"], CloseInWindow, &[InProgressEdit]),
-    // A wire drawn on the sheet, or rules text not applied, refuses the step.
+    // The person busy on the sheet in any window (`person_busy_on`, as
+    // `revert`), or rules text not applied, refuses the step.
     (&["undo", "redo"], Operand, &[InProgressEdit]),
     // Save settles owed work first: `begin_document_path_save` ->
     // `save_primitive_tab_at` -> `prepare_primitive_save` ->

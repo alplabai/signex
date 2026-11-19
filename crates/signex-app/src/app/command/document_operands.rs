@@ -167,13 +167,14 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             "Nothing to redo"
         });
     }
-    // A wire or arc in progress on the active sheet is anchored to what is
-    // there; stepping the sheet under it would leave it on an undone segment
-    // (#1831). The person's drawing is not the agent's to cancel.
+    // What the person draws, types into or has armed on the sheet, in any
+    // window, is anchored to what is there; stepping the sheet under it would
+    // leave it on an undone segment (#1831). It is not the caller's to cancel;
+    // `revert` waits on the same check (#2548).
     if let DocumentKey::Schematic(path) = &key
-        && app.is_drawing_on(path)
+        && let Some(busy) = app.person_busy_on(path)
     {
-        return refused("the person is drawing on this sheet; try again when the wire is done");
+        return refused(busy);
     }
     match &key {
         DocumentKey::Schematic(path) => match app.step_sheet_on(path, undo) {
