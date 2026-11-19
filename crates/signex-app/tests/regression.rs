@@ -704,3 +704,10 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #143 / #144a — Preferences shell (nav, dirty dots, Open folder, footer)
+// and the Language page (a draft applied on Apply or OK).
+#[path = "regression/preferences_language.rs"]
+mod preferences_language;
+#[path = "regression/preferences_shell.rs"]
+mod preferences_shell;

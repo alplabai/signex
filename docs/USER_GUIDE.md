@@ -30,6 +30,7 @@ Contents:
 12. [File types](#12-file-types)
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
+15. [Preferences](#15-preferences)
 
 For the whole flow in one pass, see the
 [walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
@@ -1150,3 +1151,43 @@ label. The complete lists are in the
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+## 15. Preferences
+
+<!-- Preferences: the dialog (shell), Language and Annotation pages. -->
+
+**Tools ▸ Preferences…** (`Ctrl+,`) opens the Preferences dialog in its own
+window. The pages are listed on the left in four groups: **System**
+(Appearance, Language, Keyboard shortcuts), **Schematic** (Annotation,
+Editing), **Validation** (Rule Profiles) and **Library** (Distributor APIs,
+Component Classes). The search field above the list filters it by page or group
+name; the former names Theme and Graphical editing still find their pages.
+
+A change is not kept until you press **Apply** (the dialog stays open) or
+**OK** (it closes). **Cancel** drops every change. While a change is not
+applied, the footer shows **Unsaved changes** and the page it is on gets a dot
+in the list. Rule Profiles is the exception: its edits are saved to the profile
+file at once.
+
+If your preferences file cannot be read, a red banner under the title names the
+file and the reason. Until it is fixed, appearance, ERC severities, component
+classes and panel layout show their defaults and are not saved; the file itself
+is not changed. **Start a fresh preferences file** moves the unreadable file
+aside and starts a new one; **Open folder** shows the folder that holds it, so
+you can repair it by hand.
+
+**Language** sets the language of menus, panels, dialogs and messages. **Follow
+the system** uses your operating system's language and names the one it
+picks. The preview under the list shows the menu titles, three buttons and a
+message in the language you chose. The language changes in every window when
+you press Apply or OK; there is no restart. Text on the canvas (designators,
+values, net names) is your own and is never translated, and numbers always use a
+point. Developer builds also list the pseudo-locale (en-XA), which brackets and
+lengthens every string to show text that cannot be translated yet or that is cut
+off.
+
+**Annotation** sets how many undo steps one annotate run is: **One step for the
+whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
+(each sheet is undone on its own). It applies to the next annotate run. What a
+pasted part is called is set on Editing (Designators on paste); the Annotation
+page links to it.

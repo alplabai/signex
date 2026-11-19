@@ -56,57 +56,77 @@ impl Signex {
     }
 
     fn view_preferences_body(&self) -> Element<'_, Message> {
-        let ui = &self.ui_state;
         let dialog: Element<'_, Message> =
-            crate::preferences::view_body(crate::preferences::PrefsView {
-                nav: ui.preferences_nav,
-                draft_theme: ui.preferences_draft_theme,
-                saved_theme: ui.theme_id,
-                draft_font: &ui.preferences_draft_font,
-                draft_grid_style: ui.preferences_draft_grid_style,
-                draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
-                draft_antialiasing: ui.preferences_draft_antialiasing,
-                draft_annotate_undo: ui.preferences_draft_annotate_undo,
-                draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
-                draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
-                draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
-                draft_wheel_mode: ui.preferences_draft_wheel_mode,
-                draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
-                draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
-                draft_increment_step: ui.preferences_draft_increment_step,
-                draft_paste_designators: ui.preferences_draft_paste_designators,
-                draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
-                window_controls_restart_note: self.window_controls_needs_restart(),
-                draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
-                draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
-                i18n: &ui.i18n,
-                draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
-                draft_fast_grids: &ui.preferences_draft_fast_grids,
-                fast_grid_status: &ui.preferences_fast_grid_status,
-                draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
-                draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
-                draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
-                draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
-                dirty: ui.preferences_dirty,
-                profiles: &ui.profile_manager,
-                default_profile: ui.default_rule_profile.as_deref(),
-                distributor_settings: &self.library.settings,
-                panel_tokens: &self.document_state.panel_ctx.tokens,
-                draft_component_classes: &ui.preferences_draft_component_classes,
-                keymap_editor: &ui.preferences_keymap_editor,
-                keymap_status: &ui.preferences_keymap_status,
-                keymap_load_error: ui.keymap_load_error.as_deref(),
-                keymap_backup: ui.keymap_backup.as_deref(),
-                prefs_load_error: ui.prefs_load_error.as_deref(),
-                prefs_status: &ui.preferences_prefs_status,
-                keymap_search: &ui.preferences_keymap_search,
-                nav_search: &ui.preferences_nav_search,
-                keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
-            })
-            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
-            .boxed();
+            crate::preferences::view_body(self.preferences_view_inputs())
+                .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
+                .boxed();
 
         dialog
+    }
+
+    /// What the Preferences dialog renders from, for both the detached
+    /// window and the in-window fallback.
+    pub(in crate::app::view) fn preferences_view_inputs(
+        &self,
+    ) -> crate::preferences::PrefsView<'_> {
+        let ui = &self.ui_state;
+        crate::preferences::PrefsView {
+            nav: ui.preferences_nav,
+            draft_theme: ui.preferences_draft_theme,
+            saved_theme: ui.theme_id,
+            draft_font: &ui.preferences_draft_font,
+            draft_grid_style: ui.preferences_draft_grid_style,
+            draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
+            draft_antialiasing: ui.preferences_draft_antialiasing,
+            draft_annotate_undo: ui.preferences_draft_annotate_undo,
+            draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
+            draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
+            draft_wheel_mode: ui.preferences_draft_wheel_mode,
+            draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
+            draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
+            draft_increment_step: ui.preferences_draft_increment_step,
+            draft_paste_designators: ui.preferences_draft_paste_designators,
+            draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
+            window_controls_restart_note: self.window_controls_needs_restart(),
+            draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
+            draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
+            i18n: &ui.i18n,
+            draft_language: &ui.preferences_draft_language,
+            // The preview is built when the dialog opens; until then the
+            // live catalog stands in.
+            language_preview: ui
+                .preferences_language_preview
+                .as_deref()
+                .unwrap_or(ui.i18n.as_ref()),
+            system_language_name: &ui.preferences_system_language_name,
+            dirty_pages: &ui.preferences_dirty_pages,
+            pages_view: &ui.preferences_pages_view,
+            keymap_view: &ui.preferences_keymap_view,
+            classes_view: &ui.preferences_classes_view,
+            draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
+            draft_fast_grids: &ui.preferences_draft_fast_grids,
+            fast_grid_status: &ui.preferences_fast_grid_status,
+            draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
+            draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
+            draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
+            draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
+            dirty: ui.preferences_dirty,
+            profiles: &ui.profile_manager,
+            default_profile: ui.default_rule_profile.as_deref(),
+            distributor_settings: &self.library.settings,
+            panel_tokens: &self.document_state.panel_ctx.tokens,
+            draft_component_classes: &ui.preferences_draft_component_classes,
+            keymap_editor: &ui.preferences_keymap_editor,
+            keymap_status: &ui.preferences_keymap_status,
+            keymap_load_error: ui.keymap_load_error.as_deref(),
+            keymap_backup: ui.keymap_backup.as_deref(),
+            prefs_load_error: ui.prefs_load_error.as_deref(),
+            prefs_status: &ui.preferences_prefs_status,
+            keymap_search: &ui.preferences_keymap_search,
+            nav_search: &ui.preferences_nav_search,
+            keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
+        }
     }
 
     pub(in crate::app::view) fn view_detached_modal(
