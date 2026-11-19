@@ -291,7 +291,7 @@ impl Signex {
                             .color(muted)
                             .wrapping(iced::widget::text::Wrapping::None),
                     )
-                    .max_width(META_MAX_W)
+                    .width(Length::Fit.max(META_MAX_W))
                     .clip(true)
                     .boxed(),
                 );

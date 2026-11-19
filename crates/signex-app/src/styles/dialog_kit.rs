@@ -266,7 +266,7 @@ fn footer_line<'a, M: 'a>(
     extras: Vec<Element<'a, M>>,
     buttons: Vec<Element<'a, M>>,
     gap: f32,
-) -> iced::widget::Row<'a, M> {
+) -> iced::widget::Row<Element<'a, M>> {
     let extras = row(extras).spacing(gap).align_y(Alignment::Center);
     let buttons = row(buttons).spacing(gap).align_y(Alignment::Center);
     row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center)
