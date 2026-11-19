@@ -48,8 +48,6 @@ properties-section-selection-filters = Custom Selection Filters
 
 ## Row labels
 
-# The X and Y of a position.
-properties-xy = (X/Y)
 properties-position = Position
 properties-size = Size
 properties-name = Name
@@ -240,3 +238,37 @@ properties-title-block-from-project = { $field } (project)
 # The sheet's own value replaces the project's. $field is the field's name.
 properties-title-block-overrides-project = { $field } (overrides project)
 properties-title-block-hint = Press Enter to apply a field.
+
+## Pre-placement form (Tab while a placement tool is armed, #2532)
+
+# Header. $tool is the placement tool's name ("Net Label", "Wire").
+properties-pre-placement-title = Place { $tool }
+# Caption under the header, in pieces around the key caps:
+# "Applies to the next object placed · Enter OK · Esc back to placing".
+properties-pre-placement-applies = Applies to the next object placed
+properties-pre-placement-separator = ·
+properties-pre-placement-key-enter = Enter
+properties-pre-placement-key-esc = Esc
+properties-pre-placement-back-to-placing = back to placing
+# Row label: where a wire starts (its end is "End").
+properties-pre-placement-start = Start
+# Under the wire illustration.
+properties-pre-placement-length-derived = Length is derived from Start and End
+# Card under Location of a tool with nothing else to set.
+properties-pre-placement-no-options = No other options
+properties-pre-placement-no-options-hint = Set the position above, or click on the sheet to place.
+# Axis letters before a coordinate field.
+properties-axis-x = X
+properties-axis-y = Y
+# One step of the Rotation control. $degrees is a whole number.
+properties-rotation-step = { $degrees }°
+# The anchor the justification grid marks.
+properties-anchor-top-left = Top left
+properties-anchor-top = Top
+properties-anchor-top-right = Top right
+properties-anchor-left = Left
+properties-anchor-center = Center
+properties-anchor-right = Right
+properties-anchor-bottom-left = Bottom left
+properties-anchor-bottom = Bottom
+properties-anchor-bottom-right = Bottom right
