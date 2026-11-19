@@ -73,7 +73,7 @@ window.
   annotate reset, Re-prefix confirm, Create Sheet, close-library, library
   delete; and the small dialogs: About, Grid Properties, Custom Selection
   Filter, Enable Version Control, custom net colour, library picker, primitive
-  picker, document options, library options, Copy to Library) open with `resizable: false` and `minimizable:
+  picker, document options, New Library, Copy to Library) open with `resizable: false` and `minimizable:
   false`. iced 0.14 maps `resizable` to winit's maximise / zoom button (so the
   macOS green button is disabled) and `minimizable` to the minimise button;
   iced exposes no separate fullscreen switch, so fullscreen is off only as a
@@ -154,7 +154,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Library delete confirm (per browser) | locking | Cancel for THAT browser; nothing deleted | `detached_library_tests` |
 | Library recovery | locking | Cancel (never a decision that deletes or rebinds; returns if its window vanishes, twice at most, then stays in the window) | `detached_library_tests`, `detached_confirm_tests` |
 | Copy to Library (opening a stock symbol or footprint) | tool | Cancel; the stock original is never changed | `detached_modals` |
-| Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
+| Library picker, primitive picker, document options, New Library (create options), updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
 | Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
 
