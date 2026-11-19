@@ -167,7 +167,8 @@ fn symbol_column<'a>(
             TILE_HEIGHT - 2.0 * crate::styles::HAIRLINE,
             device_px,
         )
-        .map(|()| LibraryMessage::Noop),
+        .map(|()| LibraryMessage::Noop)
+        .boxed(),
         None => empty_tile_text(
             t!(i18n, pane_message(PaneKind::Symbol, unbound)),
             unbound,

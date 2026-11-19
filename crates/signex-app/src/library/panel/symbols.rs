@@ -180,7 +180,8 @@ fn parts_section<'a>(
                 muted,
                 fill,
             )
-            .map(DockMessage::Panel),
+            .map(DockMessage::Panel)
+            .boxed(),
         );
     }
     for part in 1..=sym.active_max_part {
@@ -193,7 +194,8 @@ fn parts_section<'a>(
                 muted,
                 fill,
             )
-            .map(DockMessage::Panel),
+            .map(DockMessage::Panel)
+            .boxed(),
         );
     }
     Some(section_frame(col))

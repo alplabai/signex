@@ -214,13 +214,17 @@ fn the_library_panel_filter_matches_part_rows() {
     s.sync_view_caches();
     assert_eq!(
         parts_shown(&s),
-        vec![("cap".into(), 0), ("res".into(), 0)],
+        vec![("cap".to_owned(), 0), ("res".to_owned(), 0)],
         "an empty filter lists every row"
     );
     for (query, expect) in [("r-10", "res"), ("murata", "cap"), ("GRM", "cap")] {
         s.panel_search = query.into();
         s.sync_view_caches();
-        assert_eq!(parts_shown(&s), vec![(expect.into(), 0)], "query {query:?}");
+        assert_eq!(
+            parts_shown(&s),
+            vec![(expect.to_owned(), 0)],
+            "query {query:?}"
+        );
     }
     assert_eq!(
         shown(&s).len(),

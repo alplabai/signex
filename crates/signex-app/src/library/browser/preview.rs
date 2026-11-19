@@ -343,6 +343,7 @@ fn symbol_tile<'a>(
             look.device_px_per_logical_px,
         )
         .map(|()| LibraryMessage::Noop)
+        .boxed()
     } else if loading(row, browser) {
         tile_note(
             t!(i18n, ids::LIBRARY_BROWSER_PREVIEW_LOADING),
