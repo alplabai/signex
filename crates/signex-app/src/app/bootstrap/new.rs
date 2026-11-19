@@ -697,6 +697,7 @@ impl Signex {
                     history: crate::panels::history::HistoryPanelState::default(),
                     illustration_hover: Default::default(),
                     document_font_family: None,
+                    selection_form: Default::default(),
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
                 window_history: std::collections::HashMap::new(),

@@ -1,13 +1,16 @@
 //! Line-art illustrations under the Properties header (epic #2523, #40-#51):
 //! a part, a pin, a footprint thumbnail, a wire or bus, a net label, a port,
-//! a power port and a text note. Each builder turns the selected object into
-//! plain `Illustration` data, with callouts named after the rows below;
-//! [`show`] draws it. They are pure, so the tests read the parts they produce
-//! instead of pixels. Rotation is never drawn, so no builder takes one.
+//! a power port, a text note, a sheet symbol and a drawing shape. Each
+//! builder turns the selected object into plain `Illustration` data, with
+//! callouts named after the rows below; [`show`] draws it. They are pure, so
+//! the tests read the parts they produce instead of pixels. Rotation is never
+//! drawn, so no builder takes one.
 
+pub(super) mod drawing_shape;
 pub(super) mod footprint_thumb;
 pub(super) mod part;
 pub(super) mod pin;
+pub(super) mod sheet_symbol;
 
 mod net_label;
 mod port;

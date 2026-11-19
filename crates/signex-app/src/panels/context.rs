@@ -281,6 +281,8 @@ pub struct PanelContext {
     pub history: history::HistoryPanelState,
     /// The field / callout hover of the Properties illustration (#2523).
     pub illustration_hover: super::PanelIllustrationHover,
+    /// View state of the selection forms: kind chips, rule filter, hover (#1699).
+    pub selection_form: super::SelectionForm,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

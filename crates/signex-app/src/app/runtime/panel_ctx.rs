@@ -774,6 +774,12 @@ impl Signex {
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
             illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),
+            selection_form: crate::panels::SelectionForm {
+                kinds: crate::panels::SelectionKinds::of(
+                    &self.interaction_state.active_canvas().selected,
+                ),
+                ..self.document_state.panel_ctx.selection_form.clone()
+            },
         };
         self.fill_symbol_lists(kept_symbol_lists);
         if !tree_unchanged {

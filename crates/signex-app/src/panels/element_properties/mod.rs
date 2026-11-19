@@ -10,7 +10,6 @@ mod body_row;
 mod child_sheet;
 mod directive;
 mod drawing;
-mod drawing_preview;
 pub(in crate::panels) mod font_row;
 mod footprint_card;
 mod footprint_section;

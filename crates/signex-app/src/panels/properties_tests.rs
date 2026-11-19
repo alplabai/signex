@@ -396,8 +396,8 @@ fn a_fields_yes_and_no_values_follow_the_language() {
     assert_eq!(beside(&shown, &label(ids::PROPERTIES_JUSTIFY_H)), "Left");
 }
 
-/// The Border Colour row opens the border picker and the Fill Colour row
-/// the fill picker.
+/// The Border row opens the border picker and the Fill row the fill picker
+/// (#46 shortened the labels).
 #[test]
 fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
     let id = uuid::Uuid::from_u128(9);
@@ -434,16 +434,16 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
         )
     };
     assert!(
-        click("Border Colour")
+        click("Border")
             .iter()
             .any(|m| matches!(m, PanelMsg::ToggleChildSheetBorderPicker(i) if *i == id)),
-        "Border Colour opens the border picker"
+        "Border opens the border picker"
     );
     assert!(
-        click("Fill Colour")
+        click("Fill")
             .iter()
             .any(|m| matches!(m, PanelMsg::ToggleChildSheetFillPicker(i) if *i == id)),
-        "Fill Colour opens the fill picker"
+        "Fill opens the fill picker"
     );
 }
 
@@ -823,7 +823,7 @@ fn a_blankets_sections_keep_their_titles() {
         "{all:?}"
     );
     assert!(
-        at("ERC EXCLUSIONS").is_some() && at("ERC EXCLUSIONS") < at("All Rules"),
+        at("SUPPRESSED RULES").is_some() && at("Net Class") < at("SUPPRESSED RULES"),
         "{all:?}"
     );
 }

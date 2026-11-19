@@ -1,9 +1,7 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::mouse;
-use iced::widget::canvas;
 use iced::widget::{Column, Space, container, row, scrollable, svg};
-use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -130,7 +128,10 @@ pub(super) use library::{
     view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
 };
 pub use messages::{PanelMsg, SheetFrameEdit};
-pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
+pub use multi_selection::{
+    MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
+    edit_from_text as multi_edit_from_text,
+};
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
