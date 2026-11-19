@@ -164,7 +164,47 @@ impl Engine {
             plain: &plain,
             plain_dots: &plain_dots,
         };
-        self.guarded_rounds(before, contacts, items, followed, &reference, fold)
+        let contacts = self.needed_contacts(contacts, &moved, &plain);
+        self.guarded_rounds(before, &contacts, items, followed, &reference, fold)
+    }
+
+    /// `contacts` less the carried points the plain move `plain` already keeps:
+    /// the old place still on the wire's net through what was there before the
+    /// move (no dot the move made), and more than a lone wire end left there.
+    /// A lone end is the carry's to fold away; anything else stays as the
+    /// plain move leaves it, so a drag that lines a wire up with its neighbour
+    /// folds as a plain move does.
+    fn needed_contacts(
+        &self,
+        contacts: &Contacts,
+        moved: &SchematicSheet,
+        plain: &SchematicSheet,
+    ) -> Contacts {
+        let mut needed = Contacts {
+            tips: contacts.tips.clone(),
+            wires: Vec::new(),
+            bailed: contacts.bailed.clone(),
+        };
+        if contacts.wires.is_empty() {
+            return needed;
+        }
+        let had: HashSet<Uuid> = moved.junctions.iter().map(|j| j.uuid).collect();
+        let mut bare = plain.clone();
+        bare.junctions.retain(|j| had.contains(&j.uuid));
+        let keys: Vec<(signex_net::uf::Key, bool)> = (contacts.wires.iter())
+            .flat_map(|w| [(w.old_key(), false), (w.new_key(), true)])
+            .collect();
+        let found = match self.preset_base.as_deref() {
+            Some(base) => base.derive_at(&bare, &keys).1,
+            None => signex_net::net_signatures_at(&bare, &keys).1,
+        };
+        for (point, at) in contacts.wires.iter().zip(found.chunks(2)) {
+            let kept = at.len() == 2 && at[0].0 == at[1].0;
+            if !kept || lone_wire_end(&bare, point.old_key()) {
+                needed.wires.push(*point);
+            }
+        }
+        needed
     }
 
     /// The rounds of [`Self::keep_contacts`]: each one follows, reconciles
@@ -330,4 +370,26 @@ impl Engine {
             |n| format!("{n} pins kept their nets and were not joined to the wires they end on"),
         ));
     }
+}
+
+/// Whether only one wire end lies at `k` on `sheet`: no other wire end or
+/// span, label, dot, pin or child-sheet pin.
+fn lone_wire_end(sheet: &SchematicSheet, k: signex_net::uf::Key) -> bool {
+    use signex_net::{point_on_segment, pt_key};
+    let ends = (sheet.wires.iter())
+        .filter(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+        .count();
+    if ends != 1 {
+        return false;
+    }
+    let through = (sheet.wires.iter()).any(|w| {
+        let (a, b) = (pt_key(&w.start), pt_key(&w.end));
+        a != k && b != k && point_on_segment(k, a, b)
+    });
+    let marked = sheet.labels.iter().any(|l| pt_key(&l.position) == k)
+        || sheet.junctions.iter().any(|j| pt_key(&j.position) == k)
+        || (sheet.child_sheets.iter())
+            .flat_map(|c| c.pins.iter())
+            .any(|p| pt_key(&p.position) == k);
+    !through && !marked && !crate::transform::pin_owners(sheet).contains_key(&k)
 }

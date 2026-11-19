@@ -1363,6 +1363,9 @@ pub(crate) fn check_closure_oracle(
             }
         }
     }
+    // A wire the pass edited is no member to judge a warned pin by: it is
+    // identified by its pins and labels, on the wires all three sheets share.
+    let shared = unedited_wires(&[before, plain, after]);
     for pin in warned {
         let members = |nets: &Nets,
                        index: &std::collections::HashMap<Item, usize>|
@@ -1377,6 +1380,7 @@ pub(crate) fn check_closure_oracle(
                         // wire carries; the warned pin is judged on what it
                         // joins itself.
                         .filter(|m| !riding.contains(m))
+                        .filter(|m| !matches!(m, Item::Wire(id) if !shared.contains(id)))
                         .cloned()
                         .collect()
                 })
