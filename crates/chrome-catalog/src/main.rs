@@ -4,6 +4,7 @@ mod catalog;
 mod graphite_tokens;
 mod enable_section;
 mod chips;
+mod dimension_label;
 mod icon;
 mod illustration;
 mod modal_card;

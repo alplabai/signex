@@ -110,6 +110,8 @@ impl Catalog {
                 "Property illustrations",
                 tokens,
                 crate::illustration::view(tokens)
+                "Dimension labels",
+                crate::dimension_label::view(tokens)
             ),
         ]
         .spacing(20)
