@@ -611,6 +611,8 @@ impl Signex {
 
                     properties_tab: 0,
                     projects_view: Default::default(),
+                    // Filled from `ui_state` by every `finish_update`.
+                    recent_projects: Vec::new(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),
                     pcb_layers_ui: Default::default(),

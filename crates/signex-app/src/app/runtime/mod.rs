@@ -28,8 +28,10 @@ mod window_hierarchies;
 mod window_placement_tests;
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    /// Copy the UI-state grid/unit/snap fields and the recent projects into
+    /// the panel context.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
+        self.document_state.panel_ctx.recent_projects = self.recent_projects_panel_rows();
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
