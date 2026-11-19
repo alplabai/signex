@@ -1540,7 +1540,7 @@ thread_local! {
 
 /// The moved pins the plain move joined to a wire through a new pin dot at
 /// their new tip (decision 2026-11-18), not a T where wires meet: their
-/// terminals and child-sheet pins.
+/// terminals and child-sheet pins, and where those dots are.
 fn plain_pin_dot_pins(
     before: &SchematicSheet,
     plain: &SchematicSheet,
@@ -1548,6 +1548,7 @@ fn plain_pin_dot_pins(
 ) -> (
     std::collections::BTreeSet<(Uuid, String)>,
     std::collections::BTreeSet<Uuid>,
+    Vec<Point>,
 ) {
     let dots: std::collections::HashSet<_> = (plain.junctions.iter())
         .filter(|dot| !before.junctions.iter().any(|old| old.uuid == dot.uuid))
@@ -1555,10 +1556,14 @@ fn plain_pin_dot_pins(
         .collect();
     let mut terminals = std::collections::BTreeSet::new();
     let mut pins = std::collections::BTreeSet::new();
+    let mut at = Vec::new();
     // Read on the plain sheet, a tip's "old" place is where the move put it.
     for tip in crate::moved_pin_tips(plain, items) {
         if !dots.contains(&tip.old_key()) {
             continue;
+        }
+        if let Some(spot) = tip.now(plain) {
+            at.push(spot);
         }
         match tip.ident() {
             crate::PinIdent::Terminal(symbol, pin) => {
@@ -1569,7 +1574,7 @@ fn plain_pin_dot_pins(
             }
         }
     }
-    (terminals, pins)
+    (terminals, pins, at)
 }
 
 /// One case of [`property_run`]: case `index` of `seed`.
@@ -1650,7 +1655,7 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     // dot (2026-11-18): the user's placement, which may join two nets. The
     // closure oracle reads the plain nets, so it still holds such a pin; the
     // strict net equality below leaves out just that pin (counted, bounded).
-    let (dot_terminals, dot_pins) = plain_pin_dot_pins(&sheet, plain.document(), &items);
+    let (dot_terminals, dot_pins, dot_spots) = plain_pin_dot_pins(&sheet, plain.document(), &items);
     let oracle = check_closure_oracle(
         &sheet,
         plain.document(),
@@ -1695,8 +1700,15 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     counts.pin_joined += dot_terminals.len() + dot_pins.len();
     skip_terminals.extend(dot_terminals);
     skip_pins.extend(dot_pins);
+    // Such a dot joins whatever passes through its place, as it does in the
+    // plain move (two wires laid over each other there, say): the reference
+    // is the sheet before the move with those dots on it.
+    let mut reference = sheet.clone();
+    for spot in &dot_spots {
+        add_dot(&mut reference, (spot.x, spot.y), true);
+    }
     let want: std::collections::BTreeSet<_> =
-        signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
+        signex_net::net_signatures(&without_skipped_power(&reference, &skip_terminals))
             .iter()
             .filter_map(|n| n.without(&skip_terminals, &skip_pins))
             .collect();
