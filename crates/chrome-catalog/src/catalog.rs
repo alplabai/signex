@@ -116,7 +116,10 @@ impl Catalog {
                 "Property illustrations",
                 tokens,
                 crate::illustration::view(tokens)
+            ),
+            section::view(
                 "Dimension labels",
+                tokens,
                 crate::dimension_label::view(tokens)
             ),
         ]
