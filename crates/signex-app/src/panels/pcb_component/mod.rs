@@ -1,14 +1,16 @@
-//! Properties of the components selected on a board (#2354): a header with
-//! the selection summary, a row search and General / Parameters tabs; then
-//! Location, Properties, Footprint, Swapping Options and Schematic Reference
-//! Information. Several components show the values they share and leave a
-//! differing one blank. A pure view over facts the panel context copies from
-//! the board; every edit is a message the board handler runs as one
-//! `BoardCommand` undo step.
+//! Properties of the components selected on a board (#2354, Graphite m94):
+//! the header block (title, selection pill, footprint name, General /
+//! Parameters tabs, row search, then the footprint's line-art illustration);
+//! then Location, Properties, Footprint, Swapping Options and Schematic
+//! Reference Information. Several components show the values they share and
+//! leave a differing one blank or "Mixed". A pure view over facts the panel
+//! context copies from the board; every edit is a message the board handler
+//! runs as one `BoardCommand` undo step.
 //!
-//! Rows the board cannot act on yet are drawn disabled with a
-//! tooltip saying why, never with a made-up value.
+//! Rows the board cannot act on are drawn read-only, never with a made-up
+//! value.
 
+mod drawing;
 mod footprint;
 mod general;
 mod header;
@@ -29,10 +31,15 @@ use signex_engine::pcb::component_edit::{ComponentSetting, TypedSetting};
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_types::pcb::{ComponentAttributes, ComponentType};
 use signex_types::pcb_layer::BoardSide;
+use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
 
+pub use drawing::{
+    ComponentDrawing, DESIGNATOR_FIELD, FOOTPRINT_FIELD, LAYER_FIELD, PIN_ONE_FIELD, PadOutline,
+    illustration,
+};
 pub use text::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
 
 /// A value the selected components share, or `Mixed` when they differ.
@@ -186,6 +193,11 @@ pub struct PcbComponentFacts {
     pub read_only: bool,
     /// The row filter typed into the header's search field.
     pub search: String,
+    /// The footprint as the illustration draws it; `None` unless exactly one
+    /// component is selected (no merged drawing of several is defined).
+    pub drawing: Option<ComponentDrawing>,
+    /// The field or callout under the pointer, linking the two.
+    pub illustration_hover: IllustrationHover,
 }
 
 impl PcbComponentFacts {
@@ -267,10 +279,17 @@ pub enum PcbComponentMsg {
         footprints: Vec<Uuid>,
         key: String,
     },
+    /// The pointer entered or left a linked field row or an illustration
+    /// part.
+    IllustrationHovered(IllustrationMsg),
+    /// The Update PCB button of the designator mismatch note was pressed:
+    /// Update PCB runs as from the Design menu.
+    UpdatePcbPressed,
 }
 
-/// The Component view: header, then the General or the Parameters tab.
-/// `single` carries the Designator and Comment drafts of a single component.
+/// The Component view: header, then the General tab (the illustration and
+/// the sections) or the Parameters tab. `single` carries the Designator and
+/// Comment drafts of a single component.
 pub fn view<'a>(
     ctx: &'a PanelContext,
     facts: &'a PcbComponentFacts,
@@ -281,6 +300,9 @@ pub fn view<'a>(
     col = if ctx.properties_tab == 1 {
         col.push(parameters::view(ctx, facts))
     } else {
+        if let Some(drawn) = drawing::view(ctx, facts) {
+            col = col.push(drawn);
+        }
         let col = general::push_sections(col, ctx, facts, single);
         footprint::push_sections(col, ctx, facts)
     };

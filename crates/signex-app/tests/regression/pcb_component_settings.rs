@@ -1,7 +1,8 @@
 //! #2365 and #2369: the board Component view's stored settings and its
 //! parameter and Comment edits, driven through `Signex::update` with the
-//! messages the panel sends. Every edit is one board undo step; Lock
-//! Primitives stops a pad edit.
+//! messages the panel sends (the 3D Opacity slider and the Lock row's
+//! checkboxes of Graphite m94 send the same edits). Every edit is one board
+//! undo step; Lock Primitives stops a pad edit.
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
@@ -330,6 +331,34 @@ fn every_typed_setting_is_one_step() {
         );
     });
     assert_eq!(fp(&edited, R2).component.description, "Thick film");
+}
+
+/// The 3D Opacity slider (Graphite m94): each drag step is the field's draft
+/// in two decimals and changes nothing; letting go applies the last one as
+/// one step, the edit the typed field made.
+#[test]
+fn a_dragged_opacity_applies_once_on_release() {
+    let mut f = open_board();
+    select_both(&mut f.app);
+    let field = ComponentField::Setting(TypedSetting::BodyOpacity);
+    let edited = assert_one_step(&mut f, |f| {
+        let before = snapshot(&f.app);
+        for step in ["0.90", "0.62", "0.25"] {
+            type_in(f, field.clone(), step);
+        }
+        assert_eq!(snapshot(&f.app), before, "a drag edits nothing yet");
+        let footprints = facts(&f.app).footprints;
+        send(
+            &mut f.app,
+            panel(PcbComponentMsg::FieldSubmitted {
+                board: f.path.clone(),
+                footprints,
+                field: field.clone(),
+            }),
+        );
+    });
+    assert_eq!(fp(&edited, R2).component.body_opacity, 0.25);
+    assert_eq!(fp(&edited, C7).component.body_opacity, 0.25);
 }
 
 #[test]

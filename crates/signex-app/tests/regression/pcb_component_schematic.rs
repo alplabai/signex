@@ -368,6 +368,50 @@ fn a_renamed_board_designator_shows_the_mismatch() {
     assert_eq!(shown.designator_mismatches, 1);
 }
 
+/// The mismatch note's Update PCB button (Graphite m94) runs Design ▸
+/// Update PCB Document: the Update PCB dialog opens for the project, and
+/// nothing changes on the board until it is executed.
+#[test]
+fn the_update_pcb_button_of_a_mismatch_opens_update_pcb() {
+    let mut f = fixture(true);
+    select(&mut f.app, 10.0);
+    for message in [
+        PcbFootprintTextMsg::Typed {
+            board: f.board.clone(),
+            footprint: FP_R1,
+            field: FootprintTextField::Designator,
+            text: "R5".into(),
+        },
+        PcbFootprintTextMsg::Submitted {
+            board: f.board.clone(),
+            footprint: FP_R1,
+            field: FootprintTextField::Designator,
+        },
+    ] {
+        send(
+            &mut f.app,
+            Message::Dock(DockMessage::Panel(PanelMsg::PcbFootprintText(message))),
+        );
+    }
+    assert_eq!(facts(&f.app).designator_mismatches, 1);
+    assert!(f.app.ui_state.update_pcb.is_none());
+    send(
+        &mut f.app,
+        Message::Dock(DockMessage::Panel(PanelMsg::PcbComponent(
+            PcbComponentMsg::UpdatePcbPressed,
+        ))),
+    );
+    assert!(
+        f.app.ui_state.update_pcb.is_some(),
+        "the Update PCB dialog is open"
+    );
+    assert_eq!(
+        facts(&f.app).designator,
+        Shared::Same("R5".to_string()),
+        "the board keeps its designator until Update PCB runs"
+    );
+}
+
 #[test]
 fn a_mechanical_type_on_the_board_leaves_the_part_out_of_the_bom() {
     let mut f = fixture(true);
