@@ -256,6 +256,8 @@ pub struct PourSummary {
     pub net: Option<String>,
     pub fill_type: signex_sketch::attr::PourFillType,
     pub priority: u32,
+    /// The copper layer of the pour: the sub-form header names it.
+    pub layer: signex_types::pcb_layer::PcbLayer,
 }
 
 /// v0.16.4 — Keepout role properties surfaced on the Properties panel.
@@ -267,6 +269,8 @@ pub struct KeepoutSummary {
     pub no_vias: bool,
     pub no_drilling: bool,
     pub no_pours: bool,
+    /// The layer the keepout applies to (`KeepoutAttr::layer`).
+    pub layer: signex_types::pcb_layer::PcbLayer,
 }
 
 /// v0.16.4 — BoardCutout role properties surfaced on the Properties panel.
@@ -293,6 +297,16 @@ pub struct ArraySummary {
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
+    /// The array's numbering scheme as stored; the pattern drawing numbers
+    /// each instance with it.
+    pub numbering_scheme: signex_sketch::array::NumberingScheme,
+    /// Number of the source pad (`PadAttr::number`); empty when the source
+    /// carries no pad.
+    pub source_number: String,
+    /// Position of the source point in mm; `None` when it is not a Point.
+    pub source_position_mm: Option<[f64; 2]>,
+    /// Copper size of the source pad in mm, from the editor's pad list.
+    pub source_size_mm: Option<[f64; 2]>,
 }
 
 /// v0.25 polish — surface for BGA numbering scheme parameters.
@@ -604,6 +618,18 @@ pub struct SketchPadAttrSummary {
     /// `true` when the pad has a drill spec (i.e. THT / NPT). Used
     /// to gate Hole-detail UI rows.
     pub has_drill: bool,
+    /// The pad number (`PadAttr::number`).
+    pub number: String,
+    pub kind: signex_sketch::attr::PadKind,
+    /// Paste and mask expansion expressions per side; `None` follows the
+    /// design rule (`PadStackOverrides::paste_*_expr` / `mask_*_expr`).
+    pub paste_top_expr: Option<String>,
+    pub paste_bottom_expr: Option<String>,
+    pub mask_top_expr: Option<String>,
+    pub mask_bottom_expr: Option<String>,
+    /// Copper size in mm, from the editor's pad bound to this entity; the
+    /// sketch profile sets it, so the form shows it and never edits it.
+    pub size_mm: Option<[f64; 2]>,
 }
 
 /// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's

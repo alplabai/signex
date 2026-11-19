@@ -14,6 +14,7 @@ mod pad;
 mod pad_stack;
 mod pad_trapezoid;
 mod props;
+mod role;
 mod shape;
 mod silk;
 mod sketch;

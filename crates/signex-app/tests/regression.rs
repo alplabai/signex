@@ -289,6 +289,9 @@ mod footprint_hand_silk_rebake;
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
 mod footprint_pad_fields_persist;
+// #126 — the keepout layer and the sketch pad expansions of the role sub-forms.
+#[path = "regression/footprint_role_subforms.rs"]
+mod footprint_role_subforms;
 // #2242 — a trapezoid delta without copper is named when the file opens.
 #[path = "regression/footprint_trapezoid_warning.rs"]
 mod footprint_trapezoid_warning;
