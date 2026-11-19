@@ -39,9 +39,10 @@ pub const MAX_RESULTS: usize = 10;
 
 #[derive(Debug, Clone, Default)]
 pub struct CommandPaletteState {
-    /// Dropdown open flag. The text_input is always rendered (it's the
-    /// chrome-strip search bar); this gates whether the result list
-    /// shows. Open implies the input is also focused.
+    /// Dropdown open flag. The text_input is the title-bar search field, or,
+    /// on a window too narrow for the field, a row at the top of the card;
+    /// this gates whether the result list shows. Open implies the input is
+    /// also focused.
     pub open: bool,
     /// Live query text — echoed on every text_input change.
     pub query: String,
@@ -144,11 +145,36 @@ impl CommandSource {
     }
 }
 
-/// Order `results` group by group (stable, so rank order holds inside a
-/// group). The Graphite palette draws group headers, so the flat order that
-/// `selected_index` and the arrow keys walk must be the order drawn.
-pub fn group_for_display(results: &mut [CommandEntry]) {
-    results.sort_by_key(|e| e.source.group_rank());
+/// Order ranked `(entry, score)` rows group by group. The Graphite palette
+/// draws group headers, so the flat order that `selected_index` and the
+/// arrow keys walk must be the order drawn.
+///
+/// With a typed query (`by_relevance`) the group holding the best-scoring
+/// row comes first, ties broken by [`CommandSource::group_rank`]; with an
+/// empty query the groups keep the fixed `group_rank` order. The sort is
+/// stable, so rows inside a group keep their rank order.
+pub fn group_for_display(rows: &mut [(CommandEntry, i32)], by_relevance: bool) {
+    let mut best: Vec<(CommandSource, i32)> = Vec::new();
+    for (entry, score) in rows.iter() {
+        match best.iter_mut().find(|(source, _)| *source == entry.source) {
+            Some((_, top)) => *top = (*top).max(*score),
+            None => best.push((entry.source, *score)),
+        }
+    }
+    let group_best = |source: CommandSource| -> i32 {
+        if !by_relevance {
+            return 0;
+        }
+        best.iter()
+            .find(|(s, _)| *s == source)
+            .map_or(i32::MIN, |(_, top)| *top)
+    };
+    rows.sort_by_key(|(entry, _)| {
+        (
+            std::cmp::Reverse(group_best(entry.source)),
+            entry.source.group_rank(),
+        )
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -595,23 +621,73 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
 mod tests {
     use super::*;
 
-    #[test]
-    fn grouping_is_stable_and_follows_group_rank() {
-        let entry = |source, label: &str| CommandEntry {
+    fn entry(source: CommandSource, label: &str, detail: &str) -> CommandEntry {
+        CommandEntry {
             source,
             label: label.to_string(),
-            detail: String::new(),
+            detail: detail.to_string(),
             action: CommandAction::OpenFile(PathBuf::new()),
-        };
+        }
+    }
+
+    fn labels(rows: &[(CommandEntry, i32)]) -> Vec<&str> {
+        rows.iter().map(|(e, _)| e.label.as_str()).collect()
+    }
+
+    /// An empty query keeps the fixed group order (COMMANDS first), whatever
+    /// the scores, and rows inside a group keep their order.
+    #[test]
+    fn an_empty_query_keeps_the_fixed_group_order() {
         let mut rows = vec![
-            entry(CommandSource::Sheet, "s1"),
-            entry(CommandSource::Command, "c1"),
-            entry(CommandSource::Net, "n1"),
-            entry(CommandSource::Command, "c2"),
+            (entry(CommandSource::Sheet, "s1", ""), 90),
+            (entry(CommandSource::Command, "c1", ""), 10),
+            (entry(CommandSource::Net, "n1", ""), 80),
+            (entry(CommandSource::Command, "c2", ""), 5),
         ];
-        group_for_display(&mut rows);
-        let labels: Vec<_> = rows.iter().map(|e| e.label.as_str()).collect();
-        assert_eq!(labels, ["c1", "c2", "n1", "s1"]);
+        group_for_display(&mut rows, false);
+        assert_eq!(labels(&rows), ["c1", "c2", "n1", "s1"]);
+    }
+
+    /// Mock #9: for a typed query whose best hit is a net, NETS is the first
+    /// group, then the groups follow their best row; rows inside a group stay
+    /// in score order. This is the order the arrow keys walk.
+    #[test]
+    fn a_query_whose_best_hit_is_a_net_puts_nets_first() {
+        let catalog = vec![
+            entry(CommandSource::Command, "Validate Bus Wiring", ""),
+            entry(CommandSource::Net, "VBUS", "9 terminals"),
+            entry(CommandSource::Net, "VBUS_SENSE", "2 terminals"),
+            entry(
+                CommandSource::Symbol,
+                "D3",
+                "ESD5Z5.0 · VBUS clamp · usb-c.snxsch",
+            ),
+        ];
+        let mut rows: Vec<(CommandEntry, i32)> = rank_results(&catalog, "vbu")
+            .into_iter()
+            .map(|(idx, score)| (catalog[idx].clone(), score))
+            .collect();
+        assert_eq!(rows.len(), 4, "every row matches 'vbu'");
+        group_for_display(&mut rows, true);
+        assert_eq!(
+            labels(&rows),
+            ["VBUS", "VBUS_SENSE", "D3", "Validate Bus Wiring"]
+        );
+        // The fixed order would have put the command first.
+        group_for_display(&mut rows, false);
+        assert_eq!(labels(&rows)[0], "Validate Bus Wiring");
+    }
+
+    /// Two groups whose best rows score the same keep the fixed order.
+    #[test]
+    fn groups_with_equal_best_scores_follow_group_rank() {
+        let mut rows = vec![
+            (entry(CommandSource::File, "f1", ""), 40),
+            (entry(CommandSource::Symbol, "u1", ""), 40),
+            (entry(CommandSource::Net, "n1", ""), 20),
+        ];
+        group_for_display(&mut rows, true);
+        assert_eq!(labels(&rows), ["u1", "f1", "n1"]);
     }
 
     #[test]

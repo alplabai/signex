@@ -27,6 +27,12 @@ overlay-palette-no-results = No results
 overlay-palette-window-search = Search files, symbols, commands…
 # Footer note: matches beyond the rows shown. $count is a whole number.
 overlay-palette-more-results = { $count } more results — refine query
+# Footer note when every match is shown: how many rows matched. $count is a
+# whole number.
+overlay-palette-result-count = { $count ->
+    [one] 1 result
+   *[other] { $count } results
+}
 # Footer key hints: the arrow keys move the selection, Enter runs it.
 overlay-palette-navigate = Navigate
 overlay-palette-run = Run

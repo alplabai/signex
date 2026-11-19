@@ -548,6 +548,8 @@ define_ids! {
     MENU_BAR_SEARCH_PLACEHOLDER = "menu-bar-search-placeholder";
     MENU_BAR_LIGHT_THEME = "menu-bar-light-theme";
     MENU_BAR_DARK_THEME = "menu-bar-dark-theme";
+    MENU_BAR_SEARCH_BUTTON = "menu-bar-search-button";
+    MENU_BAR_SEARCH_BUTTON_KEY = "menu-bar-search-button-key";
     PANELS_ERC_RUN = "panels-erc-run";
     PANELS_ERC_CLEAR = "panels-erc-clear";
     PANELS_ERC_RUNNING = "panels-erc-running";
@@ -1058,6 +1060,7 @@ define_ids! {
     OVERLAY_PALETTE_NO_RESULTS = "overlay-palette-no-results";
     OVERLAY_PALETTE_WINDOW_SEARCH = "overlay-palette-window-search";
     OVERLAY_PALETTE_MORE_RESULTS = "overlay-palette-more-results";
+    OVERLAY_PALETTE_RESULT_COUNT = "overlay-palette-result-count";
     OVERLAY_PALETTE_NAVIGATE = "overlay-palette-navigate";
     OVERLAY_PALETTE_RUN = "overlay-palette-run";
     DIALOG_ERC_SCOPE_PROJECT = "dialog-erc-scope-project";

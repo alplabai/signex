@@ -661,8 +661,8 @@ impl Signex {
     }
 
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
-    /// above every other modal layer; click-outside dismisses via the
-    /// standard dismiss_layer pattern. Pushes the dismiss layer then the
+    /// above every other modal layer; click-outside dismisses through the
+    /// backdrop (`command_palette_backdrop`). Pushes the backdrop then the
     /// dropdown.
     pub(in crate::app::view) fn command_palette_overlay(
         &self,
@@ -674,10 +674,11 @@ impl Signex {
         {
             return Vec::new();
         }
-        // The palette dims the app with the theme's modal scrim, like a dialog.
+        // The palette dims the app with the theme's modal scrim, like a dialog,
+        // except over the title-bar field it is typed into.
         let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
         vec![
-            Self::dismiss_layer_tinted(Message::CommandPalette(CommandPaletteMsg::Close), scrim),
+            self.command_palette_backdrop(scrim),
             self.view_command_palette_dropdown(),
         ]
     }
