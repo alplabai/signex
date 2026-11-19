@@ -29,6 +29,7 @@ mod net_hover;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod panel_list;
 pub(super) mod read_only_badge;
 #[cfg(test)]
 mod window_gate_tests;
