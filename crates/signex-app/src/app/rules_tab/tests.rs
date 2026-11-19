@@ -7,12 +7,17 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
+use signex_drc_dsl::table::catalog::Domain;
 use signex_drc_dsl::table::{LimitField, RuleField, RuleKind};
 use signex_types::pcb::{NetDef, PcbBoard, Point, Segment};
 use signex_types::project::{DrcRuleSet, ProjectRules};
 use uuid::Uuid;
 
-use super::{RulesDomain, RulesTabMsg};
+use signex_drc_dsl::table::grid::CellSource;
+use signex_widgets::constraint_grid::{CellRef, GridMessage};
+
+use super::RulesTabMsg;
+use super::grid::{CellShow, Cells, RowRef};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -245,7 +250,7 @@ fn a_project_without_rules_stores_them_with_its_first_rule() {
         &mut app,
         RulesTabMsg::DomainPicked {
             project_id: id,
-            domain: RulesDomain::Routing,
+            domain: Domain::Physical,
         },
     );
     send(
@@ -734,15 +739,251 @@ fn update_keeps_the_selected_rules_why_and_the_text_view_follows_stored_rules() 
         "rules_set",
         &["id=sig_b", "field=min_clearance", "value=0.5mm"],
     );
-    send(
-        &mut app,
-        RulesTabMsg::SearchEdited {
-            project_id: id,
-            text: String::new(),
-        },
-    );
+    // Any message runs `update`, which refreshes the text view.
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
     assert!(
         text_view(&app, id).contains("clearance >= 0.5mm"),
         "a text view nobody typed in shows the stored rules"
     );
+}
+
+// #2530 - the constraint grid: domains, find, cell edits, reset, the
+// filter chips and constraint sets on rows.
+
+fn grid(app: &Signex, id: ProjectId) -> &super::RulesGrid {
+    &rules_tab(app, id).grid
+}
+
+fn grid_msg(app: &mut Signex, id: ProjectId, msg: GridMessage) {
+    send(
+        app,
+        RulesTabMsg::GridActed {
+            project_id: id,
+            msg,
+        },
+    );
+}
+
+fn pick(app: &mut Signex, id: ProjectId, domain: Domain) {
+    send(
+        app,
+        RulesTabMsg::DomainPicked {
+            project_id: id,
+            domain,
+        },
+    );
+}
+
+/// The cell of row `row` in the column with catalog id `column`.
+fn cell(app: &Signex, id: ProjectId, row: &RowRef, column: &str) -> CellRef {
+    let grid = grid(app, id);
+    CellRef::new(
+        grid.row_of(row).expect("the row is listed"),
+        grid.column_named(column)
+            .expect("the column is on the domain"),
+    )
+}
+
+/// Type `value` in `at` and press Enter.
+fn type_in(app: &mut Signex, id: ProjectId, at: CellRef, value: &str) {
+    grid_msg(app, id, GridMessage::CellPressed(at));
+    grid_msg(app, id, GridMessage::EditTextChanged(value.into()));
+    grid_msg(app, id, GridMessage::EditSubmitted);
+}
+
+#[test]
+fn a_domain_pick_lays_out_its_catalog_columns_and_hierarchy_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    assert_eq!(grid(&app, id).domain(), Domain::Clearance, "the first tab");
+    pick(&mut app, id, Domain::Physical);
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Physical);
+    let groups: Vec<&str> = shown.groups().iter().map(|g| g.id).collect();
+    let catalog: Vec<&str> = Domain::Physical.groups().map(|g| g.id).collect();
+    assert_eq!(groups, catalog, "the groups are the catalog's, in order");
+    let rows = shown.rows();
+    assert_eq!(rows[0], RowRef::All);
+    assert!(
+        rows.contains(&RowRef::Net("SIG".into())),
+        "a net with rules of its own is listed: {rows:?}"
+    );
+    let layers: Vec<(usize, usize)> = rows
+        .iter()
+        .filter_map(|r| match r {
+            RowRef::Layer { number, count, .. } => Some((*number, *count)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(layers, vec![(1, 2), (2, 2)], "L1 is Top, L2 is Bottom");
+    // Placement has no net or layer rows.
+    pick(&mut app, id, Domain::Placement);
+    assert!(
+        grid(&app, id)
+            .rows()
+            .iter()
+            .all(|r| !matches!(r, RowRef::Net(_) | RowRef::Layer { .. })),
+        "{:?}",
+        grid(&app, id).rows()
+    );
+}
+
+#[test]
+fn find_jumps_to_the_matching_column_and_enter_steps_to_the_next() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    grid_msg(
+        &mut app,
+        id,
+        GridMessage::ColumnQueryChanged("annular".into()),
+    );
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Manufacturing, "the column's domain");
+    let column = shown
+        .column_named("annular_ring_min")
+        .expect("on the domain");
+    assert_eq!(shown.view.selected().map(|c| c.column), Some(column));
+    assert_eq!(
+        shown.view.selected().map(|c| c.row),
+        shown.row_of(&RowRef::All),
+        "no row was selected, so All"
+    );
+    // Two letters only list; the grid stays.
+    grid_msg(&mut app, id, GridMessage::ColumnQueryChanged("wi".into()));
+    assert_eq!(grid(&app, id).domain(), Domain::Manufacturing);
+    assert!(rules_tab(&app, id).find.is_listing());
+    grid_msg(
+        &mut app,
+        id,
+        GridMessage::ColumnQueryChanged("width".into()),
+    );
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Physical);
+    assert_eq!(
+        shown.view.selected().map(|c| c.column),
+        shown.column_named("width_min")
+    );
+    grid_msg(&mut app, id, GridMessage::ColumnQuerySubmitted);
+    let shown = grid(&app, id);
+    assert_eq!(
+        shown.view.selected().map(|c| c.column),
+        shown.column_named("width_preferred"),
+        "Enter steps to the next match"
+    );
+}
+
+#[test]
+fn a_cell_commit_writes_one_rule_and_one_undo_step_and_reset_removes_only_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let before = undo_steps(&app, id);
+    let at = cell(&app, id, &RowRef::All, "clearance_min");
+    type_in(&mut app, id, at, "0.25");
+    let text = dsl(&app).expect("stored");
+    assert!(
+        text.starts_with(TEXT),
+        "the written rules stay as typed: {text}"
+    );
+    assert!(
+        text.contains("rule all_clearance on clearance require clearance >= 0.25mm then error"),
+        "{text}"
+    );
+    assert_eq!(undo_steps(&app, id), before + 1, "one undo step");
+    assert!(grid(&app, id).view.edit().is_none(), "the editor closed");
+    // A bare number is millimetres; the cell shows the row's own value.
+    let tab = rules_tab(&app, id);
+    let sets = std::collections::BTreeMap::new();
+    let table = signex_drc_dsl::table::table(&text);
+    let cells = Cells {
+        grid: &tab.grid,
+        table: &table,
+        sets: &sets,
+    };
+    assert!(cells.show(at).is_own());
+
+    grid_msg(&mut app, id, GridMessage::CellReset(at));
+    assert_eq!(
+        dsl(&app).as_deref(),
+        Some(TEXT),
+        "reset drops that rule only"
+    );
+    assert_eq!(undo_steps(&app, id), before + 2);
+    command(&mut app, "undo");
+    assert!(dsl(&app).expect("stored").contains("all_clearance"));
+    command(&mut app, "undo");
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT));
+}
+
+#[test]
+fn overridden_rows_only_lists_the_rows_with_values_of_their_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let has_layers = |app: &Signex| {
+        grid(app, id)
+            .rows()
+            .iter()
+            .any(|r| matches!(r, RowRef::Layer { .. }))
+    };
+    assert!(has_layers(&app));
+    send(
+        &mut app,
+        RulesTabMsg::OverriddenOnlyToggled { project_id: id },
+    );
+    let rows = grid(&app, id).rows().to_vec();
+    assert!(rows.contains(&RowRef::All), "All always stays");
+    assert!(rows.contains(&RowRef::Net("SIG".into())), "{rows:?}");
+    assert!(!has_layers(&app), "no layer sets a clearance: {rows:?}");
+    send(
+        &mut app,
+        RulesTabMsg::OverriddenOnlyToggled { project_id: id },
+    );
+    assert!(has_layers(&app));
+    // Show inherited values starts on.
+    assert!(!rules_tab(&app, id).hide_inherited);
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert!(rules_tab(&app, id).hide_inherited);
+}
+
+#[test]
+fn a_row_using_a_constraint_set_carries_its_chip_and_resolves_from_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    answer(
+        &mut app,
+        "rules_set_create",
+        &["name=hv", "values=min_clearance=0.8mm"],
+    );
+    answer(
+        &mut app,
+        "rules_set_apply",
+        &["set=hv", "scope=net == \"GND\""],
+    );
+    // The next `update` lays the rows out again.
+    pick(&mut app, id, Domain::Clearance);
+    let gnd = RowRef::Net("GND".into());
+    let drc = app.rules_drc_of(id).expect("rules");
+    assert_eq!(
+        super::grid::sets_on(&gnd, &drc.sets),
+        vec!["hv".to_string()]
+    );
+    assert!(super::grid::sets_on(&RowRef::Net("SIG".into()), &drc.sets).is_empty());
+    let at = cell(&app, id, &gnd, "clearance_min");
+    let table = signex_drc_dsl::table::table(drc.dsl.as_deref().unwrap_or_default());
+    let cells = Cells {
+        grid: grid(&app, id),
+        table: &table,
+        sets: &drc.sets,
+    };
+    match cells.show(at) {
+        CellShow::Value { source, .. } => assert!(
+            matches!(&source, CellSource::Set { set, .. } if set == "hv"),
+            "{source:?}"
+        ),
+        other => panic!("the set's value: {other:?}"),
+    }
 }
