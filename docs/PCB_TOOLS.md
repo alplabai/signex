@@ -758,8 +758,8 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
 - **Find Similar Objects** (`find_similar_objects`): the seed is the object
   under the cursor, else the one selected; the dialog lists its properties
   (kind, value, footprint, designator prefix, layer, width, size, drill, pad
-  shape, net) and OK selects every object of the board that matches the ones
-  set to Same.
+  shape, net) and Select N selects every object of the board that matches
+  the ones set to Same; the button counts them.
 - **Select Net** and **Highlight Net** (`select_board_net`,
   `highlight_board_net`): the net `net=<name>` names, else the net of the
   selection or of what is under the cursor. Select puts its tracks, vias,

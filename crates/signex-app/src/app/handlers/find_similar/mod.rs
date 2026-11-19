@@ -41,33 +41,78 @@ impl Signex {
         }
         self.close_find_similar_if_sheet_changed();
         match msg {
-            FindSimilarMsg::OpenRequested { at } => self.open_find_similar(at),
+            FindSimilarMsg::OpenRequested { at } => {
+                self.open_find_similar(at);
+                self.recount_find_similar();
+            }
             FindSimilarMsg::PropertySet(property, same) => {
-                // The running search was made for the old criteria.
-                if let Some(state) = self.ui_state.find_similar.as_mut()
-                    && !state.running
-                {
+                let changed = self.ui_state.find_similar.as_mut().is_some_and(|state| {
                     if same {
-                        state.same.insert(property);
+                        state.same.insert(property)
                     } else {
-                        state.same.remove(&property);
+                        state.same.remove(&property)
                     }
+                });
+                if changed {
+                    return self.find_similar_criteria_changed();
                 }
             }
             FindSimilarMsg::ScopeChosen(scope) => {
-                if let Some(state) = self.ui_state.find_similar.as_mut()
-                    && !state.running
-                {
+                let changed = self.ui_state.find_similar.as_mut().is_some_and(|state| {
+                    let changed = state.scope != scope;
                     state.scope = scope;
+                    changed
+                });
+                if changed {
+                    return self.find_similar_criteria_changed();
                 }
             }
-            FindSimilarMsg::ApplyPressed => return self.apply_find_similar(),
+            FindSimilarMsg::ApplyPressed => self.apply_find_similar(),
             FindSimilarMsg::Closed => self.close_find_similar(),
             FindSimilarMsg::ProjectSearched { generation, result } => {
                 self.apply_project_search(generation, &result);
             }
         }
         Task::none()
+    }
+
+    /// The criteria or the scope changed: count this sheet again and drop
+    /// the project count made for the old ones; on a project scope, start
+    /// a new one.
+    fn find_similar_criteria_changed(&mut self) -> Task<Message> {
+        self.recount_find_similar();
+        // A count still running answers for the old criteria: its token
+        // no longer matches.
+        self.ui_state.find_similar_generation += 1;
+        let Some(state) = self.ui_state.find_similar.as_mut() else {
+            return Task::none();
+        };
+        state.running = false;
+        state.other_sheets = None;
+        if state.board || state.scope != SimilarScope::Project {
+            return Task::none();
+        }
+        self.start_project_search().unwrap_or_else(Task::none)
+    }
+
+    /// Count what the dialog's criteria match on its sheet (or board): the
+    /// number Select N shows.
+    fn recount_find_similar(&mut self) {
+        let Some(state) = self.ui_state.find_similar.as_ref() else {
+            return;
+        };
+        let criteria = state.criteria();
+        let count = if state.board {
+            self.active_pcb()
+                .map(|board| signex_engine::pcb::similar::find_similar(board, &criteria).len())
+        } else {
+            self.document_state
+                .active_engine()
+                .map(|engine| find_similar(engine.document(), &criteria).len())
+        };
+        if let Some(state) = self.ui_state.find_similar.as_mut() {
+            state.sheet_matches = count.unwrap_or(0);
+        }
     }
 
     /// Dismiss the dialog. The search token moves on, so a search still
@@ -137,28 +182,29 @@ impl Signex {
         ));
     }
 
-    /// OK: select the matches on this sheet, or start the project search.
-    fn apply_find_similar(&mut self) -> Task<Message> {
+    /// Select N: select the matches on this sheet. On a project scope the
+    /// other sheets' counts go to the Messages panel with it; Select waits
+    /// while they are being counted.
+    fn apply_find_similar(&mut self) {
         let Some(state) = self.ui_state.find_similar.as_ref() else {
-            return Task::none();
+            return;
         };
         if state.running {
-            return Task::none();
+            return;
         }
         if state.board {
             self.select_similar_on_board();
-            return Task::none();
+            return;
         }
-        if state.scope == SimilarScope::Project {
-            if let Some(task) = self.start_project_search() {
-                return task;
-            }
+        let others = (state.scope == SimilarScope::Project)
+            .then(|| state.other_sheets.clone())
+            .flatten();
+        if state.scope == SimilarScope::Project && !self.in_a_project() {
             crate::diagnostics::log_warning(
                 "Find Similar: not in a project, so only this sheet was searched",
             );
         }
-        self.select_similar_on_this_sheet(None);
-        Task::none()
+        self.select_similar_on_this_sheet(others.as_ref());
     }
 
     /// Select what the dialog's criteria match on the live sheet and close the
