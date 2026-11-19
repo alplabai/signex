@@ -62,3 +62,11 @@ pub use project::{
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
 };
+
+mod harness;
+#[cfg(test)]
+mod harness_fixture;
+pub use harness::{
+    HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    harness_mismatches, harness_segments_touch, on_harness,
+};

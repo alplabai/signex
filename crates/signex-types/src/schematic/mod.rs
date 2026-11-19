@@ -892,6 +892,8 @@ pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
+mod harness_ops;
+pub use harness_ops::*;
 
 #[cfg(test)]
 mod default_tests;

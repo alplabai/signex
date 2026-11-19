@@ -41,6 +41,8 @@ pub struct ClipboardSelection {
     pub no_connects: Vec<NoConnect>,
     pub no_erc_directives: Vec<NoErcDirective>,
     pub text_notes: Vec<TextNote>,
+    /// Selected harness connectors (with their entries) and wires (#1280).
+    pub harness: signex_types::schematic::SheetHarness,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -136,9 +138,12 @@ impl Engine {
                         clipboard.text_notes.push(tn.clone());
                     }
                 }
+                // Gathered below in one pass, in sheet order.
+                ClipboardSlot::Harness => {}
             }
         }
 
+        clipboard.harness = crate::clipboard_harness::copied_harness(&self.document.harness, items);
         clipboard
     }
 
@@ -146,7 +151,10 @@ impl Engine {
         let mut anchors = Vec::new();
 
         for item in items {
-            let position = self.document.item_anchor(item);
+            let position = self
+                .document
+                .item_anchor(item)
+                .or_else(|| self.document.harness.item_anchor(item));
 
             if let Some(Point { x, y }) = position {
                 anchors.push(SelectionAnchor {
@@ -667,6 +675,9 @@ impl Engine {
                 ));
             }
             SelectedKind::Directive => info.extend(self.directive_info(item.uuid)?),
+            SelectedKind::HarnessConnector
+            | SelectedKind::HarnessEntry
+            | SelectedKind::HarnessWire => info.extend(self.harness_info(item)?),
         }
 
         // A symbol lists its own `Locked` row above; the other lockable kinds
@@ -703,6 +714,9 @@ enum ClipboardSlot {
     NoConnect,
     NoErcDirective,
     TextNote,
+    /// A harness connector (entries included) or harness wire; copied by
+    /// `clipboard_harness::copied_harness` in one pass.
+    Harness,
 }
 
 fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
@@ -715,7 +729,10 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
         SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
         SelectedKind::NoErcDirective => Some(ClipboardSlot::NoErcDirective),
         SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
-        SelectedKind::Directive
+        SelectedKind::HarnessConnector | SelectedKind::HarnessWire => Some(ClipboardSlot::Harness),
+        // An entry lives in its connector's slot list; copy the connector.
+        SelectedKind::HarnessEntry
+        | SelectedKind::Directive
         | SelectedKind::BusEntry
         | SelectedKind::SheetPin
         | SelectedKind::ChildSheet
@@ -747,7 +764,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clipboard_can_carry_matches_the_documented_eight_kinds() {
+    fn clipboard_can_carry_matches_the_documented_ten_kinds() {
         // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
         // derive from `clipboard_slot`'s single exhaustive match, so this
         // pins down which kinds that match currently classifies as
@@ -768,6 +785,9 @@ mod tests {
             SelectedKind::Directive,
             SelectedKind::SymbolRefField,
             SelectedKind::SymbolValField,
+            SelectedKind::HarnessConnector,
+            SelectedKind::HarnessEntry,
+            SelectedKind::HarnessWire,
         ]
         .into_iter()
         .filter(|k| clipboard_can_carry(*k))
@@ -784,6 +804,9 @@ mod tests {
                 SelectedKind::NoErcDirective,
                 SelectedKind::Label,
                 SelectedKind::TextNote,
+                // #1280: a connector carries its entries.
+                SelectedKind::HarnessConnector,
+                SelectedKind::HarnessWire,
             ]
         );
     }

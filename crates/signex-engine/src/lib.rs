@@ -4,6 +4,7 @@ mod patch;
 
 mod annotation;
 mod annotation_placements;
+mod clipboard_harness;
 mod clipboard_text;
 mod derived_ids;
 mod notice;
@@ -861,6 +862,11 @@ impl Engine {
             Command::AutoplaceFields { symbol_ids } => {
                 Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }
+            Command::PlaceHarnessConnector { .. }
+            | Command::UpdateHarnessConnector { .. }
+            | Command::PlaceHarnessEntry { .. }
+            | Command::PlaceHarnessWire { .. }
+            | Command::SetHarnessEntryType { .. } => self.exec_harness(before, cmd),
         };
         self.taps_before = None;
         // A pin end the edit left bare where wires of two nets overlap: no dot

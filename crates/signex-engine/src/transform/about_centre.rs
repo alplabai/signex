@@ -235,6 +235,16 @@ impl Engine {
                 .filter(|d| d.uuid() == id)
                 .flat_map(directive_points)
                 .collect(),
+            SelectedKind::HarnessConnector => doc
+                .harness
+                .connector(id)
+                .map(|c| c.anchor_points())
+                .unwrap_or_default(),
+            SelectedKind::HarnessWire => doc
+                .harness
+                .wire(id)
+                .map(|w| vec![w.start, w.end])
+                .unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -405,6 +415,22 @@ impl Engine {
             .filter(|d| has(SelectedKind::Directive, d.uuid()))
         {
             d.map_points(|p| transform.point(centre, p));
+        }
+        for c in doc
+            .harness
+            .connectors
+            .iter_mut()
+            .filter(|c| has(SelectedKind::HarnessConnector, c.uuid))
+        {
+            *c = c.mapped(|p| transform.point(centre, p));
+        }
+        for w in doc
+            .harness
+            .wires
+            .iter_mut()
+            .filter(|w| has(SelectedKind::HarnessWire, w.uuid))
+        {
+            w.map_points(|p| transform.point(centre, p));
         }
 
         self.autoplace_symbol_fields(&present_symbol_ids(items));

@@ -60,6 +60,9 @@ impl Engine {
                 .directives
                 .iter()
                 .any(|d| d.uuid() == item.uuid),
+            SelectedKind::HarnessConnector => self.document.harness.connector(item.uuid).is_some(),
+            SelectedKind::HarnessEntry => self.document.harness.entry(item.uuid).is_some(),
+            SelectedKind::HarnessWire => self.document.harness.wire(item.uuid).is_some(),
             _ => false,
         }
     }
@@ -110,6 +113,20 @@ impl Engine {
                 self.document.directives.retain(|d| d.uuid() != item.uuid);
                 self.document.directives.len() != before_len
             }
+            SelectedKind::HarnessConnector => {
+                remove_by_uuid(&mut self.document.harness.connectors, item.uuid)
+            }
+            SelectedKind::HarnessWire => {
+                remove_by_uuid(&mut self.document.harness.wires, item.uuid)
+            }
+            // An entry belongs to its connector: deleting it closes the gap,
+            // so the entries below move up a slot.
+            SelectedKind::HarnessEntry => self
+                .document
+                .harness
+                .entry_owner_mut(item.uuid)
+                .map(|(connector, index)| connector.entries.remove(index))
+                .is_some(),
             // A child sheet owns its pins (`ChildSheet::pins`); removing the
             // sheet entry removes them with it in one shot — no separate
             // reconcile step needed, the whole owning document goes away.
@@ -542,6 +559,20 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::HarnessConnector => self
+                .document
+                .harness
+                .connector_mut(item.uuid)
+                .map(|c| c.translate(dx, dy))
+                .is_some(),
+            SelectedKind::HarnessWire => self
+                .document
+                .harness
+                .wire_mut(item.uuid)
+                .map(|w| w.translate(dx, dy))
+                .is_some(),
+            // An entry sits in a slot of its connector; it moves with it.
+            SelectedKind::HarnessEntry => false,
             SelectedKind::Directive => self
                 .document
                 .directives
@@ -666,6 +697,45 @@ impl Engine {
                 })
                 .unwrap_or(false),
             SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
+            SelectedKind::HarnessConnector | SelectedKind::HarnessWire => {
+                self.turn_harness_item(item, |(dx, dy)| {
+                    // Counter-clockwise on a y-down page.
+                    let (sin, cos) = angle_degrees.to_radians().sin_cos();
+                    (dx * cos + dy * sin, -dx * sin + dy * cos)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// Turn or mirror a harness connector or wire in place, about its own
+    /// centre, by `vector` (the image of an offset from that centre).
+    fn turn_harness_item(
+        &mut self,
+        item: &SelectedItem,
+        vector: impl Fn((f64, f64)) -> (f64, f64),
+    ) -> bool {
+        use signex_types::schematic::Point;
+        let harness = &mut self.document.harness;
+        let vector = &vector;
+        let about = |centre: Point| {
+            move |p: Point| {
+                let (dx, dy) = vector((p.x - centre.x, p.y - centre.y));
+                Point::new(centre.x + dx, centre.y + dy)
+            }
+        };
+        match item.kind {
+            SelectedKind::HarnessConnector => harness
+                .connector_mut(item.uuid)
+                .map(|c| *c = c.mapped(about(c.centre())))
+                .is_some(),
+            SelectedKind::HarnessWire => harness
+                .wire_mut(item.uuid)
+                .map(|w| {
+                    let mid = Point::new((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0);
+                    w.map_points(about(mid));
+                })
+                .is_some(),
             _ => false,
         }
     }
@@ -679,6 +749,12 @@ impl Engine {
                 })
             }
             SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
+            SelectedKind::HarnessConnector | SelectedKind::HarnessWire => {
+                self.turn_harness_item(item, |(dx, dy)| match axis {
+                    MirrorAxis::Horizontal => (-dx, dy),
+                    MirrorAxis::Vertical => (dx, -dy),
+                })
+            }
             _ => false,
         }
     }
@@ -748,6 +824,8 @@ macro_rules! impl_has_uuid {
 }
 
 impl_has_uuid!(
+    signex_types::schematic::HarnessConnector,
+    signex_types::schematic::HarnessWire,
     signex_types::schematic::Wire,
     signex_types::schematic::Bus,
     signex_types::schematic::BusEntry,

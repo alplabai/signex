@@ -30,6 +30,10 @@ impl Engine {
                 .iter_mut()
                 .find(|n| n.uuid == item.uuid)
                 .map(|n| &mut n.locked),
+            SelectedKind::HarnessConnector => {
+                doc.harness.connector_mut(item.uuid).map(|c| &mut c.locked)
+            }
+            SelectedKind::HarnessWire => doc.harness.wire_mut(item.uuid).map(|w| &mut w.locked),
             _ => None,
         };
         let changed = match slot {
