@@ -114,7 +114,7 @@ fn compact_rows_are_the_default_and_previews_rows_are_taller() {
         look.height_for(ComponentsRowStyle::Previews),
         look::PREVIEW_ROW_HEIGHT
     );
-    assert!(look::PREVIEW_ROW_HEIGHT > look::ROW_HEIGHT);
+    const { assert!(look::PREVIEW_ROW_HEIGHT > look::ROW_HEIGHT) };
 }
 
 /// The open menu's row wins over the selection, the selection over hover.

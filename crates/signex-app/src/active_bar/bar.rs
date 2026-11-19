@@ -299,56 +299,6 @@ pub(super) fn bar_items(
     items
 }
 
-#[cfg(test)]
-mod pill_tests {
-    use super::*;
-
-    /// #1379: a pill click while drawing a bus must not switch the tool to
-    /// Wire; every cell picks a corner mode and nothing else.
-    #[test]
-    fn the_corner_pill_picks_a_mode_and_never_a_tool() {
-        for mode in [
-            CornerMode::Ortho90,
-            CornerMode::Angle45Start,
-            CornerMode::Angle45End,
-            CornerMode::FreeAngle,
-        ] {
-            for (_, cell) in CORNER_CELLS {
-                assert!(matches!(
-                    corner_cell_message(cell, mode),
-                    ActiveBarMsg::CornerModePicked(_)
-                ));
-            }
-        }
-    }
-
-    /// One cell is lit per mode; both 45° leg orders light the 45° cell,
-    /// and clicking it keeps the leg order already chosen.
-    #[test]
-    fn one_cell_is_lit_and_the_45_cell_keeps_its_leg_order() {
-        for mode in [
-            CornerMode::Ortho90,
-            CornerMode::Angle45Start,
-            CornerMode::Angle45End,
-            CornerMode::FreeAngle,
-        ] {
-            let lit = CORNER_CELLS
-                .iter()
-                .filter(|(_, cell)| corner_cell_lit(*cell, mode))
-                .count();
-            assert_eq!(lit, 1, "{mode:?}");
-        }
-        assert!(matches!(
-            corner_cell_message(CornerMode::Angle45Start, CornerMode::Angle45End),
-            ActiveBarMsg::CornerModePicked(CornerMode::Angle45End)
-        ));
-        assert!(matches!(
-            corner_cell_message(CornerMode::FreeAngle, CornerMode::Ortho90),
-            ActiveBarMsg::CornerModePicked(CornerMode::FreeAngle)
-        ));
-    }
-}
-
 /// The bar a test draws for `tool`: nothing selected, no net colour, no
 /// group used yet.
 #[cfg(test)]
@@ -417,4 +367,54 @@ pub(crate) fn drawn_trigger_centres_with(
 pub(crate) fn drawn_trigger_centres(tool: Tool, window_width: f32) -> Vec<(ActiveBarMenu, f32)> {
     let tokens = signex_types::theme::theme_tokens(ThemeId::DEFAULT);
     drawn_trigger_centres_with(tool, window_width, &tokens, ThemeId::DEFAULT)
+}
+
+#[cfg(test)]
+mod pill_tests {
+    use super::*;
+
+    /// #1379: a pill click while drawing a bus must not switch the tool to
+    /// Wire; every cell picks a corner mode and nothing else.
+    #[test]
+    fn the_corner_pill_picks_a_mode_and_never_a_tool() {
+        for mode in [
+            CornerMode::Ortho90,
+            CornerMode::Angle45Start,
+            CornerMode::Angle45End,
+            CornerMode::FreeAngle,
+        ] {
+            for (_, cell) in CORNER_CELLS {
+                assert!(matches!(
+                    corner_cell_message(cell, mode),
+                    ActiveBarMsg::CornerModePicked(_)
+                ));
+            }
+        }
+    }
+
+    /// One cell is lit per mode; both 45° leg orders light the 45° cell,
+    /// and clicking it keeps the leg order already chosen.
+    #[test]
+    fn one_cell_is_lit_and_the_45_cell_keeps_its_leg_order() {
+        for mode in [
+            CornerMode::Ortho90,
+            CornerMode::Angle45Start,
+            CornerMode::Angle45End,
+            CornerMode::FreeAngle,
+        ] {
+            let lit = CORNER_CELLS
+                .iter()
+                .filter(|(_, cell)| corner_cell_lit(*cell, mode))
+                .count();
+            assert_eq!(lit, 1, "{mode:?}");
+        }
+        assert!(matches!(
+            corner_cell_message(CornerMode::Angle45Start, CornerMode::Angle45End),
+            ActiveBarMsg::CornerModePicked(CornerMode::Angle45End)
+        ));
+        assert!(matches!(
+            corner_cell_message(CornerMode::FreeAngle, CornerMode::Ortho90),
+            ActiveBarMsg::CornerModePicked(CornerMode::FreeAngle)
+        ));
+    }
 }
