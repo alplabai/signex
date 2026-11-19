@@ -118,6 +118,19 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         operands: operands::SYMBOL_PARAMETER,
         ..CommandMetadata::DEFAULT
     },
+    // A sheet variable `${NAME}` and expressions resolve; the Properties
+    // panel's Sheet Variables rows run this too.
+    CommandMetadata {
+        id: "set_sheet_variable",
+        category: "edit",
+        label: command_ids::CMD_SET_SHEET_VARIABLE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_VARIABLE,
+        ..CommandMetadata::DEFAULT
+    },
     // #2407: lock or unlock the selected tracks and vias (the board menu's
     // rows), or the ones `ids` names on `document`. One undo step.
     CommandMetadata {

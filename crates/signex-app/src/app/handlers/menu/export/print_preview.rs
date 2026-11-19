@@ -57,7 +57,7 @@ impl Signex {
             let (page_size, orientation) =
                 PageSize::from_sheet_size(&sheet_size, sheet_orientation);
             let palette = signex_output::SchematicPalette::from(
-                &signex_types::theme::canvas_colors(self.ui_state.theme_id),
+                &self.canvas_colors_for(self.ui_state.theme_id),
             );
             let mut options = PdfOptions {
                 page_size,

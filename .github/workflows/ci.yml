@@ -56,6 +56,7 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
       library_server: ${{ steps.decide.outputs.library_server }}
+      routing_corpus: ${{ steps.decide.outputs.routing_corpus }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -102,6 +103,20 @@ jobs:
             fi
           fi
           echo "library_server=$library_server" >> "$GITHUB_OUTPUT"
+          # The routing corpus (#2481) is fetched from Git LFS and load-checked
+          # on a PR only when its inputs change: the boards, the format and
+          # geometry crates that read them, the routing tests, and the files
+          # that fetch it. Pushes, the merge queue and manual runs always do.
+          routing_corpus=true
+          if [ -n "$BASE_SHA" ]; then
+            if git diff --no-renames --name-only "$BASE_SHA"...HEAD | grep -qE '^(testdata/routing-corpus/|crates/signex-types/|crates/pcb-geom/|crates/signex-engine/tests/routing/|scripts/check_routing_corpus\.sh$|\.gitattributes$|Cargo\.lock$|rust-toolchain\.toml$|\.github/workflows/ci\.yml$)'; then
+              routing_corpus=true
+            else
+              routing_corpus=false
+            fi
+          fi
+          echo "routing_corpus=$routing_corpus" >> "$GITHUB_OUTPUT"
+          echo "Routing corpus fetched and load-checked: $routing_corpus"
           echo "Postgres job needed: $library_server"
 
   check:
@@ -189,9 +204,40 @@ jobs:
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
+      # No lfs here: the routing corpus (#2481, ~90 MiB in Git LFS) is fetched
+      # below only when `changes` says its inputs moved, and from a cache of
+      # .git/lfs keyed on the boards' LFS object ids, so an unchanged corpus
+      # costs no LFS bandwidth.
       - uses: actions/checkout@v5
         with:
           submodules: false
+
+      # The key is a hash of the boards' LFS object ids (read from the pointer
+      # files in the checkout), so it changes exactly when a board does.
+      - name: Hash the routing corpus LFS objects
+        id: corpus_lfs
+        if: needs.changes.outputs.routing_corpus == 'true'
+        run: |
+          set -o pipefail
+          hash=$(git lfs ls-files --long --include 'testdata/routing-corpus/**' | cut -d ' ' -f1 | sort | sha256sum | cut -d ' ' -f1)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the routing corpus LFS cache
+        if: needs.changes.outputs.routing_corpus == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: routing-corpus-lfs-${{ steps.corpus_lfs.outputs.hash }}
+
+      # With the cache warm this only checks the objects out; with it cold
+      # it downloads them once for the key. SIGNEX_REQUIRE_ROUTING_CORPUS
+      # makes the load check fail on a pointer left unfetched or an empty
+      # corpus instead of skipping it.
+      - name: Fetch the routing corpus
+        if: needs.changes.outputs.routing_corpus == 'true'
+        run: |
+          git lfs pull --include 'testdata/routing-corpus/**'
+          echo "SIGNEX_REQUIRE_ROUTING_CORPUS=1" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
@@ -543,6 +589,17 @@ jobs:
       - name: Lint-lockstep gate
         if: ${{ !cancelled() }}
         run: bash scripts/check_lint_lockstep.sh
+
+      # The routing corpus (#2481) holds third-party boards: every board has
+      # a manifest row with an allowed licence and its licence text, and
+      # every row a board. Rules: testdata/routing-corpus/README.md.
+      - name: Routing corpus gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_routing_corpus.sh
+
+      - name: Routing corpus gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_routing_corpus.sh
 
       # Fragment names/bodies are validated on every event (PR, merge queue,
       # push). Rule + rationale: changelog.d/README.md (GH #748).

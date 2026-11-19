@@ -51,6 +51,8 @@ mod hierarchy_operands;
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
 mod needs;
+#[cfg(test)]
+mod no_erc_operand_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
@@ -75,6 +77,9 @@ mod placement_operands;
 mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
+#[cfg(test)]
+mod repair_reset_operand_tests;
+mod repair_reset_operands;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -84,6 +89,11 @@ mod sheet_entry_ref_tests;
 #[cfg(test)]
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
+#[cfg(test)]
+mod sheet_sync_operand_tests;
+mod sheet_sync_operands;
+#[cfg(test)]
+mod sheet_variable_operand_tests;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;

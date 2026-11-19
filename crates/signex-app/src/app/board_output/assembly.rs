@@ -99,13 +99,13 @@ impl Signex {
         options: AssemblySvgOptions,
         folder: &Path,
     ) -> Option<Vec<AssemblySvgFile>> {
-        let pcb = self.document_state.pcb_board(board)?;
+        let pcb = self.document_state.pcb_board_shown(board)?;
         let stem = super::file_title(board);
         let files = sides
             .iter()
             .map(|&side| {
                 let mirrored = options.mirrored && side == BoardSide::Bottom;
-                let drawing = assembly_drawing(pcb, side);
+                let drawing = assembly_drawing(&pcb, side);
                 let look = AssemblySvgOptions {
                     mirrored,
                     ..options
@@ -280,12 +280,12 @@ pub(crate) fn board_assembly_drawing(app: &mut Signex, args: &CommandArgs) -> Ra
     let Some(side) = side_operand(args) else {
         return refused("`side` is top or bottom");
     };
-    let Some(pcb) = app.document_state.pcb_board(&board) else {
+    let Some(pcb) = app.document_state.pcb_board_shown(&board) else {
         return refused("the board is not open");
     };
     let mut options = look(args);
     options.mirrored &= side == BoardSide::Bottom;
-    let drawing = assembly_drawing(pcb, side);
+    let drawing = assembly_drawing(&pcb, side);
     let answer = json!({
         "document": board.display().to_string(),
         "side": side_id(side),

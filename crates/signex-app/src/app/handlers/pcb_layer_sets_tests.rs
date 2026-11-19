@@ -38,7 +38,7 @@ fn segment(n: u128, y: f64, layer: &str) -> Segment {
     }
 }
 
-/// Top Layer, Top Overlay, Bottom Layer, in that order, a track on each
+/// Top Layer, Top Silkscreen, Bottom Layer, in that order, a track on each
 /// copper layer: the bottom one first in the file, so a draw order that
 /// stacks by side differs from the file's.
 fn board() -> PcbBoard {
@@ -167,8 +167,8 @@ fn traces(app: &Signex) -> Vec<(f32, bool)> {
 #[test]
 fn signal_layers_hide_the_other_layers_from_the_canvas_and_the_strip() {
     let (mut app, path, main) = open();
-    let overlay_tabs = count(&app, main, "Top Overlay");
-    assert!(overlay_tabs >= 1, "the strip lists Top Overlay");
+    let overlay_tabs = count(&app, main, "Top Silkscreen");
+    assert!(overlay_tabs >= 1, "the strip lists Top Silkscreen");
     let signal_texts = count(&app, main, "Signal");
 
     open_set_menu(&mut app, main, "All");
@@ -187,7 +187,7 @@ fn signal_layers_hide_the_other_layers_from_the_canvas_and_the_strip() {
     assert!(!view.is_hidden(TOP) && !view.is_hidden(BOTTOM));
     assert_eq!(traces(&app).len(), 2, "both copper tracks are drawn");
     assert_eq!(
-        count(&app, main, "Top Overlay"),
+        count(&app, main, "Top Silkscreen"),
         overlay_tabs - 1,
         "the strip no longer lists the overlay"
     );
@@ -303,7 +303,10 @@ fn short_names_show_tl_and_bl_and_numbers_go_in_front() {
     let shown = texts(&app, main);
     assert!(shown.iter().any(|t| t == "1 TL"), "{shown:?}");
     assert!(shown.iter().any(|t| t == "2 BL"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "TO"), "an overlay has no number");
+    assert!(
+        shown.iter().any(|t| t == "TO"),
+        "a silkscreen has no number"
+    );
 }
 
 #[test]

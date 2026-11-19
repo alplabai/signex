@@ -27,6 +27,9 @@ pub struct SchematicPalette {
     pub no_connect: (f32, f32, f32),
     pub symbol_stroke: (f32, f32, f32),
     pub symbol_fill: (f32, f32, f32),
+    /// Default fill of the body shapes a symbol leaves unfilled
+    /// (`CanvasColors::body_tint`); `None` leaves them unfilled.
+    pub symbol_body_tint: Option<(f32, f32, f32)>,
     pub pin: (f32, f32, f32),
     pub reference: (f32, f32, f32),
     pub value: (f32, f32, f32),
@@ -65,6 +68,7 @@ impl SchematicPalette {
             no_connect: (0.78, 0.18, 0.18),
             symbol_stroke: (0.53, 0.41, 0.04),
             symbol_fill: (0.93, 0.93, 0.56),
+            symbol_body_tint: None,
             pin: (0.53, 0.41, 0.04),
             reference: (0.53, 0.41, 0.04),
             value: (0.0, 0.4, 0.4),
@@ -100,6 +104,7 @@ impl From<&CanvasColors> for SchematicPalette {
             no_connect: rgb(c.no_connect),
             symbol_stroke: rgb(c.body),
             symbol_fill: rgb(c.body_fill),
+            symbol_body_tint: c.body_tint.map(rgb),
             pin: rgb(c.pin),
             reference: rgb(c.reference),
             value: rgb(c.value),

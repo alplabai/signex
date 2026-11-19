@@ -67,6 +67,8 @@ pub enum UndoGroupKind {
     FootprintSwap,
     /// A board pin or gate swap and its schematic rewiring (#2410).
     PartSwap,
+    /// Synchronize Sheet Entries and Ports writing a sheet's ports (#1276).
+    SheetEntrySync,
 }
 
 impl UndoGroupSheets {
@@ -81,6 +83,7 @@ impl UndoGroupSheets {
             UndoGroupKind::AgentEdit => "agent edit",
             UndoGroupKind::FootprintSwap => "footprint change",
             UndoGroupKind::PartSwap => "pin or gate swap",
+            UndoGroupKind::SheetEntrySync => "sheet entry sync",
         }
     }
 
@@ -104,6 +107,7 @@ impl UndoGroupSheets {
             UndoGroupKind::AgentEdit => "Agent edit",
             UndoGroupKind::FootprintSwap => "Change Footprint",
             UndoGroupKind::PartSwap => "Pin or gate swap",
+            UndoGroupKind::SheetEntrySync => "Sheet entry sync",
         }
     }
 
@@ -117,6 +121,7 @@ impl UndoGroupSheets {
             UndoGroupKind::AgentEdit => "agent edits".to_string(),
             UndoGroupKind::FootprintSwap => "changed footprints".to_string(),
             UndoGroupKind::PartSwap => "swapped pin connections".to_string(),
+            UndoGroupKind::SheetEntrySync => "synced ports".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -132,6 +137,7 @@ impl UndoGroupSheets {
             UndoGroupKind::AgentEdit => "contents",
             UndoGroupKind::FootprintSwap => "footprints",
             UndoGroupKind::PartSwap => "pin connections",
+            UndoGroupKind::SheetEntrySync => "ports",
             _ => "designators",
         }
     }
@@ -148,6 +154,7 @@ impl UndoGroupSheets {
             UndoGroupKind::AgentEdit => "edited",
             UndoGroupKind::FootprintSwap => "changed",
             UndoGroupKind::PartSwap => "swapped",
+            UndoGroupKind::SheetEntrySync => "synced",
         }
     }
 }

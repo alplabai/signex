@@ -156,12 +156,15 @@ fn every_context_fact_is_listed() {
                 footprints: _,
                 pad_pair: _,
                 one_footprint: _,
+                routes: _,
+                hovered: _,
+                net: _,
             },
         turn_in_hand: _,
     } = CommandContext::default();
     let names: BTreeSet<&str> = FACTS.iter().map(|(name, _, _)| *name).collect();
     assert_eq!(names.len(), FACTS.len(), "a fact is listed twice");
-    assert_eq!(FACTS.len(), 30 + 14, "30 context facts and 14 board facts");
+    assert_eq!(FACTS.len(), 30 + 17, "30 context facts and 17 board facts");
 }
 
 /// No core row stands on its gate alone: every core route's handler was

@@ -421,6 +421,27 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["open_document"], Operand, &[]),
+    // Headless with no `document`: they act on the sheet in view (#2522).
+    (
+        &["create_sheet_symbol_from_sheet", "repair_pin_junctions"],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
+    ),
+    // The `at` point is checked against the grid (#2522).
+    (&["create_sheet_symbol_from_sheet"], Operand, &[ToolState]),
+    // The target sheet comes from `document` (#2522): nothing implicit.
+    (
+        &[
+            "edit_no_erc_rules",
+            "repair_pin_junctions",
+            "set_sheet_variable",
+            "sync_sheet_entries",
+        ],
+        Operand,
+        &[],
+    ),
+    // The named board only (#2522): nothing implicit.
+    (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
     (
         &["new_pcb_document", "new_schematic_sheet"],
         HeadlessWithoutOperands,

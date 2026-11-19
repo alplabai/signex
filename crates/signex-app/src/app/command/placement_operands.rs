@@ -18,7 +18,7 @@
 use iced::Task;
 use signex_engine::DocumentPatch;
 use signex_net::NameChange;
-use signex_types::schematic::{LabelType, Point};
+use signex_types::schematic::{LabelType, NoErcDirective, Point};
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{
@@ -149,7 +149,8 @@ pub(super) fn junction(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::Junction)
 }
 
-/// `place_no_erc at=x,y`.
+/// `place_no_erc at=x,y [rules=id,id]`: `rules` names the ERC rules it
+/// silences; left out or empty, every rule (#1699).
 pub(super) fn no_erc(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::NoErc)
 }
@@ -423,7 +424,11 @@ impl Signex {
                 placed(self.place_junction_at(at))
             }
             Placement::NoErc => {
-                placed(self.place_no_erc_directive_at(self.grid_point(args, "at")?))
+                let at = self.grid_point(args, "at")?;
+                let rules = super::directive_operands::rule_ids(args, "rules")?;
+                let mut directive = NoErcDirective::new(uuid::Uuid::now_v7(), at);
+                directive.rules = rules.unwrap_or_default();
+                placed(self.place_no_erc_directive(directive))
             }
             Placement::Text => {
                 placed(self.place_text_at(self.grid_point(args, "at")?, text(args, "text")?))

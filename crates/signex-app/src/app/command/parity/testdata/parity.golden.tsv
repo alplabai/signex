@@ -172,6 +172,11 @@ copy_attributes_or_add_vertex	headless_refusal	headless_refusal	core	none	routin
 create_sheet_from_sheet_symbol	bridge	ContextMenu(Action(CreateChildSheet))	gui	selection	handler
 create_sheet_from_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 create_sheet_from_sheet_symbol	headless_refusal	headless_refusal	core	none	routing
+create_sheet_symbol_from_sheet	bridge	Edit(SheetSync(CreateSymbolRequested))	gui	active document	gate
+create_sheet_symbol_from_sheet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
+create_sheet_symbol_from_sheet	in_window_rewrite	document_window	gui	window	routing
+create_sheet_symbol_from_sheet	refusal_needs	Schematic	core	active document	routing
+create_sheet_symbol_from_sheet	headless_without_operands	run_operands	core	active document	handler
 cross_probe	bridge	CrossProbe(ProbeRequested)	gui	active document,selection	gate
 cross_probe	in_window_rewrite	document_window	gui	window	routing
 cross_probe	refusal_needs	ProbeTarget	gui	active document,selection	routing
@@ -307,9 +312,17 @@ edit_blanket	headless_missing_operand	needs `id`	core	none	routing
 edit_footprint_field	bridge	TextEdit(Requested(FootprintField))	gui	selection,cursor	handler
 edit_footprint_field	in_window_rewrite	document_window	gui	window	routing
 edit_footprint_field	headless_refusal	headless_refusal	core	none	routing
+edit_layer_color	bridge	Pcb(LayerTabMenu(ColourEditRequested(None)))	gui	active document	gate
+edit_layer_color	in_window_rewrite	document_window	gui	window	routing
+edit_layer_color	refusal_needs	EditablePcb	gui	active document	routing
+edit_layer_color	headless_refusal	headless_refusal	core	none	routing
 edit_library_symbol	bridge	Library(PlacedPart(ActionRequested(EditSymbol)))	gui	selection	handler
 edit_library_symbol	in_window_rewrite	document_window	gui	window	routing
 edit_library_symbol	headless_refusal	headless_refusal	core	none	routing
+edit_no_erc_rules	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+edit_no_erc_rules	refusal_needs	Schematic	core	active document	routing
+edit_no_erc_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
+edit_no_erc_rules	headless_missing_operand	needs `id`	core	none	routing
 edit_object_properties	bridge	Menu(OpenPropertiesPanel)	gui	active document,selection	gate
 edit_object_properties	in_window_rewrite	document_window	gui	window	routing
 edit_object_properties	refusal_needs	SelectedObject	gui	active document,selection	routing
@@ -1002,6 +1015,11 @@ remove_teardrops	headless_missing_operand	needs `document`	core	none	routing
 rename_net_class	operand_handler	run_operands: named document	core	origin	handler
 rename_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rename_net_class	headless_missing_operand	needs `document`	core	none	routing
+repair_pin_junctions	bridge	Erc(PinJunctionRepairRequested)	gui	active document	gate
+repair_pin_junctions	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+repair_pin_junctions	in_window_rewrite	document_window	gui	window	routing
+repair_pin_junctions	refusal_needs	Schematic	core	active document	routing
+repair_pin_junctions	headless_without_operands	run_operands	core	active document	handler
 repeat_last_item	bridge	Edit(RepeatLastItem)	gui	active document	gate
 repeat_last_item	in_window_rewrite	document_window	gui	window	routing
 repeat_last_item	refusal_needs	Schematic	gui	active document	routing
@@ -1019,6 +1037,16 @@ repour_selected	bridge	Pcb(RepourRequested { selected: true })	gui	active docume
 repour_selected	in_window_rewrite	document_window	gui	window	routing
 repour_selected	refusal_needs	Pcb	gui	active document	routing
 repour_selected	headless_refusal	headless_refusal	core	none	routing
+reset_board_origin	bridge	Pcb(Origin(ResetPicked))	gui	active document	gate
+reset_board_origin	operand_handler	run_operands: named document	core	origin	handler
+reset_board_origin	in_window_rewrite	document_window	gui	window	routing
+reset_board_origin	refusal_needs	EditablePcb	core	active document	routing
+reset_board_origin	headless_missing_operand	needs `document`	core	none	routing
+reset_layer_colors	bridge	Pcb(View(LayerColoursReset))	gui	active document	gate
+reset_layer_colors	operand_handler	run_operands: named document	core	origin	handler
+reset_layer_colors	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
+reset_layer_colors	refusal_needs	EditablePcb	core	active document	routing
+reset_layer_colors	headless_missing_operand	needs `document`	core	none	routing
 reset_local_coordinates	headless_refusal	headless_refusal	core	none	routing
 reset_schematic_designators	bridge	Annotate(OpenResetConfirm)	gui	none	handler
 reset_schematic_designators	in_window_rewrite	document_window	gui	window	routing
@@ -1152,6 +1180,10 @@ set_board_graphic	operand_handler	run_operands: named document	core	origin	handl
 set_board_graphic	refusal_needs	Pcb	core	active document	routing
 set_board_graphic	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_board_graphic	headless_missing_operand	needs `document`	core	none	routing
+set_board_origin	bridge	Pcb(Origin(SetPicked))	gui	active document	gate
+set_board_origin	in_window_rewrite	document_window	gui	window	routing
+set_board_origin	refusal_needs	EditablePcb	gui	active document	routing
+set_board_origin	headless_refusal	headless_refusal	core	none	routing
 set_board_panel	operand_handler	run_operands: named document	core	origin	handler
 set_board_panel	refusal_needs	Pcb	core	active document	routing
 set_board_panel	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -1161,7 +1193,7 @@ set_footprint_text	refusal_needs	Pcb	core	active document	routing
 set_footprint_text	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_footprint_text	headless_missing_operand	needs `document`	core	none	routing
 set_layer_color	operand_handler	run_operands: named document	core	origin	handler
-set_layer_color	refusal_needs	Pcb	core	active document	routing
+set_layer_color	refusal_needs	EditablePcb	core	active document	routing
 set_layer_color	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_layer_color	headless_missing_operand	needs `layer`	core	none	routing
 set_layer_sizes	operand_handler	run_operands: named document	core	origin	handler
@@ -1207,6 +1239,9 @@ set_selection_filters	headless_missing_operand	needs `kinds`	core	none	routing
 set_sheet_symbol_size	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_sheet_symbol_size	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_sheet_symbol_size	headless_missing_operand	needs `id`	core	none	routing
+set_sheet_variable	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+set_sheet_variable	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_sheet_variable	headless_missing_operand	needs `name`	core	none	routing
 set_symbol_parameter	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_symbol_parameter	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_symbol_parameter	headless_missing_operand	needs `id`	core	none	routing
@@ -1253,6 +1288,10 @@ smart_paste	bridge	Edit(SmartPaste)	core	active document,tool state,render cache
 smart_paste	in_window_rewrite	document_window	gui	window	routing
 smart_paste	refusal_needs	PasteTarget	core	active document,clipboard	routing
 smart_paste	disabled_still_runs_refusal	explains_refusal_in	core	active document,tool state,render cache,clipboard	handler
+snap_board_origin_to_corner	bridge	Pcb(Origin(SnapToCornerPicked))	gui	active document	gate
+snap_board_origin_to_corner	in_window_rewrite	document_window	gui	window	routing
+snap_board_origin_to_corner	refusal_needs	EditablePcb	gui	active document	routing
+snap_board_origin_to_corner	headless_refusal	headless_refusal	core	none	routing
 stitch_vias	bridge	Pcb(Tools(StitchRequested))	gui	active document	gate
 stitch_vias	operand_handler	run_operands: named document	core	origin,settings	handler
 stitch_vias	in_window_rewrite	document_window	gui	window	routing
@@ -1271,6 +1310,11 @@ swap_pins	headless_missing_operand	needs `document`	core	none	routing
 switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progress edit	handler
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing
 switch_segment_posture	headless_refusal	headless_refusal	core	none	routing
+sync_sheet_entries	bridge	Edit(SheetSync(Requested))	gui	active document	gate
+sync_sheet_entries	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+sync_sheet_entries	in_window_rewrite	document_window	gui	window	routing
+sync_sheet_entries	refusal_needs	Schematic	core	active document	routing
+sync_sheet_entries	headless_missing_operand	needs `symbol`	core	none	routing
 sync_sheet_pins	bridge	ContextMenu(Action(SyncSheetPins))	gui	selection	handler
 sync_sheet_pins	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 sync_sheet_pins	in_window_rewrite	document_window	gui	window	routing

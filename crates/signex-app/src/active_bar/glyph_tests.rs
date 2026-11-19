@@ -141,7 +141,12 @@ fn wire_glyph_is_one_routed_jog_not_a_pulse() {
 fn power_glyph_follows_the_port_family() {
     use ActiveBarAction::*;
     assert_eq!(PowerGlyph::of(None), PowerGlyph::Ground);
-    for a in [PlacePowerGND, PlacePowerSignalGND, PlacePowerEarth] {
+    for a in [
+        PlacePowerGND,
+        PlacePowerSignalGND,
+        PlacePowerEarth,
+        PlacePowerChassis,
+    ] {
         assert_eq!(PowerGlyph::of(Some(&a)), PowerGlyph::Ground, "{a:?}");
     }
     for a in [

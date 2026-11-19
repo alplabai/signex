@@ -23,6 +23,7 @@ fn text(content: &str, at: [f32; 2]) -> FootprintTextInput {
         mirrored: false,
         layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         justify: HAlign::Center,
+        designator: false,
     }
 }
 

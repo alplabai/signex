@@ -27,6 +27,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use signex_types::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
 use uuid::Uuid;
 
 use crate::adapter::LibraryError;
@@ -37,6 +38,14 @@ pub use layout::SourceLayout;
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
 pub const FORMAT_TOKEN: &str = "snxlib/2";
+
+/// `.snxlib` version policy: one version; any other token is refused.
+pub const FORMAT_VERSION: FormatVersion = FormatVersion {
+    current: FORMAT_TOKEN,
+    readable: &[FORMAT_TOKEN],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::Refused,
+};
 
 /// Top-level on-disk shape of a `.snxlib` file.
 ///
@@ -278,11 +287,8 @@ pub enum LibraryFileError {
     TomlDe(#[from] toml::de::Error),
     #[error("toml serialize: {0}")]
     TomlSer(#[from] toml::ser::Error),
-    #[error(
-        "unsupported .snxlib format token {got:?} (this build expects {expected:?})",
-        expected = FORMAT_TOKEN
-    )]
-    UnsupportedFormat { got: String },
+    #[error(".snxlib {0}")]
+    UnsupportedFormat(#[from] FormatVersionError),
     #[error("table {table:?}: TSV is empty (no header row)")]
     EmptyTable { table: String },
     #[error("table {table:?}: header row contains duplicate column {column:?}")]

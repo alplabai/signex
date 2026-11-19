@@ -109,9 +109,9 @@ editors-layers-eye-hidden = ○
 editors-layer-top = Top Layer
 editors-layer-bottom = Bottom Layer
 # Silkscreen of the top side.
-editors-layer-top-overlay = Top Overlay
+editors-layer-top-overlay = Top Silkscreen
 # Silkscreen of the bottom side.
-editors-layer-bottom-overlay = Bottom Overlay
+editors-layer-bottom-overlay = Bottom Silkscreen
 # Assembly drawing of the top side.
 editors-layer-top-assembly = Top Assembly
 # Assembly drawing of the bottom side.

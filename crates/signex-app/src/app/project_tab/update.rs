@@ -53,6 +53,9 @@ impl Signex {
                     ProjectGeneralCommand::SetParameter { name, value },
                 );
             }
+            ProjectTabMsg::ParameterSubmitted { project_id } => {
+                self.report_project_variable_issues(project_id);
+            }
             ProjectTabMsg::ParameterRemoved { project_id, name } => {
                 self.close_general_run(project_id);
                 self.apply_project_general(
@@ -79,6 +82,19 @@ impl Signex {
                     .document_state
                     .project_by_id(project_id)
                     .is_none_or(|p| p.data.parameters.contains_key(&name));
+                // A parameter is a variable (#1987): `${NAME}` and an
+                // expression can only name an identifier.
+                if !name.is_empty() && !signex_types::variables::is_variable_name(&name) {
+                    crate::diagnostics::log_warning(format!(
+                        "Parameter '{name}' was not added: a name is letters, digits and _, \
+                         and does not start with a digit."
+                    ));
+                    // The refused name stays typed, to be corrected.
+                    if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                        tab.new_parameter_name = name;
+                    }
+                    return;
+                }
                 if !name.is_empty() && !exists {
                     self.apply_project_general(
                         project_id,
@@ -356,5 +372,18 @@ impl Signex {
             self.after_project_general_change(defaults_moved);
         }
         moved
+    }
+}
+
+impl Signex {
+    /// Write the project variables whose `=` expression does not evaluate
+    /// (a cycle, an unknown name) to Messages (#1987).
+    fn report_project_variable_issues(&self, project_id: ProjectId) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        for issue in signex_types::variables::project_variable_issues(&project.data.parameters) {
+            crate::diagnostics::log_warning(format!("{}: {issue}", project.data.name));
+        }
     }
 }

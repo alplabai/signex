@@ -25,7 +25,7 @@ use signex_types::schematic::{SelectedItem, SelectedKind};
 use crate::context::ErcContext;
 use crate::diagnostic::Diagnostic;
 use crate::rules::label_conflict_groups;
-use crate::{RuleKind, Violation, sel};
+use crate::{RuleId, RuleKind, Violation, sel};
 
 /// What the project pass found.
 #[derive(Debug, Default)]
@@ -94,15 +94,17 @@ fn load_facts(graph: &ProjectGraph, net: &MultiNamedNet, facts: &mut Facts) {
 }
 
 /// The sources of the sheets whose part of `net` is reported: a sheet where
-/// `NetLabelConflict` owns the net, or where a No-ERC directive sits on any of
-/// the net's names, is left out.
+/// `NetLabelConflict` owns the net, or where a No-ERC directive that silences
+/// the rule sits on any of the net's names, is left out.
 fn reportable_sources<'a>(net: &'a MultiNamedNet, facts: &Facts) -> Vec<&'a NetNameSource> {
+    let rule = RuleId::builtin(RuleKind::NetMultipleNames);
     let left_out: HashSet<&SheetKey> = net
         .sources
         .iter()
         .filter(|s| {
             facts.get(&s.sheet).is_some_and(|f| {
-                f.conflicted.contains(&pt_key(&s.at)) || f.ctx.has_no_erc_directive_at(&s.at)
+                f.conflicted.contains(&pt_key(&s.at))
+                    || f.ctx.has_no_erc_directive_at(&s.at, rule.as_str())
             })
         })
         .map(|s| &s.sheet)
