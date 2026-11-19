@@ -212,7 +212,12 @@ impl LocalGuard {
         if want == got {
             return Some((true, None));
         }
-        let at = wire_nets(&self.wires, &self.wire_at, &self.plain.added, &self.wire_pins);
+        let at = wire_nets(
+            &self.wires,
+            &self.wire_at,
+            &self.plain.added,
+            &self.wire_pins,
+        );
         Some((false, Guard::blame(tips, &at, policy, edited, &want, &got)))
     }
 
