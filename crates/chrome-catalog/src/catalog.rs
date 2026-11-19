@@ -19,6 +19,7 @@ struct Catalog {
     theme: ThemeId,
     tokens: ThemeTokens,
     passive_calculator: CalculatorControl,
+    compact_group: crate::compact_group::CompactGroupSample,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,8 @@ pub(crate) enum Message {
     PassiveCalculator(CalculatorMessage),
     /// A project-tree sample row was interacted with; the samples are static.
     TreeInteracted,
+    /// A compact group sample header or row was clicked.
+    CompactGroup(crate::compact_group::SampleMsg),
 }
 
 impl Catalog {
@@ -35,6 +38,7 @@ impl Catalog {
             theme: ThemeId::DEFAULT,
             tokens: theme_tokens(ThemeId::DEFAULT),
             passive_calculator: CalculatorControl::default(),
+            compact_group: Default::default(),
         }
     }
 
@@ -46,6 +50,7 @@ impl Catalog {
             }
             Message::PassiveCalculator(message) => self.passive_calculator.update(message),
             Message::TreeInteracted => {}
+            Message::CompactGroup(message) => self.compact_group.update(message),
         }
     }
 
@@ -126,6 +131,16 @@ impl Catalog {
                 "Dimension labels",
                 tokens,
                 crate::dimension_label::view(tokens)
+            ),
+            section::view(
+                "Target band (in band, out of band, small) on Graphite Light and Dark",
+                tokens,
+                crate::target_band::view()
+            ),
+            section::view(
+                "Compact group (open with a selection, collapsed) on Graphite Light and Dark",
+                tokens,
+                self.compact_group.view()
             ),
         ]
         .spacing(20)

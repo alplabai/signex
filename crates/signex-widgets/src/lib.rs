@@ -6,6 +6,7 @@
 pub mod active_bar;
 pub mod chevron;
 pub mod chips;
+pub mod compact_group;
 pub mod constraint_grid;
 pub mod dimension_label;
 pub mod doc_tab_shell;
@@ -24,6 +25,7 @@ pub mod property_illustration;
 pub mod segmented;
 pub mod status_bar;
 pub mod tab_pill;
+pub mod target_band;
 pub mod theme_ext;
 pub mod toggle_switch;
 pub mod translate;
