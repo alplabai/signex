@@ -5,7 +5,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, button::Status, raw, text};

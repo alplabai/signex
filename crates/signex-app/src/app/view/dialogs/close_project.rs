@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use iced::widget::{Space, column, container};
-use iced::{Element, Length, Widget as _};
+use iced::{Element, Length};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;

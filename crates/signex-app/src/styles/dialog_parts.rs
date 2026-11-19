@@ -64,8 +64,8 @@ impl CalloutTone {
 
     fn glyph(self) -> &'static svg::Handle {
         match self {
-            Self::Info => &*GLYPH_INFO,
-            Self::Warn | Self::Error => &*GLYPH_WARN,
+            Self::Info => &GLYPH_INFO,
+            Self::Warn | Self::Error => &GLYPH_WARN,
         }
     }
 }
@@ -136,7 +136,7 @@ pub fn dialog_inline_error<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let ink = ti(tokens.error);
-    container(glyph_line(&*GLYPH_WARN, ink, body))
+    container(glyph_line(&GLYPH_WARN, ink, body))
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
             text_color: Some(ink),
