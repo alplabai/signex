@@ -6,17 +6,22 @@
 
 use std::collections::HashMap;
 
+use signex_expr::{LiteralContext, Quantity, parse, parse_with};
 use signex_sketch::SketchError;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::unit::Quantity;
 
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= pad_w` parse cleanly.
+/// Strip the optional leading `=` and surrounding whitespace so authored
+/// expressions like `= pad_w` parse cleanly (the sketch-style rule,
+/// [`signex_expr::expression_body`]).
 pub(crate) fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
+    signex_expr::expression_body(src)
+}
+
+/// Parse a value that must be a length: a bare `m` reads as metres here
+/// ([`signex_expr::bare_m_meaning`]).
+fn parse_length(src: &str) -> Result<signex_expr::ExprNode, signex_expr::ExprError> {
+    parse_with(strip_eq_prefix(src), LiteralContext::Length)
 }
 
 /// Build an [`EvalContext`] whose parameters are the canonical values in the
@@ -36,14 +41,14 @@ fn eval_quantity(expr: &str, ctx: &EvalContext) -> Result<Quantity, String> {
 /// Evaluate a length expression to millimetres. A unitless parameter is read
 /// as millimetres here (see [`crate::params::eval_length_mm`]).
 pub(crate) fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
-    let ast = parse(strip_eq_prefix(expr)).map_err(|e| format!("parse: {e:?}"))?;
+    let ast = parse_length(expr).map_err(|e| format!("parse: {e:?}"))?;
     crate::params::eval_length_mm(&ast, ctx).map_err(crate::params::describe)
 }
 
 /// [`eval_mm`] with the typed error, for callers that propagate
 /// [`SketchError`] (pad baking). Same parse + unitless-as-mm rule.
 pub(crate) fn eval_length(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
-    let ast = parse(strip_eq_prefix(expr)).map_err(SketchError::Expr)?;
+    let ast = parse_length(expr).map_err(SketchError::Expr)?;
     crate::params::eval_length_mm(&ast, ctx)
 }
 

@@ -161,6 +161,38 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // 2026-11-18: Edit ▸ Origin, where the board counts from. Each is one
+    // undo step on the board's options; greyed on a read-only board.
+    CommandMetadata {
+        id: "set_board_origin",
+        category: "edit",
+        label: command_ids::CMD_SET_BOARD_ORIGIN,
+        menu_label: Some(command_ids::CMD_MENU_SET_BOARD_ORIGIN),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "reset_board_origin",
+        category: "edit",
+        label: command_ids::CMD_RESET_BOARD_ORIGIN,
+        menu_label: Some(command_ids::CMD_MENU_RESET_BOARD_ORIGIN),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "snap_board_origin_to_corner",
+        category: "edit",
+        label: command_ids::CMD_SNAP_BOARD_ORIGIN_TO_CORNER,
+        menu_label: Some(command_ids::CMD_MENU_SNAP_BOARD_ORIGIN_TO_CORNER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "measure_distance",
         category: "view",

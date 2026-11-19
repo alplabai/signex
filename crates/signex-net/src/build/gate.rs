@@ -17,6 +17,10 @@ use crate::uf::Key;
 /// or no-connect marker.
 ///
 /// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
+/// The rule stays "a dot is the connection" (#107): since 2026-11-18 the edit
+/// that puts a pin end inside a wire mints that dot (`signex-engine`,
+/// `transform::pin_junctions`), and a bare touch an older file holds stays
+/// unconnected until Repair Pin Junctions adds it.
 /// Buses do **not**: a bus is a member bundle, not a single net, and the
 /// union-find never merges buses, so gating on a bus endpoint minted a
 /// one-terminal phantom net (D5.4).

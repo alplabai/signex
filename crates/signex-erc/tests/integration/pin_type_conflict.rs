@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use signex_erc::{ErcConfig, RuleKind, Severity, Violation};
 use signex_types::schematic::{
-    LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
+    LibPin, LibSymbol, NoErcDirective, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
     SelectedKind, Symbol, Wire,
 };
 use uuid::Uuid;
@@ -448,10 +448,8 @@ fn no_erc_on_one_pin_silences_only_its_pairs() {
     ]);
     wire(&mut sheet, 0.0, 10.0);
     wire(&mut sheet, 10.0, 20.0);
-    sheet.no_erc_directives.push(NoConnect {
-        uuid: Uuid::now_v7(),
-        position: Point::new(0.0, 0.0),
-    });
+    let marker = NoErcDirective::new(Uuid::now_v7(), Point::new(0.0, 0.0));
+    sheet.no_erc_directives.push(marker);
 
     let found = conflicts(signex_erc::run(&sheet));
 

@@ -8,6 +8,7 @@
 //! Differential pairs and buses route side by side (`bus`, `pair`).
 
 mod bus;
+mod ends;
 mod pair;
 mod tune;
 
@@ -26,6 +27,7 @@ use super::draw::TrackStyle;
 use super::items::BoardItem;
 
 pub use bus::{BusMember, BusStyle, bus_start, bus_tracks, nearest_net_point, route_bus_leg};
+pub use ends::{PadAt, PadEnd, copper_under, join_pads, pad_at, pad_end, via_fits};
 pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
 pub use tune::{Meander, NetsTuned, TuneRefusal, tune_length, tune_net, tune_nets};
 

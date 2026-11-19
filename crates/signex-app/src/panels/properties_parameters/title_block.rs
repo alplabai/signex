@@ -1,11 +1,12 @@
-//! Title Block section of the sheet's Properties (#1080): edits the active
-//! sheet's `title_block` map, which the canvas frame, the PDF title block
-//! and every `${TOKEN}` substitution read.
+//! Title-block rows of Document Options ▸ Parameters (#1080): edit the
+//! active sheet's `title_block` map, which the canvas frame, the PDF title
+//! block and every `${TOKEN}` substitution read.
 //!
 //! Each field commits on Enter, as one undoable edit; a half-typed value
 //! is a draft that never reaches the document or undo.
 
 use super::super::*;
+use super::graphite_table::ParameterRow;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 
@@ -15,7 +16,9 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// One editable title-block field, with the key it is stored under in the
 /// sheet's `title_block` map. The first four keys are the ones sheets have
-/// always carried; the rest are new with #1080.
+/// always carried; DocumentNumber to ApprovedBy are new with #1080, Author
+/// to Address4 with the Parameters list (maintainer decision 2026-11-18).
+/// A key is written only when the sheet has a value for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TitleBlockField {
     Title,
@@ -26,10 +29,17 @@ pub enum TitleBlockField {
     DrawnBy,
     CheckedBy,
     ApprovedBy,
+    Author,
+    Engineer,
+    Organization,
+    Address1,
+    Address2,
+    Address3,
+    Address4,
 }
 
 impl TitleBlockField {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 15] = [
         Self::Title,
         Self::DocumentNumber,
         Self::Revision,
@@ -38,6 +48,13 @@ impl TitleBlockField {
         Self::DrawnBy,
         Self::CheckedBy,
         Self::ApprovedBy,
+        Self::Author,
+        Self::Engineer,
+        Self::Organization,
+        Self::Address1,
+        Self::Address2,
+        Self::Address3,
+        Self::Address4,
     ];
 
     /// Key in `SchematicSheet::title_block`.
@@ -51,6 +68,13 @@ impl TitleBlockField {
             Self::DrawnBy => "drawn_by",
             Self::CheckedBy => "checked_by",
             Self::ApprovedBy => "approved_by",
+            Self::Author => "author",
+            Self::Engineer => "engineer",
+            Self::Organization => "organization",
+            Self::Address1 => "address1",
+            Self::Address2 => "address2",
+            Self::Address3 => "address3",
+            Self::Address4 => "address4",
         }
     }
 
@@ -64,6 +88,34 @@ impl TitleBlockField {
             Self::DrawnBy => "Drawn By",
             Self::CheckedBy => "Checked By",
             Self::ApprovedBy => "Approved By",
+            Self::Author => "Author",
+            Self::Engineer => "Engineer",
+            Self::Organization => "Organization",
+            Self::Address1 => "Address 1",
+            Self::Address2 => "Address 2",
+            Self::Address3 => "Address 3",
+            Self::Address4 => "Address 4",
+        }
+    }
+
+    /// The `${Name}` token the field is read with in any text.
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Title => "Title",
+            Self::DocumentNumber => "DocumentNumber",
+            Self::Revision => "Revision",
+            Self::Date => "Date",
+            Self::Company => "CompanyName",
+            Self::DrawnBy => "DrawnBy",
+            Self::CheckedBy => "CheckedBy",
+            Self::ApprovedBy => "ApprovedBy",
+            Self::Author => "Author",
+            Self::Engineer => "Engineer",
+            Self::Organization => "Organization",
+            Self::Address1 => "Address1",
+            Self::Address2 => "Address2",
+            Self::Address3 => "Address3",
+            Self::Address4 => "Address4",
         }
     }
 
@@ -79,6 +131,13 @@ impl TitleBlockField {
             Self::DrawnBy => ids::PROPERTIES_TITLE_BLOCK_DRAWN_BY,
             Self::CheckedBy => ids::PROPERTIES_TITLE_BLOCK_CHECKED_BY,
             Self::ApprovedBy => ids::PROPERTIES_TITLE_BLOCK_APPROVED_BY,
+            Self::Author => ids::PROPERTIES_TITLE_BLOCK_AUTHOR,
+            Self::Engineer => ids::PROPERTIES_TITLE_BLOCK_ENGINEER,
+            Self::Organization => ids::PROPERTIES_TITLE_BLOCK_ORGANIZATION,
+            Self::Address1 => ids::PROPERTIES_TITLE_BLOCK_ADDRESS_1,
+            Self::Address2 => ids::PROPERTIES_TITLE_BLOCK_ADDRESS_2,
+            Self::Address3 => ids::PROPERTIES_TITLE_BLOCK_ADDRESS_3,
+            Self::Address4 => ids::PROPERTIES_TITLE_BLOCK_ADDRESS_4,
         }
     }
 }
@@ -93,88 +152,83 @@ pub struct TitleBlockDraft {
     pub text: String,
 }
 
-/// The Title Block collapsible section for the active sheet.
-pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+/// What a title-block row shows in its field: the text being typed, else
+/// the sheet's own value; empty when the sheet has none.
+pub fn shown_title_block_value(ctx: &PanelContext, field: TitleBlockField) -> String {
+    ctx.title_block_sheet
+        .as_deref()
+        .and_then(|sheet| ctx.drafts.title_block_text(sheet, field))
+        .or_else(|| ctx.title_block.get(field.key()).cloned())
+        .unwrap_or_default()
+}
+
+/// The title-block rows of the Parameters table for the active sheet. Each
+/// field commits on Enter through `CommitTitleBlockField`.
+pub(super) fn title_block_rows<'a>(ctx: &'a PanelContext) -> Vec<ParameterRow<'a>> {
     use signex_i18n::{RenderTranslatable, Translatable, ids, t};
-    let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
     let i18n = &ctx.i18n;
-    ctx.collapsible(
-        "prop_title_block",
-        ids::PROPERTIES_SECTION_TITLE_BLOCK,
-        &ctx.collapsed_sections,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            for field in TitleBlockField::ALL {
-                let draft = ctx
-                    .title_block_sheet
-                    .as_deref()
-                    .and_then(|sheet| ctx.drafts.title_block_text(sheet, field));
-                let own = ctx
-                    .title_block
-                    .get(field.key())
-                    .cloned()
-                    .unwrap_or_default();
-                let value = match draft {
-                    Some(draft) => draft,
-                    None => own.clone(),
-                };
-                // The project's value, shown greyed while the sheet leaves
-                // the field empty, and named in the label (#1080).
-                let project_value = ctx
-                    .project_parameters
-                    .get(field.key())
-                    .filter(|v| !v.is_empty())
-                    .cloned();
-                // Rendered without isolation marks, so the label reads as before.
-                let around = |id| {
-                    Translatable::new(id)
-                        .arg("field", Translatable::new(field.message()))
-                        .localized(i18n)
-                };
-                let label = match (&project_value, own.is_empty()) {
-                    (Some(_), true) => around(ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT),
-                    (Some(_), false) => around(ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT),
-                    (None, _) => t!(i18n, field.message()),
-                };
-                c = c.push(
-                    container(
-                        row![
-                            property_label(label, muted),
-                            signex_widgets::text_input(
-                                // The project's own value for the field, shown verbatim.
-                                signex_i18n::UserText::new(
-                                    project_value.clone().unwrap_or_default()
-                                ),
-                                value.clone()
-                            )
-                            .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
-                            .on_submit(PanelMsg::CommitTitleBlockField(field))
-                            .size(TS.body)
-                            .padding(SP.s)
-                            .style(crate::panels::form_look::text_input_style)
-                            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-                        ]
-                        .spacing(SP.m)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([2, PROPERTY_ROW_PAD_X])
+    TitleBlockField::ALL
+        .into_iter()
+        .map(|field| {
+            let own_is_empty = ctx
+                .title_block
+                .get(field.key())
+                .is_none_or(String::is_empty);
+            // The project's value, shown greyed while the sheet leaves the
+            // field empty, and named in the label (#1080).
+            let project_value = ctx
+                .project_parameters
+                .get(field.key())
+                .filter(|v| !v.is_empty())
+                .cloned();
+            // An empty Date with no project value shows today, greyed, and
+            // stores nothing (maintainer decision 2026-11-18).
+            let today = match (field, &project_value) {
+                (TitleBlockField::Date, None) => today_of(ctx),
+                _ => None,
+            };
+            // Rendered without isolation marks, so the label reads as before.
+            let around = |id| {
+                Translatable::new(id)
+                    .arg("field", Translatable::new(field.message()))
+                    .localized(i18n)
+            };
+            let name = match (&project_value, own_is_empty, &today) {
+                (Some(_), true, _) => around(ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT),
+                (Some(_), false, _) => around(ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT),
+                (None, true, Some(_)) => around(ids::PROPERTIES_TITLE_BLOCK_TODAY),
+                (None, _, _) => t!(i18n, field.message()),
+            };
+            let input = signex_widgets::text_input(
+                // The project's own value for the field (or today's date),
+                // shown verbatim.
+                signex_i18n::UserText::new(project_value.or(today).unwrap_or_default()),
+                shown_title_block_value(ctx, field),
+            )
+            .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
+            .on_submit(PanelMsg::CommitTitleBlockField(field))
+            .size(TS.body)
+            .padding(SP.xs)
+            .style(crate::panels::form_look::text_input_style)
+            .width(Length::Fill);
+            ParameterRow {
+                name: name.into(),
+                value: container(input)
+                    .padding([2.0, SP.xs])
                     .width(Length::Fill)
                     .boxed(),
-                );
             }
-            c = c.push(
-                container(
-                    text(t!(i18n, ids::PROPERTIES_TITLE_BLOCK_HINT))
-                        .size(TS.caption)
-                        .color(muted),
-                )
-                .padding([3.0, SP.m])
-                .boxed(),
-            );
-            c
-        },
-    )
-    .boxed()
+        })
+        .collect()
+}
+
+/// Today's date as the CurrentDate row shows it; `None` with no sheet.
+fn today_of(ctx: &PanelContext) -> Option<String> {
+    ctx.builtin_parameters
+        .iter()
+        .find(|(parameter, _)| *parameter == super::BuiltinParameter::CurrentDate)
+        .map(|(_, value)| value.clone())
+        .filter(|value| !value.is_empty())
 }
 
 #[cfg(test)]

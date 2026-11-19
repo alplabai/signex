@@ -527,14 +527,7 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .boxed(),
                         Length::Fixed(MSG_SOURCE_W),
                     ),
-                    cell(
-                        text(UserText::new(entry.message.as_str()))
-                            .size(TS.body)
-                            .color(ink)
-                            .wrapping(iced::widget::text::Wrapping::None)
-                            .boxed(),
-                        Length::Fill,
-                    ),
+                    cell(message_text(tokens, i18n, entry, ink), Length::Fill),
                     cell(
                         text(UserText::new(clock_time(entry.at)))
                             .size(TS.body)
@@ -553,6 +546,33 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(rule());
     }
     container(col).width(Length::Fill).boxed()
+}
+
+/// The Message cell of a Messages row: the text, then the link to the command
+/// the row offers, if any (`messages_row::row_action`).
+fn message_text<'a>(
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+    entry: &'a crate::diagnostics::DiagnosticEntry,
+    ink: iced::Color,
+) -> Element<'a, PanelMsg> {
+    let line = text(UserText::new(entry.message.as_str()))
+        .size(TS.body)
+        .color(ink)
+        .wrapping(iced::widget::text::Wrapping::None);
+    let Some((command, label)) = super::messages_row::row_action(&entry.code) else {
+        return line.boxed();
+    };
+    row![
+        line,
+        Space::new().width(6).height(Length::Shrink),
+        signex_widgets::button(text(t!(i18n, label)).size(TS.body).color(ink))
+            .padding([SP.xs, SP.m])
+            .on_press(PanelMsg::MessageLinkPressed(command))
+            .style(crate::styles::menu_item(tokens)),
+    ]
+    .align_y(iced::Alignment::Center)
+    .boxed()
 }
 
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

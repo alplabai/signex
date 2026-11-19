@@ -196,6 +196,11 @@ pub struct PanelContext {
     /// The parameters of the project that owns the active sheet (#1080): the
     /// values a field falls back to while the sheet leaves it empty.
     pub project_parameters: std::collections::BTreeMap<String, String>,
+    /// The active sheet's variables (#1987), as stored: name to source text.
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The active sheet's read-only Parameters rows with their values, as
+    /// `signex_output::resolve` gives them; empty with no active sheet.
+    pub builtin_parameters: Vec<(super::BuiltinParameter, String)>,
     /// The app's one store of half-typed title-block fields and custom
     /// paper edges (#2027): a handle the view reads, never a copy.
     pub drafts: super::PanelDrafts,
@@ -269,6 +274,8 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The field / callout hover of the Properties illustration (#2523).
+    pub illustration_hover: super::PanelIllustrationHover,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

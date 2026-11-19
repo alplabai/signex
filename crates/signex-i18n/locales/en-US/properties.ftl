@@ -43,7 +43,6 @@ properties-section-net-general = General (Net)
 properties-section-net-parameters = Parameters (Net)
 properties-section-parameters = Parameters
 properties-section-page-options = Page Options
-properties-section-title-block = Title Block
 properties-section-selection-filters = Custom Selection Filters
 
 ## Row labels
@@ -145,6 +144,7 @@ properties-power-style-circle = Circle
 properties-power-style-power-ground = Power Ground
 properties-power-style-signal-ground = Signal Ground
 properties-power-style-earth = Earth
+properties-power-style-chassis = Chassis
 properties-physical-name = Physical Name
 properties-power-net = Power Net
 properties-high-speed = High Speed
@@ -240,3 +240,71 @@ properties-title-block-from-project = { $field } (project)
 # The sheet's own value replaces the project's. $field is the field's name.
 properties-title-block-overrides-project = { $field } (overrides project)
 properties-title-block-hint = Press Enter to apply a field.
+properties-section-sheet-variables = Sheet Variables
+properties-sheet-variable-add = Add
+properties-sheet-variable-remove = Remove
+# What a variable's `=` expression evaluates to. $value is the result, such
+# as 1.65V.
+properties-sheet-variable-shows = Shows { $value }
+# Why a variable's `=` expression does not evaluate. $error is the reason.
+properties-sheet-variable-error = Error: { $error }
+properties-sheet-variables-hint = A sheet variable replaces the project variable of the same name. A value starting with = is an expression. Press Enter to apply.
+# The read-only rows of Document Options, Parameters: special strings of the
+# sheet that nothing in the panel edits.
+properties-parameter-document-name = Document Name
+properties-parameter-sheet-name = Sheet Name
+properties-parameter-sheet-number = Sheet Number
+properties-parameter-sheet-count = Sheet Count
+properties-parameter-project-name = Project Name
+properties-parameter-current-time = Current Time
+properties-parameter-current-date = Current Date
+properties-parameter-time = Time
+properties-parameter-document-full-path = Document Full Path
+properties-parameter-modified-date = Modified Date
+properties-title-block-author = Author
+properties-title-block-engineer = Engineer
+properties-title-block-organization = Organization
+properties-title-block-address-1 = Address 1
+properties-title-block-address-2 = Address 2
+properties-title-block-address-3 = Address 3
+properties-title-block-address-4 = Address 4
+# The sheet leaves the Date field empty, so it shows today's date and
+# stores nothing. $field is the field's name.
+properties-title-block-today = { $field } (today)
+# What a part value's `=` expression evaluates to. $value is the result,
+# such as 20kΩ.
+properties-value-shows = Shows { $value }
+# Why a part value's `=` expression does not evaluate. $error is the reason.
+properties-value-error = Error: { $error }
+
+## Shared Properties rows (#2523)
+
+# One step of the Rotation control. $degrees is 0, 90, 180 or 270.
+properties-rotation-step = { $degrees }°
+# The first point of a wire or a bus, an X / Y pair.
+properties-start = Start
+# Axis tag inside a coordinate field.
+properties-axis-x = X
+properties-axis-y = Y
+# Width / height tag inside a size field.
+properties-axis-width = W
+properties-axis-height = H
+# The unit shown at the right of a length field. $unit is the unit symbol
+# (mm, mil, in, um); symbols are not translated.
+properties-unit-suffix = { $unit }
+# A Font Size entry. $size is the size in points.
+properties-font-size-pt = { $size } pt
+# Tooltips of the text style buttons.
+properties-style-bold = Bold
+properties-style-italic = Italic
+properties-style-underline = Underline
+properties-style-strike = Strike
+# The text style buttons: one letter each, drawn in its own style.
+properties-style-bold-glyph = B
+properties-style-italic-glyph = I
+properties-style-underline-glyph = U
+properties-style-strike-glyph = T
+# Tooltip of the header's more-actions button.
+properties-header-more = More
+# The glyph of the header's more-actions button.
+properties-header-more-glyph = ⋯

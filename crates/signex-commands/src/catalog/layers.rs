@@ -272,8 +272,32 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_SET_LAYER_COLOR),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::NONE,
+        // Layer colours are saved with the board (2026-11-18).
+        flags: CommandFlags::MUTATES,
         operands: super::operands::LAYER_COLOR,
+        ..CommandMetadata::DEFAULT
+    },
+    // 2026-11-18: Layer colour... on a layer tab; the palette opens it for
+    // the active layer. It opens the Layers panel's colour picker.
+    CommandMetadata {
+        id: "edit_layer_color",
+        category: "view",
+        label: command_ids::CMD_EDIT_LAYER_COLOR,
+        menu_label: Some(command_ids::CMD_MENU_EDIT_LAYER_COLOR),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // 2026-11-18: Reset all layer colours on a layer tab, one undo step.
+    CommandMetadata {
+        id: "reset_layer_colors",
+        category: "view",
+        label: command_ids::CMD_RESET_LAYER_COLORS,
+        menu_label: Some(command_ids::CMD_MENU_RESET_LAYER_COLORS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

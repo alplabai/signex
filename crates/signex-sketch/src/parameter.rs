@@ -6,16 +6,15 @@
 //!
 //! 1. Parse each source string into an [`ExprNode`].
 //! 2. Walk the AST to discover [`ExprNode::Ref`] dependencies.
-//! 3. Topologically sort the parameter graph; reject cycles.
+//! 3. Topologically sort the parameter graph; reject cycles
+//!    ([`signex_expr::dependency_order`]).
 //! 4. Evaluate in topo order, accumulating already-resolved
 //!    parameters as `Literal(Quantity)` ASTs in the eval context so
 //!    later expressions resolve cleanly.
-//!
-//! Cycle detection uses an iterative DFS with `Visiting` / `Visited`
-//! colours (Tarjan-style). No third-party graph or solver source
-//! consulted.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
+
+use signex_expr::{dependency_order, expression_body};
 
 use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
@@ -24,13 +23,6 @@ use crate::expr::parse::parse;
 use crate::unit::{Quantity, UnitFamily};
 
 pub use signex_types::sketch::parameter::ParameterTable;
-
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace from a parameter source string.
-fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
-}
 
 /// Resolve every parameter to a canonical-unit [`Quantity`]: millimetres
 /// for `Length`, radians for `Angle`, a plain number for `Count`. Unlike
@@ -43,15 +35,13 @@ pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quan
     // 1. Parse every parameter source string into an AST.
     let mut asts: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, src) in table.iter() {
-        let body = strip_eq_prefix(src);
+        let body = expression_body(src);
         let ast = parse(body)?;
         asts.insert(name.clone(), ast);
     }
 
-    // 2. Topologically sort by dependency. Iterative DFS with three
-    //    colours: White (unseen), Gray (on the recursion stack),
-    //    Black (finished). Gray-revisit signals a cycle.
-    let order = topo_sort(&asts)?;
+    // 2. Topologically sort by dependency; a cycle is an error.
+    let order = dependency_order(&asts)?;
 
     // 3. Evaluate in topo order. Each freshly-resolved value is
     //    re-injected into the eval context as a Literal(Quantity)
@@ -72,6 +62,13 @@ pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quan
             UnitFamily::Length => Quantity::length(q.as_mm()?),
             UnitFamily::Angle => Quantity::angle(q.as_rad()?),
             UnitFamily::Count => Quantity::count(q.as_count()?),
+            // `eval` already refuses these at the sketch boundary.
+            UnitFamily::Derived => {
+                return Err(ExprError::WrongFamily {
+                    expected: UnitFamily::Length,
+                    got: UnitFamily::Derived,
+                });
+            }
         };
         out.insert(name, canonical);
     }
@@ -89,125 +86,6 @@ pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError
         .into_iter()
         .map(|(name, q)| (name, q.value))
         .collect())
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Color {
-    White,
-    Gray,
-    Black,
-}
-
-/// Iterative DFS topological sort. Returns parameter names in an
-/// order where every dependency precedes its dependants. Errors with
-/// [`ExprError::Cycle`] if a cycle is found.
-fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError> {
-    let mut color: HashMap<&str, Color> = asts.keys().map(|k| (k.as_str(), Color::White)).collect();
-    let mut order: Vec<String> = Vec::with_capacity(asts.len());
-
-    // We walk every parameter in BTreeMap order so the resolution is
-    // deterministic across runs.
-    for root in asts.keys() {
-        if color.get(root.as_str()).copied() != Some(Color::White) {
-            continue;
-        }
-        // Stack frame: (param_name, child_iter_index, deps_vec)
-        let mut stack: Vec<(String, usize, Vec<String>)> = Vec::new();
-        let root_deps = collect_deps(asts, root);
-        color.insert(root.as_str(), Color::Gray);
-        stack.push((root.clone(), 0, root_deps));
-
-        while let Some(top) = stack.last_mut() {
-            if top.1 >= top.2.len() {
-                // All children processed → mark Black, emit, pop.
-                let name = top.0.clone();
-                color.insert(name_borrow(&name, asts), Color::Black);
-                order.push(name);
-                stack.pop();
-                continue;
-            }
-            let dep_name = top.2[top.1].clone();
-            top.1 += 1;
-
-            // Skip refs that aren't parameters in this table — they
-            // might be ArrayIndex variables or unbound; the evaluator
-            // will surface a clearer error when they're encountered.
-            if !asts.contains_key(&dep_name) {
-                continue;
-            }
-
-            match color.get(dep_name.as_str()).copied() {
-                Some(Color::White) => {
-                    let dep_deps = collect_deps(asts, &dep_name);
-                    color.insert(name_borrow(&dep_name, asts), Color::Gray);
-                    stack.push((dep_name, 0, dep_deps));
-                }
-                Some(Color::Gray) => {
-                    return Err(ExprError::Cycle(dep_name));
-                }
-                Some(Color::Black) => {
-                    // Already finished; nothing to do.
-                }
-                None => {
-                    // Should not happen — every param key is in the map.
-                }
-            }
-        }
-    }
-
-    Ok(order)
-}
-
-/// Borrow a `&str` view of `name` whose lifetime matches `asts`'s
-/// keys, so we can use it as a `HashMap<&str, _>` key.
-fn name_borrow<'a>(name: &str, asts: &'a BTreeMap<String, ExprNode>) -> &'a str {
-    asts.get_key_value(name)
-        .map(|(k, _)| k.as_str())
-        .expect("name must be a param in the table")
-}
-
-/// Collect every [`ExprNode::Ref`] name reachable from `name`'s AST.
-fn collect_deps(asts: &BTreeMap<String, ExprNode>, name: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some(root) = asts.get(name) {
-        gather_refs(root, &mut out);
-    }
-    out
-}
-
-/// Walk an AST and append every distinct `Ref(name)` name to `out`.
-fn gather_refs(node: &ExprNode, out: &mut Vec<String>) {
-    fn rec(node: &ExprNode, seen: &mut HashSet<String>, out: &mut Vec<String>) {
-        match node {
-            ExprNode::Literal(_) | ExprNode::ArrayIndex(_) => {}
-            ExprNode::Ref(name) => {
-                if seen.insert(name.clone()) {
-                    out.push(name.clone());
-                }
-            }
-            ExprNode::Binary(_, l, r) => {
-                rec(l, seen, out);
-                rec(r, seen, out);
-            }
-            ExprNode::Unary(_, inner) => rec(inner, seen, out),
-            ExprNode::Ternary(c, t, e) => {
-                rec(c, seen, out);
-                rec(t, seen, out);
-                rec(e, seen, out);
-            }
-            ExprNode::Lookup { key, keys, values } => {
-                rec(key, seen, out);
-                for k in keys {
-                    rec(k, seen, out);
-                }
-                for v in values {
-                    rec(v, seen, out);
-                }
-            }
-        }
-    }
-    let mut seen = HashSet::new();
-    rec(node, &mut seen, out);
 }
 
 #[cfg(test)]

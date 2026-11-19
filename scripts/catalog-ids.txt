@@ -1,6 +1,6 @@
 # Every accepted command id, sorted with LC_ALL=C. Checked by
-# scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
 # removing a line removes a command and needs a maintainer decision.
+# scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
 add_board_graphic
 add_net_class
 add_teardrops
@@ -52,6 +52,7 @@ color_net
 copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol
+create_sheet_symbol_from_sheet
 cross_probe
 cut
 cycle_arc_mode
@@ -88,7 +89,9 @@ draw_wire
 duplicate
 edit_blanket
 edit_footprint_field
+edit_layer_color
 edit_library_symbol
+edit_no_erc_rules
 edit_object_properties
 edit_reference_designator
 edit_selected_object_properties
@@ -267,10 +270,13 @@ remove_board_panel
 remove_last_vertex
 remove_teardrops
 rename_net_class
+repair_pin_junctions
 repeat_last_item
 report_manager_bom
 repour_all
 repour_selected
+reset_board_origin
+reset_layer_colors
 reset_local_coordinates
 reset_schematic_designators
 resolve
@@ -313,6 +319,7 @@ send_to_back
 send_to_back_of
 set_active_layer
 set_board_graphic
+set_board_origin
 set_board_panel
 set_footprint_text
 set_layer_color
@@ -341,10 +348,12 @@ show_layer_group
 show_layer_set
 show_used_layers_only
 smart_paste
+snap_board_origin_to_corner
 stitch_vias
 swap_gates
 swap_pins
 switch_segment_posture
+sync_sheet_entries
 sync_sheet_pins
 tile_windows_horizontally
 tile_windows_vertically

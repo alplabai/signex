@@ -18,6 +18,7 @@ pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
 mod placed_edit;
+mod pre_placement;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -45,9 +46,10 @@ mod erc_waivers;
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
+pub(crate) mod illustration;
 mod library;
 mod messages;
-mod messages_row;
+pub(crate) mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
@@ -80,7 +82,7 @@ pub(crate) use element_properties::{
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
-    FootprintCards,
+    FootprintCards, NoErcRuleEdit,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -95,7 +97,8 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField, typed_mm,
+    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft,
+    TitleBlockField, shown_title_block_value, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
@@ -120,6 +123,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{
@@ -150,13 +154,14 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+#[cfg(test)]
+pub(crate) use pre_placement::pre_placement_readout;
+pub use pre_placement::{PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
-#[cfg(test)]
-pub(crate) use properties::pre_placement_readout;
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
+pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
     PROPERTY_ROW_PAD_X, view_properties,

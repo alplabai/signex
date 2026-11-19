@@ -236,6 +236,14 @@ impl Engine {
                 if !changed {
                     return Ok(CommandResult::unchanged());
                 }
+                // A field expression naming the part follows its new
+                // designator, in this same undo step (#1986).
+                if let TextTarget::SymbolReference(_) = target {
+                    signex_types::part_keys::follow_part_keys(
+                        &mut self.document.symbols,
+                        &before.symbols,
+                    );
+                }
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::TextUpdated,

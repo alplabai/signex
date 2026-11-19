@@ -12,8 +12,8 @@
 use std::sync::Arc;
 
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, Junction, Label, NoConnect, SchDirective, SchDrawing,
-    SchematicSheet, Symbol, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, Junction, Label, NoConnect, NoErcDirective, SchDirective,
+    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
 };
 
 macro_rules! shared_collections {
@@ -71,7 +71,7 @@ shared_collections! {
     buses: Bus,
     bus_entries: BusEntry,
     drawings: SchDrawing,
-    no_erc_directives: NoConnect,
+    no_erc_directives: NoErcDirective,
     directives: SchDirective,
 }
 

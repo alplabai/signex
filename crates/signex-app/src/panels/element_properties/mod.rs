@@ -11,19 +11,21 @@ mod child_sheet;
 mod directive;
 mod drawing;
 mod drawing_preview;
-mod font_row;
+pub(in crate::panels) mod font_row;
 mod footprint_card;
 mod footprint_section;
-mod header;
+pub(in crate::panels) mod header;
+mod illustrations;
 mod label;
 mod library_rows;
+mod no_erc;
 mod pins;
 mod placed_kinds;
 mod placed_rows;
 #[cfg(test)]
 mod placed_rows_tests;
 mod power_port;
-mod rows;
+pub(in crate::panels) mod rows;
 mod selected;
 mod symbol;
 mod symbol_field;
@@ -39,4 +41,5 @@ pub(super) use font_row::font_family_row;
 pub use footprint_card::{
     FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
 };
+pub use no_erc::NoErcRuleEdit;
 pub(super) use selected::view_selected_element_properties;

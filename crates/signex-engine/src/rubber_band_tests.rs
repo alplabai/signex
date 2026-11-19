@@ -1170,6 +1170,54 @@ fn items_per_net(sheet: &SchematicSheet, stable: &std::collections::HashSet<Uuid
         .collect()
 }
 
+/// The carried wires as items, and the labels and sheet pins the plain move
+/// moved onto one of them.
+fn riding_items(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    carried: &[Uuid],
+) -> std::collections::HashSet<Item> {
+    use signex_net::{point_on_segment, pt_key};
+    let on_carried = |p: &Point| {
+        (plain.wires.iter())
+            .filter(|w| carried.contains(&w.uuid))
+            .any(|w| point_on_segment(pt_key(p), pt_key(&w.start), pt_key(&w.end)))
+    };
+    let mut out: std::collections::HashSet<Item> =
+        carried.iter().map(|id| Item::Wire(*id)).collect();
+    for label in &plain.labels {
+        let moved = (before.labels.iter())
+            .any(|old| old.uuid == label.uuid && pt_key(&old.position) != pt_key(&label.position));
+        if moved && on_carried(&label.position) {
+            out.insert(Item::Label(label.uuid));
+        }
+    }
+    let pins = |sheet: &SchematicSheet| -> Vec<(Uuid, Point)> {
+        (sheet.child_sheets.iter())
+            .flat_map(|c| c.pins.iter().map(|p| (p.uuid, p.position)))
+            .collect()
+    };
+    let was = pins(before);
+    for (id, at) in pins(plain) {
+        let moved = was
+            .iter()
+            .any(|(old, p)| *old == id && pt_key(p) != pt_key(&at));
+        if moved && on_carried(&at) {
+            out.insert(Item::SheetPin(id));
+        }
+    }
+    out
+}
+
+/// The selected wires of a move: the wires that carry their joins along,
+/// known by id whatever a fold does to their geometry afterwards.
+pub(crate) fn selected_wire_ids(items: &[SelectedItem]) -> Vec<Uuid> {
+    (items.iter())
+        .filter(|item| item.kind == SelectedKind::Wire)
+        .map(|item| item.uuid)
+        .collect()
+}
+
 /// Wires present with identical geometry in every sheet.
 fn unedited_wires(sheets: &[&SchematicSheet]) -> std::collections::HashSet<Uuid> {
     let geometry = |sheet: &SchematicSheet| -> std::collections::HashMap<Uuid, _> {
@@ -1249,10 +1297,15 @@ pub(crate) fn check_closure_oracle(
     after: &SchematicSheet,
     warned: &std::collections::BTreeSet<Item>,
     moved_pins: &std::collections::BTreeSet<Item>,
+    carried: &[Uuid],
 ) -> Result<(), String> {
     // Wires the plain move leaves alone bridge the before and plain nets; the
     // rubber-banded result is judged on identified items only.
-    let stable = unedited_wires(&[before, plain]);
+    let mut stable = unedited_wires(&[before, plain]);
+    // A selected wire (`carried`, by id) keeps its joins as it moves and
+    // makes new ones where it lands (`wire_contacts`): it bridges its net
+    // before the move and its net after the plain move.
+    stable.extend(carried.iter().copied());
     let (b, p, r) = (
         items_per_net(before, &stable),
         items_per_net(plain, &stable),
@@ -1294,6 +1347,10 @@ pub(crate) fn check_closure_oracle(
         }
     }
     let (bi, pi, ri) = (net_index(&b), net_index(&p), net_index(&r));
+    // What rides on a carried wire goes where the wire's kept joins go: the
+    // wire itself, and a label or sheet pin the move took along that lies on
+    // it in the plain move. (Moved pins are left out of every check below.)
+    let riding = riding_items(before, plain, carried);
     for net in &b {
         let live: Vec<&Item> = net
             .iter()
@@ -1310,6 +1367,9 @@ pub(crate) fn check_closure_oracle(
             }
         }
     }
+    // A wire the pass edited is no member to judge a warned pin by: it is
+    // identified by its pins and labels, on the wires all three sheets share.
+    let shared = unedited_wires(&[before, plain, after]);
     for pin in warned {
         let members = |nets: &Nets,
                        index: &std::collections::HashMap<Item, usize>|
@@ -1320,6 +1380,11 @@ pub(crate) fn check_closure_oracle(
                     nets[*i]
                         .iter()
                         .filter(|m| !moved_pins.contains(m))
+                        // A carried wire and what rides on it join what the
+                        // wire carries; the warned pin is judged on what it
+                        // joins itself.
+                        .filter(|m| !riding.contains(m))
+                        .filter(|m| !matches!(m, Item::Wire(id) if !shared.contains(id)))
                         .cloned()
                         .collect()
                 })
@@ -1365,11 +1430,25 @@ struct Share {
 /// back more often, and one shared cap would let them hide a regression in
 /// the symbol-only ones.
 #[derive(Debug, Default)]
-struct RunCounts {
+pub(crate) struct RunCounts {
     symbols_only: Share,
     co_selected: Share,
     /// Cases that edited wires.
     rerouted: usize,
+    /// Moved pins the plain move joined to a wire through a new pin dot: left
+    /// out of the strict net check, which holds every other pin.
+    pin_joined: usize,
+    /// Moved pins of the cases held to the strict net check.
+    strict_pins: usize,
+    /// Per kind of case and cause, the cases that fell back to a plain move
+    /// (`transform::rubber_band::reasons`, and the notices given).
+    fallbacks: std::collections::BTreeMap<(&'static str, &'static str), usize>,
+    /// Per kind of case, the cases whose only notice was a held pin kept off
+    /// the wire it landed in (spec gap (a)): a notice, not a fallback.
+    unjoined_only: std::collections::BTreeMap<&'static str, usize>,
+    /// Cases the differential check passed without checking (a moved power
+    /// port, whose name-merges it does not restate).
+    allowed_skipped: usize,
 }
 
 impl RunCounts {
@@ -1382,6 +1461,15 @@ impl RunCounts {
             mine.warned += theirs.warned;
         }
         self.rerouted += other.rerouted;
+        self.pin_joined += other.pin_joined;
+        self.strict_pins += other.strict_pins;
+        self.allowed_skipped += other.allowed_skipped;
+        for (key, n) in &other.fallbacks {
+            *self.fallbacks.entry(*key).or_default() += n;
+        }
+        for (key, n) in &other.unjoined_only {
+            *self.unjoined_only.entry(*key).or_default() += n;
+        }
     }
 }
 
@@ -1391,22 +1479,85 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     for seed in [0x5EED_0963, 0xC0FFEE, 0xBADC_AB1E, 0x1234_5678] {
         total.add(&property_run(seed, 2000));
     }
+    // Under `RUBBER_BAND_ALL` every failing case, one line each.
+    let failures = COLLECTED.with(|all| std::mem::take(&mut *all.borrow_mut()));
+    assert!(
+        failures.is_empty(),
+        "{} failing cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
     let exercised = total.symbols_only.cases + total.co_selected.cases;
     assert!(exercised > 4000, "only {exercised} cases");
+    // The strict net check leaves out a moved pin the plain move joined to a
+    // wire through a new pin dot; a bound keeps those few from growing into
+    // a blind spot. Measured 1232 of 11465 (10.7 %, 2026-11-19).
+    eprintln!(
+        "pin-dot pins left out of the strict check: {} of {} moved pins",
+        total.pin_joined, total.strict_pins
+    );
+    assert!(
+        total.pin_joined * 100 < total.strict_pins * 15,
+        "{} of {} moved pins left out of the strict check for a pin dot",
+        total.pin_joined,
+        total.strict_pins
+    );
     assert!(
         total.rerouted * 3 > exercised,
         "only {} cases rerouted wires",
         total.rerouted
     );
-    // Measured at 22.6 % and 26.9 % (#1177); the caps leave about two points.
+    // Why the fallbacks fell back, a case counted once per cause it shows.
+    for ((kind, why), n) in &total.fallbacks {
+        eprintln!("fallback {kind}: {n} cases: {why}");
+    }
+    eprintln!(
+        "differential check passed without checking: {} cases (a moved power port)",
+        total.allowed_skipped
+    );
+    for (kind, n) in &total.unjoined_only {
+        eprintln!("notice only {kind}: {n} cases: a held pin kept off its landing wire");
+    }
+    for (kind, share) in [
+        ("symbol-only", total.symbols_only),
+        ("co-selected", total.co_selected),
+    ] {
+        eprintln!(
+            "{kind}: {} of {} cases fell back",
+            share.warned, share.cases
+        );
+    }
+    // Symbol-only measured at 22.6 % (#1177), 17.8 % with the guarded pass
+    // (957 of 5366, 2026-11-19), the cap about two points above.
+    // Co-selected measured at 32.2 % with the guarded pass (2026-11-19), the
+    // cap about two points above. Its causes: moved pins that cannot be kept
+    // (the pin pass, as for symbol-only), a dragged wire that cannot be
+    // carried whole (the rule that an edit makes no new T dot), and held pins
+    // touching their landing wire (decision (a)).
+    // TODO: lower the fallback rate, #2521.
     for (kind, share, cap) in [
-        ("symbol-only", total.symbols_only, 25),
-        ("co-selected", total.co_selected, 29),
+        ("symbol-only", total.symbols_only, 20),
+        ("co-selected", total.co_selected, 34),
     ] {
         assert!(
             share.warned * 100 < share.cases * cap,
             "{} of {} {kind} cases fell back to a plain move",
             share.warned,
+            share.cases
+        );
+    }
+    // A held pin kept off the wire it landed in (decision (a)) is
+    // told but kept; those notices are bounded apart. Measured 7 of 5366
+    // symbol-only and 2 of 2548 co-selected cases (2026-11-19); the cap is 1 %
+    // per kind of case.
+    for (kind, share) in [
+        ("symbol-only", total.symbols_only),
+        ("co-selected", total.co_selected),
+    ] {
+        let only = total.unjoined_only.get(kind).copied().unwrap_or_default();
+        assert!(
+            only * 100 < share.cases,
+            "{only} of {} {kind} cases gave only the held-pin notice",
             share.cases
         );
     }
@@ -1416,122 +1567,275 @@ fn random_rubber_band_moves_never_change_the_netlist() {
 /// zero-length checks, and (unless user edits are co-selected) strict net
 /// equality.
 fn property_run(seed: u64, cases: usize) -> RunCounts {
+    // `RUBBER_BAND_ALL=1` runs every case and collects the failures instead of
+    // stopping at the first; the test prints them all at the end.
+    let collect = std::env::var_os("RUBBER_BAND_ALL").is_some();
     let mut rng = Lcg(seed);
     let mut counts = RunCounts::default();
     for index in 0..cases {
-        let Some(Case {
-            sheet,
-            moves,
-            selects_wire,
-        }) = random_case(&mut rng)
-        else {
+        let Some(case) = random_case(&mut rng) else {
             continue;
         };
-        let described = describe(&sheet);
-        let overlaps_before = overlap_pairs(&sheet);
-        let wires_before: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+        if !collect {
+            property_case(seed, index, case, &mut counts);
+            continue;
+        }
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            property_case(seed, index, case, &mut counts);
+        }));
+        if let Err(cause) = run {
+            let text = (cause.downcast_ref::<String>().cloned())
+                .or_else(|| cause.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_default();
+            let line = text.lines().next().unwrap_or_default().to_string();
+            COLLECTED.with(|all| all.borrow_mut().push(line));
+        }
+    }
+    counts
+}
 
-        // Pins the netlist did not see before are the user's to place.
-        let mut skip_terminals = std::collections::BTreeSet::new();
-        let mut skip_pins = std::collections::BTreeSet::new();
-        let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
-        let tips = crate::moved_pin_tips(&sheet, &items);
-        let seen = crate::Guard::new(&sheet, &sheet, &tips, None);
-        for tip in tips.iter().filter(|t| !seen.was_connected(t)) {
-            match tip.ident() {
-                crate::PinIdent::Terminal(symbol, pin) => {
-                    skip_terminals.insert((*symbol, pin.clone()));
-                }
-                crate::PinIdent::SheetPin(uuid) => {
-                    skip_pins.insert(*uuid);
-                }
+thread_local! {
+    /// The failures `property_run` collected under `RUBBER_BAND_ALL`.
+    static COLLECTED: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The moved pins the plain move joined to a wire through a new pin dot at
+/// their new tip (decision 2026-11-18), not a T where wires meet: their
+/// terminals and child-sheet pins, and where those dots are.
+fn plain_pin_dot_pins(
+    before: &SchematicSheet,
+    plain: &SchematicSheet,
+    items: &[SelectedItem],
+) -> (
+    std::collections::BTreeSet<(Uuid, String)>,
+    std::collections::BTreeSet<Uuid>,
+    Vec<Point>,
+) {
+    let dots: std::collections::HashSet<_> = (plain.junctions.iter())
+        .filter(|dot| !before.junctions.iter().any(|old| old.uuid == dot.uuid))
+        .map(|dot| signex_net::pt_key(&dot.position))
+        .collect();
+    let mut terminals = std::collections::BTreeSet::new();
+    let mut pins = std::collections::BTreeSet::new();
+    let mut at = Vec::new();
+    // Read on the plain sheet, a tip's "old" place is where the move put it.
+    for tip in crate::moved_pin_tips(plain, items) {
+        if !dots.contains(&tip.old_key()) {
+            continue;
+        }
+        if let Some(spot) = tip.now(plain) {
+            at.push(spot);
+        }
+        match tip.ident() {
+            crate::PinIdent::Terminal(symbol, pin) => {
+                terminals.insert((*symbol, pin.clone()));
+            }
+            crate::PinIdent::SheetPin(uuid) => {
+                pins.insert(*uuid);
             }
         }
+    }
+    (terminals, pins, at)
+}
 
-        let run = |keep_wires: bool| {
-            let mut engine = Engine::new(sheet.clone()).expect("engine");
-            engine
-                .execute(Command::MoveEach {
-                    moves: moves.clone(),
-                    keep_wires,
-                    wiring: signex_types::corner::DragWiringMode::Auto,
-                })
-                .expect("move");
-            engine
-        };
-        let plain = run(false);
-        let mut engine = run(true);
-        let warnings = engine.take_warnings();
-        let unkept = engine.take_unkept_pins();
-        let share = if selects_wire {
-            &mut counts.co_selected
-        } else {
-            &mut counts.symbols_only
-        };
-        share.cases += 1;
-        share.warned += usize::from(!warnings.is_empty());
-        let after = engine.document();
-        counts.rerouted += usize::from(
-            after
-                .wires
-                .iter()
-                .map(|w| (w.start, w.end))
-                .collect::<Vec<_>>()
-                != wires_before,
-        );
+/// One case of [`property_run`]: case `index` of `seed`.
+pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut RunCounts) {
+    let Case {
+        sheet,
+        moves,
+        selects_wire,
+    } = case;
+    let described = describe(&sheet);
+    let overlaps_before = overlap_pairs(&sheet);
+    let wires_before: Vec<_> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
 
-        for w in &after.wires {
-            assert_ne!(
-                signex_net::pt_key(&w.start),
-                signex_net::pt_key(&w.end),
-                "seed {seed:#x} case {index}: zero-length wire\n{described}"
-            );
+    // Pins the netlist did not see before are the user's to place.
+    let mut skip_terminals = std::collections::BTreeSet::new();
+    let mut skip_pins = std::collections::BTreeSet::new();
+    let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
+    let tips = crate::moved_pin_tips(&sheet, &items);
+    let seen = crate::Guard::new(&sheet, &sheet, &tips, None);
+    for tip in tips.iter().filter(|t| !seen.was_connected(t)) {
+        match tip.ident() {
+            crate::PinIdent::Terminal(symbol, pin) => {
+                skip_terminals.insert((*symbol, pin.clone()));
+            }
+            crate::PinIdent::SheetPin(uuid) => {
+                skip_pins.insert(*uuid);
+            }
         }
-        assert!(
-            overlap_pairs(after) <= overlaps_before.max(overlap_pairs(plain.document())),
-            "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
-            describe(after)
-        );
-        if let Err(why) = check_closure_oracle(
-            &sheet,
-            plain.document(),
-            after,
-            &warned_items(&sheet, &unkept),
-            &moved_pin_items(&tips),
-        ) {
-            panic!(
-                "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
-                describe(after)
-            );
+    }
+
+    let run = |keep_wires: bool| {
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        engine
+            .execute(Command::MoveEach {
+                moves: moves.clone(),
+                keep_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
+            })
+            .expect("move");
+        engine
+    };
+    let plain = run(false);
+    // A plain move keeps no contacts and leaves no record; drop a stale one.
+    let _ = crate::exec::guarded::take_record();
+    let _ = crate::transform::rubber_band::reasons::take();
+    let mut engine = run(true);
+    let record = crate::exec::guarded::take_record();
+    let reasons = crate::transform::rubber_band::reasons::take();
+    let warnings = engine.take_warnings();
+    let unkept = engine.take_unkept_pins();
+    let kind = if selects_wire {
+        "co-selected"
+    } else {
+        "symbol-only"
+    };
+    let share = if selects_wire {
+        &mut counts.co_selected
+    } else {
+        &mut counts.symbols_only
+    };
+    share.cases += 1;
+    // A fallback is a notice that something could not be kept; a held pin
+    // kept off the wire it landed in is told, but kept.
+    let fell_back = warnings.iter().any(|w| w.starts_with("could not keep"));
+    share.warned += usize::from(fell_back);
+    if fell_back {
+        let notices = (warnings.iter()).filter_map(|w| {
+            if !w.starts_with("could not keep") {
+                None
+            } else if w.contains("on the dragged wire") {
+                Some("notice: a dragged wire's contact parted")
+            } else {
+                Some("notice: a moved pin left as a plain move")
+            }
+        });
+        let causes: std::collections::BTreeSet<&'static str> =
+            reasons.iter().copied().chain(notices).collect();
+        for why in causes {
+            *counts.fallbacks.entry((kind, why)).or_default() += 1;
         }
-        let moves_power = sheet
-            .symbols
+    } else if !warnings.is_empty() {
+        *counts.unjoined_only.entry(kind).or_default() += 1;
+    }
+    let after = engine.document();
+    counts.rerouted += usize::from(
+        after
+            .wires
             .iter()
-            .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
-        if selects_wire || moves_power {
-            // Co-selected items move plainly, wherever the user puts them, and
-            // a power port landing on a net merges it by name: the closure
-            // oracle above is the check for these cases.
-            continue;
-        }
-        // A warned pin keeps the old plain behaviour; every other net stays.
-        let (warned_terminals, warned_pins) = warned_skips(&sheet, &unkept);
-        skip_terminals.extend(warned_terminals);
-        skip_pins.extend(warned_pins);
-        let want: std::collections::BTreeSet<_> =
-            signex_net::net_signatures(&without_skipped_power(&sheet, &skip_terminals))
-                .iter()
-                .filter_map(|n| n.without(&skip_terminals, &skip_pins))
-                .collect();
-        let got = projected(after, &skip_terminals, &skip_pins);
-        assert_eq!(
-            got,
-            want,
-            "seed {seed:#x} case {index}: nets changed (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+            .map(|w| (w.start, w.end))
+            .collect::<Vec<_>>()
+            != wires_before,
+    );
+
+    for w in &after.wires {
+        assert_ne!(
+            signex_net::pt_key(&w.start),
+            signex_net::pt_key(&w.end),
+            "seed {seed:#x} case {index}: zero-length wire\n{described}"
+        );
+    }
+    assert!(
+        overlap_pairs(after) <= overlaps_before.max(overlap_pairs(plain.document())),
+        "seed {seed:#x} case {index}: new overlapping wires\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
+    // No new bare touch of a pin end (a wire over it with no dot): only the
+    // plain move's own, or one at a pin dot it made (a held pin, spec gap (a)).
+    let plain_taps = crate::transform::bare_tap_keys(plain.document());
+    let plain_dots: std::collections::HashSet<_> =
+        (crate::transform::new_pin_dots(&sheet, plain.document()).iter())
+            .map(signex_net::pt_key)
+            .collect();
+    let new_taps: Vec<_> = (crate::transform::bare_tap_keys(after).into_iter())
+        .filter(|k| !plain_taps.contains(k) && !plain_dots.contains(k))
+        .collect();
+    assert!(
+        new_taps.is_empty(),
+        "seed {seed:#x} case {index}: new bare pin touches {new_taps:?}\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
+    // A pin end the plain move put inside a wire joins it through a new pin
+    // dot (2026-11-18): the user's placement, which may join the pin's net to
+    // the wire's. It never merges two wire nets: where wires of two nets
+    // overlap the pin end gets no dot (2026-11-19), so the plain nets the
+    // oracles read keep them apart. The
+    // closure oracle reads the plain nets, so it still holds such a pin; the
+    // strict net equality below leaves out just that pin (counted, bounded).
+    let (dot_terminals, dot_pins, dot_spots) = plain_pin_dot_pins(&sheet, plain.document(), &items);
+    // A wire that could not be carried whole moved plainly: it carries
+    // nothing, so it bridges nothing.
+    let mut carried = selected_wire_ids(&items);
+    if let Some(record) = &record {
+        carried.retain(|id| !record.bailed_wires.contains(id));
+    }
+    let oracle = check_closure_oracle(
+        &sheet,
+        plain.document(),
+        after,
+        &warned_items(&sheet, &unkept),
+        &moved_pin_items(&tips),
+        &carried,
+    );
+    if let Err(why) = oracle {
+        panic!(
+            "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
             describe(after)
         );
     }
-    counts
+    // The written rule worked out apart from the guard (a differential
+    // check): the plain nets with every kept contact restored.
+    if let Some(record) = &record {
+        let allowed =
+            crate::carry_guard_tests::check_allowed(&sheet, plain.document(), after, &tips, record);
+        match allowed {
+            Ok(checked) => counts.allowed_skipped += usize::from(!checked),
+            Err(why) => panic!(
+                "seed {seed:#x} case {index}: {why} (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+                describe(after)
+            ),
+        }
+    }
+    let moves_power = sheet
+        .symbols
+        .iter()
+        .any(|s| s.is_power && moves.iter().any(|(item, _, _)| item.uuid == s.uuid));
+    if selects_wire || moves_power {
+        // Co-selected items move plainly, wherever the user puts them, and
+        // a power port landing on a net merges it by name: the closure
+        // oracle above is the check for these cases.
+        return;
+    }
+    // A warned pin keeps the old plain behaviour, a pin the plain move dotted
+    // onto a wire is the user's placement; every other net stays.
+    let (warned_terminals, warned_pins) = warned_skips(&sheet, &unkept);
+    skip_terminals.extend(warned_terminals);
+    skip_pins.extend(warned_pins);
+    counts.strict_pins += tips.len();
+    counts.pin_joined += dot_terminals.len() + dot_pins.len();
+    skip_terminals.extend(dot_terminals);
+    skip_pins.extend(dot_pins);
+    // Such a dot joins whatever passes through its place, as it does in the
+    // plain move (two wires laid over each other there, say): the reference
+    // is the sheet before the move with those dots on it.
+    let mut reference = sheet.clone();
+    for spot in &dot_spots {
+        add_dot(&mut reference, (spot.x, spot.y), true);
+    }
+    let want: std::collections::BTreeSet<_> =
+        signex_net::net_signatures(&without_skipped_power(&reference, &skip_terminals))
+            .iter()
+            .filter_map(|n| n.without(&skip_terminals, &skip_pins))
+            .collect();
+    let got = projected(after, &skip_terminals, &skip_pins);
+    assert_eq!(
+        got,
+        want,
+        "seed {seed:#x} case {index}: nets changed (warnings {warnings:?}, moves {moves:?})\nBEFORE {described}\nAFTER {}",
+        describe(after)
+    );
 }
 
 /// No exact duplicates and no collinear overlaps among the document's wires.
@@ -1632,17 +1936,28 @@ fn moving_a_part_by_its_own_pitch_does_not_short_its_pins() {
 }
 
 #[test]
-fn a_pin_landing_on_a_foreign_wire_interior_does_not_merge_nets() {
+/// A pin end landing inside a wire joins it through a dot (2026-11-18; this
+/// used to leave the nets apart, the bare contact counting for nothing).
+fn a_pin_landing_on_a_foreign_wire_interior_joins_it_through_a_dot() {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0)); // 45/55
     let _r2 = add_resistor(&mut sheet, "R2", Point::new(25.0, 50.0)); // 20/30
-    let _r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0)); // 45/55 @ y90
+    let r5 = add_resistor(&mut sheet, "R5", Point::new(50.0, 90.0)); // 45/55 @ y90
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
     add_wire(&mut sheet, (45.0, 60.0), (45.0, 90.0)); // foreign net, R5.1
-    let before_sheet = sheet.clone();
     let mut e = Engine::new(sheet).unwrap();
     mv(&mut e, vec![symbol_item(r1)], 0.0, 15.0, true);
-    assert_nets_hold(&mut e, &before_sheet, &[r1]);
+    let at = Point::new(45.0, 65.0);
+    assert!(
+        e.document().junctions.iter().any(|j| j.position == at),
+        "{}",
+        describe(e.document())
+    );
+    let joined = net_shape(e.document()).into_iter().any(|(_, pins)| {
+        pins.contains(&(r1, "1".to_string())) && pins.contains(&(r5, "1".to_string()))
+    });
+    assert!(joined, "R1.1 joins R5.1");
+    assert_no_overlaps(&e);
 }
 
 #[test]
@@ -2035,6 +2350,7 @@ fn a_pin_whose_wire_moves_with_it_stays_on_the_net_the_wire_lands_on() {
         e.document(),
         &warned,
         &moved_pin_items(&tips),
+        &[carried],
     )
     .unwrap();
 }
@@ -2063,6 +2379,7 @@ fn the_oracle_reports_a_kept_pin_shorted_to_its_plain_landing_net() {
         &shorted,
         &std::collections::BTreeSet::new(),
         &moved_pin_items(&tips),
+        &[],
     );
     assert!(
         matches!(&verdict, Err(why) if why.starts_with("SHORT")),
@@ -2102,4 +2419,117 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
         "{notices:?}"
     );
     assert_eq!(e.take_unkept_pins().len(), 5);
+}
+
+/// Diagnostic for any case of `random_rubber_band_moves_never_change_the_netlist`:
+/// `DIAG_SEED` (hex with `0x`, or decimal) and `DIAG_CASE`; run with
+/// `--ignored --nocapture`.
+#[test]
+#[ignore = "diagnostic: prints the case DIAG_SEED and DIAG_CASE name"]
+fn diagnose_case_from_env() {
+    let number = |name: &str| -> Option<u64> {
+        let text = std::env::var(name).ok()?;
+        let text = text.trim();
+        match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            Some(hex) => u64::from_str_radix(&hex.replace('_', ""), 16).ok(),
+            None => text.replace('_', "").parse().ok(),
+        }
+    };
+    let (Some(seed), Some(case)) = (number("DIAG_SEED"), number("DIAG_CASE")) else {
+        eprintln!("set DIAG_SEED and DIAG_CASE");
+        return;
+    };
+    diagnose_case(seed, case as usize);
+}
+
+/// Case `wanted` of `seed`, rebuilt as `property_run` draws it; `None` when
+/// the generator skips that index.
+pub(crate) fn case_at(seed: u64, wanted: usize) -> Option<Case> {
+    let mut rng = Lcg(seed);
+    let mut found = None;
+    for index in 0..=wanted {
+        let case = random_case(&mut rng);
+        if index == wanted {
+            found = case;
+        }
+    }
+    found
+}
+
+/// Rebuild case `wanted` of `seed` as `property_run` does, run the plain and
+/// the keep-wires move, and print the sheet and what each run changed.
+fn diagnose_case(seed: u64, wanted: usize) {
+    let Some(Case { sheet, moves, .. }) = case_at(seed, wanted) else {
+        eprintln!("case {wanted} is empty for this generator");
+        return;
+    };
+    eprintln!("moves: {moves:?}");
+    eprintln!("BEFORE {}", describe(&sheet));
+    print_nets(&sheet);
+    for keep_wires in [false, true] {
+        let mut engine = Engine::new(sheet.clone()).expect("engine");
+        let command = Command::MoveEach {
+            moves: moves.clone(),
+            keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
+        };
+        engine.execute(command).expect("move");
+        let warnings = engine.take_warnings();
+        eprintln!("--- keep_wires {keep_wires}, warnings {warnings:?} ---");
+        print_changes(&sheet, engine.document());
+        eprintln!("AFTER {}", describe(engine.document()));
+    }
+}
+
+fn spot(p: &Point) -> String {
+    format!("({}, {})", p.x, p.y)
+}
+
+fn print_nets(sheet: &SchematicSheet) {
+    for (name, pins) in net_shape(sheet) {
+        eprintln!("net {name:?}: {pins:?}");
+    }
+}
+
+/// The wires and dots `after` added, changed or removed against `before`,
+/// every pin tip, and the nets.
+fn print_changes(before: &SchematicSheet, after: &SchematicSheet) {
+    for wire in &after.wires {
+        let (a, b) = (spot(&wire.start), spot(&wire.end));
+        match before.wires.iter().find(|w| w.uuid == wire.uuid) {
+            None => eprintln!("wire added {}: {a} - {b}", wire.uuid),
+            Some(old) if old.start != wire.start || old.end != wire.end => {
+                let (c, d) = (spot(&old.start), spot(&old.end));
+                eprintln!("wire changed {}: {c} - {d} -> {a} - {b}", wire.uuid);
+            }
+            Some(_) => {}
+        }
+    }
+    for old in &before.wires {
+        if !after.wires.iter().any(|w| w.uuid == old.uuid) {
+            let (a, b) = (spot(&old.start), spot(&old.end));
+            eprintln!("wire removed {}: {a} - {b}", old.uuid);
+        }
+    }
+    for dot in &after.junctions {
+        if !before.junctions.iter().any(|j| j.uuid == dot.uuid) {
+            let at = spot(&dot.position);
+            eprintln!("junction added {at} minted={}", dot.minted);
+        }
+    }
+    for dot in &before.junctions {
+        if !after.junctions.iter().any(|j| j.uuid == dot.uuid) {
+            eprintln!("junction removed {}", spot(&dot.position));
+        }
+    }
+    for symbol in &after.symbols {
+        let pins = after.lib_symbols[&symbol.lib_id].pins.len();
+        let tips: Vec<String> = (0..pins)
+            .map(|i| spot(&pin_tip(after, symbol.uuid, i)))
+            .collect();
+        let (name, id, unit) = (&symbol.reference, symbol.uuid, symbol.unit);
+        let tips = tips.join(" ");
+        eprintln!("{name} {id} unit {unit}: {tips}");
+    }
+    print_nets(after);
 }
