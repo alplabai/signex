@@ -226,9 +226,6 @@ pub struct FootprintEditorPanelContext {
     /// renders one editable row per entry so the user can edit the
     /// shared sketch parameter without entering Sketch mode.
     pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
-    /// The page shown while nothing is selected (mirror of
-    /// `editor.state.properties_page`).
-    pub properties_page: crate::library::editor::footprint::state::FpPropertiesPage,
     /// The field or callout under the pointer (mirror of
     /// `editor.state.properties_hover`).
     pub illustration_hover: signex_widgets::property_illustration::IllustrationHover,
@@ -296,6 +293,9 @@ pub struct CutoutSummary {
     pub through: bool,
 }
 
+/// Most pattern instances the Properties drawing draws one by one.
+pub const PATTERN_PREVIEW_MAX_INSTANCES: usize = 256;
+
 /// v0.23 — Array (Pattern) properties surfaced on the Properties panel
 /// when the selected sketch entity is the source of an
 /// [`signex_sketch::array::Array`]. The handler resolves the array by
@@ -313,9 +313,9 @@ pub struct ArraySummary {
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
-    /// The array's numbering scheme as stored; the pattern drawing numbers
-    /// each instance with it.
-    pub numbering_scheme: signex_sketch::array::NumberingScheme,
+    /// Every instance with its offset and number, from the bake's own walk
+    /// (`signex_bake::array::preview_array`); the pattern drawing shows it.
+    pub preview: signex_bake::array::ArrayPreview,
     /// Number of the source pad (`PadAttr::number`); empty when the source
     /// carries no pad.
     pub source_number: String,
@@ -637,6 +637,9 @@ pub struct SketchPadAttrSummary {
     /// The pad number (`PadAttr::number`).
     pub number: String,
     pub kind: signex_sketch::attr::PadKind,
+    /// The copper side of the pad (`PadAttr::side`): a surface pad shows
+    /// only its own side's paste and mask.
+    pub side: signex_sketch::attr::PadSide,
     /// Paste and mask expansion expressions per side; `None` follows the
     /// design rule (`PadStackOverrides::paste_*_expr` / `mask_*_expr`).
     pub paste_top_expr: Option<String>,

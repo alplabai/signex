@@ -18,7 +18,6 @@ mod helpers;
 mod keepout;
 mod pattern;
 mod pattern_drawing;
-mod pattern_layout;
 mod pour;
 mod sketch_pad;
 mod sketch_pad_drawing;

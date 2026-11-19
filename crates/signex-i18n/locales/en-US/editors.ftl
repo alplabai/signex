@@ -377,10 +377,6 @@ editors-fp-props-status-solved = { $pads ->
         [one] { $pads } pad
        *[other] { $pads } pads
     } · { $state }
-# The three pages of the Properties panel with nothing selected.
-editors-fp-props-page-footprint = Footprint
-editors-fp-props-page-snap = Snap & Grid
-editors-fp-props-page-sketch = Sketch
 editors-fp-props-section-footprint = Footprint
 editors-fp-props-name = Name
 editors-fp-props-description = Description
@@ -469,7 +465,6 @@ editors-fp-props-parameters-none = None yet: add one through an expression.
 editors-fp-props-parameter-placeholder = expression…
 editors-fp-props-section-warnings = Solve warnings
 editors-fp-props-warnings-none = None
-editors-fp-props-open-sketch = Open the sketch (Edit Sketch in the active bar) to see the constraints on the canvas.
 # Hint at the bottom of the panel, by editor mode.
 editors-fp-props-hint-pads = Click a pad to edit its properties.
 editors-fp-props-hint-sketch = Click a sketch entity (Point, Line, Arc or Circle) to edit it.
@@ -517,6 +512,24 @@ editors-fp-props-silk-kind = { $kind ->
 editors-fp-props-silk-heading = Silk graphic · { $kind }
 editors-fp-props-section-silk = Silk graphic
 editors-fp-props-index = Index
+# The pad stack check card. $count is a number of sketch pads.
+editors-fp-props-pad-stack-check = Pad stack check
+editors-fp-props-pad-stack-offer = { $count ->
+        [one] The sketch pad has paste disabled and direct connect, the stack older builds wrote. It produces no paste stencil opening. Enable paste and thermal relief on it? Undo reverts it; nothing is saved until you save.
+       *[other] All { $count } sketch pads have paste disabled and direct connect, the stack older builds wrote. They produce no paste stencil openings. Enable paste and thermal relief on them? Undo reverts it; nothing is saved until you save.
+    }
+editors-fp-props-pad-stack-restore = { $count ->
+        [one] Enable paste and thermal relief on 1 pad
+       *[other] Enable paste and thermal relief on { $count } pads
+    }
+editors-fp-props-pad-stack-keep = Keep as is
+# $pads lists the pad numbers.
+editors-fp-props-pad-stack-no-paste = { $count ->
+        [one] Warning: 1 SMD pad has paste disabled on its copper side and gets no stencil opening: { $pads }
+       *[other] Warning: { $count } SMD pads have paste disabled on their copper side and get no stencil opening: { $pads }
+    }
+# Appended to a cut-short pad list.
+editors-fp-props-pad-stack-more = +{ $count } more
 
 ## Component editor empty states
 editors-component-alternates-empty = No alternate drawings; the row uses its default symbol only.
@@ -735,3 +748,19 @@ editors-role-sketch-pad-mask-off = Top Solder mask off: tented
 editors-role-sketch-pad-size = { $width } × { $height } (from the sketch)
 # Drawing corner note; $layer is a copper layer name, $number the pad number.
 editors-role-sketch-pad-corner = { $layer } · pad { $number }
+
+## Symbol editor active bar
+# Header of the Shapes menu.
+editors-symbol-bar-shapes = Shapes
+# Tooltip of the selection filter trigger; $kinds lists the filter categories.
+editors-symbol-bar-filter-tooltip = Selection Filter: { $kinds } (left or right click for menu)
+# A selection filter category; $kind is the category's name in the code.
+editors-symbol-bar-filter-kind = { $kind ->
+        [Pins] Pins
+        [Drawings] Drawings
+        [Texts] Texts
+        [Designators] Designators
+        [Values] Values
+        [Parameters] Parameters
+       *[other] Other
+    }

@@ -1,5 +1,5 @@
-//! The Snap & Grid page: the grid and snap illustration, Snap Options and
-//! the Grid Manager.
+//! The Snap & Grid part of the nothing-selected body: the grid and snap
+//! illustration, Snap Options and the Grid Manager.
 
 use iced::Element;
 use iced::widget::Column;

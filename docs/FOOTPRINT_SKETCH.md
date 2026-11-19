@@ -98,9 +98,9 @@ separately as over-constrained.
 
 ## The sketch in the Properties panel
 
-With nothing selected, the footprint Properties panel has three pages: Footprint,
-Snap & Grid and Sketch. The Sketch page holds the solve state and the sketch
-parameters:
+With nothing selected, the footprint Properties panel shows the Footprint and
+Snap & Grid sections in one scroll; in Sketch mode the sketch sections follow
+them, with the solve state and the sketch parameters:
 
 - **Sketch solve**: a pill in the header names the state (DOF 0 in green when
   fully constrained, Under-constrained in blue, Over-constrained in red, or
@@ -141,16 +141,17 @@ step, re-solves and re-bakes the sketch, and dirties the tab.
   a plain number is stored as `<n>mm`, an expression as written, and text
   that does not parse yet is kept in the editor's field buffers without
   touching the pad. A paste expression clears the paste percentage of that
-  side. The bottom side and the hole details show only for a drilled pad.
+  side. A pad without a drill shows the paste and mask of its own side
+  (`PadAttr::side`; both sides for a pad on every side), which are the
+  layers the bake gives it; a drilled pad shows both sides and the hole
+  details.
 - **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
   the kind it was made with. Start row / col and the letter skip apply to
   BGA numbering and grey otherwise.
 
-The pattern illustration places and numbers the instances itself, reading
-the array's expressions with the sketch evaluator and the parameter table
-(`subforms/pattern_layout.rs`). It follows the bake's rules (grid cells row
-by row, a polar step of sweep / count, a mask or list entry skips an
-instance, a failed numbering expression falls back to the index) but the
-bake in `signex-bake::array` stays the authority: when a count, spacing or
+The pattern illustration draws `signex_bake::array::preview_array`: the
+same walk the bake runs (`signex-bake/src/array/walk.rs`) gives each
+instance its offset, number and dropped flag, so the drawing shows what the
+bake produces. Dropped instances are drawn dashed. When a count, spacing or
 mask does not evaluate, or the pattern has more than 256 instances, the
 drawing shows the source pad only, with a note.

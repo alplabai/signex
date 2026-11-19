@@ -124,7 +124,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{PadOutlineSummary, SketchStateSummary};
+pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, PadOutlineSummary, SketchStateSummary};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{

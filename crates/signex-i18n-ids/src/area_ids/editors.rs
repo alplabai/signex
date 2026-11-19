@@ -216,4 +216,7 @@ define_ids! {
     EDITORS_ROLE_SKETCH_PAD_MASK_OFF = "editors-role-sketch-pad-mask-off";
     EDITORS_ROLE_SKETCH_PAD_SIZE = "editors-role-sketch-pad-size";
     EDITORS_ROLE_SKETCH_PAD_CORNER = "editors-role-sketch-pad-corner";
+    EDITORS_SYMBOL_BAR_SHAPES = "editors-symbol-bar-shapes";
+    EDITORS_SYMBOL_BAR_FILTER_TOOLTIP = "editors-symbol-bar-filter-tooltip";
+    EDITORS_SYMBOL_BAR_FILTER_KIND = "editors-symbol-bar-filter-kind";
 }

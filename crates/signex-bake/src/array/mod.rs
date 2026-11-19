@@ -37,6 +37,43 @@ mod grid;
 mod linear;
 mod numbering;
 mod polar;
+mod preview;
+mod walk;
+
+pub use preview::{ArrayPreview, InstancePreview, preview_array};
+
+/// Bake one kept instance of an array: the source pad moved by the
+/// instance offset and given its number.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one instance needs the source pad, its context and the bake outputs"
+)]
+fn bake_instance(
+    source: signex_sketch::id::SketchEntityId,
+    pad_attr: &signex_sketch::attr::PadAttr,
+    instance: walk::Instance,
+    ctx: &signex_sketch::expr::eval::EvalContext,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    out: &mut Vec<LibPad>,
+    warnings: &mut Vec<String>,
+) -> Result<(), SketchError> {
+    // A kept instance always has an offset; only a dropped one may not.
+    let [dx, dy] = instance.offset_mm.unwrap_or_default();
+    let pad = crate::pad::bake_one_pad(
+        source,
+        pad_attr,
+        ctx,
+        dx,
+        dy,
+        Some(instance.number),
+        sketch,
+        solve,
+        warnings,
+    )?;
+    out.push(pad);
+    Ok(())
+}
 
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update

@@ -1,13 +1,13 @@
 //! Sketch pad sub-form (#126): a pad whose copper is a sketch profile. The
 //! header names the pad and jumps to it in Pads mode; Pad Attributes, the
-//! top side's paste and mask as enable sections with Rule / Manual
-//! expansions, the bottom side and hole only for a drilled pad, and the
+//! paste and mask of the pad's own side as enable sections with Rule /
+//! Manual expansions (both sides and the hole for a drilled pad), and the
 //! pad features in a closed section.
 
 use iced::widget::{Row, container};
 use iced::{Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_sketch::attr::{ElectricalType, PadFeature, PadKind};
+use signex_sketch::attr::{ElectricalType, PadFeature, PadKind, PadSide};
 use signex_sketch::id::SketchEntityId;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
 use signex_types::theme::ThemeTokens;
@@ -47,10 +47,18 @@ fn kind_message(kind: PadKind) -> MessageId {
     }
 }
 
-/// The bottom side's paste and mask and the hole details apply to a
-/// drilled pad only; a surface pad shows its own layer.
-pub(super) fn shows_bottom_side(pad: &SketchPadAttrSummary) -> bool {
-    pad.has_drill
+/// The sides whose paste and mask the form shows: both for a drilled pad,
+/// else the pad's own side (`PadAttr::side`; both for a surface pad on
+/// every side). The hole details show for a drilled pad only.
+pub(super) fn shown_sides(pad: &SketchPadAttrSummary) -> &'static [BoardSide] {
+    if pad.has_drill {
+        return &[BoardSide::Top, BoardSide::Bottom];
+    }
+    match pad.side {
+        PadSide::Top => &[BoardSide::Top],
+        PadSide::Bottom => &[BoardSide::Bottom],
+        PadSide::All => &[BoardSide::Top, BoardSide::Bottom],
+    }
 }
 
 /// The state word beside a solder mask header.
@@ -90,53 +98,29 @@ pub(super) fn view<'a>(
     if open {
         parts.extend(attribute_rows(pad, tokens, i18n));
     }
-    let top = PcbLayer::Copper(CopperLayer::Top);
-    let open = is_open(TOP_SIDE, collapsed, true);
-    parts.push(section_header(
-        TOP_SIDE,
-        side_title(i18n, top),
-        open,
-        tokens,
-        i18n,
-    ));
-    if open {
-        parts.extend(side_rows(fp, pad, BoardSide::Top, palette, tokens, i18n));
-        parts.push(field_row(
-            t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
-            example_input(
-                "25",
-                pad.corner_radius_pct
-                    .map(|v| format!("{v:.0}"))
-                    .unwrap_or_default(),
-                move |value| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id: pad.id, value },
-            ),
-            tokens,
-        ));
-        let id = pad.id;
-        parts.push(field_row(
-            UserText::new(String::new()),
-            check(
-                t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF),
-                pad.thermal_relief,
-                move |value| PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value },
-                tokens,
-            ),
-            tokens,
-        ));
-    }
-    if shows_bottom_side(pad) {
-        let bottom = PcbLayer::Copper(CopperLayer::Bottom);
-        let open = is_open(BOTTOM_SIDE, collapsed, true);
+    for (index, &side) in shown_sides(pad).iter().enumerate() {
+        let (key, layer) = match side {
+            BoardSide::Top => (TOP_SIDE, CopperLayer::Top),
+            BoardSide::Bottom => (BOTTOM_SIDE, CopperLayer::Bottom),
+        };
+        let open = is_open(key, collapsed, true);
         parts.push(section_header(
-            BOTTOM_SIDE,
-            side_title(i18n, bottom),
+            key,
+            side_title(i18n, PcbLayer::Copper(layer)),
             open,
             tokens,
             i18n,
         ));
-        if open {
-            parts.extend(side_rows(fp, pad, BoardSide::Bottom, palette, tokens, i18n));
+        if !open {
+            continue;
         }
+        parts.extend(side_rows(fp, pad, side, palette, tokens, i18n));
+        // The copper rows sit under the first side shown.
+        if index == 0 {
+            parts.extend(copper_rows(pad, tokens, i18n));
+        }
+    }
+    if pad.has_drill {
         let open = is_open(HOLE, collapsed, true);
         parts.push(section_header(
             HOLE,
@@ -161,6 +145,38 @@ pub(super) fn view<'a>(
         parts.extend(feature_rows(pad, tokens, i18n));
     }
     form(parts)
+}
+
+/// Corner radius and thermal relief, under the pad's first side.
+fn copper_rows<'a>(
+    pad: &'a SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    vec![
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
+            example_input(
+                "25",
+                pad.corner_radius_pct
+                    .map(|v| format!("{v:.0}"))
+                    .unwrap_or_default(),
+                move |value| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value },
+            ),
+            tokens,
+        ),
+        field_row(
+            UserText::new(String::new()),
+            check(
+                t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF),
+                pad.thermal_relief,
+                move |value| PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value },
+                tokens,
+            ),
+            tokens,
+        ),
+    ]
 }
 
 fn side_title(i18n: &I18n, layer: PcbLayer) -> signex_i18n::Localized {

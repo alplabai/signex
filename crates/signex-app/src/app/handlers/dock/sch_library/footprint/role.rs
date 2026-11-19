@@ -8,6 +8,8 @@ use super::super::*;
 use super::shape::{rebuild_sketch, sketch_entity_mut};
 use crate::panels::{FpSubformMsg, expansion_buffer_key};
 use signex_sketch::id::SketchEntityId;
+use signex_sketch::parameter::ParameterTable;
+use signex_sketch::unit::UnitFamily;
 use signex_types::pcb_layer::{BoardSide, PcbLayer};
 
 /// Which expansion of a sketch pad a field edits.
@@ -53,9 +55,9 @@ impl Signex {
         true
     }
 
-    /// Writes the expansion expression of `value`. Text that is not an
-    /// expression yet is kept in the editor's field buffers and leaves the
-    /// pad as it is.
+    /// Writes the expansion expression of `value`. Text that is not a
+    /// length yet is kept in the editor's field buffers, where the field
+    /// shows it refused, and leaves the pad as it is.
     fn fp_sketch_pad_expansion_edited(
         &mut self,
         id: SketchEntityId,
@@ -67,7 +69,13 @@ impl Signex {
         let Some(editor) = self.active_footprint_editor_mut() else {
             return true;
         };
-        let Some(expr) = expansion_expr(value) else {
+        let parameters = editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .map(|sketch| sketch.parameters.clone())
+            .unwrap_or_default();
+        let Some(expr) = expansion_expr(value, &parameters) else {
             editor
                 .state
                 .numeric_buffers
@@ -115,10 +123,11 @@ impl Signex {
 }
 
 /// The stored expression of an expansion field's text: `Some(None)` for
-/// empty text (the design rule applies), `Some(Some(expr))` for a length
-/// expression (a bare number is millimetres), `None` for text that does not
-/// parse yet.
-fn expansion_expr(value: &str) -> Option<Option<String>> {
+/// empty text (the design rule applies), `Some(Some(expr))` for an
+/// expression that evaluates to a length against the sketch `parameters`
+/// (a bare number is millimetres), `None` for anything else: text that does
+/// not parse yet, an unknown parameter, or a value without a length unit.
+fn expansion_expr(value: &str, parameters: &ParameterTable) -> Option<Option<String>> {
     let text = value.trim();
     if text.is_empty() {
         return Some(None);
@@ -126,41 +135,64 @@ fn expansion_expr(value: &str) -> Option<Option<String>> {
     if let Ok(mm) = text.parse::<f64>() {
         return mm.is_finite().then(|| Some(format!("{mm}mm")));
     }
-    let body = text.strip_prefix('=').unwrap_or(text).trim();
-    signex_sketch::expr::parse::parse(body)
-        .ok()
-        .map(|_| Some(text.to_owned()))
+    let q = signex_sketch::parameter::eval_with_parameters(text, parameters).ok()?;
+    let is_length = q.unit.family() == UnitFamily::Length && q.value.is_finite();
+    is_length.then(|| Some(text.to_owned()))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::expansion_expr;
+    use super::{ParameterTable, expansion_expr};
+
+    fn table() -> ParameterTable {
+        ParameterTable(
+            [("mask_margin".to_owned(), "0.05mm".to_owned())]
+                .into_iter()
+                .collect(),
+        )
+    }
 
     #[test]
     fn empty_text_follows_the_rule() {
-        assert_eq!(expansion_expr("  "), Some(None));
+        assert_eq!(expansion_expr("  ", &table()), Some(None));
     }
 
     #[test]
     fn a_bare_number_is_stored_in_millimetres() {
-        assert_eq!(expansion_expr("0.05"), Some(Some("0.05mm".into())));
-        assert_eq!(expansion_expr("-0.040"), Some(Some("-0.04mm".into())));
-        assert_eq!(expansion_expr("0"), Some(Some("0mm".into())));
+        assert_eq!(
+            expansion_expr("0.05", &table()),
+            Some(Some("0.05mm".into()))
+        );
+        assert_eq!(
+            expansion_expr("-0.040", &table()),
+            Some(Some("-0.04mm".into()))
+        );
+        assert_eq!(expansion_expr("0", &table()), Some(Some("0mm".into())));
     }
 
     #[test]
-    fn an_expression_is_stored_as_written() {
+    fn a_length_expression_is_stored_as_written() {
         assert_eq!(
-            expansion_expr("mask_margin * 2"),
+            expansion_expr("mask_margin * 2", &table()),
             Some(Some("mask_margin * 2".into()))
         );
-        assert_eq!(expansion_expr("0.1mm"), Some(Some("0.1mm".into())));
+        assert_eq!(
+            expansion_expr("0.1mm", &table()),
+            Some(Some("0.1mm".into()))
+        );
     }
 
     #[test]
     fn half_typed_text_is_not_stored() {
-        assert_eq!(expansion_expr("-"), None);
-        assert_eq!(expansion_expr("0.1 +"), None);
-        assert_eq!(expansion_expr("NaN"), None);
+        assert_eq!(expansion_expr("-", &table()), None);
+        assert_eq!(expansion_expr("0.1 +", &table()), None);
+        assert_eq!(expansion_expr("NaN", &table()), None);
+    }
+
+    #[test]
+    fn text_that_is_not_a_length_is_not_stored() {
+        assert_eq!(expansion_expr("2*3", &table()), None, "no length unit");
+        assert_eq!(expansion_expr("m", &table()), None, "half-typed name");
+        assert_eq!(expansion_expr("pitch * 2", &table()), None, "unknown name");
     }
 }

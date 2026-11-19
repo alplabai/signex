@@ -1,7 +1,6 @@
 //! Footprint-editor handler for the Properties panel's view state: the
-//! hover link between fields and the illustration, and the page shown while
-//! nothing is selected. View state only: the tab is not dirtied, no undo
-//! step is recorded and the canvas keeps its cache.
+//! hover link between fields and the illustration. View state only: the tab
+//! is not dirtied, no undo step is recorded and the canvas keeps its cache.
 
 use crate::app::Signex;
 use crate::panels::FpPropertiesMsg;
@@ -16,7 +15,6 @@ impl Signex {
                 FpPropertiesMsg::Illustration(hover) => {
                     editor.state.properties_hover.update(hover.clone());
                 }
-                FpPropertiesMsg::PageSelected(page) => editor.state.properties_page = *page,
             }
         }
         self.refresh_panel_ctx();
@@ -33,7 +31,6 @@ mod tests {
 
     use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
     use crate::dock::DockMessage;
-    use crate::library::editor::footprint::state::FpPropertiesPage;
     use crate::panels::{FpPropertiesMsg, PanelMsg};
 
     const PATH: &str = "properties-view.snxfpt";
@@ -72,24 +69,19 @@ mod tests {
         &app.document_state.footprint_editors[&PathBuf::from(PATH)]
     }
 
-    /// Hovering a field and picking a page reach the panel, and leave the
-    /// tab clean with nothing to undo.
+    /// Hovering a field reaches the panel, and leaves the tab clean with
+    /// nothing to undo.
     #[test]
-    fn hover_and_page_messages_change_the_view_and_leave_the_tab_clean() {
+    fn hover_messages_change_the_view_and_leave_the_tab_clean() {
         let mut app = app_with_a_footprint();
         let field = FieldId::new("pad-size-x");
         send(
             &mut app,
             FpPropertiesMsg::Illustration(IllustrationMsg::FieldHovered(field.clone())),
         );
-        send(
-            &mut app,
-            FpPropertiesMsg::PageSelected(FpPropertiesPage::SnapAndGrid),
-        );
 
         let ed = editor(&app);
         assert!(ed.state.properties_hover.is_field_highlighted(&field));
-        assert_eq!(ed.state.properties_page, FpPropertiesPage::SnapAndGrid);
         assert!(!ed.is_dirty(), "view state must not dirty the tab");
         assert!(
             !ed.history.can_undo(),
@@ -103,7 +95,6 @@ mod tests {
             .as_ref()
             .expect("the footprint panel context is built");
         assert!(ctx.illustration_hover.is_field_highlighted(&field));
-        assert_eq!(ctx.properties_page, FpPropertiesPage::SnapAndGrid);
 
         send(
             &mut app,

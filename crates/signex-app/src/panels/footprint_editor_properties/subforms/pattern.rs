@@ -19,7 +19,7 @@ use super::helpers::{
     ghost_action, header, illustration, is_open, note, pair, section_header, segmented, value_box,
 };
 use super::pattern_drawing::drawing;
-use super::pattern_layout::{Layout, layout};
+use signex_bake::array::ArrayPreview;
 
 const LAYOUT_SECTION: &str = "fp_role_pattern_layout";
 const NUMBERING_SECTION: &str = "fp_role_pattern_numbering";
@@ -79,17 +79,17 @@ fn scheme_label(i18n: &I18n, scheme: NumberingSchemeKindUi) -> String {
 
 /// The caption under the title: the source pad and the numbers the
 /// pattern runs over.
-fn range_caption(pattern: &ArraySummary, shown: &Layout, i18n: &I18n) -> Localized {
+fn range_caption(pattern: &ArraySummary, shown: &ArrayPreview, i18n: &I18n) -> Localized {
     let source = pattern.source_number.as_str();
-    if let Layout::Instances(all) = shown {
+    if let ArrayPreview::Instances(all) = shown {
         let mut kept = all.iter().filter(|c| !c.is_skipped);
         if let (Some(first), Some(last)) = (kept.next(), kept.next_back()) {
             return t!(
                 i18n,
                 ids::EDITORS_ROLE_PATTERN_RANGE,
                 "source" => source,
-                "first" => first.label.as_str(),
-                "last" => last.label.as_str()
+                "first" => first.number.as_str(),
+                "last" => last.number.as_str()
             );
         }
     }
@@ -103,7 +103,7 @@ pub(super) fn view<'a>(
     collapsed: &'a CollapsedSections,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
-    let shown = layout(pattern, &fp.sketch_parameters);
+    let shown = &pattern.preview;
     let pill = shown
         .kept()
         .map(|n| t!(i18n, ids::EDITORS_ROLE_PATTERN_INSTANCES, "count" => n));
@@ -111,10 +111,10 @@ pub(super) fn view<'a>(
         header(
             t!(i18n, ids::EDITORS_ROLE_PATTERN_TITLE),
             pill,
-            caption(range_caption(pattern, &shown, i18n), tokens),
+            caption(range_caption(pattern, shown, i18n), tokens),
             tokens,
         ),
-        illustration(drawing(pattern, &shown, i18n), fp, tokens),
+        illustration(drawing(pattern, shown, i18n), fp, tokens),
         container(segmented(kind_segments(pattern, i18n)))
             .padding([SP.xs, SP.m])
             .width(Length::Fill)

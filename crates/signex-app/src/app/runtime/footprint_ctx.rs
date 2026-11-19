@@ -396,6 +396,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         has_drill: p.drill.is_some(),
                         number: p.number.clone(),
                         kind: p.kind,
+                        side: p.side,
                         paste_top_expr: p.stack.paste_top_expr.clone(),
                         paste_bottom_expr: p.stack.paste_bottom_expr.clone(),
                         mask_top_expr: p.stack.mask_top_expr.clone(),
@@ -544,21 +545,35 @@ pub(super) fn build_footprint_editor_panel_ctx(
             ToolPending::RepickPolarCenter { array_id } if array_id == array.id
         );
         let source = sketch.entities.iter().find(|e| e.id == sel_id);
+        let source_position_mm = source.and_then(|e| match e.kind {
+            signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
+            _ => None,
+        });
+        let center_position_mm = match &kind {
+            crate::panels::ArrayKindSummary::Polar {
+                center_position_mm, ..
+            } => *center_position_mm,
+            _ => None,
+        };
+        let preview = signex_bake::array::preview_array(
+            array,
+            sketch,
+            source_position_mm,
+            center_position_mm,
+            crate::panels::PATTERN_PREVIEW_MAX_INSTANCES,
+        );
         Some(crate::panels::ArraySummary {
             array_id: array.id,
             kind,
             numbering,
             repicking_polar_center,
             bga_config,
-            numbering_scheme: array.numbering.clone(),
+            preview,
             source_number: source
                 .and_then(|e| e.pad.as_ref())
                 .map(|p| p.number.clone())
                 .unwrap_or_default(),
-            source_position_mm: source.and_then(|e| match e.kind {
-                signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
-                _ => None,
-            }),
+            source_position_mm,
             source_size_mm: editor_pad_size_mm(editor, sel_id),
         })
     });
@@ -683,7 +698,6 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_array,
         selected_pad_shape_params,
         numeric_buffers: editor.state.numeric_buffers.clone(),
-        properties_page: editor.state.properties_page,
         illustration_hover: editor.state.properties_hover.clone(),
         courtyard_extent_mm: courtyard_extent_mm(&editor.state),
         courtyard_expansion_mm: crate::library::editor::footprint::state::COURTYARD_SLACK_MM,

@@ -91,6 +91,21 @@ pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError
         .collect())
 }
 
+/// Evaluate one expression `src` (an optional leading `=`) against the
+/// resolved parameter `table`, keeping its unit family.
+pub fn eval_with_parameters(src: &str, table: &ParameterTable) -> Result<Quantity, ExprError> {
+    let ast = parse(strip_eq_prefix(src))?;
+    let params = resolve_quantities(table)?
+        .into_iter()
+        .map(|(name, q)| (name, ExprNode::Literal(q)))
+        .collect();
+    let ctx = EvalContext {
+        params,
+        array_index: None,
+    };
+    eval(&ast, &ctx)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Color {
     White,

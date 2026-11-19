@@ -51,7 +51,7 @@ pub use pad::{
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
-pub use properties_view::{FpPropertiesPage, pad_field, pad_field_buffer_key};
+pub use properties_view::{pad_field, pad_field_buffer_key};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
@@ -304,8 +304,6 @@ pub struct FootprintEditorState {
     /// under the sketch. The Active Bar then offers the sketch tools only,
     /// and the footprint bake is off (the board bakes on commit).
     pub board_backdrop: Option<std::sync::Arc<BoardBackdrop>>,
-    /// The Properties panel page shown while nothing is selected.
-    pub properties_page: FpPropertiesPage,
     /// The field or callout under the pointer in the Properties panel
     /// illustration. View state: it never dirties the tab.
     pub properties_hover: signex_widgets::property_illustration::IllustrationHover,
@@ -423,7 +421,6 @@ impl FootprintEditorState {
             fit_pending: false,
             zoom_request: ZoomRequest::default(),
             board_backdrop: None,
-            properties_page: FpPropertiesPage::default(),
             properties_hover: Default::default(),
         }
     }

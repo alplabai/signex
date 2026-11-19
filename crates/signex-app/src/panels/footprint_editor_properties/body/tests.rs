@@ -1,6 +1,7 @@
-//! The footprint Properties body (#124): the three pages with nothing
-//! selected, the snap fields greyed while snapping is Off, the sketch solve
-//! statistics, and a role sub-form above the Entity section.
+//! The footprint Properties body (#124): every section in one scroll with
+//! nothing selected and the pad stack check above them, the snap fields
+//! greyed while snapping is Off, the sketch solve statistics, and a role
+//! sub-form above the Entity section.
 
 use std::path::PathBuf;
 
@@ -9,13 +10,14 @@ use iced::Widget as _;
 use super::{BodyState, body_state, view_body};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
-use crate::library::editor::footprint::state::{FpPropertiesPage, SnappingMode};
+use crate::library::editor::footprint::state::SnappingMode;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::{
     FootprintEditorPanelContext, FootprintModeKind, FootprintSketchEntitySummary,
     FootprintSolveSummary, KeepoutSummary, PanelMsg, PanelPalette, SnapOptionFlag,
 };
 use signex_library::{Footprint, FootprintFile, Pad};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 const PATH: &str = "body-tests.snxfpt";
 const DOCK: iced::Size = iced::Size::new(300.0, 4000.0);
@@ -97,23 +99,22 @@ fn top_of(texts: &[LaidOutText], label: &str) -> f32 {
 }
 
 #[test]
-fn nothing_selected_is_the_pages_body() {
+fn nothing_selected_is_the_one_scroll_body() {
     let app = app_with_eight_pads();
     let fp = panel_ctx(&app);
-    assert!(matches!(body_state(&fp), BodyState::Pages));
+    assert!(matches!(body_state(&fp), BodyState::NothingSelected));
 }
 
 #[test]
-fn nothing_selected_shows_the_footprint_page_under_the_header_and_page_switch() {
+fn nothing_selected_shows_every_section_in_one_scroll() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
-    fp.properties_page = FpPropertiesPage::Footprint;
+    fp.mode_kind = FootprintModeKind::Pads;
+    fp.snapping_mode = SnappingMode::AllLayers;
     let texts = texts(&app, &fp);
     for label in [
         "Footprint",
         "8 pads",
-        "Snap & Grid",
-        "Sketch",
         "Name",
         "Description",
         "Designator",
@@ -125,22 +126,39 @@ fn nothing_selected_shows_the_footprint_page_under_the_header_and_page_switch() 
         "COURTYARD & SILKSCREEN",
         "Expansion",
         "0.25 mm",
+        "SNAP OPTIONS",
+        "GRID MANAGER",
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    // The other pages and the dropped empty Settings header are not shown.
-    for label in ["Snap Distance", "GRID MANAGER", "SKETCH SOLVE", "Settings"] {
-        assert!(!has(&texts, label), "{label:?} on the Footprint page");
+    // No page switch; the sketch sections stay in Sketch mode; the empty
+    // Settings header is dropped.
+    for label in ["Snap & Grid", "SKETCH SOLVE", "Settings"] {
+        assert!(!has(&texts, label), "{label:?} shown outside Sketch mode");
     }
-    assert!(top_of(&texts, "8 pads") < top_of(&texts, "Snap & Grid"));
-    assert!(top_of(&texts, "Snap & Grid") < top_of(&texts, "Name"));
+    assert!(top_of(&texts, "8 pads") < top_of(&texts, "Name"));
+    assert!(top_of(&texts, "Name") < top_of(&texts, "COURTYARD & SILKSCREEN"));
+    assert!(top_of(&texts, "COURTYARD & SILKSCREEN") < top_of(&texts, "SNAP OPTIONS"));
+    assert!(top_of(&texts, "SNAP OPTIONS") < top_of(&texts, "GRID MANAGER"));
 }
 
 #[test]
-fn the_snap_and_grid_page_shows_the_snap_fields_and_the_grid_manager() {
+fn the_pad_stack_check_sits_above_every_section() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
-    fp.properties_page = FpPropertiesPage::SnapAndGrid;
+    fp.legacy_pad_stack_offer = Some(3);
+    fp.paste_disabled_smd_pads = vec!["1".into(), "2".into()];
+    let texts = texts(&app, &fp);
+    let card = top_of(&texts, "Pad stack check");
+    assert!(top_of(&texts, "8 pads") < card);
+    assert!(card < top_of(&texts, "Name"), "{texts:#?}");
+    assert!(has(&texts, "Keep as is"));
+}
+
+#[test]
+fn nothing_selected_shows_the_snap_fields_and_the_grid_manager() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
     fp.snapping_mode = SnappingMode::AllLayers;
     let texts = texts(&app, &fp);
     for label in [
@@ -163,17 +181,12 @@ fn the_snap_and_grid_page_shows_the_snap_fields_and_the_grid_manager() {
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    assert!(
-        !has(&texts, "Name"),
-        "the Footprint page's fields are not shown"
-    );
 }
 
 #[test]
 fn snapping_off_greys_the_snap_fields_and_they_take_no_clicks() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
-    fp.properties_page = FpPropertiesPage::SnapAndGrid;
     fp.snapping_mode = SnappingMode::AllLayers;
     let grids = lay_out_texts(body(&app, &fp), DOCK)
         .into_iter()
@@ -203,10 +216,10 @@ fn snapping_off_greys_the_snap_fields_and_they_take_no_clicks() {
 }
 
 #[test]
-fn the_sketch_page_shows_the_solve_statistics_and_parameters() {
+fn sketch_mode_adds_the_solve_statistics_and_parameters() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
-    fp.properties_page = FpPropertiesPage::Sketch;
+    fp.mode_kind = FootprintModeKind::Sketch;
     fp.last_solve = Some(FootprintSolveSummary {
         iterations: 6,
         elapsed_ms: 2,
@@ -231,10 +244,7 @@ fn the_sketch_page_shows_the_solve_statistics_and_parameters() {
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    assert!(
-        !has(&texts, "Name"),
-        "the Footprint page's fields are not shown"
-    );
+    assert!(top_of(&texts, "GRID MANAGER") < top_of(&texts, "SKETCH SOLVE"));
 }
 
 /// A sketch line selected in Sketch mode, with no role.
@@ -281,6 +291,7 @@ fn a_role_with_a_sub_form_shows_the_sub_form_first_then_the_entity_section_with_
         no_vias: false,
         no_drilling: false,
         no_pours: false,
+        layer: PcbLayer::Copper(CopperLayer::Top),
     });
     let texts = texts(&app, &fp);
     assert!(

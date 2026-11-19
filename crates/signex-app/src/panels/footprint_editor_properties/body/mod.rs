@@ -1,7 +1,8 @@
 //! The footprint Properties body for every state but a selected pad in Pads
 //! mode and pad placement (#124): its own object header, then the body.
 //!
-//! - Nothing selected: the Footprint, Snap & Grid and Sketch pages.
+//! - Nothing selected: the pad stack check, then the Footprint and Snap &
+//!   Grid sections and, in Sketch mode, the sketch sections, in one scroll.
 //! - A sketch entity: its role sub-form or header, the Entity section, then
 //!   Snap Options and the sketch sections as before.
 //! - A silk graphic: the silk form, then Snap Options.
@@ -13,7 +14,6 @@
 mod footprint_illustration;
 mod footprint_page;
 mod header;
-mod sketch_page;
 mod snap_illustration;
 mod snap_page;
 
@@ -31,8 +31,6 @@ use super::super::{
     FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary, PanelMsg,
     PanelPalette,
 };
-use crate::library::editor::footprint::state::FpPropertiesPage;
-use crate::panels::FpPropertiesMsg;
 use crate::styles::PillTone;
 
 pub(super) use header::{
@@ -74,7 +72,7 @@ enum BodyState<'a> {
     SelectedPad(&'a FootprintPadSummary),
     Silk(&'a FootprintSelectedSilkSummary),
     Board(&'a BoardSketchProps),
-    Pages,
+    NothingSelected,
 }
 
 fn body_state(fp: &FootprintEditorPanelContext) -> BodyState<'_> {
@@ -96,7 +94,7 @@ fn body_state(fp: &FootprintEditorPanelContext) -> BodyState<'_> {
     if let Some(board) = fp.board.as_ref() {
         return BodyState::Board(board);
     }
-    BodyState::Pages
+    BodyState::NothingSelected
 }
 
 /// The header and body of the footprint Properties panel.
@@ -128,7 +126,7 @@ pub(super) fn view_body<'a>(
             selection_tail(col, cx)
         }
         BodyState::Board(board) => view_board(col, cx, board),
-        BodyState::Pages => view_pages(col, cx),
+        BodyState::NothingSelected => view_nothing_selected(col, cx),
     }
 }
 
@@ -139,7 +137,7 @@ fn selection_tail<'a>(
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
     col = super::board::view_board_section(col, cx.fp, cx.palette, cx.i18n);
-    col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.palette, cx.collapsed);
+    col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.i18n);
     col = super::snap_options::view_snap_options(col, cx, true);
     if cx.fp.mode_kind == FootprintModeKind::Sketch {
         col = super::sections::view_sketch_sections(col, cx);
@@ -161,7 +159,7 @@ fn view_board<'a>(
         cx.tokens,
     ));
     col = super::board::view_board_summary(col, cx.fp, board, cx.palette, cx.collapsed, i18n);
-    col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.palette, cx.collapsed);
+    col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.i18n);
     col = super::snap_options::view_snap_options(col, cx, false);
     col = super::managers::view_grid_manager(col, cx);
     col = col.push(footprint_page::units_row(cx));
@@ -171,8 +169,11 @@ fn view_board<'a>(
     col.push(hint(cx))
 }
 
-/// Nothing selected: the Footprint header, the page switch and the page.
-fn view_pages<'a>(
+/// Nothing selected: the Footprint header, the pad stack check, then every
+/// section in one scroll (Footprint, Snap & Grid, and in Sketch mode the
+/// sketch sections), each collapsible. Pages or one scroll is an open
+/// maintainer decision (m124); one scroll is the shipped behaviour.
+fn view_nothing_selected<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
@@ -182,29 +183,12 @@ fn view_pages<'a>(
         Some(footprint_status(cx.fp, i18n)),
         cx.tokens,
     ));
-    let pages = [
-        (
-            FpPropertiesPage::Footprint,
-            ids::EDITORS_FP_PROPS_PAGE_FOOTPRINT,
-        ),
-        (
-            FpPropertiesPage::SnapAndGrid,
-            ids::EDITORS_FP_PROPS_PAGE_SNAP,
-        ),
-        (FpPropertiesPage::Sketch, ids::EDITORS_FP_PROPS_PAGE_SKETCH),
-    ]
-    .map(|(page, label)| (page, Label::from(t!(i18n, label))));
-    col = col.push(full_width_segment(
-        pages,
-        cx.fp.properties_page,
-        cx.tokens,
-        |page| PanelMsg::FpProperties(FpPropertiesMsg::PageSelected(page)),
-    ));
-    col = match cx.fp.properties_page {
-        FpPropertiesPage::Footprint => footprint_page::view(col, cx),
-        FpPropertiesPage::SnapAndGrid => snap_page::view(col, cx),
-        FpPropertiesPage::Sketch => sketch_page::view(col, cx),
-    };
+    col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, i18n);
+    col = footprint_page::view(col, cx);
+    col = snap_page::view(col, cx);
+    if cx.fp.mode_kind == FootprintModeKind::Sketch {
+        col = super::sections::view_sketch_sections(col, cx);
+    }
     col.push(hint(cx))
 }
 

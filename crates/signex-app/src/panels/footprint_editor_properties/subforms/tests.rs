@@ -4,9 +4,12 @@
 
 use std::path::PathBuf;
 
+use signex_bake::array::ArrayPreview;
 use signex_library::{Footprint, FootprintFile};
-use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
-use signex_sketch::attr::{BoardCutoutAttr, DrillSpec, KeepoutAttr, KeepoutKinds, PadAttr};
+use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
+use signex_sketch::attr::{
+    BoardCutoutAttr, DrillSpec, KeepoutAttr, KeepoutKinds, PadAttr, PadSide,
+};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -14,13 +17,10 @@ use signex_sketch::sketch::SketchData;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, InnerCopper, PcbLayer};
 use signex_types::theme::{ThemeId, theme_tokens};
 
-use super::pattern_layout::{Layout, layout};
 use super::{cutout, keepout, pattern, sketch_pad, view_role_subform};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use crate::panels::{
-    ArrayKindSummary, CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette,
-};
+use crate::panels::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
 
 const PATH: &str = "role-subforms.snxfpt";
 
@@ -208,7 +208,28 @@ fn an_smd_sketch_pad_hides_the_bottom_side_and_the_hole() {
     let ctx = ctx_with(sketch, id);
     let pad = ctx.selected_sketch_pad.as_ref().expect("a sketch pad");
     assert_eq!(pad.number, "3");
-    assert!(!sketch_pad::shows_bottom_side(pad));
+    assert_eq!(sketch_pad::shown_sides(pad), &[BoardSide::Top]);
+    assert!(has_form(&ctx, id));
+}
+
+#[test]
+fn a_bottom_smd_sketch_pad_shows_only_its_bottom_paste_and_mask() {
+    let mut id = None;
+    let sketch = sketch(|plane, s| {
+        let pad = pad_point(plane, s, None);
+        let entity = s.entities.iter_mut().find(|e| e.id == pad).unwrap();
+        entity.pad.as_mut().unwrap().side = PadSide::Bottom;
+        id = Some(pad);
+    });
+    let id = id.unwrap();
+    let ctx = ctx_with(sketch, id);
+    let pad = ctx.selected_sketch_pad.as_ref().expect("a sketch pad");
+    assert_eq!(pad.side, PadSide::Bottom);
+    assert_eq!(
+        sketch_pad::shown_sides(pad),
+        &[BoardSide::Bottom],
+        "the bake gives a bottom SMD pad the bottom paste and mask only"
+    );
     assert!(has_form(&ctx, id));
 }
 
@@ -225,11 +246,23 @@ fn a_drilled_sketch_pad_shows_the_bottom_side_and_the_hole() {
     });
     let ctx = ctx_with(sketch, id.unwrap());
     let pad = ctx.selected_sketch_pad.as_ref().expect("a sketch pad");
-    assert!(sketch_pad::shows_bottom_side(pad));
+    assert_eq!(
+        sketch_pad::shown_sides(pad),
+        &[BoardSide::Top, BoardSide::Bottom]
+    );
 }
 
 /// A 2 × 2 grid pattern on a pad point, numbered by `numbering`.
 fn grid_ctx(numbering: NumberingScheme) -> FootprintEditorPanelContext {
+    grid_ctx_with(numbering, "2", None)
+}
+
+/// A grid pattern of `nx_expr` × 2 on a pad point.
+fn grid_ctx_with(
+    numbering: NumberingScheme,
+    nx_expr: &str,
+    depopulation: Option<GridDepopulation>,
+) -> FootprintEditorPanelContext {
     let mut id = None;
     let sketch = sketch(|plane, s| {
         let source = pad_point(plane, s, None);
@@ -237,11 +270,11 @@ fn grid_ctx(numbering: NumberingScheme) -> FootprintEditorPanelContext {
             id: ArrayId::new(),
             kind: ArrayKind::Grid {
                 source,
-                nx_expr: "2".into(),
+                nx_expr: nx_expr.into(),
                 ny_expr: "2".into(),
                 dx_expr: "1.27mm".into(),
                 dy_expr: "2mm".into(),
-                depopulation: None,
+                depopulation,
             },
             numbering,
         });
@@ -279,10 +312,10 @@ fn the_kind_segment_shows_the_kind_and_offers_no_other() {
 fn a_grid_pattern_numbers_its_instances_like_the_bake() {
     let ctx = grid_ctx(NumberingScheme::default());
     let pattern = ctx.selected_array.as_ref().expect("a pattern");
-    let Layout::Instances(all) = layout(pattern, &ctx.sketch_parameters) else {
+    let ArrayPreview::Instances(all) = &pattern.preview else {
         panic!("a literal grid resolves");
     };
-    let labels: Vec<&str> = all.iter().map(|c| c.label.as_str()).collect();
+    let labels: Vec<&str> = all.iter().map(|c| c.number.as_str()).collect();
     assert_eq!(labels, vec!["1", "2", "3", "4"]);
     let last = all.last().unwrap();
     assert!((last.offset_mm[0] - 1.27).abs() < 1e-9);
@@ -298,29 +331,25 @@ fn a_bga_grid_names_rows_by_letter() {
         start_col: 1,
     });
     let pattern = ctx.selected_array.as_ref().expect("a pattern");
-    let Layout::Instances(all) = layout(pattern, &ctx.sketch_parameters) else {
+    let ArrayPreview::Instances(all) = &pattern.preview else {
         panic!("a literal grid resolves");
     };
-    let labels: Vec<&str> = all.iter().map(|c| c.label.as_str()).collect();
+    let labels: Vec<&str> = all.iter().map(|c| c.number.as_str()).collect();
     assert_eq!(labels, vec!["H1", "H2", "J1", "J2"], "I is skipped");
 }
 
 #[test]
 fn a_masked_or_unticked_instance_is_skipped() {
-    let ctx = grid_ctx(NumberingScheme::default());
-    let mut pattern = ctx.selected_array.clone().expect("a pattern");
-    let ArrayKindSummary::Grid {
-        mask_expr,
-        suppressed_instances,
-        ..
-    } = &mut pattern.kind
-    else {
-        panic!("a grid pattern");
-    };
-    *mask_expr = "i != 0 || j != 0".into();
-    suppressed_instances.push((1, 1));
-    let shown = layout(&pattern, &ctx.sketch_parameters);
-    let Layout::Instances(all) = &shown else {
+    let ctx = grid_ctx_with(
+        NumberingScheme::default(),
+        "2",
+        Some(GridDepopulation {
+            mask_expr: "i != 0 || j != 0".into(),
+            suppressed_instances: vec![(1, 1)],
+        }),
+    );
+    let shown = &ctx.selected_array.as_ref().expect("a pattern").preview;
+    let ArrayPreview::Instances(all) = shown else {
         panic!("a literal grid resolves");
     };
     let skipped: Vec<bool> = all.iter().map(|c| c.is_skipped).collect();
@@ -330,12 +359,8 @@ fn a_masked_or_unticked_instance_is_skipped() {
 
 #[test]
 fn a_count_that_does_not_evaluate_draws_the_source_only() {
-    let ctx = grid_ctx(NumberingScheme::default());
-    let mut pattern = ctx.selected_array.clone().expect("a pattern");
-    let ArrayKindSummary::Grid { nx_expr, .. } = &mut pattern.kind else {
-        panic!("a grid pattern");
-    };
-    *nx_expr = "missing_parameter".into();
-    assert_eq!(layout(&pattern, &ctx.sketch_parameters), Layout::Unresolved);
-    assert_eq!(Layout::Unresolved.kept(), None);
+    let ctx = grid_ctx_with(NumberingScheme::default(), "missing_parameter", None);
+    let shown = &ctx.selected_array.as_ref().expect("a pattern").preview;
+    assert_eq!(shown, &ArrayPreview::Unresolved);
+    assert_eq!(shown.kept(), None);
 }

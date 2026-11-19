@@ -1,4 +1,5 @@
-//! The Footprint page: the pads-and-courtyard illustration, the Footprint
+//! The Footprint part of the nothing-selected body: the pads-and-courtyard
+//! illustration, the Footprint
 //! section (name, description, designator, type, height, version, units)
 //! and the Courtyard & Silkscreen section.
 //!
@@ -37,7 +38,6 @@ pub(super) fn view<'a>(
             cx.tokens,
         ));
     }
-    col = super::super::pad_stack_check::view_pad_stack_check(col, fp, cx.palette, cx.collapsed);
     col = footprint_section(col, cx);
     courtyard_section(col, cx)
 }

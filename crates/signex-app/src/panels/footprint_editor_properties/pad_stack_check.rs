@@ -1,14 +1,15 @@
 //! The "Pad stack check" card (#1073, look of #125): the one-time offer to
-//! restore paste and thermal relief on pre-#1052 sketch pads, and the
-//! standing warning listing SMD pads that have no paste opening. An inline
-//! card on the theme's warning tone; its actions are the shipped Restore
-//! and Keep as is.
+//! restore paste and thermal relief on sketch pads that older builds wrote
+//! with neither, and the standing warning listing SMD pads that have no
+//! paste opening. An inline card on the theme's warning tone; its actions
+//! are the shipped Restore and Keep as is.
 
 use iced::widget::{Column, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_widgets::{button, raw, text};
+use signex_i18n::{I18n, Localized, ids, t};
+use signex_widgets::{button, text};
 
-use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
+use super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Radii, Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -24,8 +25,7 @@ const CARD_FILL_ALPHA: f32 = 0.15;
 pub(super) fn view_pad_stack_check<'a>(
     col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
-    _palette: PanelPalette,
-    _collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     if fp.legacy_pad_stack_offer.is_none() && fp.paste_disabled_smd_pads.is_empty() {
         return col;
@@ -34,29 +34,26 @@ pub(super) fn view_pad_stack_check<'a>(
         weight: iced::font::Weight::Semibold,
         ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     };
-    let mut body: Column<Element<'a, PanelMsg>> =
-        column![text(raw("Pad stack check")).size(TS.caption).font(bold)]
-            .spacing(SP.xs)
-            .width(Length::Fill);
+    let mut body: Column<Element<'a, PanelMsg>> = column![
+        text(t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_CHECK))
+            .size(TS.caption)
+            .font(bold)
+    ]
+    .spacing(SP.xs)
+    .width(Length::Fill);
     if let Some(n) = fp.legacy_pad_stack_offer {
         body = body.push(
-            text(raw(format!(
-                "All {n} sketch pad(s) have paste disabled and direct connect, the \
-                 stack written by builds before #1052. They produce no paste stencil \
-                 openings. Enable paste and thermal relief on them? Undo reverts it; \
-                 nothing is saved until you save."
-            )))
-            .size(TS.caption),
+            text(t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_OFFER, "count" => n)).size(TS.caption),
         );
         body = body.push(
             row![
                 action_button(
-                    format!("Enable paste and thermal relief on {n} pad(s)"),
+                    t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_RESTORE, "count" => n),
                     PanelMsg::FpEditorRestorePadStackDefaults,
                     false,
                 ),
                 action_button(
-                    "Keep as is".to_string(),
+                    t!(i18n, ids::EDITORS_FP_PROPS_PAD_STACK_KEEP),
                     PanelMsg::FpEditorDismissPadStackOffer,
                     true,
                 ),
@@ -66,21 +63,27 @@ pub(super) fn view_pad_stack_check<'a>(
     }
     if !fp.paste_disabled_smd_pads.is_empty() {
         let total = fp.paste_disabled_smd_pads.len();
-        let mut listed = fp
+        let mut listed: Vec<String> = fp
             .paste_disabled_smd_pads
             .iter()
             .take(LISTED_PADS)
             .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect();
         if total > LISTED_PADS {
-            listed.push_str(&format!(", +{} more", total - LISTED_PADS));
+            let more = t!(
+                i18n,
+                ids::EDITORS_FP_PROPS_PAD_STACK_MORE,
+                "count" => total - LISTED_PADS
+            );
+            listed.push(more.into_string());
         }
         body = body.push(
-            text(raw(format!(
-                "Warning: {total} SMD pad(s) have paste disabled on their copper side \
-                 and get no stencil opening: {listed}"
-            )))
+            text(t!(
+                i18n,
+                ids::EDITORS_FP_PROPS_PAD_STACK_NO_PASTE,
+                "count" => total,
+                "pads" => listed.join(", ")
+            ))
             .size(TS.caption),
         );
     }
@@ -117,8 +120,8 @@ fn warning_ink(theme: &Theme) -> Color {
 }
 
 /// A small card action: outlined, or quiet (no outline) for "Keep as is".
-fn action_button<'a>(label: String, msg: PanelMsg, quiet: bool) -> Element<'a, PanelMsg> {
-    button(text(raw(label)).size(TS.caption))
+fn action_button<'a>(label: Localized, msg: PanelMsg, quiet: bool) -> Element<'a, PanelMsg> {
+    button(text(label).size(TS.caption))
         .padding([SP.xs, SP.m])
         .on_press(msg)
         .style(move |theme: &Theme, status: button::Status| {

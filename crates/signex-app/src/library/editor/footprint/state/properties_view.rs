@@ -1,15 +1,6 @@
-//! View state of the footprint Properties panel: the page it shows when
-//! nothing is selected, and the keys a refused pad field keeps its text
-//! under. Neither is document data: changing them never dirties the tab.
-
-/// The page of the footprint Properties panel while nothing is selected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FpPropertiesPage {
-    #[default]
-    Footprint,
-    SnapAndGrid,
-    Sketch,
-}
+//! View state of the footprint Properties panel: the keys a refused pad
+//! field keeps its text under. Not document data: changing it never
+//! dirties the tab.
 
 /// The pad form fields whose refused text is kept in
 /// `FootprintEditorState::numeric_buffers`, so the field shows what was
@@ -56,10 +47,5 @@ mod tests {
             pad_field_buffer_key(Some(0), pad_field::SIZE_X),
             pad_field_buffer_key(Some(1), pad_field::SIZE_X)
         );
-    }
-
-    #[test]
-    fn the_panel_opens_on_the_footprint_page() {
-        assert_eq!(FpPropertiesPage::default(), FpPropertiesPage::Footprint);
     }
 }

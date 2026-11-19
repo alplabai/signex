@@ -10,6 +10,7 @@
 //! Built on `signex_widgets::active_bar::view`; the dropdown overlay and
 //! click-outside backstop are mounted by the symbol editor view.
 
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
@@ -24,7 +25,11 @@ mod dropdowns;
 /// Build the SchLib bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
-pub fn bar_items(editor: &SymbolDocument, theme_id: ThemeId) -> Vec<ActiveBarItem<LibraryMessage>> {
+pub fn bar_items(
+    editor: &SymbolDocument,
+    theme_id: ThemeId,
+    i18n: &I18n,
+) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active_tool = editor.tool;
     let tool = |icon: ActiveBarIcon, tooltip: &str, pick: SymbolToolMsg, armed: SymbolTool| {
@@ -41,7 +46,7 @@ pub fn bar_items(editor: &SymbolDocument, theme_id: ThemeId) -> Vec<ActiveBarIte
         })
     };
 
-    let mut triggers = dropdown_trigger_items(editor, theme_id);
+    let mut triggers = dropdown_trigger_items(editor, theme_id, i18n);
     let placement = triggers.split_off(SELECTION_TRIGGERS);
 
     let mut items = triggers;
@@ -78,12 +83,19 @@ const FILTER_KINDS: [SymbolFilterKind; 7] = [
 ];
 
 /// Tooltip of the selection-filter trigger: the categories it filters.
-fn filter_tooltip() -> String {
-    let kinds: Vec<&str> = FILTER_KINDS.iter().map(|kind| kind.label()).collect();
-    format!(
-        "Selection Filter: {} (left or right click for menu)",
-        kinds.join(", ")
+fn filter_tooltip(i18n: &I18n) -> String {
+    let kinds: Vec<String> = FILTER_KINDS
+        .iter()
+        .map(|kind| {
+            t!(i18n, ids::EDITORS_SYMBOL_BAR_FILTER_KIND, "kind" => kind.label()).into_string()
+        })
+        .collect();
+    t!(
+        i18n,
+        ids::EDITORS_SYMBOL_BAR_FILTER_TOOLTIP,
+        "kinds" => kinds.join(", ")
     )
+    .into_string()
 }
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
@@ -95,6 +107,7 @@ pub fn dropdown_overlay<'a>(
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     top_padding_px: u16,
+    i18n: &I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
     use iced::Widget as _;
@@ -107,6 +120,7 @@ pub fn dropdown_overlay<'a>(
         editor.tool,
         editor.path.clone(),
         theme_id,
+        i18n,
     );
     let width_hint = match menu {
         SymActiveBarMenu::Filter => None,
@@ -148,6 +162,7 @@ pub fn dropdown_overlay<'a>(
 fn dropdown_trigger_items(
     editor: &SymbolDocument,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.active_bar_menu;
@@ -178,7 +193,7 @@ fn dropdown_trigger_items(
 
     vec![
         dual(
-            &filter_tooltip(),
+            &filter_tooltip(i18n),
             ActiveBarIcon::Svg(ic::icon_filter(tid)),
             SymActiveBarMenu::Filter,
             None,
@@ -276,7 +291,7 @@ mod tests {
     #[test]
     fn move_trigger_left_click_arms_select_tool() {
         let editor = new_editor();
-        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight);
+        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight, &I18n::en_us());
         let place = &items[2]; // Filter, Snap, Place, Select, Align, Pin, Shapes, Text
         assert!(matches!(
             left_click_symbol_msg(place),
@@ -290,7 +305,7 @@ mod tests {
     #[test]
     fn align_trigger_left_click_snaps_selection_to_grid() {
         let editor = new_editor();
-        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight);
+        let items = dropdown_trigger_items(&editor, ThemeId::GraphiteLight, &I18n::en_us());
         let align = &items[4];
         assert!(matches!(
             left_click_symbol_msg(align),
@@ -305,7 +320,7 @@ mod tests {
     #[test]
     fn the_bar_has_a_selection_and_a_placement_group() {
         let editor = new_editor();
-        let items = bar_items(&editor, ThemeId::GraphiteLight);
+        let items = bar_items(&editor, ThemeId::GraphiteLight, &I18n::en_us());
         let divider = items
             .iter()
             .position(|i| matches!(i, ActiveBarItem::Separator))
@@ -336,13 +351,20 @@ mod tests {
         }
     }
 
-    /// The filter trigger's tooltip names the categories the filter has.
+    /// The filter trigger's tooltip names the categories the filter has,
+    /// each from the catalog.
     #[test]
     fn the_filter_tooltip_lists_the_filter_categories() {
+        let i18n = I18n::en_us();
+        let tooltip = filter_tooltip(&i18n).replace(['\u{2068}', '\u{2069}'], "");
         assert_eq!(
-            filter_tooltip(),
+            tooltip,
             "Selection Filter: Pins, Drawings, Texts, Designators, Values, Parameters, Other \
              (left or right click for menu)"
         );
+        for kind in FILTER_KINDS {
+            let name = t!(i18n, ids::EDITORS_SYMBOL_BAR_FILTER_KIND, "kind" => kind.label());
+            assert_eq!(name.into_string(), kind.label(), "en-US names the category");
+        }
     }
 }

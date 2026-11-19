@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -59,6 +60,7 @@ pub fn entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
         SymActiveBarMenu::Filter => filter_entries(selection_filter, path),
@@ -68,7 +70,7 @@ pub fn entries(
         SymActiveBarMenu::Align => align_entries(path, tid),
         SymActiveBarMenu::Pin => pin_entries(active_tool, path),
         SymActiveBarMenu::Text => text_entries(active_tool, path, tid),
-        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid),
+        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid, i18n),
     }
 }
 
@@ -374,6 +376,7 @@ fn shapes_entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     // The armed tool's row keeps the highlight as well as the check; the
     // stub rows below have no glyph and keep the icon column empty.
@@ -391,7 +394,7 @@ fn shapes_entries(
         )
     };
     vec![
-        DropdownEntry::Header("Shapes".into()),
+        DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string()),
         shape(
             "Line",
             SymbolToolMsg::PlaceLine,
@@ -528,12 +531,16 @@ mod tests {
     /// the armed tool's row (and only it).
     #[test]
     fn shapes_menu_has_a_header_and_highlights_the_armed_tool() {
+        let i18n = I18n::en_us();
         let entries = shapes_entries(
             SymbolTool::PlaceRectangle,
             PathBuf::from("t.snxsym"),
             ThemeId::GraphiteLight,
+            &i18n,
         );
-        assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "Shapes"));
+        let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string();
+        assert_eq!(header, "Shapes");
+        assert!(matches!(&entries[0], DropdownEntry::Header(h) if *h == header));
         let highlighted: Vec<&str> = entries
             .iter()
             .filter_map(|e| match e {

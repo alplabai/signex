@@ -1,5 +1,5 @@
 //! Ids of the footprint Properties body in `locales/en-US/editors.ftl`
-//! (#124): the header, the Footprint / Snap & Grid / Sketch pages and the
+//! (#124): the header, the Footprint / Snap & Grid / Sketch sections and the
 //! selection forms.
 
 define_ids! {
@@ -7,9 +7,6 @@ define_ids! {
     EDITORS_FP_PROPS_TITLE = "editors-fp-props-title";
     EDITORS_FP_PROPS_STATUS = "editors-fp-props-status";
     EDITORS_FP_PROPS_STATUS_SOLVED = "editors-fp-props-status-solved";
-    EDITORS_FP_PROPS_PAGE_FOOTPRINT = "editors-fp-props-page-footprint";
-    EDITORS_FP_PROPS_PAGE_SNAP = "editors-fp-props-page-snap";
-    EDITORS_FP_PROPS_PAGE_SKETCH = "editors-fp-props-page-sketch";
     EDITORS_FP_PROPS_SECTION_FOOTPRINT = "editors-fp-props-section-footprint";
     EDITORS_FP_PROPS_NAME = "editors-fp-props-name";
     EDITORS_FP_PROPS_DESCRIPTION = "editors-fp-props-description";
@@ -81,7 +78,6 @@ define_ids! {
     EDITORS_FP_PROPS_PARAMETER_PLACEHOLDER = "editors-fp-props-parameter-placeholder";
     EDITORS_FP_PROPS_SECTION_WARNINGS = "editors-fp-props-section-warnings";
     EDITORS_FP_PROPS_WARNINGS_NONE = "editors-fp-props-warnings-none";
-    EDITORS_FP_PROPS_OPEN_SKETCH = "editors-fp-props-open-sketch";
     EDITORS_FP_PROPS_HINT_PADS = "editors-fp-props-hint-pads";
     EDITORS_FP_PROPS_HINT_SKETCH = "editors-fp-props-hint-sketch";
     EDITORS_FP_PROPS_HINT_VIEW3D = "editors-fp-props-hint-view3d";
@@ -103,4 +99,10 @@ define_ids! {
     EDITORS_FP_PROPS_SILK_HEADING = "editors-fp-props-silk-heading";
     EDITORS_FP_PROPS_SECTION_SILK = "editors-fp-props-section-silk";
     EDITORS_FP_PROPS_INDEX = "editors-fp-props-index";
+    EDITORS_FP_PROPS_PAD_STACK_CHECK = "editors-fp-props-pad-stack-check";
+    EDITORS_FP_PROPS_PAD_STACK_OFFER = "editors-fp-props-pad-stack-offer";
+    EDITORS_FP_PROPS_PAD_STACK_RESTORE = "editors-fp-props-pad-stack-restore";
+    EDITORS_FP_PROPS_PAD_STACK_KEEP = "editors-fp-props-pad-stack-keep";
+    EDITORS_FP_PROPS_PAD_STACK_NO_PASTE = "editors-fp-props-pad-stack-no-paste";
+    EDITORS_FP_PROPS_PAD_STACK_MORE = "editors-fp-props-pad-stack-more";
 }

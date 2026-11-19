@@ -11,8 +11,8 @@ use signex_widgets::property_illustration::{
 
 use super::super::super::{ArrayKindSummary, ArraySummary};
 use super::drawing::{bottom_note, canvas, centred, label};
-use super::pattern_layout::{Instance, Layout};
 use crate::styles::board_palette::BoardPalette;
+use signex_bake::array::{ArrayPreview, InstancePreview as Instance};
 
 pub(super) const COUNT: FieldId = FieldId::new("pattern.count");
 pub(super) const NX: FieldId = FieldId::new("pattern.nx");
@@ -80,25 +80,25 @@ fn layout_fields(pattern: &ArraySummary) -> Vec<FieldId> {
     }
 }
 
-pub(super) fn drawing(pattern: &ArraySummary, layout: &Layout, i18n: &I18n) -> Illustration {
+pub(super) fn drawing(pattern: &ArraySummary, preview: &ArrayPreview, i18n: &I18n) -> Illustration {
     let copper = Paint::Document(BoardPalette::new().layer(PcbLayer::Copper(CopperLayer::Top)));
     let pad = pattern.source_size_mm.unwrap_or(FALLBACK_PAD_MM);
     let source_only = [Instance {
         i: 0,
         j: 0,
         offset_mm: [0.0, 0.0],
-        label: pattern.source_number.clone(),
+        number: pattern.source_number.clone(),
         is_skipped: false,
     }];
-    let (instances, note) = match layout {
-        Layout::Instances(all) if !all.is_empty() => {
+    let (instances, note) = match preview {
+        ArrayPreview::Instances(all) if !all.is_empty() => {
             (all.as_slice(), t!(i18n, ids::EDITORS_ROLE_PATTERN_LEGEND))
         }
-        Layout::Instances(_) | Layout::Unresolved => (
+        ArrayPreview::Instances(_) | ArrayPreview::Unresolved => (
             source_only.as_slice(),
             t!(i18n, ids::EDITORS_ROLE_PATTERN_UNRESOLVED),
         ),
-        Layout::TooMany(n) => (
+        ArrayPreview::TooMany(n) => (
             source_only.as_slice(),
             t!(i18n, ids::EDITORS_ROLE_PATTERN_TOO_MANY, "count" => *n),
         ),
@@ -134,7 +134,7 @@ pub(super) fn drawing(pattern: &ArraySummary, layout: &Layout, i18n: &I18n) -> I
         };
         drawing = drawing.part(part).part(label(
             fit.point(c.offset_mm),
-            UserText::new(c.label.as_str()),
+            UserText::new(c.number.as_str()),
             Anchor::Middle,
             TextRole::Mono,
         ));

@@ -422,6 +422,19 @@ impl Signex {
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
+                // A preview label still open commits its draft first, as
+                // Enter would, so OK never drops a typed value.
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    use crate::app::view::dialogs::grid_properties::preview;
+                    let _ = preview::label_edited(
+                        state,
+                        signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
+                        &i18n,
+                    );
+                }
                 // `SnapOptions` stores one grid step for both axes, so the
                 // dialog has a single Step field.
                 let draft = self.ui_state.grid_properties.clone();
