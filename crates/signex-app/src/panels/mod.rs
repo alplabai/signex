@@ -63,8 +63,10 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
-mod sch_filter;
-pub use sch_filter::SchFilterMsg;
+mod selection_filter;
+pub use selection_filter::{
+    FilterEditor, KindCounts, SchFilterMsg, SelectionFilterFacts, board_counts,
+};
 mod status;
 mod symbol_context;
 mod widgets;
@@ -261,13 +263,13 @@ pub const ALL_PANELS: &[PanelKind] = &[
 ];
 
 impl PanelKind {
-    /// Whether this panel requires a schematic document to be open.
+    /// Whether this panel requires a schematic document to be open. Filter
+    /// follows the active editor, a schematic's or a board's (#55).
     pub fn needs_schematic(self) -> bool {
         matches!(
             self,
             PanelKind::Navigator
                 | PanelKind::Properties
-                | PanelKind::Filter
                 | PanelKind::Erc
                 | PanelKind::SchFilter
                 | PanelKind::SchList
@@ -365,12 +367,9 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter => empty_state_card(
-            &ctx.tokens,
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_TITLE),
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_BODY),
-            None,
-        ),
+        // The active editor's selection filter (#55): a schematic's or a
+        // board's kinds, else the empty card.
+        PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
         PanelKind::Drc => drc_results::view(ctx),
@@ -392,7 +391,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
-        PanelKind::SchFilter => sch_filter::view(ctx),
+        PanelKind::SchFilter => selection_filter::sch_view(ctx),
         PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,

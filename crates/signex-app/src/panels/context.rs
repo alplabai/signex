@@ -269,6 +269,9 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The editor the Filter panel follows, its per-kind counts and SCH
+    /// Filter's preset rename (#55, #56).
+    pub selection_filter: super::SelectionFilterFacts,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

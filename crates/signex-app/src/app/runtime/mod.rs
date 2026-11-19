@@ -16,6 +16,7 @@ pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
+mod selection_filter_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]

@@ -704,3 +704,7 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #55: the Filter panel edits the filter a box select picks with.
+#[path = "regression/selection_filter_panels.rs"]
+mod selection_filter_panels;
