@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use signex_types::coord::Unit;
+use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 
 use crate::paste_prefs::PasteDesignators;
 use signex_types::measure::{length_field_text, parse_length_field_mm};
@@ -16,12 +17,18 @@ pub const MAX_PLACED_ITEMS: usize = 100_000;
 /// cannot push copies out of any real sheet.
 const MAX_EXTENT_MM: f64 = 1.0e6;
 
+/// The step "Count up label numbers" turns on with when the preference
+/// step is 0.
+const COUNT_UP_FALLBACK_STEP: i32 = 1;
+
 /// The open dialog: what is typed, as typed.
 #[derive(Debug, Clone)]
 pub struct PasteArrayState {
     pub count: String,
     pub x_spacing: String,
     pub y_spacing: String,
+    /// The label step; `0` is "Count up label numbers" off, the only state
+    /// that checkbox has.
     pub step: String,
     /// What the pasted parts are called; starts as the saved preference.
     pub designators: PasteDesignators,
@@ -35,6 +42,15 @@ pub struct PasteArrayState {
     pub seed_pending: bool,
     /// Which opening of the dialog this is (`UiState::paste_array_opens`).
     pub id: u64,
+    /// The first label text of the copy, for the help line's worked example
+    /// and the preview.
+    pub sample_label: Option<String>,
+    /// Width and height of one copy, in mm, for the preview.
+    pub copy_size_mm: Option<(f64, f64)>,
+    /// The sheet grid pitch, in mm, the preview is drawn on.
+    pub grid_mm: f64,
+    /// The preview callout under the pointer.
+    pub hover: IllustrationHover,
 }
 
 /// A dialog whose fields all parse.
@@ -45,6 +61,15 @@ pub struct PasteArrayInput {
     pub dy_mm: f64,
     pub step: i32,
     pub designators: PasteDesignators,
+}
+
+/// The field a refusal is about; it is drawn red with the reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteArrayField {
+    Copies,
+    XSpacing,
+    YSpacing,
+    Step,
 }
 
 impl PasteArrayState {
@@ -70,44 +95,105 @@ impl PasteArrayState {
             origin,
             seed_pending: false,
             id: 0,
+            sample_label: None,
+            copy_size_mm: None,
+            grid_mm: 0.0,
+            hover: IllustrationHover::default(),
+        }
+    }
+
+    /// The copies typed, when they are a whole number from 1 to
+    /// [`MAX_COPIES`].
+    pub fn copies(&self) -> Option<u32> {
+        self.count
+            .trim()
+            .parse::<u32>()
+            .ok()
+            .filter(|n| (1..=MAX_COPIES).contains(n))
+    }
+
+    /// How many items the paste places: copies times the items in one copy.
+    pub fn placed_items(&self) -> Option<usize> {
+        self.copies()
+            .map(|n| (n as usize).saturating_mul(self.items_per_copy))
+    }
+
+    /// Whether "Count up label numbers" is ticked: any step but 0. A step
+    /// still being typed counts as ticked.
+    pub fn counts_up(&self) -> bool {
+        self.step.trim().parse::<i32>() != Ok(0)
+    }
+
+    /// Ticks or clears "Count up label numbers": off is step 0; on restores
+    /// `preferred` (the preference step), or 1 when that is 0 too.
+    pub fn set_count_up(&mut self, on: bool, preferred: i32) {
+        if !on {
+            self.step = "0".to_owned();
+        } else if !self.counts_up() {
+            let step = if preferred == 0 {
+                COUNT_UP_FALLBACK_STEP
+            } else {
+                preferred
+            };
+            self.step = step.to_string();
         }
     }
 
     /// The parsed fields, or why OK is disabled.
     pub fn input(&self) -> Result<PasteArrayInput, String> {
-        let count = self
-            .count
-            .trim()
-            .parse::<u32>()
-            .ok()
-            .filter(|n| (1..=MAX_COPIES).contains(n))
-            .ok_or_else(|| format!("Copies must be a whole number from 1 to {MAX_COPIES}."))?;
+        self.check().map_err(|(_, reason)| reason)
+    }
+
+    /// The field a refusal is about, if the dialog is refused.
+    pub fn invalid_field(&self) -> Option<PasteArrayField> {
+        self.check().err().map(|(field, _)| field)
+    }
+
+    /// [`Self::input`] with the field the refusal is about.
+    pub fn check(&self) -> Result<PasteArrayInput, (PasteArrayField, String)> {
+        let count = self.copies().ok_or_else(|| {
+            (
+                PasteArrayField::Copies,
+                format!("Copies must be a whole number from 1 to {MAX_COPIES}."),
+            )
+        })?;
         if (count as usize).saturating_mul(self.items_per_copy) > MAX_PLACED_ITEMS {
-            return Err(format!(
-                "{count} copies of {} items is over the limit of {MAX_PLACED_ITEMS} items; use fewer copies.",
-                self.items_per_copy
+            return Err((
+                PasteArrayField::Copies,
+                format!(
+                    "{count} copies of {} items is over the limit of {MAX_PLACED_ITEMS} items; use fewer copies.",
+                    self.items_per_copy
+                ),
             ));
         }
-        let spacing = |text: &str, axis: &str| {
+        let spacing = |text: &str, axis: &str, field: PasteArrayField| {
             parse_length_field_mm(text, self.unit)
                 .filter(|mm| (mm * f64::from(count)).abs() <= MAX_EXTENT_MM)
                 .ok_or_else(|| {
-                    format!(
-                        "{axis} spacing must be a number in {} (at most {} for the whole array).",
-                        self.unit,
-                        length_field_text(MAX_EXTENT_MM / f64::from(count), self.unit),
+                    (
+                        field,
+                        format!(
+                            "{axis} spacing must be a number in {} (at most {} for the whole array).",
+                            self.unit,
+                            length_field_text(MAX_EXTENT_MM / f64::from(count), self.unit),
+                        ),
                     )
                 })
         };
-        let dx_mm = spacing(&self.x_spacing, "X")?;
-        let dy_mm = spacing(&self.y_spacing, "Y")?;
+        let dx_mm = spacing(&self.x_spacing, "X", PasteArrayField::XSpacing)?;
+        let dy_mm = spacing(&self.y_spacing, "Y", PasteArrayField::YSpacing)?;
         let step = self
             .step
             .trim()
             .parse::<i32>()
             .ok()
             .filter(|s| (STEP_MIN..=STEP_MAX).contains(s))
-            .ok_or_else(|| format!("Step must be a whole number from {STEP_MIN} to {STEP_MAX}."))?;
+            .ok_or_else(|| {
+                (
+                    PasteArrayField::Step,
+                    format!("Step must be a whole number from {STEP_MIN} to {STEP_MAX}."),
+                )
+            })?;
         Ok(PasteArrayInput {
             count,
             dx_mm,
@@ -124,7 +210,11 @@ pub enum PasteArrayMsg {
     XSpacingChanged(String),
     YSpacingChanged(String),
     StepChanged(String),
+    /// "Count up label numbers" was ticked (`true`) or cleared.
+    CountUpToggled(bool),
     DesignatorsChosen(PasteDesignators),
+    /// The pointer moved over the preview's spacing callouts.
+    PreviewHovered(IllustrationMsg),
     /// OK: place the array.
     ApplyPressed,
     Closed,
@@ -159,11 +249,13 @@ mod tests {
             let mut s = state();
             s.count = bad.to_owned();
             assert!(s.input().unwrap_err().contains("Copies"), "{bad:?}");
+            assert_eq!(s.invalid_field(), Some(PasteArrayField::Copies), "{bad:?}");
         }
         for good in ["1", "1000", " 7 "] {
             let mut s = state();
             s.count = good.to_owned();
             assert!(s.input().is_ok(), "{good:?}");
+            assert_eq!(s.invalid_field(), None, "{good:?}");
         }
     }
 
@@ -172,6 +264,7 @@ mod tests {
         let mut s = PasteArrayState::new(Unit::Mm, 10.0, 0.0, 1, PasteDesignators::Keep, 101, None);
         s.count = "1000".to_owned();
         assert!(s.input().unwrap_err().contains("100000 items"));
+        assert_eq!(s.invalid_field(), Some(PasteArrayField::Copies));
         s.count = "990".to_owned();
         assert!(s.input().is_ok(), "99 990 items is within the cap");
         s.items_per_copy = 100;
@@ -185,9 +278,11 @@ mod tests {
             let mut s = state();
             s.x_spacing = bad.to_owned();
             assert!(s.input().unwrap_err().contains("X spacing"), "{bad:?}");
+            assert_eq!(s.invalid_field(), Some(PasteArrayField::XSpacing));
             let mut s = state();
             s.y_spacing = bad.to_owned();
             assert!(s.input().unwrap_err().contains("Y spacing"), "{bad:?}");
+            assert_eq!(s.invalid_field(), Some(PasteArrayField::YSpacing));
         }
     }
 
@@ -206,9 +301,37 @@ mod tests {
             let mut s = state();
             s.step = bad.to_owned();
             assert!(s.input().unwrap_err().contains("Step"), "{bad:?}");
+            assert_eq!(s.invalid_field(), Some(PasteArrayField::Step));
         }
         let mut s = state();
         s.step = "0".to_owned();
         assert_eq!(s.input().unwrap().step, 0);
+    }
+
+    #[test]
+    fn clearing_count_up_sets_step_zero_and_ticking_restores_a_step() {
+        let mut s = state();
+        s.step = "3".to_owned();
+        assert!(s.counts_up());
+        s.set_count_up(false, 2);
+        assert_eq!(s.step, "0");
+        assert!(!s.counts_up());
+        assert_eq!(s.input().unwrap().step, 0, "off places with step 0");
+        s.set_count_up(true, 2);
+        assert_eq!(s.step, "2", "on takes the preference step");
+        s.set_count_up(true, 5);
+        assert_eq!(s.step, "2", "ticking an on box keeps the typed step");
+        s.set_count_up(false, 2);
+        s.set_count_up(true, 0);
+        assert_eq!(s.step, "1", "a 0 preference turns on with 1");
+    }
+
+    #[test]
+    fn the_placed_items_are_copies_times_items_per_copy() {
+        let mut s = state();
+        s.count = "4".to_owned();
+        assert_eq!(s.placed_items(), Some(12));
+        s.count = "1001".to_owned();
+        assert_eq!(s.placed_items(), None);
     }
 }
