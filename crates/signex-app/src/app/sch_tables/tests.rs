@@ -52,7 +52,7 @@ fn four_bezier_clicks_place_one_curve_in_the_sheet_colour() {
 #[test]
 fn a_linear_dimension_takes_two_points_then_its_line() {
     let mut app = app_with_tool(Tool::LinearDimension);
-    let _ = app.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+    let _ = app.update(Message::Tool(crate::toolbar::ToolMessage::SelectTool(
         Tool::LinearDimension,
     )));
     click(&mut app, (0.0, 0.0));
@@ -85,7 +85,7 @@ fn a_linear_dimension_takes_two_points_then_its_line() {
 #[test]
 fn a_live_tag_shows_the_value_the_cursor_would_place() {
     let mut app = app_with_tool(Tool::AlignedDimension);
-    let _ = app.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+    let _ = app.update(Message::Tool(crate::toolbar::ToolMessage::SelectTool(
         Tool::AlignedDimension,
     )));
     click(&mut app, (0.0, 0.0));
