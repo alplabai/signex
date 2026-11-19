@@ -496,6 +496,7 @@ impl Signex {
             .boxed(),
             ModalId::LibraryRecovery => crate::library::recovery::view(
                 lib.recovery.as_ref()?,
+                self.recovery_project_file(),
                 tokens,
                 &self.ui_state.i18n,
                 windowed,

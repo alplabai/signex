@@ -24,7 +24,7 @@ mod view;
 mod tests;
 
 pub use view::view;
-pub(crate) use view::{intro_texts, previous_note};
+pub(crate) use view::{EMPTY_CARD_PAD_Y, intro_texts, list_height, previous_note};
 
 /// Which primitive kind a stock file holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +88,10 @@ pub struct StockCopyState {
     pub previous_unavailable: Option<PathBuf>,
     /// The last attempt's failure, shown in the dialog.
     pub error: Option<String>,
+    /// The library the user selected in the list (`.snxlib` path); the
+    /// primary button copies into it. The first writable library when the
+    /// dialog opens.
+    pub selected: Option<PathBuf>,
 }
 
 /// Where the copy goes.
@@ -102,7 +106,9 @@ pub enum CopyTarget {
 /// Events of the "Copy to Library" dialog and its copy.
 #[derive(Debug, Clone)]
 pub enum StockCopyMsg {
-    /// The user chose a mounted writable library in the dialog.
+    /// The user selected a library row in the dialog; nothing is copied yet.
+    TargetSelected(PathBuf),
+    /// The user confirmed the copy into this mounted writable library.
     TargetPicked(PathBuf),
     /// The user asked to create a new library to copy into.
     NewLibraryRequested,

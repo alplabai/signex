@@ -30,17 +30,38 @@ pub enum DialogIcon {
     File,
     /// Options or preferences.
     Settings,
+    /// A copy is made (Copy to Library).
+    Copy,
+    /// Something is deleted.
+    Trash,
+    /// A file or folder is not where it was expected.
+    Folder,
+    /// The version-control history of a library.
+    Git,
 }
 
 impl DialogIcon {
     /// Tone of the tile: its soft fill and its ink.
     pub fn tone(self) -> PillTone {
         match self {
-            Self::Info | Self::File => PillTone::Info,
-            Self::Warn => PillTone::Warn,
-            Self::Error => PillTone::Err,
+            Self::Info | Self::File | Self::Copy => PillTone::Info,
+            Self::Warn | Self::Git => PillTone::Warn,
+            Self::Error | Self::Trash | Self::Folder => PillTone::Err,
             Self::Library | Self::Settings => PillTone::Accent,
         }
+    }
+
+    /// The glyph alone, `size` px square, drawn in `color`: for a list row
+    /// or a banner, where no tile sits behind it.
+    pub fn glyph_element<'a, M: 'a>(self, size: f32, color: iced::Color) -> Element<'a, M> {
+        svg(GLYPHS[self.index()].clone())
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .style(move |_: &Theme, _| svg::Style {
+                color: Some(color),
+                ..Default::default()
+            })
+            .boxed()
     }
 
     /// The 24 x 24 stroke glyph, drawn in the tile's ink.
@@ -52,6 +73,10 @@ impl DialogIcon {
             Self::Library => 3,
             Self::File => 4,
             Self::Settings => 5,
+            Self::Copy => 6,
+            Self::Trash => 7,
+            Self::Folder => 8,
+            Self::Git => 9,
         }
     }
 
@@ -63,6 +88,10 @@ impl DialogIcon {
             Self::Library => GLYPH_LIBRARY,
             Self::File => GLYPH_FILE,
             Self::Settings => GLYPH_SETTINGS,
+            Self::Copy => GLYPH_COPY,
+            Self::Trash => GLYPH_TRASH,
+            Self::Folder => GLYPH_FOLDER,
+            Self::Git => GLYPH_GIT,
         }
     }
 }
@@ -73,9 +102,13 @@ const GLYPH_ERROR: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 const GLYPH_LIBRARY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="M16 5l3.5-1 3 15.5-3.5 1z"/></svg>"##;
 const GLYPH_FILE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>"##;
 const GLYPH_SETTINGS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>"##;
+const GLYPH_COPY: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="7.5" width="12.75" height="12.75" rx="2.25"/><path d="M4.5 15.75V5.25a1.5 1.5 0 0 1 1.5-1.5h9.75"/></svg>"##;
+const GLYPH_TRASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.75h15M9.75 6.75V4.5h4.5v2.25M6.75 6.75l1.05 12.75h8.4l1.05-12.75"/></svg>"##;
+const GLYPH_FOLDER: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.75v12h18V8.25h-9L9.75 5.25H3z"/></svg>"##;
+const GLYPH_GIT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><circle cx="6.75" cy="6" r="2.4"/><circle cx="6.75" cy="18" r="2.4"/><circle cx="17.25" cy="9.75" r="2.4"/><path d="M6.75 8.4v7.2M17.25 12.15c0 3-4.5 3-9 4.5"/></svg>"##;
 
-/// The six glyphs parsed once, in [`DialogIcon::index`] order.
-static GLYPHS: LazyLock<[svg::Handle; 6]> = LazyLock::new(|| {
+/// The glyphs parsed once, in [`DialogIcon::index`] order.
+static GLYPHS: LazyLock<[svg::Handle; 10]> = LazyLock::new(|| {
     [
         DialogIcon::Info,
         DialogIcon::Warn,
@@ -83,6 +116,10 @@ static GLYPHS: LazyLock<[svg::Handle; 6]> = LazyLock::new(|| {
         DialogIcon::Library,
         DialogIcon::File,
         DialogIcon::Settings,
+        DialogIcon::Copy,
+        DialogIcon::Trash,
+        DialogIcon::Folder,
+        DialogIcon::Git,
     ]
     .map(|icon| svg::Handle::from_memory(icon.glyph()))
 });
@@ -166,14 +203,44 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const ALL: [DialogIcon; 6] = [
+    const ALL: [DialogIcon; 10] = [
         DialogIcon::Info,
         DialogIcon::Warn,
         DialogIcon::Error,
         DialogIcon::Library,
         DialogIcon::File,
         DialogIcon::Settings,
+        DialogIcon::Copy,
+        DialogIcon::Trash,
+        DialogIcon::Folder,
+        DialogIcon::Git,
     ];
+
+    /// Each kind sits at its own place in the parsed glyph table.
+    #[test]
+    fn every_kind_has_its_own_slot_in_the_glyph_table() {
+        for (i, icon) in ALL.iter().enumerate() {
+            assert_eq!(icon.index(), i, "{icon:?}");
+        }
+        assert_eq!(GLYPHS.len(), ALL.len());
+    }
+
+    /// The four kinds the Library confirms added use the tones their
+    /// meaning asks for: a copy informs, a delete and a missing folder are
+    /// errors, a missing history warns.
+    #[test]
+    fn the_library_confirm_kinds_use_their_tones() {
+        assert_eq!(DialogIcon::Copy.tone(), PillTone::Info);
+        assert_eq!(DialogIcon::Trash.tone(), PillTone::Err);
+        assert_eq!(DialogIcon::Folder.tone(), PillTone::Err);
+        assert_eq!(DialogIcon::Git.tone(), PillTone::Warn);
+        for id in ThemeId::BUILTINS {
+            let t = signex_types::theme::theme_tokens(*id);
+            for icon in ALL {
+                let _: Element<'_, ()> = icon.glyph_element(14.0, ti(t.text));
+            }
+        }
+    }
 
     /// Every kind draws its own glyph on the soft fill of its tone, and the
     /// three status kinds use the three status tones.

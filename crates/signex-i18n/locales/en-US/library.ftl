@@ -242,3 +242,76 @@ library-distributor-other = Other
 library-order-help = Saved to <config_dir>/signex/distributors.toml. The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }
+
+## Copy to Library (#134)
+
+# Intro title. $label is the name of the stock symbol or footprint.
+library-stock-copy-intro-title = Copy { $label } to a library
+# Intro text under the title.
+library-stock-copy-intro-text = The stock library is read-only. The copy opens for editing; the stock original is not changed.
+# Primary button: copy into the selected library. $library is its name.
+library-stock-copy-to = Copy to { $library }
+# Primary button while no library is selected.
+library-stock-copy-copy = Copy
+# The chosen library can no longer take the copy. $path is its file.
+library-stock-copy-not-writable = { $path } is not open and writable; pick another library.
+
+## Close Library (#136)
+
+# Intro title of the prompt shown when a library with unsaved drafts closes.
+library-close-intro-title = Save the drafts before closing?
+# $library is the library's name, $count how many drafts are unsaved.
+library-close-intro-text = '{ $library }' has { $count ->
+        [one] { $count } unsaved draft
+       *[other] { $count } unsaved drafts
+    }.
+# Kind of a draft that is a table row. $table is the table's name.
+library-close-kind-row = { $table } · row
+# Kind of a draft that is a file (a symbol or footprint).
+library-close-kind-file = file
+
+## Library recovery (#138)
+
+# Footer button: close the dialog and decide later.
+library-recovery-skip-for-now = Skip for now
+# Keys of the facts box.
+library-recovery-key-library = Library
+library-recovery-key-expected = Expected
+library-recovery-key-remote = Remote
+library-recovery-key-row = Row
+library-recovery-key-missing-uuid = Missing UUID
+# Library Missing: dialog title, intro and the caption under the facts.
+library-recovery-missing-title = Library Missing
+library-recovery-missing-intro-title = The library file is missing
+library-recovery-missing-intro-text = The project refers to a library that is not on disk.
+# $library is the missing library's name.
+library-recovery-missing-caption = Skip for now opens the project anyway: parts from { $library } keep their embedded copies.
+# Git Repository Missing: dialog title, intro, banners and caption.
+library-recovery-git-title = Git Repository Missing
+library-recovery-git-intro-title = The library's history is missing
+library-recovery-git-intro-text = Version control is on for this library, but its .git folder is gone.
+# $error is the system's reason, in English.
+library-recovery-git-reinit-failed = Re-init failed: { $error }
+library-recovery-git-reinit-warning = Re-init starts a new history: all earlier commits are lost.
+library-recovery-git-caption = Skip for now leaves the library closed until its history is restored.
+# Broken binding: $kind is symbol, footprint, sim or other; $table is the
+# table that holds the row.
+library-recovery-binding-title = Broken { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } Binding
+library-recovery-binding-intro-title = The { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } is missing
+library-recovery-binding-intro-text = A row in '{ $table }' references a { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } that no longer exists on disk.
+library-recovery-binding-caption = Skip for now keeps the row as it is until it is re-bound.

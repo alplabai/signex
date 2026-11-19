@@ -5,6 +5,10 @@
 use iced::Size;
 
 use crate::app::state::{ModalId, Signex};
+use crate::library::modal_chrome::{
+    BANNER_GAP, BANNER_GLYPH, BANNER_PAD_X, BANNER_PAD_Y, KV_ROW_GAP, NOTE_LINE_H,
+};
+use crate::styles::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale};
 
 use super::intro_wrap::{Wrapped, intro_growth, note_growth};
 
@@ -23,10 +27,35 @@ pub(crate) const NOTE_HEIGHT: f32 = 25.0;
 /// Height of one line of message text, and the lines shown before it scrolls.
 const MESSAGE_LINE: f32 = 16.0;
 const MESSAGE_MAX: f32 = 200.0;
-/// Window height of Copy to Library when no library is writable: the body
-/// padding, the two-line intro, the one-line hint and the footer, with no list
-/// area (13 + 33 + 9 + 17 + 13 + 53 px on the legacy layout).
-const STOCK_COPY_EMPTY: f32 = 140.0;
+/// Window height of Copy to Library around its library list or its
+/// no-library card: the body padding, the two-line intro and its gap, and the
+/// footer (13 + 33 + 9 + 13 + 53 px on the legacy layout).
+const STOCK_COPY_BASE: f32 = 123.0;
+/// The no-library card of Copy to Library: one hint line inside the card's
+/// padding and border.
+const STOCK_COPY_EMPTY_CARD: f32 =
+    17.0 + 2.0 * (crate::library::stock_copy::EMPTY_CARD_PAD_Y + HAIRLINE);
+/// A one-line notice banner and the gap above it.
+pub(crate) const BANNER_BLOCK: f32 =
+    2.0 * BANNER_PAD_Y + TypeScale::DEFAULT.body * LINE_HEIGHT + Spacing::DEFAULT.m;
+/// Window height of a recovery dialog without its fact rows: the body
+/// padding, a one-line intro text and its gap, the facts box padding and
+/// border, the gap and one caption line, the space above the footer and the
+/// footer (13 + 17 + 9 + 22 + 9 + 15 + 13 + 53 px on the legacy layout, and 5
+/// to spare).
+const RECOVERY_BASE: f32 = 156.0;
+/// One row of the recovery facts box and the gap after it.
+const RECOVERY_FACT: f32 = TypeScale::DEFAULT.body * LINE_HEIGHT + KV_ROW_GAP;
+
+/// Height of a notice banner showing `text` in a card `card_w` wide whose
+/// body has `pad` px of padding: [`BANNER_BLOCK`] and the lines its text
+/// wraps onto. [`note_growth`] counts caption-size lines, so the column is
+/// scaled to the caption size and the growth back to the body size.
+pub(crate) fn banner_height(card_w: f32, pad: f32, text: &str) -> f32 {
+    let ts = TypeScale::DEFAULT;
+    let column = card_w - 2.0 * (pad + BANNER_PAD_X) - BANNER_GLYPH - BANNER_GAP;
+    BANNER_BLOCK + note_growth(column * ts.caption / ts.body, 0.0, text) * ts.body / ts.caption
+}
 
 /// Height a Graphite theme adds to `modal`'s window over the legacy layout
 /// the sizes here were measured on: what the shell's intro adds over the
@@ -155,43 +184,73 @@ impl Signex {
                     let lines = wrapped_lines(&p.messages.join("\n"), 70) as f32;
                     236.0 + (lines * 14.0).min(120.0)
                 }),
-            ModalId::LibraryStockCopy => self.library.stock_copy.as_ref().and_then(|c| {
-                if !self.library.writable_libraries().is_empty() {
-                    return None;
-                }
-                let notes =
-                    usize::from(c.previous_unavailable.is_some()) + usize::from(c.error.is_some());
-                let noun = c.kind.noun();
-                let (title, text) = crate::library::stock_copy::intro_texts(&c.label, noun);
-                let (ref_title, ref_text) = crate::library::stock_copy::intro_texts("x", noun);
-                let pad = crate::styles::Spacing::DEFAULT.l;
-                let mut wrapped = library_intro_growth(
-                    modal,
-                    fixed.width,
-                    ((&title, &text), (&ref_title, &ref_text)),
-                );
-                if let Some(previous) = c.previous_unavailable.as_deref() {
-                    let note =
-                        crate::library::stock_copy::previous_note(&self.ui_state.i18n, previous)
-                            .into_string();
-                    wrapped += note_growth(fixed.width, pad, &note);
-                }
-                if let Some(error) = c.error.as_deref() {
-                    wrapped += note_growth(fixed.width, pad, error);
-                }
-                Some(STOCK_COPY_EMPTY + notes as f32 * NOTE_HEIGHT + wrapped)
-            }),
-            ModalId::LibraryCloseConfirm => self.library.close_library_confirm.as_ref().map(|c| {
-                let drafts = c.dirty_editors.len() + c.dirty_paths.len();
-                let (title, text) =
-                    crate::library::close_prompt::intro_texts(&c.library_name, drafts);
-                let (ref_title, ref_text) = crate::library::close_prompt::intro_texts("x", drafts);
-                fixed.height
+            ModalId::LibraryStockCopy => self.library.stock_copy.as_ref().map(|c| {
+                use crate::library::stock_copy::{intro_texts, list_height, previous_note};
+                let i18n = &self.ui_state.i18n;
+                let rows = self.library.writable_libraries().len();
+                let (title, text) = intro_texts(i18n, &c.label);
+                let (ref_title, ref_text) = intro_texts(i18n, "x");
+                let pad = Spacing::DEFAULT.l;
+                let content = if rows == 0 {
+                    STOCK_COPY_EMPTY_CARD
+                } else {
+                    list_height(rows)
+                };
+                let mut height = STOCK_COPY_BASE
+                    + content
                     + library_intro_growth(
                         modal,
                         fixed.width,
-                        ((title, &text), (ref_title, &ref_text)),
+                        ((&title, &text), (&ref_title, &ref_text)),
+                    );
+                if let Some(previous) = c.previous_unavailable.as_deref() {
+                    let note = previous_note(i18n, previous).into_string();
+                    height += banner_height(fixed.width, pad, &note);
+                }
+                if let Some(error) = c.error.as_deref() {
+                    height += banner_height(fixed.width, pad, error);
+                }
+                height
+            }),
+            ModalId::LibraryCloseConfirm => self.library.close_library_confirm.as_ref().map(|c| {
+                use crate::library::close_prompt::{LIST_MAX_H, intro_texts, list_height};
+                let i18n = &self.ui_state.i18n;
+                let drafts = c.dirty_editors.len() + c.dirty_paths.len();
+                let (title, text) = intro_texts(i18n, &c.library_name, drafts);
+                let (ref_title, ref_text) = intro_texts(i18n, "x", drafts);
+                // The base height holds the longest list; the note line
+                // names the library above the body.
+                fixed.height - LIST_MAX_H
+                    + list_height(drafts)
+                    + NOTE_LINE_H
+                    + library_intro_growth(
+                        modal,
+                        fixed.width,
+                        ((&title, &text), (&ref_title, &ref_text)),
                     )
+            }),
+            ModalId::LibraryRecovery => self.library.recovery.as_ref().map(|d| {
+                use crate::library::recovery as r;
+                let i18n = &self.ui_state.i18n;
+                let (title, text) = r::intro_texts(d, i18n);
+                let (ref_title, ref_text) = r::reference_intro_texts(d, i18n);
+                let pad = Spacing::DEFAULT.l;
+                let caption = r::caption(d, i18n).into_string();
+                let mut height = RECOVERY_BASE + r::fact_rows(d) as f32 * RECOVERY_FACT
+                    - KV_ROW_GAP
+                    + note_growth(fixed.width, pad, &caption)
+                    + library_intro_growth(
+                        modal,
+                        fixed.width,
+                        ((&title, &text), (&ref_title, &ref_text)),
+                    );
+                if r::note(d, self.recovery_project_file()).is_some() {
+                    height += NOTE_LINE_H;
+                }
+                for banner in r::banners(d, i18n) {
+                    height += banner_height(fixed.width, pad, &banner.into_string());
+                }
+                height
             }),
             ModalId::LibraryDeleteConfirm => owner
                 .and_then(|path| self.library.library_browsers.get(path))

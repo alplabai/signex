@@ -50,4 +50,36 @@ define_ids! {
     LIBRARY_DISTRIBUTOR_OTHER = "library-distributor-other";
     LIBRARY_ORDER_HELP = "library-order-help";
     LIBRARY_ORDER_SAVE_FAILED = "library-order-save-failed";
+    // Copy to Library (#134)
+    LIBRARY_STOCK_COPY_INTRO_TITLE = "library-stock-copy-intro-title";
+    LIBRARY_STOCK_COPY_INTRO_TEXT = "library-stock-copy-intro-text";
+    LIBRARY_STOCK_COPY_TO = "library-stock-copy-to";
+    LIBRARY_STOCK_COPY_COPY = "library-stock-copy-copy";
+    LIBRARY_STOCK_COPY_NOT_WRITABLE = "library-stock-copy-not-writable";
+    // Close Library (#136)
+    LIBRARY_CLOSE_INTRO_TITLE = "library-close-intro-title";
+    LIBRARY_CLOSE_INTRO_TEXT = "library-close-intro-text";
+    LIBRARY_CLOSE_KIND_ROW = "library-close-kind-row";
+    LIBRARY_CLOSE_KIND_FILE = "library-close-kind-file";
+    // Library recovery (#138)
+    LIBRARY_RECOVERY_SKIP_FOR_NOW = "library-recovery-skip-for-now";
+    LIBRARY_RECOVERY_KEY_LIBRARY = "library-recovery-key-library";
+    LIBRARY_RECOVERY_KEY_EXPECTED = "library-recovery-key-expected";
+    LIBRARY_RECOVERY_KEY_REMOTE = "library-recovery-key-remote";
+    LIBRARY_RECOVERY_KEY_ROW = "library-recovery-key-row";
+    LIBRARY_RECOVERY_KEY_MISSING_UUID = "library-recovery-key-missing-uuid";
+    LIBRARY_RECOVERY_MISSING_TITLE = "library-recovery-missing-title";
+    LIBRARY_RECOVERY_MISSING_INTRO_TITLE = "library-recovery-missing-intro-title";
+    LIBRARY_RECOVERY_MISSING_INTRO_TEXT = "library-recovery-missing-intro-text";
+    LIBRARY_RECOVERY_MISSING_CAPTION = "library-recovery-missing-caption";
+    LIBRARY_RECOVERY_GIT_TITLE = "library-recovery-git-title";
+    LIBRARY_RECOVERY_GIT_INTRO_TITLE = "library-recovery-git-intro-title";
+    LIBRARY_RECOVERY_GIT_INTRO_TEXT = "library-recovery-git-intro-text";
+    LIBRARY_RECOVERY_GIT_REINIT_FAILED = "library-recovery-git-reinit-failed";
+    LIBRARY_RECOVERY_GIT_REINIT_WARNING = "library-recovery-git-reinit-warning";
+    LIBRARY_RECOVERY_GIT_CAPTION = "library-recovery-git-caption";
+    LIBRARY_RECOVERY_BINDING_TITLE = "library-recovery-binding-title";
+    LIBRARY_RECOVERY_BINDING_INTRO_TITLE = "library-recovery-binding-intro-title";
+    LIBRARY_RECOVERY_BINDING_INTRO_TEXT = "library-recovery-binding-intro-text";
+    LIBRARY_RECOVERY_BINDING_CAPTION = "library-recovery-binding-caption";
 }

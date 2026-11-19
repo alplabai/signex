@@ -26,6 +26,17 @@ fn app_on(theme_id: ThemeId) -> Signex {
 /// Every text of the dialog's window is inside it, the footer button labels
 /// included, and the footer is there at all.
 fn assert_footer_inside(app: &Signex, id: iced::window::Id, modal: ModalId, what: &str) {
+    assert_footer_with_inside(app, id, modal, what, "Cancel");
+}
+
+/// [`assert_footer_inside`] for a footer whose button reads `label`.
+fn assert_footer_with_inside(
+    app: &Signex,
+    id: iced::window::Id,
+    modal: ModalId,
+    what: &str,
+    label: &str,
+) {
     let size = app.dialog_window_size_of(
         modal,
         app.ui_state
@@ -36,8 +47,8 @@ fn assert_footer_inside(app: &Signex, id: iced::window::Id, modal: ModalId, what
     );
     let texts = lay_out_texts(app.view(id), size);
     assert!(
-        texts.iter().any(|t| t.text == "Cancel"),
-        "{what}: no Cancel label"
+        texts.iter().any(|t| t.text == label),
+        "{what}: no {label} label"
     );
     let bottom = texts
         .iter()
@@ -110,13 +121,17 @@ fn a_long_part_number_and_table_keep_the_delete_confirm_footer_in_its_window() {
 fn a_short_name_leaves_the_close_and_delete_windows_at_their_base_height() {
     let mut app = app_on(ThemeId::GraphiteLight);
     let base = |app: &Signex, modal| app.modal_window_size_of(modal, None).height;
-    let before = base(&app, ModalId::LibraryCloseConfirm);
-    app.library.close_library_confirm = Some(crate::library::state::CloseLibraryConfirmState {
+    // The list follows the draft count (#136), so the base is the height
+    // for one draft under the one-letter name the base was measured with.
+    let confirm = |name: &str| crate::library::state::CloseLibraryConfirmState {
         library_path: "l.snxlib".into(),
-        library_name: "l".into(),
+        library_name: name.into(),
         dirty_editors: Vec::new(),
         dirty_paths: vec!["l.snxlib".into()],
-    });
+    };
+    app.library.close_library_confirm = Some(confirm("x"));
+    let before = base(&app, ModalId::LibraryCloseConfirm);
+    app.library.close_library_confirm = Some(confirm("l"));
     assert_eq!(base(&app, ModalId::LibraryCloseConfirm), before);
 }
 
@@ -130,6 +145,7 @@ fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
             label: LONG.repeat(2),
             previous_unavailable: None,
             error: None,
+            selected: None,
         });
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy);
@@ -139,5 +155,87 @@ fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
             ModalId::LibraryStockCopy,
             &format!("{theme_id:?}"),
         );
+    }
+}
+
+/// #136: the Close Library list is as tall as its drafts until it scrolls,
+/// so the window grows with the draft count up to the cap, and the footer
+/// stays in the window.
+#[test]
+fn the_close_library_window_follows_its_drafts_up_to_the_list_cap() {
+    let mut app = app_on(ThemeId::GraphiteLight);
+    let mut height_for = |drafts: usize| {
+        app.library.close_library_confirm = Some(crate::library::state::CloseLibraryConfirmState {
+            library_path: "/libs/l/l.snxlib".into(),
+            library_name: "l".into(),
+            dirty_editors: Vec::new(),
+            dirty_paths: (0..drafts)
+                .map(|i| PathBuf::from(format!("/libs/l/symbols/s{i}.snxsym")))
+                .collect(),
+        });
+        app.modal_window_size_of(ModalId::LibraryCloseConfirm, None)
+            .height
+    };
+    let (one, three, forty, fifty) = (height_for(1), height_for(3), height_for(40), height_for(50));
+    assert!(one < three && three < forty, "{one} < {three} < {forty}");
+    assert_eq!(forty, fifty, "past the cap the list scrolls");
+    for &theme_id in ThemeId::BUILTINS {
+        let mut app = app_on(theme_id);
+        app.library.close_library_confirm = Some(crate::library::state::CloseLibraryConfirmState {
+            library_path: "/libs/l/l.snxlib".into(),
+            library_name: "l".into(),
+            dirty_editors: Vec::new(),
+            dirty_paths: (0..3)
+                .map(|i| PathBuf::from(format!("/libs/l/symbols/s{i}.snxsym")))
+                .collect(),
+        });
+        let _ = app.sync_detached_modals();
+        let id = window_of(&app, ModalId::LibraryCloseConfirm);
+        assert_footer_inside(
+            &app,
+            id,
+            ModalId::LibraryCloseConfirm,
+            &format!("{theme_id:?}"),
+        );
+    }
+}
+
+/// #138: every recovery case (a failed re-init and a known remote included)
+/// keeps its footer in its window.
+#[test]
+fn every_recovery_case_keeps_its_footer_in_its_window() {
+    use crate::library::recovery::RecoveryDialog;
+    let cases = [
+        RecoveryDialog::LibraryMissing {
+            path: PathBuf::from(format!("/libs/{LONG}/power-ics.snxlib")),
+        },
+        RecoveryDialog::GitMissing {
+            path: "/libs/passives/passives.snxlib".into(),
+            remote: Some("git@example.com:hw/passives.git".into()),
+            error: Some(LONG.into()),
+        },
+        RecoveryDialog::BrokenPrimitiveBinding {
+            library_path: "/libs/passives/passives.snxlib".into(),
+            table: LONG.into(),
+            row_id: uuid::Uuid::nil(),
+            internal_pn: Some("R-0805-1K-1%".into()),
+            kind: signex_library::PrimitiveKind::Footprint,
+            missing_uuid: uuid::Uuid::nil(),
+        },
+    ];
+    for &theme_id in ThemeId::BUILTINS {
+        for dialog in &cases {
+            let mut app = app_on(theme_id);
+            app.library.recovery = Some(dialog.clone());
+            let _ = app.sync_detached_modals();
+            let id = window_of(&app, ModalId::LibraryRecovery);
+            assert_footer_with_inside(
+                &app,
+                id,
+                ModalId::LibraryRecovery,
+                &format!("{theme_id:?} {dialog:?}"),
+                "Skip for now",
+            );
+        }
     }
 }
