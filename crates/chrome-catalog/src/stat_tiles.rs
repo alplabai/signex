@@ -89,7 +89,7 @@ fn theme_column<'a>(theme: ThemeId, i18n: &I18n) -> Element<'a, Message> {
 
 /// Both Graphite themes side by side, whichever theme the catalog shows.
 pub(crate) fn view<'a>(_tokens: &ThemeTokens) -> Element<'a, Message> {
-    let i18n = I18n::en_us_ref();
+    let i18n = crate::locale::en_us();
     let mut row = iced::widget::Row::new().spacing(SP.xl);
     for theme in ThemeId::BUILTINS {
         row = row.push(theme_column(*theme, i18n));
