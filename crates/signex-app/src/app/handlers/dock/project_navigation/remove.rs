@@ -11,6 +11,10 @@ use crate::app::project_entry_disk::{EntryPatch, remove_entries};
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use signex_i18n::RenderTranslatable;
 
+#[cfg(test)]
+#[path = "remove_choice_tests.rs"]
+mod choice_tests;
+
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
         if self.refuse_on_missing_child(&tree_path, "Remove", true) {
@@ -38,6 +42,7 @@ impl Signex {
             is_outside_project,
             unsaved_prompt: false,
             is_directory_package,
+            choice: None,
         });
     }
 
@@ -63,6 +68,7 @@ impl Signex {
             is_outside_project,
             unsaved_prompt: false,
             is_directory_package,
+            choice: None,
         });
     }
 

@@ -33,6 +33,7 @@ fn remove_dialog_for(fx: &Fixture) -> RemoveDialogState {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     }
 }
 

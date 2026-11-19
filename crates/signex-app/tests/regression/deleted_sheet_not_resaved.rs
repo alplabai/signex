@@ -116,6 +116,7 @@ fn deleting_a_dirty_sheet_is_not_resurrected_by_save_all_on_quit() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         &mut app,
@@ -220,6 +221,7 @@ fn delete_file(app: &mut Signex, target: &Path) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         app,
@@ -1369,6 +1371,7 @@ fn failed_disk_delete_keeps_the_project_entry() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         &mut app,

@@ -1,5 +1,6 @@
-//! Confirmation modals — Remove-from-Project, Close-Project confirm, and
-//! Quit-app confirm.
+//! The Quit-app confirm, and the unsaved-count sentence it shares with the
+//! Close Project confirm. Remove from Project is in `remove.rs`, the Close
+//! Project confirm in `close_project.rs`.
 //!
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
@@ -7,15 +8,14 @@
 
 use super::*;
 use iced::widget::{Space, column, container};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, ids, t};
-use signex_widgets::{button, raw, text};
+use signex_widgets::text;
 
 use super::widgets::modal_title_header;
-use crate::app::path_ops::PlacingSymbol;
 use crate::styles::{
-    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_hint,
-    dialog_intro, dialog_list,
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_intro,
+    dialog_list,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -23,391 +23,6 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
-    pub(in crate::app::view) fn view_remove_dialog(&self) -> Element<'_, Message> {
-        let dialog = self.view_remove_dialog_body();
-        self.wrap_dialog(
-            crate::app::state::ModalId::RemoveDialog,
-            dialog,
-            super::sizes::REMOVE,
-        )
-    }
-
-    pub(in crate::app::view) fn view_remove_dialog_body(&self) -> Element<'_, Message> {
-        let Some(ref st) = self.ui_state.remove_dialog else {
-            return container(Space::new()).boxed();
-        };
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let i18n = self.ui_state.i18n.as_ref();
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-
-        let header_content: Element<'_, Message> = modal_title_header(
-            t!(
-                i18n,
-                if st.unsaved_prompt {
-                    ids::DIALOG_REMOVE_UNSAVED_TITLE
-                } else {
-                    ids::DIALOG_REMOVE_TITLE
-                }
-            )
-            .into_string(),
-            Message::Remove(RemoveMsg::Close),
-            tokens,
-        );
-        let header = self.modal_header(
-            header_content,
-            super::super::super::state::ModalId::RemoveDialog,
-        );
-
-        if st.unsaved_prompt {
-            let (body, can_discard) = self.exclude_dirty_prompt(st);
-            let width = self.dialog_width(
-                crate::app::state::ModalId::RemoveDialog,
-                super::sizes::REMOVE,
-            );
-            return Self::exclude_dirty_card(i18n, body, can_discard, header, width, tokens);
-        }
-
-        let option_card =
-            |title: MessageId, subtitle: MessageId, msg: Message| -> Element<'_, Message> {
-                button(
-                    column![
-                        text(t!(i18n, title)).size(TS.label).color(text_c),
-                        text(t!(i18n, subtitle)).size(TS.caption).color(text_muted),
-                    ]
-                    .spacing(SP.s)
-                    .padding([SP.xs, 0.0]),
-                )
-                .on_press(msg)
-                .padding([10, 14])
-                .width(Length::Fill)
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.06)
-                        }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
-                    };
-                    button::Style {
-                        background: Some(Background::Color(bg)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 4.0.into(),
-                            color: border_c,
-                            ..Border::default()
-                        },
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                })
-                .boxed()
-            };
-
-        let exclude_card = option_card(
-            ids::DIALOG_REMOVE_EXCLUDE,
-            if st.is_outside_project {
-                ids::DIALOG_REMOVE_EXCLUDE_OUTSIDE
-            } else {
-                ids::DIALOG_REMOVE_EXCLUDE_INSIDE
-            },
-            Message::Remove(RemoveMsg::Confirm(
-                crate::app::RemoveChoice::ExcludeFromProject,
-            )),
-        );
-        // Shared / Global libraries are owned by other projects too:
-        // never offer to delete them from disk (#139). A sheet other sheets
-        // place is not deleted either, and a sheet that is not a project page
-        // has nothing to exclude (#1618).
-        let blockers = self.remove_blockers(st);
-        // A `.snxlib` is a directory package: it is never a placed sheet.
-        let is_library = crate::app::file_extension::has_extension(&st.target_path, "snxlib");
-        let mut remove_options = column![].spacing(SP.m);
-        if !st.is_outside_project && !blockers.blocks_delete(is_library) {
-            remove_options = remove_options.push(option_card(
-                ids::DIALOG_REMOVE_DELETE,
-                if st.is_directory_package {
-                    ids::DIALOG_REMOVE_DELETE_PACKAGE
-                } else if is_library {
-                    ids::DIALOG_REMOVE_DELETE_LIBRARY
-                } else {
-                    ids::DIALOG_REMOVE_DELETE_FILE
-                },
-                Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
-            ));
-        }
-        if !blockers.unlisted {
-            remove_options = remove_options.push(exclude_card);
-        }
-        let remove_options: Element<'_, Message> = remove_options.boxed();
-
-        let mut prompt = column![dialog_intro(
-            DialogIcon::Warn,
-            t!(i18n, ids::DIALOG_REMOVE_QUESTION, "name" => st.display_name.as_str()).into_string(),
-            Some(
-                t!(i18n, ids::DIALOG_REMOVE_QUESTION_DETAIL, "name" => st.display_name.as_str())
-                    .into_string(),
-            ),
-            tokens,
-        )]
-        .spacing(SP.s);
-        if !blockers.other_parents.is_empty() {
-            prompt = prompt.push(
-                text(t!(i18n, ids::DIALOG_REMOVE_PLACED_BY, "parents" => blockers.parent_names()))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
-            );
-        }
-        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_library) {
-            prompt = prompt.push(
-                text(t!(i18n, ids::DIALOG_REMOVE_PLACEMENT_UNKNOWN, "reason" => why))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
-            );
-        }
-        // Delete is only offered when no other sheet places the file
-        // (`blocks_delete`), so every listed symbol sits on the row's own parent.
-        if !blockers.blocks_delete(is_library)
-            && !st.is_outside_project
-            && blockers.own_parent.is_some()
-        {
-            prompt = prompt.push(
-                text(t!(
-                    i18n,
-                    ids::DIALOG_REMOVE_DANGLING,
-                    "count" => blockers.symbols.len(),
-                    "symbols" => PlacingSymbol::describe_all(&blockers.symbols)
-                ))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
-            );
-        }
-        if blockers.placed && !blockers.unlisted {
-            prompt = prompt.push(
-                text(t!(
-                    i18n,
-                    ids::DIALOG_REMOVE_STILL_PLACED,
-                    "symbols" => PlacingSymbol::describe_all(&blockers.symbols)
-                ))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
-            );
-        }
-        if blockers.unlisted {
-            prompt = prompt.push(
-                text(t!(i18n, ids::DIALOG_REMOVE_NOT_A_PAGE))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
-            );
-        }
-        // Library names can repeat across folders; the full path says which
-        // one is affected. Sheets and PCBs get no extra line.
-        if is_library {
-            prompt = prompt.push(
-                text(signex_i18n::UserText::new(
-                    st.target_path.display().to_string(),
-                ))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
-            );
-            if let Some(line) = self.library_usage_line(st) {
-                // raw: the usage line is built in English by the Remove
-                // handler, which its own tests read (#2061).
-                prompt = prompt.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
-            }
-        }
-
-        let dialog = container(
-            column![
-                header,
-                dialog_body(column![prompt, remove_options].spacing(SP.m)),
-                dialog_footer(vec![dialog_button(
-                    t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                    DialogButtonKind::Cancel,
-                    Some(Message::Remove(RemoveMsg::Close)),
-                    tokens,
-                )]),
-            ]
-            .width(self.dialog_width(
-                super::super::super::state::ModalId::RemoveDialog,
-                super::sizes::REMOVE,
-            )),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
-        dialog.boxed()
-    }
-
-    /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
-    /// Cancel is `RemoveMsg::Close`, the same message Esc resolves to.
-    fn exclude_dirty_card<'a>(
-        i18n: &I18n,
-        body: String,
-        can_discard: bool,
-        header: Element<'a, Message>,
-        width: Length,
-        tokens: &signex_types::theme::ThemeTokens,
-    ) -> Element<'a, Message> {
-        // Discard is withheld when another open project shares the target.
-        let mut buttons = vec![dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            DialogButtonKind::Cancel,
-            Some(Message::Remove(RemoveMsg::Close)),
-            tokens,
-        )];
-        if can_discard {
-            buttons.push(dialog_button(
-                t!(i18n, ids::DIALOG_BUTTON_DISCARD),
-                DialogButtonKind::Danger,
-                Some(Message::Remove(RemoveMsg::ExcludeDirty(
-                    crate::app::ExcludeDirtyChoice::Discard,
-                ))),
-                tokens,
-            ));
-        }
-        buttons.push(dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_SAVE),
-            DialogButtonKind::Primary,
-            Some(Message::Remove(RemoveMsg::ExcludeDirty(
-                crate::app::ExcludeDirtyChoice::Save,
-            ))),
-            tokens,
-        ));
-        container(
-            column![
-                header,
-                dialog_body(dialog_intro(
-                    DialogIcon::Warn,
-                    t!(i18n, ids::DIALOG_EXCLUDE_DIRTY_QUESTION).into_string(),
-                    Some(body),
-                    tokens,
-                )),
-                dialog_footer(buttons),
-            ]
-            .width(width),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true)
-        .boxed()
-    }
-
-    pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
-        let dialog = self.view_project_close_confirm_body();
-        self.wrap_centred_dialog(dialog, super::sizes::PROJECT_CLOSE_CONFIRM)
-    }
-
-    pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
-        use crate::app::ProjectCloseChoice;
-        let Some(ref st) = self.ui_state.project_close_confirm else {
-            return container(Space::new()).boxed();
-        };
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let i18n = self.ui_state.i18n.as_ref();
-
-        let header_content: Element<'_, Message> = modal_title_header(
-            t!(i18n, ids::DIALOG_CLOSE_PROJECT_UNSAVED_TITLE).into_string(),
-            Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
-            tokens,
-        );
-        let header = self.modal_header(
-            header_content,
-            super::super::super::state::ModalId::ProjectCloseConfirm,
-        );
-
-        // Filenames only: paths would overflow narrow modals and the project
-        // context already implies the parent dir.
-        let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
-
-        // An unreadable sheet hides its children: no Discard All, and why.
-        let discard_blocked = st.sheet_refs.discard_blocked_reason();
-
-        let mut body = column![
-            dialog_intro(
-                DialogIcon::Warn,
-                t!(i18n, ids::DIALOG_CLOSE_PROJECT_QUESTION).into_string(),
-                Some(unsaved_line(
-                    i18n,
-                    ids::DIALOG_CLOSE_PROJECT_DETAIL,
-                    st.dirty_paths.len(),
-                    st.dirty_rows.len(),
-                    Some(&st.project_name),
-                )),
-                tokens,
-            ),
-            container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
-                crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
-                    + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
-            )),
-        ]
-        .spacing(SP.m);
-        // Kept documents stay open and are never discarded; say so, by name.
-        if !st.kept_paths.is_empty() {
-            let names: Vec<String> = st
-                .kept_paths
-                .iter()
-                .map(|p| crate::app::state::sheet_refs::file_label(p))
-                .collect();
-            body = body.push(dialog_hint(
-                t!(
-                    i18n,
-                    ids::DIALOG_CLOSE_PROJECT_KEPT,
-                    "names" => crate::app::state::sheet_refs::bounded_names(&names)
-                )
-                .into_string(),
-                tokens,
-            ));
-        }
-        if let Some(reason) = &discard_blocked {
-            body = body.push(dialog_hint(reason.clone(), tokens));
-        }
-
-        let mut buttons = vec![dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            DialogButtonKind::Cancel,
-            Some(Message::Project(ProjectMsg::CloseConfirm(
-                ProjectCloseChoice::Cancel,
-            ))),
-            tokens,
-        )];
-        if discard_blocked.is_none() {
-            buttons.push(dialog_button(
-                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
-                DialogButtonKind::Danger,
-                Some(Message::Project(ProjectMsg::CloseConfirm(
-                    ProjectCloseChoice::DiscardAll,
-                ))),
-                tokens,
-            ));
-        }
-        buttons.push(dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
-            DialogButtonKind::Primary,
-            Some(Message::Project(ProjectMsg::CloseConfirm(
-                ProjectCloseChoice::SaveAll,
-            ))),
-            tokens,
-        ));
-
-        let dialog = container(
-            column![header, dialog_body(body), dialog_footer(buttons)].width(self.dialog_width(
-                super::super::super::state::ModalId::ProjectCloseConfirm,
-                super::sizes::PROJECT_CLOSE_CONFIRM,
-            )),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
-        dialog.boxed()
-    }
-
     pub(in crate::app::view) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_app_quit_confirm_body();
         self.wrap_centred_dialog(dialog, super::sizes::APP_QUIT_CONFIRM)
@@ -554,7 +169,7 @@ impl Signex {
 /// The sentence `id` naming the unsaved count: "1 unsaved document",
 /// "2 unsaved documents"; with library rows in the mix, "3 unsaved items"
 /// (singular "1 unsaved item"). `project` names the project when it says so.
-fn unsaved_line(
+pub(super) fn unsaved_line(
     i18n: &I18n,
     id: MessageId,
     documents: usize,
@@ -613,7 +228,7 @@ mod copy_tests {
                 0,
                 Some("Demo")
             )),
-            "'Demo' has 2 unsaved documents. What would you like to do?"
+            "'Demo' has 2 unsaved documents."
         );
     }
 

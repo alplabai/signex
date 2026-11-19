@@ -112,6 +112,7 @@ fn exclude_at(app: &mut Signex, target: &Path, tree_path: Vec<usize>) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,

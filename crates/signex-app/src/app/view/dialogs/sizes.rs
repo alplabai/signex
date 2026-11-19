@@ -5,7 +5,7 @@
 pub(super) const ANNOTATE_RESET_CONFIRM: (f32, f32) = (420.0, 180.0);
 pub(super) const REPREFIX_CONFIRM: (f32, f32) = (560.0, 520.0);
 pub(super) const AUTOSAVE_RECOVERY: (f32, f32) = (520.0, 250.0);
-pub(super) const REMOVE: (f32, f32) = (560.0, 260.0);
+pub(super) const REMOVE: (f32, f32) = (540.0, 320.0);
 pub(super) const PROJECT_CLOSE_CONFIRM: (f32, f32) = (520.0, 360.0);
 pub(super) const APP_QUIT_CONFIRM: (f32, f32) = (520.0, 360.0);
 pub(super) const CREATE_CHILD_SHEET: (f32, f32) = (560.0, 260.0);

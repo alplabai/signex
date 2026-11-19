@@ -665,6 +665,11 @@ pub struct RemoveDialogState {
     /// Is the target a `.snxlib` directory package (deleted whole, with
     /// everything inside)? Decided when the dialog opens: `view` must not stat.
     pub is_directory_package: bool,
+    /// The card the user clicked (#2262). `None` until then, and the card
+    /// the modal selects is its default: Exclude when offered, else Delete
+    /// (`RemoveOffer::selected`). A pick that is no longer offered falls
+    /// back to that default too.
+    pub choice: Option<RemoveChoice>,
 }
 
 /// User choice from the Remove-from-Project modal.

@@ -51,6 +51,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 is_outside_project: false,
                 unsaved_prompt: false,
                 is_directory_package: false,
+                choice: None,
             })
         }
         ModalId::EnableVersionControl => {

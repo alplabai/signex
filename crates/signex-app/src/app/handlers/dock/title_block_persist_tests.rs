@@ -337,6 +337,7 @@ fn remove_dialog_on_draft_sheet() -> (Signex, PathBuf, tempfile::TempDir, Arc<Re
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     (app, sheet, dir, recorder)
 }

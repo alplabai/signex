@@ -307,6 +307,9 @@ pub enum RemoveMsg {
     /// The delete worker finished: forget the documents of what it removed
     /// (#859).
     Deleted(Box<crate::app::path_ops::DeleteDone>),
+    /// A card of the Remove modal was clicked: it is selected, and nothing
+    /// is removed until the footer action sends `Confirm` (#2262).
+    ChoicePicked(RemoveChoice),
 }
 
 /// Context-menu subsystem message family (ADR-0001 D3). Namespaced

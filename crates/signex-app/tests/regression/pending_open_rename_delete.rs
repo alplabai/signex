@@ -89,6 +89,7 @@ fn delete_dialog(target: &Path) -> RemoveDialogState {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     }
 }
 

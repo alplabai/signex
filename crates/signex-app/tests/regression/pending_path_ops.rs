@@ -159,6 +159,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -591,6 +592,7 @@ fn the_exclude_prompt_save_is_refused_while_a_rename_holds_the_file() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     let _prompt = f.app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,
