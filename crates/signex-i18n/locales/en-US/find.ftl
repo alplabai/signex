@@ -16,6 +16,8 @@ find-no-matches = No matches
 find-replace-current = Replace Current
 find-replace-all = Replace All
 find-targets = Targets: labels, notes, designators, values
+# Kind of a match in the results list: a text note on the sheet.
+find-kind-text-note = Text Note
 
 ## Find Similar Objects
 find-similar-title = Find Similar Objects
@@ -32,6 +34,13 @@ find-similar-footer = Selects every match. Matches on other sheets are only coun
 # $seed names the object the search starts from, such as "Symbol R1", in
 # English.
 find-similar-seed = Seed: { $seed }
+# Property names in the Find Similar table.
+find-similar-prop-library-part = Library part
+# The letters a designator starts with, such as "R" for "R12".
+find-similar-prop-designator-prefix = Designator prefix
+find-similar-prop-net-name = Net name
+# Net, global, hierarchical or power label.
+find-similar-prop-label-type = Label type
 
 ## Paste Array
 paste-array-title = Paste Array

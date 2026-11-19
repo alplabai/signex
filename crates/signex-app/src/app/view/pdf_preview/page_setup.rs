@@ -2,12 +2,15 @@
 //! in a toolbar row on the Preview tab, margins in a Settings-tab section.
 //! Pure views — every edit is a `PrintPreviewMsg` the handlers validate.
 
+use signex_i18n::MessageId;
 use signex_output::{MarginEdge, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
+use signex_types::schematic::SheetOrientation;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use iced::Widget;
 
 use super::super::*;
+use crate::choice::{Choice, chosen};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -47,37 +50,41 @@ impl Signex {
 
         let current_size = options.page_size;
         let orientation = options.orientation;
+        let sizes = Choice::named(&PageSizeKind::ALL, page_size_label, i18n);
         let size_picker = pick_list(
-            Some(current_size.kind()),
-            PageSizeKind::ALL.to_vec(),
-            |kind: &PageSizeKind| kind.to_string(),
+            chosen(&sizes, &current_size.kind()),
+            sizes,
+            |c: &Choice<PageSizeKind>| c.label.clone(),
         )
         .graphite()
-        .on_select(move |kind: PageSizeKind| {
+        .on_select(move |c: Choice<PageSizeKind>| {
             Message::PrintPreview(PrintPreviewMsg::SetPageSize(
-                kind.select(current_size, orientation),
+                c.value.select(current_size, orientation),
             ))
         });
         // A Custom page is exactly the width and height entered, so its
         // orientation is derived from them and shown, not picked.
         let orientation_control: Element<'static, Message> =
             if matches!(current_size, PageSize::Custom { .. }) {
-                // raw: the orientation's name comes from signex-types (#2060).
-                text(raw(orientation.to_string()))
+                text(t!(i18n, orientation_label(orientation)))
                     .size(FIELD_TEXT)
                     .color(text_muted)
                     .boxed()
             } else {
+                let orientations = Choice::named(
+                    &[SheetOrientation::Portrait, SheetOrientation::Landscape],
+                    orientation_label,
+                    i18n,
+                );
                 pick_list(
-                    Some(orientation),
-                    vec![
-                        signex_types::schematic::SheetOrientation::Portrait,
-                        signex_types::schematic::SheetOrientation::Landscape,
-                    ],
-                    |o: &signex_types::schematic::SheetOrientation| o.to_string(),
+                    chosen(&orientations, &orientation),
+                    orientations,
+                    |c: &Choice<SheetOrientation>| c.label.clone(),
                 )
                 .graphite()
-                .on_select(|o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)))
+                .on_select(|c: Choice<SheetOrientation>| {
+                    Message::PrintPreview(PrintPreviewMsg::SetOrientation(c.value))
+                })
                 .boxed()
             };
 
@@ -115,13 +122,16 @@ impl Signex {
             controls = controls.push(text(raw("mm")).size(FIELD_TEXT).color(text_muted).boxed());
         }
 
+        let modes = Choice::named(&PdfScaleMode::ALL, scale_mode_label, i18n);
         let scale_picker = pick_list(
-            Some(options.scale.mode()),
-            PdfScaleMode::ALL.to_vec(),
-            |m: &PdfScaleMode| m.to_string(),
+            chosen(&modes, &options.scale.mode()),
+            modes,
+            |c: &Choice<PdfScaleMode>| c.label.clone(),
         )
         .graphite()
-        .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)));
+        .on_select(|c: Choice<PdfScaleMode>| {
+            Message::PrintPreview(PrintPreviewMsg::SetScaleMode(c.value))
+        });
         controls = controls.push(
             text(t!(i18n, ids::PDF_SCALE))
                 .size(FIELD_TEXT)
@@ -178,8 +188,7 @@ impl Signex {
         let mut margins = row![].spacing(SP.m).align_y(iced::Alignment::Center);
         for edge in MarginEdge::ALL {
             margins = margins.push(
-                // raw: the edge's name comes from signex-output (#2060).
-                text(raw(edge.to_string()))
+                text(t!(i18n, margin_edge_label(edge)))
                     .size(FIELD_TEXT)
                     .color(text_muted)
                     .boxed(),
@@ -213,5 +222,58 @@ impl Signex {
             .boxed(),
         ]
         .boxed()
+    }
+}
+
+/// The catalog name of a page-size picker entry.
+pub(super) fn page_size_label(kind: PageSizeKind) -> MessageId {
+    use signex_i18n::ids;
+    match kind {
+        PageSizeKind::IsoA0 => ids::PDF_PAGE_SIZE_ISO_A0,
+        PageSizeKind::IsoA1 => ids::PDF_PAGE_SIZE_ISO_A1,
+        PageSizeKind::IsoA2 => ids::PDF_PAGE_SIZE_ISO_A2,
+        PageSizeKind::IsoA3 => ids::PDF_PAGE_SIZE_ISO_A3,
+        PageSizeKind::IsoA4 => ids::PDF_PAGE_SIZE_ISO_A4,
+        PageSizeKind::IsoA5 => ids::PDF_PAGE_SIZE_ISO_A5,
+        PageSizeKind::IsoB5 => ids::PDF_PAGE_SIZE_ISO_B5,
+        PageSizeKind::AnsiA => ids::PDF_PAGE_SIZE_ANSI_A,
+        PageSizeKind::AnsiB => ids::PDF_PAGE_SIZE_ANSI_B,
+        PageSizeKind::AnsiC => ids::PDF_PAGE_SIZE_ANSI_C,
+        PageSizeKind::AnsiD => ids::PDF_PAGE_SIZE_ANSI_D,
+        PageSizeKind::AnsiE => ids::PDF_PAGE_SIZE_ANSI_E,
+        PageSizeKind::UsLetter => ids::PDF_PAGE_SIZE_US_LETTER,
+        PageSizeKind::UsLegal => ids::PDF_PAGE_SIZE_US_LEGAL,
+        PageSizeKind::Tabloid => ids::PDF_PAGE_SIZE_TABLOID,
+        PageSizeKind::Custom => ids::PROPERTIES_FORMAT_CUSTOM,
+    }
+}
+
+/// The catalog name of a page orientation.
+pub(super) fn orientation_label(orientation: SheetOrientation) -> MessageId {
+    use signex_i18n::ids;
+    match orientation {
+        SheetOrientation::Landscape => ids::PROPERTIES_ORIENTATION_LANDSCAPE,
+        SheetOrientation::Portrait => ids::PROPERTIES_ORIENTATION_PORTRAIT,
+    }
+}
+
+/// The catalog name of a scale picker entry.
+pub(super) fn scale_mode_label(mode: PdfScaleMode) -> MessageId {
+    use signex_i18n::ids;
+    match mode {
+        PdfScaleMode::FitToPage => ids::BOARD_PRINT_SCALE_FIT,
+        PdfScaleMode::OneToOne => ids::BOARD_PRINT_SCALE_ONE,
+        PdfScaleMode::Percent => ids::PDF_SCALE_PERCENT,
+    }
+}
+
+/// The catalog name of a page margin's edge.
+pub(super) fn margin_edge_label(edge: MarginEdge) -> MessageId {
+    use signex_i18n::ids;
+    match edge {
+        MarginEdge::Top => ids::BOARD_PANEL_RAIL_TOP,
+        MarginEdge::Right => ids::BOARD_PANEL_RAIL_RIGHT,
+        MarginEdge::Bottom => ids::BOARD_PANEL_RAIL_BOTTOM,
+        MarginEdge::Left => ids::BOARD_PANEL_RAIL_LEFT,
     }
 }

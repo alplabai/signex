@@ -66,3 +66,27 @@ bom-price-total-unpriced = Total { $sums } · { $count ->
     [one] { $count } line without a cached price
    *[other] { $count } lines without a cached price
 }
+# Validation rule names on the Rules tab.
+bom-rule-missing-footprint = Missing footprint
+bom-rule-missing-mpn = Missing MPN
+bom-rule-duplicate-designator = Duplicate designator
+bom-rule-empty-or-zero-qty = Empty or zero quantity
+bom-rule-unit-field-conflict = Conflicting unit fields
+# Footer issue count, one part per severity; $count is how many (a whole
+# number, at least 1).
+bom-issue-count-errors = { $count ->
+    [one] { $count } error
+   *[other] { $count } errors
+}
+bom-issue-count-warnings = { $count ->
+    [one] { $count } warning
+   *[other] { $count } warnings
+}
+bom-issue-count-notes = { $count ->
+    [one] { $count } note
+   *[other] { $count } notes
+}
+# Joins two parts of the footer issue count, such as "2 errors, 5 warnings".
+# $first is the error or warning count, $second the count after it (it may
+# itself be a joined pair).
+bom-issue-count-pair = { $first }, { $second }

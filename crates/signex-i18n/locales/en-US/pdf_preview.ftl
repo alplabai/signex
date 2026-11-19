@@ -77,3 +77,21 @@ pdf-variant-base = Base
 pdf-quality-draft = Draft (72 dpi)
 pdf-quality-medium = Medium (300 dpi)
 pdf-quality-high = High (600 dpi)
+# Paper size names in the page-size picker.
+pdf-page-size-iso-a0 = ISO A0
+pdf-page-size-iso-a1 = ISO A1
+pdf-page-size-iso-a2 = ISO A2
+pdf-page-size-iso-a3 = ISO A3
+pdf-page-size-iso-a4 = ISO A4
+pdf-page-size-iso-a5 = ISO A5
+pdf-page-size-iso-b5 = ISO B5
+pdf-page-size-ansi-a = ANSI A
+pdf-page-size-ansi-b = ANSI B
+pdf-page-size-ansi-c = ANSI C
+pdf-page-size-ansi-d = ANSI D
+pdf-page-size-ansi-e = ANSI E
+pdf-page-size-us-letter = US Letter
+pdf-page-size-us-legal = US Legal
+pdf-page-size-tabloid = Tabloid
+# Scale picker: print at the percentage typed next to it.
+pdf-scale-percent = Percent

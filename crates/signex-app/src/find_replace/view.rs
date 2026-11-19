@@ -34,7 +34,29 @@ pub fn window_view<'a>(
 }
 
 /// One result row's two lines: what kind of text it is, and the text.
-type ResultLines = (&'static str, String);
+type ResultLines = (MessageId, String);
+
+/// The catalog name of a sheet hit's kind.
+fn find_kind_label(kind: signex_engine::FindKind) -> MessageId {
+    use signex_engine::FindKind;
+    match kind {
+        FindKind::NetLabel => signex_i18n::command_ids::CMD_MENU_PLACE_NET_LABEL,
+        FindKind::TextNote => ids::FIND_KIND_TEXT_NOTE,
+        FindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        FindKind::Value => ids::PROPERTIES_VALUE,
+    }
+}
+
+/// The catalog name of a board hit's kind.
+fn board_find_kind_label(kind: signex_engine::pcb::find::BoardFindKind) -> MessageId {
+    use signex_engine::pcb::find::BoardFindKind;
+    match kind {
+        BoardFindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        BoardFindKind::Value => ids::PROPERTIES_VALUE,
+        BoardFindKind::Footprint => ids::PROPERTIES_FOOTPRINT,
+        BoardFindKind::Net => ids::PROPERTIES_NET,
+    }
+}
 
 /// The rows the list shows: a board's hits on a board (#2403), else the
 /// sheet results with the placement a designator was read at.
@@ -43,7 +65,7 @@ fn result_lines(state: &FindReplaceState) -> Vec<ResultLines> {
         return board
             .hits
             .iter()
-            .map(|hit| (hit.kind.label(), hit.text.clone()))
+            .map(|hit| (board_find_kind_label(hit.kind), hit.text.clone()))
             .collect();
     }
     state
@@ -54,7 +76,7 @@ fn result_lines(state: &FindReplaceState) -> Vec<ResultLines> {
                 Some(label) => format!("{} · {label}", hit.hit.text),
                 None => hit.hit.text.clone(),
             };
-            (hit.hit.kind.label(), text)
+            (find_kind_label(hit.hit.kind), text)
         })
         .collect()
 }
@@ -192,8 +214,7 @@ fn build<'a>(
             button(
                 row![
                     column![
-                        // raw: the hit's kind is named by signex-engine (#2060).
-                        text(raw(kind)).size(TS.body).color(text_primary),
+                        text(t!(i18n, kind)).size(TS.body).color(text_primary),
                         text(UserText::new(found))
                             .size(TS.caption)
                             .color(text_secondary),
@@ -389,6 +410,36 @@ mod i18n_tests {
         let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
         assert_ne!(line(&xa, false, false, 3), "3 match(es)");
         assert_eq!(line(&xa, false, false, 3), matches(&xa));
+    }
+
+    /// #2060: every hit kind reads as the engine's `label` and follows the
+    /// language.
+    #[test]
+    fn the_hit_kinds_keep_their_english() {
+        use signex_engine::FindKind;
+        use signex_engine::pcb::find::BoardFindKind;
+        let en = I18n::en_us();
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        let check = |id, english: &str| {
+            assert_eq!(en.message_plain(id, &[]), english);
+            assert_ne!(xa.message_plain(id, &[]), english);
+        };
+        for kind in [
+            FindKind::NetLabel,
+            FindKind::TextNote,
+            FindKind::Designator,
+            FindKind::Value,
+        ] {
+            check(super::find_kind_label(kind), kind.label());
+        }
+        for kind in [
+            BoardFindKind::Designator,
+            BoardFindKind::Value,
+            BoardFindKind::Footprint,
+            BoardFindKind::Net,
+        ] {
+            check(super::board_find_kind_label(kind), kind.label());
+        }
     }
 
     /// #2058: the find, find-similar and paste-array texts keep their

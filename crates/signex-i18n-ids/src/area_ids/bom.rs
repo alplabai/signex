@@ -49,4 +49,13 @@ define_ids! {
     BOM_PRICE_NONE = "bom-price-none";
     BOM_PRICE_TOTAL = "bom-price-total";
     BOM_PRICE_TOTAL_UNPRICED = "bom-price-total-unpriced";
+    BOM_RULE_MISSING_FOOTPRINT = "bom-rule-missing-footprint";
+    BOM_RULE_MISSING_MPN = "bom-rule-missing-mpn";
+    BOM_RULE_DUPLICATE_DESIGNATOR = "bom-rule-duplicate-designator";
+    BOM_RULE_EMPTY_OR_ZERO_QTY = "bom-rule-empty-or-zero-qty";
+    BOM_RULE_UNIT_FIELD_CONFLICT = "bom-rule-unit-field-conflict";
+    BOM_ISSUE_COUNT_ERRORS = "bom-issue-count-errors";
+    BOM_ISSUE_COUNT_WARNINGS = "bom-issue-count-warnings";
+    BOM_ISSUE_COUNT_NOTES = "bom-issue-count-notes";
+    BOM_ISSUE_COUNT_PAIR = "bom-issue-count-pair";
 }

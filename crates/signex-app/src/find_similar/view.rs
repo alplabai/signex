@@ -3,7 +3,7 @@ use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use crate::styles::{Spacing, TypeScale};
 
@@ -15,6 +15,28 @@ const DIALOG_W: f32 = 460.0;
 const DIALOG_H: f32 = 420.0;
 /// The seed value column is clipped to this many characters.
 const VALUE_SHOWN_CHARS: usize = 28;
+
+/// The catalog name of a property row.
+fn property_label(property: signex_engine::SimilarProperty) -> MessageId {
+    use signex_engine::SimilarProperty as P;
+    match property {
+        P::Kind => ids::RULES_COL_KIND,
+        P::Value => ids::PROPERTIES_VALUE,
+        P::Footprint => ids::PROPERTIES_FOOTPRINT,
+        P::LibraryPart => ids::FIND_SIMILAR_PROP_LIBRARY_PART,
+        P::DesignatorPrefix => ids::FIND_SIMILAR_PROP_DESIGNATOR_PREFIX,
+        P::NetName => ids::FIND_SIMILAR_PROP_NET_NAME,
+        P::LabelType => ids::FIND_SIMILAR_PROP_LABEL_TYPE,
+        P::Text => ids::PROPERTIES_TEXT,
+        P::Name => ids::PROPERTIES_NAME,
+        P::FileName => ids::FAB_OUTPUTS_NAME,
+        P::Layer => ids::PCB_PRIM_LAYER,
+        P::Width => ids::PCB_PRIM_WIDTH,
+        P::Size => ids::PROPERTIES_SIZE,
+        P::Drill => ids::BOARD_NET_CLASSES_COL_DRILL,
+        P::Shape => ids::PCB_PRIM_SHAPE,
+    }
+}
 
 fn shown(value: &str) -> String {
     if value.is_empty() {
@@ -97,8 +119,7 @@ pub fn view<'a>(
         };
         table = table.push(
             row![
-                // raw: the property's name comes from signex-engine (#2060).
-                text(raw(v.property.label()))
+                text(t!(i18n, property_label(v.property)))
                     .size(TS.body)
                     .color(text_primary)
                     .width(130),
@@ -245,6 +266,19 @@ mod tests {
             I18n::en_us().message_plain(ids::FIND_SIMILAR_EMPTY, &[]),
             shown("")
         );
+    }
+
+    /// #2060: every property name reads as the engine's `label` and
+    /// follows the language.
+    #[test]
+    fn the_property_names_keep_their_english() {
+        let en = I18n::en_us();
+        let xa = I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".to_owned()));
+        for property in SimilarProperty::ALL {
+            let id = property_label(property);
+            assert_eq!(en.message_plain(id, &[]), property.label());
+            assert_ne!(xa.message_plain(id, &[]), property.label());
+        }
     }
 
     #[test]
