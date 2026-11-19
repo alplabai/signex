@@ -31,6 +31,7 @@ const TAB_RADIUS_EM: f32 = 8.0 / 12.0;
 const BADGE_HEIGHT_EM: f32 = 16.0 / 12.0;
 const BADGE_PAD_EM: f32 = 4.0 / 12.0;
 const BADGE_TEXT_EM: f32 = 10.0 / 12.0;
+const DOT_EM: f32 = 7.0 / 12.0;
 /// Caption step of the type scale (`TypeScale::caption`).
 const CAPTION_RATIO: f32 = 10.0 / 11.0;
 
@@ -262,11 +263,51 @@ pub fn chip<'a, M: Clone + 'a>(
     on_press: Option<M>,
 ) -> Element<'a, M> {
     let count = count.map(|n| count_text(i18n, n));
-    pill(label.into(), count, is_on, style, metrics, on_press)
+    pill(None, label.into(), count, is_on, style, metrics, on_press)
+}
+
+/// A [`chip`] led by a round colour dot (a kind's colour). `count` is
+/// written out already, with [`count_text`].
+pub fn dot_chip<'a, M: Clone + 'a>(
+    dot: Color,
+    label: impl Into<Label<'a>>,
+    count: Option<String>,
+    is_on: bool,
+    style: ChipStyle,
+    metrics: ChipMetrics,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    pill(
+        Some(dot),
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
+}
+
+/// The round dot of a [`dot_chip`].
+fn dot_mark<'a, M: 'a>(colour: Color, metrics: ChipMetrics) -> Element<'a, M> {
+    let size = metrics.text_size * DOT_EM;
+    container(iced::widget::Space::new())
+        .width(size)
+        .height(size)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(colour)),
+            border: Border {
+                radius: (size / 2.0).into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// A chip whose count, if any, is already written out.
 fn pill<'a, M: Clone + 'a>(
+    dot: Option<Color>,
     label: Label<'a>,
     count: Option<String>,
     is_on: bool,
@@ -284,6 +325,9 @@ fn pill<'a, M: Clone + 'a>(
         .spacing(metrics.gap)
         .height(Length::Fill)
         .align_y(Alignment::Center);
+    if let Some(colour) = dot {
+        content = content.push(dot_mark(faded(colour, alpha), metrics));
+    }
     content = content.push(label_text(label, metrics.text_size, ink, is_on));
     if let Some(count) = count {
         content = content.push(mono_text(
@@ -339,6 +383,7 @@ where
     for (value, label) in options {
         let on_press = Some(on_select(value));
         row = row.push(pill(
+            None,
             label,
             None,
             value == selected,

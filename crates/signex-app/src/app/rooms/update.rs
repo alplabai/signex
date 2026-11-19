@@ -342,7 +342,11 @@ impl Signex {
                 crate::diagnostics::log_warning(line.into_string());
             }
             Ok(sheets) => {
-                rooms.create = Some(CreateRoomsDialog::new(board, project_file, sheets));
+                rooms.create = Some(Box::new(CreateRoomsDialog::new(
+                    board,
+                    project_file,
+                    sheets,
+                )));
             }
             Err(why) => {
                 let line = t!(self.ui_state.i18n, ids::ROOMS_READ_FAILED, "why" => why);

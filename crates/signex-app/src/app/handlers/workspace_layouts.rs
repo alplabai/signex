@@ -7,16 +7,16 @@ use std::path::PathBuf;
 
 use iced::Task;
 use iced::widget::operation;
-use signex_i18n::ids;
+use signex_i18n::{ids, t};
 
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::{Message, Signex, TileLayout, WindowMsg};
-use crate::diagnostics::{log_error, log_info, log_warning};
+use crate::diagnostics::{log_error_line, log_info, log_warning};
 use crate::dock::DockLayoutSnapshot;
 use crate::workspace_layouts::{
-    BuiltinLayout, Captured, DocumentSplit, LayoutId, LayoutsMenu, ManageLayoutsDialog,
-    ManageLayoutsMsg, Naming, RowDrag, SaveLayoutDialog, SaveLayoutMsg, SaveOutcome, UndoToast,
-    WorkspaceLayoutMsg, naming, store,
+    BuiltinLayout, Captured, DocumentSplit, ImportRefusal, LayoutId, LayoutsMenu,
+    ManageLayoutsDialog, ManageLayoutsMsg, Naming, RowDrag, SaveLayoutDialog, SaveLayoutMsg,
+    SaveOutcome, UndoToast, WorkspaceLayoutMsg, naming, problems, store,
 };
 
 /// Widget id of Save Layout's name field, focused when it opens.
@@ -54,10 +54,9 @@ impl Signex {
             WorkspaceLayoutMsg::Manage(msg) => self.dispatch_manage_layouts(msg),
             WorkspaceLayoutMsg::Saved(Ok(())) => Task::none(),
             WorkspaceLayoutMsg::Saved(Err(reason)) => {
-                log_error(
-                    "Workspace layouts were not saved; the change is lost at the next launch",
-                    &anyhow::anyhow!(reason),
-                );
+                let line =
+                    t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_NOT_SAVED, "why" => reason);
+                log_error_line(line.into_string());
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }
@@ -117,7 +116,8 @@ impl Signex {
     /// the new dock.
     pub(crate) fn apply_workspace_layout(&mut self, id: &LayoutId) -> Task<Message> {
         let Some(layout) = self.ui_state.workspace_layouts.layouts.get(id) else {
-            log_warning("Workspace layouts: that layout no longer exists; nothing was arranged");
+            let line = t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_GONE);
+            log_warning(line.into_string());
             return self.finish_update();
         };
         let mut tasks = Vec::new();
@@ -134,7 +134,8 @@ impl Signex {
         let layouts = &mut self.ui_state.workspace_layouts.layouts;
         layouts.set_active(Some(id.clone()));
         let name = layouts.name_of(id, &naming).unwrap_or_default();
-        log_info(format!("Workspace layout \"{name}\" applied"));
+        let line = t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_APPLIED, "name" => name);
+        log_info(line.into_string());
         tasks.push(self.persist_workspace_layouts());
         tasks.push(self.finish_update());
         Task::batch(tasks)
@@ -169,9 +170,8 @@ impl Signex {
     fn reset_active_workspace_layout(&mut self) -> Task<Message> {
         let layouts = &mut self.ui_state.workspace_layouts.layouts;
         let Some(builtin) = layouts.resettable() else {
-            log_info(
-                "Workspace layouts: the layout on screen is not an edited built-in; nothing was reset",
-            );
+            let line = t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_NOTHING_TO_RESET);
+            log_info(line.into_string());
             return self.finish_update();
         };
         layouts.reset_builtin(builtin);
@@ -238,15 +238,16 @@ impl Signex {
         let Ok(outcome) = layouts.save(&dialog.name, captured, naming) else {
             return Task::none();
         };
-        let (id, verb) = match outcome {
-            SaveOutcome::Added(id) => (id, "saved"),
-            SaveOutcome::Replaced(id) => (id, "replaced"),
+        // One whole message per outcome, so a language words each its way.
+        let (id, said) = match outcome {
+            SaveOutcome::Added(id) => (id, ids::WORKSPACE_LAYOUTS_LAYOUT_SAVED),
+            SaveOutcome::Replaced(id) => (id, ids::WORKSPACE_LAYOUTS_LAYOUT_REPLACED),
         };
         // The arrangement on screen is this layout now.
         layouts.set_active(Some(id.clone()));
         let name = layouts.name_of(&id, naming).unwrap_or_default();
         self.ui_state.workspace_layouts.save = None;
-        log_info(format!("Workspace layout \"{name}\" {verb}"));
+        log_info(t!(self.ui_state.i18n, said, "name" => name).into_string());
         Task::batch([self.persist_workspace_layouts(), self.finish_update()])
     }
 
@@ -329,11 +330,18 @@ impl Signex {
                 path.map_or_else(Task::none, |path| self.write_layouts_export(path))
             }
             ManageLayoutsMsg::ExportWritten(Ok(path)) => {
-                log_info(format!("Workspace layouts exported to {}", path.display()));
+                let line = t!(
+                    self.ui_state.i18n,
+                    ids::WORKSPACE_LAYOUTS_EXPORTED,
+                    "path" => path.display().to_string(),
+                );
+                log_info(line.into_string());
                 self.finish_update()
             }
             ManageLayoutsMsg::ExportWritten(Err(why)) => {
-                log_error("Workspace layouts were not exported", &anyhow::anyhow!(why));
+                let line =
+                    t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_NOT_EXPORTED, "why" => why);
+                log_error_line(line.into_string());
                 self.finish_update()
             }
         }
@@ -518,20 +526,23 @@ impl Signex {
     fn layouts_imported(
         &mut self,
         path: &std::path::Path,
-        result: Result<(Vec<crate::workspace_layouts::WorkspaceLayout>, Vec<String>), String>,
+        result: Result<store::ImportRead, ImportRefusal>,
     ) -> Task<Message> {
-        let (incoming, problems) = match result {
+        let (incoming, skipped) = match result {
             Ok(read) => read,
             Err(why) => {
-                log_error(
-                    &format!("Workspace layouts: {} was not imported", path.display()),
-                    &anyhow::anyhow!(why),
+                let line = t!(
+                    self.ui_state.i18n,
+                    ids::WORKSPACE_LAYOUTS_NOT_IMPORTED,
+                    "path" => path.display().to_string(),
+                    "why" => problems::refusal(&why),
                 );
+                log_error_line(line.into_string());
                 return self.finish_update();
             }
         };
-        for problem in problems {
-            log_warning(problem);
+        for problem in &skipped {
+            log_warning(problems::problem_line(&self.ui_state.i18n, problem));
         }
         let naming = self.layout_naming();
         let added = self
@@ -539,11 +550,13 @@ impl Signex {
             .workspace_layouts
             .layouts
             .import(incoming, &naming);
-        log_info(format!(
-            "Workspace layouts: imported {} from {}",
-            added.len(),
-            path.display()
-        ));
+        let line = t!(
+            self.ui_state.i18n,
+            ids::WORKSPACE_LAYOUTS_IMPORTED,
+            "count" => added.len(),
+            "path" => path.display().to_string(),
+        );
+        log_info(line.into_string());
         if let Some(first) = added.first().cloned() {
             self.with_manage(|dialog| dialog.selected = first);
         }
@@ -572,10 +585,11 @@ impl Signex {
         let value = store::export_json(self.ui_state.workspace_layouts.layouts.user());
         Task::perform(
             on_blocking_pool(move || {
-                let text = serde_json::to_string_pretty(&value)
-                    .map_err(|e| format!("the layouts could not be written as JSON: {e}"))?;
+                // The system's or serialiser's reason; the Messages line
+                // around it comes from the catalog.
+                let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
                 signex_types::atomic_io::atomic_write(&path, text.as_bytes())
-                    .map_err(|e| format!("writing {} failed: {e}", path.display()))?;
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
                 Ok(path)
             }),
             |result| ManageLayoutsMsg::ExportWritten(result).into(),
@@ -587,12 +601,19 @@ impl Signex {
 fn read_import(path: PathBuf) -> Task<Message> {
     let read_path = path.clone();
     Task::perform(
-        on_blocking_pool(move || {
-            let bytes = std::fs::read(&read_path).map_err(|e| format!("reading it failed: {e}"))?;
-            let value: serde_json::Value =
-                serde_json::from_slice(&bytes).map_err(|e| format!("it is not JSON: {e}"))?;
-            store::import_json(&value)
-        }),
-        move |result| ManageLayoutsMsg::ImportRead { path, result }.into(),
+        on_blocking_pool(move || Ok(parse_import(&read_path))),
+        move |read: Result<_, String>| {
+            // A stopped worker reads as a failed read.
+            let result = read.unwrap_or_else(|why| Err(ImportRefusal::ReadFailed(why)));
+            ManageLayoutsMsg::ImportRead { path, result }.into()
+        },
     )
+}
+
+/// Blocking: the layouts of the export file at `path`.
+fn parse_import(path: &std::path::Path) -> Result<store::ImportRead, ImportRefusal> {
+    let bytes = std::fs::read(path).map_err(|e| ImportRefusal::ReadFailed(e.to_string()))?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| ImportRefusal::NotJson(e.to_string()))?;
+    store::import_json(&value)
 }

@@ -153,8 +153,24 @@ pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
 }
 
 pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::dock::DockArea> {
-    let snapshot = snapshot_from_json(json?.get("dock")?)?;
-    Some(dock_from_snapshot(&snapshot))
+    let stored = json?.get("dock")?;
+    let snapshot = snapshot_from_json(stored)?;
+    let mut dock = dock_from_snapshot(&snapshot);
+    // The saved dock keeps a side width as written, fractional px included;
+    // the dock's setter ignores a width that is not a positive number.
+    for (key, pos) in [
+        ("left", crate::dock::PanelPosition::Left),
+        ("right", crate::dock::PanelPosition::Right),
+    ] {
+        if let Some(width) = stored
+            .get(key)
+            .and_then(|region| region.get("width"))
+            .and_then(serde_json::Value::as_f64)
+        {
+            dock.set_preferred_width(pos, width as f32);
+        }
+    }
+    Some(dock)
 }
 
 pub(crate) fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {

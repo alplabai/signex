@@ -76,6 +76,9 @@ pub struct NotebookScan {
     pub folder_found: bool,
     /// Every `.snxnbk` file of the folder, by name.
     pub files: Vec<NotebookFile>,
+    /// Entries of the folder that could not be listed: the system's reason
+    /// for each, for Messages.
+    pub unlisted: Vec<String>,
     /// Every designator of the design and where its part is; `None` when
     /// the design could not be read whole (no part is then called gone).
     pub parts: Option<PartIndex>,
@@ -90,7 +93,16 @@ pub struct NotebookFile {
     pub annotations: Vec<Annotation>,
     pub problems: Vec<ScanProblem>,
     /// Why the file could not be read; it then has no annotations.
-    pub read_error: Option<String>,
+    pub read_error: Option<FileReadError>,
+}
+
+/// Why a notebook file could not be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileReadError {
+    /// The system's reason.
+    Io(String),
+    /// The file is not UTF-8 text.
+    NotUtf8,
 }
 
 /// Designator to the place of its part.

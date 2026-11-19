@@ -1,10 +1,10 @@
 //! The tools block above the list: the search field with Refresh, the kind
 //! chips with their counts, and the Part, Status and Date filter fields.
 
-use iced::widget::{Column, Row, Space, container, pick_list, row, svg};
+use iced::widget::{Column, Row, container, pick_list, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
-use signex_widgets::chips::{ChipMetrics, count_text};
+use signex_widgets::chips::{ChipMetrics, ChipStyle, count_text, dot_chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext::annotation_kind_colour;
 use signex_widgets::{PickListPlaceholder as _, button, text, text_input};
@@ -17,10 +17,6 @@ use crate::panels::PanelContext;
 use crate::panels::PanelMsg;
 use crate::styles::{LINE_HEIGHT, ti, tokens::resolve};
 
-/// The kind chips' dot.
-const DOT: f32 = TS.body * 7.0 / 12.0;
-/// The kind chips' side padding.
-const CHIP_PAD: f32 = TS.body * 7.0 / 12.0;
 /// The filter fields' side padding.
 const FIELD_PAD: f32 = TS.body * 6.0 / 12.0;
 /// The search and clear glyphs.
@@ -117,78 +113,36 @@ fn bare_input(
 }
 
 /// One chip per kind, each with its colour dot and count; a chip that is
-/// on shows its kind.
+/// on shows its kind. The shared chip (BB4) with its dot slot.
 fn kind_chips<'a>(ctx: &'a PanelContext, kinds: &[KindChip]) -> Element<'a, PanelMsg> {
     let metrics = ChipMetrics::from_text_size(TS.body);
+    let style = chip_style(&ctx.tokens);
     let mut chips: Row<Element<'a, PanelMsg>> = Row::new().spacing(PAD_TIGHT);
     for chip in kinds {
-        chips = chips.push(kind_chip(ctx, chip, metrics));
+        chips = chips.push(dot_chip(
+            annotation_kind_colour(tone(chip.kind), &ctx.tokens),
+            kind_label(&ctx.i18n, chip.kind),
+            Some(count_text(&ctx.i18n, chip.count)),
+            chip.on,
+            style,
+            metrics,
+            Some(msg(AnnotationsMsg::KindToggled(chip.kind))),
+        ));
     }
     chips.wrap().vertical_spacing(PAD_TIGHT).boxed()
 }
 
-fn kind_chip<'a>(
-    ctx: &'a PanelContext,
-    chip: &KindChip,
-    metrics: ChipMetrics,
-) -> Element<'a, PanelMsg> {
-    let tokens = &ctx.tokens;
+/// The colours of a kind chip.
+fn chip_style(tokens: &signex_types::theme::ThemeTokens) -> ChipStyle {
     let r = resolve(tokens);
-    let on = chip.on;
-    let ink = if on { r.accent_soft_ink } else { r.ink3 };
-    let dot_colour = annotation_kind_colour(tone(chip.kind), tokens);
-    let dot = container(Space::new())
-        .width(DOT)
-        .height(DOT)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(dot_colour)),
-            border: Border {
-                radius: (DOT / 2.0).into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
-    let mut label = text(kind_label(&ctx.i18n, chip.kind))
-        .size(metrics.caption_size)
-        .color(ink)
-        .wrapping(iced::widget::text::Wrapping::None);
-    if on {
-        label = label.font(rows::medium());
+    ChipStyle {
+        fill: r.field,
+        edge: ti(tokens.border),
+        hover: ti(tokens.hover),
+        ink: r.ink3,
+        on_fill: r.accent_soft,
+        on_ink: r.accent_soft_ink,
     }
-    let count = text(UserText::new(count_text(&ctx.i18n, chip.count)))
-        .size(metrics.caption_size)
-        .font(rows::mono())
-        .color(Color { a: 0.85, ..ink });
-    let content = row![dot, label, count]
-        .spacing(metrics.gap)
-        .height(Length::Fill)
-        .align_y(Alignment::Center);
-    let (field, edge, hover, on_fill) =
-        (r.field, ti(tokens.border), ti(tokens.hover), r.accent_soft);
-    button(content)
-        .height(metrics.kind_height)
-        .padding([0.0, CHIP_PAD])
-        .on_press(msg(AnnotationsMsg::KindToggled(chip.kind)))
-        .style(move |_: &Theme, status: button::Status| {
-            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let (fill, line) = match (on, hovered) {
-                (true, _) => (on_fill, Color::TRANSPARENT),
-                (false, true) => (hover, edge),
-                (false, false) => (field, edge),
-            };
-            button::Style {
-                background: Some(Background::Color(fill)),
-                text_color: ink,
-                border: Border {
-                    color: line,
-                    width: 1.0,
-                    radius: ChipMetrics::pill_radius(metrics.kind_height).into(),
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            }
-        })
-        .boxed()
 }
 
 /// Part, Status and Date as three equal fields. A field with a value shows

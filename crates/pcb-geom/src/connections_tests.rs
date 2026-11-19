@@ -95,6 +95,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, zones: Vec<Zone>) -
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

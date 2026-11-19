@@ -22,8 +22,9 @@ pub struct RoomsUi {
     pub(crate) draft_room: Option<Uuid>,
     /// Which callout or field the pointer is over.
     pub(crate) hover: IllustrationHover,
-    /// Create Rooms from Sheets, while open.
-    pub(crate) create: Option<CreateRoomsDialog>,
+    /// Create Rooms from Sheets, while open. Boxed: a closed dialog costs
+    /// one pointer (#2412).
+    pub(crate) create: Option<Box<CreateRoomsDialog>>,
     /// Generation of the newest sheet read; an older answer is dropped.
     pub(crate) reads: u64,
     /// The board and project file the read in flight is for.

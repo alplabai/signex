@@ -64,3 +64,12 @@ command-log-footer-session = Kept for this session only
 command-log-cli-no-project = <project.snxprj>
 command-log-save-title = Save Command Log
 command-log-save-filter = Command Log (JSON Lines)
+
+# Messages lines.
+# { $command } is the id a row was logged under.
+command-log-not-a-command = Command Log: `{ $command }` is not a command id
+# { $name } is the designator or net a row names.
+command-log-not-in-view = Command Log: { $name } is not on the sheet in view
+command-log-saved-to = Command Log saved to { $path }
+# { $why } is the system's reason.
+command-log-not-saved = Command Log not saved: { $why }

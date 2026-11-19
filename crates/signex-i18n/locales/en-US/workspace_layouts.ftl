@@ -80,3 +80,40 @@ workspace-layouts-undo = Undo
 workspace-layouts-import-title = Import Workspace Layouts
 workspace-layouts-export-title = Export Workspace Layouts
 workspace-layouts-file-filter = Signex workspace layouts
+
+# Messages lines. { $name } is a layout's name, { $path } a file.
+workspace-layouts-applied = Workspace layout “{ $name }” applied
+workspace-layouts-layout-saved = Workspace layout “{ $name }” saved
+workspace-layouts-layout-replaced = Workspace layout “{ $name }” replaced
+workspace-layouts-gone = Workspace layouts: that layout no longer exists; nothing was arranged
+workspace-layouts-nothing-to-reset = Workspace layouts: the layout on screen is not an edited built-in; nothing was reset
+# { $why } is the system's reason.
+workspace-layouts-not-saved = Workspace layouts were not saved; the change is lost at the next launch: { $why }
+workspace-layouts-exported = Workspace layouts exported to { $path }
+workspace-layouts-not-exported = Workspace layouts were not exported: { $why }
+# { $why } is one of the workspace-layouts-why-* reasons.
+workspace-layouts-not-imported = Workspace layouts: { $path } was not imported: { $why }
+workspace-layouts-imported = Workspace layouts: imported { $count } from { $path }
+
+# A stored or imported entry that was skipped. { $key } is its stored id,
+# { $entry } its place in the imported file, { $why } a reason below.
+workspace-layouts-list-unreadable = Workspace layouts: the stored list is not readable; only the built-in layouts are available
+workspace-layouts-skipped-unknown-builtin = Workspace layouts: skipped the edit of an unknown built-in layout “{ $key }”
+workspace-layouts-skipped-builtin-edit = Workspace layouts: skipped your edit of the built-in layout “{ $key }”: { $why }
+workspace-layouts-skipped-builtin-id = Workspace layouts: skipped a layout stored under the built-in id “{ $key }”
+workspace-layouts-skipped-stored = Workspace layouts: skipped the stored layout “{ $key }”: { $why }
+workspace-layouts-skipped-import-entry = Workspace layouts: skipped entry { $entry } of the imported file: { $why }
+
+# Why an entry was skipped or a file refused.
+workspace-layouts-why-not-object = it is not an object
+workspace-layouts-why-no-name = it has no name
+workspace-layouts-why-panels-unreadable = its panels are not readable
+workspace-layouts-why-split-unknown = its document split is unknown
+workspace-layouts-why-nothing-stored = it stores neither panels nor a split
+workspace-layouts-why-not-layouts-file = it is not a Signex workspace layouts file
+# { $format } is the file's export format, { $reads } the newest this build reads.
+workspace-layouts-why-newer = it was written by a newer Signex (format { $format }, this one reads { $reads })
+workspace-layouts-why-no-list = it has no layouts list
+# { $error } is the system's or the parser's reason.
+workspace-layouts-why-read-failed = reading it failed: { $error }
+workspace-layouts-why-not-json = it is not JSON: { $error }

@@ -338,7 +338,7 @@ impl Signex {
             }
             CommandLogMsg::SaveRequested => self.save_command_log(),
             CommandLogMsg::Saved(result) => {
-                command_log_saved(result);
+                command_log_saved(&self.ui_state.i18n, result);
                 Task::none()
             }
         };
@@ -376,10 +376,12 @@ impl Signex {
             return Task::none();
         };
         let Ok(command) = AppCommandId::new(row.command.as_str()) else {
-            crate::diagnostics::log_warning(format!(
-                "Command Log: `{}` is not a command id",
-                row.command
-            ));
+            let line = t!(
+                self.ui_state.i18n,
+                ids::COMMAND_LOG_NOT_A_COMMAND,
+                "command" => row.command.as_str(),
+            );
+            crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         };
         if row.operands.is_empty() {
@@ -454,9 +456,8 @@ impl Signex {
                     JumpTarget::Designator(name) | JumpTarget::Net(name) => name.as_str(),
                     JumpTarget::Point(_) => "",
                 };
-                crate::diagnostics::log_info(format!(
-                    "Command Log: {name} is not on the sheet in view"
-                ));
+                let line = t!(self.ui_state.i18n, ids::COMMAND_LOG_NOT_IN_VIEW, "name" => name);
+                crate::diagnostics::log_info(line.into_string());
             }
         }
     }
@@ -485,7 +486,7 @@ impl Signex {
                         .map_err(|error| format!("{}: {error}", path.display()))
                 })
                 .await
-                .unwrap_or_else(|error| Err(format!("the worker stopped: {error}")))
+                .unwrap_or_else(|error| Err(error.to_string()))
             },
             |result| panel_message(CommandLogMsg::Saved(result)),
         )
@@ -493,12 +494,17 @@ impl Signex {
 }
 
 /// Say in Messages where the log went, or why it did not.
-fn command_log_saved(result: Result<Option<PathBuf>, String>) {
+fn command_log_saved(i18n: &signex_i18n::I18n, result: Result<Option<PathBuf>, String>) {
     match result {
         Ok(Some(path)) => {
-            crate::diagnostics::log_info(format!("Command Log saved to {}", path.display()))
+            let path = path.display().to_string();
+            let line = t!(i18n, ids::COMMAND_LOG_SAVED_TO, "path" => path);
+            crate::diagnostics::log_info(line.into_string());
         }
         Ok(None) => {}
-        Err(why) => crate::diagnostics::log_warning(format!("Command Log not saved: {why}")),
+        Err(why) => {
+            let line = t!(i18n, ids::COMMAND_LOG_NOT_SAVED, "why" => why);
+            crate::diagnostics::log_warning(line.into_string());
+        }
     }
 }

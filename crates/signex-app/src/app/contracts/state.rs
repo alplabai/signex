@@ -671,10 +671,14 @@ pub enum StatusBarRequest {
     /// Click on the "Importing …" segment cancels the running Altium
     /// import (#1123).
     CancelAltiumImport,
-    /// A click on a board counter (the layer pill, the Grid read-out,
-    /// Routed, Unrouted, DRC, Selected) opens its popover above it, or
-    /// closes it when open (#2460). The bar sends `window: None`;
-    /// `Signex::status_bar_message` names the window it was clicked in.
+    /// A click on the active-layer pill steps to the next copper layer
+    /// (#2223).
+    ActiveLayerStepRequested,
+    /// A click on a board counter (Routed, Unrouted, DRC, Selected), or a
+    /// right-click on the layer pill or the Grid read-out, opens its popover
+    /// above it, or closes it when open (#2460). The bar sends
+    /// `window: None`; `Signex::status_bar_message` names the window it was
+    /// clicked in.
     BoardCounterClicked {
         window: Option<iced::window::Id>,
         counter: crate::status_bar::BoardCounter,

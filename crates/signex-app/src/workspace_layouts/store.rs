@@ -49,6 +49,61 @@ impl WorkspaceLayoutsStore for PrefsWorkspaceLayoutsStore {
     }
 }
 
+/// Why one stored or imported layout was skipped. The handler words it with
+/// the catalog (`problems::reason`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyProblem {
+    NotAnObject,
+    NoName,
+    PanelsUnreadable,
+    SplitUnknown,
+    NothingStored,
+}
+
+/// An entry of the stored list or of an import that was skipped, for a
+/// Messages line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LayoutProblem {
+    /// The stored list is not an object; only the built-ins are available.
+    ListUnreadable,
+    /// An edit of a built-in this build does not know.
+    UnknownBuiltinEdit {
+        key: String,
+    },
+    BuiltinEditSkipped {
+        key: String,
+        why: BodyProblem,
+    },
+    /// A user layout stored under a built-in's id.
+    BuiltinIdTaken {
+        key: String,
+    },
+    StoredLayoutSkipped {
+        key: String,
+        why: BodyProblem,
+    },
+    /// Entry `entry` (from 1) of an imported file.
+    ImportEntrySkipped {
+        entry: usize,
+        why: BodyProblem,
+    },
+}
+
+/// Why an import file was refused as a whole.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportRefusal {
+    NotALayoutsFile,
+    /// Written by a newer build, in export format `format`.
+    Newer {
+        format: u64,
+    },
+    NoLayoutsList,
+    /// The file could not be read; the system's reason.
+    ReadFailed(String),
+    /// The file is not JSON; the parser's reason.
+    NotJson(String),
+}
+
 /// The body of one layout: everything but its id (and, for a built-in, its
 /// name).
 fn body_to_json(layout: &WorkspaceLayout) -> Value {
@@ -70,10 +125,8 @@ fn body_to_json(layout: &WorkspaceLayout) -> Value {
 }
 
 /// A stored body as a layout with `id`; `Err` says why it was skipped.
-fn body_from_json(id: LayoutId, body: &Value) -> Result<WorkspaceLayout, String> {
-    let object = body
-        .as_object()
-        .ok_or_else(|| String::from("it is not an object"))?;
+fn body_from_json(id: LayoutId, body: &Value) -> Result<WorkspaceLayout, BodyProblem> {
+    let object = body.as_object().ok_or(BodyProblem::NotAnObject)?;
     let name = match id {
         LayoutId::Builtin(_) => String::new(),
         LayoutId::User(_) => object
@@ -81,15 +134,14 @@ fn body_from_json(id: LayoutId, body: &Value) -> Result<WorkspaceLayout, String>
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|n| !n.is_empty())
-            .ok_or_else(|| String::from("it has no name"))?
+            .ok_or(BodyProblem::NoName)?
             .to_string(),
     };
     let dock = match object.get("dock") {
         None | Some(Value::Null) => None,
-        Some(dock) => Some(
-            crate::fonts::snapshot_from_json(dock)
-                .ok_or_else(|| String::from("its panels are not readable"))?,
-        ),
+        Some(dock) => {
+            Some(crate::fonts::snapshot_from_json(dock).ok_or(BodyProblem::PanelsUnreadable)?)
+        }
     };
     let split = match object.get("split") {
         None | Some(Value::Null) => None,
@@ -97,11 +149,11 @@ fn body_from_json(id: LayoutId, body: &Value) -> Result<WorkspaceLayout, String>
             split
                 .as_str()
                 .and_then(DocumentSplit::from_key)
-                .ok_or_else(|| String::from("its document split is unknown"))?,
+                .ok_or(BodyProblem::SplitUnknown)?,
         ),
     };
     if dock.is_none() && split.is_none() {
-        return Err(String::from("it stores neither panels nor a split"));
+        return Err(BodyProblem::NothingStored);
     }
     Ok(WorkspaceLayout {
         id,
@@ -140,9 +192,9 @@ pub fn to_json(layouts: &Layouts) -> Value {
     })
 }
 
-/// The list in `prefs` (its whole JSON), with a line per entry that was
+/// The list in `prefs` (its whole JSON), with a problem per entry that was
 /// skipped. No key reads as the built-ins alone.
-pub fn from_prefs(prefs: Option<&Value>) -> (Layouts, Vec<String>) {
+pub fn from_prefs(prefs: Option<&Value>) -> (Layouts, Vec<LayoutProblem>) {
     match prefs.and_then(|p| p.get(PREFS_KEY)) {
         None => (Layouts::default(), Vec::new()),
         Some(value) => from_json(value),
@@ -150,32 +202,29 @@ pub fn from_prefs(prefs: Option<&Value>) -> (Layouts, Vec<String>) {
 }
 
 /// The stored list. Tolerant: a malformed entry is skipped and named in the
-/// returned lines, an unknown panel key drops that panel only, and a user
-/// layout missing from `order` is kept at the end.
-pub fn from_json(value: &Value) -> (Layouts, Vec<String>) {
+/// returned problems, an unknown panel key drops that panel only, and a
+/// user layout missing from `order` is kept at the end.
+pub fn from_json(value: &Value) -> (Layouts, Vec<LayoutProblem>) {
     let mut problems = Vec::new();
     let Some(object) = value.as_object() else {
-        problems.push(String::from(
-            "Workspace layouts: the stored list is not readable; only the built-in layouts are available",
-        ));
+        problems.push(LayoutProblem::ListUnreadable);
         return (Layouts::default(), problems);
     };
     let mut overrides = BTreeMap::new();
     if let Some(stored) = object.get("overrides").and_then(Value::as_object) {
         for (key, body) in stored {
             let Some(b) = BuiltinLayout::from_key(key) else {
-                problems.push(format!(
-                    "Workspace layouts: skipped the edit of an unknown built-in layout \"{key}\""
-                ));
+                problems.push(LayoutProblem::UnknownBuiltinEdit { key: key.clone() });
                 continue;
             };
             match body_from_json(LayoutId::Builtin(b), body) {
                 Ok(layout) => {
                     overrides.insert(b, layout);
                 }
-                Err(why) => problems.push(format!(
-                    "Workspace layouts: skipped your edit of the built-in layout \"{key}\": {why}"
-                )),
+                Err(why) => problems.push(LayoutProblem::BuiltinEditSkipped {
+                    key: key.clone(),
+                    why,
+                }),
             }
         }
     }
@@ -204,16 +253,12 @@ pub fn from_json(value: &Value) -> (Layouts, Vec<String>) {
             continue;
         };
         if BuiltinLayout::from_key(&key).is_some() {
-            problems.push(format!(
-                "Workspace layouts: skipped a layout stored under the built-in id \"{key}\""
-            ));
+            problems.push(LayoutProblem::BuiltinIdTaken { key });
             continue;
         }
         match body_from_json(LayoutId::User(key.clone()), body) {
             Ok(layout) => user.push(layout),
-            Err(why) => problems.push(format!(
-                "Workspace layouts: skipped the stored layout \"{key}\": {why}"
-            )),
+            Err(why) => problems.push(LayoutProblem::StoredLayoutSkipped { key, why }),
         }
     }
     let active = object
@@ -229,32 +274,33 @@ pub fn export_json(layouts: &[WorkspaceLayout]) -> Value {
     json!({ EXPORT_FORMAT_KEY: EXPORT_FORMAT, "layouts": list })
 }
 
-/// The layouts of an export file, with a line per entry that was skipped.
-/// `Err` when the file is not a Signex layouts export at all.
-pub fn import_json(value: &Value) -> Result<(Vec<WorkspaceLayout>, Vec<String>), String> {
+/// What an import read: the layouts, and a problem per skipped entry.
+pub type ImportRead = (Vec<WorkspaceLayout>, Vec<LayoutProblem>);
+
+/// The layouts of an export file, with a problem per entry that was
+/// skipped. `Err` when the file is not a Signex layouts export at all.
+pub fn import_json(value: &Value) -> Result<ImportRead, ImportRefusal> {
     let format = value
         .get(EXPORT_FORMAT_KEY)
         .and_then(Value::as_u64)
-        .ok_or_else(|| String::from("it is not a Signex workspace layouts file"))?;
+        .ok_or(ImportRefusal::NotALayoutsFile)?;
     if format > EXPORT_FORMAT {
-        return Err(format!(
-            "it was written by a newer Signex (format {format}, this one reads {EXPORT_FORMAT})"
-        ));
+        return Err(ImportRefusal::Newer { format });
     }
     let list = value
         .get("layouts")
         .and_then(Value::as_array)
-        .ok_or_else(|| String::from("it has no layouts list"))?;
+        .ok_or(ImportRefusal::NoLayoutsList)?;
     let mut layouts = Vec::new();
     let mut problems = Vec::new();
     for (index, body) in list.iter().enumerate() {
         // The id is replaced on import; this one only names the entry.
         match body_from_json(LayoutId::User(format!("import-{index}")), body) {
             Ok(layout) => layouts.push(layout),
-            Err(why) => problems.push(format!(
-                "Workspace layouts: skipped entry {} of the imported file: {why}",
-                index + 1
-            )),
+            Err(why) => problems.push(LayoutProblem::ImportEntrySkipped {
+                entry: index + 1,
+                why,
+            }),
         }
     }
     Ok((layouts, problems))

@@ -21,8 +21,8 @@ use crate::app::{CaseFold, Message, ProjectId, Signex};
 use crate::dock::DockMessage;
 use crate::panels::annotations::{
     Annotation, AnnotationKind, AnnotationRow, AnnotationsState, AnnotationsView, FileGroup,
-    IsoDate, KindChip, ListStatus, NotebookFile, NotebookScan, PartIndex, PartPlace, RefChip,
-    Reference, RowKey, ScanProblem,
+    FileReadError, IsoDate, KindChip, ListStatus, NotebookFile, NotebookScan, PartIndex, PartPlace,
+    RefChip, Reference, RowKey, ScanProblem,
 };
 use crate::panels::{AnnotationsMsg, NetInspectorMsg, PanelKind, PanelMsg};
 
@@ -317,21 +317,28 @@ fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
         }
         Err(e) => return Err(e.to_string()),
     };
-    let mut paths: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.is_file()
-                && path
+    // An entry that cannot be listed is said in Messages, never dropped.
+    let (mut paths, mut unlisted) = (Vec::new(), Vec::new());
+    for entry in entries {
+        match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                let notebook = path
                     .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION))
-        })
-        .collect();
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION));
+                if notebook && path.is_file() {
+                    paths.push(path);
+                }
+            }
+            Err(e) => unlisted.push(e.to_string()),
+        }
+    }
     paths.sort();
     let files = paths.into_iter().map(read_notebook).collect();
     Ok(NotebookScan {
         folder_found: true,
         files,
+        unlisted,
         parts: inputs.design.as_ref().and_then(part_index),
     })
 }
@@ -343,8 +350,8 @@ fn read_notebook(path: PathBuf) -> NotebookFile {
         .unwrap_or_default();
     let label = format!("{NOTEBOOK_DIR}/{name}");
     let text = std::fs::read(&path)
-        .map_err(|e| e.to_string())
-        .and_then(|bytes| String::from_utf8(bytes).map_err(|_| "not UTF-8 text".to_string()));
+        .map_err(|e| FileReadError::Io(e.to_string()))
+        .and_then(|bytes| String::from_utf8(bytes).map_err(|_| FileReadError::NotUtf8));
     let (annotations, problems, read_error) = match text {
         Ok(text) => {
             let (annotations, problems) = signex_notebook::scan(&text);
@@ -411,11 +418,24 @@ fn part_index(design: &DesignInputs) -> Option<PartIndex> {
 
 /// One Messages line per file that could not be read and per problem.
 fn report_scan(scan: &NotebookScan, i18n: &I18n) {
+    for why in &scan.unlisted {
+        let line = t!(
+            i18n, ids::ANNOTATIONS_READ_FAILED,
+            "file" => NOTEBOOK_DIR, "why" => why.as_str()
+        );
+        log::warn!(target: TARGET, "{}", line.into_string());
+    }
     for file in &scan.files {
         if let Some(why) = &file.read_error {
+            let why = match why {
+                FileReadError::Io(reason) => signex_i18n::Arg::from(reason.as_str()),
+                FileReadError::NotUtf8 => {
+                    signex_i18n::Translatable::new(ids::ANNOTATIONS_NOT_UTF8).into()
+                }
+            };
             let line = t!(
                 i18n, ids::ANNOTATIONS_READ_FAILED,
-                "file" => file.label.as_str(), "why" => why.as_str()
+                "file" => file.label.as_str(), "why" => why
             );
             log::warn!(target: TARGET, "{}", line.into_string());
         }

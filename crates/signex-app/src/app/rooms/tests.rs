@@ -179,11 +179,11 @@ fn sheets() -> Vec<SheetMembers> {
 fn create_rooms_makes_the_ticked_rooms_in_one_undo_step() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with(dir.path());
-    app.ui_state.rooms.create = Some(CreateRoomsDialog::new(
+    app.ui_state.rooms.create = Some(Box::new(CreateRoomsDialog::new(
         path.clone(),
         "project.snxprj".into(),
         sheets(),
-    ));
+    )));
     let steps = undo_len(&app, &path);
     let task = app.update(Message::from(CreateRoomsMsg::Confirmed));
     settle(&mut app, task);
@@ -201,11 +201,11 @@ fn create_rooms_makes_the_ticked_rooms_in_one_undo_step() {
     run(&mut app, "undo");
     assert!(live(&app, &path).rooms.is_empty());
 
-    app.ui_state.rooms.create = Some(CreateRoomsDialog::new(
+    app.ui_state.rooms.create = Some(Box::new(CreateRoomsDialog::new(
         path.clone(),
         "project.snxprj".into(),
         sheets(),
-    ));
+    )));
     let task = app.update(Message::from(CreateRoomsMsg::RowToggled("mcu".into())));
     settle(&mut app, task);
     let task = app.update(Message::from(CreateRoomsMsg::Confirmed));

@@ -40,6 +40,7 @@ define_ids! {
     ANNOTATIONS_READING = "annotations-reading";
     ANNOTATIONS_UNAVAILABLE = "annotations-unavailable";
     ANNOTATIONS_READ_FAILED = "annotations-read-failed";
+    ANNOTATIONS_NOT_UTF8 = "annotations-not-utf8";
     ANNOTATIONS_PROBLEM_UNCLOSED_FRONT_MATTER = "annotations-problem-unclosed-front-matter";
     ANNOTATIONS_PROBLEM_MISSING_KIND = "annotations-problem-missing-kind";
     ANNOTATIONS_PROBLEM_UNKNOWN_KIND = "annotations-problem-unknown-kind";

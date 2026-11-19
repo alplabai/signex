@@ -69,6 +69,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,
@@ -200,8 +201,9 @@ fn a_counter_opens_its_popover_over_its_own_window_and_esc_closes_it() {
     assert_eq!(open_popover(&rig.app), None, "Routed shares the popover");
 }
 
-/// m164: on a board the Grid read-out opens the Grid popover and leaves the
-/// grid shown; a preset and a Custom… pitch set it, a bad pitch is refused.
+/// m164: on a board a right-click on the Grid read-out opens the Grid
+/// popover and leaves the grid shown; a preset and a Custom… pitch set it, a
+/// bad pitch is refused. A left click still shows and hides the grid.
 #[test]
 fn the_board_grid_popover_sets_the_grid() {
     let mut rig = rig();
@@ -209,7 +211,7 @@ fn the_board_grid_popover_sets_the_grid() {
     click(&mut rig.app, rig.main, BoardCounter::Grid);
     assert_eq!(
         rig.app.ui_state.grid_visible, shown,
-        "the click toggles nothing"
+        "opening the popover toggles nothing"
     );
     assert_eq!(
         open_popover(&rig.app),
@@ -229,7 +231,8 @@ fn the_board_grid_popover_sets_the_grid() {
     );
     popover_event(&mut rig.app, BoardPopoverEvent::CustomGridSubmitted);
     assert_eq!(rig.app.ui_state.grid_size_mm, 0.2, "refused, unchanged");
-    // View ▸ Toggle Grid still shows and hides it.
+    // A left click on the read-out (and View ▸ Toggle Grid) still shows and
+    // hides it.
     send(
         &mut rig.app,
         Message::Ui(UiMsg::StatusBar(StatusBarRequest::ToggleGrid)),

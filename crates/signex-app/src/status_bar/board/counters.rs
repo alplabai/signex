@@ -4,7 +4,7 @@
 //! swatch and chevron. Each segment's width is computed from the same texts
 //! it draws, so a popover can be anchored above it (`anchor.rs`).
 
-use iced::widget::{Row, Space, Widget, container, row};
+use iced::widget::{Row, Space, Widget, container, mouse_area, row};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -110,7 +110,8 @@ pub(crate) fn grid_value(
 }
 
 /// The board's Grid read-out: the grid glyph, "Grid" and the mono value. A
-/// click opens the Grid popover.
+/// click shows or hides the grid, as on a sheet; a right-click opens the
+/// Grid popover.
 pub(in crate::status_bar) fn board_grid_readout<'a>(
     value: Localized,
     open: bool,
@@ -125,10 +126,12 @@ pub(in crate::status_bar) fn board_grid_readout<'a>(
     ]
     .spacing(SEGMENT_GAP)
     .align_y(iced::Alignment::Center);
-    button(face)
+    let readout = button(face)
         .padding([1.0, SP.s])
         .style(segment_style(tokens, open))
-        .on_press(clicked(BoardCounter::Grid))
+        .on_press(StatusBarRequest::ToggleGrid);
+    mouse_area(readout)
+        .on_right_press(clicked(BoardCounter::Grid))
         .boxed()
 }
 

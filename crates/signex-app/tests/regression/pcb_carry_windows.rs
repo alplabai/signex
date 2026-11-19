@@ -1,7 +1,8 @@
 //! #2271 review — a footprint drag ends when its window loses focus or
 //! closes, a locked footprint refuses at the start of a drag, and the
 //! status-bar layer pill of a board window acts on that window's board
-//! (#2272): it opens the Active layer popover there (#2460).
+//! (#2272): a click steps it, a right-click opens the Active layer popover
+//! there (#2460).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -364,9 +365,40 @@ fn pick_layer(app: &mut Signex, layer: PcbLayer) {
     );
 }
 
-/// #2460: the pill of a board window opens the Active layer popover over
-/// that window, and a row of it sets that window's board (#2272 kept: the
-/// other board is untouched).
+#[test]
+fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
+    let mut rig = rig();
+    let window = undock_a(&mut rig);
+    let b_before = active_layer(&rig.app, &rig.b);
+    let pill = StatusBarRequest::ActiveLayerStepRequested;
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(window, None, pill.clone()),
+    );
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        Some(PcbLayer::Copper(CopperLayer::Bottom))
+    );
+    assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
+
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(rig.main, None, pill),
+    );
+    assert_eq!(
+        active_layer(&rig.app, &rig.b),
+        Some(PcbLayer::Copper(CopperLayer::Bottom))
+    );
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        Some(PcbLayer::Copper(CopperLayer::Bottom)),
+        "the main pill leaves A"
+    );
+}
+
+/// #2460: a right-click on the pill of a board window opens the Active
+/// layer popover over that window, and a row of it sets that window's board
+/// (#2272 kept: the other board is untouched).
 #[test]
 fn the_layer_pill_of_a_board_window_opens_the_popover_and_a_row_sets_that_board() {
     let mut rig = rig();
@@ -388,7 +420,7 @@ fn the_layer_pill_of_a_board_window_opens_the_popover_and_a_row_sets_that_board(
     assert_eq!(
         active_layer(&rig.app, &rig.a),
         a_before,
-        "a click steps nothing"
+        "opening the popover steps nothing"
     );
     let bottom = PcbLayer::Copper(CopperLayer::Bottom);
     pick_layer(&mut rig.app, bottom);

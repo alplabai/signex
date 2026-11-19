@@ -135,7 +135,8 @@ impl Signex {
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
-        // Workspace layouts (#166): a skipped entry is said in Messages.
+        // Workspace layouts (#166): a skipped entry is said in Messages once
+        // the language is known.
         let (workspace_layouts, layout_problems) =
             crate::workspace_layouts::WorkspaceLayoutsState::boot(
                 prefs,
@@ -143,9 +144,6 @@ impl Signex {
                     crate::workspace_layouts::PrefsWorkspaceLayoutsStore::user_prefs(),
                 ),
             );
-        for problem in layout_problems {
-            crate::diagnostics::log_warning(problem);
-        }
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -180,6 +178,11 @@ impl Signex {
             &crate::fonts::read_language_pref_from(prefs),
         ));
         crate::app::handlers::preferences::language::log_dropped_language(&i18n);
+        for problem in &layout_problems {
+            crate::diagnostics::log_warning(crate::workspace_layouts::problems::problem_line(
+                &i18n, problem,
+            ));
+        }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);

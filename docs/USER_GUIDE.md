@@ -199,11 +199,13 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
   how long ago it ran, or *not run yet*) and **Selected**, which takes the
   place of the selection summary. A count of zero shows as a grey 0. Each of
-  them, the active layer pill and the grid value is a button that opens a
-  popover above it; Esc or a click elsewhere closes it:
+  them is a button that opens a popover above it. A click on the active
+  layer pill still steps to the next layer and a click on the grid value
+  still shows or hides the grid; right-click either to open its popover.
+  Esc or a click elsewhere closes a popover:
   - **Active layer:** the board's shown layers; click one to make it the
     active layer. **Layers panel** opens the panel. The `+` and `-` keys
-    (**View ▸ Next Layer** and **Previous Layer**) still step the layer.
+    (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
   - **Grid:** pick 0.100, 0.250, 0.500 or 1.270 mm, or type any pitch in mm
     into **Custom…** and press Enter (a pitch of 0 or less is refused and
     shows red). **Snap to grid** switches snapping; **Grids…** opens the

@@ -65,6 +65,8 @@ annotations-unavailable = The notebook files could not be read. The Messages pan
 
 ## Messages lines. Each leads with the file and the line it is about.
 annotations-read-failed = { $file }: not read: { $why }
+# The { $why } of annotations-read-failed for a file that is not UTF-8.
+annotations-not-utf8 = not UTF-8 text
 annotations-problem-unclosed-front-matter = { $file } line { $line }: the +++ front matter is never closed; the file was read as Typst.
 annotations-problem-missing-kind = { $file } line { $line }: an annotation without kind: was skipped.
 annotations-problem-unknown-kind = { $file } line { $line }: kind "{ $kind }" is not note, calculation, measurement, issue or decision; the block was skipped.

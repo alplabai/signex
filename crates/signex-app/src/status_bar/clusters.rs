@@ -180,9 +180,9 @@ fn cursor_cluster<'a>(
     .boxed()
 }
 
-/// The Grid read-out (a click shows or hides the grid; on a sheet a
-/// right-click opens the Grid & Snap popover; on a board a click opens the
-/// Grid popover, #2460) and the Snap pill.
+/// The Grid read-out (a click shows or hides the grid; a right-click opens
+/// the Grid & Snap popover on a sheet, the Grid popover on a board, #2460)
+/// and the Snap pill.
 fn grid_snap_cluster<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
@@ -225,8 +225,8 @@ fn grid_snap_cluster<'a>(
 }
 
 /// The active copper layer of an open board: its swatch, the caption, the
-/// name and the chevron; a click opens the Active layer popover (#2460).
-/// Stepping the layer is View ▸ Next / Previous Layer and their keys.
+/// name and the chevron; a click steps to the next layer (#2223), a
+/// right-click opens the Active layer popover (#2460).
 fn layer_pill_view<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
@@ -247,7 +247,8 @@ fn layer_pill_view<'a>(
     )
     .padding([1.5, 6.0])
     .style(layer_pill(tokens))
-    .on_press(StatusBarRequest::BoardCounterClicked {
+    .on_press(StatusBarRequest::ActiveLayerStepRequested);
+    let pill = mouse_area(pill).on_right_press(StatusBarRequest::BoardCounterClicked {
         window: None,
         counter: super::BoardCounter::Layer,
     });

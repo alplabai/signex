@@ -490,8 +490,9 @@ pub struct UiState {
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
     /// Rooms (#2457): the Room Properties drafts and illustration hover, and
-    /// Create Rooms from Sheets while open.
-    pub rooms: crate::app::rooms::RoomsUi,
+    /// Create Rooms from Sheets while open. Boxed: a pointer of the size
+    /// budget (#2412).
+    pub rooms: Box<crate::app::rooms::RoomsUi>,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
@@ -522,7 +523,8 @@ pub struct UiState {
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
     /// The Annotations panel's filters, expanded row and last scan (#165).
-    pub annotations: crate::panels::AnnotationsState,
+    /// Boxed: a pointer of the size budget (#2412).
+    pub annotations: Box<crate::panels::AnnotationsState>,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
@@ -848,6 +850,7 @@ mod tests {
             ("update_pcb", field_size(|ui| &ui.update_pcb)),
             ("back_annotate", field_size(|ui| &ui.back_annotate)),
             ("compare_board", field_size(|ui| &ui.compare_board)),
+            ("rooms.create", field_size(|ui| &ui.rooms.create)),
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),

@@ -67,4 +67,8 @@ define_ids! {
     COMMAND_LOG_CLI_NO_PROJECT = "command-log-cli-no-project";
     COMMAND_LOG_SAVE_TITLE = "command-log-save-title";
     COMMAND_LOG_SAVE_FILTER = "command-log-save-filter";
+    COMMAND_LOG_NOT_A_COMMAND = "command-log-not-a-command";
+    COMMAND_LOG_NOT_IN_VIEW = "command-log-not-in-view";
+    COMMAND_LOG_SAVED_TO = "command-log-saved-to";
+    COMMAND_LOG_NOT_SAVED = "command-log-not-saved";
 }

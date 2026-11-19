@@ -10,6 +10,7 @@
 
 pub mod builtins;
 pub mod model;
+pub mod problems;
 pub mod store;
 
 #[cfg(test)]
@@ -23,7 +24,7 @@ pub use model::{
     BuiltinLayout, Captured, DeletedLayout, DocumentSplit, LayoutId, Layouts, NameClash, Naming,
     RenameRefusal, SaveOutcome, SaveRefusal, WorkspaceLayout,
 };
-pub use store::{PrefsWorkspaceLayoutsStore, WorkspaceLayoutsStore};
+pub use store::{ImportRefusal, LayoutProblem, PrefsWorkspaceLayoutsStore, WorkspaceLayoutsStore};
 
 /// How long the "Deleted layout" toast offers Undo.
 pub const UNDO_TOAST_DURATION: Duration = Duration::from_secs(8);
@@ -41,12 +42,12 @@ pub struct WorkspaceLayoutsState {
 
 impl WorkspaceLayoutsState {
     /// The state a launch starts with: the list read from `prefs` (its whole
-    /// JSON), written back through `store`. The lines name skipped entries,
-    /// for the Messages panel.
+    /// JSON), written back through `store`. The problems name skipped
+    /// entries, for the Messages panel.
     pub fn boot(
         prefs: Option<&serde_json::Value>,
         store: Arc<dyn WorkspaceLayoutsStore>,
-    ) -> (Self, Vec<String>) {
+    ) -> (Self, Vec<LayoutProblem>) {
         let (layouts, problems) = store::from_prefs(prefs);
         (
             Self {
@@ -234,10 +235,11 @@ pub enum ManageLayoutsMsg {
     ImportPicked(Option<PathBuf>),
     ImportRead {
         path: PathBuf,
-        result: Result<(Vec<WorkspaceLayout>, Vec<String>), String>,
+        result: Result<store::ImportRead, ImportRefusal>,
     },
     ExportRequested,
     ExportPicked(Option<PathBuf>),
+    /// The written path, or the system's reason the write failed.
     ExportWritten(Result<PathBuf, String>),
 }
 
