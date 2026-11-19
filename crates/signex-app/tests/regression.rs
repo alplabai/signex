@@ -684,12 +684,12 @@ mod sheet_frame_canvas;
 mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
 mod project_tab;
-#[path = "regression/page_tab_titles.rs"]
-mod page_tab_titles;
 #[path = "regression/project_tab_rename.rs"]
 mod project_tab_rename;
 #[path = "regression/project_tab_saves.rs"]
