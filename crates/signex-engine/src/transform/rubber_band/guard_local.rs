@@ -60,8 +60,8 @@ use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
 use super::guard::{
-    Exclusions, Found, Guard, Placement, Projected, holds_any, place_moved_pins, query_keys,
-    warned_idents, wire_answers, wire_joins, wire_nets,
+    Exclusions, Found, Guard, Placement, Projected, Terminals, holds_any, place_moved_pins,
+    query_keys, seed_lone, warned_idents, wire_answers, wire_joins, wire_nets,
 };
 use super::intent;
 use super::{PinIdent, PinTip, Policy, WirePoint};
@@ -79,6 +79,8 @@ pub(super) struct LocalGuard {
     /// place and where its wire landed (positions in `plain.added`).
     wires: Vec<WirePoint>,
     wire_at: Vec<(Found, Found)>,
+    /// Per carried point, the component pins at its old place (`pins_at`).
+    wire_pins: Vec<Terminals>,
 }
 
 impl LocalGuard {
@@ -90,6 +92,7 @@ impl LocalGuard {
         plain_sheet: &SchematicSheet,
         tips: &[PinTip],
         wires: &[WirePoint],
+        wire_pins: &[Terminals],
     ) -> Option<Self> {
         if !base.delta_ready() || tips.iter().any(|t| t.is_power() || t.is_sheet_pin()) {
             return None;
@@ -138,12 +141,23 @@ impl LocalGuard {
             carried,
             wires: wires.to_vec(),
             wire_at,
+            wire_pins: wire_pins.to_vec(),
         })
     }
 
     /// Per tip: nothing stays at the old tip to carry the connection.
     pub(super) fn carried(&self) -> &[bool] {
         &self.carried
+    }
+
+    /// Per tip: the net its pin is on in the plain-moved sheet.
+    pub(super) fn home(&self) -> &[Option<usize>] {
+        &self.home
+    }
+
+    /// Per tip: the net at its old tip in the plain-moved sheet, when named.
+    pub(super) fn old_nets(&self, tips: usize) -> Vec<Option<usize>> {
+        self.plain.found[..tips].iter().map(|found| found.1).collect()
     }
 
     /// Whether the pre-move nets had this pin on a net.
@@ -223,7 +237,7 @@ impl LocalGuard {
                 .retain(|(s, p)| !moved.contains(&(*s, p.as_str())));
         }
         debug_assert_eq!(tips.len(), self.home.len());
-        let (extra, lone, mut joins) = place_moved_pins(
+        let (extra, mut lone, mut joins) = place_moved_pins(
             tips,
             skip,
             &mut nets,
@@ -235,6 +249,7 @@ impl LocalGuard {
             |tip| guard.was_connected(tip),
         );
         joins.extend(wire_joins(&self.wires, &self.wire_at, policy));
+        seed_lone(&mut lone, &self.wires, &self.wire_at, &self.wire_pins, policy);
         let warned = warned_idents(tips, policy, |tip| guard.was_connected(tip));
         let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
         let want = (joined.into_iter())

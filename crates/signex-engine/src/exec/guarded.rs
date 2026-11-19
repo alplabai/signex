@@ -270,8 +270,21 @@ impl Engine {
     ) {
         let moving: HashSet<Uuid> = items.iter().map(|item| item.uuid).collect();
         let live_plain = (contacts.wires.iter()).filter(|w| policy.plain.contains(&w.old_key()));
+        let points: Vec<&crate::WirePoint> = live_plain.chain(&contacts.bailed).collect();
+        if points.is_empty() {
+            return;
+        }
+        // A point is parted only when the committed sheet has its old place
+        // and its wire on two nets: a pin or another path may still keep it.
+        let keys: Vec<(signex_net::uf::Key, bool)> = (points.iter())
+            .flat_map(|w| [(w.old_key(), false), (w.new_key(), true)])
+            .collect();
+        let (_, found) = signex_net::net_signatures_at(&self.document, &keys);
         let mut names: Vec<String> = Vec::new();
-        for point in live_plain.chain(&contacts.bailed) {
+        for (point, at) in points.iter().zip(found.chunks(2)) {
+            if at.len() == 2 && at[0].0 == at[1].0 {
+                continue;
+            }
             if let Some(name) = crate::held_at(before, point.old(), &moving)
                 && !names.contains(&name)
             {
@@ -286,7 +299,6 @@ impl Engine {
             |name| format!("could not keep {name} on the dragged wire"),
             |n| format!("could not keep {n} connections on the dragged wire"),
         ));
-        self.unkept_pins.extend(names);
     }
 
     /// One notice for the pins held on their old net whose new tip lies

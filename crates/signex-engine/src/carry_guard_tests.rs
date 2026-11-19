@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use signex_net::{NetSignature, net_signatures, net_signatures_at, point_is_occupied, pt_key};
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
 
 use crate::exec::guarded::{Record, all_plain, take_record};
@@ -130,6 +130,20 @@ pub(crate) fn check_allowed(
             None => {}
         }
     }
+    // The component pins of the plain sheet that are no contact: power ports
+    // name nets and are left out.
+    let symbols: Vec<SelectedItem> = (plain.symbols.iter())
+        .filter(|symbol| !symbol.is_power)
+        .map(|symbol| SelectedItem::new(symbol.uuid, SelectedKind::Symbol))
+        .collect();
+    let stationary: Vec<(signex_net::uf::Key, (Uuid, String))> =
+        (crate::moved_pin_tips(plain, &symbols).into_iter())
+            .filter(|pin| !tips.iter().any(|tip| tip.ident() == pin.ident()))
+            .filter_map(|pin| match pin.ident() {
+                PinIdent::Terminal(s, p) => Some((pin.old_key(), (*s, p.clone()))),
+                PinIdent::SheetPin(_) => None,
+            })
+            .collect();
     let mut parent: Vec<usize> = (0..bags.len()).collect();
     for (j, (old, _)) in record.wires.iter().enumerate() {
         if record.plain.contains(&pt_key(old)) {
@@ -141,6 +155,11 @@ pub(crate) fn check_allowed(
             parent.push(parent.len());
         }
         let (a, b) = (root(&parent, a), root(&parent, b));
+        // A pin alone at the old place is on no net, yet the point joined it.
+        if found[at].1.is_none() {
+            let alone = (stationary.iter()).filter(|(k, _)| *k == pt_key(old));
+            bags[a].terminals.extend(alone.map(|(_, pin)| pin.clone()));
+        }
         if a == b {
             continue;
         }
