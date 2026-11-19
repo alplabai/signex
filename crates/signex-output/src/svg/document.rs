@@ -23,6 +23,7 @@ use super::*;
 use crate::SheetSnapshot;
 use crate::markup_escape::escape_markup;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::optional_content::{LayerSpans, PdfLayer};
 use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
@@ -41,6 +42,20 @@ impl SvgRenderContext {
         units_per_mm: f64,
         eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
     ) -> Self {
+        Self::from_sheet_layered(sheet, opts, page_w_mm, page_h_mm, units_per_mm, eval_inputs).0
+    }
+
+    /// [`Self::from_sheet`] plus the PDF layer each run of elements belongs
+    /// to. Elements outside every span are in no layer.
+    pub(crate) fn from_sheet_layered(
+        sheet: &SheetSnapshot,
+        opts: &PdfOptions,
+        page_w_mm: f64,
+        page_h_mm: f64,
+        units_per_mm: f64,
+        eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
+    ) -> (Self, LayerSpans) {
+        let mut layers = LayerSpans::default();
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
 
@@ -81,6 +96,10 @@ impl SvgRenderContext {
         // Always render the physical sheet boundary on top of the
         // page-fill so both preview and PDF clearly reference the
         // document page area.
+        layers.mark(
+            PdfLayer::TitleBlockAndBorder,
+            elements.len()..elements.len() + 1,
+        );
         elements.push(rect_path(
             0.5,
             0.5,
@@ -104,6 +123,7 @@ impl SvgRenderContext {
         );
 
         // Base primitives
+        let wires_start = elements.len();
         for wire in &sheet.schematic.wires {
             let class = opts.net_class_styles.get(&wire.uuid);
             let stroke_mm = wire_style::wire_width_mm(wire, class, &opts.schematic_defaults);
@@ -209,6 +229,7 @@ impl SvgRenderContext {
                 },
             ));
         }
+        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
 
         if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
@@ -243,6 +264,12 @@ impl SvgRenderContext {
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
+            let label_layer = if label.label_type == LabelType::Power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::NetLabelsAndPorts
+            };
+            layers.mark(label_layer, elements.len()..elements.len() + 1);
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
@@ -331,6 +358,7 @@ impl SvgRenderContext {
 
         // Full symbol body graphics from library definitions.
         for sym in &sheet.schematic.symbols {
+            let symbol_start = elements.len();
             let symbol_vars = symbol_eval_variables(sym);
             let mut refdes_vars = HashMap::new();
             if !sym.uuid.is_nil() && !sym.reference.is_empty() {
@@ -449,6 +477,12 @@ impl SvgRenderContext {
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
+            let symbol_layer = if sym.is_power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::Parts
+            };
+            layers.mark(symbol_layer, symbol_start..elements.len());
         }
 
         push_placed_drawings(
@@ -460,12 +494,15 @@ impl SvgRenderContext {
             &opts.schematic_defaults,
         );
 
-        Self {
-            width,
-            height,
-            elements,
-            paper: palette.paper,
-        }
+        (
+            Self {
+                width,
+                height,
+                elements,
+                paper: palette.paper,
+            },
+            layers,
+        )
     }
 
     /// Serialize the elements to an SVG document string. Computed on

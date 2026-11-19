@@ -412,6 +412,8 @@ fn no_outlines_emitted_when_every_bookmark_toggle_is_off() {
     let opts = PdfOptions {
         include_component_parameters: false,
         generate_nets_info: false,
+        bookmark_sheets: false,
+        bookmark_parts: false,
         ..Default::default()
     };
     let out = PdfExporter.export(&ctx, &opts).expect("export");
