@@ -7,9 +7,7 @@
 use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
-use signex_engine::pcb::route::{
-    PadAt, PadEnd, RouteRefusal, RoutedLeg, pad_at, pad_end, via_fits,
-};
+use signex_engine::pcb::route::{PadAt, PadEnd, RouteRefusal, RoutedLeg, pad_end, via_fits};
 use signex_i18n::{Arg, I18n, ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::pcb::{PcbBoard, Point, Via};
@@ -51,26 +49,16 @@ pub(super) fn leg_end(
     Ok(LegEnd { style, joins, via })
 }
 
-/// The via at `to` when a leg of `style` ends on a pad off its layer (a
-/// surface pad on Top while the leg runs on an inner layer). A leg of no
-/// net yet takes the pad's net.
+/// The via at `to` when a leg of `style` ends on a pad off its layer
+/// (`signex_engine::pcb::route::end_via`), sized by the tool's form.
 pub(super) fn end_via(
     board: &PcbBoard,
     defaults: &BoardToolDefaults,
     to: Point,
     style: &mut TrackStyle,
 ) -> Option<Via> {
-    let pad = pad_at(board, to, u32::MAX)?;
-    if pad.reaches(style.layer) {
-        return None;
-    }
-    if style.net == 0 {
-        style.net = pad.net;
-    }
-    Some(Via {
-        attributes: Default::default(),
-        net: style.net,
-        ..defaults.via(board, Uuid::now_v7(), to)
+    signex_engine::pcb::route::end_via(board, to, style, |at| {
+        defaults.via(board, Uuid::now_v7(), at)
     })
 }
 

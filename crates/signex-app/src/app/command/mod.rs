@@ -76,6 +76,9 @@ mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
+mod repair_reset_operand_tests;
+mod repair_reset_operands;
+#[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
 #[cfg(test)]
@@ -86,6 +89,8 @@ mod sheet_symbol_checks;
 #[cfg(test)]
 mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
+#[cfg(test)]
+mod sheet_variable_operand_tests;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;

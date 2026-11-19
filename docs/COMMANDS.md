@@ -322,6 +322,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_object_rotation` | Set the rotation of a placed part or label | edit | — | — |
 | `set_selection_filters` | Set the schematic selection filter | select | — | — |
 | `set_sheet_symbol_size` | Set the size of a sheet symbol | edit | — | — |
+| `set_sheet_variable` | Set a sheet variable | edit | — | — |
 | `set_symbol_parameter` | Set a parameter of a placed part | edit | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |

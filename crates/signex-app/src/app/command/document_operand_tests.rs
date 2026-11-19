@@ -453,6 +453,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "set_sheet_variable",
+        "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
     ];
@@ -559,6 +561,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "set_layer_visible",
                     "set_active_layer",
                     "set_layer_color",
+                    // Headless forms of the Reset rows, on the named board.
+                    "reset_layer_colors",
+                    "reset_board_origin",
                     "show_used_layers_only",
                     "set_object_visible",
                     "set_object_transparency",

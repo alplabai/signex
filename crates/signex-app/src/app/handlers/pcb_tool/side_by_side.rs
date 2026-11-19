@@ -177,6 +177,7 @@ impl Signex {
                     start_vias,
                 }),
                 joined: Vec::new(),
+                joined_lines: Vec::new(),
             });
         }
         Ok(())

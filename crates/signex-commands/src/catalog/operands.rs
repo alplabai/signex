@@ -261,6 +261,14 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// One sheet variable: its `name` and `value` (left out or empty: the
+/// variable stays, with no value), or `remove=true` to delete it.
+pub const SHEET_VARIABLE: &[Operand] = &[
+    required("name", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
 /// agent has no selection.
 pub const PART_ON_DOCUMENT: &[Operand] = &[
@@ -415,6 +423,9 @@ pub const COLOR_NET: &[Operand] = &[
 /// The document a command acts on, by id or path. A headless or CLI run names
 /// it every time and never falls back to the active one (#2172).
 pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A sheet edit that takes nothing but the sheet: the one in view, or the one
+/// `document` names (a CLI or an agent's edit list).
+pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
 /// A board report written as CSV (#2404): which board, which report
 /// (`bom`, `netlist`, `net_length`, `components`) and the file.
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[

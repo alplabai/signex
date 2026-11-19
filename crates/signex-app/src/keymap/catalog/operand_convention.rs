@@ -28,6 +28,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("dry_run", OperandKind::Bool),
     ("designator", OperandKind::Text),
     ("value", OperandKind::Text),
+    // Delete what the command names instead of setting it.
+    ("remove", OperandKind::Bool),
     ("net", OperandKind::Text),
     ("ids", OperandKind::Text),
     ("kinds", OperandKind::Text),

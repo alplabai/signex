@@ -10,7 +10,6 @@
 //! with a via (`start_on_copper`).
 
 use signex_engine::pcb::draw::{self, TrackStyle};
-use signex_engine::pcb::route::copper_under;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
@@ -164,28 +163,16 @@ pub(super) fn next_leg_style(
     (style, via)
 }
 
-/// `style`, started at `at`: with no net on its layer there and none set in
-/// Properties, it takes the layer and net of the netted copper under `at` on
-/// another copper layer (a surface pad off the active layer), so the first
-/// leg adds a via there and runs on the active layer (maintainer
-/// 2026-11-18). Over bare board it stays as it is, of no net.
+/// `style`, started at `at` (`signex_engine::pcb::route::start_on_copper`);
+/// a net set in Properties keeps it on the active layer.
 pub(super) fn start_on_copper(
     board: &PcbBoard,
     defaults: &BoardToolDefaults,
     at: Point,
     style: TrackStyle,
 ) -> TrackStyle {
-    if style.net != 0 || defaults.track_net.is_some() {
-        return style;
-    }
-    match copper_under(board, at) {
-        Some((layer, net)) => TrackStyle {
-            layer,
-            net,
-            ..style
-        },
-        None => style,
-    }
+    let net_set = defaults.track_net.is_some();
+    signex_engine::pcb::route::start_on_copper(board, at, style, net_set)
 }
 
 /// The net classes that size a track: none once the tool's form set a width

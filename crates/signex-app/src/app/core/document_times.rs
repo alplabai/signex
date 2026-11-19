@@ -26,12 +26,13 @@ pub struct DocumentTimes {
 }
 
 impl DocumentTimes {
-    /// The clock read now, no file times yet. The app starts with it, so a
-    /// frame lowered before the first panel refresh already shows today for
-    /// an empty Date, and does not change when that refresh reads the clock.
-    pub fn from_clock() -> Self {
+    /// The clock stamp `now`, no file times yet. The caller reads the clock
+    /// (bootstrap, runtime); the core never does (ADR-0006). The app starts
+    /// with it, so a frame lowered before the first panel refresh already
+    /// shows today for an empty Date.
+    pub fn at(now: DateTime<Local>) -> Self {
         Self {
-            now: Some(Local::now()),
+            now: Some(now),
             ..Self::default()
         }
     }
@@ -70,10 +71,9 @@ mod tests {
     #[test]
     fn the_facts_format_the_clock_and_the_file_times() {
         let at = Local.with_ymd_and_hms(2026, 11, 18, 9, 5, 0).unwrap();
-        let mut times = DocumentTimes {
-            now: Some(at),
-            ..DocumentTimes::default()
-        };
+        let mut times = DocumentTimes::at(at);
+        assert_eq!(times.now, Some(at));
+        assert!(times.modified.is_empty());
         times.set_modified(Path::new("a.snxsch"), SystemTime::from(at));
         let facts = times.facts();
         assert_eq!(facts.current_date, "2026-11-18");

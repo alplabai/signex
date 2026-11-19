@@ -18,7 +18,7 @@ use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::MutationOutcome as Applied;
-use crate::app::sheet_hierarchy::{CaseFold, normalised_key};
+use crate::app::sheet_hierarchy::CaseFold;
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -152,50 +152,18 @@ impl Signex {
         Ok((project_dir, path, reference))
     }
 
-    /// The child file reference `file`: [`Self::child_file_target`], not
-    /// through a link that leaves the project folder (read before the edit
-    /// ran), and neither this sheet, one above it nor one that places it. A
-    /// file with a sheet that cannot be read has unknown names and an unknown
-    /// subtree: refused unless `allow_merge`. Nothing is created or opened.
+    /// The child file reference `file`: [`Self::child_file_target`], then the
+    /// file rules of `signex_engine::check_sheet_file` (no link out of the
+    /// project folder, not this sheet, one above it nor one that places it;
+    /// unless `allow_merge`, no unreadable subtree and not placed already).
+    /// Nothing is created or opened.
     pub(super) fn child_file_reference(
         &self,
         file: &str,
         allow_merge: bool,
     ) -> Result<String, String> {
         let (_, path, reference) = self.child_file_target(file)?;
-        if self.prefetched_escape(&path)? {
-            return Err(
-                "`file`: the sheet must be inside the project folder (a linked folder leaves it)"
-                    .to_string(),
-            );
-        }
-        let docs = &self.document_state;
-        let sheet = docs.edit_path().ok_or("no schematic is open")?;
-        let fold = crate::app::state::project_case::fold_of(docs.document_project(sheet));
-        let target = normalised_key(&path, fold);
-        if target == normalised_key(sheet, fold) {
-            return Err("`file` is this sheet: a sheet cannot contain itself".to_string());
-        }
-        if self.sheets_above_edited(sheet, fold)?.contains(&target) {
-            return Err(
-                "`file` is an ancestor of this sheet: a sheet cannot contain itself".to_string(),
-            );
-        }
-        let subtree = self.file_subtree(&path, sheet, fold)?;
-        if subtree.reaches {
-            return Err(
-                "`file` places this sheet below it: a sheet cannot contain itself".to_string(),
-            );
-        }
-        if !allow_merge && !subtree.unreadable.is_empty() {
-            return Err(format!(
-                "`file`: {}; its names and the sheets it places are unknown; pass allow_merge=true to place it anyway",
-                subtree.unreadable.join("; ")
-            ));
-        }
-        if !allow_merge {
-            self.refuse_placed_file(&path)?;
-        }
+        self.check_sheet_symbol_file(&path, allow_merge)?;
         Ok(reference)
     }
 
@@ -203,7 +171,11 @@ impl Signex {
     /// from the project as the edit's checks read it (the closed sheets read
     /// before the edit ran, `edit_reads`), and in the hierarchy a window
     /// already holds for it (a sheet the project does not own yet).
-    fn sheets_above_edited(&self, sheet: &Path, fold: CaseFold) -> Result<HashSet<String>, String> {
+    pub(super) fn sheets_above_edited(
+        &self,
+        sheet: &Path,
+        fold: CaseFold,
+    ) -> Result<HashSet<String>, String> {
         let mut above = self.sheets_above_known(sheet, fold);
         if self.document_state.document_project(sheet).is_none() {
             return Ok(above);
@@ -224,9 +196,8 @@ impl Signex {
 
     /// The keys of the sheets above `sheet` in the hierarchy a window already
     /// holds for it (the Navigator's, built off the UI thread): no read. The
-    /// Create Sheet Symbol From Sheet dialog's cycle check (#1276) and the
     /// first half of [`Self::sheets_above_edited`].
-    pub(crate) fn sheets_above_known(&self, sheet: &Path, fold: CaseFold) -> HashSet<String> {
+    fn sheets_above_known(&self, sheet: &Path, fold: CaseFold) -> HashSet<String> {
         self.hierarchy_describing(sheet)
             .map(|(h, _)| h.sheets_above(sheet, fold))
             .unwrap_or_default()
