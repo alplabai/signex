@@ -29,13 +29,15 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let accent_c = crate::styles::ti(tokens.accent);
 
+        let i18n = self.ui_state.i18n.as_ref();
         let mut rule_list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for rule in BomRule::ALL {
             let on = preview.options.rule_options.is_enabled(rule);
-            rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c, tokens));
+            let name = t!(i18n, rule_label(rule));
+            rule_list =
+                rule_list.push(rule_row(rule, name, on, text_c, border_c, accent_c, tokens));
         }
 
-        let i18n = self.ui_state.i18n.as_ref();
         let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
         let report = &preview.validation_report;
         if report.issues.is_empty() {
@@ -95,8 +97,48 @@ impl Signex {
 }
 
 /// Footer-sized issue count (`2 errors, 5 warnings`), `None` when clean.
-pub(super) fn issue_count_label(report: &signex_output::BomValidationReport) -> Option<String> {
-    report.summary()
+/// The English matches `BomValidationReport::summary`, which logs keep.
+pub(super) fn issue_count_label(
+    report: &signex_output::BomValidationReport,
+    i18n: &signex_i18n::I18n,
+) -> Option<signex_i18n::Localized> {
+    use signex_i18n::{RenderTranslatable, Translatable};
+    let notes = report
+        .issues
+        .iter()
+        .filter(|issue| issue.severity == BomIssueSeverity::Info)
+        .count();
+    [
+        (report.error_count(), ids::BOM_ISSUE_COUNT_ERRORS),
+        (report.warning_count(), ids::BOM_ISSUE_COUNT_WARNINGS),
+        (notes, ids::BOM_ISSUE_COUNT_NOTES),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    // `n` picks the plural; `count` is shown ungrouped, as `summary()` writes it.
+    .map(|(count, id)| {
+        Translatable::new(id)
+            .arg("n", count)
+            .arg("count", count.to_string())
+    })
+    .rev()
+    .reduce(|second, first| {
+        Translatable::new(ids::BOM_ISSUE_COUNT_PAIR)
+            .arg("first", first)
+            .arg("second", second)
+    })
+    .map(|count| count.localized(i18n))
+}
+
+/// The catalog name of a validation rule.
+pub(super) fn rule_label(rule: BomRule) -> signex_i18n::MessageId {
+    match rule {
+        BomRule::MissingFootprint => ids::BOM_RULE_MISSING_FOOTPRINT,
+        BomRule::MissingMpn => ids::BOM_RULE_MISSING_MPN,
+        BomRule::DuplicateDesignator => ids::BOM_RULE_DUPLICATE_DESIGNATOR,
+        BomRule::EmptyOrZeroQty => ids::BOM_RULE_EMPTY_OR_ZERO_QTY,
+        BomRule::UnitFieldConflict => ids::BOM_RULE_UNIT_FIELD_CONFLICT,
+    }
 }
 
 /// Colour for a severity heading and the footer count.
@@ -114,6 +156,7 @@ pub(super) fn severity_color(
 
 fn rule_row<'a>(
     rule: BomRule,
+    name: signex_i18n::Localized,
     on: bool,
     text_c: Color,
     border_c: Color,
@@ -151,8 +194,7 @@ fn rule_row<'a>(
         row![
             pip,
             Space::new().width(8),
-            // raw: the rule's name comes from signex-bom (#2060).
-            text(raw(rule.label())).size(TS.body).color(text_c),
+            text(name).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
         ]
         .align_y(iced::Alignment::Center),

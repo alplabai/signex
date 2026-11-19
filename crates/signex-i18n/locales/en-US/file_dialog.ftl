@@ -63,3 +63,8 @@ file-filter-json-ext = JSON (.json)
 file-filter-csv-ext = CSV (.csv)
 file-filter-step-ext = STEP (.step, .stp)
 file-filter-text-ext = Text (.txt)
+file-filter-xlsx-ext = Excel (.xlsx)
+# Signex's own plain-text netlist dump.
+file-filter-netlist-listing = { -brand-name } Netlist Listing
+# The Protel netlist format; "Protel" is a product name.
+file-filter-netlist-protel = Protel Netlist

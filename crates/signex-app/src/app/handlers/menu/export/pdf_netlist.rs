@@ -132,13 +132,13 @@ impl Signex {
             &self.ui_state.i18n,
             signex_i18n::ids::FILE_DIALOG_EXPORT_NETLIST,
         );
+        let i18n = self.ui_state.i18n.clone();
         Some(Task::perform(
             async move {
-                // The filter name is the netlist format's own label (#2060).
                 target
                     .dialog(base)
                     .await
-                    .add_filter(format.label(), &[format.extension()])
+                    .filter_in(&i18n, netlist_filter(format), &[format.extension()])
                     .set_file_name(file_name)
                     .save_file()
                     .await
@@ -306,5 +306,14 @@ impl Signex {
     /// Writes nothing; just clears the pending prompt.
     pub(crate) fn handle_netlist_cancel_incomplete(&mut self) {
         self.document_state.netlist_incomplete_prompt = None;
+    }
+}
+
+/// The catalog name of a netlist format's save-dialog filter.
+pub(super) fn netlist_filter(format: signex_output::NetlistFormat) -> signex_i18n::MessageId {
+    use signex_output::NetlistFormat;
+    match format {
+        NetlistFormat::Listing => signex_i18n::ids::FILE_FILTER_NETLIST_LISTING,
+        NetlistFormat::Protel => signex_i18n::ids::FILE_FILTER_NETLIST_PROTEL,
     }
 }

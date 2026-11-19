@@ -68,4 +68,24 @@ define_ids! {
     PDF_QUALITY_DRAFT = "pdf-quality-draft";
     PDF_QUALITY_MEDIUM = "pdf-quality-medium";
     PDF_QUALITY_HIGH = "pdf-quality-high";
+    PDF_PAGE_SIZE_ISO_A0 = "pdf-page-size-iso-a0";
+    PDF_PAGE_SIZE_ISO_A1 = "pdf-page-size-iso-a1";
+    PDF_PAGE_SIZE_ISO_A2 = "pdf-page-size-iso-a2";
+    PDF_PAGE_SIZE_ISO_A3 = "pdf-page-size-iso-a3";
+    PDF_PAGE_SIZE_ISO_A4 = "pdf-page-size-iso-a4";
+    PDF_PAGE_SIZE_ISO_A5 = "pdf-page-size-iso-a5";
+    PDF_PAGE_SIZE_ISO_B5 = "pdf-page-size-iso-b5";
+    PDF_PAGE_SIZE_ANSI_A = "pdf-page-size-ansi-a";
+    PDF_PAGE_SIZE_ANSI_B = "pdf-page-size-ansi-b";
+    PDF_PAGE_SIZE_ANSI_C = "pdf-page-size-ansi-c";
+    PDF_PAGE_SIZE_ANSI_D = "pdf-page-size-ansi-d";
+    PDF_PAGE_SIZE_ANSI_E = "pdf-page-size-ansi-e";
+    PDF_PAGE_SIZE_US_LETTER = "pdf-page-size-us-letter";
+    PDF_PAGE_SIZE_US_LEGAL = "pdf-page-size-us-legal";
+    PDF_PAGE_SIZE_TABLOID = "pdf-page-size-tabloid";
+    PDF_SCALE_PERCENT = "pdf-scale-percent";
+    PDF_MARGIN_TOP = "pdf-margin-top";
+    PDF_MARGIN_RIGHT = "pdf-margin-right";
+    PDF_MARGIN_BOTTOM = "pdf-margin-bottom";
+    PDF_MARGIN_LEFT = "pdf-margin-left";
 }

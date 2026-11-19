@@ -34,6 +34,8 @@ bom-column-designator = Designator
 bom-column-value = Value
 bom-column-footprint = Footprint
 bom-column-lib-ref = LibRef
+# The legacy column that lists the designators, under its old name.
+bom-column-reference = Reference
 bom-column-qty = Qty
 bom-column-unit-price = Unit Price
 bom-column-buy-qty = Buy Qty
@@ -66,3 +68,34 @@ bom-price-total-unpriced = Total { $sums } · { $count ->
     [one] { $count } line without a cached price
    *[other] { $count } lines without a cached price
 }
+# Validation rule names on the Rules tab.
+bom-rule-missing-footprint = Missing footprint
+bom-rule-missing-mpn = Missing MPN
+bom-rule-duplicate-designator = Duplicate designator
+bom-rule-empty-or-zero-qty = Empty or zero quantity
+bom-rule-unit-field-conflict = Conflicting unit fields
+# Footer issue count, errors part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
+bom-issue-count-errors = { $n ->
+    [one] { $count } error
+   *[other] { $count } errors
+}
+# Footer issue count, warnings part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
+bom-issue-count-warnings = { $n ->
+    [one] { $count } warning
+   *[other] { $count } warnings
+}
+# Footer issue count, notes part. $n (a whole number, at least 1) picks the
+# plural form; $count is the same number written without grouping.
+# Write { $count }, not { $n }.
+bom-issue-count-notes = { $n ->
+    [one] { $count } note
+   *[other] { $count } notes
+}
+# Joins two parts of the footer issue count, such as "2 errors, 5 warnings".
+# $first is the error or warning count, $second the count after it (it may
+# itself be a joined pair).
+bom-issue-count-pair = { $first }, { $second }

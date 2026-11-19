@@ -16,6 +16,8 @@ use signex_widgets::{raw, text};
 use super::widgets::{draggable_header, os_title_bar_slot};
 use crate::styles::dialog_button;
 
+#[cfg(test)]
+mod names_tests;
 mod rules;
 mod sidebar;
 mod table;
@@ -203,15 +205,14 @@ impl Signex {
         // empty band between them and tightens the modal's
         // bottom chrome.
         let issue_badge: Element<'_, Message> =
-            match rules::issue_count_label(&preview.validation_report) {
+            match rules::issue_count_label(&preview.validation_report, i18n) {
                 Some(label) => {
                     let severity = if preview.validation_report.has_errors() {
                         signex_output::BomIssueSeverity::Error
                     } else {
                         signex_output::BomIssueSeverity::Warning
                     };
-                    // raw: the issue count comes from signex-bom (#2060).
-                    text(raw(label))
+                    text(label)
                         .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted, tokens))
                         .boxed()

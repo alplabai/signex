@@ -24,6 +24,42 @@ fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> Stri
     signex_output::bom::cell_text(r, c)
 }
 
+/// The catalog name of a standard column; `None` for a custom-field column,
+/// whose name is the field's own. Exported files keep `BomColumn::header`.
+pub(super) fn column_name(c: &signex_output::BomColumn) -> Option<signex_i18n::MessageId> {
+    use signex_i18n::ids;
+    use signex_output::BomColumn;
+    Some(match c {
+        BomColumn::Name => ids::BOM_COLUMN_NAME,
+        BomColumn::Designator => ids::BOM_COLUMN_DESIGNATOR,
+        BomColumn::LibRef => ids::BOM_COLUMN_LIB_REF,
+        BomColumn::Reference => ids::BOM_COLUMN_REFERENCE,
+        BomColumn::Qty => ids::BOM_COLUMN_QTY,
+        BomColumn::Value => ids::BOM_COLUMN_VALUE,
+        BomColumn::Footprint => ids::BOM_COLUMN_FOOTPRINT,
+        BomColumn::Description => ids::BOM_COLUMN_DESCRIPTION,
+        BomColumn::Custom(_) => return None,
+        BomColumn::UnitPrice => ids::BOM_COLUMN_UNIT_PRICE,
+        BomColumn::BuyQty => ids::BOM_COLUMN_BUY_QTY,
+        BomColumn::ExtendedPrice => ids::BOM_COLUMN_EXT_PRICE,
+        BomColumn::Currency => ids::BOM_COLUMN_CURRENCY,
+        BomColumn::Stock => ids::BOM_COLUMN_STOCK,
+        BomColumn::Distributor => ids::BOM_COLUMN_DISTRIBUTOR,
+        BomColumn::PriceAge => ids::BOM_COLUMN_PRICE_AGE,
+    })
+}
+
+/// The header text of a column in `i18n`'s language.
+fn column_header(
+    c: &signex_output::BomColumn,
+    i18n: &signex_i18n::I18n,
+) -> signex_widgets::Label<'static> {
+    match column_name(c) {
+        Some(id) => i18n.message(id, &[]).into(),
+        None => signex_i18n::UserText::new(c.header()).into(),
+    }
+}
+
 /// Default on-screen width of a column, in px, until the user resizes it.
 pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 {
     use signex_output::BomColumn;
@@ -247,13 +283,12 @@ impl Signex {
             // arrow (when this column is the active sort) anchored
             // to the right via Space::Fill. Spreadsheet convention.
             let arrow = sort_arrow(idx).trim();
-            // raw: the column name comes from signex-output (#2060) and the
-            // sort arrow is a glyph.
             let cell_content = row![
-                text(raw(c.header().to_string()))
+                text(column_header(c, self.ui_state.i18n.as_ref()))
                     .size(TS.body)
                     .color(text_c),
                 Space::new().width(Length::Fill),
+                // raw: the sort arrow is a glyph, not language.
                 text(raw(arrow.to_string())).size(TS.body).color(text_c),
             ]
             .align_y(iced::Alignment::Center);

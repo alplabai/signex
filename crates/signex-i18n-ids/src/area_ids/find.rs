@@ -16,6 +16,8 @@ define_ids! {
     FIND_REPLACE_CURRENT = "find-replace-current";
     FIND_REPLACE_ALL = "find-replace-all";
     FIND_TARGETS = "find-targets";
+    FIND_KIND_NET_LABEL = "find-kind-net-label";
+    FIND_KIND_TEXT_NOTE = "find-kind-text-note";
     FIND_SIMILAR_TITLE = "find-similar-title";
     FIND_SIMILAR_COL_PROPERTY = "find-similar-col-property";
     FIND_SIMILAR_COL_SEED = "find-similar-col-seed";
@@ -27,6 +29,10 @@ define_ids! {
     FIND_SIMILAR_SCOPE_PROJECT = "find-similar-scope-project";
     FIND_SIMILAR_FOOTER = "find-similar-footer";
     FIND_SIMILAR_SEED = "find-similar-seed";
+    FIND_SIMILAR_PROP_LIBRARY_PART = "find-similar-prop-library-part";
+    FIND_SIMILAR_PROP_DESIGNATOR_PREFIX = "find-similar-prop-designator-prefix";
+    FIND_SIMILAR_PROP_NET_NAME = "find-similar-prop-net-name";
+    FIND_SIMILAR_PROP_LABEL_TYPE = "find-similar-prop-label-type";
     PASTE_ARRAY_TITLE = "paste-array-title";
     PASTE_ARRAY_COPIES = "paste-array-copies";
     PASTE_ARRAY_X_SPACING = "paste-array-x-spacing";
