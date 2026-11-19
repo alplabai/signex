@@ -306,7 +306,7 @@ fn a_detached_dialog_does_not_paint_in_the_main_window() {
         (ModalId::About, "Copy version info"),
         (
             ModalId::FindReplace,
-            "Targets: labels, notes, designators, values",
+            "Searches labels, notes, designators, values",
         ),
     ];
     for (modal, probe) in probes {
