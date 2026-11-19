@@ -183,5 +183,11 @@ define_ids! {
         CTX_GRID_PREVIEW_ACTIVE = "ctx-grid-preview-active";
         CTX_GRID_PREVIEW_ON_PITCH = "ctx-grid-preview-on-pitch";
         CTX_GRID_PREVIEW_OFF_PITCH = "ctx-grid-preview-off-pitch";
+        ZOOM_PILL_PERCENT = "zoom-pill-percent";
+        ZOOM_PILL_FIT = "zoom-pill-fit";
+        ZOOM_PILL_HINT = "zoom-pill-hint";
+        ZOOM_PILL_PRESETS = "zoom-pill-presets";
+        ZOOM_PRESETS_PERCENT = "zoom-presets-percent";
+        ZOOM_PRESETS_FIT_SELECTION = "zoom-presets-fit-selection";
     }
 }

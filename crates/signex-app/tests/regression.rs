@@ -715,3 +715,6 @@ mod object_list;
 // #2267 — a canvas menu row runs against the window the menu opened in.
 #[path = "regression/context_menu_in_window.rs"]
 mod context_menu_in_window;
+
+#[path = "regression/floating_panel_menu.rs"]
+mod floating_panel_menu;

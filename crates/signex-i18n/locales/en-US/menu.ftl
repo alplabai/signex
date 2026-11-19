@@ -264,3 +264,13 @@ ctx-grid-preview = Grid preview
 ctx-grid-preview-active = { $step } · active
 ctx-grid-preview-on-pitch = Pins on the 2.54 mm pitch land on this grid
 ctx-grid-preview-off-pitch = Pins on the 2.54 mm pitch fall between grid points
+# The canvas zoom pill (#64). { $percent } is the zoom as a whole number.
+zoom-pill-percent = { $percent }%
+zoom-pill-fit = Fit
+# Hover hint of a pill control: { $action } is the command's menu text,
+# { $shortcut } its key in the active shortcut profile.
+zoom-pill-hint = { $action } · { $shortcut }
+zoom-pill-presets = Zoom Presets
+# Rows of the menu the pill's percentage opens. { $percent } as above.
+zoom-presets-percent = { $percent }%
+zoom-presets-fit-selection = Fit Selection

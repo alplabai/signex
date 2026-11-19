@@ -256,6 +256,30 @@ impl Signex {
                 Task::none()
             }
             UiMsg::NetNav(msg) => self.dispatch_net_nav_message(msg),
+            UiMsg::ZoomPresetsToggled => {
+                self.interaction_state.zoom_presets_open =
+                    !self.interaction_state.zoom_presets_open;
+                Task::none()
+            }
+            UiMsg::ZoomPresetsDismissed => {
+                self.interaction_state.zoom_presets_open = false;
+                Task::none()
+            }
+            UiMsg::ZoomPresetPicked(percent) => {
+                self.interaction_state.zoom_presets_open = false;
+                if self.has_active_schematic() {
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    if canvas.zoom_to_percent_about_centre(percent) {
+                        canvas.clear_bg_cache();
+                        canvas.clear_content_cache();
+                    }
+                }
+                Task::none()
+            }
+            UiMsg::ZoomPresetCommandPicked(command) => {
+                self.interaction_state.zoom_presets_open = false;
+                self.run_menu_command(&command, None)
+            }
         }
     }
 
