@@ -35,7 +35,7 @@ const PREVIEW_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 /// The replay options of the preview: the sheet's, with the thumbnail's text
 /// clamp.
-fn preview_draw_options(
+pub(in crate::panels::components_panel) fn preview_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
     schematic_draw_options_with(transform, PREVIEW_TEXT_SIZE)
@@ -105,7 +105,9 @@ fn take_rebuild(shown: &mut Option<Shown>, current: &Shown) -> bool {
 
 /// A sheet holding `lib` placed once near the paper's centre, unit 1, normal
 /// body.
-fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
+pub(in crate::panels::components_panel) fn preview_sheet(
+    lib: &LibSymbol,
+) -> (SchematicSheet, Symbol) {
     let mut sheet = SchematicSheet::default();
     let (width, height) = sheet.paper_mm();
     let on_grid = |mid: f64| (mid / PLACEMENT_GRID_MM).round() * PLACEMENT_GRID_MM;

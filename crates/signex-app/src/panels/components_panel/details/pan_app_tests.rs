@@ -405,8 +405,9 @@ fn moved(to: Point) -> (Event, Point) {
 /// the label that offers a grab, plus a margin. Panics with the hover scan
 /// when nothing below the label offers one.
 fn preview_point(app: &mut Live, label: Rectangle) -> Point {
-    // Far enough in that the drag's source pixels stay inside the canvas.
-    let x = label.x + 80.0;
+    // Far enough in that the drag's source pixels stay inside the canvas,
+    // near enough that the checked band fits a half-width preview (#2535).
+    let x = label.x + 45.0;
     let points: Vec<Point> = (0..60)
         .map(|i| Point::new(x, label.y + label.height + i as f32 * 6.0))
         .collect();
@@ -465,7 +466,7 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
     // above the scale bar.
     let area = Rectangle::new(
         Point::new(from.x + 2.0, from.y + 15.0),
-        Size::new(100.0, 30.0),
+        Size::new(40.0, 30.0),
     );
     let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
     assert!(
