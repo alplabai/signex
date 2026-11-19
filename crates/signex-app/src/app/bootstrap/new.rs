@@ -500,6 +500,7 @@ impl Signex {
                 passive_calculator_open: false,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
+                net_color_palette: Default::default(),
                 parameter_manager_open: false,
                 parameter_table: crate::app::state::ParameterTableState::default(),
                 reorder_picker: None,

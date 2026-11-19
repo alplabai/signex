@@ -596,6 +596,8 @@ pub struct UiState {
     pub move_selection: MoveSelectionState,
     /// F5 Net Color palette state — open flag and transient edit buffer.
     pub net_color_palette_open: bool,
+    /// F5 Net Color palette: filter text and the open row chooser.
+    pub net_color_palette: crate::app::state::NetColorPaletteState,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
