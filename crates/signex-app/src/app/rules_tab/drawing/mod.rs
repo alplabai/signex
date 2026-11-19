@@ -68,6 +68,27 @@ pub(crate) struct RulePreview {
     expanded: bool,
 }
 
+impl RulePreview {
+    /// Close an open label and drop a held handle; the size is kept.
+    pub(crate) fn close_labels(&mut self) {
+        self.labels = DimensionLabels::default();
+    }
+}
+
+/// Whether `old` and `new` draw the same thing, whatever its values: a
+/// rule of the grid, the same class pair or the same object pair.
+pub(crate) fn same_subject(old: Option<&PreviewTarget>, new: Option<&PreviewTarget>) -> bool {
+    use PreviewTarget::{ClassPair, ObjectPair, Rule};
+    match (old, new) {
+        (None, None) | (Some(Rule { .. }), Some(Rule { .. })) => true,
+        (Some(ClassPair { a, b, .. }), Some(ClassPair { a: c, b: d, .. })) => a == c && b == d,
+        (Some(ObjectPair { objects, .. }), Some(ObjectPair { objects: other, .. })) => {
+            objects == other
+        }
+        _ => false,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PreviewMsg {
     Labels(DimensionLabelMessage),

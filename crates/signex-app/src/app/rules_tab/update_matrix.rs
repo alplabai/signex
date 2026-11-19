@@ -34,10 +34,6 @@ impl MatrixBook {
 
 /// A value typed on the preview drawing: written to the pinned matrix cell
 /// or object-pair row as one undo step.
-#[allow(
-    dead_code,
-    reason = "the preview drawing's value editor calls it through update.rs"
-)]
 pub(super) fn preview_committed(
     app: &mut Signex,
     project_id: ProjectId,

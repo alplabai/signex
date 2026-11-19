@@ -23,6 +23,8 @@ mod update_matrix;
 mod view;
 
 #[cfg(test)]
+mod matrix_preview_tests;
+#[cfg(test)]
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
@@ -190,7 +192,7 @@ pub struct RulesTabState {
     /// The drawing of the selected cell: its label being typed, a drag.
     pub(crate) drawing: RulePreview,
     /// What the drawing shows: the selected cell's rule kind with its row's
-    /// values, or the pinned matrix cell. Refreshed in `update`.
+    /// values, or the hovered or pinned matrix pair. Refreshed in `update`.
     pub(crate) drawing_target: Option<PreviewTarget>,
     /// The rule whose detail is shown, by name: the rule that governs the
     /// selected cell, or a scoped rule's row.
@@ -218,6 +220,13 @@ pub struct RulesTabState {
     /// The matrix cell or object pair the preview stays on; a value typed
     /// on the drawing writes it.
     pub matrix_pin: Option<CellKey>,
+}
+
+impl RulesTabState {
+    /// The Clearance domain shows its class matrix, not the grid.
+    pub fn is_matrix_shown(&self) -> bool {
+        self.grid.domain() == Domain::Clearance && self.clearance_view == ClearanceView::Matrix
+    }
 }
 
 /// Messages of a Rules tab, under `ProjectMsg::Rules`. Each names its

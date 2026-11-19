@@ -16,16 +16,8 @@ use crate::styles::tokens;
 
 pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let state = frame.state;
-    let id = frame.id;
-    if let Some(target) = state.drawing_target.as_ref() {
-        return drawing::view(&state.drawing, target, frame.i18n, frame.tokens)
-            .map(move |msg| {
-                up(RulesTabMsg::PreviewActed {
-                    project_id: id,
-                    msg,
-                })
-            })
-            .boxed();
+    if let Some(element) = drawn(frame) {
+        return element;
     }
     let note = if state.grid.view.selected().is_some() {
         ids::RULES_GRID_PREVIEW_NONE
@@ -40,4 +32,22 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     ]
     .spacing(SP.s)
     .boxed()
+}
+
+/// The tab's drawing with its editable labels, the grid cell's or the
+/// matrix pair's; `None` while there is nothing to draw.
+pub(super) fn drawn<'a>(frame: &Frame<'a>) -> Option<Element<'a, Message>> {
+    let state = frame.state;
+    let id = frame.id;
+    let target = state.drawing_target.as_ref()?;
+    Some(
+        drawing::view(&state.drawing, target, frame.i18n, frame.tokens)
+            .map(move |msg| {
+                up(RulesTabMsg::PreviewActed {
+                    project_id: id,
+                    msg,
+                })
+            })
+            .boxed(),
+    )
 }

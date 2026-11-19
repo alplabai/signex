@@ -481,10 +481,16 @@ fn preview_row<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         )
         .push(Space::new().width(Length::Fill).boxed())
         .push(text(caption).size(TS.caption).color(faint).boxed());
+    let mut left = Column::new()
+        .spacing(SP.s)
+        .push(head.width(Length::Fill).boxed());
+    if let Some(drawn) = super::grid_preview::drawn(frame) {
+        left = left.push(drawn);
+    }
     Row::new()
         .spacing(SP.xl)
         .align_y(Alignment::Start)
-        .push(head.width(Length::FillPortion(3)).boxed())
+        .push(left.width(Length::FillPortion(3)).boxed())
         .push(
             text(t!(i18n, ids::RULES_MATRIX_PREVIEW_ABOUT))
                 .size(TS.caption)

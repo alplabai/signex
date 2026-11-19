@@ -63,7 +63,7 @@ fn classes() -> Vec<NetClass> {
     vec![hv, lv]
 }
 
-fn app_with_board(dir: &tempfile::TempDir) -> (Signex, ProjectId) {
+pub(super) fn app_with_board(dir: &tempfile::TempDir) -> (Signex, ProjectId) {
     let _ = crate::diagnostics::init_logging();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     let path = dir.path().join("board.snxpcb");
@@ -95,11 +95,11 @@ fn drc(app: &Signex) -> DrcRuleSet {
         .unwrap_or_default()
 }
 
-fn dsl(app: &Signex) -> String {
+pub(super) fn dsl(app: &Signex) -> String {
     drc(app).dsl.unwrap_or_default()
 }
 
-fn send(app: &mut Signex, msg: RulesTabMsg) {
+pub(super) fn send(app: &mut Signex, msg: RulesTabMsg) {
     let _ = app.update(Message::Project(ProjectMsg::Rules(msg)));
 }
 
@@ -133,7 +133,7 @@ fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
     }
 }
 
-fn undo_steps(app: &Signex, id: ProjectId) -> usize {
+pub(super) fn undo_steps(app: &Signex, id: ProjectId) -> usize {
     app.document_state
         .rules_history
         .get(&id)
@@ -658,12 +658,12 @@ fn the_preset_commands_diff_and_apply_tiers_and_profiles() {
 }
 
 /// What the matrix shows at `key`, from the rules as stored now.
-fn shown_at(app: &Signex, id: ProjectId, key: &CellKey) -> Option<Shown> {
+pub(super) fn shown_at(app: &Signex, id: ProjectId, key: &CellKey) -> Option<Shown> {
     let table = signex_drc_dsl::table::table(&dsl(app));
     super::matrix::shown(&table, &app.rules_matrix_defaults(id), key)
 }
 
-fn show_matrix(app: &mut Signex, id: ProjectId) {
+pub(super) fn show_matrix(app: &mut Signex, id: ProjectId) {
     open(app);
     send(
         app,

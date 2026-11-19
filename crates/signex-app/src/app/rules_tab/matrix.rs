@@ -16,6 +16,7 @@ use signex_widgets::constraint_grid::{ClassPair, PairClearance, PairValues};
 
 use super::RulesTabState;
 use super::commands::{Ran, answered, project_text, refused, text};
+use super::drawing::PreviewTarget;
 use super::json::mm;
 use crate::app::Signex;
 use crate::app::command::CommandArgs;
@@ -221,6 +222,19 @@ impl PairValues for ClassClearances<'_> {
 pub(crate) struct MatrixPreview {
     pub key: CellKey,
     pub shown: Option<Shown>,
+}
+
+impl MatrixPreview {
+    /// The drawing: two tracks for a class pair, the two objects for an
+    /// object pair, at the shown gap. `None` while nothing gives a value.
+    pub(super) fn drawing_target(self) -> Option<PreviewTarget> {
+        let gap_mm = self.shown?.mm();
+        let CellKey { a, b, pair, .. } = self.key;
+        Some(match pair {
+            None => PreviewTarget::ClassPair { a, b, gap_mm },
+            Some(objects) => PreviewTarget::ObjectPair { objects, gap_mm },
+        })
+    }
 }
 
 /// The preview of the hovered cell or row, else of the pinned one.

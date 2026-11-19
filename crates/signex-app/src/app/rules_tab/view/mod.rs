@@ -33,7 +33,7 @@ use signex_widgets::text;
 
 pub(super) use super::analysis::Checked;
 use super::grid::{Cells, RulesGrid};
-use super::{ClearanceView, RulesOrigin, RulesPanel, RulesTabMsg, RulesTabState};
+use super::{RulesOrigin, RulesPanel, RulesTabMsg, RulesTabState};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::{Spacing, TypeScale, tokens};
@@ -181,11 +181,9 @@ impl Signex {
         };
         let frame = self.rules_frame(id, i18n, tokens, state, src, origin);
         let domain = state.grid.domain();
-        let matrix_shown =
-            domain == Domain::Clearance && state.clearance_view == ClearanceView::Matrix;
         let rules: Element<'_, Message> = match state.text.as_ref() {
             Some(rules_text) => text_view::view(&frame, rules_text),
-            None if matrix_shown => matrix::view(&frame),
+            None if state.is_matrix_shown() => matrix::view(&frame),
             None if domain == Domain::SignalIntegrity => table::later(&frame),
             None => column![
                 container(table::view(&frame)).height(Length::FillPortion(3)),

@@ -10,8 +10,9 @@ use signex_drc_dsl::table::grid as cells;
 use signex_drc_dsl::table::{self, LimitField, RuleField, RuleTable};
 use signex_widgets::constraint_grid::{CellRef, GridMessage, RowId};
 
-use super::drawing::{self, PreviewMsg};
+use super::drawing::{self, PreviewMsg, same_subject};
 use super::grid::{Cells, RowRef, RowSource, RulesGrid, mm_format, scoped_on, typed_length};
+use super::matrix::matrix_preview;
 use super::search::FindHit;
 use super::{RulesPanel, RulesTabMsg};
 use crate::app::state::ProjectId;
@@ -379,7 +380,7 @@ impl Signex {
         let Some(commit) = commit else {
             return task;
         };
-        if self.rules_tab_mut(id).matrix_open.is_some() {
+        if self.rules_tab_mut(id).is_matrix_shown() {
             return Task::batch([
                 task,
                 super::update_matrix::preview_committed(self, id, commit.value_mm),
@@ -401,9 +402,10 @@ impl Signex {
         task
     }
 
-    /// What the drawing shows: the selected cell's rule kind, drawn with
-    /// the values its row resolves to. A pinned matrix cell's drawing is
-    /// the matrix's to set.
+    /// What the drawing shows: in the grid, the selected cell's rule kind
+    /// with the values its row resolves to; in the matrix, the hovered or
+    /// pinned pair at the value it shows. A new subject closes the
+    /// drawing's open label.
     pub(super) fn refresh_rules_drawing(&mut self, id: ProjectId) {
         let sets = self.rules_sets(id);
         let i18n = &self.ui_state.i18n;
@@ -411,19 +413,27 @@ impl Signex {
             return;
         };
         let state = &mut tab.rules;
-        let (Some(analysis), None) = (state.analysis.as_ref(), state.matrix_open.as_ref()) else {
+        let Some(analysis) = state.analysis.as_ref() else {
             return;
         };
-        let cells = Cells {
-            grid: &state.grid,
-            table: &analysis.table,
-            sets: &sets,
+        let target = if state.is_matrix_shown() {
+            matrix_preview(state, &analysis.table, &analysis.defaults)
+                .and_then(|preview| preview.drawing_target())
+        } else {
+            let cells = Cells {
+                grid: &state.grid,
+                table: &analysis.table,
+                sets: &sets,
+            };
+            state
+                .grid
+                .view
+                .selected()
+                .and_then(|at| drawing_target(&cells, at, i18n))
         };
-        let target = state
-            .grid
-            .view
-            .selected()
-            .and_then(|at| drawing_target(&cells, at, i18n));
+        if !same_subject(state.drawing_target.as_ref(), target.as_ref()) {
+            state.drawing.close_labels();
+        }
         state.drawing_target = target;
     }
 
